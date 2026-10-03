@@ -5,8 +5,8 @@ messages from that host for LoRa transmission. This page is the platform's refer
 It is verified against the MeshCom firmware source rather than the published description, because the
 two differ (see [Differences from the ICSSW description](#differences-from-the-icssw-description)).
 
-**Verified against:** MeshCom firmware 4.40a — `icssw-org/MeshCom-Firmware` tag `v4.40a` at `6966c52`
-(2026-10-01): the ExtUDP emitters `src/extudp_functions.cpp`, `src/extern_msg_json.h`, `src/extern_tele_json.h`,
+**Verified against:** MeshCom firmware 4.40a — `icssw-org/MeshCom-Firmware` tag `v4.40a` at `e1e2ace`
+(2026-10-02): the ExtUDP emitters `src/extudp_functions.cpp`, `src/extern_msg_json.h`, `src/extern_tele_json.h`,
 `src/extern_notice_json.h` and `src/udp_frame.h`. Fields marked 4.40 are absent from older nodes.
 The firmware is MIT-licensed.
 
@@ -64,8 +64,8 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
 - `dst` is the whole destination path, `[<via>,…,]<destination>`. The **destination** is the last token:
   `*` (everyone), a group number (`1`–`99999`; group 9 carries emergency traffic), or a callsign with
-  optional SSID. The tokens before it are the sender's **via list** (`--via`), the relays it allows to
-  forward the message:
+  optional SSID. The tokens before it are a **via list** (`--via`), the relays allowed to forward this
+  copy:
 
   | `dst` | Destination | Via list |
   |---|---|---|
@@ -77,9 +77,16 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
   This is how the firmware's APRS decoder splits it (`msg_destination_call` is the text after the last
   comma, empty after a trailing comma). The firmware does not check via tokens; APRScaching keeps the
-  callsigns among them, drops the rest and counts them (`viaDropped`). A via list is the sender's plan, not
-  the route the frame took — that is `src`. Firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8): `checkVia()` in `src/via_functions.cpp`, the
-  destination split in `src/aprs_functions.cpp`.
+  callsigns among them, drops the rest and counts them (`viaDropped`). A via list is a plan, not the route
+  the frame took — that is `src`.
+
+- The via list belongs to **the node that last transmitted this copy**, not necessarily to the originator. A
+  relaying node resets the destination path to the destination alone and then applies its own via list, if
+  it has one; a gateway does the same to a frame it puts on air from the MeshCom server. So `dst` carries the
+  originator's via list only when `src` is the originator alone, with no relay calls. Firmware
+  [`e1e2ace`](https://github.com/icssw-org/MeshCom-Firmware/tree/e1e2acea6a18285301b57f32caacd0beb62638f2):
+  `checkVia()` in `src/via_functions.cpp`, the relay in `src/lora_functions.cpp`, the server-to-LoRa path in
+  `src/esp32/udp_frame_esp32.cpp`, the destination split in `src/aprs_functions.cpp`.
 
 - `msg` is UTF-8. A direct message may end in an APRS message number (`Hello{034`).
 - A direct message neither to nor from the node is suppressed when the node runs `--nopmother on`.
@@ -137,7 +144,8 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
   emoji four). A `NUL` in either field rejects the datagram.
 - Invalid JSON, a missing field, or a length outside the limits is dropped silently.
 - `{"type":"tele", "temp":…, "hum":…, "press":…, "temp2":…, "qnh":…, "gasres":…, "co2":…}` sets the
-  node's own sensor values instead of sending text.
+  node's own sensor values instead of sending text. A node with its own BME, BMP, AHT or SHT sensor ignores
+  it, so the values a client sends never replace a real reading.
 - The node frames the text as `:{<dst>}<msg>` and transmits it under its own callsign. With `--via` on, it
   puts its own via list in front of the destination, as for anything it sends.
 
@@ -154,11 +162,12 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
 
 The node's own frames carry the version string and letter, such as `firmware: "4.40"` and `fw_sub: "a"`;
 received frames carry the sender's number and letter (`40`, `a`). No build date is included. The firmware fix for the ESP32 loop-task stack overflow with
-`--extudp on` (MeshCom-Firmware pull request #1157, merged 2026-09-25) landed within 4.35t, so:
+`--extudp on` (MeshCom-Firmware pull request #1157, merged 2026-09-25) is in 4.35u (2026-09-27) and later.
+Every published 4.35t build predates it; a 4.35t built from source after 2026-09-25 has it. So:
 
 - older than 4.35t → affected;
-- 4.35t → affected if built before 2026-09-25, which the datagram cannot tell;
-- newer → not affected.
+- 4.35t → affected unless built from source after 2026-09-25, which the datagram cannot tell;
+- 4.35u or newer → not affected.
 
 ## Differences from the ICSSW description
 

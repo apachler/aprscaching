@@ -97,7 +97,7 @@ flight mode is fine) or the **router** the phone has joined.
     - **On a router** the router hands out the addresses. Reserve one for the node and one for the phone in its
       DHCP settings; the script prints only `--setssid`, `--setpwd`, `--extudpip` and `--extudp on`.
 
-The node needs MeshCom firmware 4.35t built on or after 2026-09-25, or newer. The listener binds the phone's
+The node needs MeshCom firmware 4.35u or newer. The listener binds the phone's
 address on the node's network when the ingest starts: bring the network up first, or run `restart.sh ingest`
 afterwards (`status.sh` says when). If the hotspot's subnet changes after a reboot, run the script again and enter
 the new commands.

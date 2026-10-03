@@ -91,7 +91,10 @@ export function lanAddressFor(nodeIp: string, ifaces = networkInterfaces()): str
   return null;
 }
 
-/** MeshCom firmware at or before this build crashes an ESP32 node with ExtUDP on (fixed 2026-09-25). */
+/**
+ * MeshCom firmware before 4.35u can crash an ESP32 node with ExtUDP on. Every published 4.35t build predates the
+ * fix; only a 4.35t built from source after 2026-09-25 has it, which the version string cannot tell.
+ */
 function firmwareRisk(fw: string): "affected" | "unknown-build" | null {
   const m = /^(\d+)\.(\d+)([a-z]?)$/.exec(fw);
   if (!m) return null;
@@ -293,11 +296,11 @@ export class MeshcomListener {
     this.fwWarned.add(node.ip);
     if (risk === "affected")
       this.log.warn(
-        `[meshcom] node ${node.ip} runs firmware ${e.provenance.firmware}, which can crash an ESP32 node with --extudp on — update to a 4.35t build from 2026-09-25 or later`,
+        `[meshcom] node ${node.ip} runs firmware ${e.provenance.firmware}, which can crash an ESP32 node with --extudp on — update to 4.35u or later`,
       );
     else if (risk === "unknown-build")
       this.log.warn(
-        `[meshcom] node ${node.ip} runs firmware 4.35t; builds before 2026-09-25 can crash an ESP32 node with --extudp on — update if the node restarts`,
+        `[meshcom] node ${node.ip} runs firmware 4.35t, which can crash an ESP32 node with --extudp on unless built from source after 2026-09-25 — update to 4.35u or later`,
       );
   }
 

@@ -444,10 +444,10 @@ check "  … and only warns where a missing backup is a warning (Desktop)" \
   bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/a.env' eval 'DOC_BACKUP_PLACES=(\"$TMP/place-a|aprscaching-desktop-*.tar.gz\"); DOC_BACKUP_MISSING=warn; doc_resources' | grep -q '^warn no backup in'"
 check "  … fails when the bucket has none" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^fail no backup archive in the bucket'"
 
-check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"
-check "  … 4.36 too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.36 4 35 t"
-check "  … 4.35s is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35s 4 35 t"
-check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 t"
+check "MeshCom firmware 4.35u is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35u 4 35 u"
+check "  … 4.40a too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.40a 4 35 u"
+check "  … 4.35t is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35t 4 35 u"
+check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 u"
 if have python3; then
   check "the checklist is read without node, with python3" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
     have() { [ \"\$1\" != node ] && command -v \"\$1\" >/dev/null; };

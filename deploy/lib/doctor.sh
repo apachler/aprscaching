@@ -337,8 +337,8 @@ doc_meshcom() {
       continue
     fi
     pass "ingest.meshcom.$call" "MeshCom node $call last heard $(date -d "@$heard" '+%F %T' 2>/dev/null || echo "$heard")"
-    if [ -n "$fw" ] && ! fw_at_least "$fw" 4 35 t; then
-      warnc "ingest.meshcom_fw.$call" "MeshCom node $call runs firmware $fw; ExtUDP needs 4.35t (built 2026-09-25) or newer" \
+    if [ -n "$fw" ] && ! fw_at_least "$fw" 4 35 u; then
+      warnc "ingest.meshcom_fw.$call" "MeshCom node $call runs firmware $fw; ExtUDP needs 4.35u or newer" \
         "update the node's firmware"
     fi
   done

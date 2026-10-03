@@ -570,8 +570,9 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
     turns a broadcast or group message into a direct message to a relay; the via list is display
     metadata, never a link and never trust; the operator's own node's Via setting shows in the station
     status, the Pocket notification and the box log ([design](docs/contribute/design/meshcom.md#via-calls)).
-  - **Watch: automatic via selection and Hey!-based routing** — the firmware's automatic via (the gateway
-    token `HG`, the best-connected MHeard neighbour) is commented out "for testing" since 2026-07-22. Once
+  - **Watch: automatic via selection and Hey!-based routing** — the firmware's automatic via is commented out
+    "for testing" since 2026-07-22 (still so in 4.40a). The disabled code picks the gateway token `HG` on a
+    gateway and otherwise the direct neighbour heard within 60 minutes that reports the most neighbours. Once
     it returns, via lists appear without operators setting them, and destinations such as `HG` may reach
     ExtUDP; check the destination rules and the fixtures against it then.
   - **MeshCom on the map** — done: the node and link store, `/api/meshcom/nodes` and `/links`, the map
@@ -621,7 +622,9 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
           adds a station to the map, and the one that fills the position list, negate latitude for `W` and
           longitude for `S`, so neither is negated (`tdeck_add_pos_point`, `tdeck_add_to_pos_view`).
           _Why:_ stations outside the northern and eastern hemispheres plot in the wrong place. _Notes:_ a
-          one-line fix; file it on icssw-org/MeshCom-Firmware. _Depends on:_ —
+          one-line fix in each function; the issue is drafted in the research page
+          ([draft](docs/contribute/design/meshcom-tdeck-map.md#draft-southern-and-western-positions-on-the-t-deck-map)),
+          to file on icssw-org/MeshCom-Firmware. _Depends on:_ —
 - [ ] **Bring-your-own-ingest** _(P2 · M)_ — a user binds their local ingest box to a cloud instance
       they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
       signed-batch path already authenticates one operator, own-traffic-only), extended with per-user

@@ -16,9 +16,9 @@
 #   bash ~/aprscaching/deploy/pocket/meshcom-setup.sh --call OE8APR-12 --yes
 #   bash ~/aprscaching/deploy/pocket/meshcom-setup.sh --wifi --node-ip 192.168.1.60
 #
-# The node needs MeshCom firmware 4.35t built on or after 2026-09-25, or newer (older builds can crash
-# with ExtUDP on); the fixed-address commands exist since 4.34i. Should the network's subnet change (the
-# hotspot's, after a reboot on some phones), run this again and enter the new commands. Telling the
+# The node needs MeshCom firmware 4.35u or newer (older builds can crash with ExtUDP on); the
+# fixed-address commands exist since 4.34i. Should the network's subnet change (the hotspot's, after a
+# reboot on some phones), run this again and enter the new commands. Telling the
 # hotspot from a joined Wi-Fi needs the Termux:API app and package; without them, the script asks.
 #
 # Options:

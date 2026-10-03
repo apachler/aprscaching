@@ -144,8 +144,8 @@ It waits 30 s after boot (`APRSCACHING_BOOT_DELAY`), then runs `start.sh --no-at
 
 A MeshCom node (a T-Deck, T-Beam or Heltec on 70 cm) joins the phone's hotspot as a Wi-Fi client and sends
 everything it handles to the ingest over ExtUDP. Positions and messages then appear on the map with no
-internet at all: flight mode with the hotspot on is enough. The node needs MeshCom firmware 4.35t built on
-or after 2026-09-25, or newer; older builds can crash with ExtUDP on.
+internet at all: flight mode with the hotspot on is enough. The node needs MeshCom firmware 4.35u or newer;
+older builds can crash with ExtUDP on.
 
 With the hotspot on:
 
