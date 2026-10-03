@@ -16,4 +16,5 @@ export * from "./meshcom.js";
 export * from "./config.js";
 export * from "./offlinepack.js";
 export * from "./stageseal.js";
+export * from "./media.js";
 export * from "./dxcc.js";

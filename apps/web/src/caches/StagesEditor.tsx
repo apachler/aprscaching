@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
+import { MEDIA_LIMITS, mediaMB } from "@aprscaching/shared";
 import { getStages, setStages, uploadStageClip, type CacheStage } from "../api.js";
 import { parseCoordinates } from "../map/geo.js";
 import { Button, useToast, useConfirm } from "../ui/index.js";
@@ -127,8 +128,8 @@ export function StagesEditor(props: {
 
   async function upload(n: number, file: File | undefined) {
     if (!file) return;
-    if (file.size > 5_000_000) {
-      toast("The clip is over 5 MB.");
+    if (file.size > MEDIA_LIMITS.audio) {
+      toast(`The clip is over ${mediaMB(MEDIA_LIMITS.audio)}.`);
       return;
     }
     try {
@@ -217,7 +218,7 @@ export function StagesEditor(props: {
                 )}
                 {r.unlock === "audio" && n > 0 && (
                   <label>
-                    Audio clip <span className="muted">(up to 3 MB)</span>
+                    Audio clip <span className="muted">(up to {mediaMB(MEDIA_LIMITS.audio)})</span>
                     <input
                       type="file"
                       accept="audio/*"

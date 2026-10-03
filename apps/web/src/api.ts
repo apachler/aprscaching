@@ -1371,7 +1371,7 @@ export function setStages(
 ): Promise<{ ok: boolean; offline: { stageNo: number; offline: boolean; reason?: string }[] }> {
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
-/** Upload an audio stage's clip (up to 5 MB), as the cache's owner. */
+/** Upload an audio stage's clip (at most `MEDIA_LIMITS.audio`), as the cache's owner. It replaces the stage's clip. */
 export function uploadStageClip(
   cacheId: number,
   stageNo: number,
@@ -1379,7 +1379,7 @@ export function uploadStageClip(
   file: File,
 ): Promise<{ ok: true }> {
   return call(`/api/caches/${cacheId}/stages/${stageNo}/media`, {
-    method: "POST",
+    method: "PUT",
     headers: { "content-type": file.type || "audio/mpeg", "x-owner-call": ownerCall },
     body: file,
   });
