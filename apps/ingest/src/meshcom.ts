@@ -111,6 +111,8 @@ export type MeshcomCounters = {
   udp: number;
   own: number;
   tele: number;
+  /** Delivery acks the node reported for its own direct messages; counted, not forwarded. */
+  acks: number;
   /** Via-path tokens dropped from messages because they are not callsigns; the messages themselves are kept. */
   viaDropped: number;
   rejected: Record<string, number>;
@@ -131,6 +133,7 @@ export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined)
     ...(p.rf ? { rssi: p.rssi, snr: p.snr } : {}),
     firmware: p.firmware,
     ...(e.type === "pos" ? { hwId: e.hwId, batt: e.batt } : {}),
+    ...(e.type === "msg" && e.hwId !== undefined ? { hwId: e.hwId } : {}),
     // a message carries its sender's via list, empty when it named none (display only)
     ...(e.type === "msg" ? { via: e.via ?? [] } : {}),
   });
@@ -189,6 +192,7 @@ export class MeshcomListener {
     udp: 0,
     own: 0,
     tele: 0,
+    acks: 0,
     viaDropped: 0,
     rejected: {},
   };
@@ -231,6 +235,10 @@ export class MeshcomListener {
     this.fanOut(msg);
 
     const d = decodeMeshcom(msg, { receiverCalls: this.receiverCalls });
+    if (!d.ok && d.reason === "ack") {
+      this.counters.acks++;
+      return null;
+    }
     if (!d.ok) return this.reject(d.reason);
     const e = d.event;
     this.checkFirmware(e, node);

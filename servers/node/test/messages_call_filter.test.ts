@@ -26,4 +26,21 @@ describe("messages for one call", () => {
     expect((await call(env, "GET", "/api/messages")).data.messages).toHaveLength(5);
     expect((await call(env, "GET", "/api/messages?call=%25")).status).toBe(400);
   });
+
+  it("leaves out the service call's traffic, which shares the sysop's base call", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8ABC" });
+    const rows: [string, string, string][] = [
+      ["OE8ABC-7", "OE3XYZ", "the sysop's own"],
+      ["OE3XYZ", "OE8ABC-15", "a player's command"],
+      ["OE8ABC-15", "OE3XYZ", "the instance's answer"],
+    ];
+    for (const [i, [from, to, body]] of rows.entries())
+      await env.DB.prepare("INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?,?,?,?, 'rx')")
+        .bind(1_000 + i, from, to, body)
+        .run();
+    const mine = (await call(env, "GET", "/api/messages?call=OE8ABC")).data.messages.map(
+      (m: { body: string }) => m.body,
+    );
+    expect(mine).toEqual(["the sysop's own"]);
+  });
 });

@@ -13,6 +13,7 @@ import { lastSeenLagS } from "./downsample.js";
 import { sessionIdentity } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
+import { serviceCall } from "./servicecall.js";
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -99,7 +100,8 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const pg = parsePage(u, 50, 200);
   const to = u.searchParams.get("to");
   const bulletins = u.searchParams.get("bulletins") === "1";
-  // `call`: one operator's traffic, sent or received under any SSID of its base call
+  // `call`: one operator's traffic, sent or received under any SSID of its base call. The service call shares
+  // the sysop's base call but carries the instance's traffic (players' commands, its answers), never theirs.
   const callParam = u.searchParams.get("call");
   const base = callParam ? baseCall(callParam.trim().toUpperCase()) : null;
   if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
@@ -108,7 +110,9 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const binds: (string | number)[] = [];
   if (base) {
     sql += " AND (from_call = ? OR from_call LIKE ? OR to_call = ? OR to_call LIKE ?)";
-    binds.push(base, `${base}-%`, base, `${base}-%`);
+    sql += " AND from_call != ? AND IFNULL(to_call, '') != ?";
+    const service = serviceCall(env);
+    binds.push(base, `${base}-%`, base, `${base}-%`, service, service);
   } else if (to) {
     sql += " AND to_call = ?";
     binds.push(to.toUpperCase());

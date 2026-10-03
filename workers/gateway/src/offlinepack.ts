@@ -29,7 +29,7 @@ import { json } from "./app.js";
 import { nowS } from "./util/time.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { sessionIdentity } from "./auth.js";
-import { serviceCall } from "./radiolog.js";
+import { serviceCall } from "./servicecall.js";
 import {
   toSummary,
   nativeMapCache,

@@ -80,7 +80,7 @@ export interface BoxPollerOpts {
   radio: BoxRadio | null;
   /** MeshCom sender, or null when MeshCom transmit is not enabled on this box. */
   meshcom?: BoxMeshcom | null;
-  /** The gateway's service call answers are sent from (`BOX_SERVICE_CALL`, default `APRSCG`). */
+  /** The gateway's service call answers are sent from, until the gateway names it in a poll. */
   serviceCall?: string;
   state: BoxState;
   /** Digipeater path for remote beacons and messages. */
@@ -125,6 +125,8 @@ export class BoxPoller {
   private loggedAt = 0;
   /** The last APRS message number sent; starts at random so a restart does not repeat recent numbers. */
   private msgNo = Math.floor(Math.random() * 99_999);
+  /** The service call the gateway named in its last poll. */
+  private serviceCall?: string;
   private readonly startedAt: number;
   private readonly now: () => number;
   private readonly fetch: typeof fetch;
@@ -190,7 +192,8 @@ export class BoxPoller {
         headers: { "x-ingest-secret": this.o.secret },
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const { commands } = (await r.json()) as { commands?: BoxCommand[] };
+      const { commands, serviceCall } = (await r.json()) as { commands?: BoxCommand[]; serviceCall?: string };
+      if (serviceCall) this.serviceCall = serviceCall;
       for (const cmd of commands ?? []) {
         const res = await this.execute(cmd);
         this.log(`[box] ${cmd.kind} #${cmd.id} ${res.status}: ${res.result}`);
@@ -265,7 +268,7 @@ export class BoxPoller {
    */
   private aprsAnswer(cmd: BoxCommand, p: Record<string, unknown>): BoxResult {
     const fail = (result: string): BoxResult => ({ status: "failed", result });
-    const service = (this.o.serviceCall ?? "APRSCG").toUpperCase();
+    const service = (this.serviceCall ?? this.o.serviceCall ?? "APRSCG").toUpperCase();
     const from = String(p.from ?? "").toUpperCase();
     const to = String(p.to ?? "")
       .trim()

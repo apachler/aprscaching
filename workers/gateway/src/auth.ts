@@ -10,6 +10,7 @@ import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { licenceFor } from "./licence.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
+import { FALLBACK_SERVICE_CALL } from "./servicecall.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -118,8 +119,8 @@ export const isWithdrawnCall = (c: string | null | undefined): boolean => {
 export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAWN : c);
 
 /** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
- *  and the default service call that takes radio commands and sends BBS mail. */
-const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
+ *  and the service call of an instance with no sysop. A sysop's own service call is their licence. */
+const RESERVED_CALLS = new Set([WITHDRAWN, FALLBACK_SERVICE_CALL]);
 const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
 /** The account holding a base call. `account_callsigns` is the one record of who holds a licence:

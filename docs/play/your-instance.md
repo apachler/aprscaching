@@ -69,7 +69,7 @@ there, so use these ways in for the game, never for anything private.
 Open **Settings → Help & credits → About this instance**. It names the instance, its sysop, the ways in it
 publishes (its internet, 44Net or HAMNET name), how many peer instances it names and the version it runs. A way
 in the sysop did not publish is not listed: ask your sysop. For logging over the radio, the instance names its service call when you verify
-your callsign; it is `APRSCG` unless the instance names another ([Log from your radio](log-a-find.md#log-from-your-radio)).
+your callsign; it is your sysop's callsign with SSID 15 unless the instance names another ([Log from your radio](log-a-find.md#log-from-your-radio)).
 
 ## On the air
 

@@ -104,7 +104,7 @@ One verification covers the callsign and every [SSID](../glossary.md#ssid) of it
 ### On the air
 
 1. Tap **Get a code**. The app shows the message to send:
-    - **To**: the instance's service call, usually `APRSCG`.
+    - **To**: the instance's service call, your sysop's callsign with SSID 15, such as `OE8APR-15`.
     - **Message**: `VERIFY` and a six-digit code, for example `VERIFY 482913`.
 
     It also names the **Receiving stations** that listen for it.

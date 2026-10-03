@@ -65,7 +65,7 @@ describe("starting an RF verification", () => {
   });
 
   it("names the configured service call", async () => {
-    const env = rfEnv({ BBS_CALL: "OE8BBS" });
+    const env = rfEnv({ SERVICE_CALL: "OE8BBS" });
     const { s } = await started(env);
     expect(s.data.to).toBe("OE8BBS");
   });

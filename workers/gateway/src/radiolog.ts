@@ -2,7 +2,7 @@
 /**
  * radiolog.ts — logging finds by radio message.
  *
- * A text message addressed to the instance's service call (`BBS_CALL`, default `APRSCG`) is a command:
+ * A text message addressed to the instance's service call (servicecall.ts) is a command:
  *
  *   FOUND <code> [text]   log a find          DNF <code> [text]   log a did-not-find
  *   NOTE <code> <text>    log a note          HELP                the command syntax
@@ -39,6 +39,7 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import { alreadyFound, logRefusal } from "./findrules.js";
+import { serviceCall } from "./servicecall.js";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -65,9 +66,6 @@ type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
   | { command: "note"; code: string; body: string }
   | { command: "help" };
-
-/** The service call radio commands and `VERIFY` messages are addressed to — the identity BBS mail uses. */
-export const serviceCall = (env: Env): string => (env.BBS_CALL ?? "APRSCG").toUpperCase();
 
 /**
  * `ac1234`, `AC-1234`, `ac-1234` → `AC-1234`. A heritage reference keeps its own form, upper-cased: a SOTA

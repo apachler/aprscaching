@@ -21,7 +21,9 @@ export type MeshcomRejectReason =
   | "bad-position"
   | "no-fix"
   | "bad-dst"
-  | "empty-text";
+  | "empty-text"
+  /** A delivery ack (`type: "ack"`): a report about the node's own message, not a frame. */
+  | "ack";
 
 interface DatagramBase {
   srcType: MeshcomSrcType;
@@ -54,6 +56,23 @@ export interface MeshcomMsgDatagram extends DatagramBase {
   type: "msg";
   dst: string;
   text: string;
+  /** The sender's device; firmware 4.40 and later send it on messages too. */
+  hwId?: number;
+}
+
+/**
+ * A node's report that a direct message it sent was acknowledged, delivered through the MeshCom server
+ * (firmware 4.40 and later). It carries no `src_type` and no frame: `status` 1 is the gateway's ack, 2 the
+ * addressee's.
+ */
+export interface MeshcomAckDatagram {
+  type: "ack";
+  /** The acknowledged message's id, eight upper-case hex digits. */
+  msgId: string;
+  status: "gateway" | "peer";
+  /** The acknowledging call, when it is a callsign. */
+  from?: string;
+  raw: Record<string, unknown>;
 }
 
 export interface MeshcomTeleDatagram extends DatagramBase {
@@ -64,9 +83,12 @@ export interface MeshcomTeleDatagram extends DatagramBase {
 
 export type MeshcomDatagram = MeshcomPosDatagram | MeshcomMsgDatagram | MeshcomTeleDatagram;
 
-export type MeshcomParseResult = { ok: true; datagram: MeshcomDatagram } | { ok: false; reason: MeshcomRejectReason };
+export type MeshcomParseResult =
+  | { ok: true; datagram: MeshcomDatagram }
+  | { ok: true; ack: MeshcomAckDatagram }
+  | { ok: false; reason: MeshcomRejectReason };
 
-/** Upper bound on an accepted datagram. The firmware's JSON buffer is 500 bytes; 2 KiB leaves slack. */
+/** Upper bound on an accepted datagram. The firmware's message JSON buffer is 700 bytes; 2 KiB leaves slack. */
 export const MESHCOM_MAX_DATAGRAM = 2048;
 
 /** Numeric telemetry keys the firmware emits (`extern_tele_json.h`). */
@@ -111,6 +133,14 @@ export function parseMeshcomDatagram(input: Uint8Array | string): MeshcomParseRe
   }
   if (!o || typeof o !== "object" || Array.isArray(o)) return reject("not-object");
   const raw = o as Record<string, unknown>;
+
+  if (raw.type === "ack") {
+    const msgId = str(raw.msg_id);
+    const status = raw.status === 1 ? "gateway" : raw.status === 2 ? "peer" : undefined;
+    if (!msgId || !/^[0-9A-F]{1,8}$/i.test(msgId) || !status) return reject("unknown-type");
+    const from = str(raw.from);
+    return { ok: true, ack: { type: "ack", msgId: msgId.toUpperCase(), status, ...(from ? { from } : {}), raw } };
+  }
 
   const srcType = raw.src_type;
   if (srcType !== "lora" && srcType !== "udp" && srcType !== "node") return reject("unknown-src-type");
@@ -168,7 +198,8 @@ export function parseMeshcomDatagram(input: Uint8Array | string): MeshcomParseRe
         msg = str(raw.msg);
       if (dst === undefined) return reject("bad-dst");
       if (msg === undefined) return reject("empty-text");
-      return { ok: true, datagram: { ...base, type: "msg", dst, text: msg } };
+      const hwId = num(raw.hw_id);
+      return { ok: true, datagram: { ...base, type: "msg", dst, text: msg, ...(hwId !== undefined ? { hwId } : {}) } };
     }
     case "tele": {
       const values: Record<string, number> = {};

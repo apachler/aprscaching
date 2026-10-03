@@ -66,9 +66,12 @@ Restart the ingest. Its log shows:
 
 ### Answering radio commands (optional)
 
-Players can log a find by sending a MeshCom direct message such as `FOUND AC-1234` to `APRSCG`
-([Log from your radio](../../play/log-a-find.md#log-from-your-radio)). To let the box acknowledge those
-messages, and send the instance's text replies, through the node that heard them, set on the box:
+Players can log a find by sending a MeshCom direct message such as `FOUND AC-1234` to the instance's
+[service call](../../glossary.md#service-call) ([Log from your radio](../../play/log-a-find.md#log-from-your-radio)):
+your callsign with SSID 15, such as `OE8APR-15`. MeshCom nodes drop a direct message to an address without a
+digit, so the service call is always a callsign; give your node and your other stations another SSID, or the
+node takes the players' messages as its own. To let the box acknowledge those messages, and send the
+instance's text replies, through the node that heard them, set on the box:
 
 ```
 BOX_ID=pi-home
@@ -128,7 +131,7 @@ corroborates your own finds. Relays and server copies still show on the map and 
 nothing about where a station was.
 
 **Callsign verification** follows the same rule. A player's `VERIFY <code>` direct message to the service
-call (`APRSCG`), from any SSID of their call, verifies the call only when your node heard it directly over
+call, from any SSID of their call, verifies the call only when your node heard it directly over
 LoRa and the node's callsign is in `FIRST_PARTY_SITES`. A copy relayed by another node, or passed on by the
 MeshCom server, is dropped without an answer and costs the player no attempt. The verification names your
 node as the station that heard it. With [answering](#answering-radio-commands-optional) set up, the node
@@ -158,6 +161,10 @@ acks the message and confirms the verification. The player's steps are in
 The box transmits on MeshCom only when [answering radio commands](#answering-radio-commands-optional) is
 set up.
 
+**KISS over TCP.** An ESP32 node with firmware 4.35t (built 2026-09-24 or later) also serves KISS on TCP port
+8001, one client at a time. APRSdroid, Xastir or YAAC can use the node that way. The box keeps ExtUDP: it
+carries the signal report and the sender's device, which KISS frames do not.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
@@ -167,6 +174,7 @@ set up.
 | `no datagram from … for N min` | The node is off the Wi-Fi, runs its own access point, or `--extudpip` points elsewhere. Check on the node with `--info`. |
 | `rejected: {"not-allowlisted": …}` rising | The node's address changed (give it a DHCP reservation), or something else on the LAN sends to 1799. |
 | The node restarts when ExtUDP is on | Firmware older than a 4.35t build of 2026-09-25: update it. |
+| Players' `FOUND` messages never arrive | The instance's service call has no digit (`SERVICE_CALL`), or your node uses the service call's SSID and takes the messages as its own. |
 | Positions but no Tier A | The node's callsign is missing from `MESHCOM_NODE=<ip>=<CALL>` or from the gateway's `FIRST_PARTY_SITES`, or the frames are relayed rather than heard directly. |
 
 ## Next

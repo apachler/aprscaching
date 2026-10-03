@@ -97,6 +97,20 @@ describe("MeshCom listener — allowlist and limits", () => {
     l.receive(pos({ lat: 0, long: 0 }), NODE);
     expect(l.counters.rejected).toMatchObject({ "not-json": 1, "no-fix": 1 });
   });
+  it("counts a delivery ack from a 4.40 node, neither forwarding nor rejecting it", () => {
+    const { l, out } = make();
+    expect(
+      l.receive(enc({ type: "ack", msg_id: "0A1B2C3D", status: 2, from: "DH1FR-1", via: "udp" }), NODE),
+    ).toBeNull();
+    expect(out).toHaveLength(0);
+    expect(l.counters.acks).toBe(1);
+    expect(l.counters.rejected).toEqual({});
+  });
+  it("keeps the sender's device on a message from a 4.40 node", () => {
+    const { l, out } = make();
+    l.receive(msg({ hw_id: 43, lora_mod: 3, max_hop: 4 }), NODE);
+    expect((out[0]?.parsed?.meshcom as { hwId?: number } | undefined)?.hwId).toBe(43);
+  });
 });
 
 describe("MeshCom listener — provenance stamped on forwarded packets", () => {

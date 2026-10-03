@@ -285,6 +285,21 @@ describe("answers to radio commands", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("speaks for the service call the gateway names in its poll", async () => {
+    const f = (async () =>
+      new Response(JSON.stringify({ serviceCall: "OE8APR-15", commands: [] }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    const { poller, sent, nowSec } = setup({ fetch: f });
+    await poller.tick();
+    expect((await poller.execute(answer({ createdAt: nowSec() }))).result).toMatch(/only answers from OE8APR-15/);
+    const r = await poller.execute(
+      answer({ createdAt: nowSec(), payload: { from: "OE8APR-15", to: "OE8APR-7", text: "ack12" } }),
+    );
+    expect(r.status).toBe("done");
+    expect(sent[0]!.payload).toBe("}OE8APR-15>APZACG,TCPIP,OE8APR-10*::OE8APR-7 :ack12");
+  });
+
   it("passes the opt-in, transmit switch and age gates", async () => {
     expect((await setup({ remoteTx: false }).poller.execute(answer())).result).toMatch(/BOX_TX=1/);
     const off = setup();

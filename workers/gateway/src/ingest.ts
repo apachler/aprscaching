@@ -16,7 +16,8 @@ import { recordRendezvous } from "./rendezvous.js";
 import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { handleRadioMessage, serviceCall, splitMessageNumber, type RadioMessage } from "./radiolog.js";
+import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./radiolog.js";
+import { serviceCall } from "./servicecall.js";
 import { transportForPort } from "./provenance.js";
 import {
   downsamplePolicy,
@@ -67,13 +68,19 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
 const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * GET /ingest/check — does this ingest credential work? 200 with the instance id (and the box, for an
- * enrolled box's signed request) for a valid credential, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
+ * GET /ingest/check — does this ingest credential work? 200 with the instance id, its service call (the box
+ * asks APRS-IS for messages addressed to it) and, for an enrolled box's signed request, the box, for a valid
+ * credential, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
  * doctor`) can test its settings without posting a batch, draining the outbox or leasing a command.
  */
 export function handleIngestCheck(req: Request, env: Env): Response {
   if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
-  return json({ ok: true, instance: env.INSTANCE ?? null, box: boxPrincipal(req)?.box ?? null });
+  return json({
+    ok: true,
+    instance: env.INSTANCE ?? null,
+    serviceCall: serviceCall(env),
+    box: boxPrincipal(req)?.box ?? null,
+  });
 }
 
 /** Receive batched packets from the ingest box, persist positions, enrich the shack, fan out live. */
@@ -199,7 +206,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         });
       }
     } else if (data.kind === "message" && data.ack && data.msgNo) {
-      ackedBy.push({ from: p.src, lineNo: data.msgNo });
+      // held mail is sent from the service call, so only an ack addressed to it confirms a delivery
+      if (String(data.addressee ?? "").toUpperCase() === service) ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
 
     // shack raw packet view: a short, TTL-pruned ring of raw frames per

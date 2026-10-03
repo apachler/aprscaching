@@ -68,6 +68,8 @@ export interface MeshcomMsgEvent extends EventBase {
   viaDropped?: number;
   /** Message text, control characters collapsed to single spaces. */
   text: string;
+  /** The MeshCom hardware id of the sending device. */
+  hwId?: number;
 }
 
 export interface MeshcomTeleEvent extends EventBase {
@@ -103,10 +105,12 @@ export function classifyMeshcomDst(dst: string): { dst: string; kind: MeshcomDst
   }
   const call = canonMeshcomCall(d);
   if (call) return { dst: call, kind: "call" };
-  // The firmware takes any destination of up to nine characters as a direct message, so a service
-  // address such as APRSCG (not a callsign) is a valid direct-message destination too.
+  // Kept for a destination such as APRSCG that a gateway or another client relays: nodes themselves drop a
+  // direct message whose destination is not callsign-shaped (no digit), so they never relay one.
   return /^[A-Z][A-Z0-9-]{0,8}$/.test(d) ? { dst: d, kind: "call" } : null;
 }
+
+const validHwId = (n: number | undefined): n is number => n !== undefined && Number.isInteger(n) && n >= 0 && n <= 255;
 
 /** Path tokens beyond this are not a MeshCom path (the firmware's hop limit is far lower). */
 const MAX_PATH = 9;
@@ -178,7 +182,7 @@ export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): 
         locator: toMaidenhead(lat, lon),
         ...(symbol !== undefined ? { symbol } : {}),
         ...(d.batt !== undefined && d.batt >= 0 && d.batt <= 100 ? { batt: d.batt } : {}),
-        ...(d.hwId !== undefined && Number.isInteger(d.hwId) && d.hwId >= 0 && d.hwId <= 255 ? { hwId: d.hwId } : {}),
+        ...(validHwId(d.hwId) ? { hwId: d.hwId } : {}),
       },
     };
   }
@@ -199,6 +203,7 @@ export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): 
         text,
         ...(parts.via.length ? { via: parts.via } : {}),
         ...(parts.viaDropped ? { viaDropped: parts.viaDropped } : {}),
+        ...(validHwId(d.hwId) ? { hwId: d.hwId } : {}),
       },
     };
   }
@@ -209,5 +214,6 @@ export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): 
 /** Parse and normalise in one step. */
 export function decodeMeshcom(input: Uint8Array | string, ctx: MeshcomContext = {}): MeshcomDecodeResult {
   const p = parseMeshcomDatagram(input);
-  return p.ok ? normalizeMeshcom(p.datagram, ctx) : p;
+  if (!p.ok) return p;
+  return "ack" in p ? { ok: false, reason: "ack" } : normalizeMeshcom(p.datagram, ctx);
 }

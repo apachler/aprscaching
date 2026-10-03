@@ -72,7 +72,7 @@ Set `BBS_NODE_CALL`, and the box answers inbound AX.25 connects to that call wit
 
 The gateway also runs a connectionless store-and-forward BBS. It holds personal mail and bulletins; personal
 mail is **held until the addressee is next heard**, then delivered as a standard APRS message with
-line-number ack tracking. The relay callsign is `BBS_CALL` (default `APRSCG`). The message format (P/B type
+line-number ack tracking. Mail goes out from the instance's service call (`SERVICE_CALL`, by default your callsign with SSID 15). The message format (P/B type
 and BID) is MBL/FBB-compatible. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
 
 ### FBB forwarding

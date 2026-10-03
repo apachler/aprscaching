@@ -2,11 +2,15 @@
 import net from "node:net";
 import { Backoff } from "./backoff.js";
 
+const baseOf = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
+
 /**
- * APRS-IS uplink for publishing announces. Logs in ONCE under the service callsign and relays
- * each user find using THIRD-PARTY format, so the user's callsign stays the inner source:
+ * APRS-IS uplink. Logs in ONCE under the uplink callsign (`APRSIS_SERVICE_CALL`, with the passcode of its
+ * base call). An item from a call of that same base call — the gateway's service call answering a radio
+ * command, acking it or delivering held mail — goes out as a plain packet, so IGates gate a message to the
+ * addressee on RF. An item from anyone else (a player's announced find) is relayed as THIRD-PARTY traffic,
+ * so the player's call stays the inner source:
  *   SERVICE>APZACG,TCPIP*:}USERCALL>APZACG,TCPIP*:>Found AC-1234 via aprscaching.net
- * Requires a service callsign + its APRS-IS passcode (passcode is derived from the callsign).
  */
 export class AprsUplink {
   private sock?: net.Socket;
@@ -67,7 +71,10 @@ export class AprsUplink {
     // caller keeps the item queued for the next tick.
     if (!this.ready || !s || !s.writable || s.destroyed) return false;
     const inner = `${item.src_call}>${item.tocall},TCPIP*:${item.payload}`;
-    const frame = `${this.o.serviceCall}>${item.tocall},TCPIP*:}${inner}\r\n`;
+    const frame =
+      baseOf(item.src_call) === baseOf(this.o.serviceCall)
+        ? `${inner}\r\n`
+        : `${this.o.serviceCall}>${item.tocall},TCPIP*:}${inner}\r\n`;
     try {
       s.write(frame);
       return true;

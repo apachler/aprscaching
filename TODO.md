@@ -604,7 +604,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
           on a measurement build. _Why:_ sizes the overlay's point cap. _Notes:_ the other firmware questions
           are settled from the 4.40a source (research page). _Depends on:_ the T-Deck Plus test device.
     - [ ] **Upstream issue: southern and western positions on the T-Deck map** _(P3 · S)_ — the function that
-          adds a station to the map negates latitude for `W` and longitude for `S`, so neither is negated.
+          adds a station to the map, and the one that fills the position list, negate latitude for `W` and
+          longitude for `S`, so neither is negated (`tdeck_add_pos_point`, `tdeck_add_to_pos_view`).
           _Why:_ stations outside the northern and eastern hemispheres plot in the wrong place. _Notes:_ a
           one-line fix; file it on icssw-org/MeshCom-Firmware. _Depends on:_ —
 - [ ] **Bring-your-own-ingest** _(P2 · M)_ — a user binds their local ingest box to a cloud instance

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
+import { serviceCall } from "./servicecall.js";
 import { ingestSecretOk, sessionIdentity, accountHoldsCall } from "./auth.js";
 /**
  * bbs.ts — store-and-forward message BBS (connectionless). A message base of personal mail
@@ -18,7 +19,6 @@ const RETRY_INTERVAL = 60; // seconds between (re)delivery attempts
 const APRS_BODY_MAX = 67; // APRS message text limit
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
-const relayCall = (env: Env) => (env.BBS_CALL ?? "APRSCG").toUpperCase();
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
 // ---------------------------------------------------------------- mailbox access
@@ -379,7 +379,7 @@ export async function deliverHeld(env: Env, callsign: string): Promise<number> {
     stmts.push(
       env.DB.prepare(
         "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?, 'APZACG', 'message', ?)",
-      ).bind(n, relayCall(env), payload),
+      ).bind(n, serviceCall(env), payload),
     );
     stmts.push(
       env.DB.prepare(

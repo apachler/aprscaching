@@ -57,8 +57,8 @@ From the firmware source, release 4.40a:
 - **Memory.** The board has 8 MB of PSRAM and LVGL allocates from it, so memory is not what limits an
   overlay. The 30-entry ring is.
 - **Southern and western positions plot in the wrong place.** The function that adds a station negates the
-  latitude for `W` and the longitude for `S`, the letters swapped, so neither is ever negated. Positions in
-  Europe are unaffected.
+  latitude for `W` and the longitude for `S`, the letters swapped, so neither is ever negated. The position
+  list has the same swap. Positions in Europe are unaffected.
 
 ## Why caches cannot be pushed onto the map
 

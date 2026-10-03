@@ -109,6 +109,15 @@ describe("station status", () => {
     ]);
   });
 
+  it("leaves out messages to the service call: players' commands, which the instance answers itself", async () => {
+    sqlite
+      .prepare("INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,NULL,'rx')")
+      .run(now - 10, "OE5XYZ-7", "OE8APR-15", "FOUND AC-0001");
+    const s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.messages.map((m) => m.body)).not.toContain("FOUND AC-0001");
+    expect(s.messages.map((m) => m.body)).toContain("hello");
+  });
+
   it("returns only messages after `since`, and never older than a week", async () => {
     let s = (await (await status({ "x-operator-secret": SECRET }, `?since=${now - 60}`)).json()) as StationStatus;
     expect(s.messages.map((m) => m.body)).toEqual(["second"]);

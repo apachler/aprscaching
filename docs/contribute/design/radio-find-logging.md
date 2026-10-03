@@ -38,8 +38,12 @@ command runs — it only decides how far the message is trusted (its provenance)
 Meshtastic is out of scope: its nodes are identified by node ids, not callsigns, so a message cannot be tied
 to a verified callsign.
 
-The service call is the identity the gateway sends BBS forwarding from and to which callsign-verification
-messages are addressed: `BBS_CALL`, default `APRSCG`.
+The service call is the instance's one on-air call: radio commands and callsign-verification messages are
+addressed to it, and acks, replies and held personal mail are sent from it. It is `SERVICE_CALL`, by default the
+first `ADMIN_CALLSIGNS` base call with SSID 15 (`OE8APR-15`), and `APRSCG` only on an instance with no sysop. It
+must be callsign-shaped: MeshCom nodes drop a direct message whose destination has no digit. The ingest box
+learns it from the gateway, adds a group-message filter (`g/<service call>`) to its APRS-IS feed so commands
+from outside the feed's range arrive, and refuses to answer from any other call.
 
 ## Commands
 
@@ -102,9 +106,9 @@ Tier A`, or why it was not logged) is sent only when the instance operator turns
 
 | The message was heard | The answer goes |
 |---|---|
-| on the ingest box's own radio (KISS TNC) | from that box, on RF: third-party traffic whose inner source is the service call, under the box's licensed call — `OE8APR-10>APZACG:}APRSCG>APZACG,TCPIP,OE8APR-10*::OE3PLY-7 :ack12`, the form an IGate uses to gate APRS-IS messages to RF, so the sender's radio sees the answer come from the address it messaged. No internet needed. |
+| on the ingest box's own radio (KISS TNC) | from that box, on RF: third-party traffic whose inner source is the service call, under the box's licensed call — `OE8APR-10>APZACG:}OE8APR-15>APZACG,TCPIP,OE8APR-10*::OE3PLY-7 :ack12`, the form an IGate uses to gate APRS-IS messages to RF, so the sender's radio sees the answer come from the address it messaged. No internet needed. |
 | by a MeshCom node the box listens to | from that node, handed to it over ExtUDP. The ack is the text `SENDER   :ack<nnn>`: the firmware offers an external client no ack frame, but its receive path treats a text message of that form as the acknowledgement of message `nnn`, matched by number alone. The node sends it under its own call. |
-| only over APRS-IS | through the APRS outbox and the ingest box's APRS-IS uplink (`APRSIS_SERVICE_CALL`); an IGate near the player gates it to RF. |
+| only over APRS-IS | through the APRS outbox and the ingest box's APRS-IS uplink (`APRSIS_SERVICE_CALL`). An uplink logged in with the service call's base call sends the answer as a plain message from the service call, which an IGate near the player gates to RF; any other login sends it as third-party traffic, which IGates do not gate. |
 
 Each ingest box stamps the frames it receives on a radio it can transmit on with its `BOX_ID`, and
 reports with every command poll whether it may transmit (`BOX_TX=1` and the transmit switch on), whether it
@@ -149,9 +153,9 @@ export and erase of a callsign cover logs written under any of its SSIDs.
 `HELP` is always answered, even with text replies off — the sender asked for the reply — and it counts
 against the per-destination reply limit.
 
-Settled against the MeshCom firmware source (4.35t): no input path checks a direct message's destination
-against a callsign pattern, so `APRSCG` is a valid destination; nodes relay direct messages not addressed to
-them and output them on ExtUDP (unless the node operator turned on `--nopmother`); and a direct message
+Settled against the MeshCom firmware source (4.35t to 4.40a): every node checks a direct message's destination
+against a callsign pattern (`checkRegexCall`, a digit required) and drops the frame when it fails, so the
+service call must be callsign-shaped; nodes relay direct messages not addressed to them and output them on ExtUDP (unless the node operator turned on `--nopmother`); and a direct message
 carries its number as a `{nnn` suffix, which reaches the gateway as the APRS message number.
 
 ## Invariants

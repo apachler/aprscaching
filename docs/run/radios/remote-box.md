@@ -55,8 +55,9 @@ the box to its configured state.
 ## Answers to radio commands
 
 With `BOX_TX=1` the box also answers players' radio commands that it heard itself, such as `FOUND AC-1234`
-sent to `APRSCG` ([Log from your radio](../../play/log-a-find.md#log-from-your-radio)). The ack goes out on its
-own radio as third-party traffic from `APRSCG` under `BOX_CALL`, or through its MeshCom node when
+sent to the instance's [service call](../../glossary.md#service-call)
+([Log from your radio](../../play/log-a-find.md#log-from-your-radio)). The ack goes out on its own radio as
+third-party traffic from the service call under `BOX_CALL`, or through its MeshCom node when
 `MESHCOM_TX=1` ([MeshCom](meshcom.md#answering-radio-commands-optional)). A box with a radio therefore
 acknowledges finds even without internet. These answers pass the same gates: the transmit switch, the command
 age and the rate limit.

@@ -248,8 +248,8 @@ describe("retries, limits and replies", () => {
     expect(outbox()).toEqual(["APRSCG :OE8APR-7 :AC-0001 found, logged Tier A"]);
   });
 
-  it("replies and acks come from BBS_CALL when set", async () => {
-    freshEnv({ BBS_CALL: "OE8APR-5" });
+  it("replies and acks come from SERVICE_CALL when set", async () => {
+    freshEnv({ SERVICE_CALL: "OE8APR-5" });
     await handleRadioMessage(env, onAir());
     expect(outbox()).toEqual(["OE8APR-5 :OE8APR-7 :ack12"]);
   });

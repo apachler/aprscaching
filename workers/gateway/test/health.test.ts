@@ -62,7 +62,7 @@ describe("/health readiness probe", () => {
       route(new Request("http://gw/ingest/check", { headers: secret ? { "x-ingest-secret": secret } : {} }), env, ctx);
     const ok = await check("the-ingest-secret-123");
     expect(ok.status).toBe(200);
-    expect(await ok.json()).toEqual({ ok: true, instance: "oe.test", box: null });
+    expect(await ok.json()).toEqual({ ok: true, instance: "oe.test", serviceCall: "APRSCG", box: null });
     expect((await check("wrong")).status).toBe(401);
     expect((await check()).status).toBe(401);
     expect(touched).toBe(false);
