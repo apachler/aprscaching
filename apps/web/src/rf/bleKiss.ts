@@ -108,30 +108,36 @@ export class BleKissLink {
     private onLost?: () => void,
   ) {}
 
+  /** Throws when no link comes up, with the GATT connection already released; onLost is for an established link. */
   async connect(): Promise<void> {
     const bt = (navigator as unknown as { bluetooth: { requestDevice(o: unknown): Promise<BleDeviceLike> } }).bluetooth;
-    this.device = await bt.requestDevice(bleKissRequestOptions());
-    this.closed = false;
-    this.device.addEventListener?.("gattserverdisconnected", () => {
-      if (!this.closed) this.onLost?.();
+    const device = await bt.requestDevice(bleKissRequestOptions());
+    this.device = device;
+    // The link counts as lost only once it is up: a GATT drop while connecting is connect()'s own error.
+    this.closed = true;
+    device.addEventListener?.("gattserverdisconnected", () => {
+      if (!this.closed && this.device === device) this.onLost?.();
     });
-    const gatt = await this.device.gatt.connect();
-    const services = await gatt.getPrimaryServices();
-    const profile = pickBleKissProfile(services.map((s) => s.uuid));
-    const svc = profile && services.find((s) => s.uuid.toLowerCase() === profile.service);
-    if (!profile || !svc) {
-      this.device.gatt.disconnect();
-      throw new Error("this Bluetooth device offers no KISS service");
-    }
-    this.profile = profile;
-    this.notifyChar = await svc.getCharacteristic(profile.notify);
-    this.notifyChar.addEventListener("characteristicvaluechanged", this.onValue);
-    await this.notifyChar.startNotifications();
     try {
-      this.writeChar = await svc.getCharacteristic(profile.write);
-    } catch {
-      this.writeChar = null; // a receive-only TNC
+      const gatt = await device.gatt.connect();
+      const services = await gatt.getPrimaryServices();
+      const profile = pickBleKissProfile(services.map((s) => s.uuid));
+      const svc = profile && services.find((s) => s.uuid.toLowerCase() === profile.service);
+      if (!profile || !svc) throw new Error("this Bluetooth device offers no KISS service");
+      this.profile = profile;
+      this.notifyChar = await svc.getCharacteristic(profile.notify);
+      this.notifyChar.addEventListener("characteristicvaluechanged", this.onValue);
+      await this.notifyChar.startNotifications();
+      try {
+        this.writeChar = await svc.getCharacteristic(profile.write);
+      } catch {
+        this.writeChar = null; // a receive-only TNC
+      }
+    } catch (e) {
+      await this.disconnect(); // a half-set-up link must not hold the GATT connection open
+      throw e;
     }
+    this.closed = false;
   }
 
   /** Can this TNC transmit? (It offers the write characteristic.) */

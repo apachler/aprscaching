@@ -32,8 +32,8 @@ type View = "air" | "mailbox" | "groups";
  * appears only once a group has been heard. Each message names the network that carried it. Transmitting from your own radio is gated on callsign control-verification
  * and lives with the RF path in Settings → My radio.
  */
-export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void }) {
-  const { callsign } = usePlatform();
+export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void; onSignIn?: () => void }) {
+  const { callsign, session } = usePlatform();
   const fmt = useFmt();
   const me = callsign.toUpperCase();
   const base = me.split("-")[0] ?? "";
@@ -136,10 +136,23 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
       )}
       {props.onRadio && shown !== "groups" && (
         <div className="msg-send">
-          <p className="muted fine">
-            To send a message, connect a TNC in <strong>Settings → My radio (browser)</strong> and switch on transmit.
-          </p>
-          <Button onClick={props.onRadio}>Open Settings</Button>
+          {session.signedIn ? (
+            <>
+              <p className="muted fine">
+                To send a message, connect a TNC in <strong>Settings → My radio (browser)</strong> and switch on
+                transmit.
+              </p>
+              <Button onClick={props.onRadio}>Open Settings</Button>
+            </>
+          ) : (
+            <>
+              <p className="muted fine">
+                To send a message from your own radio, sign in first, then connect a TNC in{" "}
+                <strong>Settings → My radio (browser)</strong>.
+              </p>
+              {props.onSignIn && <Button onClick={props.onSignIn}>Sign in</Button>}
+            </>
+          )}
         </div>
       )}
     </Panel>

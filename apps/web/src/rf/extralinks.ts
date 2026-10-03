@@ -154,7 +154,7 @@ export class WebSerialMeshtastic implements RfLink {
     this.port = await serial.requestPort();
     await this.port.open({ baudRate: this.baudRate });
     await this.wantConfig(); // ask the node to start streaming FromRadio frames
-    this.readLoop();
+    void this.readLoop();
   }
 
   /** ToRadio{ want_config_id } — triggers the node database (with licence flags) + the live packet stream. */
@@ -170,8 +170,10 @@ export class WebSerialMeshtastic implements RfLink {
     }
   }
 
+  /** Read until disconnect() or the link fails; a failed read ends the session like a failed KISS read. */
   private async readLoop(): Promise<void> {
-    while (this.port?.readable && !this.closed) {
+    let err: Error | undefined;
+    while (this.port?.readable && !this.closed && !err) {
       const reader = this.port.readable.getReader();
       this.reader = reader;
       try {
@@ -194,21 +196,27 @@ export class WebSerialMeshtastic implements RfLink {
           }
         }
       } catch (e) {
-        if (!this.closed) this.onClose?.(e as Error);
+        err = e as Error;
       } finally {
         try {
           reader.releaseLock();
         } catch {
           /* */
         }
+        this.reader = null;
       }
     }
+    if (this.closed) return;
+    // A lost link closes the port before it is reported, so the next connect can open it again.
+    await this.disconnect();
+    this.onClose?.(err);
   }
 
   async send(_frame: TxFrame): Promise<void> {
     throw new Error("Meshtastic transmit is not enabled here");
   }
 
+  /** Close the port; safe to call again on a port that is already closed. */
   async disconnect(): Promise<void> {
     this.closed = true;
     try {

@@ -145,9 +145,11 @@ export class WebSerialKiss implements RfLink {
       }
     } catch (e) {
       err = e as Error;
-    } finally {
-      if (!this.closed) this.onClose?.(err);
     }
+    if (this.closed) return;
+    // A lost link closes the port before it is reported, so the next connect can open it again.
+    await this.close();
+    this.onClose?.(err);
   }
 
   /** Transmit a frame over the serial port (gated on callsign control-verification). Throws if the port has no writable stream. */
@@ -162,6 +164,12 @@ export class WebSerialKiss implements RfLink {
   }
 
   async disconnect(): Promise<void> {
+    await this.close();
+    this.onClose?.();
+  }
+
+  /** Stop reading and close the port; safe to call again on a port that is already closed. */
+  private async close(): Promise<void> {
     this.closed = true;
     try {
       await this.reader?.cancel();
@@ -174,7 +182,6 @@ export class WebSerialKiss implements RfLink {
       /* ignore */
     }
     this.port = null;
-    this.onClose?.();
   }
 }
 
@@ -192,7 +199,7 @@ export class WebBluetoothKiss implements RfLink {
     onFrame: (f: RfFrame) => void,
     private onClose?: (err?: Error) => void,
   ) {
-    this.link = new BleKissLink(makeFeeder(onFrame), () => this.onClose?.());
+    this.link = new BleKissLink(makeFeeder(onFrame), () => this.onClose?.(new Error("the Bluetooth TNC disconnected")));
   }
 
   /** Prompt the user to pick a BLE TNC (requires a user gesture) and start reading. */

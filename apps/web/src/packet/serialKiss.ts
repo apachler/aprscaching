@@ -94,11 +94,14 @@ export class SerialKissTransport implements Transport {
       }
     } catch (e) {
       err = e as Error;
-    } finally {
-      if (!this.closed) this.onClose?.(err);
     }
+    if (this.closed) return;
+    // A lost link closes the port before it is reported, so the next connect can open it again.
+    await this.disconnect();
+    this.onClose?.(err);
   }
 
+  /** Close the port; safe to call again on a link that is already closed. */
   async disconnect(): Promise<void> {
     this.closed = true;
     try {
