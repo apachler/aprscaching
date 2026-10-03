@@ -171,6 +171,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   DB_PATH: "SQLite database file",
   MIGRATIONS_DIR: "Directory of schema migrations applied at boot",
   MEDIA_DIR: "Directory for uploaded cache media",
+  MEDIA_QUOTA_MB: "Megabytes of cache media the instance stores in all; uploads stop there",
   OFFLINE_TILES_URL: "Where phones fetch the offline map archive, when it is hosted elsewhere",
   OFFLINE_TILES_ATTRIBUTION: "Attribution of the offline map's data",
   OFFLINE_TILES_MAXZOOM: "The most detailed zoom level a pack takes from the offline map",
@@ -254,6 +255,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`APP_URL`'s host",
       ],
       ["`SESSION_TTL_DAYS`", "Session cookie lifetime", "`30`"],
+      [
+        "`MEDIA_QUOTA_MB`",
+        "Megabytes of cache media (photos, sound, audio clues) the instance stores in all; past it, uploads are refused. Set it to what the disk or bucket can spare",
+        "`1024`",
+      ],
       [
         "`SESSION_EPOCH`",
         "Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all`",

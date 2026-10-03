@@ -20,6 +20,7 @@ backup holds:
   secrets);
 - **the media**: uploaded cache media and audio clues. They are files (`MEDIA_DIR`; in the Docker stack
   `/data/media` in the `data` volume), or the R2 bucket on the Cloudflare split, never rows in the database.
+  `MEDIA_QUOTA_MB` (default 1024) caps how much the instance stores, so size it to the disk or bucket.
 
 Pick the tool for your shape:
 

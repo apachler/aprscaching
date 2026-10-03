@@ -66,7 +66,7 @@ Each stage has:
 
 - an unlock kind: geo, nfc, audio or open;
 - a position, revealed when the stage unlocks;
-- a clue text, and for an audio stage an audio clip of up to 5 MB;
+- a clue text, and for an audio stage an audio clip of up to 3 MB;
 - a radius, 60 m by default: when the next stage unlocks by location, the finder stands within it;
 - a tag code for an NFC stage.
 
