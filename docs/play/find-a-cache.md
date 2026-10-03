@@ -104,6 +104,33 @@ Two things can tell the app you are near:
 The app must be open for either. Your own caches, archived or disabled ones, and caches from other instances do
 not prompt.
 
+### A message to your radio
+
+Hunting without the app? The instance can send your radio an APRS message instead, from its service call:
+
+```text
+Near AC-1234 Landhaus courtyard 40m NE. Reply FOUND AC-1234
+```
+
+The message names the nearest cache, its distance and its direction from you. With more caches in range it
+adds the count, such as `+2 more`. Reply `FOUND AC-1234` to log the find, as in
+[Log from your radio](log-a-find.md#log-from-your-radio). Your station gets the message the way the instance
+heard it: on APRS, or as a MeshCom direct message.
+
+The message is off until you switch it on. Do one of these:
+
+- **Settings** → **Near-cache radio message**;
+- send `NEAR ON` from your radio to the service call. A `NEAR ON` that arrives only over the internet waits
+  under **You** → **Logs sent over the air** for you to confirm. `NEAR OFF` switches it off at once.
+
+You get a message only when:
+
+- your callsign is verified, and the beacon is from your callsign, with any SSID;
+- you move slower than 10 km/h, on foot rather than driving past;
+- the cache is active, and you have neither found it nor own it.
+
+You get one message per cache a day, and at most four an hour.
+
 ## Caches from other instances
 
 Your instance can show caches from other instances in its network. Their sheet says **mirrored from** the

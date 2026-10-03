@@ -32,6 +32,7 @@ const SCOPED: Array<[string, string]> = [
     "SELECT COUNT(*) AS n FROM bbs_messages WHERE type='P' AND (from_call='DL1GDP' OR to_call='DL1GDP')",
   ],
   ["callsign_challenges", "SELECT COUNT(*) AS n FROM callsign_challenges WHERE account_id=?"],
+  ["near_cache_messages", "SELECT COUNT(*) AS n FROM near_cache_messages WHERE call='DL1GDP'"],
   ["accounts", "SELECT COUNT(*) AS n FROM accounts WHERE account_id=?"],
 ];
 
@@ -95,6 +96,12 @@ async function seeded() {
       "INSERT INTO bbs_messages (type, from_call, to_call, body, posted_at) VALUES ('P', 'OE8APR', 'DL1GDP', 'hi', ?)",
       t,
     ],
+    [
+      "INSERT INTO near_cache_messages (call, cache_id, station, msg_no, sent_at) VALUES ('DL1GDP', ?, 'DL1GDP-7', 'N0001', ?)",
+      cacheId,
+      t,
+    ],
+    ["UPDATE accounts SET near_radio = 1 WHERE account_id = ?", acct],
   ] as const;
   for (const [sql, ...binds] of seed)
     await env.DB.prepare(sql)
@@ -134,8 +141,11 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
       "apiKeys",
       "bbsMessages",
       "verificationChallenges",
+      "nearCacheMessages",
     ])
       expect(exp.data[key], key).toBeTruthy();
+    expect(exp.data.nearCacheMessages).toHaveLength(1);
+    expect(exp.data.account.near_radio).toBe(1);
     expect(exp.data.passkeys).toHaveLength(1);
     expect(exp.data.passkeys[0]).not.toHaveProperty("public_key");
     expect(exp.data.watchCalls).toHaveLength(1);

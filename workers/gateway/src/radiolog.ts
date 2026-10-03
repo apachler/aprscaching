@@ -6,6 +6,8 @@
  *
  *   FOUND <code> [text]   log a find          DNF <code> [text]   log a did-not-find
  *   NOTE <code> <text>    log a note          HELP                the command syntax
+ *   MAIL <call> <text>    leave a Mailbox message (mailbox.ts)
+ *   NEAR ON | NEAR OFF    switch the "you're near" radio message (nearradio.ts)
  *   VERIFY <code>         complete the sender's callsign control-verification (callsign.ts)
  *
  * Every transport that carries text messages hands them to the ingest as APRS message packets, so one
@@ -41,6 +43,7 @@ import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import { alreadyFound, logRefusal } from "./findrules.js";
 import { serviceCall } from "./servicecall.js";
 import { leaveMail } from "./mailbox.js";
+import { setNearRadio } from "./nearradio.js";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -61,12 +64,13 @@ const DUPLICATE_WINDOW_SEC = 30 * 60;
 /** APRS message text limit. */
 const APRS_TEXT_MAX = 67;
 
-export const HELP_TEXT = "FOUND/DNF <code> [log]; NOTE <code> <text>; MAIL <call> <text>";
+export const HELP_TEXT = "FOUND/DNF/NOTE <code> [text]; MAIL <call> <text>; NEAR ON/OFF";
 
 type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
   | { command: "note"; code: string; body: string }
   | { command: "mail"; to: string; body: string }
+  | { command: "near"; on: boolean }
   | { command: "help" };
 
 /**
@@ -93,6 +97,12 @@ export function parseRadioCommand(text: string): RadioCommand | { error: string 
       return { error: "MAIL needs a callsign, e.g. MAIL OE5XYZ hi" };
     const body = rest.slice(1).join(" ").trim();
     return body ? { command: "mail", to, body } : { error: "MAIL needs a text" };
+  }
+  if (word === "NEAR") {
+    const arg = rest.length === 1 ? rest[0]!.toUpperCase() : "";
+    return arg === "ON" || arg === "OFF"
+      ? { command: "near", on: arg === "ON" }
+      : { error: "send NEAR ON or NEAR OFF" };
   }
   if (word !== "FOUND" && word !== "DNF" && word !== "NOTE") return { error: "unknown command - send HELP" };
   const code = rest[0] ? normalizeCacheCode(rest[0]) : null;
@@ -413,6 +423,7 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
     return;
   }
   if (parsed.command === "mail") return handleMailCommand(env, m, src, trusted, parsed);
+  if (parsed.command === "near") return handleNearCommand(env, m, src, trusted, parsed.on);
 
   const reject = async (reason: string, extra: { accountId?: string | null; cache?: CacheForLog | null } = {}) => {
     const id = await insertRow(env, m, {
@@ -508,6 +519,34 @@ async function handleMailCommand(
 }
 
 /**
+ * `NEAR ON` / `NEAR OFF` switches the account's "you're near" radio message (nearradio.ts). Switching it off
+ * is harmless, so any copy from a call an account holds applies at once. Switching it on makes the instance
+ * transmit to the station, and anyone can put any call on an APRS-IS message, so it needs a control-verified
+ * call and, like MAIL, applies at once only from a copy the provenance rule attests; any other copy waits
+ * for the player to confirm it in the app.
+ */
+async function handleNearCommand(env: Env, m: RadioMessage, src: string, trusted: boolean, on: boolean): Promise<void> {
+  const row = { command: "near", body: on ? "ON" : "OFF", trusted };
+  const holder = await baseHolder(env, baseCall(src));
+  const verified = !!holder && (await isCallsignVerified(env, src));
+  const accountId = on ? (verified ? holder : null) : holder;
+  const finish = async (status: string, text: string, reason: string | null = null) => {
+    const id = await insertRow(env, m, { ...row, accountId, status, reason });
+    await ack(env, m);
+    await reply(env, m, id, text);
+  };
+  if (!accountId) {
+    const reason = on
+      ? `${baseCall(src)} is not a verified callsign here - verify it in the app`
+      : `${baseCall(src)} is not a callsign here`;
+    return finish("rejected", reason, reason);
+  }
+  if (on && !trusted) return finish("pending", "NEAR ON received - confirm it in the app");
+  await setNearRadio(env, accountId, on);
+  return finish("logged", on ? "near-cache messages on" : "near-cache messages off");
+}
+
+/**
  * `VERIFY <code>` completes the sender's callsign control-verification challenge (callsign.ts). Only a
  * copy heard on the air at an attested site counts. Any other copy — over APRS-IS, through a tunnel,
  * from the browser RF bridge or an unattested receiver — is dropped unanswered: it costs no attempt, so
@@ -562,6 +601,15 @@ async function confirmRow(
         await done("rejected", r.error, null);
         return { ok: false, reason: r.error };
       }
+      await done("logged", null, null);
+      return { ok: true };
+    }
+    if (row.command === "near") {
+      if (!row.account_id) {
+        await done("rejected", "no verified callsign", null);
+        return { ok: false, reason: "no verified callsign" };
+      }
+      await setNearRadio(env, row.account_id, row.body === "ON");
       await done("logged", null, null);
       return { ok: true };
     }

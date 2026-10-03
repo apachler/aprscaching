@@ -54,7 +54,13 @@ export function RadioLogs() {
     setBusy(c.id);
     try {
       await decideRadioCommand(c.id, decision);
-      toast(decision === "confirm" ? `${c.cacheCode} logged` : "Discarded");
+      toast(
+        decision === "discard"
+          ? "Discarded"
+          : c.command === "near"
+            ? `Near-cache messages ${c.body === "ON" ? "on" : "off"}`
+            : `${c.cacheCode ?? c.command.toUpperCase()} logged`,
+      );
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -75,9 +81,10 @@ export function RadioLogs() {
     >
       <p className="muted">
         Send <span className="mono">FOUND AC-1234</span> (or <span className="mono">DNF</span>,{" "}
-        <span className="mono">NOTE</span>, <span className="mono">HELP</span>) from your radio to{" "}
-        <span className="mono">{service}</span>. A message heard by one of this instance&apos;s own stations is logged
-        at once; one that only came over the internet waits here for you to confirm.
+        <span className="mono">NOTE</span>, <span className="mono">MAIL</span>, <span className="mono">NEAR ON</span>,{" "}
+        <span className="mono">HELP</span>) from your radio to <span className="mono">{service}</span>. A message heard
+        by one of this instance&apos;s own stations is logged at once; one that only came over the internet waits here
+        for you to confirm.
       </p>
       {error ? (
         <ErrorState onRetry={load}>Couldn&apos;t load your radio logs.</ErrorState>
@@ -93,7 +100,11 @@ export function RadioLogs() {
             <li key={c.id}>
               <Badge>{c.command.toUpperCase()}</Badge> {c.cacheCode && <span className="mono">{c.cacheCode}</span>}{" "}
               <Badge kind={STATUS_KIND[c.status]}>
-                {c.command === "mail" && c.status === "logged" ? "in the Mailbox" : STATUS_LABEL[c.status]}
+                {c.command === "mail" && c.status === "logged"
+                  ? "in the Mailbox"
+                  : c.command === "near" && c.status === "logged"
+                    ? "applied"
+                    : STATUS_LABEL[c.status]}
               </Badge>
               {c.command === "found" && c.tier && (
                 <>

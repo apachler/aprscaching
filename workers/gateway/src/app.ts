@@ -188,6 +188,7 @@ import {
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
 import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommands } from "./radiolog.js";
 import { handleMailboxPost, handleMailboxList, handleMailboxWithdraw, expireMailbox } from "./mailbox.js";
+import { handleNearRadioPrefs, pruneNearCacheMessages } from "./nearradio.js";
 export { syncAllPeers } from "./fedpull.js";
 
 /**
@@ -297,6 +298,7 @@ export async function runScheduled(env: Env): Promise<void> {
   // radio commands nobody confirmed within the pending window expire
   await expireRadioCommands(env);
   await expireMailbox(env);
+  await pruneNearCacheMessages(env);
   await pruneMeshcom(env, now);
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
@@ -416,6 +418,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // account-level UI preferences sync: theme, units/locale, pinned apps, basemap
   if (p === "/api/announce" && (m === "GET" || m === "POST")) return handleAnnouncePrefs(req, env);
+  if (p === "/api/near-radio" && (m === "GET" || m === "POST")) return handleNearRadioPrefs(req, env);
   if (p === "/api/prefs" && m === "GET") return handlePrefsGet(req, env);
   if (p === "/api/prefs" && m === "PUT") return handlePrefsPut(req, env);
 

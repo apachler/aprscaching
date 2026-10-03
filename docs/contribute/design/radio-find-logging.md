@@ -52,6 +52,8 @@ from outside the feed's range arrive, and refuses to answer from any other call.
 | `FOUND <code> [text]` | log a find, with optional log text |
 | `DNF <code> [text]` | log a did-not-find |
 | `NOTE <code> <text>` | log a note |
+| `MAIL <call> <text>` | leave a Mailbox message for that station |
+| `NEAR ON` / `NEAR OFF` | switch the account's near-cache radio message |
 | `HELP` | the command syntax |
 | `VERIFY <code>` | complete the sender's callsign control-verification |
 

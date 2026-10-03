@@ -116,9 +116,9 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
   // control-verification comes from its one store and is shown on the rows it concerns
   const verification = await verificationOf(env, cs);
   const verifiedFlag = verification ? 1 : 0;
-  const accountRow = await env.DB.prepare("SELECT callsign, created_at FROM accounts WHERE callsign=?")
+  const accountRow = await env.DB.prepare("SELECT callsign, created_at, near_radio FROM accounts WHERE callsign=?")
     .bind(cs)
-    .first<{ callsign: string; created_at: number }>();
+    .first<{ callsign: string; created_at: number; near_radio: number }>();
   const data = {
     instance: instanceOf(env, req),
     callsign: cs,
@@ -129,6 +129,7 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
       verify_method: verification?.method ?? null,
       created_at: accountRow.created_at,
       verified_at: verification?.verifiedAt ?? null,
+      near_radio: accountRow.near_radio,
     },
     caches: await rows(
       env,
@@ -278,6 +279,11 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
       `SELECT type, from_call, to_call, subject, body, posted_at, read_at FROM bbs_messages WHERE ${by("from_call").sql} OR (type='P' AND ${by("to_call").sql}) ORDER BY posted_at`,
       ...by("from_call").binds,
       ...by("to_call").binds,
+    ),
+    // the near-cache radio messages sent to any of the person's calls in the last day, kept for their limits
+    nearCacheMessages: await q(
+      "SELECT call, cache_id, station, msg_no, sent_at, acked_at FROM near_cache_messages WHERE $CALLS ORDER BY sent_at",
+      by("call"),
     ),
     // Mailbox messages the person left, and those addressed to any of their calls
     mailbox: await rows(
@@ -465,6 +471,7 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
     del("DELETE FROM box_commands WHERE $CALLS", "callsign"),
     del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
     del("DELETE FROM mailbox_messages WHERE $CALLS OR $CALLS", "from_call", "to_call"),
+    del("DELETE FROM near_cache_messages WHERE $CALLS", "call"),
     ...(accountId ? [env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=?").bind(accountId)] : []),
     env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
       WITHDRAWN,
