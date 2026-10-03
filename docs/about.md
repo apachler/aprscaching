@@ -62,7 +62,7 @@ APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT) and is **not affiliated with, sponsore
 Bruninga or his estate. The APRScaching game and this application are the author's (OE8APR) own work.
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL. Imported heritage data carries its
-source's own licence and disclaimer. The same credits appear in-app under *Settings → About & credits*.
+source's own licence and disclaimer. The same credits appear in-app under *Settings → Help & credits*.
 
 ## Next
 

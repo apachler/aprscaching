@@ -7,6 +7,7 @@ import { makeD1 } from "../src/d1.js";
 import { migrate } from "../src/migrate.js";
 import {
   handleRadioMessage,
+  handleRadioCommandsList,
   decideRadioCommand,
   expireRadioCommands,
   RADIO_COMMANDS_PER_HOUR,
@@ -486,5 +487,30 @@ describe("hardening", () => {
     sqlite.prepare("UPDATE radio_commands SET created_at = ? WHERE msg_no = '2'").run(t - 31 * 24 * 3600);
     await expireRadioCommands(env);
     expect(commands().map((c) => c.msg_no)).toEqual(["2", "3"]);
+  });
+});
+
+describe("the player's list of logs sent over the air", () => {
+  it("shows a command refused because the call is not verified yet, with its reason, to the call's holder only", async () => {
+    freshEnv({ SESSION_SECRET: "a-strong-session-secret", INSTANCE: "gw.test" });
+    sqlite
+      .prepare(
+        "INSERT INTO accounts (account_id, callsign, created_at) VALUES ('acct-new','OE5NEW',?), ('acct-apr','OE8APR',?)",
+      )
+      .run(t, t);
+    await handleRadioMessage(env, onAir({ src: "OE5NEW-7" }));
+    const list = async (acct: string, call: string) => {
+      const cookie = (await issueSessionCookie(env, acct, call)).split(";")[0]!;
+      const res = await handleRadioCommandsList(new Request("http://gw.test/x", { headers: { cookie } }), env);
+      return ((await res.json()) as { commands: { fromCall: string; status: string; reason: string }[] }).commands;
+    };
+    expect(await list("acct-new", "OE5NEW")).toEqual([
+      expect.objectContaining({
+        fromCall: "OE5NEW-7",
+        status: "rejected",
+        reason: expect.stringContaining("not a verified callsign"),
+      }),
+    ]);
+    expect(await list("acct-apr", "OE8APR")).toEqual([]);
   });
 });

@@ -88,7 +88,8 @@ The dash in a cache code is optional. A heritage place takes its reference as th
 `FOUND OE/ST-001`. A MeshCom direct message to the service call works the same way.
 
 The log goes to the account that holds your callsign, with any SSID. Your callsign must be verified first;
-otherwise the message is not logged.
+otherwise the message is not logged, and **You** → **Logs sent over the air** lists it as **not logged** with the
+reason. A message the instance could not read shows there the same way.
 
 ### Where it lands
 

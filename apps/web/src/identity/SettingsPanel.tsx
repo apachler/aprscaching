@@ -35,6 +35,7 @@ import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
 import { AnnounceSettings } from "./AnnounceSettings.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { AboutInstance, BugReportLink } from "./AboutInstance.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
 
@@ -326,7 +327,9 @@ export function SettingsPanel(props: {
         </Group>
       )}
 
-      {match("Help manual tour guide about credits attribution Bruninga WB4APR APRS trademark licence open source") && (
+      {match(
+        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence open source",
+      ) && (
         <Group title="Help & credits" defaultOpen={false}>
           <p className="row gap-2">
             {props.onDocs && (
@@ -340,6 +343,8 @@ export function SettingsPanel(props: {
               </Button>
             )}
           </p>
+          <BugReportLink />
+          <AboutInstance />
           <p className="muted">
             APRScaching is an APRS geocaching game and ham-radio Shack by <span className="mono">OE8APR</span>.
           </p>

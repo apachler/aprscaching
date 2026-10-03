@@ -551,13 +551,19 @@ export async function expireRadioCommands(env: Env): Promise<void> {
 export async function handleRadioCommandsList(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
+  // The account's own commands, and the ones refused before they had an account — an unparsable message, or one
+  // from a call not verified yet — sent from a call the account holds, so the player sees why nothing was logged.
   const rows = (
     await env.DB.prepare(
       `SELECT id, from_call AS fromCall, command, cache_code AS cacheCode, body, trusted, status, reason, score,
               sent_at AS sentAt, decided_at AS decidedAt
-         FROM radio_commands WHERE account_id = ? ORDER BY sent_at DESC LIMIT 50`,
+         FROM radio_commands rc
+        WHERE account_id = ?
+           OR (account_id IS NULL AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                 AND (rc.from_call = ac.callsign OR rc.from_call LIKE ac.callsign || '-%')))
+        ORDER BY sent_at DESC LIMIT 50`,
     )
-      .bind(me.accountId)
+      .bind(me.accountId, me.accountId)
       .all<{ score: string | null; trusted: number }>()
   ).results;
   return json({

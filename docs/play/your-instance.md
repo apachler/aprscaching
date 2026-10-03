@@ -66,8 +66,9 @@ there, so use these ways in for the game, never for anything private.
 
 ## Find out which ways your instance offers
 
-The app does not list how your instance can be reached. Ask your sysop for its internet name, its 44Net name
-and whether it is on HAMNET. For logging over the radio, the instance names its service call when you verify
+Open **Settings → Help & credits → About this instance**. It names the instance, its sysop, the ways in it
+publishes (its internet, 44Net or HAMNET name), how many peer instances it names and the version it runs. A way
+in the sysop did not publish is not listed: ask your sysop. For logging over the radio, the instance names its service call when you verify
 your callsign; it is `APRSCG` unless the instance names another ([Log from your radio](log-a-find.md#log-from-your-radio)).
 
 ## On the air

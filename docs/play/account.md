@@ -73,7 +73,7 @@ Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, 
 | **Locale & time** | Language, date and number format, time zone |
 | **Your data** | Export or erase your data |
 | **Support the project** | Donations, and what they pay for. A donation earns thanks, never features. |
-| **Help & credits** | The manual, the tour again, credits |
+| **Help & credits** | The manual, the tour again, a link to report a bug, **About this instance**, credits |
 
 Dark is the default appearance. Phosphor is a green-screen terminal look.
 
