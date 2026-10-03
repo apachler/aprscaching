@@ -113,9 +113,13 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 - Under **You**, **Embed your badge** shows an image of your all-time rank, verified finds, points and hides.
   **Copy** copies the HTML that shows it on QRZ.com, in a forum signature or on a club page. The image stays
   current.
-- The instance offers caches as GPX (for GPS units) and KML (for map programs), and your finds as ADIF (for
-  your logbook program). The app has no download button for them yet. Logbook and GPS tools can fetch them
-  from the instance's [public read API](../reference/api.md#public-read-api).
+- On a cache page, **GPX** saves the cache as a waypoint for a GPS unit.
+- On the map, **Search & filter → GPX** or **KML** saves every cache in view, for a GPS unit or a map
+  program. Zoom in if the view is too wide to export.
+- On your profile, **Download ADIF** saves your finds, under any SSID of your call, for your logbook program.
+- On a station's page, **Track KML** saves its last 24 hours of positions for a map program.
+- Logbook and GPS tools can fetch the same files from the instance's
+  [public read API](../reference/api.md#public-read-api).
 
 ## Next
 

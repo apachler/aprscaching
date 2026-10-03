@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { badgeUrl, getProfile, getLicence, type Licence, type Profile } from "../api.js";
+import { badgeUrl, getProfile, getLicence, exportPath, type Licence, type Profile } from "../api.js";
+import { ExportButton } from "../exports/ExportButton.js";
 import { useFmt } from "../format.js";
 import {
   Button,
@@ -133,6 +134,16 @@ export function ProfilePanel(props: {
                 </span>
               )}
             </p>
+          )}
+          {profile && (
+            <div className="row between">
+              <span className="muted">Your finds as ADIF, for your logbook program.</span>
+              <ExportButton
+                label="Download ADIF"
+                filename={`${callsign.toUpperCase().split("-")[0]}-finds.adif`}
+                path={() => exportPath.findsAdif(callsign)}
+              />
+            </div>
           )}
           {profile && (profile.corroborations ?? 0) > 0 && (
             <p title="Finds your receiving stations heard on the air and made Radio-verified">

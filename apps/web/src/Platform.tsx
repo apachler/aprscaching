@@ -903,6 +903,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 spotFilters={spotFilters}
                 setSpotFilters={setSpotFilters}
                 getViewState={getViewState}
+                getBbox={() => (mapRef.current ? bboxOf(mapRef.current) : null)}
                 onClose={closeView}
               />
             )}

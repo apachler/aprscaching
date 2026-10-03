@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * exports.ts — public read-API exports: caches as GPX (GPS devices) / KML (Earth),
- * and a callsign's finds as ADIF (standard logbooks — Log4OM/N1MM/DXLab). Pure builders + read-only
- * queries; served under /api/v1 behind the same rate-limit gate. Runtime-neutral.
+ * and a person's finds (their base call and every SSID of it) as ADIF (standard logbooks — Log4OM/N1MM/DXLab).
+ * Pure builders + read-only queries; served under /api/v1 behind the same rate-limit gate. Runtime-neutral.
  */
+import { baseCall } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { xmlEscape } from "./sitemap.js";
@@ -198,14 +199,15 @@ export async function handleStationKml(req: Request, env: Env, call: string): Pr
 }
 
 export async function handleFindsAdif(req: Request, env: Env, call: string): Promise<Response> {
+  const person = baseCall(call); // finds are stored under the exact call logged with, SSID and all
   const finds = (
     await env.DB.prepare(
       `SELECT c.code, c.title, c.owner_call AS ownerCall, c.station_call AS stationCall, l.ts
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.logger_call = ? AND l.log_type = 'found' ORDER BY l.ts DESC LIMIT 2000`,
+       WHERE (l.logger_call = ? OR l.logger_call LIKE ? || '-%') AND l.log_type = 'found' ORDER BY l.ts DESC LIMIT 2000`,
     )
-      .bind(call)
+      .bind(person, person)
       .all<ExpFind>()
   ).results;
-  return download(findsToAdif(finds, call), "text/plain", `${call}-finds.adif`);
+  return download(findsToAdif(finds, person), "text/plain", `${person}-finds.adif`);
 }
