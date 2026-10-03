@@ -14,7 +14,7 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | AXUDP (AX.25-in-UDP + RFC 1226 CRC trailer) | LinBPQ (BPQAXIP), ax25ipd, JNOS, TNN | `bpq-loop`, `fbb-smoke`, `extra-peers` | trailer codec also unit-tested (`packages/ax25` axip-crc, ingest socket tests) |
 | NET/ROM NODES broadcasts (both directions) | LinBPQ, TNN, JNOS | `bpq-loop`, `extra-peers` | acs learns the peer AND the peer learns ACS |
 | AX.25 v2.2 connected mode (SABM/I-frames) | LinBPQ dials our node | `bpq-loop` (`C 1 OE1ACS-7`) | our LAPB answers a real initiator |
-| FBB forwarding (SID · FA/FB proposals · LZHUF B0/B1) | F6FBB (kernel AX.25 leg), LinBPQ when its mail app runs | `fbb-smoke` + explicit SKIP in `bpq-loop` | the local loop asserts the full session against our own responder every run |
+| FBB forwarding (SID · FA/FB proposals · LZHUF B0/B1) | F6FBB over telnet, LinBPQ when its mail app runs | `fbb-forward`, `fbb-smoke` + explicit SKIP in `bpq-loop` | `fbb-forward` runs a full ASCII mail exchange both ways with F6FBB; the local loop asserts the session against our own responder every run |
 | APRS-IS (login/passcode · server-side filter · stream) | aprsc (the core APRS-IS server) | `aprsis-loop` | beacon travels driver → aprsc → acs ingest → gateway API |
 | KISS TCP (the ingest's KISS TNC client) | Direwolf | `direwolf-loop` | keys one Direwolf, hears the other, over Bell-202 1200 bd AFSK |
 | AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
@@ -30,8 +30,8 @@ same APRS-IS protocol asserted above.
 
 The remaining headless-coverable paths are the transport-conformance program in
 [`TODO.md`](../../TODO.md); each leg landing updates this matrix. Active — the core transports:
-KISS TCP vs kernel AX.25 and the full FBB mail exchange (APRS-IS vs aprsc, KISS TCP + AGWPE + the
-RX-IGate vs Direwolf, and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
+KISS TCP vs kernel AX.25 (APRS-IS vs aprsc, KISS TCP + AGWPE + the RX-IGate vs Direwolf, the FBB mail
+exchange vs F6FBB and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
 AXIP vs ax25ipd, Meshtastic vs meshtasticd, the browser GPLSL drivers under Node, and the client-side
 legs against the Station hub's servers. Every leg that already runs here stays.
 
@@ -67,6 +67,7 @@ node tools/interop/tests/bpq-loop.mjs        # NODES both ways + forward into th
 sudo modprobe ax25                            # host, once — then the FBB tier:
 docker compose -f tools/interop/docker-compose.yml --profile fbb up -d
 node tools/interop/tests/fbb-smoke.mjs        # xfbbd up + registration gate asserted
+pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-forward.mjs   # full mail exchange
 ```
 
 The LinBPQ binary is freeware downloaded at image build (never redistributed here); FBB installs
@@ -121,7 +122,34 @@ package: `fbb.conf` + the telnet com in `port.sys` bring `xfbbd` up serving
 the interactive prompts with `yes Y` once, then serves.
 
 FBB's telnet gate requires REGISTERED users: an unknown callsign is refused at the `Callsign :`
-prompt (the smoke asserts that too). Registering the forwarding partner (`OE1ACS` + password +
-BBS status) happens through the sysop console — `xfbbC -c -r` connects with full sysop rights —
-and is the remaining step for the full telnet-forwarding driver; over kernel AX.25 (the CI path)
-FBB auto-creates users on first connect, so the AXUDP/ax25ipd leg needs no registration.
+prompt (the smoke asserts that too), and a known one without modem access logs in read-only. On a
+fresh data volume `start.sh` registers two users through the sysop console (`xfbbC -c -r -i OE1TST
+-w password`, the `passwd.sys` default), with `EU <call>` and the flags set as `<flag> ON`:
+
+| call | flags | password | role |
+|---|---|---|---|
+| `OE1TST` | `M` (modem/telnet access) | `interop2` | the sysop and the mailbox user the test reads as |
+| `OE1ACS` | `B` (BBS), `M` | `interop1` | the aprscaching forwarding partner |
+
+`EU` on an existing call asks `Delete <call> (Y/N) ?` first and on an unknown call `Create it
+(Y/N) ?`; the console callsign itself exists from the moment the console connects. The container
+log prints the edited user lines and `registered through xfbbC` when it is done.
+
+`forward.sys` names `OE1ACS` as the partner on the telnet port (`P B`) and routes mail addressed
+`@OE1ACS` to it; `bbs.sys` gives it slot 02. FBB never dials out: OE1ACS connects and FBB hands over
+its queue by reverse forwarding in that session. FBB's forward-file parser rejects long or non-ASCII
+comment lines (`Unknown command`), so the comments there stay short ASCII, and FBB defers (`FS =`) a
+BID longer than 12 characters.
+
+`tests/fbb-forward.mjs` drives our `FbbForwarder` (the session engine the ingest runs over AX.25)
+over the telnet port as OE1ACS and asserts:
+
+- FBB greets the partner with its SID, and accepts our `FB P` proposal (`FS +`); the message is
+  delivered and dequeued.
+- A message OE1TST wrote `@OE1ACS` comes back to us in the same session (reverse forwarding), and the
+  session ends with `FQ`.
+- A second session that proposes the same BID is refused (`FS -`) and sends nothing.
+- OE1TST's mailbox lists the message (`LM`), and `R <n>` shows its body and BID.
+
+Over kernel AX.25 FBB auto-creates users on first connect, so the AXUDP/ax25ipd leg needs no
+registration.

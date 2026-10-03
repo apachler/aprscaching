@@ -19,7 +19,7 @@ const banner = await new Promise((resolve) => {
   s.on("data", (b) => {
     out += b.toString("latin1");
   });
-  s.on("connect", () => setTimeout(() => s.write("OE1ACS\r"), 1000));
+  s.on("connect", () => setTimeout(() => s.write("OE1ZZZ\r"), 1000));
   s.on("error", () => resolve(out));
   setTimeout(() => {
     s.destroy();

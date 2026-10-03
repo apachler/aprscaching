@@ -67,6 +67,9 @@ export class FbbSession {
   private pendingRx: Proposal[] = []; // accepted inbound proposals whose bodies we're awaiting
   private compressed = false; // negotiated: both SIDs advertise the B flag → bodies travel as LZHUF-B1 blocks
   private pendingBinary: Uint8Array[] = []; // encoded binary transfers to transmit (drained by the byte layer)
+  // BIDs the peer deferred (`FS =`) this session: they stay queued for the next session, but proposing them
+  // again here would loop forever against a peer that keeps deferring (F6FBB defers a BID it cannot take).
+  private deferred = new Set<string>();
 
   constructor(
     private store: FbbStore,
@@ -111,7 +114,10 @@ export class FbbSession {
 
   /** Build our next proposal block (≤5), or ["FF"] when we have nothing to send. Sets await-fs. */
   private proposeBlock(): string[] {
-    const out = this.store.outbound().slice(0, MAX_BLOCK);
+    const out = this.store
+      .outbound()
+      .filter((m) => !this.deferred.has(m.bid))
+      .slice(0, MAX_BLOCK);
     if (out.length === 0) {
       this.phase = "await-proposals";
       return ["FF"];
@@ -146,7 +152,10 @@ export class FbbSession {
       // A short/garbled FS reply leaves later verdicts undefined. Only an EXPLICIT accept or
       // reject dequeues the message; anything else ('=' defer, missing, unknown) keeps it queued so a
       // truncated `FS +` to a 5-proposal block can't silently drop the other four.
-      if (v !== "accept" && v !== "reject") return;
+      if (v !== "accept" && v !== "reject") {
+        this.deferred.add(p.bid);
+        return;
+      }
       if (v === "accept") {
         const m = queued.find((q) => q.bid === p.bid);
         if (m) {

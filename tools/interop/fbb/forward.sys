@@ -1,0 +1,14 @@
+#
+# Interop forward file: one partner, OE1ACS (aprscaching)
+# on the telnet port (TNC 2 in port.sys = port B).
+# No connect script: FBB never dials out. OE1ACS
+# connects and FBB reverse-forwards in its session.
+# Mail addressed @OE1ACS routes to it.
+#
+A OE1ACS
+#
+  P B
+#
+  B OE1ACS
+#
+--------

@@ -102,9 +102,10 @@ radios) stay documented validate-at-deploy entries — visible, never silently a
       via `socat`, peer services on `ax25d` (privileged job, same host-`modprobe ax25` pattern as the
       F6FBB leg). Proves FEND/FESC escaping, port nibbles, and frame boundaries against the canonical
       implementation.
-- [ ] **Full FBB mail exchange vs F6FBB** _(P1 · M)_ — register the partner callsign through the
-      `xfbbC` sysop console (runbook in `tools/interop/README.md`), then assert a complete telnet
-      forward session: proposal, delivery, BID dedup, message visible in the FBB mailbox.
+- [ ] **FBB BIDs within 12 characters** _(P1 · S)_ — F6FBB defers (`FS =`) any proposal whose BID is
+      longer than 12 characters, and the gateway's BID is `<id>_<INSTANCE>` (`1_aprscaching.net` is
+      17), so a real FBB partner never takes our mail. Derive a short BID that stays unique per instance
+      (the `own`-BID check in `bbs.ts` reads the current shape) and assert it in `fbb-forward`.
 
 Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom: the kernel KISS leg above,
 KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (running in the weekly

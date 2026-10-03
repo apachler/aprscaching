@@ -5,10 +5,12 @@
 FROM ubuntu:noble
 RUN apt-get update && apt-get install -y --no-install-recommends fbb ax25-tools ax25-apps telnet \
   && rm -rf /var/lib/apt/lists/*
-COPY fbb.conf port.sys /etc/ax25/fbb/
+COPY fbb.conf port.sys forward.sys /etc/ax25/fbb/
 COPY axports ax25ipd.conf /etc/ax25/
 COPY start.sh /start.sh
+# bbs.sys numbers the forwarding partners (its line count is fixed): OE1ACS takes slot 02
 RUN chmod +x /start.sh \
+  && sed -i 's/^02 *$/02 OE1ACS/' /etc/ax25/fbb/bbs.sys \
   && mkdir -p /var/ax25/fbb/mail /var/ax25/fbb/binmail /var/ax25/fbb/fbbdos/yapp \
      /var/ax25/fbb/docs /var/ax25/fbb/log /var/ax25/fbb/oldmail /var/ax25/fbb/sat \
   && touch /var/ax25/fbb/sat/satel.dat
