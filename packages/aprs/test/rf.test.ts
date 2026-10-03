@@ -36,7 +36,13 @@ describe("digipeater (new n-N paradigm)", () => {
     expect(digipeat(f(["OE8XXX"]), opts)!.path).toEqual(["OE8XXX*"]);
   });
   it("does not repeat our own transmission", () => {
-    expect(digipeat(f(["WIDE2-2"], "OE8XXX-9"), opts)).toBeNull();
+    expect(digipeat(f(["WIDE2-2"], "OE8XXX"), opts)).toBeNull();
+    expect(digipeat(f(["WIDE2-2"], "OE8XXX-0"), opts)).toBeNull();
+  });
+  it("repeats another SSID of our base call like any station: the operator's handheld or car", () => {
+    expect(digipeat(f(["WIDE2-2"], "OE8XXX-9"), opts)!.path).toEqual(["OE8XXX*", "WIDE2-1"]);
+    expect(digipeat(f(["OE8XXX-1*", "WIDE2-1"]), opts)!.path).toEqual(["OE8XXX-1*", "OE8XXX*"]);
+    expect(digipeat(f(["OE8XXX-1"]), opts)).toBeNull(); // routed through another station, not us
   });
   it("does not repeat twice (loop guard)", () => {
     expect(digipeat(f(["OE8XXX*", "WIDE2-1"], "OE1ABC"), { ...opts, mycall: "OE8XXX" })).toBeNull();

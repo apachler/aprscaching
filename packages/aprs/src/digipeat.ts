@@ -12,7 +12,14 @@ interface Hop {
   used: boolean;
 }
 
-const baseCall = (c: string) => c.split("-")[0]!.toUpperCase();
+/**
+ * The same station: callsign and SSID equal, `-0` the same as none. Another SSID of the operator's base call
+ * is another station (their handheld, their car), which the digipeater repeats like anyone else's.
+ */
+const sameCall = (a: string, b: string) => {
+  const norm = (c: string) => c.toUpperCase().replace(/-0$/, "");
+  return norm(a) === norm(b);
+};
 function parseNN(call: string): { base: string; ssid: number } {
   const [base, ss] = call.split("-");
   return { base: (base ?? "").toUpperCase(), ssid: Number(ss ?? 0) || 0 };
@@ -40,11 +47,11 @@ export interface DigiOpts {
 export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   const mycall = opts.mycall.toUpperCase();
   const aliases = opts.aliases ?? new Set(["WIDE1", "WIDE2"]);
-  if (baseCall(f.src) === baseCall(mycall)) return null; // never repeat our own
+  if (sameCall(f.src, mycall)) return null; // never repeat our own
   const hops: Hop[] = f.path.map((p) => ({ used: p.endsWith("*"), call: p.replace(/\*$/, "") }));
 
   // already repeated by us? (loop guard)
-  if (hops.some((h) => h.used && baseCall(h.call) === baseCall(mycall))) return null;
+  if (hops.some((h) => h.used && sameCall(h.call, mycall))) return null;
 
   const i = hops.findIndex((h) => !h.used);
   if (i < 0) return null; // nothing left to repeat
@@ -52,7 +59,7 @@ export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   const { base, ssid } = parseNN(hop.call);
 
   // explicitly routed through us
-  if (baseCall(hop.call) === baseCall(mycall)) {
+  if (sameCall(hop.call, mycall)) {
     hops[i] = { call: mycall, used: true };
     return rebuild(f, hops);
   }

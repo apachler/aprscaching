@@ -19,12 +19,25 @@ const FEND = 0xc0,
 // ---- KISS framing ----
 /** Split a KISS byte stream into raw AX.25 frames (strips the port/type byte + unescapes). */
 export function kissFrames(buf: Uint8Array): Uint8Array[] {
-  const out: Uint8Array[] = [];
+  return kissDecode(buf).map((k) => k.frame);
+}
+
+/** One KISS frame: its port (high nibble of the type byte), its command (low nibble; 0 = data) and body. */
+export interface KissFrame {
+  port: number;
+  command: number;
+  frame: Uint8Array;
+}
+
+/** Split a KISS byte stream into frames, keeping each one's port and command. */
+export function kissDecode(buf: Uint8Array): KissFrame[] {
+  const out: KissFrame[] = [];
   let cur: number[] | null = null,
     esc = false;
   for (const b of buf) {
     if (b === FEND) {
-      if (cur && cur.length > 1) out.push(Uint8Array.from(cur.slice(1))); // drop the type/port byte
+      if (cur && cur.length > 1)
+        out.push({ port: cur[0]! >> 4, command: cur[0]! & 0x0f, frame: Uint8Array.from(cur.slice(1)) });
       cur = [];
       esc = false;
       continue;
