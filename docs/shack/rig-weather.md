@@ -14,8 +14,8 @@ speaks three radio families:
 - **Icom (CI-V)**: with the radio's [CI-V](../glossary.md#ci-v) address.
 - **Yaesu classic (FT-817/857/897)**: the older binary protocol.
 
-Radios outside these families need a Hamlib program of their own; the
-[Rig control library](../reference/rig-library.md) describes the client for it.
+Radios outside these families cannot be tuned from the Shack yet. Support for them through Hamlib, by way of
+your ingest box, is planned.
 
 Rig control only sets the frequency and mode: it never keys the transmitter. Tuning is receive-side and needs
 no verified callsign. Keying a transmitter is transmitting, which is gated on callsign control-verification.

@@ -483,6 +483,25 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       an unvetted peer quarantined), a queue on the sending instance while the home is unreachable, and the
       mirror's sheet saying the find is on its way. Transport never lifts trust: the tier is the home's.
 
+- [ ] **Rig control through the ingest box (Hamlib)** _(P2 · M)_ — the Shack tunes only the three CAT families it
+      speaks over Web Serial; Hamlib's `rigctld` covers 200+ radios, but a web page cannot open its TCP port (4532).
+      The ingest box bridges it, with Hamlib never linked (it is (L)GPL; `packages/*` stay MIT):
+      - **Box:** new settings `RIGCTLD_HOST` / `RIGCTLD_PORT` (default `127.0.0.1:4532`) in
+        `packages/shared/src/configkeys.ts` + `configdocs.ts` (`node tools/config/generate.mjs`). The box opens the
+        TCP link and drives `RigctldClient` (`packages/aprs/src/rigctld.ts`, the transport's `send(line)` resolves
+        with the reply lines); it reports `rig` in its capabilities on the commands poll (`apps/ingest/src/boxpoll.ts`
+        query, gateway `BoxCaps` in `workers/gateway/src/box.ts`).
+      - **Commands:** a box command kind `rig_tune {hz, mode?}` enqueued by the gateway and handled in the
+        `boxpoll.ts` switch beside `aprs_msg` / `meshcom_msg`; the result (frequency read back with `f`) returns on
+        the next poll. Owner-only, the same rule as the remote box (`docs/run/radios/remote-box.md`).
+      - **Shack:** **Rig control** gets a third connection, **Through my box (Hamlib)**, shown when the signed-in
+        account has a box reporting `rig`; it works on iOS and non-Chromium browsers, since no Web Serial is involved.
+      - **Never PTT:** frequency and mode only. `T` (keying) stays unwired, as transmit is gated on callsign
+        control-verification and the box is not a transmit path for the Shack.
+      - Docs: `docs/shack/rig-weather.md` (the option), `docs/run/radios/ingest-box.md` (the settings, running
+        `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client now has a user).
+      The Station hub's parked **rigctld client** item above is the same client from the hub side.
+
 - [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
       so a dark or Phosphor app opens onto a bright map. A dark style from the same tiles would follow the
       Appearance setting; the offline grid map already does (`--map-graticule-*`). It needs a style the operator
