@@ -31,8 +31,10 @@ flowchart TB
 
 All of these must hold:
 
-- Your radio beacons its APRS position, and the beacon is heard **on the air** by a receiving station your
-  instance trusts. The instance's sysop vouches for each such station.
+- Your radio beacons its position, and the beacon is heard **on the air** by a receiving station your
+  instance trusts. The instance's sysop vouches for each such station. The beacon can be APRS or MeshCom; a
+  MeshCom position counts only when a trusted node hears it directly, not one relayed over the mesh or passed
+  on by the MeshCom server.
 - That station is not yours. A station you run cannot vouch for your own find.
 - The position is within **150 m** of the cache.
 - The beacon was heard in the **30 minutes** before you logged.
