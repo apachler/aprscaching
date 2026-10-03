@@ -7,6 +7,7 @@ import { docsPlugin } from "./vite-docs.js";
 import { vendorMaplibrePlugin } from "./vite-vendor.js";
 import { serviceWorkerPlugin } from "./vite-sw.js";
 import { prerenderLandingPlugin } from "./vite-prerender.js";
+import { noticesPlugin } from "./vite-notices.js";
 
 // The manual lives in the repo-root `docs/` tree; bundle it into the SPA at build time (vite-docs.ts).
 const webDir = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,7 @@ export default defineConfig(({ mode }) => ({
     vendorMaplibrePlugin(),
     prerenderLandingPlugin(webDir),
     serviceWorkerPlugin(),
+    noticesPlugin(webDir),
   ],
   build: {
     chunkSizeWarningLimit: 1100, // MapLibre's real chunk size (~1.05 MB)

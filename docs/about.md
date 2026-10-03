@@ -55,15 +55,36 @@ under these licences also satisfies **ARDC's** open-access requirement for grant
 
 ## Credits & trademarks
 
-**APRS** — the Automatic Packet Reporting System — was created by the late **Bob Bruninga, WB4APR**
-(1948–2022), whose decades of work made everything this project builds on possible. *APRS* is his trademark.
-This project is an **independent, unofficial** implementation built from open specifications (APRS101,
-APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT) and is **not affiliated with, sponsored by, or endorsed by** Bob
-Bruninga or his estate. The APRScaching game and this application are the author's (OE8APR) own work.
+APRS — the Automatic Packet Reporting System — was created by the late **Bob Bruninga, WB4APR** (1948–2022),
+whose decades of work made everything this project builds on possible. APRS® is a registered trademark of APRS
+Foundation, Inc. APRScaching is an **independent, unofficial** implementation built from open specifications
+(APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). APRScaching is not affiliated with, sponsored by, or endorsed
+by APRS Foundation, Inc. The APRScaching game and this application are the author's (OE8APR) own work.
 
-Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL. Imported heritage data carries its
-source's own licence and disclaimer. DXCC entities and prefixes come from the Amateur Radio Country Files by Jim
-Reisert, AD1C (MIT). The same credits appear in-app under *Settings → Help & credits*.
+Meshtastic® is a registered trademark of Meshtastic LLC. Parks on the Air® is a registered service mark of Parks on
+the Air, Inc. Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook of
+The World® are registered trademarks of the American Radio Relay League, Inc. (ARRL). Geocaching® is a registered
+trademark of Groundspeak, Inc. (Geocaching HQ); “geocaching” here names the outdoor activity. APRScaching is not
+affiliated with, sponsored by, or endorsed by Groundspeak, Inc. (Geocaching HQ), Geocaching Australia, Meshtastic
+LLC, ARRL, Parks on the Air (POTA), Summits on the Air (SOTA), World Wide Flora and Fauna (WWFF), World Wide Bunkers
+on the Air (WWBOTA), Islands on the Air (IOTA), or the TAK Product Center.
+
+Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; vector tiles © OpenFreeMap, © OpenMapTiles.
+Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA))
+and Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data). Imported places name
+and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
+Radio Country Files by Jim Reisert, AD1C (MIT).
+
+Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur callsign list,
+reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media Authority information.
+Austria: Fernmeldebehörde. Germany: Bundesnetzagentur.
+
+Type: Fredoka and IBM Plex Mono (SIL Open Font License 1.1); the Phosphor theme's CP437 face is from The Ultimate
+Oldschool PC Font Pack v2.2 by VileR (int10h.org), CC BY-SA 4.0. Built on open source, among others React, MapLibre
+GL, uPlot, zod, Mermaid, pmtiles, fflate and node-forge: the web app serves the copyright notices and licence texts
+of every library in its bundle at `/third-party-notices.txt`. The desktop app includes the Bun runtime (MIT, with
+JavaScriptCore under the LGPL 2.1); its notices ship beside the binary. The same credits appear in-app under
+*Settings → Help & credits*.
 
 ## Next
 

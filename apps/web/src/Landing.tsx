@@ -3,6 +3,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
 import { Button, Icon, TierBadge, type IconName } from "./ui/index.js";
+import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "./credits.js";
 
 /**
  * The landing page — "Live on the air". The hero keeps the brand treatment in every theme and opens with the
@@ -50,9 +51,7 @@ export function Landing(props: {
         <a href={`${API_BASE}/privacy`}>Privacy</a>
         <a href={`${API_BASE}/sitemap.xml`}>sitemap.xml</a>
         <p className="landing-fineprint">
-          APRS® is a registered trademark of Bob Bruninga, WB4APR. Meshtastic® is a registered trademark of Meshtastic
-          LLC. Not affiliated with the APRS Foundation, Groundspeak, Inc. (Geocaching HQ), Meshtastic LLC, POTA, SOTA,
-          or the TAK Product Center.
+          {APRS_CREDIT} {APRS_MARK} {APRS_NOT_AFFILIATED} {OTHER_MARKS} {OTHERS_NOT_AFFILIATED}
         </p>
       </footer>
     </main>

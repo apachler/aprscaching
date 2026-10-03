@@ -14,6 +14,7 @@ federation peer like any other instance.
 | `appdata.ts` | per-OS data directory resolver |
 | `build-exe.sh` | cross-compile the matrix from one machine (web build → embed → `bun build --compile`) |
 | `entitlements.plist` | macOS JIT entitlements for codesigning |
+| `THIRD-PARTY-NOTICES.txt`, `BUN-LICENSE.txt` | the Bun runtime's licence (MIT, with JavaScriptCore/WebKit under the LGPL 2.1) and where its source is; `build-exe.sh` copies both beside the binaries |
 | `../../.github/workflows/desktop-release.yml` | CI: build matrix + attach to a tagged release |
 
 ## How it works
@@ -32,6 +33,7 @@ self-contained: it serves the embedded SPA, gateway and migrations with no repos
 ```bash
 bash deploy/desktop/build-exe.sh v1.0.0
 # -> dist/desktop/aprscaching-{windows-x64.exe, macos-arm64, macos-x64, linux-x64, linux-arm64}
+#    plus THIRD-PARTY-NOTICES.txt and BUN-LICENSE.txt
 ```
 
 ## Run & data location
