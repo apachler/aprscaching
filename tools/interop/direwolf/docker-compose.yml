@@ -1,0 +1,57 @@
+# Direwolf transport legs: two Direwolf modems joined by a UDP audio cable (see start.sh), our full
+# stack (acs) whose ingest drives dw-a over KISS TCP with its RX-IGate on, and aprsc as the APRS-IS
+# server the IGate logs in to. The driver (tests/direwolf-loop.mjs) dials dw-a's KISS port, dw-b's
+# AGW port and aprsc's full feed from the host. Host ports are high and overridable, so the project
+# runs beside other compose projects.
+#
+#   docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml up -d --build
+#   pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
+services:
+  dw-a:
+    build: .
+    hostname: dw-a
+    environment: { MYCALL: OE1DWA, PEER: dw-b }
+    ports:
+      - "${DW_A_KISS_PORT:-38001}:8001" # KISS TCP — our KISS client
+    networks: [rf]
+
+  dw-b:
+    build: .
+    hostname: dw-b
+    environment: { MYCALL: OE1DWB, PEER: dw-a }
+    ports:
+      - "${DW_B_AGW_PORT:-38000}:8000" # AGWPE — our AGWPE client
+    networks: [rf]
+
+  aprsc:
+    build: ../aprsc
+    hostname: aprsc
+    ports:
+      - "${DW_APRSC_FULLFEED_PORT:-38152}:10152" # full feed — the driver watches the IGate's uplink here
+    networks: [rf]
+
+  acs:
+    build:
+      context: ../../..
+      dockerfile: tools/interop/acs/Dockerfile
+    depends_on: [dw-a, aprsc]
+    environment:
+      INGEST_SECRET: interop-ci-secret-0001
+      OPERATOR_SECRET: interop-ci-operator-0001
+      INSTANCE: oe.interop
+      # the ingest's KISS TNC is dw-a, and its RX-IGate gates what dw-a hears up to aprsc
+      KISS_TNC_HOST: dw-a
+      KISS_TNC_PORT: "8001"
+      IGATE_CALL: OE1ACS-10
+      IGATE_PASS: "20149"
+      # the IGate and the read-only APRS-IS feed share this server; the feed logs in unverified
+      APRSIS_HOST: aprsc
+      APRSIS_PORT: "14580"
+      APRSIS_CALLSIGN: N0CALL
+      APRSIS_PASSCODE: "-1"
+    ports:
+      - "${DW_ACS_PORT:-38787}:8787" # gateway API
+    networks: [rf]
+
+networks:
+  rf: {}

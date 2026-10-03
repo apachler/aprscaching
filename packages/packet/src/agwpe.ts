@@ -4,7 +4,7 @@
  * protocol spoken by Direwolf, SoundModem and UZ7HO — the single highest-leverage interop after KISS,
  * letting any AGWPE modem feed us (and us key it) over a socket. This is the pure wire codec (a fixed
  * 36-byte little-endian header + payload); the TCP client that uses it lives in apps/ingest and is
- * validated at deploy against a real engine.
+ * asserted against Direwolf in the interop suite.
  */
 export interface AgwpeFrame {
   port: number; // radio port (Multiport)

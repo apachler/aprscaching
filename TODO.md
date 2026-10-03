@@ -106,16 +106,9 @@ radios) stay documented validate-at-deploy entries — visible, never silently a
       `xfbbC` sysop console (runbook in `tools/interop/README.md`), then assert a complete telnet
       forward session: proposal, delivery, BID dedup, message visible in the FBB mailbox.
 
-**Weekly `transports.yml` (schedule + manual dispatch; the heavy/privileged legs stay out of the
-interop run):**
-
-- [ ] **Direwolf leg** _(P1 · L)_ — two Direwolf instances over an ALSA loopback pair
-      (`snd-aloop`): a real Bell-202 AFSK modem path. Our KISS TCP client on one side and the AGWPE
-      client against Direwolf's AGW port (:8000) on the same instance; the same environment chains the
-      igate path (Direwolf RF side → our igate → aprsc) end-to-end.
-
-Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom: the KISS and AGWPE legs above,
-APRS-IS against aprsc (running), and MeshCom's golden-fixture conformance on Node, Bun and workerd
+Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom: the kernel KISS leg above,
+KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (running in the weekly
+`transports.yml`), APRS-IS against aprsc (running), and MeshCom's golden-fixture conformance on Node, Bun and workerd
 (`pnpm conformance:meshcom`, running; a live node stays validate-at-deploy). The legs already running
 in `interop.yml` — the local AXUDP loop, LinBPQ, F6FBB, aprsc, TNN/JNOS — stay: they guard the shipped
 NET/ROM node and FBB/BBS code.

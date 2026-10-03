@@ -1,8 +1,9 @@
 # Interop test environment
 
 Real-software interoperability tests for the packet stack: the NET/ROM node, the SID-gated FBB
-BBS/forwarding, the AXUDP port, and the APRS-IS client, exercised against the programs actual
-partners run — LinBPQ, F6FBB, TheNetNode, JNOS, aprsc. Two tiers:
+BBS/forwarding, the AXUDP port, the APRS-IS client, the KISS TCP and AGWPE modem clients and the
+RX-IGate, exercised against the programs actual partners run — LinBPQ, F6FBB, TheNetNode, JNOS,
+aprsc, Direwolf. Three tiers:
 
 ## Protocol × real-partner coverage
 
@@ -15,6 +16,9 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | AX.25 v2.2 connected mode (SABM/I-frames) | LinBPQ dials our node | `bpq-loop` (`C 1 OE1ACS-7`) | our LAPB answers a real initiator |
 | FBB forwarding (SID · FA/FB proposals · LZHUF B0/B1) | F6FBB (kernel AX.25 leg), LinBPQ when its mail app runs | `fbb-smoke` + explicit SKIP in `bpq-loop` | the local loop asserts the full session against our own responder every run |
 | APRS-IS (login/passcode · server-side filter · stream) | aprsc (the core APRS-IS server) | `aprsis-loop` | beacon travels driver → aprsc → acs ingest → gateway API |
+| KISS TCP (the ingest's KISS TNC client) | Direwolf | `direwolf-loop` | keys one Direwolf, hears the other, over Bell-202 1200 bd AFSK |
+| AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
+| RX-IGate (RF → APRS-IS, `qAR,<igate>`) | Direwolf + aprsc | `direwolf-loop` | the acs ingest gates what its Direwolf hears; an `RFONLY` path is held back |
 | Telnet consoles | LinBPQ, F6FBB, TNN, JNOS | all drivers | reachability + banner/gate assertions |
 | INP3 (RIF/L3RTT) | TNN (TheNet lineage) | `extra-peers` once the TNN leg is green | asserted stack-vs-stack in the local loop every run |
 
@@ -26,8 +30,8 @@ same APRS-IS protocol asserted above.
 
 The remaining headless-coverable paths are the transport-conformance program in
 [`TODO.md`](../../TODO.md); each leg landing updates this matrix. Active — the core transports:
-KISS TCP vs kernel AX.25, AGWPE + AFSK vs Direwolf, and the full FBB mail exchange (APRS-IS vs aprsc
-and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
+KISS TCP vs kernel AX.25 and the full FBB mail exchange (APRS-IS vs aprsc, KISS TCP + AGWPE + the
+RX-IGate vs Direwolf, and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
 AXIP vs ax25ipd, Meshtastic vs meshtasticd, the browser GPLSL drivers under Node, and the client-side
 legs against the Station hub's servers. Every leg that already runs here stays.
 
@@ -69,6 +73,37 @@ The LinBPQ binary is freeware downloaded at image build (never redistributed her
 from the Ubuntu archive; TNN and JNOS build from source. CI runs the container tiers in the
 `interop` workflow (scheduled + manual dispatch — never the PR loop; peer downloads and kernel
 modules are not PR-gating dependencies).
+
+## 3. Modem transports — `direwolf/docker-compose.yml`
+
+Two Direwolf modems joined by an audio cable, our full stack and aprsc, in the weekly `transports`
+workflow (scheduled + manual dispatch, kept out of the `interop` run):
+
+| service | software | role |
+|---------|----------|------|
+| `dw-a`  | Direwolf 1.7 (Ubuntu archive) | KISS TCP modem for the driver and the acs ingest |
+| `dw-b`  | Direwolf 1.7 (Ubuntu archive) | AGWPE modem for the driver |
+| `acs`   | our gateway + ingest | KISS TNC on `dw-a`, RX-IGate to `aprsc` |
+| `aprsc` | aprsc (OH7LZB) | the APRS-IS server the IGate logs in to |
+
+```bash
+docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml up -d --build
+pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
+docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml down -v
+```
+
+Each Direwolf writes its transmit audio through ALSA's `file` plugin into UDP datagrams that the other
+reads with `ADEVICE udp:7355`, so every frame is modulated and demodulated as Bell-202 1200 bd AFSK by
+real modem code. The cable needs no kernel module and no privileges; `direwolf/start.sh` says why it is
+used instead of `snd-aloop`. The driver runs the ingest's own `KissTnc` and `AgwpeTnc` classes against
+the published ports (`DW_A_KISS_PORT` 38001, `DW_B_AGW_PORT` 38000, `DW_APRSC_FULLFEED_PORT` 38152,
+`DW_ACS_PORT` 38787) and asserts:
+
+- a frame keyed over KISS TCP on `dw-a` reaches the AGWPE client on `dw-b` with source, destination,
+  path and information field intact, and a frame keyed over AGWPE on `dw-b` reaches the KISS client;
+- a position keyed on `dw-b` is heard by `dw-a`, gated by the acs ingest's RX-IGate, and appears on
+  aprsc's full feed as `OE9TST-9>APZACG,WIDE1-1,qAR,OE1ACS-10:…`;
+- a frame whose path carries `RFONLY` is heard on RF but never reaches aprsc.
 
 ## What this catches
 
