@@ -3,7 +3,8 @@
 // account), finds under an SSID count for the person on the leaderboard, an archived or disabled cache takes
 // no find or did-not-find, and an owner does not find their own cache.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, operatorVerify, ORIGIN, type Res } from "./helpers/authflow.js";
+import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const at = () => Math.floor(Date.now() / 1000);
@@ -57,6 +58,29 @@ describe("a find counts once per person", () => {
     const prof = await call(w.env, "GET", "/api/profile/DL1FND");
     expect(prof.data.finds).toBe(1);
     expect(prof.data.badges.some((b: { badge: string }) => b.badge === "first-find")).toBe(true);
+    // the embeddable badge counts the person too, under the base call or any SSID of it, with their board place
+    for (const asked of ["DL1FND", "DL1FND-9"]) {
+      const res = await serve(w.env)(new Request(`${ORIGIN}/badge/${asked}.svg`));
+      const svg = await res.text();
+      expect(res.headers.get("content-type")).toMatch(/image\/svg\+xml/);
+      expect(svg).toContain(">DL1FND<");
+      expect(svg).toMatch(/>1<\/text><text[^>]*>finds</);
+      expect(svg).toMatch(/>#1<\/text><text[^>]*>network rank</);
+    }
+  });
+
+  it("the leaderboard counts over a period: a find older than 30 days leaves the month, not the year", async () => {
+    const w = await world();
+    await operatorVerify(w.env, "DL1FND");
+    expect((await log(w, w.finder, { logType: "found", appGeo: here() })).status).toBe(200);
+    await w.env.DB.prepare("UPDATE cache_logs SET ts = ? WHERE logger_call = 'DL1FND'")
+      .bind(at() - 40 * 86400)
+      .run();
+    const finds = async (period: string) =>
+      (await call(w.env, "GET", `/api/leaderboard?metric=finds&period=${period}`)).data.leaderboard.length;
+    expect(await finds("month")).toBe(0);
+    expect(await finds("year")).toBe(1);
+    expect(await finds("all")).toBe(1);
   });
 });
 

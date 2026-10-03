@@ -230,8 +230,18 @@ export async function getCache(
   }
 }
 
-export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<{ leaderboard: LeaderboardEntry[] }> {
-  return call(`/api/leaderboard?metric=${metric}&bbox=${bbox.join(",")}`);
+/** The windows the leaderboard counts over: every find, or those of the last 365 or 30 days. */
+export type RankPeriod = "all" | "year" | "month";
+export function getLeaderboard(
+  bbox: BBox,
+  metric: "finds" | "points",
+  period: RankPeriod = "all",
+): Promise<{ leaderboard: LeaderboardEntry[] }> {
+  return call(`/api/leaderboard?metric=${metric}&period=${period}&bbox=${bbox.join(",")}`);
+}
+/** The absolute address of a callsign's embeddable badge, `/badge/<call>.svg`, wherever the API is served. */
+export function badgeUrl(callsign: string): string {
+  return new URL(`/badge/${encodeURIComponent(callsign)}.svg`, API_BASE || location.origin).href;
 }
 import type { Corroborator } from "@aprscaching/shared";
 export type { Corroborator };

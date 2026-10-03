@@ -8,36 +8,12 @@
 import type { Env } from "./env.js";
 import { FREDOKA_DATA_URI } from "./brandfont.js";
 import { escapeHtml } from "./util/html.js";
-
-const POINTS =
-  "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
+import { standing } from "./community.js";
+import { baseCall } from "@aprscaching/aprs";
 
 export async function handleBadge(req: Request, env: Env, callsign: string): Promise<Response> {
-  const cs = callsign.toUpperCase();
-  const stat = await env.DB.prepare(
-    `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points FROM (
-       SELECT l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-       WHERE l.logger_call=? AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
-  )
-    .bind(cs)
-    .first<{ finds: number; points: number }>();
-  const finds = stat?.finds ?? 0,
-    points = Math.round(stat?.points ?? 0);
-
-  // network rank by points (loggers strictly ahead + 1); only meaningful once they have finds
-  let rank = 0;
-  if (finds > 0) {
-    const r = await env.DB.prepare(
-      `WITH agg AS (
-         SELECT logger_call, SUM(pts) AS points FROM (
-           SELECT l.logger_call, l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-           WHERE l.log_type='found' AND l.verified=1 GROUP BY l.logger_call, l.cache_id) GROUP BY logger_call)
-       SELECT COUNT(*)+1 AS rank FROM agg WHERE points > ?`,
-    )
-      .bind(points)
-      .first<{ rank: number }>();
-    rank = r?.rank ?? 0;
-  }
+  const cs = baseCall(callsign.toUpperCase()); // the badge is the person's: finds under any SSID count
+  const { finds, points, rank } = await standing(env, cs);
   const hides =
     (
       await env.DB.prepare(

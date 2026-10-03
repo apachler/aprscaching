@@ -68,6 +68,37 @@ export async function handleLeaderboard(req: Request, env: Env): Promise<Respons
   });
 }
 
+/**
+ * A person's all-time standing: verified finds, points, and their place on the network board. The place
+ * counts the people strictly ahead on points, among verified callsigns, as the leaderboard ranks them; a
+ * person with no finds, or an unverified callsign, has none (0).
+ */
+export async function standing(env: Env, person: string): Promise<{ finds: number; points: number; rank: number }> {
+  const stat = await env.DB.prepare(
+    `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points FROM (
+       SELECT l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
+       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
+  )
+    .bind(person, person)
+    .first<{ finds: number; points: number }>();
+  const finds = stat?.finds ?? 0;
+  const raw = stat?.points ?? 0;
+  const points = Math.round(raw);
+  if (finds === 0 || !(await isCallsignVerified(env, person))) return { finds, points, rank: 0 };
+  const r = await env.DB.prepare(
+    `WITH agg AS (
+       SELECT person, SUM(pts) AS points FROM (
+         SELECT ${baseSql("l.logger_call")} AS person, l.cache_id, MAX(${POINTS}) AS pts
+         FROM cache_logs l JOIN caches c ON c.id = l.cache_id
+         WHERE l.log_type='found' AND l.verified=1 ${VERIFIED_LOGGER}
+         GROUP BY person, l.cache_id) GROUP BY person)
+     SELECT COUNT(*)+1 AS rank FROM agg WHERE points > ?`,
+  )
+    .bind(raw)
+    .first<{ rank: number }>();
+  return { finds, points, rank: r?.rank ?? 0 };
+}
+
 // ---------------------------------------------------------------- profile
 export async function handleProfile(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();

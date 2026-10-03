@@ -73,8 +73,9 @@ Hide badges count the caches you own that are not archived. A badge stays once y
 
 ## Ranks
 
-**Ranks** shows the leaderboard for the area on your map. Tap **Points** or **Finds** to sort it. Move the
-map and tap **↻ this area** to load a new area. Tap a callsign to see that player's finds, points, hides and
+**Ranks** shows the leaderboard for the area on your map. Tap **Points** or **Finds** to sort it, and
+**All time**, **Year** or **Month** to count every find, the last 365 days or the last 30 days. Move the map
+and tap **↻ this area** to load a new area. Tap a callsign to see that player's finds, points, hides and
 badges.
 
 Each cache you found counts once, with your best find on it. Its points are:
@@ -93,9 +94,6 @@ Only verified finds by verified callsigns reach the board
 points and no badges. Your profile counts your verified finds and points even before your callsign is
 verified.
 
-The app shows all-time ranks. The instance also keeps ranks for the last 30 and 365 days, which the app does
-not show yet.
-
 Finds you log under an SSID, such as `OE8APR-7`, count for your base callsign. Owners don't log their own
 caches as found, so a cache never earns its owner points.
 
@@ -112,6 +110,9 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 - On a cache page, **Copy link** copies a link to it. **QR** shows a QR code to print and place at your
   station or the site; **download SVG** saves it.
 - On the map, **Search & filter → Share this view** copies a link to what you see.
+- Under **You**, **Embed your badge** shows an image of your all-time rank, verified finds, points and hides.
+  **Copy** copies the HTML that shows it on QRZ.com, in a forum signature or on a club page. The image stays
+  current.
 - The instance offers caches as GPX (for GPS units) and KML (for map programs), and your finds as ADIF (for
   your logbook program). The app has no download button for them yet. Logbook and GPS tools can fetch them
   from the instance's [public read API](../reference/api.md#public-read-api).
