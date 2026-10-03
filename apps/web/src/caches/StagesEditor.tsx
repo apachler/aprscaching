@@ -217,7 +217,7 @@ export function StagesEditor(props: {
                 )}
                 {r.unlock === "audio" && n > 0 && (
                   <label>
-                    Audio clip <span className="muted">(up to 5 MB)</span>
+                    Audio clip <span className="muted">(up to 3 MB)</span>
                     <input
                       type="file"
                       accept="audio/*"

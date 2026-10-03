@@ -11,7 +11,7 @@ import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { haversineMeters } from "@aprscaching/aprs";
+import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { STAGE_MIN_CODE_BITS, StageUnlockRequest, codeEntropyBits, sealStage } from "@aprscaching/shared";
 
 interface StageRow {
@@ -194,12 +194,18 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   const ct = mediaType(req.headers.get("content-type"));
   if (!AUDIO_TYPES.has(ct)) return json({ error: "an audio clue is a sound (MP3, Ogg, WAV, M4A)" }, { status: 415 });
   const bytes = new Uint8Array(await req.arrayBuffer());
-  if (!bytes.length || bytes.length > 5_000_000) return json({ error: "empty or >5MB" }, { status: 413 });
+  if (!bytes.length || bytes.length > MEDIA_LIMITS.audio)
+    return json({ error: `an audio clue is at most ${MB(MEDIA_LIMITS.audio)}` }, { status: 413 });
+  const before = await env.DB.prepare("SELECT media_bytes FROM cache_stages WHERE cache_id=? AND stage_no=?")
+    .bind(cacheId, stageNo)
+    .first<{ media_bytes: number | null }>();
+  const full = await mediaRefusal(env, cacheId, owner, bytes.length, before?.media_bytes ?? 0);
+  if (full) return json({ error: full }, { status: 413 });
   const ext = ct.split("/")[1]?.split(";")[0] ?? "bin";
   const key = `cache/${cacheId}/stage/${stageNo}/clue.${ext}`;
   await env.MEDIA.put(key, bytes, ct);
-  await env.DB.prepare("UPDATE cache_stages SET media_key=? WHERE cache_id=? AND stage_no=?")
-    .bind(key, cacheId, stageNo)
+  await env.DB.prepare("UPDATE cache_stages SET media_key=?, media_bytes=? WHERE cache_id=? AND stage_no=?")
+    .bind(key, bytes.length, cacheId, stageNo)
     .run();
   await resealStage(env, cacheId, stageNo); // the sealed payload names the audio clue
   return json({ ok: true, mediaKey: key });
@@ -352,8 +358,70 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   });
 }
 
+// ---- how much media an instance holds ----
+/**
+ * Media fills the instance's disk or bucket, so it is bounded at every level: a photo scaled in the browser to
+ * 1600 px is about half a megabyte, and an audio clue runs a few minutes at most. The instance's own ceiling,
+ * `MEDIA_QUOTA_MB`, is what its storage can spare.
+ */
+export const MEDIA_LIMITS = {
+  image: 2_000_000,
+  audio: 3_000_000,
+  /** gallery items on one cache */
+  items: 6,
+  cache: 10_000_000,
+  /** across every cache of one account */
+  account: 50_000_000,
+} as const;
+const MEDIA_QUOTA_MB_DEFAULT = 1024;
+const quotaBytes = (env: Env) => (Number(env.MEDIA_QUOTA_MB) || MEDIA_QUOTA_MB_DEFAULT) * 1_000_000;
+const MB = (n: number) => `${n / 1_000_000} MB`;
+
+/** Gallery bytes (thumbnails included) plus audio clues, over the caches a WHERE clause on `c` selects. */
+const mediaBytesSql = (where: string) =>
+  `SELECT
+     (SELECT COALESCE(SUM(m.bytes + COALESCE(m.thumb_bytes, 0)), 0) FROM cache_media m JOIN caches c ON c.id = m.cache_id WHERE ${where})
+   + (SELECT COALESCE(SUM(COALESCE(s.media_bytes, 0)), 0) FROM cache_stages s JOIN caches c ON c.id = s.cache_id WHERE ${where})
+   AS n`;
+const ownerBase =
+  "UPPER(CASE WHEN instr(c.owner_call, '-') > 0 THEN substr(c.owner_call, 1, instr(c.owner_call, '-') - 1) ELSE c.owner_call END)";
+
+/**
+ * Why `adding` more bytes of media on a cache does not fit, or null when it does. `freeing` is what the upload
+ * replaces (a stage's previous clue). Checks the cache, the account that owns it, and the instance.
+ */
+async function mediaRefusal(
+  env: Env,
+  cacheId: number,
+  owner: string,
+  adding: number,
+  freeing = 0,
+): Promise<string | null> {
+  const sum = async (where: string, ...binds: (string | number)[]) =>
+    (
+      await env.DB.prepare(mediaBytesSql(where))
+        .bind(...binds, ...binds)
+        .first<{ n: number }>()
+    )?.n ?? 0;
+  const delta = adding - freeing;
+  if ((await sum("c.id = ?", cacheId)) + delta > MEDIA_LIMITS.cache)
+    return `this cache holds at most ${MB(MEDIA_LIMITS.cache)} of media`;
+  const base = baseCall(owner);
+  const calls = (
+    await env.DB.prepare(
+      "SELECT callsign FROM account_callsigns WHERE account_id = (SELECT account_id FROM account_callsigns WHERE callsign = ?)",
+    )
+      .bind(base)
+      .all<{ callsign: string }>()
+  ).results.map((r) => r.callsign.toUpperCase());
+  const held = calls.length ? calls : [base];
+  if ((await sum(`${ownerBase} IN (${held.map(() => "?").join(",")})`, ...held)) + delta > MEDIA_LIMITS.account)
+    return `your caches hold at most ${MB(MEDIA_LIMITS.account)} of media together`;
+  if ((await sum("1 = 1")) + delta > quotaBytes(env)) return "this instance's media storage is full: ask the sysop";
+  return null;
+}
+
 // ---- cache media gallery: owner-managed images and audio on a cache ----
-const MEDIA_LIMIT = 10_000_000; // 10 MB per item
 /**
  * The media an instance stores and serves: photos and sound, nothing a browser runs. A type outside this list
  * (a page, a script, an SVG drawing) would play out in the instance's own origin for whoever opens the link.
@@ -428,12 +496,16 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
       { status: 415 },
     );
   const bytes = new Uint8Array(await req.arrayBuffer());
-  if (!bytes.length || bytes.length > MEDIA_LIMIT)
-    return json({ error: `empty or >${MEDIA_LIMIT / 1_000_000}MB` }, { status: 413 });
+  const max = MEDIA_LIMITS[kind];
+  if (!bytes.length || bytes.length > max)
+    return json({ error: `${kind === "image" ? "a photo" : "a sound"} is at most ${MB(max)}` }, { status: 413 });
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_media WHERE cache_id=?")
     .bind(cacheId)
     .first<{ n: number }>();
-  if ((count?.n ?? 0) >= 20) return json({ error: "media limit reached (20 per cache)" }, { status: 409 });
+  if ((count?.n ?? 0) >= MEDIA_LIMITS.items)
+    return json({ error: `a cache holds at most ${MEDIA_LIMITS.items} media items` }, { status: 409 });
+  const full = await mediaRefusal(env, cacheId, owner, bytes.length);
+  if (full) return json({ error: full }, { status: 413 });
 
   const ext = ct.split("/")[1] ?? "bin";
   const key = `cache/${cacheId}/media/${crypto.randomUUID()}.${ext}`;

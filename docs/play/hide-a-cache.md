@@ -106,7 +106,8 @@ cache**.
 owns the cache.
 
 - Photos: JPEG, PNG, WebP, GIF or AVIF. Sound: MP3, Ogg, WAV or M4A.
-- Up to 20 items per cache, 10 MB each.
+- Up to 6 items per cache: a photo is at most 2 MB, a sound at most 3 MB.
+- A cache holds at most 10 MB of media in all, audio clues included, and all your caches together 50 MB.
 - The app scales a photo to at most 1,600 pixels on its longest side before upload.
 - Everyone can see and play the media.
 

@@ -40,9 +40,9 @@ Hide the cache as usual and pick **Audio** under **Type**. See
 
 Then add the sound:
 
-- **In the Media section:** open your cache and pick an audio file under **Media**. A cache holds up to 20
-  media items of up to 10 MB each. Anyone who opens the cache can play them.
-- **As a stage clue:** an audio stage carries one clip of up to 5 MB. Open your cache, tap **Edit**, add an
+- **In the Media section:** open your cache and pick an audio file under **Media**. A sound is at most 3 MB,
+  a few minutes long. Anyone who opens the cache can play it.
+- **As a stage clue:** an audio stage carries one clip of up to 3 MB. Open your cache, tap **Edit**, add an
   audio stage under **Stages**, save the stages, then pick the clip
   ([Edit your cache](../hide-a-cache.md#edit-your-cache)).
 
