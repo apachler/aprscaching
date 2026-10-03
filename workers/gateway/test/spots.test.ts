@@ -11,6 +11,7 @@ import {
   handleSpots,
   _resetSpotsCache,
   _resetSotaSummits,
+  getSpots,
 } from "../src/spots.js";
 import type { Env } from "../src/env.js";
 
@@ -193,6 +194,96 @@ describe("spots — SOTA normalizer + summit resolution (S3)", () => {
       expect(calls).toBe(1); // second spot hits the per-summit cache
     } finally {
       globalThis.fetch = orig;
+    }
+  });
+});
+
+describe("spots — polite upstream use", () => {
+  const sotaSpot = (id: number, summitCode: string) => ({
+    id,
+    activatorCallsign: `OE5X${id}`,
+    associationCode: "OE",
+    summitCode,
+    frequency: "7032",
+    mode: "CW",
+    timeStamp: "2024-06-01T08:00:00Z",
+  });
+
+  it("asks the summits API by path, association and summit as separate segments", async () => {
+    _resetSotaSummits();
+    const orig = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (u: string) => {
+      urls.push(String(u));
+      return Response.json({ latitude: 47, longitude: 13 });
+    }) as typeof fetch;
+    try {
+      await normalizeSota([sotaSpot(1, "ST-027")], {} as Env);
+      expect(urls).toEqual(["https://api-db2.sota.org.uk/api/summits/OE/ST-027"]);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it("remembers a summit it could not resolve for the poll interval", async () => {
+    _resetSotaSummits();
+    const orig = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("Nothing to see", { status: 404 });
+    }) as typeof fetch;
+    try {
+      expect(await normalizeSota([sotaSpot(1, "ZZ-999")], {} as Env)).toEqual([]);
+      expect(await normalizeSota([sotaSpot(2, "ZZ-999")], {} as Env)).toEqual([]);
+      expect(calls).toBe(1);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it("resolves summits a few at a time, each code once", async () => {
+    _resetSotaSummits();
+    const orig = globalThis.fetch;
+    let open = 0,
+      peak = 0,
+      calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      peak = Math.max(peak, ++open);
+      await new Promise((r) => setTimeout(r, 5));
+      open--;
+      return Response.json({ latitude: 47, longitude: 13 });
+    }) as typeof fetch;
+    try {
+      const raw = Array.from({ length: 12 }, (_, i) => sotaSpot(i, `ST-${String(i % 10).padStart(3, "0")}`));
+      const out = await normalizeSota(raw, {} as Env);
+      expect(out).toHaveLength(12);
+      expect(calls).toBe(10); // ten distinct summits
+      expect(peak).toBeGreaterThan(1);
+      expect(peak).toBeLessThanOrEqual(4);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it("concurrent requests after the cache expires share one upstream fetch", async () => {
+    _resetSpotsCache();
+    const orig = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 5));
+      return Response.json([{ activator: "OE8APR", latitude: 46.6, longitude: 14.3, frequency: "14250" }]);
+    }) as typeof fetch;
+    try {
+      const env = { SPOTS_ENABLED: "1", SPOTS_SOURCES: "pota" } as unknown as Env;
+      const all = await Promise.all([getSpots(env), getSpots(env), getSpots(env)]);
+      expect(calls).toBe(1);
+      for (const spots of all) expect(spots).toHaveLength(1);
+    } finally {
+      globalThis.fetch = orig;
+      _resetSpotsCache();
     }
   });
 });

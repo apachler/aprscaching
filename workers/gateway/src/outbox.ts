@@ -15,8 +15,12 @@ export async function outboxPending(req: Request, env: Env): Promise<Response> {
 
 export async function outboxAck(req: Request, env: Env): Promise<Response> {
   if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
-  const { ids } = (await req.json()) as { ids: number[] };
-  if (ids?.length) {
+  const b = (await req.json().catch(() => null)) as { ids?: unknown } | null;
+  if (!b) return json({ error: "a JSON body {ids} is required" }, { status: 400 });
+  const ids: unknown[] = b.ids === undefined ? [] : Array.isArray(b.ids) ? b.ids : [null];
+  if (!ids.every((id) => Number.isInteger(id)))
+    return json({ error: "ids must be a list of message ids" }, { status: 400 });
+  if (ids.length) {
     const now = nowS();
     await env.DB.batch(
       ids.map((id) => env.DB.prepare("UPDATE aprs_outbox SET status='sent', sent_at=? WHERE id=?").bind(now, id)),

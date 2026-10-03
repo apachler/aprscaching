@@ -131,12 +131,32 @@ export function normalizeGma(raw: unknown): Spot[] {
   return out;
 }
 
-// SOTA spots carry a summit code but no coordinates → resolve via the summits API, cached per code.
-const sotaSummits = new Map<string, { lat: number; lon: number; name?: string }>();
-async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: number; name?: string } | null> {
-  if (sotaSummits.has(code)) return sotaSummits.get(code)!;
+// SOTA spots carry a summit code but no coordinates → resolve via the summits API. A summit found is cached
+// for good (summits do not move); one not found, or a failed lookup, is remembered for the SOTA poll interval
+// so the next poll does not ask again. Concurrent lookups of one code share a single request.
+interface Summit {
+  lat: number;
+  lon: number;
+  name?: string;
+}
+const sotaSummits = new Map<string, Summit>();
+const sotaMisses = new Map<string, number>(); // code → when the miss expires (ms)
+const sotaInflight = new Map<string, Promise<Summit | null>>();
+/** Summit lookups in flight at once while one SOTA batch resolves. */
+const SOTA_LOOKUP_CONCURRENCY = 4;
+
+/** The summits API path for `G/LD-001`: `G/LD-001` with each part encoded (the API takes the slash as a path). */
+function sotaSummitPath(code: string): string | null {
+  const slash = code.indexOf("/");
+  if (slash <= 0 || slash === code.length - 1) return null;
+  return `${encodeURIComponent(code.slice(0, slash))}/${encodeURIComponent(code.slice(slash + 1))}`;
+}
+
+async function lookupSummit(env: Env, code: string): Promise<Summit | null> {
+  const path = sotaSummitPath(code);
+  if (!path) return null;
   try {
-    const res = await fetch(`${SOTA_SUMMITS_URL}${encodeURIComponent(code)}`, {
+    const res = await fetch(`${SOTA_SUMMITS_URL}${path}`, {
       headers: { accept: "application/json", "user-agent": spotsUserAgent(env) },
       signal: AbortSignal.timeout(8000),
     });
@@ -145,30 +165,74 @@ async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: n
     const lat = num(pick(d, "latitude", "lat")),
       lon = num(pick(d, "longitude", "lon"));
     if (lat == null || lon == null) return null;
-    const v = { lat, lon, name: pickStr(d, "name", "summitName") || undefined };
-    sotaSummits.set(code, v);
-    return v;
+    return { lat, lon, name: pickStr(d, "name", "summitName") || undefined };
   } catch {
     return null;
   }
 }
 
+async function sotaCoords(env: Env, code: string): Promise<Summit | null> {
+  const hit = sotaSummits.get(code);
+  if (hit) return hit;
+  const nowMs = Date.now();
+  const missUntil = sotaMisses.get(code);
+  if (missUntil != null && missUntil > nowMs) return null;
+  let pending = sotaInflight.get(code);
+  if (!pending) {
+    pending = lookupSummit(env, code)
+      .then((v) => {
+        if (v) {
+          sotaSummits.set(code, v);
+          sotaMisses.delete(code);
+        } else sotaMisses.set(code, Date.now() + intervalSec(SOTA_SOURCE, env) * 1000);
+        return v;
+      })
+      .finally(() => sotaInflight.delete(code));
+    sotaInflight.set(code, pending);
+  }
+  return pending;
+}
+
+/** Run `fn` over `items` with at most `limit` calls in flight. */
+async function mapBounded<T>(items: T[], limit: number, fn: (item: T) => Promise<unknown>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+const sotaRef = (r: Record<string, unknown>): string => {
+  const summit = pickStr(r, "summitCode", "summit") ?? "";
+  const assoc = pickStr(r, "associationCode", "association") ?? "";
+  return summit.includes("/") || !assoc ? summit : `${assoc}/${summit}`;
+};
+const hasCoords = (r: Record<string, unknown>): boolean =>
+  num(pick(r, "latitude", "lat")) != null && num(pick(r, "longitude", "lon")) != null;
+
 /** SOTA — api2.sota.org.uk/api/spots: array; coords resolved from the summit code. */
 export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
   if (!Array.isArray(raw)) return [];
+  const rows = raw as Record<string, unknown>[];
+  // resolve every summit the batch needs first, a few at a time, so one slow lookup does not hold up the rest
+  const needed = new Set<string>();
+  for (const r of rows) {
+    const ref = sotaRef(r);
+    if (ref && !hasCoords(r)) needed.add(ref);
+  }
+  const resolved = new Map<string, Summit | null>();
+  await mapBounded([...needed], SOTA_LOOKUP_CONCURRENCY, async (ref) => resolved.set(ref, await sotaCoords(env, ref)));
   const out: Spot[] = [];
-  for (const r of raw as Record<string, unknown>[]) {
+  for (const r of rows) {
     const callsign = (pickStr(r, "activatorCallsign", "callsign", "activator") ?? "").toUpperCase();
-    const summit = pickStr(r, "summitCode", "summit") ?? "";
-    const assoc = pickStr(r, "associationCode", "association") ?? "";
-    const ref = summit.includes("/") || !assoc ? summit : `${assoc}/${summit}`;
+    const ref = sotaRef(r);
     if (!callsign || !ref) continue;
-    // prefer inline coords if the feed provides them, else resolve from the summit code
+    // prefer inline coords if the feed provides them, else the summit lookup
     let lat = num(pick(r, "latitude", "lat")),
       lon = num(pick(r, "longitude", "lon"));
     let name = pickStr(r, "summitName", "name") || undefined;
     if (lat == null || lon == null) {
-      const c = await sotaCoords(env, ref);
+      const c = resolved.get(ref);
       if (!c) continue;
       lat = c.lat;
       lon = c.lon;
@@ -196,6 +260,8 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
 /** Test seam: clear the cached SOTA summit coordinates. */
 export function _resetSotaSummits(): void {
   sotaSummits.clear();
+  sotaMisses.clear();
+  sotaInflight.clear();
 }
 
 // ---- reception networks: "who heard whom". Mappable only with a grid/coords; a station
@@ -283,6 +349,13 @@ const receptionUrl = (env: Env, source: SpotSource): string => {
   return typeof v === "string" ? v : "";
 };
 
+const SOTA_SOURCE: SourceDef = {
+  source: "sota",
+  url: () => "https://api2.sota.org.uk/api/spots/50/all",
+  normalize: normalizeSota,
+  minIntervalSec: 180, // SOTA asks for reasonable use and blocks heavy clients; stay well inside it
+};
+
 const SOURCES: SourceDef[] = [
   {
     source: "pota",
@@ -290,12 +363,7 @@ const SOURCES: SourceDef[] = [
     normalize: normalizePota,
     minIntervalSec: 120,
   },
-  {
-    source: "sota",
-    url: () => "https://api2.sota.org.uk/api/spots/50/all",
-    normalize: normalizeSota,
-    minIntervalSec: 180, // SOTA asks for reasonable use and blocks heavy clients; stay well inside it
-  },
+  SOTA_SOURCE,
   {
     source: "gma",
     url: () => "https://www.cqgma.org/api/spots/25/",
@@ -330,6 +398,8 @@ function enabledSources(env: Env): SourceDef[] {
 }
 
 const cache = new Map<SpotSource, { at: number; spots: Spot[] }>();
+/** The upstream fetch under way per source: requests arriving while it runs wait for it rather than call again. */
+const inflight = new Map<SpotSource, Promise<Spot[]>>();
 
 async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
   try {
@@ -358,9 +428,17 @@ export async function getSpots(env: Env): Promise<Spot[]> {
     sources.map(async (def) => {
       const hit = cache.get(def.source);
       if (hit && nowMs - hit.at < intervalSec(def, env) * 1000) return hit.spots;
-      const spots = await fetchSource(def, env);
-      cache.set(def.source, { at: nowMs, spots });
-      return spots;
+      let pending = inflight.get(def.source);
+      if (!pending) {
+        pending = fetchSource(def, env)
+          .then((spots) => {
+            cache.set(def.source, { at: nowMs, spots });
+            return spots;
+          })
+          .finally(() => inflight.delete(def.source));
+        inflight.set(def.source, pending);
+      }
+      return pending;
     }),
   );
   return dedupeSpots(batches.flat());
@@ -377,6 +455,7 @@ function oldestFetchAt(env: Env): number | null {
 /** Test seam: reset the in-process cache. */
 export function _resetSpotsCache(): void {
   cache.clear();
+  inflight.clear();
 }
 
 const csv = (v: string | null) =>

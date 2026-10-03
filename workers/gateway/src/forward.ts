@@ -43,13 +43,36 @@ async function resolvePartner(env: Env, dest: string): Promise<{ addr: string; p
   return { addr, partner: router.route(parseHierAddr(addr)) };
 }
 
-/** Learn a White Pages entry from a heard/posted message ("S OE8APR @ OE8XBM…"). Best-effort. */
-async function learnWhitePages(env: Env, call: string, bbs: string): Promise<void> {
+/** A BBS's hierarchical address in an R: header: its call, then the hierarchy (`OE8XBM.#KAR.AUT.EU`). */
+const R_HEADER_HA = /@:?([A-Z0-9]{1,6}(?:-\d{1,2})?(?:\.[#A-Z0-9-]+)*)/i;
+
+/**
+ * The home BBS of a forwarded message's sender, from its R: headers. Each BBS on the way puts its own R: line
+ * on top, so the last of the leading R: lines is the BBS the message was written at — the sender's home BBS,
+ * as F6FBB's White Pages read it. Null when the message carries no R: line naming a BBS. Pure.
+ */
+export function originBbs(body: string): string | null {
+  let origin: string | null = null;
+  for (const line of body.split(/\r\n|\r|\n/)) {
+    if (!/^R:/i.test(line)) break;
+    const m = R_HEADER_HA.exec(line);
+    if (m) origin = m[1]!.toUpperCase();
+  }
+  return origin;
+}
+
+/**
+ * Write a White Pages entry. The operator's (`manual`) wins: a learned entry fills a gap or follows a station
+ * that moved, and never replaces what the operator set.
+ */
+async function setWhitePages(env: Env, call: string, bbs: string, source: "manual" | "learned"): Promise<void> {
   if (!call || !bbs) return;
   await env.DB.prepare(
-    "INSERT INTO white_pages (callsign, home_bbs, updated_at) VALUES (?,?,?) ON CONFLICT(callsign) DO UPDATE SET home_bbs=excluded.home_bbs, updated_at=excluded.updated_at",
+    `INSERT INTO white_pages (callsign, home_bbs, updated_at, source) VALUES (?,?,?,?)
+     ON CONFLICT(callsign) DO UPDATE SET home_bbs=excluded.home_bbs, updated_at=excluded.updated_at, source=excluded.source
+     WHERE excluded.source = 'manual' OR white_pages.source = 'learned'`,
   )
-    .bind(call.toUpperCase(), bbs.toUpperCase(), nowS())
+    .bind(call.toUpperCase(), bbs.toUpperCase(), nowS(), source)
     .run();
 }
 
@@ -75,8 +98,10 @@ export async function handleWhitePages(req: Request, env: Env): Promise<Response
   const denied = await requireIngestOrOperator(req, env);
   if (denied) return denied;
   const b = (await req.json().catch(() => ({}))) as { callsign?: string; homeBbs?: string };
-  if (!b.callsign || !b.homeBbs) return json({ error: "callsign + homeBbs required" }, { status: 400 });
-  await learnWhitePages(env, b.callsign, b.homeBbs);
+  if (typeof b.callsign !== "string" || typeof b.homeBbs !== "string" || !b.callsign || !b.homeBbs)
+    return json({ error: "callsign + homeBbs required" }, { status: 400 });
+  // the ingest box reports what it learned from the mail it carries; the operator's entry is the operator's word
+  await setWhitePages(env, b.callsign, b.homeBbs, ingestSecretOk(req, env) ? "learned" : "manual");
   return json({ ok: true, callsign: b.callsign.toUpperCase(), homeBbs: b.homeBbs.toUpperCase() });
 }
 
@@ -372,7 +397,12 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
       console.warn(`federation: ACSFED bulletin ${row.bid} could not be applied: ${(e as Error).message}`);
     }
   }
-  if (row.type === "P") await learnWhitePages(env, row.from, row.origin); // FBB White Pages: learn HomeBBS from P-mail
+  // FBB White Pages: a personal message's R: headers name its sender's home BBS. `origin` names the partner
+  // that handed the message over, which is only the last hop, so it teaches nothing about the sender.
+  if (row.type === "P") {
+    const home = originBbs(row.body);
+    if (home) await setWhitePages(env, row.from, home, "learned");
+  }
   return json({
     ok: true,
     stored: res.meta.changes ? 1 : 0,

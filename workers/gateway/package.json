@@ -39,7 +39,10 @@
     "./station_status": "./src/station_status.ts",
     "./tombstones": "./src/tombstones.ts",
     "./meshcom": "./src/meshcom.ts",
-    "./migrate": "./src/migrate.ts"
+    "./migrate": "./src/migrate.ts",
+    "./forward": "./src/forward.ts",
+    "./bbs": "./src/bbs.ts",
+    "./outbox": "./src/outbox.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

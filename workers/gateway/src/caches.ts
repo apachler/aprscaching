@@ -460,7 +460,10 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   }
 
   const now = nowS();
+  // An explicit code goes in with the row, so a duplicate fails the insert and leaves nothing behind. A minted
+  // code names the row's id, so the row takes a placeholder until the id is known.
   const tmpCode = `__minting__${crypto.randomUUID()}`;
+  let id: number | null = null;
   try {
     const ins = await env.DB.prepare(
       `INSERT INTO caches
@@ -470,7 +473,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
        VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?,?,?,?, ?,?)`,
     )
       .bind(
-        tmpCode,
+        b.code ?? tmpCode,
         owner,
         b.title,
         b.type,
@@ -492,17 +495,30 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
         now,
       )
       .run();
-    const id = Number(ins.meta.last_row_id);
-    const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
-    await env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?").bind(code, id).run();
-    const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
-    await awardHideBadge(env, owner); // hider badges
-    return json({ cache: toSummary(row!) }, { status: 201 });
+    id = Number(ins.meta.last_row_id);
+    if (!b.code)
+      await env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?")
+        .bind(`AC-${String(id).padStart(4, "0")}`, id)
+        .run();
   } catch (e) {
+    // a row whose code could not be set is not a cache: take it out rather than leave a placeholder listed
+    if (id != null)
+      await env.DB.prepare("DELETE FROM caches WHERE id = ?")
+        .bind(id)
+        .run()
+        .catch(() => undefined);
     const msg = (e as Error).message ?? "";
     if (/UNIQUE/i.test(msg)) return json({ error: "code already exists" }, { status: 409 });
     return json({ error: "create failed", detail: msg }, { status: 500 });
   }
+  const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
+  // the cache exists either way: a badge that fails to award is not the hide failing
+  try {
+    await awardHideBadge(env, owner);
+  } catch (e) {
+    console.warn(`caches: hide badge for ${owner} not awarded: ${(e as Error).message}`);
+  }
+  return json({ cache: toSummary(row!) }, { status: 201 });
 }
 
 // ---------------------------------------------------------------- update (owner CRUD)
