@@ -8,7 +8,7 @@
  * Two GATT services carry KISS over BLE, and a TNC offers one of them:
  * - The BLE KISS API service (Mobilinkd TNC3/TNC4, aprs.fi, many LoRa APRS trackers). UUIDs from Mobilinkd's
  *   own sources: github.com/mobilinkd/iosTncConfig "Mobilinkd TNC Config/UUIDKey.swift" and
- *   github.com/mobilinkd/webconfig docs/PROTOCOL.md, and the shared specification
+ *   the protocol notes (PROTOCOL.md) in github.com/mobilinkd/webconfig, and the shared specification
  *   github.com/hessu/aprs-specs BLE-KISS-API.md.
  * - The Nordic UART Service, the generic serial-over-BLE service other TNCs and bridges use.
  *
