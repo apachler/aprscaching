@@ -523,7 +523,7 @@ export function getMessages(
   to?: string,
   /** only this operator's traffic, under any SSID of its base call */
   ofCall?: string,
-): Promise<{ messages: MessageItem[] } & PageInfo> {
+): Promise<{ messages: MessageItem[]; serviceCall?: string } & PageInfo> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (bulletins) q.set("bulletins", "1");
   if (to) q.set("to", to);
