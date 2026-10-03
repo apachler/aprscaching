@@ -119,7 +119,7 @@ describe("bulletins", () => {
   it("mirror from a peer end to end", async () => {
     const { a, hub } = await pair();
     await a.DB.prepare(
-      "INSERT INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin) VALUES ('7_a.example', 'B', 'OE8APR', 'ALL', 'Net tonight', 'QRV 20:00', ?, 'local')",
+      "INSERT INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin) VALUES ('7_OE8APR', 'B', 'OE8APR', 'ALL', 'Net tonight', 'QRV 20:00', ?, 'local')",
     )
       .bind(Math.floor(Date.now() / 1000))
       .run();
@@ -129,7 +129,8 @@ describe("bulletins", () => {
       bid: string;
       subject: string;
     }>();
-    expect(row).toMatchObject({ bid: "7_a.example", subject: "Net tonight" });
+    // stored under its gid: a peer's claim on an FBB BID is never taken on trust
+    expect(row).toMatchObject({ bid: expect.stringMatching(/^a\.example:bulletin:\d+$/), subject: "Net tonight" });
   });
 
   it("refuses a bulletin frame whose gid is outside the peer's namespace", async () => {

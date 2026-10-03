@@ -12,10 +12,30 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import type { FeedServeDef } from "./federation.js";
 import { FED_BBS_CATEGORY } from "@aprscaching/shared";
+import { baseCall } from "@aprscaching/aprs";
+import { serviceCall } from "./servicecall.js";
 
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
-const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
+// ---------------------------------------------------------------- BIDs
+/** An FBB BID holds at most 12 characters: F6FBB defers (`FS =`) a proposal with a longer one. */
+const BID_MAX = 12;
+
+/** The call this BBS's BIDs carry: the sysop's base call, the base of the service call. */
+export const bbsCall = (env: Env): string => baseCall(serviceCall(env));
+
+/**
+ * The BID of local message `id`, `<id in base 36>_<call>`, the `<number>_<BBS call>` form F6FBB issues. The
+ * number takes the digits the call leaves within 12 characters (five beside a six-character call, so 36^5
+ * messages before it wraps). Pure.
+ */
+export function bidFor(id: number, call: string): string {
+  const digits = BID_MAX - 1 - call.length;
+  return `${(id % 36 ** digits).toString(36).toUpperCase()}_${call}`;
+}
+
+/** Does `bid` carry this BBS's call? Only this BBS issues those, so one arriving from elsewhere is refused. */
+export const isOwnBid = (env: Env, bid: string): boolean => bid.toUpperCase().endsWith(`_${bbsCall(env)}`);
 
 // ---------------------------------------------------------------- mailbox access
 /** The callsign a mailbox address names: `OE1TST @ OE1BBB.OE.EU` → `OE1TST`. */
@@ -77,7 +97,7 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
     .bind(type, from, to, b.subject ?? null, b.body, posted, expires, replyTo)
     .run();
   const id = Number(res.meta.last_row_id);
-  const bid = `${id}_${instanceOf(env, req)}`;
+  const bid = bidFor(id, bbsCall(env));
   // a root message threads to itself; a reply keeps the parent's root
   await env.DB.prepare("UPDATE bbs_messages SET bid=?, thread_id=? WHERE id=?")
     .bind(bid, threadRoot ?? id, id)
@@ -309,12 +329,16 @@ export async function upsertRemoteBulletin(
     postedAt?: number;
     expiresAt?: number | null;
   };
-  // The FBB BID from the body, but only in the origin's own `<id>_<origin>` form: BIDs are unique
-  // here, so a BID naming another instance would squat that instance's bulletin (or one of ours).
-  // Anything else is stored under the record's gid.
-  const own = typeof d.bid === "string" && /^[0-9]+_/.test(d.bid) && d.bid.slice(d.bid.indexOf("_") + 1) === origin;
-  const bid = own ? (d.bid as string) : rec.id;
+  // A mirror is stored under the record's gid, never under the FBB BID it carries: a peer cannot prove a BID
+  // is its own, and a claimed BID would squat the bulletin it names (another BBS's, or one of ours). The BID
+  // still dedups against a copy that arrived by FBB forwarding first.
+  const bid = rec.id;
   if (!d.fromCall || !d.toCall || !d.body || !bid) return;
+  if (
+    typeof d.bid === "string" &&
+    (await env.DB.prepare("SELECT 1 AS x FROM bbs_messages WHERE bid = ?").bind(d.bid).first())
+  )
+    return;
   await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
      VALUES (?, 'B', ?,?,?,?,?,?,?)`,

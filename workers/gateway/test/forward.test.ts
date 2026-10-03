@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { normalizePartner, fbbFromRow, inboundRow } from "../src/forward.js";
+import { bidFor } from "../src/bbs.js";
 
 describe("FBB forwarding partner normalizer", () => {
   it("normalizes a full partner and uppercases call/HA", () => {
@@ -118,13 +119,13 @@ describe("FBB forwarding-pool mappers", () => {
     expect(`FB ${wire.type} ${wire.from} ${wire.at} ${wire.to} ${wire.bid} 1`.split(/\s+/)).toHaveLength(7);
   });
 
-  it("synthesizes a BID from id_instance when the row has none, keeps B type", () => {
+  it("synthesizes a BID from the id and the BBS call when the row has none, keeps B type", () => {
     const wire = fbbFromRow(
       { id: 7, bid: null, type: "B", from_call: "OE8APR", to_call: "ALL", subject: null, body: "net sat" },
-      "oe.net",
+      "OE8APR",
       "OE",
     );
-    expect(wire.bid).toBe("7_oe.net");
+    expect(wire.bid).toBe("7_OE8APR");
     expect(wire.type).toBe("B");
     expect(wire.title).toBe("");
   });
@@ -147,5 +148,15 @@ describe("FBB forwarding-pool mappers", () => {
     });
     expect(inboundRow({ from: "X", to: "Y" }, "rf-fbb", 1000)).toBeNull(); // no bid / body
     expect(inboundRow({ bid: "1", from: "X", to: "Y", body: "" }, "rf-fbb", 1000)).not.toBeNull(); // empty body is valid
+  });
+});
+
+describe("FBB BIDs", () => {
+  it("fit F6FBB's 12 characters as <id in base 36>_<BBS call>, whatever the call's length", () => {
+    expect(bidFor(1, "OE8APR")).toBe("1_OE8APR");
+    expect(bidFor(1295, "OE8APR")).toBe("ZZ_OE8APR");
+    for (const call of ["K1A", "OE8APR"])
+      for (const id of [1, 36 ** 5 - 1, 36 ** 5, 2 ** 40]) expect(bidFor(id, call).length).toBeLessThanOrEqual(12);
+    expect(bidFor(36 ** 5, "OE8APR")).toBe("0_OE8APR"); // a six-character call leaves five digits, then wraps
   });
 });

@@ -96,13 +96,6 @@ gate were all found only against real partners). The protocol × partner matrix 
 updates it. Paths CI physically cannot host (Web Serial/BLE KISS, soundcard AFSK on air, real
 radios) stay documented validate-at-deploy entries — visible, never silently absent.
 
-**Found by the interop legs:**
-
-- [ ] **FBB BIDs within 12 characters** _(P1 · S)_ — F6FBB defers (`FS =`) any proposal whose BID is
-      longer than 12 characters, and the gateway's BID is `<id>_<INSTANCE>` (`1_aprscaching.net` is
-      17), so a real FBB partner never takes our mail. Derive a short BID that stays unique per instance
-      (the `own`-BID check in `bbs.ts` reads the current shape) and assert it in `fbb-forward`.
-
 Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom, and every one runs: KISS TCP
 against the kernel AX.25 stack, the full FBB mail exchange against F6FBB, APRS-IS against aprsc (all in
 `interop.yml`), KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (the weekly

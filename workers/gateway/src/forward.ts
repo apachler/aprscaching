@@ -14,6 +14,7 @@ import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
+import { bbsCall, bidFor, isOwnBid } from "./bbs.js";
 
 /** Build a router from the enabled forward rules. */
 async function loadRouter(env: Env): Promise<ForwardRouter> {
@@ -258,14 +259,14 @@ interface PoolRow {
  *  The FB proposal line is SPACE-delimited, so every field must be a single token: a stored
  *  "OE1TST @ OE1BBB.OE.EU" address splits into the bare recipient (`to`) and its destination
  *  BBS (`at` — the @BBS routing field); a bare call keeps the partner HA as the hint. */
-export function fbbFromRow(r: PoolRow, instance: string, at: string): FbbWireMsg {
+export function fbbFromRow(r: PoolRow, call: string, at: string): FbbWireMsg {
   const m = /^\s*([^\s@]+)(?:\s*@\s*(\S+))?/.exec(r.to_call);
   return {
     type: r.type === "B" ? "B" : "P", // FBB proposes P or B; T (traffic) rides as P
     from: r.from_call.trim().split(/\s+/)[0] ?? r.from_call,
     at: m?.[2] ?? at,
     to: m?.[1] ?? r.to_call,
-    bid: r.bid ?? `${r.id}_${instance}`,
+    bid: r.bid ?? bidFor(r.id, call),
     title: r.subject ?? "",
     body: r.body,
   };
@@ -308,7 +309,7 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
   const partner = (u.searchParams.get("partner") ?? "").toUpperCase();
   if (!partner) return json({ error: "partner required" }, { status: 400 });
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit")) || 20, 1), 50);
-  const instance = env.INSTANCE ?? u.host;
+  const call = bbsCall(env);
   const at =
     (await env.DB.prepare("SELECT ha FROM bbs_partners WHERE call=?").bind(partner).first<{ ha: string | null }>())
       ?.ha ?? partner;
@@ -330,7 +331,7 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
     // route the destination (White Pages expands a bare call to "CALL @ homeBBS", then the @AT hierarchy matches a rule)
     const { partner: rule } = await resolvePartner(env, r.to_call);
     if ((rule?.partner ?? "").toUpperCase() !== partner) continue;
-    out.push(fbbFromRow(r, instance, at));
+    out.push(fbbFromRow(r, call, at));
     if (out.length >= limit) break;
   }
   return json({ partner, messages: out });
@@ -342,6 +343,9 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
   const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), nowS());
   if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
+  // A BID carrying this BBS's call is one only this BBS issues: a copy from elsewhere is a loop of mail it
+  // already holds, or a claim on a BID it has yet to issue, which would make that message's post fail.
+  if (isOwnBid(env, row.bid)) return json({ ok: true, stored: 0, deduped: true });
   // A federation batch's BID is the hash of its content, so it is claimed only by that content: a
   // bulletin whose BID doesn't match what it carries is refused before it can squat the BID and make
   // the genuine batch look like a duplicate.

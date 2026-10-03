@@ -23,7 +23,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | Envelope field | Meaning |
 |---|---|
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
-| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`) and is kept only in the origin's own `localid_origin` form; a bulletin carrying any other BID is stored under its gid, so one instance cannot claim another's BID |
+| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`). A mirror is stored under its gid, never under the BID it carries, so one instance cannot claim another's BID; the BID only skips a bulletin already held from FBB forwarding |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
 | `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. A cache's `v` is its revision counter plus 2³²; a bulletin's is its posting time; the rest count up |
 | `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
