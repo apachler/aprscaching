@@ -105,8 +105,9 @@ ok(
 );
 const probeRx = rx.filter((f) => callStr(srcCall(f)) === KUI);
 ok(
-  "our client checks and strips both probes' CRC, and reads them as the same frame as the plain one",
-  probeRx.length >= 3 && probeRx.slice(0, 2).every((f) => Buffer.from(f).equals(Buffer.from(probeRx[2]))),
+  "our client checks and strips both probes' CRC, and reads them as the plain frame (bar axkit's frame number)",
+  probeRx.length >= 3 &&
+    probeRx.slice(0, 2).every((f) => Buffer.from(f.subarray(0, -2)).equals(Buffer.from(probeRx[2].subarray(0, -2)))),
   `lengths ${probeRx.map((f) => f.length).join(",")}`,
 );
 
