@@ -227,4 +227,4 @@ explains it in full.
 
 ## Next
 
-- [What is APRScaching?](play/index.md).
+- [What is APRScaching?](play/index.md): the game in five minutes.

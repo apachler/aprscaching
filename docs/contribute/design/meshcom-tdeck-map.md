@@ -230,4 +230,4 @@ concept is agreed with ICSSW. **Not filed.**
 
 ## Next
 
-- [MeshCom integration](meshcom.md).
+- [MeshCom integration (design)](meshcom.md): how the platform talks to MeshCom.

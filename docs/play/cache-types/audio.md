@@ -66,5 +66,5 @@ A pin in sand yellow with a musical note (♪). The Phosphor theme shows the sam
 
 ## Next
 
-- [Multi-stage caches](multi.md).
-- [Log a find](../log-a-find.md).
+- [Log a find](../log-a-find.md): log the find at the spot.
+- [Multi-stage caches](multi.md): a hunt in several stages.

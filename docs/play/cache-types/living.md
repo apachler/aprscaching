@@ -94,5 +94,5 @@ asterisk (*) in the Phosphor theme.
 
 ## Next
 
-- [How finds are verified](../verification.md).
-- [Community](../community.md).
+- [How finds are verified](../verification.md): the badges a meeting with the station can earn.
+- [Community](../community.md): ratings, badges and ranks.

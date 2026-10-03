@@ -213,5 +213,5 @@ When the diff cannot be read, every job runs.
 
 ## Next
 
-- [Design language](design/design-language.md).
-- [Style guide for the manual](style-guide.md).
+- [Design language](design/design-language.md): the tokens and primitives a UI change uses.
+- [Style guide for the manual](style-guide.md): how a docs change is written.

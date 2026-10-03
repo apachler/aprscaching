@@ -36,4 +36,4 @@ An instance has two parts that deploy separately:
 
 ## Next
 
-- [Choose a shape](choose-a-shape.md).
+- [Choose a shape](choose-a-shape.md): pick the install that suits your hardware.

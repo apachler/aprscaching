@@ -54,5 +54,5 @@ A pin in blue with an open diamond (◇). The Phosphor theme shows an open circl
 
 ## Next
 
-- [Traditional caches](traditional.md).
-- [Log a find](../log-a-find.md).
+- [Log a find](../log-a-find.md): log on the spot, with a note on what you saw.
+- [Traditional caches](traditional.md): the same hunt, with a container.

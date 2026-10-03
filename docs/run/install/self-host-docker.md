@@ -151,4 +151,5 @@ docker compose logs -f gateway      # from deploy/; also ingest, caddy, cloudfla
 ## Next
 
 - [Your first hour](../first-hour.md): sign in, confirm your call and make the instance public-ready.
-- [Backups](../day-to-day/backups.md) and [Updates](../day-to-day/updates.md): the recurring tasks.
+- [Backups and moving](../day-to-day/backups.md): what to back up, and how.
+- [Updates](../day-to-day/updates.md): take a new release.

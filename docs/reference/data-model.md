@@ -57,5 +57,5 @@ live in `@aprscaching/shared` (Zod schemas) and are the source of truth for requ
 
 ## Next
 
-- [HTTP API](api.md).
+- [HTTP API](api.md): the endpoints over these tables.
 - [Backups and moving](../run/day-to-day/backups.md): what to back up.

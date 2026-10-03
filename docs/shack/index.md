@@ -74,4 +74,4 @@ changes how finds are verified.
 ## Next
 
 - [Your radio in the browser](my-radio.md): connect your radio first.
-- [Writing a Shack plugin](../contribute/plugins.md): for plugin authors.
+- [On-air etiquette and rules](on-air.md): before you transmit.

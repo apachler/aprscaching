@@ -25,3 +25,4 @@ is under [Privacy by default](about.md#privacy-by-default).
 ## Next
 
 - [What is APRScaching?](play/index.md): the game in five minutes.
+- [Is running an instance for me?](run/index.md): for a club, a region or an off-grid station.

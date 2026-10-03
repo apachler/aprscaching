@@ -79,5 +79,5 @@ A pin in green with a filled circle (●). The Phosphor theme shows the same cir
 
 ## Next
 
-- [Log a find](../log-a-find.md).
-- [Multi-stage caches](multi.md).
+- [Log a find](../log-a-find.md): log what happened at the cache.
+- [Multi-stage caches](multi.md): a hunt in several stages.

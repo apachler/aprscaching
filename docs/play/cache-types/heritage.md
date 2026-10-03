@@ -98,5 +98,5 @@ Each type has its own pin colour and symbol. The Phosphor theme swaps some symbo
 
 ## Next
 
-- [Cache types](index.md).
-- [Community](../community.md).
+- [Find a cache](../find-a-cache.md): filter the map by type and see live activation spots.
+- [Community](../community.md): the heritage badges, such as Summiteer and Park hunter.
