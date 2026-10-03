@@ -144,9 +144,10 @@ they must talk to. Three tiers (full detail in `tools/interop/README.md`):
   A→B, verify BID idempotency, and (both nodes speak INP3) assert INP3 route convergence via
   triggered RIFs.
 - **Containerized peers** — `tools/interop/docker-compose.yml` brings up **LinBPQ** (default),
-  **F6FBB** (`--profile fbb`, needs host `modprobe ax25`), and **TheNetNode + JNOS**
+  **F6FBB** (`--profile fbb`, needs the host's `ax25` and `mkiss` modules), and **TheNetNode + JNOS**
   (`--profile extra`, source builds). Drivers in `tools/interop/tests/` assert NODES + forwarding
-  into the BPQ BBS and that the real `xfbbd` answers with its FBB banner. The F6FBB container
+  into the BPQ BBS, a full mail exchange with the real `xfbbd` over telnet, and an AX.25 connect to it
+  over AXUDP through `ax25ipd` and the kernel AX.25 stack. The F6FBB container
   (`fbbcomp` on) is the live-validation peer for LZHUF-B1 compressed forwarding.
 
 - **Modem transports** — `tools/interop/direwolf/docker-compose.yml` joins two **Direwolf** modems
