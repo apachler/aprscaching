@@ -22,6 +22,7 @@ import { meshcomBattLevel, meshcomQuality, type MeshcomMeta } from "@aprscaching
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
 import { nowS } from "./util/time.js";
+import { parsePage, keyset, paginate } from "./paging.js";
 
 /** How a node was last heard, as the map shows it. */
 type MeshcomVia = "direct" | "relayed" | "server" | "node";
@@ -43,7 +44,8 @@ const intEnv = (v: string | undefined, dflt: number, min: number) => {
 /** The per-node and per-link rewrite interval, seconds. */
 const metaMinS = (env: Env) => intEnv(env.MESHCOM_META_MIN_S, 300, 0);
 
-function meshcomVia(src: string, m: MeshcomMeta): MeshcomVia {
+/** How the receiving node got a frame: straight over LoRa, relayed over LoRa, from the MeshCom server, or its own. */
+export function meshcomVia(src: string, m: MeshcomMeta): MeshcomVia {
   if (m.srcType === "udp") return "server";
   if (m.srcType === "node") return "node";
   if (m.srcType === "lora" && m.receiver !== src) {
@@ -339,4 +341,73 @@ export async function handleMeshcomLinks(req: Request, env: Env): Promise<Respon
       ...(exact ? { rssi: r.rssi_avg, snr: r.snr_avg } : {}),
     })),
   });
+}
+
+// ---- group chat ----------------------------------------------------------------------------------------
+// MeshCom group messages (to a group number, or `*` to all) as the operator's node(s) heard them, stored for
+// the Messages panel's read-only group view. Kept apart from the callsign message log: a group message is
+// addressed to no station. Pruned nightly with the message log (RETENTION messagesDays).
+
+/** The longest group text stored; MeshCom's own limit is shorter. */
+const GROUP_TEXT_MAX = 200;
+/** A group number, or `*` for all — as packages/aprs `meshcomGroupOf` reads it. */
+const GROUP = /^(\*|[1-9]\d{0,4})$/;
+
+/** A group message one ingest packet carried. */
+export interface MeshcomGroupHearing {
+  from: string;
+  group: string;
+  text: string;
+  ts: number;
+  meta: MeshcomMeta | null;
+}
+
+/** How strongly a hearing places the message near the operator's node: direct LoRa, relayed LoRa, anything else. */
+const heardRank = (col: string) => `(CASE ${col} WHEN 'direct' THEN 3 WHEN 'relayed' THEN 2 ELSE 1 END)`;
+
+/**
+ * The statement that stores one group message. Every copy of a MeshCom frame carries the sender's `msg_id`, so
+ * the sender and that id name the message: a second node hearing it, or the MeshCom server echoing it, adds no
+ * row. A frame without an id is keyed on its sender, group, text and ten-minute bucket instead. A later copy
+ * heard more directly replaces how it was heard and by which node.
+ */
+export function meshcomGroupStatement(env: Env, h: MeshcomGroupHearing): SqlStatement {
+  const text = h.text.slice(0, GROUP_TEXT_MAX);
+  const msgId = h.meta?.msgId ?? null;
+  const key = msgId ? `id:${h.from}:${msgId}` : `tx:${h.from}:${h.group}:${Math.floor(h.ts / 600)}:${text}`;
+  const heard = h.meta ? meshcomVia(h.from, h.meta) : null;
+  return env.DB.prepare(
+    `INSERT INTO meshcom_group_messages (ts, from_call, grp, body, msg_id, receiver, heard, dedup_key)
+     VALUES (?,?,?,?,?,?,?,?)
+     ON CONFLICT(dedup_key) DO UPDATE SET heard = excluded.heard, receiver = excluded.receiver
+     WHERE ${heardRank("excluded.heard")} > ${heardRank("meshcom_group_messages.heard")}`,
+  ).bind(h.ts, h.from, h.group, text, msgId, h.meta?.receiver ?? null, heard, key);
+}
+
+/** GET /api/meshcom/groups — the groups heard within the message retention, most recently active first. */
+export async function handleMeshcomGroups(_req: Request, env: Env): Promise<Response> {
+  const rows = (
+    await env.DB.prepare(
+      `SELECT grp, COUNT(*) AS messages, MAX(ts) AS lastHeard FROM meshcom_group_messages
+        GROUP BY grp ORDER BY lastHeard DESC LIMIT 200`,
+    ).all<{ grp: string; messages: number; lastHeard: number }>()
+  ).results;
+  return json({ groups: rows.map((r) => ({ group: r.grp, messages: r.messages, lastHeard: r.lastHeard })) });
+}
+
+/** GET /api/meshcom/groups/:group/messages — one group's messages, newest first, keyset-paged. */
+export async function handleMeshcomGroupMessages(req: Request, env: Env, group: string): Promise<Response> {
+  if (!GROUP.test(group)) return json({ error: "group must be a number from 1 to 99999, or *" }, { status: 400 });
+  const pg = parsePage(new URL(req.url), 50, 200);
+  const ks = keyset(pg.cursor, "ts", "id");
+  const rows = (
+    await env.DB.prepare(
+      `SELECT id, ts, from_call AS fromCall, body, receiver, heard FROM meshcom_group_messages
+        WHERE grp = ?${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
+    )
+      .bind(group, ...ks.binds, pg.limit + 1)
+      .all<{ id: number; ts: number }>()
+  ).results;
+  const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
+  return json({ group, messages: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
 }

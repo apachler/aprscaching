@@ -440,6 +440,27 @@ export interface MessageItem {
   toCall: string | null;
   body: string;
   direction: string;
+  /** The network that carried it (a `Transport` value); null on a row stored without one. */
+  transport?: string | null;
+}
+
+/** A MeshCom group heard within the message retention (`*` is the all-stations group). */
+export interface MeshcomGroup {
+  group: string;
+  messages: number;
+  lastHeard: number;
+}
+
+/** One MeshCom group message, as the operator's own node(s) heard it. */
+export interface MeshcomGroupMessage {
+  id: number;
+  ts: number;
+  fromCall: string;
+  body: string;
+  /** The node that heard it. */
+  receiver: string | null;
+  /** How that node heard it: direct or relayed over LoRa, from the MeshCom server, or its own frame. */
+  heard: "direct" | "relayed" | "server" | "node" | null;
 }
 
 // ---- BBS store-and-forward ----

@@ -25,6 +25,10 @@ describe("sanitizeMeshcomMeta", () => {
     expect(sanitizeMeshcomMeta({ srcType: "lora", via: ["OE1KBC-24", "262"] })).toEqual({ srcType: "lora" });
     expect(sanitizeMeshcomMeta({ srcType: "lora", via: "OE1KBC-24" })).toEqual({ srcType: "lora" });
   });
+  it("keeps a hex msg_id, upper-cased, and drops any other", () => {
+    expect(sanitizeMeshcomMeta({ msgId: "0a1b2c3d" })).toEqual({ msgId: "0A1B2C3D" });
+    for (const msgId of ["", "123456789", "xyz", 12]) expect(sanitizeMeshcomMeta({ msgId })).toBeNull();
+  });
   it("drops invalid fields one by one, never clamps", () => {
     expect(
       sanitizeMeshcomMeta({

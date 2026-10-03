@@ -7,8 +7,8 @@
  *   - a direct message becomes an APRS message `:ADDRESSEE:text` (MeshCom already carries the `{nnn`
  *     message number inside the text);
  *   - group and `*` text becomes an APRS user-defined packet (`{` + user id `M` + type `G`), which the
- *     decoder classifies as `other` — visible in the port monitor, kept out of the message log because it
- *     is addressed to no station;
+ *     decoder classifies as `other` — visible in the port monitor, kept out of the callsign message log because
+ *     it is addressed to no station; {@link meshcomGroupOf} reads the group and text back out of it;
  *   - telemetry has no APRS mapping here: the firmware reports an absent sensor as `0`.
  */
 import type { MeshcomEvent, MeshcomProvenance } from "./normalize.js";
@@ -49,6 +49,18 @@ export function meshcomToAprs(e: MeshcomEvent): MeshcomAprsFrame | null {
     return { src: e.src, path, payload: `{MG${e.dst}:${e.text}`, kind: "other" };
   }
   return null;
+}
+
+/** A MeshCom group message, as {@link meshcomToAprs} carries it: the group (a number, or `*` for all) and its text. */
+export interface MeshcomGroupMessage {
+  group: string;
+  text: string;
+}
+
+/** The group message an APRS payload carries (`{MG<group>:text`), or null when it carries none. */
+export function meshcomGroupOf(payload: string): MeshcomGroupMessage | null {
+  const m = /^\{MG(\*|[1-9]\d{0,4}):([\s\S]*)$/.exec(payload);
+  return m ? { group: m[1]!, text: m[2]! } : null;
 }
 
 export interface MeshcomTransportHint {

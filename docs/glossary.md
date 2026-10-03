@@ -73,6 +73,11 @@ explains it in full.
 :   A LoRa mesh network for licensed amateurs. APRScaching listens to a MeshCom node on the operator's
     network through the node's **ExtUDP** interface ([MeshCom](run/radios/meshcom.md)).
 
+<span id="meshcom-group"></span>MeshCom group
+:   A MeshCom chat channel named by a number, such as `232`; `*` reaches every node. A group message is
+    addressed to the group, not to a station
+    ([Read MeshCom group chat](shack/messages.md#read-meshcom-group-chat)).
+
 <span id="meshtastic"></span>Meshtastic
 :   A LoRa mesh system; APRScaching shows only nodes in licensed mode, which carry a callsign.
 

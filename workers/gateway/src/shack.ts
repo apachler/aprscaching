@@ -108,7 +108,8 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const base = callParam ? baseCall(callParam.trim().toUpperCase()) : null;
   if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
     return json({ error: "call must be a callsign" }, { status: 400 });
-  let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages WHERE 1=1";
+  let sql =
+    "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction, transport FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
   if (base) {
     sql += " AND (((from_call = ? OR from_call LIKE ?) AND from_call != ?)";
@@ -159,7 +160,10 @@ export async function handleSentMessage(req: Request, env: Env): Promise<Respons
   if (!own) return json({ error: `${baseCall(from)} is not a callsign on your account` }, { status: 403 });
   if (!(await isCallsignVerified(env, from)))
     return json({ error: `verify ${baseCall(from)} to transmit — control-verification required` }, { status: 403 });
-  await env.DB.prepare("INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'tx')")
+  // sent from the browser's own radio: the transport a signed browser batch records
+  await env.DB.prepare(
+    "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'tx', 'browser-rf')",
+  )
     .bind(nowS(), from, to, text, msgNo)
     .run();
   return json({ ok: true });

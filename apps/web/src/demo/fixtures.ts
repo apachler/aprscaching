@@ -20,6 +20,8 @@ import type {
   LeaderboardEntry,
   MapCache,
   MessageItem,
+  MeshcomGroup,
+  MeshcomGroupMessage,
   OperatedStation,
   PortStat,
   Profile,
@@ -457,6 +459,7 @@ const MESSAGES: MessageItem[] = [
     toCall: `${ME}-7`,
     body: "QRV on 144.800? Meet at the clock tower.",
     direction: "in",
+    transport: "tnc",
   },
   {
     id: 2,
@@ -464,7 +467,8 @@ const MESSAGES: MessageItem[] = [
     fromCall: `${ME}-7`,
     toCall: "OE6GHJ-7",
     body: "On my way, 10 minutes.",
-    direction: "out",
+    direction: "tx",
+    transport: "browser-rf",
   },
   {
     id: 3,
@@ -473,8 +477,53 @@ const MESSAGES: MessageItem[] = [
     toCall: "BLN1",
     body: "Digi maintenance Saturday 08:00-10:00.",
     direction: "in",
+    transport: "aprs-is",
+  },
+  {
+    id: 4,
+    ts: NOW - 70 * MIN,
+    fromCall: "OE6MCF-1",
+    toCall: `${ME}-12`,
+    body: "Node on the Schoeckl is back up.",
+    direction: "in",
+    transport: "meshcom",
   },
 ];
+
+const MESHCOM_GROUPS: MeshcomGroup[] = [
+  { group: "232", messages: 3, lastHeard: NOW - 6 * MIN },
+  { group: "*", messages: 1, lastHeard: NOW - 3 * HOUR },
+];
+
+const MESHCOM_GROUP_MESSAGES: Record<string, MeshcomGroupMessage[]> = {
+  "232": [
+    {
+      id: 3,
+      ts: NOW - 6 * MIN,
+      fromCall: "OE6MCF-1",
+      body: "Anyone QRV for the summit net at 18z?",
+      receiver: `${ME}-12`,
+      heard: "direct",
+    },
+    {
+      id: 2,
+      ts: NOW - 25 * MIN,
+      fromCall: "OE3XYZ-4",
+      body: "Gateway in Vienna restarted, all good.",
+      receiver: `${ME}-12`,
+      heard: "server",
+    },
+    {
+      id: 1,
+      ts: NOW - 2 * HOUR,
+      fromCall: "OE6GHJ-7",
+      body: "Testing the new antenna, please report.",
+      receiver: `${ME}-12`,
+      heard: "relayed",
+    },
+  ],
+  "*": [{ id: 4, ts: NOW - 3 * HOUR, fromCall: "OE8KLU-1", body: "CQ CQ via MeshCom", receiver: null, heard: null }],
+};
 
 const MY_STATIONS: OperatedStation[] = [
   {
@@ -749,6 +798,15 @@ const ROUTES: Route[] = [
   ["GET", /^\/api\/stations\/[^/]+\/packets$/, () => ({ callsign: STATION_DETAIL.callsign, count: 0, packets: [] })],
   ["GET", /^\/api\/meshcom\/nodes$/, () => ({ exact: true, nodes: [] })],
   ["GET", /^\/api\/meshcom\/links$/, () => ({ exact: true, links: [] })],
+  ["GET", /^\/api\/meshcom\/groups$/, () => ({ groups: MESHCOM_GROUPS })],
+  [
+    "GET",
+    /^\/api\/meshcom\/groups\/([^/]+)\/messages$/,
+    (m) => {
+      const group = decodeURIComponent(m[1]!);
+      return page({ group, messages: MESHCOM_GROUP_MESSAGES[group] ?? [] });
+    },
+  ],
   ["GET", /^\/api\/spots$/, () => ({ enabled: false, count: 0, fetchedAt: NOW, spots: [] })],
   ["GET", /^\/api\/search$/, () => SEARCH],
   ["GET", /^\/api\/activity$/, () => page({ activity: ACTIVITY })],

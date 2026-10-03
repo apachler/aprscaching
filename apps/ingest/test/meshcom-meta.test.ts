@@ -86,6 +86,15 @@ describe("MeshCom metadata on the packet", () => {
     expect(m?.firmware).toBeUndefined();
   });
 
+  it("a group message carries its msg_id, so the gateway stores it once; a position does not", () => {
+    const g = receive(
+      enc({ src_type: "lora", type: "msg", src: "DH1FR-1", dst: "232", msg: "QRV?", msg_id: "0a1b2c3d", rssi: -90 }),
+    );
+    expect(g.payload).toBe("{MG232:QRV?");
+    expect(meta(g)?.msgId).toBe("0A1B2C3D");
+    expect(meta(receive(pos()))?.msgId).toBeUndefined();
+  });
+
   it("leaves the trust-relevant fields exactly as without metadata", () => {
     const p = receive(pos());
     expect(p).toMatchObject({ heardVia: "rf", igateCall: CALL, port: "meshcom", rxCall: CALL });

@@ -252,7 +252,8 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
   )
     .bind(status, result ?? null, nowS(), id, boxId)
     .run();
-  // a message the box transmitted shows in the Messages list as sent, once however often the box reports it
+  // A message the box transmitted shows in the Messages list as sent, once however often the box reports it.
+  // The box sends a message on its TNC.
   if (status === "done" && done.meta.changes) {
     const cmd = await env.DB.prepare("SELECT callsign, kind, payload FROM box_commands WHERE id=?")
       .bind(id)
@@ -260,7 +261,9 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
     const p =
       cmd?.kind === "message" && cmd.payload ? (JSON.parse(cmd.payload) as { to?: string; text?: string }) : null;
     if (cmd?.callsign && p?.to && p.text)
-      await env.DB.prepare("INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?,?,?,?, 'tx')")
+      await env.DB.prepare(
+        "INSERT INTO messages (ts, from_call, to_call, body, direction, transport) VALUES (?,?,?,?, 'tx', 'tnc')",
+      )
         .bind(nowS(), cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.text)
         .run();
   }

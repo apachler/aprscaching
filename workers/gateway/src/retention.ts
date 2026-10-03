@@ -12,7 +12,7 @@ import { jsonObjectSetting } from "./util/config.js";
 export const RETENTION_DEFAULTS = {
   /** The Shack raw-packet ring (packets_recent), in hours. */
   packetsHours: 24,
-  /** The firehose message log. */
+  /** The firehose message log and MeshCom group messages. */
   messagesDays: 7,
   /** Weather and telemetry readings. */
   sensorDays: 30,
