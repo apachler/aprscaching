@@ -54,7 +54,7 @@ jobs:
         run: docker compose -f tools/interop/docker-compose.yml down -v
 
   fbb:
-    name: F6FBB peer (kernel AX.25 + ax25ipd)
+    name: F6FBB peer (telnet mail exchange + kernel AX.25)
     runs-on: ubuntu-latest
     needs: local-loop
     timeout-minutes: 20
@@ -74,6 +74,15 @@ jobs:
       # FBB's telnet gate requires a REGISTERED user — the smoke asserts the SID banner and the
       # refusal of an unknown callsign (see tools/interop/README)
       - run: node tools/interop/tests/fbb-smoke.mjs
+      # start.sh registers OE1TST + the partner OE1ACS through the xfbbC sysop console once xfbbd is up
+      - run: timeout 90 sh -c 'until docker compose -f tools/interop/docker-compose.yml logs fbb | grep -q "registered through xfbbC"; do sleep 2; done'
+      # a full telnet forward session: proposal, delivery, BID dedup, the FBB mailbox, reverse forwarding
+      - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-forward.mjs
+      - if: failure()
+        run: |
+          docker compose -f tools/interop/docker-compose.yml --profile fbb ps -a
+          docker compose -f tools/interop/docker-compose.yml --profile fbb logs --tail 200 fbb
+          docker compose -f tools/interop/docker-compose.yml --profile fbb exec -T fbb sh -c 'tail -40 /var/ax25/fbb/log/*' || true
       - if: always()
         run: docker compose -f tools/interop/docker-compose.yml --profile fbb down -v
 

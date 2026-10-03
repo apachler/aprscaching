@@ -81,6 +81,16 @@ describe("FBB forwarding session over the loopback", () => {
     expect(A.queue.map((m) => m.bid)).toEqual(["2_A"]); // the un-verdicted one is STILL queued, not lost
   });
 
+  it("a deferred proposal (FS =) stays queued and is not proposed again in the same session", () => {
+    const A = makeStore([msg({ from: "OE8BBS", to: "DL1AAA", bid: "1_A", title: "one", body: "alpha" })]);
+    const s = new FbbSession(A, { initiator: true });
+    s.start();
+    expect(s.feed("FS =").out).toEqual([]); // nothing delivered
+    // the peer has nothing either: with the deferred BID held back we have nothing left → FQ, no loop
+    expect(s.feed("FF")).toEqual({ out: ["FQ"], done: true });
+    expect(A.queue.map((m) => m.bid)).toEqual(["1_A"]); // kept for the next session
+  });
+
   it("rejects a message the partner already holds (BID dedup) and doesn't resend", () => {
     const dup = msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Dup", body: "already have this" });
     const A = makeStore([dup]);
