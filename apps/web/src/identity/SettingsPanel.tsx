@@ -361,7 +361,8 @@ export function SettingsPanel(props: {
           </p>
           <p className="muted">
             Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre. Optional layers: © OpenTopoMap (CC-BY-SA)
-            · Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data).
+            · Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data). DXCC entities
+            and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
           </p>
           <p className="muted">
             Type: Fredoka and IBM Plex Mono (SIL Open Font License 1.1 — license texts ship with the app under{" "}

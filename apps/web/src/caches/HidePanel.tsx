@@ -6,7 +6,8 @@ import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad } from "../ui/index.js";
-import type { CacheType, FedScope } from "@aprscaching/shared";
+import { dxccOfCall, type CacheType, type FedScope } from "@aprscaching/shared";
+import { CountrySelect } from "./CountrySelect.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 const SCOPES: { v: FedScope; label: string; help: string }[] = [
@@ -43,7 +44,8 @@ export function HidePanel(props: {
     [type, callsign],
   );
   const [driveIn, setDriveIn] = useState(false);
-  const [country, setCountry] = useState("");
+  // most hide in their own country: start from the one the callsign names
+  const [country, setCountry] = useState(() => dxccOfCall(callsign)?.prefix ?? "");
   const [tags, setTags] = useState("");
   const [ratingPolicy, setRatingPolicy] = useState<"finders" | "all" | "off">("finders");
   const [rendezvous, setRendezvous] = useState(false);
@@ -119,7 +121,7 @@ export function HidePanel(props: {
         fedScope,
         stationCall: type === "aprs_living" ? stationCall.trim().toUpperCase() || undefined : undefined,
         driveIn: driveIn || undefined,
-        country: country.trim() || undefined,
+        country: country || undefined,
         tags: tagList.length ? tagList : undefined,
         ratingPolicy,
         rendezvous: type === "aprs_living" ? rendezvous : undefined,
@@ -275,10 +277,7 @@ export function HidePanel(props: {
           <Switch label="Drive-in" checked={driveIn} onChange={setDriveIn} />
         </Row>
         <div className="row">
-          <label>
-            Country <span className="muted">(optional)</span>
-            <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="AT" maxLength={56} />
-          </label>
+          <CountrySelect value={country} onChange={setCountry} optional />
           <label>
             Tags <span className="muted">(optional)</span>
             <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="scenic, family, qrp" />

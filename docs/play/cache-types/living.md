@@ -5,7 +5,7 @@ move. You find it by meeting the station.
 
 ## What it is
 
-A living cache follows a station that sends its position over [APRS](../../glossary.md#aprs): a car, a hiker
+A living cache follows a station that sends its position over [APRS](../../glossary.md#aprs) or MeshCom: a car, a hiker
 with a handheld, a balloon. The station is the cache. There is no container. Two living caches that meet can
 also record a rendezvous.
 
@@ -15,14 +15,15 @@ also record a rendezvous.
    old its position is. The pin is at that position.
 2. Find out where the station is now. Turn on **Live stations** in **Search & filter** to follow it on the map,
    or arrange a meeting with its operator.
-3. Go to the station, with your own APRS radio beaconing your position.
+3. Go to the station, with your own APRS or MeshCom radio sending your position.
 4. While you are with the station, log the find.
 
 ## What "found" means
 
 You and the station were in the same place at the same time. The game takes one of your radio positions and
 the station's position closest to it in time. The two positions must be at most 5 minutes apart and within
-150 m of each other.
+150 m of each other, so a station that sends its position less often than every 5 minutes is hard to meet: a
+hider sets a short interval on the station.
 
 ## How it is logged and verified
 

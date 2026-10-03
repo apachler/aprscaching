@@ -483,7 +483,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
         b.minTrust ?? null,
         b.fedScope,
         b.driveIn ? 1 : 0,
-        b.country ?? null,
+        b.country || null,
         joinTags(b.tags),
         b.ratingPolicy ?? "finders",
         b.rendezvous ? 1 : 0,
@@ -534,7 +534,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     min_trust: b.minTrust === undefined ? existing.min_trust : b.minTrust, // null: back to the instance's minimum
     fed_scope: b.fedScope ?? existing.fed_scope,
     drive_in: b.driveIn === undefined ? existing.drive_in : b.driveIn ? 1 : 0,
-    country: b.country ?? existing.country,
+    country: b.country === undefined ? existing.country : b.country || null, // "" clears it
     tags: b.tags === undefined ? existing.tags : joinTags(b.tags),
     rating_policy: b.ratingPolicy ?? existing.rating_policy ?? "finders",
     rendezvous: b.rendezvous === undefined ? existing.rendezvous : b.rendezvous ? 1 : 0,
