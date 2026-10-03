@@ -16,7 +16,7 @@ describe("the map's cache list", () => {
         type: "traditional",
         lat: 47,
         lon: 15,
-        country: "AT",
+        country: "OE",
         tags: ["Scenic", "family", "scenic"],
       },
       { cookie: owner.cookie },
@@ -26,7 +26,34 @@ describe("the map's cache list", () => {
     const c = (list.data.caches as { code: string; country: string | null; tags: string[] }[]).find(
       (x) => x.code === made.data.cache.code,
     );
-    expect(c?.country).toBe("AT");
+    expect(c?.country).toBe("OE");
     expect(c?.tags).toEqual(["scenic", "family"]);
+  });
+
+  it("takes a country only as a DXCC prefix, and an owner clears it with an empty one", async () => {
+    const env = authEnv();
+    const owner = await emailSignup(env, "dxcc@example.test", "OE8DXC");
+    const hide = (country: string) =>
+      call(
+        env,
+        "POST",
+        "/api/caches",
+        { title: "x", type: "traditional", lat: 47, lon: 15, country },
+        { cookie: owner.cookie },
+      );
+    expect((await hide("AT")).status).toBe(400); // an ISO code is not a DXCC prefix
+    expect((await hide("Austria")).status).toBe(400);
+    const made = await hide("oe");
+    expect(made.status).toBe(201);
+    expect(made.data.cache.country).toBe("OE");
+    const cleared = await call(
+      env,
+      "PATCH",
+      `/api/caches/${made.data.cache.id}`,
+      { country: "" },
+      { cookie: owner.cookie },
+    );
+    expect(cleared.status, JSON.stringify(cleared.data)).toBe(200);
+    expect(cleared.data.cache.country).toBeNull();
   });
 });

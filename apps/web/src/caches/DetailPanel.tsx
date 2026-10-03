@@ -42,6 +42,7 @@ import {
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
+import { countryLabel } from "./CountrySelect.js";
 import { FindView } from "./FindView.js";
 import { CacheMedia } from "./CacheMedia.js";
 import { EditCachePanel } from "./EditCachePanel.js";
@@ -240,7 +241,7 @@ export function DetailPanel(props: {
               Drive-in
             </span>
           )}
-          {c.country && <span className="chip">{c.country}</span>}
+          {c.country && <span className="chip">{countryLabel(c.country)}</span>}
           {c.tags.map((t) => (
             <span key={t} className="chip">
               #{t}

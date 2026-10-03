@@ -6,6 +6,7 @@ import { Button, Panel, Row, Switch, Segmented, useToast, useConfirm } from "../
 import type { CacheStatus, FedScope, RatingPolicy } from "@aprscaching/shared";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { StagesEditor } from "./StagesEditor.js";
+import { CountrySelect } from "./CountrySelect.js";
 
 const STATUSES: { v: CacheStatus; label: string; help: string }[] = [
   { v: "active", label: "Active", help: "On the map and takes finds." },
@@ -73,7 +74,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
     if (f.hint !== start.hint) b.hint = f.hint.trim();
     if (f.description !== start.description) b.description = f.description.trim();
     if (f.driveIn !== start.driveIn) b.driveIn = f.driveIn;
-    if (f.country !== start.country) b.country = f.country.trim();
+    if (f.country !== start.country) b.country = f.country;
     if (tagList(f.tags).join(",") !== tagList(start.tags).join(",")) b.tags = tagList(f.tags);
     if (f.radioOnly !== start.radioOnly) b.minTrust = f.radioOnly ? "A" : null;
     if (f.ratingPolicy !== start.ratingPolicy) b.ratingPolicy = f.ratingPolicy;
@@ -221,10 +222,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
         <Switch label="Drive-in" checked={f.driveIn} onChange={(v) => set("driveIn", v)} />
       </Row>
       <div className="row">
-        <label>
-          Country
-          <input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="AT" maxLength={56} />
-        </label>
+        <CountrySelect value={f.country} onChange={(v) => set("country", v)} />
         <label>
           Tags
           <input value={f.tags} onChange={(e) => set("tags", e.target.value)} placeholder="scenic, family, qrp" />

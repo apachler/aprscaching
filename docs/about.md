@@ -62,7 +62,8 @@ APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT) and is **not affiliated with, sponsore
 Bruninga or his estate. The APRScaching game and this application are the author's (OE8APR) own work.
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL. Imported heritage data carries its
-source's own licence and disclaimer. The same credits appear in-app under *Settings → Help & credits*.
+source's own licence and disclaimer. DXCC entities and prefixes come from the Amateur Radio Country Files by Jim
+Reisert, AD1C (MIT). The same credits appear in-app under *Settings → Help & credits*.
 
 ## Next
 

@@ -58,7 +58,7 @@ const base = {
   source: "native",
   sourceName: null,
   sourceUrl: null,
-  country: "AT" as string | null,
+  country: "OE" as string | null,
   tags: [] as string[],
 };
 
@@ -273,7 +273,7 @@ const detail = (c: MapCache, extra: Partial<CacheDetail> = {}): CacheDetail => (
   minTrust: null,
   fedScope: "public",
   driveIn: false,
-  country: "AT",
+  country: "OE",
   tags: [],
   hint: "Look behind the third stone from the gate.",
   description:

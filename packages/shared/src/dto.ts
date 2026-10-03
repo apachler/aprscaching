@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { z } from "zod";
+import { DxccPrefix } from "./dxcc.js";
 
 export const CacheType = z.enum([
   "traditional", // one spot to find
@@ -96,7 +97,7 @@ export const CreateCacheRequest = z.object({
   fedScope: FedScope.default("public"), // how far this cache federates
   code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
   driveIn: z.boolean().optional(), // car-accessible cache (original APRSCaching "Drive-In")
-  country: z.string().trim().max(56).optional(),
+  country: z.union([z.literal(""), DxccPrefix]).optional(), // a DXCC prefix; "" clears it
   tags: CacheTags.optional(),
   ratingPolicy: RatingPolicy.optional(), // who may rate; default 'finders'
   rendezvous: z.boolean().optional(), // living cache opts into mutual rendezvous logging
@@ -119,7 +120,7 @@ export const UpdateCacheRequest = z.object({
   minTrust: MinTrust.nullable().optional(), // null: back to the instance's minimum
   fedScope: FedScope.optional(), // change federation scope
   driveIn: z.boolean().optional(),
-  country: z.string().trim().max(56).optional(),
+  country: z.union([z.literal(""), DxccPrefix]).optional(), // a DXCC prefix; "" clears it
   tags: CacheTags.optional(),
   ratingPolicy: RatingPolicy.optional(),
   rendezvous: z.boolean().optional(),
@@ -175,7 +176,7 @@ export interface CacheSummary {
   minTrust: "A" | "B" | null;
   fedScope: FedScope; // owner's federation scope
   driveIn: boolean; // car-accessible (original APRSCaching "Drive-In")
-  country: string | null; // ISO code or short name (owner-set)
+  country: string | null; // the DXCC prefix of the country (owner-set)
   tags: string[]; // free-form tags
 }
 
