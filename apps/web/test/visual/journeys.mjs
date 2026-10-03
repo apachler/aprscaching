@@ -56,6 +56,7 @@ const JOURNEYS = [
       ["Open Nearby", "click:button:Nearby"],
       ["Pick the nearest cache", "click:button:The Landhaus courtyard"],
       ["Navigate", "click:button:Navigate"],
+      ["Find", "click:button:Find"],
       ["Log a find", "click:button:Log a find||Log"],
       ["The result", null],
     ],
@@ -138,9 +139,12 @@ async function act(page, how) {
   if (kind === "key") return page.keyboard.press(a);
   if (kind === "fill") return page.getByLabel(a, { exact: false }).first().fill(b, { timeout: 5000 });
   const roles = a.split("|");
+  // an open modal dialog is all a person can reach: look there first
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]').last();
+  const scope = (await dialog.count()) ? dialog : page;
   for (const name of b.split("||")) {
     for (const role of roles) {
-      const loc = page.getByRole(role, { name, exact: name.length <= 4 }).first();
+      const loc = scope.getByRole(role, { name, exact: name.length <= 4 }).first();
       if (await loc.count()) return loc.click({ timeout: 5000 });
     }
   }

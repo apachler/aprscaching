@@ -42,6 +42,7 @@ import {
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
+import { FindView } from "./FindView.js";
 import { CacheMedia } from "./CacheMedia.js";
 import { EditCachePanel } from "./EditCachePanel.js";
 import { usePlatform } from "../platform/PlatformContext.js";
@@ -102,6 +103,9 @@ export function DetailPanel(props: {
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   const [editing, setEditing] = useState(false);
   useEffect(() => setEditing(false), [c.id]);
+  const [finding, setFinding] = useState(false);
+  // Log a find from the Find view: the log form below runs it, so the find takes the one log flow
+  const [logRequest, setLogRequest] = useState(0);
   useEffect(() => {
     setFav({ on: c.favorited, count: c.favorites });
   }, [c.id, c.favorited, c.favorites]);
@@ -274,7 +278,24 @@ export function DetailPanel(props: {
             <span className="k">GRID</span>
             <span className="v">{grid}</span>
           </div>
-          <NavigateCache lat={c.lat!} lon={c.lon!} title={c.title} />
+          <NavigateCache lat={c.lat!} lon={c.lon!} title={c.title} onFind={() => setFinding(true)} />
+          {finding && (
+            <FindView
+              lat={c.lat!}
+              lon={c.lon!}
+              title={c.title}
+              code={c.code}
+              onClose={() => setFinding(false)}
+              onLog={
+                c.status === "active" && !(callsign && baseOf(callsign) === baseOf(c.ownerCall))
+                  ? () => {
+                      setFinding(false);
+                      setLogRequest((n) => n + 1);
+                    }
+                  : undefined
+              }
+            />
+          )}
         </div>
       )}
 
@@ -346,6 +367,7 @@ export function DetailPanel(props: {
         cacheStatus={c.status}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
+        logRequest={logRequest}
       />
 
       {c.findsByMonth && c.findsByMonth.some((m) => m.n > 0) && (

@@ -1,28 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { Icon, Button } from "../ui/index.js";
-import { useFmt } from "../format.js";
-import { bearingDeg, bearing8, haversine, parseCoordinates } from "../map/geo.js";
-import { NAV_MAX_AGE_MS } from "../geo/location.js";
-import { LocateStatus, useLocate } from "../geo/useLocate.js";
 
 /**
- * Navigate-to-cache — a one-tap field action. Hand-off links open the cache in the
- * device's own maps/navigation app (these need no permission and route from the phone's location), and
- * an on-demand bearing/compass readout uses a device fix, or a coordinate the cacher types, when they
- * want the heading + distance in the field. Real links/buttons; nothing here animates.
+ * Getting to a cache. **Find** opens the in-app compass for the last stretch on foot (`FindView`); **Navigate**
+ * hands the coordinates to a maps app for the drive there. The hand-off links need no permission: Google and Apple
+ * route from the phone's own location, and the phone's maps app and OpenStreetMap show the spot.
  */
-export function NavigateCache(props: { lat: number; lon: number; title: string }) {
+export function NavigateCache(props: { lat: number; lon: number; title: string; onFind: () => void }) {
   const { lat, lon, title } = props;
-  const fmt = useFmt();
   const [open, setOpen] = useState(false);
-  const [fix, setFix] = useState<{ bearing: number; octant: string; distM: number; typed: boolean } | null>(null);
-  const loc = useLocate();
-  const [typed, setTyped] = useState("");
-  const [typedErr, setTypedErr] = useState(false);
 
   const dest = `${lat.toFixed(6)},${lon.toFixed(6)}`;
-  // Universal + per-platform hand-offs. Google/Apple route from the device's current location.
   const links = [
     { label: "Maps app", href: `geo:${dest}?q=${dest}(${encodeURIComponent(title)})` },
     { label: "Google", href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
@@ -33,32 +22,16 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
     },
   ];
 
-  /** Bearing and distance from a point to the cache; `typed` marks a start the cacher typed in. */
-  function from(aLat: number, aLon: number, typed: boolean) {
-    setFix({
-      bearing: bearingDeg(aLat, aLon, lat, lon),
-      octant: bearing8(aLat, aLon, lat, lon),
-      distM: haversine(aLat, aLon, lat, lon),
-      typed,
-    });
-  }
-
-  async function locate() {
-    const got = await loc.locate(NAV_MAX_AGE_MS);
-    if ("fix" in got) from(got.fix.lat, got.fix.lon, false);
-  }
-
-  function fromTyped() {
-    const c = parseCoordinates(typed);
-    setTypedErr(!c);
-    if (c) from(c.lat, c.lon, true);
-  }
-
   return (
     <div className="navcache">
-      <Button className="navcache-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Icon name="navigation" size={15} /> Navigate
-      </Button>
+      <div className="navcache-row">
+        <Button className="navcache-btn" onClick={props.onFind}>
+          <Icon name="locate" size={15} /> Find
+        </Button>
+        <Button className="navcache-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <Icon name="navigation" size={15} /> Navigate
+        </Button>
+      </div>
       {open && (
         <div className="navcache-body">
           <div className="navcache-links">
@@ -67,55 +40,6 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
                 {l.label} ↗
               </a>
             ))}
-          </div>
-          <div className="navcache-bearing">
-            {fix && (
-              <p className="mono" role="status">
-                <span
-                  className="navcache-arrow"
-                  style={{ "--bearing": `${Math.round(fix.bearing)}deg` } as CSSProperties}
-                  aria-hidden="true"
-                >
-                  ↑
-                </span>{" "}
-                {Math.round(fix.bearing)}° {fix.octant} · {fmt.distance(fix.distM)} away
-                {fix.typed && <span className="muted"> from the typed point</span>}
-              </p>
-            )}
-            <Button variant="quiet" onClick={() => void locate()} disabled={!!loc.waiting}>
-              {loc.waiting ? "Getting a fix…" : fix ? "Update from here" : "Show bearing & distance from here"}
-            </Button>
-            <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
-            <form
-              className="row coord-entry"
-              onSubmit={(e) => {
-                e.preventDefault();
-                fromTyped();
-              }}
-            >
-              <label>
-                From coordinates
-                <input
-                  value={typed}
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="47.07355, 15.43785 or JN77rb"
-                  aria-invalid={typedErr || undefined}
-                  onChange={(e) => {
-                    setTyped(e.target.value);
-                    setTypedErr(false);
-                  }}
-                />
-              </label>
-              <Button type="submit" disabled={!typed.trim()}>
-                Show
-              </Button>
-            </form>
-            {typedErr && (
-              <p className="error fine" role="alert">
-                Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator.
-              </p>
-            )}
           </div>
         </div>
       )}

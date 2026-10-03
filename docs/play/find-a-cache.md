@@ -67,7 +67,7 @@ Tap a marker, a row in **Nearby**, or a search result. The cache sheet shows:
 - how far away the cache is, once your location is known;
 - **Rating**, the description, the **Hint** (tap to show it) and any photos;
 - **Verification**: the badge a find needs here to count as verified;
-- **Coordinates** with a copy button, the grid square, and **Navigate**;
+- **Coordinates** with a copy button, the grid square, **Find** and **Navigate**;
 - **Copy link** and **▦ QR** to share the cache;
 - the **Logbook**: everyone's finds, did-not-finds and notes.
 
@@ -75,12 +75,18 @@ Tap a marker, a row in **Nearby**, or a search result. The cache sheet shows:
 
 ## Get to the cache
 
-1. Tap **Navigate**. A list of maps apps opens.
-2. Tap **Maps app** (your phone's own), **Google**, **Apple** or **OpenStreetMap**. Google and Apple open with a
-   route to the cache; the others show the cache on their map.
+Drive or ride there with a maps app, then walk the last stretch with **Find**.
 
-Without a maps app, tap **Show bearing & distance from here**. The sheet shows an arrow, the bearing and the
-distance from where you stand. **Update from here** refreshes it as you walk.
+1. Tap **Navigate**, then **Maps app** (your phone's own), **Google**, **Apple** or **OpenStreetMap**. Google and
+   Apple open with a route to the cache; the others show the cache on their map.
+2. Near the cache, tap **Find**. A compass fills the screen: the arrow points at the cache, with the distance and
+   the GPS accuracy below it. The screen stays on while it is open, and it works without a connection.
+3. When the view says **search here**, you are within GPS accuracy of the pin: put the phone down and look.
+4. Found it? Tap **✓ Log a find** in the same view.
+
+The arrow follows the phone's compass. On iPhone, tap **Use the compass** once to allow it. A phone without a
+compass turns the arrow the way you walk, after a few steps. If the view asks, move the phone in a figure-eight to
+calibrate it, away from cars and metal.
 
 ## The "you're near" prompt
 
