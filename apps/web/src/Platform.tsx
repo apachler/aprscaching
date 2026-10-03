@@ -884,7 +884,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             {isPanel("activity") && <ActivityPanel onBoard={() => openView(panel("ranks"))} onClose={closeView} />}
             {isPanel("outbox") && <OutboxPanel onClose={closeView} />}
             {isPanel("offline") && <OfflinePanel onClose={closeView} />}
-            {isPanel("messages") && <MessagesPanel onClose={closeView} />}
+            {isPanel("messages") && <MessagesPanel onClose={closeView} onRadio={() => openView(panel("settings"))} />}
             {isPanel("filter") && (
               <FilterPanel
                 filters={filters}

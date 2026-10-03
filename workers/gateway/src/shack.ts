@@ -99,9 +99,17 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const pg = parsePage(u, 50, 200);
   const to = u.searchParams.get("to");
   const bulletins = u.searchParams.get("bulletins") === "1";
+  // `call`: one operator's traffic, sent or received under any SSID of its base call
+  const callParam = u.searchParams.get("call");
+  const base = callParam ? baseCall(callParam.trim().toUpperCase()) : null;
+  if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
+    return json({ error: "call must be a callsign" }, { status: 400 });
   let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
-  if (to) {
+  if (base) {
+    sql += " AND (from_call = ? OR from_call LIKE ? OR to_call = ? OR to_call LIKE ?)";
+    binds.push(base, `${base}-%`, base, `${base}-%`);
+  } else if (to) {
     sql += " AND to_call = ?";
     binds.push(to.toUpperCase());
   } else if (bulletins) {
