@@ -26,7 +26,7 @@ import {
   type SearchHitStation,
 } from "./api.js";
 import { TopBar } from "./TopBar.js";
-import { Tour, TOUR_STEPS, Button, useToast, Icon } from "./ui/index.js";
+import { Tour, TOUR_STEPS, Button, useToast, Icon, usePoll } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle, buildPackTileStyle, buildPhosphorStyle } from "./offlineBasemap.js";
@@ -36,7 +36,6 @@ import { applyTheme, watchSystemTheme } from "./shell/theme.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import { setToolTxVerified, feedHeard } from "./tools/host.js";
 import { ToolMapLayers } from "./tools/ToolMapLayers.js";
-import type { CacheType } from "@aprscaching/shared";
 import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
@@ -51,15 +50,17 @@ import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { AdminPanel } from "./identity/AdminPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
 import { FilterPanel } from "./caches/FilterPanel.js";
+import { NO_FILTERS, facetsOf, filtering, passes, type CacheFilters } from "./caches/filters.js";
 import { HidePanel } from "./caches/HidePanel.js";
 import { DetailPanel } from "./caches/DetailPanel.js";
 import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { OutboxPanel } from "./log/OutboxPanel.js";
+import { AlertsPanel } from "./shack/AlertsPanel.js";
 import { OfflinePanel } from "./offline/OfflinePanel.js";
 import type { OfflineSource } from "./offline/packs.js";
-import { offlineReady, type OfflineFrom } from "./api.js";
+import { offlineReady, listWatch, type OfflineFrom } from "./api.js";
 
 // offline packs' map tiles answer acs-pack:// requests (offline/packTiles.ts)
 registerPackTiles(offlineReady);
@@ -214,7 +215,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
   const { pins, toggle: togglePin } = usePinnedApps();
-  const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
+  const [filters, setFilters] = useState<CacheFilters>(NO_FILTERS);
   // include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
   const [includeUnvetted, setIncludeUnvetted] = useState(false);
   const includeUnvettedRef = useRef(includeUnvetted);
@@ -512,7 +513,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         if (s.layers.meshcom !== undefined) setMeshcomOn(!!s.layers.meshcom);
         if (s.layers.meshcomLinks !== undefined) setMeshcomLinksOn(!!s.layers.meshcomLinks);
       }
-      if (s.filters) setFilters(s.filters as typeof filters);
+      if (s.filters) setFilters({ ...NO_FILTERS, ...(s.filters as Partial<CacheFilters>) });
       if (s.spotFilters) setSpotFilters(s.spotFilters);
       if (s.selected != null) {
         closeAll();
@@ -537,15 +538,8 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [ready, applyView, initialQuery]);
 
   // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
-  const shown = useMemo(
-    () =>
-      caches.filter(
-        (c) =>
-          (filters.types.length === 0 || filters.types.includes(c.type)) &&
-          (!filters.q || `${c.code} ${c.title ?? ""}`.toLowerCase().includes(filters.q.toLowerCase())),
-      ),
-    [caches, filters],
-  );
+  const shown = useMemo(() => caches.filter((c) => passes(c, filters)), [caches, filters]);
+  const facets = useMemo(() => facetsOf(caches), [caches]);
 
   // ---- live socket: geofence prompts + live station deltas, subscribed to the viewport + callsign ----
   const { send } = useLiveSocket({
@@ -815,6 +809,17 @@ export default function Platform({ session, startTour }: { session: SessionState
   );
   const ctx = useMemo(() => ({ session, map, openDocs }), [session, map, openDocs]);
 
+  // the bell's count: unseen watchlist alerts, polled while signed in and on every panel change
+  const [unseenAlerts, setUnseenAlerts] = useState(0);
+  const loadUnseen = useCallback(() => {
+    if (!session.signedIn) return setUnseenAlerts(0);
+    listWatch()
+      .then((r) => setUnseenAlerts(r.unseen))
+      .catch(() => {});
+  }, [session.signedIn]);
+  usePoll(loadUnseen, 60_000, { enabled: session.signedIn });
+  useEffect(loadUnseen, [loadUnseen, view]);
+
   return (
     <PlatformContext.Provider value={ctx}>
       <FormatContext.Provider value={fmt}>
@@ -829,7 +834,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             attention={sync.status.attention}
             onQueue={() => openView(panel("outbox"))}
             onFilters={() => openView(panel("filter"))}
-            filtered={filters.types.length > 0 || filters.q.length > 0}
+            filtered={filtering(filters)}
             q={filters.q}
             onSearch={(v) => setFilters({ ...filters, q: v })}
             onSearchSubmit={runSearch}
@@ -842,6 +847,8 @@ export default function Platform({ session, startTour }: { session: SessionState
             onDocs={() => openView(panel("docs"))}
             sysop={sysop}
             onAdmin={() => openView(panel("admin"))}
+            alerts={unseenAlerts}
+            onAlerts={session.signedIn ? () => openView(panel("alerts")) : undefined}
           />
           <div className="shell">
             <NavRail
@@ -883,12 +890,16 @@ export default function Platform({ session, startTour }: { session: SessionState
             )}
             {isPanel("activity") && <ActivityPanel onBoard={() => openView(panel("ranks"))} onClose={closeView} />}
             {isPanel("outbox") && <OutboxPanel onClose={closeView} />}
+            {isPanel("alerts") && (
+              <AlertsPanel callsign={callsign} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
+            )}
             {isPanel("offline") && <OfflinePanel onClose={closeView} />}
             {isPanel("messages") && <MessagesPanel onClose={closeView} />}
             {isPanel("filter") && (
               <FilterPanel
                 filters={filters}
                 setFilters={setFilters}
+                facets={facets}
                 count={shown.length}
                 includeUnvetted={includeUnvetted}
                 setIncludeUnvetted={setIncludeUnvetted}

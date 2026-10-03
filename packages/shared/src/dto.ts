@@ -198,6 +198,9 @@ export interface MapCache {
   source: string; // "native" or an import source ("sota","pota",…)
   sourceName: string | null; // attribution label for imported caches
   sourceUrl: string | null; // deep link to the source page
+  /** The owner's country and tags; a mirrored cache carries neither. */
+  country: string | null;
+  tags: string[];
 }
 
 export interface CacheLogEntry {

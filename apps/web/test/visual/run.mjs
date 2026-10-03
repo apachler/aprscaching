@@ -111,6 +111,8 @@ const SURFACES = [
     after: ".stage-edit-list",
   },
   { name: "nearby", as: "user", query: "?view=nearby" },
+  { name: "filter", as: "user", query: "?view=filter" },
+  { name: "alerts", as: "user", query: "?view=alerts" },
   { name: "hide", as: "user", query: "?view=hide" },
   // the first-run tour: it starts when a visitor explores the map, with the tour not yet seen
   {

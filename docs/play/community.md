@@ -30,14 +30,15 @@ Tap it again to take your favourite back.
 The watchlist watches callsigns, not caches. Add a friend's callsign and you get an alert when the network
 hears it.
 
-1. Open **Settings → Notifications**.
-2. Under **Watchlist**, type the callsign in **Watch a callsign**, for example `OE8APR`, and tap **Watch**.
+1. Tap the bell in the top bar. **Alerts** opens. **Settings → Notifications → Watchlist** shows the same list.
+2. Type the callsign in **Watch a callsign**, for example `OE8APR`, and tap **Watch**.
    The callsign shows as a chip. Tap the chip to stop watching.
 
 You get at most one alert an hour for each callsign. When the station is about 500 m or less from a cache, the
 alert names the cache.
 
-Alerts show under **Alerts** in the same group. Two more ways to get them:
+The bell shows how many alerts you have not seen yet. **Mark all seen** clears the count. Two more ways to get
+alerts:
 
 - **Browser push**: tap **Enable**. The instance must offer push, and on an iPhone you install the app to
   your home screen first.

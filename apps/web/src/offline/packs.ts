@@ -113,6 +113,8 @@ function mapFields(c: PackCache): MapCache {
     source: c.source,
     sourceName: c.sourceName,
     sourceUrl: c.sourceUrl,
+    country: c.country,
+    tags: c.tags,
   };
 }
 
