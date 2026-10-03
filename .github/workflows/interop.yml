@@ -55,35 +55,59 @@ jobs:
         run: docker compose -f tools/interop/docker-compose.yml down -v
 
   fbb:
-    name: F6FBB peer (telnet mail exchange + kernel AX.25)
+    name: F6FBB peer (telnet mail exchange + kernel AX.25 over AXUDP)
     runs-on: ubuntu-latest
     needs: local-loop
     timeout-minutes: 20
     env:
-      ACS_AXUDP_PEERS: fbb:10093
+      # fbb runs on the host network (kernel AX.25); acs reaches its ax25ipd at the compose gateway
+      ACS_AXUDP_PEERS: 172.31.93.1:10093
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      # the fbb container attaches kernel AX.25 ports — the module must exist on the runner host
-      - run: sudo apt-get update && sudo apt-get install -y "linux-modules-extra-$(uname -r)" || true
-      - run: sudo modprobe ax25 || echo "ax25 module unavailable — fbb will run telnet-only"
+      # the fbb container attaches a kernel AX.25 port — ax25 and mkiss must be loaded on the runner host
+      - run: sudo apt-get update && sudo bash tools/interop/ax25kernel/load-modules.sh
+      # wire capture — the AXUDP truth for any assertion dispute (printed on failure)
+      - run: sudo tcpdump -i any -nn udp port 10093 or udp port 10094 -w /tmp/axudp.pcap >/dev/null 2>&1 &
       - run: docker compose -f tools/interop/docker-compose.yml --profile fbb up -d --build acs fbb
-      - run: sleep 25 && docker compose -f tools/interop/docker-compose.yml logs --tail 30 fbb
+      # the kernel path is required: start.sh exits without it, and this step fails unless the AX.25
+      # device and ax25ipd are up on the host
+      - run: |
+          timeout 60 sh -c 'until docker compose -f tools/interop/docker-compose.yml --profile fbb logs fbb | grep -q "kernel AX.25 port axudp on"; do
+            [ "$(docker inspect -f "{{.State.Running}}" "$(docker compose -f tools/interop/docker-compose.yml --profile fbb ps -aq fbb)")" = true ] || exit 1
+            sleep 1
+          done'
+          ip -br link | grep '^ax'
+      # xfbbd serves once its first run has created the data files (start.sh, about 20 s)
+      - run: timeout 90 sh -c 'until nc -z 127.0.0.1 6300; do sleep 1; done' && sleep 3
+      # xfbbd's listener for its BBS call is bound on the kernel port
+      - run: docker compose -f tools/interop/docker-compose.yml --profile fbb logs --tail 30 fbb && grep ' OE9FBB-1 ' /proc/net/ax25
+      # the acs node's NET/ROM broadcasts (every 10 s) reach the kernel port through AXUDP → ax25ipd;
+      # nothing else sends to it yet
+      - run: |
+          dev=$(ip -br link | awk '/^ax/ { print $1; exit }')
+          timeout 30 sh -c "until [ \$(cat /sys/class/net/$dev/statistics/rx_packets) -gt 0 ]; do sleep 1; done"
+          echo "$dev received $(cat /sys/class/net/$dev/statistics/rx_packets) frames from acs"
       # FBB's telnet gate requires a REGISTERED user — the smoke asserts the SID banner and the
       # refusal of an unknown callsign (see tools/interop/README)
       - run: node tools/interop/tests/fbb-smoke.mjs
+      # our LAPB initiator connects to OE9FBB-1 through AXUDP → ax25ipd → kernel AX.25 and must get FBB's SID
+      - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-ax25.mjs
       # start.sh registers OE1TST + the partner OE1ACS through the xfbbC sysop console once xfbbd is up
-      - run: timeout 90 sh -c 'until docker compose -f tools/interop/docker-compose.yml logs fbb | grep -q "registered through xfbbC"; do sleep 2; done'
+      - run: timeout 90 sh -c 'until docker compose -f tools/interop/docker-compose.yml --profile fbb logs fbb | grep -q "registered through xfbbC"; do sleep 2; done'
       # a full telnet forward session: proposal, delivery, BID dedup, the FBB mailbox, reverse forwarding
       - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-forward.mjs
       - if: failure()
         run: |
           docker compose -f tools/interop/docker-compose.yml --profile fbb ps -a
-          docker compose -f tools/interop/docker-compose.yml --profile fbb logs --tail 200 fbb
-          docker compose -f tools/interop/docker-compose.yml --profile fbb exec -T fbb sh -c 'tail -40 /var/ax25/fbb/log/*' || true
+          docker compose -f tools/interop/docker-compose.yml --profile fbb logs --tail 200
+          docker compose -f tools/interop/docker-compose.yml --profile fbb exec -T fbb \
+            sh -c 'cat /tmp/kissattach.log /tmp/ax25ipd.log; cat /proc/net/ax25; tail -40 /var/ax25/fbb/log/*' || true
+          sudo tcpdump -nn -tttt -r /tmp/axudp.pcap 2>/dev/null | tail -120 || true
+          sudo dmesg | grep -iE 'mkiss|ax25' | tail -20 || true
       - if: always()
         run: docker compose -f tools/interop/docker-compose.yml --profile fbb down -v
 

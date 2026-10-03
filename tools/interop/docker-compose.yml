@@ -1,10 +1,10 @@
 # Interop test environment: our full stack (gateway + ingest) against real packet software over
 # AXUDP on the compose network. Phase peers: linbpq (userspace, no privileges), fbb (real F6FBB —
-# needs kernel AX.25: privileged + `modprobe ax25` on the host), tnn and jnos (userspace, built
+# needs kernel AX.25: privileged, host network, ax25 + mkiss on the host), tnn and jnos (userspace, built
 # from source). Run the drivers in tools/interop/tests/ against the published ports.
 #
 #   docker compose up -d acs linbpq        # phase 1
-#   docker compose --profile fbb up -d     # phase 2 (host: sudo modprobe ax25)
+#   docker compose --profile fbb up -d     # phase 2 (host: sudo bash ax25kernel/load-modules.sh)
 #   docker compose --profile extra up -d   # phase 3 (tnn + jnos)
 services:
   acs:
@@ -21,8 +21,9 @@ services:
       # AXUDP port peering with every packet peer on the compose network
       AXUDP_PORT: "10093"
       # each CI job narrows this to the peers that actually exist on its network — dialing
-      # absent service names just fills the log with DNS errors
-      AXUDP_PEERS: ${ACS_AXUDP_PEERS:-linbpq:10093,fbb:10093,tnn:10093,jnos:10093}
+      # absent service names just fills the log with DNS errors. fbb runs on the host network, so its
+      # job names the compose gateway, 172.31.93.1:10093
+      AXUDP_PEERS: ${ACS_AXUDP_PEERS:-linbpq:10093,tnn:10093,jnos:10093}
       NETROM_CALL: OE1ACS-7
       NETROM_ALIAS: ACS
       NETROM_BROADCAST_MS: "10000"
@@ -52,13 +53,14 @@ services:
   fbb:
     profiles: [fbb]
     build: ./fbb
-    hostname: fbb
-    # LinFBB attaches to KERNEL AX.25 ports; ax25ipd bridges them to AXUDP on the compose
-    # network. Needs the ax25 module loaded on the HOST (sudo modprobe ax25) + privileges here.
+    # LinFBB attaches to a KERNEL AX.25 port; ax25ipd bridges it to AXUDP :10093 on the host, where acs
+    # reaches it at the compose network's gateway (172.31.93.1). AF_AX25 sockets and AX.25 devices exist
+    # only in the initial network namespace, so this runs on the host network, privileged, with the ax25
+    # and mkiss modules loaded on the HOST (ax25kernel/load-modules.sh). Telnet :6300 is on the host too.
     privileged: true
-    ports:
-      - "6300:6300" # FBB telnet console (driver + debugging)
-    networks: [packet]
+    network_mode: host
+    environment:
+      FBB_TELNET_ONLY: ${FBB_TELNET_ONLY:-}
 
   tnn:
     profiles: [extra]

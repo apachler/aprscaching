@@ -11,9 +11,9 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 
 | protocol | real partner | asserted by | notes |
 |---|---|---|---|
-| AXUDP (AX.25-in-UDP + RFC 1226 CRC trailer) | LinBPQ (BPQAXIP), ax25ipd, JNOS, TNN | `bpq-loop`, `fbb-smoke`, `extra-peers` | trailer codec also unit-tested (`packages/ax25` axip-crc, ingest socket tests) |
+| AXUDP (AX.25-in-UDP + RFC 1226 CRC trailer) | LinBPQ (BPQAXIP), ax25ipd, JNOS, TNN | `bpq-loop`, `fbb-ax25`, `extra-peers` | trailer codec also unit-tested (`packages/ax25` axip-crc, ingest socket tests) |
 | NET/ROM NODES broadcasts (both directions) | LinBPQ, TNN, JNOS | `bpq-loop`, `extra-peers` | acs learns the peer AND the peer learns ACS |
-| AX.25 v2.2 connected mode (SABM/I-frames) | LinBPQ dials our node | `bpq-loop` (`C 1 OE1ACS-7`) | our LAPB answers a real initiator |
+| AX.25 v2.2 connected mode (SABM/I-frames) | LinBPQ dials our node; we dial LinBPQ and F6FBB | `bpq-loop` (`C 1 OE1ACS-7`), `bpq-dial`, `fbb-ax25` | our LAPB answers a real initiator, and connects to BPQ's node and to FBB's BBS call through ax25ipd and the kernel stack |
 | FBB forwarding (SID · FA/FB proposals · LZHUF B0/B1) | F6FBB over telnet, LinBPQ when its mail app runs | `fbb-forward`, `fbb-smoke` + explicit SKIP in `bpq-loop` | `fbb-forward` runs a full ASCII mail exchange both ways with F6FBB; the local loop asserts the session against our own responder every run |
 | KISS TCP (FEND/FESC escaping · type byte · frame boundaries · UI both ways) | kernel Linux AX.25 (mkiss via `kissnetd`) | `kiss-kernel` | the kernel's mkiss CRC probe (SMACK, then FlexNet) is asserted as it arrives |
 | AX.25 connected mode over KISS (SABM and SABME, I-frames, DISC) | kernel Linux AX.25 + `ax25d` | `kiss-kernel` | our LAPB initiator, modulo 8 and 128, against the kernel's |
@@ -58,7 +58,7 @@ Debug tools: `probe-bbs.mjs` (dial any AXUDP BBS and run a no-traffic F-protocol
 |----------|----------|--------|------------|
 | `acs`    | our gateway + ingest | AXUDP · NET/ROM · FBB fwd | none |
 | `linbpq` | G8BPQ LinBPQ | AXUDP · NET/ROM · FBB fwd (B1/B2 capable) | none |
-| `fbb`    | F6FBB (Ubuntu `fbb` package) | kernel AX.25 ⇄ AXUDP via `ax25ipd` | privileged + host `modprobe ax25` |
+| `fbb`    | F6FBB (Ubuntu `fbb` package) | kernel AX.25 ⇄ AXUDP via `ax25ipd` · telnet :6300 | privileged + host network + host `ax25`/`mkiss` |
 | `tnn`    | TheNetNode | AXUDP · NET/ROM (TheNet lineage) | none |
 | `jnos`   | JNOS 2.0 | AXUDP · NET/ROM · FBB fwd | none |
 | `aprsc`  | aprsc (OH7LZB) | APRS-IS (login · filter · stream) | none |
@@ -67,11 +67,11 @@ Debug tools: `probe-bbs.mjs` (dial any AXUDP BBS and run a no-traffic F-protocol
 ```bash
 docker compose -f tools/interop/docker-compose.yml up -d acs linbpq
 node tools/interop/tests/bpq-loop.mjs        # NODES both ways + forward into the BPQ BBS
-sudo modprobe ax25                            # host, once — then the FBB tier:
-docker compose -f tools/interop/docker-compose.yml --profile fbb up -d
+sudo bash tools/interop/ax25kernel/load-modules.sh   # host, once — ax25 + mkiss, for both kernel tiers
+ACS_AXUDP_PEERS=172.31.93.1:10093 docker compose -f tools/interop/docker-compose.yml --profile fbb up -d acs fbb
 node tools/interop/tests/fbb-smoke.mjs        # xfbbd up + registration gate asserted
+pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-ax25.mjs      # AX.25 connect over AXUDP, FBB's SID
 pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-forward.mjs   # full mail exchange
-sudo bash tools/interop/ax25kernel/load-modules.sh   # host, once — then the kernel AX.25 tier:
 docker compose -f tools/interop/docker-compose.yml --profile ax25kernel up -d --build ax25kernel
 pnpm -C apps/ingest exec tsx ../../tools/interop/tests/kiss-kernel.mjs
 ```
@@ -157,8 +157,24 @@ over the telnet port as OE1ACS and asserts:
 - A second session that proposes the same BID is refused (`FS -`) and sends nothing.
 - OE1TST's mailbox lists the message (`LM`), and `R <n>` shows its body and BID.
 
-Over kernel AX.25 FBB auto-creates users on first connect, so the AXUDP/ax25ipd leg needs no
-registration.
+### Kernel AX.25 and ax25ipd
+
+`start.sh` attaches the kernel port `axudp` (`OE9FBB-1`) with `kissattach /dev/ptmx`, and `ax25ipd` opens the
+pty slave kissattach prints and carries its KISS frames as AXUDP on udp :10093. xfbbd binds `OE9FBB-1` on that
+port. The kernel path is required: without `/proc/net/ax25`, or when kissattach creates no `ax` device or
+ax25ipd does not start, the container exits. `FBB_TELNET_ONLY=1` skips it on a host without the modules, and the
+log says so.
+
+The container runs on the host network for the same reason as `ax25kernel` below, so `ax25ipd.conf` names its
+peers by IP: acs at `172.31.93.10`, which reaches ax25ipd at the compose network's gateway `172.31.93.1`
+(`ACS_AXUDP_PEERS`), and the `fbb-ax25` dialer on the host at udp :10094 as `OE1PRB-2` (ax25ipd routes by
+callsign and learns no addresses). The `fbb` CI job asserts the kernel leg three ways:
+
+- the `ax` device exists on the runner and xfbbd's `OE9FBB-1` listener shows in `/proc/net/ax25`;
+- the device counts received frames, the acs node's NET/ROM broadcasts arriving through ax25ipd;
+- `tests/fbb-ax25.mjs` connects our LAPB initiator to `OE9FBB-1` and receives FBB's `[FBB-7.0.11-…$]` SID.
+
+Over kernel AX.25 FBB auto-creates users on first connect, so this leg needs no registration.
 
 ## Kernel AX.25 runbook
 

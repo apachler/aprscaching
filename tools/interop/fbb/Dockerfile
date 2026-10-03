@@ -1,9 +1,9 @@
 # F6FBB (LinFBB) — the reference FBB implementation, from the Ubuntu archive. Two access paths:
 #  - telnet :6300 (Interface 9, hex 189C): console/driver access and telnet forwarding partners.
-#  - kernel AX.25 bridged to AXUDP by ax25ipd: REQUIRES the ax25 module on the HOST
-#    (sudo modprobe ax25) and a privileged container.
+#  - kernel AX.25 bridged to AXUDP by ax25ipd: REQUIRES the ax25 and mkiss modules on the HOST
+#    (tools/interop/ax25kernel/load-modules.sh), a privileged container and the host network.
 FROM ubuntu:noble
-RUN apt-get update && apt-get install -y --no-install-recommends fbb ax25-tools ax25-apps telnet \
+RUN apt-get update && apt-get install -y --no-install-recommends fbb ax25-tools ax25-apps telnet procps \
   && rm -rf /var/lib/apt/lists/*
 COPY fbb.conf port.sys forward.sys /etc/ax25/fbb/
 COPY axports ax25ipd.conf /etc/ax25/
