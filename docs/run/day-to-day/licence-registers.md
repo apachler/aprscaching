@@ -1,11 +1,11 @@
 # Licence registers
 
-This page is for the sysop. It shows how to import the public licence registers that the licence badge reads,
+This page is for the sysop. It shows how to import the public licence registers that the register badge reads,
 and how to keep them fresh on a schedule.
 
-The licence badge shows whether a public register lists a call as licensed
+The register badge shows whether a public register lists a call as licensed
 ([Licence registers](../../reference/licence-sources.md) lists the sources). It needs the registers imported;
-until then every call reads "not found in public registers", and nothing else changes.
+until then every call reads "not in a public register", and nothing else changes.
 
 ## Before you start
 
@@ -58,7 +58,7 @@ ExecStart=/usr/bin/node tools/licence/import.mjs
 ## Check that it worked
 
 For each register the tool prints `<id>: <n> calls imported, <m> no longer listed removed`. A licensed call's
-profile then shows the licence badge. The registry holds no user data, so it is outside export and erasure
+profile then shows the register badge. The registry holds no user data, so it is outside export and erasure
 ([Data protection](../compliance/data-protection.md)).
 
 ## Next

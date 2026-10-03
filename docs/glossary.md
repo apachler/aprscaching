@@ -139,7 +139,8 @@ explains it in full.
     ([Open the cache sheet](play/find-a-cache.md#open-the-cache-sheet)).
 
 <span id="verified-callsign"></span>Verified callsign
-:   Proof that you control the licence you signed in with — separate from a find's tier
+:   Proof that you control the licence you signed in with, shown as **✓ you control this call**. It is
+    separate from a find's tier, and from the register badge, which only says a licence exists
     ([Verify your callsign](play/join.md#verify-your-callsign)).
 
 <span id="attested-site"></span>Attested site

@@ -96,7 +96,7 @@ export function ProfilePanel(props: {
           )}
           <p>
             {verified ? (
-              <CallVerifiedBadge label="control-verified" title="You verified control of this callsign" />
+              <CallVerifiedBadge />
             ) : (
               <>
                 <Badge title="Verify control of your callsign to enable transmit">unverified</Badge>{" "}
