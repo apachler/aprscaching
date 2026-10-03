@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile } from "../api.js";
+import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile, type RankPeriod } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, Button, Icon } from "../ui/index.js";
+import { Panel, Badge, EmptyState, Button, Icon, Segmented } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { badgeInfo } from "../profile/badges.js";
 
-/** Community — area leaderboard, drill into a finder's profile. */
+const PERIODS: { value: RankPeriod; label: string; empty: string }[] = [
+  { value: "all", label: "All time", empty: "No verified finds in this area yet." },
+  { value: "year", label: "Year", empty: "No verified finds in this area in the last 365 days." },
+  { value: "month", label: "Month", empty: "No verified finds in this area in the last 30 days." },
+];
+
+/** Community — area leaderboard over a period, drill into a finder's profile. */
 export function CommunityPanel(props: { onClose: () => void }) {
   const { map } = usePlatform();
   const fmt = useFmt();
   const [metric, setMetric] = useState<"points" | "finds">("points");
+  const [period, setPeriod] = useState<RankPeriod>("all");
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,13 +28,15 @@ export function CommunityPanel(props: { onClose: () => void }) {
     const b = m.getBounds();
     setLoading(true);
     try {
-      setRows((await getLeaderboard([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], metric)).leaderboard);
+      setRows(
+        (await getLeaderboard([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], metric, period)).leaderboard,
+      );
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [map, metric]);
+  }, [map, metric, period]);
   useEffect(() => {
     if (!profile) void load();
   }, [load, profile]);
@@ -50,11 +60,14 @@ export function CommunityPanel(props: { onClose: () => void }) {
         <h4>Badges</h4>
         {profile.badges.length ? (
           <div className="badges">
-            {profile.badges.map((b) => (
-              <span key={b.badge} className="award">
-                {b.badge}
-              </span>
-            ))}
+            {profile.badges.map((b) => {
+              const info = badgeInfo(b.badge);
+              return (
+                <span key={b.badge} className="award" title={info.how || undefined}>
+                  {info.name}
+                </span>
+              );
+            })}
           </div>
         ) : (
           <p className="muted">No badges yet.</p>
@@ -80,18 +93,27 @@ export function CommunityPanel(props: { onClose: () => void }) {
       }
       onClose={props.onClose}
     >
+      <Segmented
+        label="Rank by"
+        value={metric}
+        onChange={setMetric}
+        options={[
+          { value: "points", label: "Points" },
+          { value: "finds", label: "Finds" },
+        ]}
+      />
       <div className="row">
-        <Button className={metric === "points" ? "primary" : ""} onClick={() => setMetric("points")}>
-          Points
-        </Button>
-        <Button className={metric === "finds" ? "primary" : ""} onClick={() => setMetric("finds")}>
-          Finds
-        </Button>
+        <Segmented
+          label="Period"
+          value={period}
+          onChange={setPeriod}
+          options={PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+        />
         <span className="spacer" />
         <Button onClick={load}>↻ this area</Button>
       </div>
       {loading && <p className="muted">Loading…</p>}
-      {!loading && !rows.length && <EmptyState>No verified finds in this area yet.</EmptyState>}
+      {!loading && !rows.length && <EmptyState>{PERIODS.find((p) => p.value === period)?.empty}</EmptyState>}
       <ol className="board">
         {rows.map((r) => (
           <li key={r.loggerCall}>

@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
+import { badgeUrl, getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Icon } from "../ui/index.js";
+import {
+  Button,
+  Panel,
+  Group,
+  Badge,
+  CallVerifiedBadge,
+  CommandBlock,
+  LicenceBadge,
+  ErrorState,
+  Icon,
+} from "../ui/index.js";
 import { badgeInfo } from "./badges.js";
 import { RadioLogs } from "./RadioLogs.js";
 import { usePlatform } from "../platform/PlatformContext.js";
@@ -147,6 +157,8 @@ export function ProfilePanel(props: {
 
       {callsign.length >= 3 && <RadioLogs />}
 
+      {callsign.length >= 3 && <EmbedBadge callsign={callsign.toUpperCase().split("-")[0]!} />}
+
       <Group title="Advanced — the Shack" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
         <div className="row wrap">
@@ -165,5 +177,22 @@ export function ProfilePanel(props: {
         </div>
       </Group>
     </Panel>
+  );
+}
+
+/** Your badge for QRZ.com, a forum signature or a club page: the live image and the HTML that shows it. */
+function EmbedBadge(props: { callsign: string }) {
+  const src = badgeUrl(props.callsign);
+  const alt = `${props.callsign} on APRScaching`;
+  const html = `<a href="${location.origin}"><img src="${src}" alt="${alt}" width="360" height="96"></a>`;
+  return (
+    <Group title="Embed your badge" defaultOpen={false}>
+      <p className="muted">
+        Your rank, verified finds, points and hides, kept current. Paste the HTML on QRZ.com, a forum signature or a
+        club page.
+      </p>
+      <img className="badge-embed" src={src} alt={alt} width={360} height={96} />
+      <CommandBlock label="HTML for your badge" command={html} copied="HTML copied" />
+    </Group>
   );
 }

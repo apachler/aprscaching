@@ -15,6 +15,14 @@
     flex: 0 0 auto;
     background: var(--surface-2);
   }
+  /* the embeddable badge's preview: its own size, never wider than the panel */
+  .badge-embed {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin-block: var(--space-sm);
+    border-radius: var(--radius-card);
+  }
   .profile-card .profile-name {
     font-weight: 700;
     color: var(--heading);
