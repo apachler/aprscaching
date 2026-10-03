@@ -60,4 +60,5 @@ the protocols it interoperates with.*
 
 ## Next
 
-- [Contribute](index.md).
+- [Architecture and runtimes](architecture.md): where each implementation sits.
+- [The AX.25 stack](ax25-stack.md): the connected-mode layer built from these specifications.

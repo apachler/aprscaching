@@ -329,5 +329,5 @@ frame is readable off the air; see [Automatic stations on the air](../run/compli
 
 ## Next
 
-- [How federation stays honest](federation-trust.md).
-- [Join the network](../run/federation/index.md).
+- [How federation stays honest](federation-trust.md): what a peer does with these frames.
+- [Join the network](../run/federation/index.md): federate an instance.

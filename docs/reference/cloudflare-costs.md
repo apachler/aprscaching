@@ -129,4 +129,4 @@ counts changed rows only (SQLite reports no index rows), so it runs low.
 
 ## Next
 
-- [Cloudflare split](../run/install/cloudflare-split.md).
+- [Cloudflare split](../run/install/cloudflare-split.md): install the shape these costs apply to.

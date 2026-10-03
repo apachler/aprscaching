@@ -66,5 +66,5 @@ source's own licence and disclaimer. The same credits appear in-app under *Setti
 
 ## Next
 
-- [What is APRScaching?](play/index.md).
-- [Contribute](contribute/index.md).
+- [What is APRScaching?](play/index.md): the game in five minutes.
+- [Contribute](contribute/index.md): change the code, the tests or this manual.

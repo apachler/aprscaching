@@ -244,5 +244,5 @@ unless configured), and sends watch-alert email digests.
 
 ## Next
 
-- [Configuration](configuration.md).
-- [Federation wire format](federation-wire.md).
+- [Configuration](configuration.md): every setting the gateway reads.
+- [Federation wire format](federation-wire.md): the signed frames instances exchange.

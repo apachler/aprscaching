@@ -113,5 +113,5 @@ and key.
 
 ## Next
 
-- [Backups: Pocket](../day-to-day/backups.md#pocket): keep a copy of the station off the phone.
+- [Backups and moving](../day-to-day/backups.md#pocket): keep a copy of the station off the phone.
 - [Hubs, relays and the registry](../federation/hubs-and-relays.md): the hub side in full.

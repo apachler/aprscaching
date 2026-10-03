@@ -90,4 +90,4 @@ boundary sits at that RF or gateway edge. You are responsible for what crosses i
 ## Next
 
 - [Data protection (GDPR)](data-protection.md): the other half of running a public instance.
-- [RF ingest and transports](../radios/rf-ingest.md): turn on the ports this page talks about.
+- [RF ingest & transports](../radios/rf-ingest.md): turn on the ports this page talks about.

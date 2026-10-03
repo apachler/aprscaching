@@ -101,5 +101,5 @@ A pin in blue with a circled M (Ⓜ). The Phosphor theme shows a plain M.
 
 ## Next
 
-- [Audio caches](audio.md).
-- [Hunting without signal](../offline.md).
+- [Hunting without signal](../offline.md): which stages travel in an offline pack.
+- [Audio caches](audio.md): a cache whose clue you hear.

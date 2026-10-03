@@ -101,5 +101,5 @@ attention**, with the reason.
 
 ## Next
 
-- [Log a find](log-a-find.md).
-- [How finds are verified](verification.md).
+- [Log a find](log-a-find.md): logging in the app and from your radio.
+- [How finds are verified](verification.md): which badge a find earns.

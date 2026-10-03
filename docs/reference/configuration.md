@@ -267,5 +267,5 @@ these from `~/.aprscaching/.env`:
 
 ## Next
 
-- [Secrets and credentials](secrets.md).
-- [Command-line tools](cli.md).
+- [Secrets and credentials](secrets.md): the settings to keep secret, and how to rotate them.
+- [Command-line tools](cli.md): the operator tools beside the settings.

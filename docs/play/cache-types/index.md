@@ -29,5 +29,5 @@ The Phosphor theme draws some symbols differently. Each type's page shows its ma
 
 ## Next
 
-- [Traditional caches](traditional.md).
-- [Find a cache](../find-a-cache.md).
+- [Traditional caches](traditional.md): the classic cache, a container at a place.
+- [Find a cache](../find-a-cache.md): filter the map by type and start a hunt.

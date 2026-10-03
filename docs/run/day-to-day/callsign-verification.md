@@ -92,5 +92,5 @@ Both actions are logged in `account_events`.
 ## Next
 
 - [Cache adoption](cache-adoption.md): hand over caches, which needs a verified call.
-- [How finds are verified](../../reference/trust-model.md): the find tiers, which are separate from callsign
+- [The trust model](../../reference/trust-model.md): the find tiers, which are separate from callsign
   verification.

@@ -220,4 +220,4 @@ nodes, messages, telemetry, and signal reports from the operator's own node.
 ## Next
 
 - [MeshCom](../../run/radios/meshcom.md): setting up a node.
-- [MeshCom ExtUDP protocol](../../reference/meshcom-extudp.md).
+- [MeshCom ExtUDP protocol](../../reference/meshcom-extudp.md): the datagrams on the wire.

@@ -146,5 +146,5 @@ suites, the CI guards under `tools/checks/` and the interop tests are described 
 
 ## Next
 
-- [Configuration](configuration.md).
-- [The deploy/aprscaching command](../run/day-to-day/helper-command.md).
+- [The deploy/aprscaching command](../run/day-to-day/helper-command.md): the tasks it runs, step by step.
+- [Configuration](configuration.md): every setting the gateway reads.
