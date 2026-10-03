@@ -364,7 +364,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
  * 1600 px is about half a megabyte, and an audio clue runs a few minutes at most. The instance's own ceiling,
  * `MEDIA_QUOTA_MB`, is what its storage can spare.
  */
-export const MEDIA_LIMITS = {
+const MEDIA_LIMITS = {
   image: 2_000_000,
   audio: 3_000_000,
   /** gallery items on one cache */
