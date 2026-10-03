@@ -5,6 +5,29 @@ import { Backoff } from "./backoff.js";
 const baseOf = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
 
 /**
+ * The uplink's APRS-IS login. `APRSIS_SERVICE_CALL` with `APRSIS_SERVICE_PASS` when set; otherwise the
+ * gateway's service call, with this box's feed passcode when the feed logs in under the same base call (a
+ * passcode belongs to a base call and serves every SSID). A box of another operator, or one with no passcode,
+ * publishes nothing: answers from a base call it does not hold would go out as third-party traffic, which
+ * IGates do not gate to RF.
+ */
+export function uplinkLogin(o: {
+  serviceCall?: string;
+  explicitCall?: string;
+  explicitPass?: string;
+  feedCall?: string;
+  feedPass?: string;
+}): { call: string; pass: string } | { reason: string } {
+  if (o.explicitCall && o.explicitPass) return { call: o.explicitCall.toUpperCase(), pass: o.explicitPass };
+  if (!o.serviceCall) return { reason: "the gateway has not named its service call" };
+  if (!o.feedCall || baseOf(o.feedCall) !== baseOf(o.serviceCall))
+    return { reason: `APRSIS_CALLSIGN is not a call of ${baseOf(o.serviceCall)}, the service call's base call` };
+  if (!o.feedPass || !/^\d{1,5}$/.test(o.feedPass.trim()))
+    return { reason: `APRSIS_PASSCODE is not set: set the passcode of ${baseOf(o.serviceCall)}` };
+  return { call: o.serviceCall.toUpperCase(), pass: o.feedPass.trim() };
+}
+
+/**
  * APRS-IS uplink. Logs in ONCE under the uplink callsign (`APRSIS_SERVICE_CALL`, with the passcode of its
  * base call). An item from a call of that same base call — the gateway's service call answering a radio
  * command, acking it or delivering held mail — goes out as a plain packet, so IGates gate a message to the

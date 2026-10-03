@@ -369,6 +369,7 @@ setInterval(async () => {
 
 aprs.start();
 
+let uplinkWarned = false;
 // The gateway names its service call: the APRS-IS feed asks for messages addressed to it, and a station of
 // this box sharing it would have its own commands ignored and, on MeshCom, acked by its own node.
 async function learnServiceCall(): Promise<void> {
@@ -378,6 +379,25 @@ async function learnServiceCall(): Promise<void> {
     const { serviceCall } = (await r.json()) as { serviceCall?: string };
     if (!serviceCall) return;
     aprs.setServiceCall(serviceCall);
+    const login = uplinkLogin({
+      serviceCall,
+      explicitCall: env.APRSIS_SERVICE_CALL,
+      explicitPass: env.APRSIS_SERVICE_PASS,
+      feedCall: env.APRSIS_CALLSIGN,
+      feedPass: env.APRSIS_PASSCODE,
+    });
+    if ("call" in login) {
+      startUplink(login.call, login.pass);
+      if (login.call.split("-")[0] !== serviceCall.toUpperCase().split("-")[0] && !uplinkWarned) {
+        uplinkWarned = true;
+        console.error(
+          `[uplink] APRSIS_SERVICE_CALL ${login.call} is not a call of the service call's base; answers from ${serviceCall} go out as third-party traffic, which IGates do not gate to RF`,
+        );
+      }
+    } else if (!uplinkStarted && !uplinkWarned) {
+      uplinkWarned = true;
+      console.log(`[uplink] not publishing to APRS-IS: ${login.reason}`);
+    }
     const own = [env.BOX_CALL, env.IGATE_CALL, env.DIGI_CALL, env.RF_SITE_CALL, env.APRSIS_CALLSIGN];
     if (own.some((c) => c?.trim().toUpperCase() === serviceCall.toUpperCase()))
       console.error(`[ingest] ${serviceCall} is the gateway's service call; give this box's station another SSID`);
@@ -434,14 +454,21 @@ if (env.BOX_ID) {
 }
 
 // ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
-import { AprsUplink } from "./uplink.js";
-const SERVICE_CALL = env.APRSIS_SERVICE_CALL;
-if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
+import { AprsUplink, uplinkLogin } from "./uplink.js";
+let uplinkStarted = false;
+/**
+ * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, BBS mail delivered by
+ * APRS message, announced finds and weather. Started once, under the login `uplinkLogin` chose.
+ */
+function startUplink(serviceCall: string, servicePass: string): void {
+  if (uplinkStarted) return;
+  uplinkStarted = true;
+  const SERVICE_CALL = serviceCall;
   const uplink = new AprsUplink({
     host: env.APRSIS_HOST ?? "rotate.aprs2.net",
     port: portEnv("APRSIS_PORT", 14580),
     serviceCall: SERVICE_CALL,
-    servicePass: env.APRSIS_SERVICE_PASS,
+    servicePass,
   });
   uplink.start();
   // CWOP relay: an optional separate uplink to CWOP (feeds NOAA). Items with target='cwop' go here; when no
@@ -451,7 +478,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
         host: env.CWOP_HOST,
         port: portEnv("CWOP_PORT", 14580),
         serviceCall: SERVICE_CALL,
-        servicePass: env.APRSIS_SERVICE_PASS,
+        servicePass,
       })
     : null;
   cwop?.start();
@@ -489,5 +516,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
       }
     }
   }, 4000);
-  console.log("[uplink] announce + weather publisher active");
+  console.log(`[uplink] publishing the gateway's outbox to APRS-IS as ${SERVICE_CALL}`);
 }
+// An explicit uplink starts at once; otherwise the box waits for the gateway to name its service call.
+if (env.APRSIS_SERVICE_CALL && env.APRSIS_SERVICE_PASS) startUplink(env.APRSIS_SERVICE_CALL, env.APRSIS_SERVICE_PASS);
