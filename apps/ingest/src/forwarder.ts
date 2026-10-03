@@ -10,7 +10,7 @@
  * default link does a single direct connect to the partner call and logs the script for the operator.
  */
 import net from "node:net";
-import { kissWrap, KissDecoder } from "@aprscaching/aprs";
+import { kissWrap, kissStripCrc, KissDecoder } from "@aprscaching/aprs";
 import type { FrameLink } from "./link.js";
 import { TokenBucket } from "./txlimit.js";
 import { gatewayFetch } from "./gatewayauth.js";
@@ -209,9 +209,11 @@ export function kissForwardLink(o: {
         sock = s;
         s.on("connect", () => link.connect());
         s.on("data", (chunk: Buffer) => {
-          for (const k of rx.push(chunk)) {
-            if (k.command !== 0) continue; // a KISS command, not a frame
-            const f = decodeFrame(k.frame);
+          for (const crcd of rx.push(chunk)) {
+            const k = kissStripCrc(crcd);
+            if (!k || k.command !== 0) continue; // a failed CRC, or a KISS command rather than a frame
+            // a modulo-128 link carries two-byte control fields
+            const f = decodeFrame(k.frame, link.extended);
             if (f) link.onReceive(f);
           }
         });
@@ -312,7 +314,7 @@ export function frameForwardLink(
   });
   const poll = setInterval(() => link.poll(), 1000);
   const onRaw = (b: Uint8Array) => {
-    const f = decodeFrame(b);
+    const f = decodeFrame(b, link.extended);
     if (f) link.onReceive(f);
   };
   pipe.onRaw(onRaw);

@@ -79,6 +79,45 @@ export class KissDecoder {
   }
 }
 
+/** A CRC-16 table, reflected, for polynomial `poly`. */
+function crcTable(poly: number, xor = 0): Uint16Array {
+  const t = new Uint16Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ poly : c >>> 1;
+    t[i] = c ^ xor;
+  }
+  return t;
+}
+/** SMACK: CRC-16 (polynomial 0x8005, reflected), initial value 0. */
+const SMACK_TABLE = crcTable(0xa001);
+/** FlexNet: the reflected CRC-CCITT table with every entry XORed with 0x0F87, run unreflected from 0xFFFF. */
+const FLEX_TABLE = crcTable(0x8408, 0x0f87);
+
+/**
+ * A KISS frame with the CRC a SMACK or FlexNet host appends, as the Linux mkiss driver sends while it probes
+ * for one: a type byte with bit 7 set carries a SMACK CRC-16, one with bit 5 set a FlexNet CRC, each over the
+ * type byte and the frame. Returns the frame with its CRC and flag removed, `null` when a SMACK CRC fails, and
+ * the frame unchanged otherwise: a type byte of 0x2n whose FlexNet CRC fails is data on port 2. Pure.
+ */
+export function kissStripCrc(k: KissFrame): KissFrame | null {
+  const type = (k.port << 4) | k.command;
+  if (type <= 0x0f || k.frame.length < 2) return k;
+  const all = [type, ...k.frame];
+  const strip = (t: number): KissFrame => ({ port: t >> 4, command: t & 0x0f, frame: k.frame.slice(0, -2) });
+  if (type & 0x80) {
+    let crc = 0;
+    for (const b of all) crc = (crc >>> 8) ^ SMACK_TABLE[(crc ^ b) & 0xff]!;
+    return crc === 0 ? strip(type & ~0x80) : null;
+  }
+  if (type & 0x20) {
+    let crc = 0xffff;
+    for (const b of all) crc = ((crc << 8) ^ FLEX_TABLE[((crc >> 8) ^ b) & 0xff]!) & 0xffff;
+    if (crc === 0x7070) return strip(type & ~0x20);
+  }
+  return k;
+}
+
 /** Wrap a raw AX.25 frame in a KISS data frame (port 0), escaping FEND/FESC. */
 export function kissWrap(ax25: Uint8Array): Uint8Array {
   const out: number[] = [FEND, 0x00];

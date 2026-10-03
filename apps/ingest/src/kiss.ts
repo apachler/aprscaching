@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
-import { KissDecoder, kissWrap, decodeAx25, encodeAx25 } from "@aprscaching/aprs";
+import { KissDecoder, kissStripCrc, kissWrap, decodeAx25, encodeAx25 } from "@aprscaching/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
@@ -92,8 +92,10 @@ export class KissTnc {
       const frames = this.rx.push(chunk);
       if (this.rx.overflows !== overflows)
         console.warn(`[kiss] RX frame over ${KISS_RX_MAX_BYTES} bytes with no closing FEND — not KISS? dropped`);
-      for (const k of frames) {
-        if (k.command !== 0) continue; // a KISS command, not a frame
+      for (const crcd of frames) {
+        // a KISS host such as the Linux kernel's mkiss opens with SMACK and FlexNet CRC probes
+        const k = kissStripCrc(crcd);
+        if (!k || k.command !== 0) continue; // a failed CRC, or a KISS command rather than a frame
         const raw = k.frame;
         const f = decodeAx25(raw);
         if (!this.meshcomNode && isMeshcomNode(k, f?.dst)) {
