@@ -471,6 +471,17 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       gateway alike (`aprs_is`); telling them apart needs the ingest to pass the distinction on. The node's own
       firmware, hardware and battery reach only the ingest log. Display only: no tier changes.
 
+- [ ] **Log a mirrored cache here, delivered to its home** _(P2 · L)_ — a cache mirrored from a peer is read-only:
+      finds point at a local `caches` row, and only the home instance holds the rules that score a find (its
+      minimum tier, its receiving stations, stage coordinates, NFC unlocks and virtual answers) and keeps the one
+      logbook (one find per callsign, the owner's deletions, the finds feed peers mirror). A find logged on a
+      mirror would travel home as a signed federation frame: the authorship signature the app already makes per
+      find, the device reading as evidence, and the logger's callsign key. The home scores it under its own rules
+      and publishes it like any find, and the mirror shows it from the finds feed. Needs: a frame kind and its
+      `admitFrame()` rules, the home's acceptance of a peer's account by the federated callsign key (a find from
+      an unvetted peer quarantined), a queue on the sending instance while the home is unreachable, and the
+      mirror's sheet saying the find is on its way. Transport never lifts trust: the tier is the home's.
+
 - [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
       so a dark or Phosphor app opens onto a bright map. A dark style from the same tiles would follow the
       Appearance setting; the offline grid map already does (`--map-graticule-*`). It needs a style the operator
