@@ -33,7 +33,8 @@ export function stationCalls(env: Env): { key: string; call: string }[] {
  * What the box should warn about, given the gateway's service call and attested sites (`sites` absent when
  * the gateway does not name them): a station of this box on the service call, whose commands the gateway
  * ignores as its own and whose MeshCom node takes players' messages as its own; and a receiving site of this
- * box the gateway does not attest, whose direct hearings never reach Tier A.
+ * box the gateway does not attest, whose direct hearings never reach Tier A; and FBB forwarding under a call
+ * other than the one the gateway's BIDs carry.
  */
 export function callWarnings(env: Env, serviceCall: string, sites?: string[]): string[] {
   const out: string[] = [];
@@ -41,6 +42,13 @@ export function callWarnings(env: Env, serviceCall: string, sites?: string[]): s
   for (const s of stationCalls(env))
     if (s.call === service)
       out.push(`${s.key} ${s.call} is the gateway's service call; give that station another SSID`);
+  // the gateway's BBS issues its BIDs as <number>_<base of the service call>
+  const fwd = up(env.BBS_FORWARD_CALL) ?? up(env.BBS_NODE_CALL);
+  const base = (c: string) => c.split("-")[0];
+  if (env.BBS_FORWARD === "1" && fwd && base(fwd) !== base(service))
+    out.push(
+      `BBS_FORWARD is on, but the gateway's BIDs carry ${base(service)}, not ${base(fwd)}: set the gateway's ADMIN_CALLSIGNS (or SERVICE_CALL) to the BBS's call, or a partner BBS on that call takes its mail for its own`,
+    );
   if (sites) {
     const attested = new Set(sites.map((c) => c.toUpperCase()));
     const own: { key: string; call: string }[] = [];

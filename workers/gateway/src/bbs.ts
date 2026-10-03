@@ -13,7 +13,7 @@ import { json } from "./app.js";
 import type { FeedServeDef } from "./federation.js";
 import { FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
-import { serviceCall } from "./servicecall.js";
+import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
@@ -34,8 +34,14 @@ export function bidFor(id: number, call: string): string {
   return `${(id % 36 ** digits).toString(36).toUpperCase()}_${call}`;
 }
 
-/** Does `bid` carry this BBS's call? Only this BBS issues those, so one arriving from elsewhere is refused. */
-export const isOwnBid = (env: Env, bid: string): boolean => bid.toUpperCase().endsWith(`_${bbsCall(env)}`);
+/**
+ * Does `bid` carry this BBS's call? Only this BBS issues those, so one arriving from elsewhere is refused. An
+ * instance without a sysop call shares the fallback call with every other such instance, so it owns none.
+ */
+export function isOwnBid(env: Env, bid: string): boolean {
+  const call = bbsCall(env);
+  return call !== FALLBACK_SERVICE_CALL && bid.toUpperCase().endsWith(`_${call}`);
+}
 
 // ---------------------------------------------------------------- mailbox access
 /** The callsign a mailbox address names: `OE1TST @ OE1BBB.OE.EU` → `OE1TST`. */

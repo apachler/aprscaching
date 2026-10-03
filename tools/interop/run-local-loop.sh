@@ -23,11 +23,13 @@ trap cleanup EXIT
 # APRS-IS is pointed at a dead local port: the interop loop is about the AXUDP leg, and CI/network
 # sandboxes must not spend 30 s per reconnect on an unreachable public server.
 COMMON="APRSIS_HOST=127.0.0.1 APRSIS_PORT=1 BATCH_MS=500"
+# Each BBS issues BIDs under its sysop's call (ADMIN_CALLSIGNS): two BBSes on one call would take each
+# other's mail for their own.
 
-setsid env DB_PATH="$DBA" PORT=9601 INSTANCE=oe.ia INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
+setsid env DB_PATH="$DBA" PORT=9601 INSTANCE=oe.ia ADMIN_CALLSIGNS=OE1AAA INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwa.log 2>&1 &
 PIDS+=($!)
-setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
+setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib ADMIN_CALLSIGNS=OE1BBB INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwb.log 2>&1 &
 PIDS+=($!)
 for i in $(seq 1 60); do
