@@ -330,7 +330,7 @@ export class NetromNodeRunner {
   }
 
   start(): void {
-    const bMs = this.o.broadcastMs ?? 300_000; // NET/ROM default NODES interval ≈ 5 min
+    const bMs = Math.max(this.o.broadcastMs ?? 300_000, 60_000); // a NODES broadcast keys the transmitter
     const dMs = this.o.decayMs ?? bMs;
     this.broadcast();
     setInterval(() => this.broadcast(), bMs);

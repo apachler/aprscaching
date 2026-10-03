@@ -35,6 +35,24 @@ export function ipv4Source(datagram: Uint8Array): string | null {
   return `${datagram[12]}.${datagram[13]}.${datagram[14]}.${datagram[15]}`;
 }
 
+/** PURE: the destination address of a raw IPv4 datagram (its header's bytes 16–19), or null without a header. */
+export function ipv4Dest(datagram: Uint8Array): string | null {
+  if (!stripIpv4Header(datagram)) return null;
+  return `${datagram[16]}.${datagram[17]}.${datagram[18]}.${datagram[19]}`;
+}
+
+/**
+ * PURE: whether a datagram reached the local address AXIP_BIND names. A raw socket receives proto-93 traffic
+ * for every address of the host, so the bind is applied to the destination in each datagram's IPv4 header.
+ * No bind (or the wildcard `0.0.0.0`) accepts every address; a datagram without an IPv4 header carries no
+ * destination to check and is refused under a bind.
+ */
+export function axipBindAccepts(bind: string | undefined, datagram: Uint8Array): boolean {
+  const b = bind?.trim();
+  if (!b || b === "0.0.0.0") return true;
+  return ipv4Dest(datagram) === b;
+}
+
 /**
  * PURE: normalize one AXIP datagram into a Tier-C ingest Packet, or null. Prefers stripping the IPv4 header
  * (raw proto-93 sockets include it); falls back to treating the datagram as a bare AX.25 frame for stacks
@@ -70,6 +88,7 @@ export function frameToAxip(f: Ax25Frame): Uint8Array {
 
 const AX25_PROTO = 93; // IANA IP protocol number for AX.25
 export interface AxipOpts {
+  /** Local IPv4 address (AXIP_BIND): only datagrams addressed to it are taken. */
   bind?: string;
 }
 /** An AXIP peer is just an IP host (no port — AXIP rides IP proto 93 directly, not UDP). */
@@ -113,7 +132,9 @@ export class AxipListener {
     console.warn(openListenerWarning("axip", "AXIP_BIND", "AXIP_PEERS"));
     this.sock = s;
     s.on("message", (buf: unknown) => {
-      const p = axipToPacket(Uint8Array.from(buf as Buffer));
+      const bytes = Uint8Array.from(buf as Buffer);
+      if (!axipBindAccepts(this.o.bind, bytes)) return;
+      const p = axipToPacket(bytes);
       if (p) this.onPacket(p);
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
@@ -159,6 +180,7 @@ export class AxipPort {
    * include it), else from the address the socket reports.
    */
   receive(bytes: Uint8Array, source?: string): void {
+    if (!axipBindAccepts(this.o.bind, bytes)) return;
     if (!this.allowlist.allows(ipv4Source(bytes) ?? source)) return;
     const body = stripAxipCrc(stripIpv4Header(bytes) ?? bytes); // connected-mode consumers want the bare frame
     for (const cb of this.rawCbs) cb(body);
@@ -178,7 +200,7 @@ export class AxipPort {
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
     console.log(
-      `[axip] port IP proto/${AX25_PROTO} ↔ ${this.o.peers.map((p) => p.host).join(", ") || "(no peers)"} (Tier C)`,
+      `[axip] port IP proto/${AX25_PROTO}${this.o.bind ? ` on ${this.o.bind}` : ""} ↔ ${this.o.peers.map((p) => p.host).join(", ") || "(no peers)"} (Tier C)`,
     );
   }
 

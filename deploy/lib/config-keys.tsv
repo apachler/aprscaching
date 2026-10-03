@@ -116,14 +116,14 @@ AXUDP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local addres
 AXUDP_PEERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	AXUDP peers as host:port, comma-separated
 AXIP_ENABLE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Set to enable the AXIP listener (IP protocol 93, needs raw-socket rights)
 AXIP_PEERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	AXIP peer hosts, comma-separated; set it to enable AXIP
-AXIP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local address the AXIP socket binds
+AXIP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local IPv4 address AXIP takes datagrams on; blank takes every address
 DIGI_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the RF digipeater; set it to enable digipeating
 DIGI_ALIASES	list	ingest	WIDE1,WIDE2		0	0	selfhost,baremetal,ingest-box,pocket	Aliases the digipeater answers to, comma-separated
 DIGI_CONNECTED	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also digipeats connected-mode AX.25 frames
-DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds the connected-mode digipeater waits, so a better-placed digi repeats first
+DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds (0-10000) the connected-mode digipeater waits, so a better-placed digi repeats first
 NETROM_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it
 NETROM_ALIAS	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Alias of the NET/ROM node
-NETROM_BROADCAST_MS	int	ingest	300000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts
+NETROM_BROADCAST_MS	int	ingest	300000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)
 NETROM_PATH_QUALITY	int	ingest	192		0	0	selfhost,baremetal,ingest-box,pocket	Link quality (0-255) assumed for a directly heard neighbour
 NETROM_INP3	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also speaks INP3 alongside NODES
 NODE_PERSONALITY	string	ingest	netrom		0	0	selfhost,baremetal,ingest-box,pocket	Command surface of the node: netrom, flexnet, tnn or baycom
@@ -138,7 +138,8 @@ BBS_FORWARD_REFILL_SEC	number	ingest	300		0	0	selfhost,baremetal,ingest-box,pock
 IGATE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the IGate; set with IGATE_PASS to enable it
 IGATE_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode of the IGate callsign
 IGATE_FILTER	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS filter for traffic the IGate may gate to RF
-IGATE_LOCAL_TTL	int	ingest	1800		0	0	selfhost,baremetal,ingest-box,pocket	Seconds a station counts as heard locally on RF
+IGATE_LOCAL_TTL	int	ingest	1800		0	0	selfhost,baremetal,ingest-box,pocket	Seconds (60-86400) a station counts as heard locally on RF
+IGATE_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 lets the IGate pass APRS-IS messages to RF; without it the IGate only receives
 IGATE_TX_PATH	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for frames the IGate transmits; blank sends direct
 IGATE_TX_BURST	int	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	IGate transmits allowed at once before pacing applies
 IGATE_TX_REFILL_SEC	number	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one IGate transmit

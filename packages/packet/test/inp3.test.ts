@@ -121,6 +121,25 @@ describe("INP3 routing table", () => {
     expect(splitHorizon).toHaveLength(0);
   });
 
+  it("caps the table: a new destination past the cap evicts the slowest route only when faster", () => {
+    const t = new Inp3Table({ maxRoutes: 2 });
+    t.applyRip(rip("A-7", 1, 10), "NB", 1); // tt 11
+    t.applyRip(rip("B-7", 1, 90), "NB", 1); // tt 91
+    expect(t.applyRip(rip("C-7", 1, 200), "NB", 1)).toBe("ignored"); // slower than every route held
+    expect(t.applyRip(rip("D-7", 1, 20), "NB", 1)).toBe("added"); // evicts B, the slowest
+    expect(t.list().map((r) => r.dest)).toEqual(["A-7", "D-7"]);
+  });
+
+  it("limits how many RIPs one neighbour can apply per window", () => {
+    let now = 0;
+    const t = new Inp3Table({ maxLearnsPerWindow: 3, learnWindowMs: 1000, clock: () => now });
+    for (const d of ["A-7", "B-7", "C-7", "D-7"]) t.applyRip(rip(d, 1, 10), "SPRAY", 1);
+    expect(t.list()).toHaveLength(3); // the fourth is over budget
+    expect(t.applyRip(rip("E-7", 1, 10), "OTHER", 1)).toBe("added"); // the budget is per neighbour
+    now = 1000; // a new window
+    expect(t.applyRip(rip("D-7", 1, 10), "SPRAY", 1)).toBe("added");
+  });
+
   it("expires stale routes and reports the withdrawn destinations", () => {
     const t = new Inp3Table();
     t.applyRip(rip("A-7", 1, 10), "NB", 1);

@@ -57,3 +57,18 @@ describe("loadBoxKey", () => {
     expect(loadBoxKey({ BOX_ID: "b", BOX_KEY: boxKey })!.publicKey).toBe(publicKey);
   });
 });
+
+describe("gatewayFetch timeout", () => {
+  it("gives a request without its own signal a deadline, and keeps a signal the caller set", async () => {
+    const signals: (AbortSignal | null | undefined)[] = [];
+    vi.stubGlobal("fetch", async (_i: unknown, init: RequestInit) => {
+      signals.push(init.signal);
+      return new Response("{}");
+    });
+    await gatewayFetch("http://gw/ingest/check", { headers: { "x-ingest-secret": "s" } });
+    const own = new AbortController().signal;
+    await gatewayFetch("http://gw/ingest/check", { signal: own });
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[1]).toBe(own);
+  });
+});

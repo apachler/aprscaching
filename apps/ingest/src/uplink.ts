@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { Backoff } from "./backoff.js";
+import { LineBuffer } from "./lines.js";
+import { SOFTWARE_VERSION } from "./version.js";
 
 const baseOf = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
+
+/**
+ * The server's answer to a login: `# logresp <call> verified, server <name>` or `… unverified, …`. Null for
+ * any other line.
+ */
+export function parseLogresp(line: string): { call: string; verified: boolean } | null {
+  const m = /^#\s*logresp\s+(\S+)\s+(verified|unverified)\b/i.exec(line);
+  return m ? { call: m[1]!.toUpperCase(), verified: m[2]!.toLowerCase() === "verified" } : null;
+}
 
 /**
  * The uplink's APRS-IS login. `APRSIS_SERVICE_CALL` with `APRSIS_SERVICE_PASS` when set; otherwise the
@@ -34,6 +45,8 @@ export function uplinkLogin(o: {
  * addressee on RF. An item from anyone else (a player's announced find) is relayed as THIRD-PARTY traffic,
  * so the player's call stays the inner source:
  *   SERVICE>APZACG,TCPIP*:}USERCALL>APZACG,TCPIP*:>Found AC-1234 via aprscaching.net
+ * It publishes only once the server answers the login `verified`: an unverified login's packets are dropped
+ * by APRS-IS, so acking outbox items sent under one would lose them.
  */
 export class AprsUplink {
   private sock?: net.Socket;
@@ -41,8 +54,25 @@ export class AprsUplink {
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
   private backoff: Backoff;
-  constructor(private o: { host: string; port: number; serviceCall: string; servicePass: string; retryMs?: number }) {
+  private lines = new LineBuffer();
+  private unverifiedLogged = false;
+  constructor(
+    private o: {
+      host: string;
+      port: number;
+      serviceCall: string;
+      servicePass: string;
+      retryMs?: number;
+      /** No bytes (not even the server's ~20 s `#` keepalive) for this long ⇒ the connection is dead. */
+      idleMs?: number;
+    },
+  ) {
     this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
+  }
+
+  /** True once the server verified the login and the socket is up: publish() sends only then. */
+  get verified(): boolean {
+    return this.ready;
   }
 
   start() {
@@ -64,13 +94,36 @@ export class AprsUplink {
     this.sock?.removeAllListeners();
     this.sock?.destroy();
     this.ready = false;
+    this.lines.reset();
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
+    // A half-dead server keeps the TCP session up but stops sending; the idle timer (reset on every read)
+    // destroys it, and `close` schedules one reconnect.
+    s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
-      s.write(`user ${this.o.serviceCall} pass ${this.o.servicePass} vers aprscaching 0.0\r\n`);
-      this.ready = true;
+      s.write(`user ${this.o.serviceCall} pass ${this.o.servicePass} vers aprscaching ${SOFTWARE_VERSION}\r\n`);
+    });
+    // The server's lines are read (and the traffic discarded) so its keepalives reset the idle timer and its
+    // send buffer never fills; the login answer decides whether this uplink may publish.
+    s.on("data", (chunk: string) => {
+      for (const line of this.lines.push(chunk)) {
+        const r = parseLogresp(line);
+        if (!r) continue;
+        if (r.verified) {
+          this.ready = true;
+          this.unverifiedLogged = false;
+        } else {
+          this.ready = false;
+          if (!this.unverifiedLogged) {
+            this.unverifiedLogged = true;
+            console.error(
+              `[uplink] APRS-IS did not verify ${this.o.serviceCall}: check the passcode (APRSIS_SERVICE_PASS, or APRSIS_PASSCODE of the same base call). Nothing is published until it is verified.`,
+            );
+          }
+        }
+      }
     });
     s.on("error", () => {
       this.ready = false; // a socket in error is NOT a place to ack an outbox write against

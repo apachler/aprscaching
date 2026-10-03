@@ -6,8 +6,8 @@
  * connected-mode AX.25 link over KISS-TCP). `startForwarder` wires them together from env. The message
  * store stays in the cloud; the RF session runs here (ingest-locality).
  *
- * Multi-hop connect scripts (`C NODE1` → `C 3 DB0XYZ`) and AXUDP partners are validate-at-deploy — the
- * default link does a single direct connect to the partner call and logs the script for the operator.
+ * A connect script (`C NODE1` → `C 3 DB0XYZ`) connects to its first hop and sequences the rest; AXUDP partners
+ * are validate-at-deploy. A session that fails to connect, at any hop, releases its link, timers and socket.
  */
 import net from "node:net";
 import { kissWrap, kissStripCrc, KissDecoder } from "@aprscaching/aprs";
@@ -182,6 +182,29 @@ export function kissForwardLink(o: {
   const fireClose = () => {
     for (const c of closeCbs.splice(0)) c();
   };
+  let wait: ReturnType<typeof setInterval> | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  let released = false;
+  /**
+   * Release everything the session holds: the link's poll timer, the connect watchers and the KISS socket
+   * (Direwolf serves few clients, and a leaked socket locks out the main ingest). Runs once.
+   */
+  const release = () => {
+    if (released) return;
+    released = true;
+    clearInterval(poll);
+    clearInterval(wait);
+    clearTimeout(deadline);
+    sock?.destroy();
+  };
+  let hungUp = false;
+  /** Send DISC, then release once it has had time to leave. Runs once. */
+  const hangUp = () => {
+    if (hungUp) return;
+    hungUp = true;
+    link.disconnect();
+    setTimeout(release, 500);
+  };
 
   const link = new ConnectedLink(local, remote, {
     send: (f: Ax25Frame) => {
@@ -218,12 +241,11 @@ export function kissForwardLink(o: {
           }
         });
         s.on("error", (e) => {
-          clearInterval(poll);
-          s.destroy();
+          release();
           reject(e);
-        }); // don't leak the socket/timer
+        });
         s.on("close", () => {
-          clearInterval(poll);
+          release();
           fireClose();
         });
         const settle = () => {
@@ -236,22 +258,24 @@ export function kissForwardLink(o: {
               sequencing = false;
               resolve();
             },
-            onFail: (why) => reject(new Error(`connect script failed: ${why}`)),
+            onFail: (why) => {
+              hangUp(); // the first hop's link is up: close it rather than leave it to the partner's timers
+              reject(new Error(`connect script failed: ${why}`));
+            },
           });
           seq.start();
         };
-        const wait = setInterval(() => {
+        wait = setInterval(() => {
           if (link.state === "connected") {
             clearInterval(wait);
+            clearTimeout(deadline); // the hops past the first are bounded by the scheduler's connect timeout
             settle();
           }
         }, 200);
-        // On connect timeout, tear down the KISS socket + poll timer (else Direwolf's few slots fill
-        // and lock out the main ingest); destroying triggers `close` which clears `poll`.
-        setTimeout(() => {
+        deadline = setTimeout(() => {
           clearInterval(wait);
           if (link.state !== "connected") {
-            s.destroy();
+            hangUp();
             reject(new Error("connect timeout"));
           }
         }, 30_000);
@@ -263,13 +287,7 @@ export function kissForwardLink(o: {
     onClose: (cb) => {
       closeCbs.push(cb);
     },
-    disconnect: () => {
-      link.disconnect();
-      setTimeout(() => {
-        clearInterval(poll);
-        sock?.end();
-      }, 500);
-    },
+    disconnect: hangUp,
   };
 }
 
@@ -291,14 +309,27 @@ export function frameForwardLink(
   let sequencing = false;
   let seq: ConnectSequencer | null = null;
   let closed = false;
+  let wait: ReturnType<typeof setInterval> | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   const dataCbs: ((b: Uint8Array) => void)[] = [];
   const closeCbs: (() => void)[] = [];
+  /** Release the poll timer, the connect watchers and the pipe subscription; runs once. */
   const fireClose = () => {
     if (closed) return;
     closed = true;
     clearInterval(poll);
+    clearInterval(wait);
+    clearTimeout(deadline);
     pipe.offRaw?.(onRaw);
     for (const c of closeCbs.splice(0)) c();
+  };
+  let hungUp = false;
+  /** Send DISC, then release once it has had time to leave. Runs once. */
+  const hangUp = () => {
+    if (hungUp) return;
+    hungUp = true;
+    link.disconnect();
+    setTimeout(fireClose, 500);
   };
 
   const link = new ConnectedLink(local, remote, {
@@ -332,20 +363,24 @@ export function frameForwardLink(
               sequencing = false;
               resolve();
             },
-            onFail: (why) => reject(new Error(`connect script failed: ${why}`)),
+            onFail: (why) => {
+              hangUp();
+              reject(new Error(`connect script failed: ${why}`));
+            },
           });
           seq.start();
         };
-        const wait = setInterval(() => {
+        wait = setInterval(() => {
           if (link.state === "connected") {
             clearInterval(wait);
+            clearTimeout(deadline); // the hops past the first are bounded by the scheduler's connect timeout
             settle();
           }
         }, 200);
-        setTimeout(() => {
+        deadline = setTimeout(() => {
           clearInterval(wait);
           if (link.state !== "connected") {
-            fireClose();
+            hangUp();
             reject(new Error("connect timeout"));
           }
         }, 30_000);
@@ -357,9 +392,6 @@ export function frameForwardLink(
     onClose: (cb) => {
       closeCbs.push(cb);
     },
-    disconnect: () => {
-      link.disconnect();
-      setTimeout(fireClose, 500);
-    },
+    disconnect: hangUp,
   };
 }

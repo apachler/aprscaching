@@ -108,9 +108,9 @@ packets count on the `hostmode` port. This link only receives. `RF_SITE_CALL` wo
 
 ## Your own IGate
 
-An IGate passes what your radio hears to APRS-IS, and APRS-IS messages for nearby stations back to RF. It
-needs a working [KISS TNC](#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc); passing messages to RF also
-needs PTT. An IGate is an automatically controlled station: read
+An IGate passes what your radio hears to APRS-IS and, when you allow it to transmit, APRS-IS messages for
+nearby stations back to RF. It needs a working [KISS TNC](#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc);
+passing messages to RF also needs PTT and `IGATE_TX=1`. An IGate is an automatically controlled station: read
 [Automatic stations on the air](../compliance/on-air-stations.md) first.
 
 1. Add the IGate's callsign and its APRS-IS passcode:
@@ -120,7 +120,9 @@ needs PTT. An IGate is an automatically controlled station: read
     IGATE_PASS=12345
     ```
 
-2. Restart the ingest. The log shows `[igate] enabled as OE8APR-10`, then `[igate] APRS-IS connected`. A
+2. To pass messages to RF as well, add `IGATE_TX=1`. Leave it out for a receive-only IGate.
+
+3. Restart the ingest. The log shows `[igate] enabled as OE8APR-10`, then `[igate] APRS-IS connected`. A
    message it sends to RF logs `[igate] TX->RF message for …`.
 
 Without `RF_SITE_CALL`, the ingest names `IGATE_CALL` as the receiving site of what the TNC hears directly.

@@ -81,9 +81,14 @@ export function useBoxKey(k: BoxKey | null): void {
   active = k;
 }
 
+/** How long a gateway request may take before it is abandoned and counted as a failure. */
+export const GATEWAY_TIMEOUT_MS = 20_000;
+
 /**
  * fetch for gateway requests. A request carrying x-ingest-secret goes out signed instead when this box has a
- * key; every other request, and every request of a box on the shared secret, goes out unchanged.
+ * key; every other request, and every request of a box on the shared secret, goes out unchanged. A request
+ * without its own signal is abandoned after GATEWAY_TIMEOUT_MS, so a gateway that accepts the connection and
+ * never answers cannot hold a poll loop forever.
  */
 export const gatewayFetch: typeof fetch = (input, init = {}) => {
   const headers = new Headers(init.headers);
@@ -93,5 +98,5 @@ export const gatewayFetch: typeof fetch = (input, init = {}) => {
     for (const [k, v] of Object.entries(signedHeaders(active, init.method ?? "GET", String(input), init.body)))
       headers.set(k, v);
   }
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(GATEWAY_TIMEOUT_MS) });
 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // KissTnc over a real TCP socket: a frame split across reads behind a whole frame keeps its boundary, and
 // a KISS command frame is never taken for a heard frame.
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import net from "node:net";
 import { encodeAx25, kissWrap } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
@@ -52,5 +52,17 @@ describe("KissTnc receive framing", () => {
     await new Promise((r) => setTimeout(r, 200));
     expect(got.map((p) => p.payload)).toEqual([">first", `>second ÀÛ`]);
     expect(raw).toHaveLength(2);
+  });
+});
+
+describe("KissTnc connection", () => {
+  it("turns on TCP keepalive, so a TNC host that vanished is noticed on a quiet channel", async () => {
+    const port = await chunkedTnc([]);
+    const spy = vi.spyOn(net.Socket.prototype, "setKeepAlive");
+    cleanups.push(() => spy.mockRestore());
+    const tnc = new KissTnc({ host: "127.0.0.1", port }, { onPacket: () => {} });
+    tnc.start();
+    cleanups.push(() => tnc["sock"]?.destroy());
+    expect(spy).toHaveBeenCalledWith(true, 30_000);
   });
 });

@@ -86,6 +86,7 @@ describe("TX-IGate pacing", () => {
       port: 14580,
       call: "OE8APR-10",
       pass: "-1",
+      canTx: () => true,
       burst: 2,
       refillSec: 60,
       now: () => clock.t,
@@ -110,6 +111,7 @@ describe("TX-IGate pacing", () => {
       port: 14580,
       call: "OE8APR-10",
       pass: "-1",
+      canTx: () => true,
       txPath: ["WIDE1-1"],
     });
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -127,7 +129,14 @@ describe("TX-IGate pacing", () => {
 
   it("spends no token on a line it would not gate", () => {
     const { sent, kiss } = radio();
-    const igate = new Igate(kiss, { host: "localhost", port: 14580, call: "OE8APR-10", pass: "-1", burst: 1 });
+    const igate = new Igate(kiss, {
+      host: "localhost",
+      port: 14580,
+      call: "OE8APR-10",
+      pass: "-1",
+      canTx: () => true,
+      burst: 1,
+    });
     vi.spyOn(console, "log").mockImplementation(() => {});
     igate.onIsLine("DL1XYZ>APRS,WIDE1-1,qAR,DB0ABC::DK9ZZZ   :not heard here{1");
     igate.onRf(heard("OE3ABC-7"));
