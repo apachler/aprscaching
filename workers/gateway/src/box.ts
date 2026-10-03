@@ -25,6 +25,7 @@ import { json } from "./app.js";
 import { sessionIdentity, accountHoldsCall, ingestSecretOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified } from "./callsign.js";
+import { serviceCall } from "./servicecall.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
@@ -224,7 +225,10 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
       rows.map((r) => env.DB.prepare("UPDATE box_commands SET status='sent', sent_at=? WHERE id=?").bind(t, r.id)),
     );
   }
-  return json({ commands: rows.map((r) => ({ ...r, payload: r.payload ? JSON.parse(r.payload) : null })) });
+  return json({
+    serviceCall: serviceCall(env),
+    commands: rows.map((r) => ({ ...r, payload: r.payload ? JSON.parse(r.payload) : null })),
+  });
 }
 
 /** POST /api/box/:id/commands/ack — the box reports execution. */

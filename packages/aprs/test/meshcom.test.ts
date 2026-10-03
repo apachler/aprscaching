@@ -188,6 +188,29 @@ describe("meshcom parser robustness (never throws, never unbounded)", () => {
   });
 });
 
+describe("meshcom 4.40 additions", () => {
+  it("a delivery ack parses as an ack, not a frame, and the decoder says so", () => {
+    const ack = j({ type: "ack", msg_id: "0a1b2c3d", status: 1, via: "udp" });
+    expect(parseMeshcomDatagram(ack)).toMatchObject({
+      ok: true,
+      ack: { type: "ack", msgId: "0A1B2C3D", status: "gateway" },
+    });
+    expect(parseMeshcomDatagram(j({ type: "ack", msg_id: "11223344", status: 2, from: "DH1FR-1" }))).toMatchObject({
+      ack: { status: "peer", from: "DH1FR-1" },
+    });
+    expect(decodeMeshcom(ack)).toEqual({ ok: false, reason: "ack" });
+    expect(parseMeshcomDatagram(j({ type: "ack", msg_id: "11223344", status: 9 }))).toEqual({
+      ok: false,
+      reason: "unknown-type",
+    });
+  });
+  it("a message keeps its sender's device", () => {
+    const e = ok(decodeMeshcom(j({ ...MSG, hw_id: 43, lora_mod: 3, max_hop: 4 })));
+    expect(e.type === "msg" && e.hwId).toBe(43);
+    expect(e.raw).toMatchObject({ lora_mod: 3, max_hop: 4 });
+  });
+});
+
 describe("meshcom dedup", () => {
   const ev = (srcType: string, src: string, id: string) =>
     ok(decodeMeshcom(j({ ...MSG, src_type: srcType, src, msg_id: id })));

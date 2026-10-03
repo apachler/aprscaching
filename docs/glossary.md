@@ -214,8 +214,9 @@ explains it in full.
     ([Offline packs](play/offline.md#offline-packs)).
 
 <span id="service-call"></span>Service call
-:   The callsign an instance listens on for APRS and MeshCom messages, `APRSCG` unless the instance names
-    another. You send it `FOUND`, `DNF`, `NOTE` or `VERIFY` messages
+:   The callsign an instance listens on for APRS and MeshCom messages: the sysop's callsign with SSID 15,
+    such as `OE8APR-15`, unless the instance names another. You send it `FOUND`, `DNF`, `NOTE` or `VERIFY`
+    messages, and personal mail held for you comes from it
     ([Log from your radio](play/log-a-find.md#log-from-your-radio)).
 
 ## Next

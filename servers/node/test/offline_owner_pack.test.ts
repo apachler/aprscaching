@@ -37,7 +37,7 @@ describe("the owner's maintenance pack", () => {
   });
 
   it("holds the owner's caches anywhere, flagged where a visit is due, and no one else's", async () => {
-    const env = authEnv({ BBS_CALL: "APRSXX" });
+    const env = authEnv({ SERVICE_CALL: "APRSXX" });
     const signup = await emailSignup(env, "owner@example.org", "OE8OWN");
     expect(signup.status).toBe(200);
     const t = now();

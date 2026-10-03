@@ -59,7 +59,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   LOTW_CA_PEM: "PEM certificates of the ARRL LoTW CAs trusted for callsign verification",
   OKAPI_BASE: "OpenCaching node to import caches from, e.g. https://www.opencaching.de",
   OKAPI_KEY: "OpenCaching OKAPI consumer key for that node",
-  BBS_CALL: "Service callsign that delivers personal mail and receives radio commands",
+  SERVICE_CALL: "The instance's on-air call for radio commands and mail; default the sysop's call -15",
   RADIO_REPLIES: "1 sends a text reply to each FOUND, DNF and NOTE radio command",
   API_RATE_WINDOW_SEC: "Length of the public read-API rate-limit window, in seconds",
   API_RATE_ANON: "Read-API requests per window without a key",
@@ -160,7 +160,6 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct",
   BOX_CMD_MAX_AGE: "Seconds after which a queued remote command is too old to run",
   BOX_POLL_MS: "Interval in milliseconds between remote-command polls",
-  BOX_SERVICE_CALL: "Gateway service call the box sends radio-command answers from",
   BOX_TX_BURST: "Remote transmits allowed at once before pacing applies",
   BOX_TX_REFILL_SEC: "Seconds to regain one remote transmit",
   APRSIS_SERVICE_CALL: "Callsign of the APRS-IS uplink for announcements and weather",
@@ -297,9 +296,9 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "—",
       ],
       [
-        "`BBS_CALL`",
-        "Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to",
-        "`APRSCG`",
+        "`SERVICE_CALL`",
+        "The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks, replies and held personal mail are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit",
+        "the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one",
       ],
       [
         "`RADIO_REPLIES`",
@@ -644,11 +643,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Announce / WX uplink (opt-in TX)",
-        "`APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`)",
+        "`APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`). Log in with a call of the gateway's `SERVICE_CALL` base call (the service call itself is simplest): answers from the service call then go out as plain APRS messages, which IGates gate to RF; anything else goes out as third-party traffic",
       ],
     ],
   },

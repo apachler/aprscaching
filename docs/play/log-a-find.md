@@ -75,7 +75,8 @@ it, edit it or discard it. [Hunt without signal](offline.md) has the details.
 ## Log from your radio
 
 No phone with you? Send an APRS text message from your radio to the instance's service call. The call is
-usually `APRSCG`; **You** → **Logs sent over the air** names the one your instance uses.
+your sysop's callsign with SSID 15, such as `OE8APR-15`; **You** → **Logs sent over the air** names the one
+your instance uses.
 
 | Message                    | Logs                                  |
 | -------------------------- | ------------------------------------- |

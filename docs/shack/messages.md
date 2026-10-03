@@ -61,7 +61,7 @@ The browser never acknowledges on its own: each ack is a transmission you choose
 ## Personal mail held until you are heard
 
 BBS mail addressed to your callsign waits on the instance until it hears your station. Then the instance sends
-it as an APRS message from its service call (`APRSCG` unless the instance names another), as
+it as an APRS message from its [service call](../glossary.md#service-call), as
 `de <SENDER>: <text>`, cut to 67 characters. The message carries a number, so your radio acknowledges it.
 
 Without an ack, the instance tries again when it hears you, at most once a minute and five times in all. The

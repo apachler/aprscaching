@@ -5,9 +5,9 @@ messages from that host for LoRa transmission. This page is the platform's refer
 It is verified against the MeshCom firmware source rather than the published description, because the
 two differ (see [Differences from the ICSSW description](#differences-from-the-icssw-description)).
 
-**Verified against:** MeshCom firmware 4.35t — `icssw-org/MeshCom-Firmware` `main` at `cf215b5`
-(2026-09-26) and `dev` at `c540761` (2026-09-28); the ExtUDP emitters (`src/extudp_functions.cpp`,
-`src/extern_tele_json.h`, `src/extern_notice_json.h`) are identical on both branches.
+**Verified against:** MeshCom firmware 4.40a — `icssw-org/MeshCom-Firmware` tag `v4.40a` at `6966c52`
+(2026-10-01): the ExtUDP emitters `src/extudp_functions.cpp`, `src/extern_msg_json.h`, `src/extern_tele_json.h`,
+`src/extern_notice_json.h` and `src/udp_frame.h`. Fields marked 4.40 are absent from older nodes.
 The firmware is MIT-licensed.
 
 Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshcom/`.
@@ -16,9 +16,12 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
 - UDP, node port **1799** (`EXTERN_PORT`, fixed in firmware). The node sends to the address set with
   `--extudpip` on port 1799 and receives on its own port 1799.
-- One JSON object per datagram, UTF-8. The node's output buffer is 500 bytes.
-- No authentication, no encryption, no sequencing, no acknowledgement. Datagrams can be lost, duplicated
-  or spoofed by any host that can reach the port.
+- One JSON object per datagram, UTF-8. A message datagram is built in a 700-byte buffer; the node reads at
+  most 254 bytes of an inbound one.
+- No authentication, no encryption, no sequencing. Datagrams can be lost, duplicated or spoofed by any host
+  that can reach the port. From 4.40 a node reports the acknowledgement of its own direct messages when it
+  arrives through the MeshCom server ([Delivery ack](#delivery-ack-type-ack)); an ack heard over LoRa is not
+  reported.
 - The node does nothing with ExtUDP while it runs its own Wi-Fi access point (`bWIFIAP`); it has to be a
   client on the operator's network.
 
@@ -39,7 +42,8 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 ### Position (`type: "pos"`)
 
 `src_type`, `type`, `src`, `msg` (always `""`), `lat`, `lat_dir`, `long`, `long_dir`, `aprs_symbol`,
-`aprs_symbol_group`, `hw_id`, `msg_id`, `alt`, `batt`, `firmware`, `fw_sub`, `rssi`, `snr`.
+`aprs_symbol_group`, `hw_id`, `msg_id`, `alt`, `batt`, `firmware`, `fw_sub`, `rssi`, `snr`, and from 4.40
+`lora_mod` and `max_hop`.
 
 - `lat` / `long` are **unsigned** decimal degrees, truncated to four decimals; the sign comes from
   `lat_dir` (`N`/`S`) and `long_dir` (`E`/`W`). A node without a fix reports `0`/`0`.
@@ -51,7 +55,12 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
 ### Text (`type: "msg"`)
 
-`src_type`, `type`, `src`, `dst`, `msg`, `msg_id`, `firmware`, `fw_sub`, `rssi`, `snr`.
+`src_type`, `type`, `src`, `dst`, `msg`, `msg_id`, `firmware`, `fw_sub`, `rssi`, `snr`, and from 4.40
+`hw_id`, `lora_mod` and `max_hop`.
+
+- `hw_id` is the originating device ([hardware ids](../run/radios/meshcom.md)); `lora_mod` the LoRa modulation
+  setting (low nibble); `max_hop` the hop budget left on this copy. APRScaching keeps `hw_id` for display and
+  the other two in the raw record.
 
 - `dst` is the whole destination path, `[<via>,…,]<destination>`. The **destination** is the last token:
   `*` (everyone), a group number (`1`–`99999`; group 9 carries emergency traffic), or a callsign with
@@ -91,6 +100,17 @@ altitude in metres against 1013.25 hPa; `din` is eight `0`/`1` characters for th
 omitted when the sender has none. **An absent sensor is reported as `0`**, indistinguishable from a real
 zero reading.
 
+### Delivery ack (`type: "ack"`)
+
+```json
+{"type":"ack","msg_id":"0A1B2C3D","status":2,"from":"OE1KBC-12","via":"udp"}
+```
+
+A 4.40 node sends this when an ack or reject for one of its own direct messages arrives through the MeshCom
+server. `msg_id` is the acknowledged message's id, `status` is `1` for the gateway's ack and `2` for the
+addressee's, and `from` is omitted when the acknowledging call is not a callsign. It has no `src_type` and is
+not a frame: APRScaching counts it (`acks`) and forwards nothing.
+
 ### Where a frame came from
 
 | `src_type` | Meaning |
@@ -110,7 +130,9 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
 {"type":"msg","dst":"OE1KBC-12","msg":"Test 1 2 3"}
 ```
 
-- `dst`: 1–9 **bytes**; `*`, a group number, or any other address — a callsign, or a service address such as `APRSCG`. The firmware does not check the destination against a callsign pattern.
+- `dst`: 1–9 **bytes**; `*`, a group number, or a callsign. The sending node takes any address, but every
+  node that receives the frame drops a direct message whose destination is not callsign-shaped (no digit), so
+  an address such as `APRSCG` never arrives.
 - `msg`: 1–150 **bytes** of UTF-8 (the firmware checks `strlen`, so an umlaut costs two bytes and an
   emoji four). A `NUL` in either field rejects the datagram.
 - Invalid JSON, a missing field, or a length outside the limits is dropped silently.
@@ -130,8 +152,8 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
 
 ## Firmware versions
 
-The node's own frames carry `firmware: "4.35"` and `fw_sub: "t"`; received frames carry the sender's
-number and letter. No build date is included. The firmware fix for the ESP32 loop-task stack overflow with
+The node's own frames carry the version string and letter, such as `firmware: "4.40"` and `fw_sub: "a"`;
+received frames carry the sender's number and letter (`40`, `a`). No build date is included. The firmware fix for the ESP32 loop-task stack overflow with
 `--extudp on` (MeshCom-Firmware pull request #1157, merged 2026-09-25) landed within 4.35t, so:
 
 - older than 4.35t → affected;

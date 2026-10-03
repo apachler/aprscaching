@@ -48,7 +48,7 @@ AMPR_REQUIRE_DNSSEC	enum	gateway		0|1|false|true	0	0	selfhost,cloudflare,baremet
 LOTW_CA_PEM	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	PEM certificates of the ARRL LoTW CAs trusted for callsign verification
 OKAPI_BASE	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching node to import caches from, e.g. https://www.opencaching.de
 OKAPI_KEY	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching OKAPI consumer key for that node
-BBS_CALL	string	gateway	APRSCG		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Service callsign that delivers personal mail and receives radio commands
+SERVICE_CALL	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	The instance's on-air call for radio commands and mail; default the sysop's call -15
 RADIO_REPLIES	enum	gateway		0|1	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 sends a text reply to each FOUND, DNF and NOTE radio command
 API_RATE_WINDOW_SEC	int	gateway	60		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Length of the public read-API rate-limit window, in seconds
 API_RATE_ANON	int	gateway	60		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Read-API requests per window without a key
@@ -149,7 +149,6 @@ BOX_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the b
 BOX_TX_PATH	list	ingest	WIDE1-1,WIDE2-1		0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for remote transmits; blank sends direct
 BOX_CMD_MAX_AGE	int	ingest	900		0	0	selfhost,baremetal,ingest-box,pocket	Seconds after which a queued remote command is too old to run
 BOX_POLL_MS	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between remote-command polls
-BOX_SERVICE_CALL	string	ingest	APRSCG		0	0	selfhost,baremetal,ingest-box,pocket	Gateway service call the box sends radio-command answers from
 BOX_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	Remote transmits allowed at once before pacing applies
 BOX_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one remote transmit
 APRSIS_SERVICE_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the APRS-IS uplink for announcements and weather

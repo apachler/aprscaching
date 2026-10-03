@@ -15,6 +15,7 @@ import { adminCalls, requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { isCallsignVerified } from "./callsign.js";
 import { ownMeshcomVia } from "./meshcom.js";
+import { serviceCall } from "./servicecall.js";
 
 const HOUR = 3600;
 /** How far back `since` may reach, and how many messages one answer carries. */
@@ -66,8 +67,10 @@ export async function handleStationStatus(req: Request, env: Env): Promise<Respo
     ports.set(h.port, p);
   }
 
-  // Received messages to any SSID of the operator's calls.
+  // Received messages to any SSID of the operator's calls, except the service call: those are players'
+  // radio commands and verification codes, which the instance answers itself.
   const calls = [...adminCalls(env)].map((c) => c.replace(/-\d{1,2}$/, ""));
+  const service = serviceCall(env);
   let messages: StationStatus["messages"] = [];
   if (calls.length) {
     const match = calls.map(() => "(UPPER(to_call) = ? OR UPPER(to_call) LIKE ?)").join(" OR ");
@@ -75,9 +78,9 @@ export async function handleStationStatus(req: Request, env: Env): Promise<Respo
     messages = (
       await env.DB.prepare(
         `SELECT id, ts, from_call AS "from", to_call AS "to", body FROM messages
-          WHERE direction = 'rx' AND ts > ? AND (${match}) ORDER BY ts ASC, id ASC LIMIT ?`,
+          WHERE direction = 'rx' AND ts > ? AND (${match}) AND UPPER(to_call) != ? ORDER BY ts ASC, id ASC LIMIT ?`,
       )
-        .bind(since, ...binds, MAX_MESSAGES)
+        .bind(since, ...binds, service, MAX_MESSAGES)
         .all<StationStatus["messages"][number]>()
     ).results;
   }

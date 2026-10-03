@@ -98,8 +98,6 @@ export const ENV_FILES = [
       "# Remote-transmit pacing: transmits at once, then one more every N seconds (ceiling: 10 at once, 6 s)",
       { key: "BOX_TX_BURST", value: "3" },
       { key: "BOX_TX_REFILL_SEC", value: "60" },
-      "# The gateway's service call (its BBS_CALL): answers to radio commands are sent on RF from this address.",
-      { key: "BOX_SERVICE_CALL", value: "APRSCG" },
       "",
       "# --- gateway position storage: set these on the GATEWAY (deploy/.env, or [vars] in workers/gateway/wrangler.toml",
       '# on the Cloudflare split), not on this box; see docs/reference/cloudflare-costs.md "Cost on D1" ---',

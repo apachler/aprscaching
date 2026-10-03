@@ -368,6 +368,25 @@ setInterval(async () => {
 }, BATCH_MS);
 
 aprs.start();
+
+// The gateway names its service call: the APRS-IS feed asks for messages addressed to it, and a station of
+// this box sharing it would have its own commands ignored and, on MeshCom, acked by its own node.
+async function learnServiceCall(): Promise<void> {
+  try {
+    const r = await gatewayFetch(`${INGEST_URL.replace(/\/+$/, "")}/check`, { headers: { "x-ingest-secret": SECRET } });
+    if (!r.ok) return;
+    const { serviceCall } = (await r.json()) as { serviceCall?: string };
+    if (!serviceCall) return;
+    aprs.setServiceCall(serviceCall);
+    const own = [env.BOX_CALL, env.IGATE_CALL, env.DIGI_CALL, env.RF_SITE_CALL, env.APRSIS_CALLSIGN];
+    if (own.some((c) => c?.trim().toUpperCase() === serviceCall.toUpperCase()))
+      console.error(`[ingest] ${serviceCall} is the gateway's service call; give this box's station another SSID`);
+  } catch {
+    /* the gateway is unreachable; the forwarder logs that, and the next attempt retries */
+  }
+}
+void learnServiceCall();
+setInterval(() => void learnServiceCall(), 15 * 60_000);
 console.log(`[ingest] started -> ${INGEST_URL}`);
 
 // ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
@@ -403,7 +422,6 @@ if (env.BOX_ID) {
     remoteTx: env.BOX_TX === "1",
     radio: boxRadio,
     meshcom: meshcomTx,
-    serviceCall: env.BOX_SERVICE_CALL || undefined,
     state: station,
     path: parseBoxPath(env.BOX_TX_PATH),
     maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),

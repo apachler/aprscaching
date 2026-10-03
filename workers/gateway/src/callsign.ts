@@ -37,7 +37,7 @@ import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
 import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { serviceCall } from "./radiolog.js";
+import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
 import { parseAttestedSites } from "./provenance.js";
 

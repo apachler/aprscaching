@@ -29,6 +29,27 @@ export class AprsIs extends EventEmitter {
     this.connect();
   }
 
+  /** The gateway's service call: messages addressed to it are radio commands, wherever their sender is. */
+  private serviceCall?: string;
+
+  /** The login filter: the configured one, plus a group-message filter for the service call. */
+  private filter(): string {
+    return this.serviceCall ? `${this.o.filter} g/${this.serviceCall}`.trim() : this.o.filter;
+  }
+
+  /**
+   * Ask for messages addressed to the service call too. A range filter passes stations near a point, so a
+   * command sent from further away would never arrive without it. A live connection takes the new filter at
+   * once (`#filter`), a later one at login.
+   */
+  setServiceCall(call: string) {
+    const c = call.trim().toUpperCase();
+    if (!c || c === this.serviceCall) return;
+    this.serviceCall = c;
+    const s = this.sock;
+    if (s && s.writable && !s.destroyed) s.write(`#filter ${this.filter()}\r\n`);
+  }
+
   /** Schedule exactly one reconnect. Only `close` calls this (`close` always follows `error`),
    *  and a stale socket's close is ignored — one failure = one attempt, never a storm.
    *  The delay backs off exponentially with jitter while the endpoint stays down. */
@@ -54,7 +75,7 @@ export class AprsIs extends EventEmitter {
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
-      s.write(`user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching 0.0 filter ${this.o.filter}\r\n`);
+      s.write(`user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching 0.0 filter ${this.filter()}\r\n`);
       this.emit("up");
     });
     s.on("data", (chunk: string) => {

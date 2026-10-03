@@ -27,6 +27,7 @@
     "./fetchguard": "./src/fetchguard.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
     "./radiolog": "./src/radiolog.ts",
+    "./servicecall": "./src/servicecall.ts",
     "./account": "./src/account.ts",
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",
