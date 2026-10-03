@@ -41,7 +41,7 @@ from your radio.
 
     ![The map on a phone, with cache markers and the bottom bar](../assets/shots/map-mobile.webp){ width="280" loading=lazy }
 
-2. Tap **Nearby**. The list shows the caches closest to the centre of the map, nearest first.
+2. Tap **Nearby**, then **Use my location**. The list shows the caches closest to you, nearest first.
 
 3. Tap a cache. Its sheet opens with the description, **Difficulty**, **Terrain** and the **Hint**.
 

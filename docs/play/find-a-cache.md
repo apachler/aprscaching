@@ -46,8 +46,13 @@ The corner of the map shows the position under the cursor as latitude and longit
 
 ## List the closest caches
 
-Tap **Nearby**. The list shows the caches and stations closest to the centre of the map, nearest first, with
-distance and direction. Move the map to change the list.
+Tap **Nearby**. The list shows the caches and stations closest to you, nearest first, with distance and
+direction. The line above it says what it measures from:
+
+- **from you**: the phone has your location, from the locate button on the map or a reading in the last five
+  minutes. When you have moved the map away, the list still shows what is within 10 km of you.
+- **from map centre**: the app has no location yet. Tap **Use my location** to measure from you, or move the
+  map to plan somewhere else.
 
 - **Caches** and **Stations** narrow the list.
 - **For adoption** lists caches whose owners are handing them on.

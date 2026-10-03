@@ -18,7 +18,7 @@ import {
   watchPermission,
   type DeviceFix,
 } from "../src/geo/location.js";
-import { parseCoordinates } from "../src/map/geo.js";
+import { parseCoordinates, boxAround, haversine } from "../src/map/geo.js";
 
 /** A GeolocationPosition as a browser reports it (the reading's own timestamp, in ms). */
 function position(lat: number, lon: number, timestamp: number, accuracy = 8): GeolocationPosition {
@@ -273,5 +273,16 @@ describe("typed coordinates", () => {
     expect(g.lon).toBeCloseTo(15.4583, 3);
     expect(parseCoordinates("95, 10")).toBeNull();
     expect(parseCoordinates("hello")).toBeNull();
+  });
+});
+
+describe("the box Nearby loads around you", () => {
+  it("reaches about the asked distance in every direction, wider in longitude away from the equator", () => {
+    const [w, s, e, n] = boxAround(47.5, 13.5, 10);
+    expect(haversine(47.5, 13.5, n, 13.5)).toBeCloseTo(10_000, -2);
+    expect(haversine(47.5, 13.5, 47.5, e)).toBeCloseTo(10_000, -2);
+    expect(13.5 - w).toBeCloseTo(e - 13.5);
+    expect(47.5 - s).toBeCloseTo(n - 47.5);
+    expect(boxAround(89.99, 0, 10)[3]).toBe(90);
   });
 });

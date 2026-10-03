@@ -83,3 +83,10 @@ export function haversine(aLat: number, aLon: number, bLat: number, bLon: number
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * d) * Math.cos(bLat * d) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+
+/** A box `[west, south, east, north]` about `km` from a point on each side, clamped at the poles. Pure. */
+export function boxAround(lat: number, lon: number, km: number): [number, number, number, number] {
+  const dLat = km / 111.32;
+  const dLon = km / (111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+  return [lon - dLon, Math.max(lat - dLat, -90), lon + dLon, Math.min(lat + dLat, 90)];
+}
