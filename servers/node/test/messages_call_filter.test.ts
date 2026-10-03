@@ -27,7 +27,7 @@ describe("messages for one call", () => {
     expect((await call(env, "GET", "/api/messages?call=%25")).status).toBe(400);
   });
 
-  it("leaves out the service call's traffic, which shares the sysop's base call", async () => {
+  it("leaves the service call's traffic out of the sysop's, which shares its base call, and in the player's", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8ABC" });
     const rows: [string, string, string][] = [
       ["OE8ABC-7", "OE3XYZ", "the sysop's own"],
@@ -42,5 +42,13 @@ describe("messages for one call", () => {
       (m: { body: string }) => m.body,
     );
     expect(mine).toEqual(["the sysop's own"]);
+    // the player keeps both sides of their exchange with the service call
+    const theirs = (await call(env, "GET", "/api/messages?call=OE3XYZ")).data;
+    expect(theirs.messages.map((m: { body: string }) => m.body)).toEqual([
+      "the instance's answer",
+      "a player's command",
+      "the sysop's own",
+    ]);
+    expect(theirs.serviceCall).toBe("OE8ABC-15");
   });
 });

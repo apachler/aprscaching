@@ -25,18 +25,24 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
   const canMine = base.length >= 3;
   const [scope, setScope] = useState<Scope>("all");
   const [view, setView] = useState<View>("air");
+  const [service, setService] = useState<string | null>(null);
   const mineOnly = canMine && scope === "mine";
   const messages = usePaged(
     (cursor) =>
-      getMessages(false, cursor, 30, undefined, mineOnly ? base : undefined).then((r) => ({
-        items: r.messages,
-        nextCursor: r.nextCursor,
-        hasMore: r.hasMore,
-      })),
+      getMessages(false, cursor, 30, undefined, mineOnly ? base : undefined).then((r) => {
+        setService(r.serviceCall?.toUpperCase() ?? null);
+        return {
+          items: r.messages,
+          nextCursor: r.nextCursor,
+          hasMore: r.hasMore,
+        };
+      }),
     [mineOnly, base],
   );
 
-  const mine = (call: string | null) => !!call && call.toUpperCase().split("-")[0] === base;
+  // The service call shares the sysop's base call but speaks for the instance, so its side is never "yours".
+  const mine = (call: string | null) =>
+    !!call && call.toUpperCase() !== service && call.toUpperCase().split("-")[0] === base;
 
   return (
     <Panel

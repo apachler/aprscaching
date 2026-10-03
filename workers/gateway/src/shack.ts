@@ -101,7 +101,9 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const to = u.searchParams.get("to");
   const bulletins = u.searchParams.get("bulletins") === "1";
   // `call`: one operator's traffic, sent or received under any SSID of its base call. The service call shares
-  // the sysop's base call but carries the instance's traffic (players' commands, its answers), never theirs.
+  // the sysop's base call but carries the instance's traffic (its answers, Mailbox deliveries), never the
+  // sysop's own: a side that is the service call never makes a row theirs. A player's command to the service
+  // call stays the player's, by its sending side.
   const callParam = u.searchParams.get("call");
   const base = callParam ? baseCall(callParam.trim().toUpperCase()) : null;
   if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
@@ -109,10 +111,10 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
   if (base) {
-    sql += " AND (from_call = ? OR from_call LIKE ? OR to_call = ? OR to_call LIKE ?)";
-    sql += " AND from_call != ? AND IFNULL(to_call, '') != ?";
+    sql += " AND (((from_call = ? OR from_call LIKE ?) AND from_call != ?)";
+    sql += " OR ((to_call = ? OR to_call LIKE ?) AND IFNULL(to_call, '') != ?))";
     const service = serviceCall(env);
-    binds.push(base, `${base}-%`, base, `${base}-%`, service, service);
+    binds.push(base, `${base}-%`, service, base, `${base}-%`, service);
   } else if (to) {
     sql += " AND to_call = ?";
     binds.push(to.toUpperCase());
@@ -128,7 +130,12 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
       .all()
   ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
-  return json({ messages: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
+  return json({
+    messages: page.items,
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
+    serviceCall: serviceCall(env),
+  });
 }
 
 /**
