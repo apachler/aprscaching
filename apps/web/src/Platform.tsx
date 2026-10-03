@@ -539,6 +539,14 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
   const shown = useMemo(() => caches.filter((c) => passes(c, filters)), [caches, filters]);
+  // Nearby's view around you when you are off the map: the same filters, and live stations only when shown
+  const nearbyAround = useCallback(
+    async (bbox: BBox) => ({
+      caches: (await listCaches(bbox, includeUnvettedRef.current)).caches.filter((c) => passes(c, filters)),
+      stations: stationsOnRef.current ? (await getStations(bbox)).stations : [],
+    }),
+    [filters],
+  );
   const facets = useMemo(() => facetsOf(caches), [caches]);
 
   // ---- live socket: geofence prompts + live station deltas, subscribed to the viewport + callsign ----
@@ -885,6 +893,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                   openCache(id);
                 }}
                 onOffline={() => openView(panel("offline"))}
+                around={nearbyAround}
                 onClose={closeView}
               />
             )}
