@@ -45,9 +45,7 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /** A well-formed address, trimmed and lower-cased, or null. */
 export function normalEmail(raw: unknown): string | null {
-  const e = String(raw ?? "")
-    .trim()
-    .toLowerCase();
+  const e = (typeof raw === "string" ? raw : "").trim().toLowerCase();
   return EMAIL_RE.test(e) ? e : null;
 }
 
