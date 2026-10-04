@@ -69,12 +69,13 @@ ALLOW_DEV_TOKENS	enum	gateway		0|1|false|true	0	0	selfhost,baremetal,pocket,desk
 OPERATOR_LINKS_FOR_ANY_CALL	enum	gateway,pocket		0|1	0	0	selfhost,baremetal,pocket,desktop	1 lets the operator's sign-in link serve every call, not only admin calls
 VAPID_PUBLIC	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Web-push VAPID public key (base64url)
 VAPID_PRIVATE	string	gateway			1	0	selfhost,baremetal,pocket,desktop	Web-push VAPID private key (base64url)
-VAPID_SUBJECT	string	gateway	mailto:admin@aprscaching.net		0	0	selfhost,baremetal,pocket,desktop	Contact the push service sees, e.g. mailto:admin@example.net
+VAPID_SUBJECT	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Contact the push service sees; default mailto:OPERATOR_EMAIL, else https://<instance host>
 SUPPORT_LINKS	json	gateway			0	0	selfhost,baremetal,pocket,desktop	JSON array of donation links [{label,url}] shown on /support
 SOURCE_REPO	string	gateway	https://github.com/apachler/aprscaching		0	0	selfhost,baremetal,pocket,desktop	Published source URL (AGPL §13); a modified fork must set its own
 OPERATOR_NAME	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Person or entity operating this instance, shown on /imprint and /privacy
 OPERATOR_ADDRESS	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's postal address; commas separate the lines
 OPERATOR_EMAIL	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's contact address, also the privacy contact
+SECURITY_CONTACT	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Contact URIs in /.well-known/security.txt; default mailto:OPERATOR_EMAIL
 SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Commit or tag the instance runs; resolved at build or start when unset
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds

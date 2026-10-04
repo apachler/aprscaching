@@ -70,6 +70,7 @@ import {
   serveFeed,
 } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect, sourceInfo } from "./source.js";
+import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleImprintPage, handlePrivacyPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
@@ -370,6 +371,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // AGPL §13 source link — the source this instance is running
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
   if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
+
+  // RFC 9116 security contact (SECURITY_CONTACT, else OPERATOR_EMAIL)
+  if (p === "/.well-known/security.txt" && m === "GET") return handleSecurityTxt(env);
 
   // per-instance legal pages — the operator's imprint + privacy notice (OPERATOR_* env)
   if (p === "/imprint" && m === "GET") return handleImprintPage(env);

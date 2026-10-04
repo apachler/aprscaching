@@ -52,7 +52,7 @@ export function isPublishable(item: { src_call: string; tocall: string; payload:
  * command, acking it or delivering held mail — goes out as a plain packet, so IGates gate a message to the
  * addressee on RF. An item from anyone else (a player's announced find) is relayed as THIRD-PARTY traffic,
  * so the player's call stays the inner source:
- *   SERVICE>APZACG,TCPIP*:}USERCALL>APZACG,TCPIP*:>Found AC-1234 via aprscaching.net
+ *   SERVICE>APZACG,TCPIP*:}USERCALL>APZACG,TCPIP*:>Found AC-1234 via aprs.example.net
  * It publishes only once the server answers the login `verified`: an unverified login's packets are dropped
  * by APRS-IS, so acking outbox items sent under one would lose them.
  */

@@ -50,10 +50,10 @@ start order: the first ones wait on replies from outside, so they start first, a
       development. Request `APACG?` (free in `tocalls.yaml`) through a GitHub issue at
       https://github.com/aprsorg/aprs-deviceid/issues, then switch the default tocall in the code to the
       allocated one.
-- [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, the `VAPID_SUBJECT` default
-      (`mailto:admin@aprscaching.net`, `workers/gateway/src/notify.ts`), an abuse address and a security
-      contact exist and are read; `SECURITY.md` names the security address the owner wants public; optionally a
-      `/.well-known/security.txt` (RFC 9116).
+- [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, an abuse address and
+      `security@aprscaching.net` exist and are read. `SECURITY.md` names `security@aprscaching.net`; the public
+      instance sets `SECURITY_CONTACT=mailto:security@aprscaching.net` for its `/.well-known/security.txt`, and
+      web push names `OPERATOR_EMAIL` as its `VAPID_SUBJECT` by default.
 - [ ] **Imprint and privacy notice for aprscaching.net** _(S — owner and legal review)_ — `OPERATOR_NAME`,
       `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` set, so `/imprint` meets ECG §5 (name, geographic address, email)
       and the MedienG §25 disclosure (owner: a small website, or a statement of the editorial line). Review

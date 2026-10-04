@@ -21,7 +21,10 @@ Self-hosters: run a supported version, and because the app is AGPL, keep your pu
 
 1. **Preferred:** GitHub → the repository's **Security** tab → **Report a vulnerability** (private
    security advisory). This keeps the report confidential and lets us collaborate on a fix.
-2. **Email fallback:** `apachler@paan-systems.com` with `SECURITY` in the subject.
+2. **Email fallback:** `security@aprscaching.net`.
+
+A running instance names its own operator's contact at `/.well-known/security.txt` (RFC 9116). A problem
+in one instance's configuration goes to that operator; a problem in the code goes here.
 
 Please include: what you found, the affected component/endpoint, a reproduction (a crafted packet, a
 request, a malicious-peer scenario), the impact, and any suggested fix. We'll acknowledge within a few

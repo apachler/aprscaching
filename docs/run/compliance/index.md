@@ -29,6 +29,12 @@ A public instance shows who runs it at `/imprint` and how it handles data at `/p
 `OPERATOR_NAME`, `OPERATOR_ADDRESS` and `OPERATOR_EMAIL`; they are *Recommended* items in **Instance admin →
 Setup** ([Your first hour](../first-hour.md)).
 
+`/.well-known/security.txt` (RFC 9116) tells a security researcher where to report a problem with your
+instance. It names `SECURITY_CONTACT`, or `mailto:` + `OPERATOR_EMAIL` when that is unset, and answers 404
+while neither is set. A separate address keeps reports apart from other mail, for example
+`SECURITY_CONTACT=mailto:security@aprscaching.net` on the project's own instance. Web push names the same
+operator address to the push services, unless `VAPID_SUBJECT` says otherwise.
+
 ## Check that it worked
 
 Run `deploy/aprscaching doctor`:
