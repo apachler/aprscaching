@@ -18,7 +18,7 @@ describe("operated stations — validation", () => {
 
   it("parses + whitelists + dedups roles, dropping unknowns", () => {
     expect(parseRoles(["weather", "digipeater", "weather", "bogus"])).toEqual(["weather", "digipeater"]);
-    expect(parseRoles("igate, node , relay")).toEqual(["igate", "node", "relay"]);
+    expect(parseRoles("igate, node , repeater")).toEqual(["igate", "node", "repeater"]);
     expect(parseRoles(undefined)).toEqual([]);
     expect(parseRoles("nonsense")).toEqual([]);
   });

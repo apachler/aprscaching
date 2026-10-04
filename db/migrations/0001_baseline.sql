@@ -565,7 +565,7 @@ CREATE TABLE account_stations (
   lon         REAL,
   symbol      TEXT,                                -- APRS symbol (the role default when unset)
   description TEXT,
-  roles       TEXT NOT NULL DEFAULT '',            -- csv subset of: weather,digipeater,igate,node,relay
+  roles       TEXT NOT NULL DEFAULT '',            -- csv subset of: weather,digipeater,igate,node,repeater
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );

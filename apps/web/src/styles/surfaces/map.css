@@ -106,7 +106,7 @@
     background: var(--type-grey);
     color: var(--role-node-ink);
   }
-  button.station-pin.role[data-role="relay"] {
+  button.station-pin.role[data-role="repeater"] {
     background: var(--type-clay);
   }
   /* MeshCom nodes: the station pin with a MeshCom ring and an "M" tag, so the difference never rests on

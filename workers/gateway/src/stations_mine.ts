@@ -81,7 +81,7 @@ function symbolForRoles(roles: StationRole[], explicit?: string | null): string 
   if (roles.includes("digipeater")) return "#"; // digipeater
   if (roles.includes("igate")) return "&"; // gateway / IGate
   if (roles.includes("node")) return "I"; // network node (TCP/IP)
-  if (roles.includes("relay")) return "R"; // relay
+  if (roles.includes("repeater")) return "r"; // repeater
   return "/"; // generic
 }
 
