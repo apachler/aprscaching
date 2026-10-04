@@ -40,6 +40,7 @@ import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
 import { isCallsignVerified } from "./callsign.js";
+import { removedCacheResponse } from "./moderation.js";
 import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
 import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cacheplace.js";
 
@@ -73,6 +74,8 @@ export interface CacheDbRow {
   rendezvous: number | null;
   created_at: number;
   updated_at: number;
+  removed_at?: number | null;
+  removed_reason?: string | null;
 }
 export interface LogDbRow {
   id: number;
@@ -362,6 +365,8 @@ async function logbookPage(env: Env, id: number, cursor: Cursor | null, limit: n
 export async function handleCacheDetail(req: Request, env: Env, id: number): Promise<Response> {
   const stored = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   if (!stored) return json({ error: "no such cache" }, { status: 404 });
+  const hidden = await removedCacheResponse(req, env, id);
+  if (hidden) return hidden;
   const { row, heardAt: stationHeardAt } = await livingAt(env, stored);
   const logs = await logbookPage(env, id, null, LOGBOOK_PAGE);
   const finds = await env.DB.prepare(
@@ -422,12 +427,15 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
         move: await moveRule(env, id),
       },
     }),
+    ...(row.removed_at != null && { removed: { at: row.removed_at, reason: row.removed_reason ?? null } }),
   };
   return json({ cache: detail });
 }
 
 /** GET /api/caches/:id/logs — paginated logbook ("Load more" past the first page in the detail). */
 export async function handleCacheLogs(req: Request, env: Env, id: number): Promise<Response> {
+  const hidden = await removedCacheResponse(req, env, id);
+  if (hidden) return hidden;
   const pg = parsePage(new URL(req.url), LOGBOOK_PAGE, 200);
   const page = await logbookPage(env, id, pg.cursor, pg.limit);
   return json({ logs: page.items.map(toLogEntry), nextCursor: page.nextCursor, hasMore: page.hasMore });
@@ -610,6 +618,9 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   // an erased owner's cache stays archived: nobody inherits it through the withdrawn marker
   if (isWithdrawnCall(existing.owner_call))
     return json({ error: "this cache's owner has withdrawn — it cannot be edited" }, { status: 403 });
+  // a cache the sysop removed stays as it is until the sysop restores it
+  if (existing.removed_at != null)
+    return json({ error: "the sysop removed this cache — it cannot be edited" }, { status: 403 });
   if (!(await mayActAsOwner(req, env, existing.owner_call, b.ownerCall)))
     return json({ error: "only the owner may edit this cache" }, { status: 403 });
 

@@ -139,7 +139,7 @@ export async function handleCachesKml(req: Request, env: Env): Promise<Response>
 }
 export async function handleCacheGpx(req: Request, env: Env, code: string): Promise<Response> {
   const c = await env.DB.prepare(
-    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND source = 'native' AND lat IS NOT NULL",
+    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND source = 'native' AND lat IS NOT NULL AND removed_at IS NULL",
   )
     .bind(code)
     .first<ExpCache>();

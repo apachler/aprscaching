@@ -5,6 +5,7 @@ import { useFmt } from "../format.js";
 import { Panel, Badge, EmptyState, ErrorState, Button, Icon, Segmented, Hint, useToast } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { badgeInfo } from "../profile/badges.js";
+import { ContentMenu } from "../moderation/ContentMenu.js";
 
 const PERIODS: { value: RankPeriod; label: string; empty: string }[] = [
   { value: "all", label: "All time", empty: "No verified finds in this area yet." },
@@ -57,7 +58,13 @@ export function CommunityPanel(props: { onClose: () => void }) {
           </>
         }
       >
-        <Button onClick={() => setProfile(null)}>← leaderboard</Button>
+        <div className="row between">
+          <Button onClick={() => setProfile(null)}>← leaderboard</Button>
+          <ContentMenu
+            target={{ kind: "profile", id: profile.callsign, label: profile.callsign }}
+            onRemoved={() => setProfile(null)}
+          />
+        </div>
         <p className="mt-5">
           <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden
         </p>

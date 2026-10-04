@@ -54,6 +54,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
 import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
 import { TERMS } from "../terms.js";
+import { ContentMenu } from "../moderation/ContentMenu.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -190,9 +191,25 @@ export function DetailPanel(props: {
           >
             {fav.on ? "♥" : "♡"} {fav.count}
           </Button>
+          {!props.offlineFrom && (
+            <ContentMenu
+              target={{ kind: "cache", id: c.id, label: c.code }}
+              own={!!c.own}
+              removed={!!c.removed}
+              onRemoved={props.onLogged}
+              onRestored={props.onLogged}
+            />
+          )}
         </>
       }
     >
+      {c.removed && (
+        <p className="inline-note" role="status">
+          <Icon name="alert" size={16} className="lead-ic" />
+          The sysop removed this cache{c.removed.reason ? `: ${c.removed.reason}` : ""}. Only its owner and the sysop
+          see it; it takes no logs and cannot be edited.
+        </p>
+      )}
       {props.offlineFrom && (
         <p className="inline-note" role="status">
           Offline copy from{" "}
@@ -383,7 +400,12 @@ export function DetailPanel(props: {
         </p>
       </Disclosure>
 
-      <CacheMedia cacheId={c.id} isOwner={!!c.own && !props.offlineFrom} onToast={toast} />
+      <CacheMedia
+        cacheId={c.id}
+        isOwner={!!c.own && !props.offlineFrom}
+        offline={!!props.offlineFrom}
+        onToast={toast}
+      />
 
       {c.source === "native" && <AdoptionSection cacheId={c.id} code={c.code} onSignIn={props.onSignIn} />}
 
@@ -448,6 +470,9 @@ export function DetailPanel(props: {
           ago={fmt.ago(l.ts)}
           dist={l.distanceM != null ? fmt.distance(l.distanceM) : null}
           sync={syncNote(l, fmt.dateTime)}
+          own={!!callsign && baseOf(callsign) === baseOf(l.loggerCall)}
+          menu={!props.offlineFrom}
+          onRemoved={props.onLogged}
         />
       ))}
       <LoadMore hasMore={logsMore} loading={logsLoading} onClick={loadMoreLogs} />
@@ -700,7 +725,16 @@ function ShareCache(props: { code: string; title: string; gpx: boolean; onToast:
   );
 }
 
-function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; sync: string | null }) {
+function LogRow(props: {
+  log: CacheLogEntry;
+  ago: string;
+  dist: string | null;
+  sync: string | null;
+  own: boolean;
+  /** Show the More menu (Report, and Remove for the sysop); never on an offline copy. */
+  menu: boolean;
+  onRemoved: () => void;
+}) {
   const l = props.log;
   const tier: Tier = l.logType === "found" && l.verified ? ((l.tier ?? "C") as Tier) : "C";
   const method = [
@@ -728,6 +762,13 @@ function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; s
             </Hint>
           )}
           <span className="logrow-when">{props.ago}</span>
+          {props.menu && (
+            <ContentMenu
+              target={{ kind: "log", id: l.id, label: `${l.logType} by ${l.loggerCall}` }}
+              own={props.own}
+              onRemoved={props.onRemoved}
+            />
+          )}
         </div>
         {method && <div className="logrow-method">{method}</div>}
         {l.needsMaintenance && <div className="logrow-method warn">⚠ flagged: needs maintenance</div>}

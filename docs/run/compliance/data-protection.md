@@ -28,6 +28,10 @@ waiting for confirmation), the profile and preferences, caches, finds, positions
 sent or was sent, keys, stations, mail and the rest of the account-scoped rows. Secrets such as passkey public
 keys and push keys stay out of it.
 
+It also carries what moderation holds about the person: the sysop's actions on their account and content
+(`moderationActions`), a suspension in force (`suspension`), and the reports the person filed (`reportsFiled`).
+Reports other people filed about the person stay out, because they would name the reporter.
+
 ## Erase
 
 `POST /api/account/<call>/delete` erases the whole account: every base call it holds.
@@ -45,6 +49,10 @@ keys and push keys stay out of it.
   adoption requests, personal BBS mail in both directions, the bulletins and NTS traffic the person posted (replies
   others posted stay), Mailbox mail, near-cache radio messages, MeshCom group messages, and the radio messages
   queued for or addressed to the person.
+- **Kept, without the reporter:** the reports the person filed stay with the sysop, with the reporter's account
+  and call removed. The person's suspension, if any, is deleted with the account.
+- **Kept as a record:** the audit log rows about the person's account and content
+  ([Moderation records](#moderation-records)).
 - **Kept:** the Shack raw-packet ring and NET/ROM MHeard rows, which record what the instance heard on the air;
   they age out on their retention below.
 - **Freed:** the base calls, for a new registration.
@@ -70,6 +78,7 @@ signed account-move record points attribution at the new instance across the net
 | Watch alerts the member has seen | 30 days | `RETENTION` (`alertsDays`) |
 | NET/ROM MHeard rows | 7 days | `RETENTION` (`mheardDays`) |
 | Delete tombstones | permanently | — |
+| Moderation reports and the audit log | until the sysop deletes them | — |
 
 `RETENTION` is JSON naming only what you change, for example `{"packetsHours":6,"sensorDays":90}`
 ([Configuration](../../reference/configuration.md)). What the instance keeps beyond accounts is public ham
@@ -82,6 +91,21 @@ register's rows and deletes calls the register no longer lists ([Licence registe
 Once a day the instance asks GitHub for the newest release (`UPDATE_CHECK`). The request names the instance and
 carries no member data. While the check is on, the privacy page lists GitHub among the recipients
 ([How you hear about a new release](../day-to-day/updates.md#how-you-hear-about-a-new-release)).
+
+## Moderation records
+
+Reports, the audit log and suspensions ([Moderation](../day-to-day/moderation.md)) are kept on the instance under
+the operator's legitimate interest in answering abuse and showing what was done and why (GDPR Art. 6(1)(f)).
+They never federate.
+
+- **A report** holds the item reported, the category, the reporter's words, and the reporter's account and
+  call (none for a signed-out visitor). Only the sysop reads it; the reported person never learns who filed it.
+- **The audit log** holds who acted, when, the action, the target and the reason. Its rows stay after the
+  person concerned erases their account.
+- **A report email** goes to `OPERATOR_EMAIL` through the configured email provider, with the item, the
+  category, the reporter's words and the reporter's call.
+- **A removal or suspension notice** goes to the person concerned as an in-app alert, by push where configured,
+  and by email when the account has a confirmed address.
 
 ## Erasure across the network
 

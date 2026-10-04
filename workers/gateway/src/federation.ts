@@ -780,7 +780,7 @@ export const CACHE_FEED: FeedServeDef<CacheRow> = {
     const region = filter?.bbox ? bboxWhere(filter.bbox) : null;
     return (
       await env.DB.prepare(
-        `SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only'
+        `SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND removed_at IS NULL
            ${region ? `AND ${region.sql}` : ""}
            AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at, id LIMIT ?`,
       )

@@ -14,7 +14,7 @@ import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { nowS } from "./util/time.js";
-import { sessionIdentity } from "./auth.js";
+import { sessionIdentity, suspensionOf } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { serviceCall } from "./servicecall.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
@@ -73,6 +73,8 @@ export async function leaveMail(env: Env, m: LeaveMail): Promise<{ id: number } 
   if (!CALL.test(to)) return { error: `${to || "the addressee"} is not a callsign`, status: 400 };
   if (to === serviceCall(env)) return { error: "that is this instance's own call", status: 400 };
   if (!body) return { error: "the message is empty", status: 400 };
+  // a suspended account sends nothing through this instance, from the app or over the radio
+  if (await suspensionOf(env, m.accountId)) return { error: "this account is suspended on this instance", status: 403 };
   if (body.length > bodyMax(from))
     return { error: `the message is longer than ${bodyMax(from)} characters`, status: 400 };
   if (await rateLimitedDurable(env, `mailbox:${m.accountId}`, Date.now(), PER_HOUR, 3600_000))

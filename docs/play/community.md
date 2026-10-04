@@ -1,7 +1,7 @@
 # Community
 
 This page explains what other players see of your hunting, and what you see of theirs: ratings, favourites,
-alerts, badges and ranks. It is for every player.
+alerts, badges and ranks, and how to report something wrong. It is for every player.
 
 ## Ratings
 
@@ -126,6 +126,14 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 - On a station's page, **Track KML** saves its last 24 hours of positions for a map program.
 - Logbook and GPS tools can fetch the same files from the instance's
   [public read API](../reference/api.md#public-read-api).
+
+## Report a problem
+
+Something wrong on a cache page? Tap **More** (**⋯**) beside a cache, a log, a photo or a profile, then
+**Report**. Pick what is wrong: **Spam**, **Offensive**, **Wrong location or unsafe**, **Copyright** or
+**Other**, and add a few words. **Other** needs the words. The report goes to your instance's
+[sysop](../glossary.md#sysop), who decides what to do. The person you report never learns who reported them.
+You can report without signing in, but less often.
 
 ## Next
 

@@ -86,6 +86,8 @@ import { TERMS } from "../terms.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { ImportsAdmin } from "./ImportsAdmin.js";
 import { ApiKeysAdmin } from "./ApiKeysAdmin.js";
+import { listReports } from "../moderation/api.js";
+import { ReportsAdmin, AccountsAdmin, AuditAdmin } from "./ModerationAdmin.js";
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -98,6 +100,8 @@ export function AdminPanel(props: { onClose: () => void }) {
   const { callsign, map } = usePlatform();
   // the Setup checklist
   const setup = useLoad(() => getAdminSetup(), []);
+  // the open reports, for the Reports group's header
+  const openReports = useLoad(() => listReports("open"), []);
   // group filter (ui-ux.md §2: settings pages with >3 groups are searchable)
   const [q, setQ] = useState("");
   // a box's trust switch changes the trusted-stations list too, so it reloads on each change
@@ -139,6 +143,41 @@ export function AdminPanel(props: { onClose: () => void }) {
           defaultOpen={true}
         >
           <SetupAdmin setup={setup} />
+        </Group>
+      )}
+      {show("moderation", "reports", "report", "abuse", "remove", "takedown", "spam") && (
+        <Group
+          title="Reports"
+          status={openReports.data ? `${openReports.data.counts.open} open` : "moderation"}
+          help={
+            <>
+              What players reported, with the item and the actions on it.{" "}
+              <ManualLink page="run/day-to-day/moderation">Moderation</ManualLink>
+            </>
+          }
+          defaultOpen={false}
+        >
+          <ReportsAdmin onChanged={openReports.reload} />
+        </Group>
+      )}
+      {show("moderation", "accounts", "account", "suspend", "suspension", "ban", "email") && (
+        <Group
+          title="Accounts"
+          status="moderation"
+          help="Find an account by callsign or email, see its content, and suspend it or lift a suspension."
+          defaultOpen={false}
+        >
+          <AccountsAdmin />
+        </Group>
+      )}
+      {show("moderation", "audit", "log", "history") && (
+        <Group
+          title="Audit log"
+          status="moderation"
+          help="Every moderation action: who, when, what and why. It stays on this instance."
+          defaultOpen={false}
+        >
+          <AuditAdmin />
         </Group>
       )}
       {show("callsigns", "verification", "verify", "callsign", "manual", "licence", "sysop", "release", "holder") && (

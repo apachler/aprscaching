@@ -197,8 +197,9 @@ describe("GET /api/admin/setup — DB probes", () => {
     const broken = baseEnv({
       DB: {
         prepare(sql: string) {
-          // identity and verification lookups answer; every checklist probe fails
-          if (operatorRow(sql) || verifiedRows(sql).length) return db({}).prepare(sql);
+          // identity, suspension and verification lookups answer; every checklist probe fails
+          if (operatorRow(sql) || verifiedRows(sql).length || sql.includes("FROM account_suspensions"))
+            return db({}).prepare(sql);
           throw new Error("no such table");
         },
       } as unknown as Env["DB"],

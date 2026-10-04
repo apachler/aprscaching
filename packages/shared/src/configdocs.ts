@@ -321,7 +321,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL`",
-        'Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning',
+        'Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning. `OPERATOR_EMAIL` also receives each player report when mail is configured ([Moderation](../run/day-to-day/moderation.md))',
         "—",
       ],
       [

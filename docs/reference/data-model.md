@@ -26,6 +26,7 @@ as noted:
 | **Federation** | Peers (endpoints, trust, pinned and accepted keys, per-feed cursors, sync health), the registry high-water mark, applied versions, the relay queue, mirrored caches/finds/keys, tombstones, account moves; the region a peer's caches cursor was read under, so a change of `FED_SYNC_REGION` reads the feed again (`fed_peers.caches_region`, `0002`), and the base callsign ARDC verified for a peer added over 44Net, by which the corroboration quorum counts one voice per operator (`fed_peers.operator_call`, `0005`); push-to-hub state: a spoke's push cursor per feed and its hub's status (`fed_push_cursors`, `fed_hub_status`), and on a hub where each spoke's feeds stand (`fed_submit_marks`) (`0009`); a mirrored cache keeps its origin's federation scope, so an `unlisted` cache stays off this map and offline packs (`remote_caches.fed_scope`, `0012`) |
 | **MeshCom** | The latest state of each MeshCom node the operator's own node(s) heard (`meshcom_nodes`, including the relays a node named in its latest message, `sent_via` — its plan, never the route taken — and when that message was seen, `msg_at`) and the links between nodes (`meshcom_links`, direct or each leg of a relay path) — display only, never a trust input, pruned nightly (`0004`, `0006`); the group chat the node(s) heard, one row per message however many nodes heard it (`meshcom_group_messages`), pruned with the message log (`0018`) |
 | **Operations** | The transparency ledger, durable rate-limit counters |
+| **Moderation** | Reports players file against an item, with the reporter's account and call (`moderation_reports`); the audit log of every sysop action, with who, when, the target and the reason (`moderation_log`); suspended accounts with the reason and an optional end (`account_suspensions`); a cache the sysop removed, archived and hidden from everyone but its owner and the sysop (`caches.removed_at`, `removed_reason`) (`0025`). None of it federates |
 
 `positions.transport` is how a position reached the gateway (`aprs-is`, `tnc`, `browser-rf`, `axudp`,
 `axip`, `meshcom`, `meshtastic`, or `unknown` for an ingest port the gateway does not know), derived from
@@ -34,6 +35,10 @@ on-air transports can carry first-party attestation.
 
 Delete tombstones (`tombstones`, `remote_tombstones`) are kept permanently. They hold only PII-free global
 ids, and a mirror consults them on every upsert so deleted data is never re-mirrored.
+
+The moderation tables stay on the instance. The audit log is kept as the instance's record of what was done
+and why; a person's export carries the rows about their account, and their erasure removes them as the reporter
+of the reports they filed ([Moderation](../run/day-to-day/moderation.md)).
 
 ## Identity: who holds a call, and whether it is verified
 

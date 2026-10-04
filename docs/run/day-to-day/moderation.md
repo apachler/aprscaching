@@ -1,0 +1,129 @@
+# Moderation
+
+This page is for the sysop of a public instance. It shows how to answer a report, take content down and
+suspend an account. At the end you know what each action does here, on the peers, and for the person concerned.
+
+## Before you start
+
+- You are signed in as a sysop ([Instance admin at a glance](index.md)).
+- `OPERATOR_EMAIL` is set, and mail is configured if you want each report by email
+  ([Configuration](../../reference/configuration.md)).
+
+## Where moderation lives
+
+**Instance admin** has three moderation groups:
+
+| Group | What you do there |
+|---|---|
+| **Reports** | the queue of open reports, each with a link to the item and the actions on it; resolved reports on a second tab |
+| **Accounts** | find an account by callsign or email, see its content, suspend or lift a suspension |
+| **Audit log** | every moderation action, newest first |
+
+Where you already see content, a **More** (**⋯**) menu offers the same actions: on a cache page, on each
+logbook row and on each photo or sound in the gallery. Players see **Report** there; you also see **Remove**.
+
+Every route behind these controls checks the sysop server-side. Hiding a control in the app is never the gate.
+
+## Answer a report
+
+Players report a cache, a log, a photo or sound, a message or a profile, with a category (**Spam**,
+**Offensive**, **Wrong location or unsafe**, **Copyright** or **Other**) and their own words. A signed-out
+visitor can report too, at a lower rate. Each report also goes by email to `OPERATOR_EMAIL` when mail is
+configured.
+
+1. Open **Instance admin → Reports**. Each row shows the item, the category, the reporter's words and the
+   reporter's callsign.
+2. Open the item from its link to see it in place.
+3. Choose one:
+    - **Remove…** takes the item down and settles every open report on it.
+    - **Resolve** closes the report without action, with an optional note.
+
+A resolved report can be reopened from the **Resolved** tab. The reported person never sees a report or learns
+who filed it.
+
+## Remove content
+
+**Remove…** asks for a reason of 3 to 500 characters. The reason goes into the audit log and to the person
+concerned.
+
+| Item | What removal does |
+|---|---|
+| Cache | Archived and hidden from everyone but its owner and you; its page, logbook, gallery and stages answer *removed by the instance operator*. The owner cannot edit it. Finds and the adoption trail keep the row. |
+| Log | Deleted (a find, a did-not-find or a note) |
+| Photo or sound | Deleted, with its stored file and thumbnail |
+| APRS message, BBS message or bulletin, Mailbox message, MeshCom group message | Deleted from this instance |
+| Profile | The display name, bio, avatar, links and public contact are cleared; the account stays |
+
+**Restore** brings a removed cache back as *disabled*, so its owner checks it and enables it again. The other
+removals are final.
+
+### What the peers see
+
+A removal of a cache, a log or one of this instance's own bulletins emits a signed tombstone. Peers that mirror
+the record drop it and never mirror it again
+([Erasure across the network](../compliance/data-protection.md#erasure-across-the-network)). A restored cache
+therefore comes back on this instance only.
+
+A bulletin mirrored from a peer is removed here and blocked against that peer's id, so the next sync does not
+bring it back. The peer keeps its own copy; ask its operator, or block the peer under **Federation**.
+
+A bulletin already forwarded to FBB partners stays with them.
+
+## Suspend an account
+
+1. Open **Instance admin → Accounts** and search by callsign or email. **Suspended** lists the accounts
+   suspended now.
+2. Open the account. It shows its callsigns, its email, open reports about it, its latest content of every kind
+   with **Remove…** on each, and the actions taken so far.
+3. Select **Suspend…**, give a reason, and pick how long: a number of days, or until you lift it.
+
+While a suspension holds:
+
+- every session of the account ends at once;
+- sign-in by passkey, email link or operator link is refused with the reason and the end date;
+- the account writes nothing: no log, no hide, no message, and no radio command in its callsigns' name;
+- the ingest box cannot post a BBS message in its name, and its Mailbox messages are refused;
+- nothing is transmitted for it through this instance.
+
+The account's public content stays. Remove items one by one where needed.
+
+**Lift suspension** ends it early, with a reason. A dated suspension ends by itself at its end date.
+
+An account that holds a callsign in `ADMIN_CALLSIGNS` cannot be suspended here.
+
+A suspended person can still export or erase their data with a request signed by their device key
+([Data protection](../compliance/data-protection.md)). Erasure deletes the suspension with the account, so a
+later registration of the same callsign starts without one.
+
+## What the person is told
+
+Each removal, suspension, lifted suspension and restore reaches the person concerned:
+
+- as an alert in their alert list, and by push where configured;
+- by email when their account has a confirmed address. That alert then stays out of the digest.
+
+A suspended person cannot sign in to see the alert, so the email is their notice.
+
+## The audit log
+
+**Instance admin → Audit log** lists every action: who, when, the action (`remove`, `restore`, `suspend`,
+`unsuspend`, `resolve`, `reopen`), the target and the reason. It is kept on this instance and never federates.
+A person's export carries the rows about their account; the rows stay after their erasure
+([Moderation records](../compliance/data-protection.md#moderation-records)).
+
+## Moderate from a script
+
+The moderation routes take `x-operator-secret` as well as a sysop session. A scripted action shows `OPERATOR`
+as its actor in the audit log. The routes and their bodies are in the
+[HTTP API](../../reference/api.md#admin-sysop).
+
+## Check that it worked
+
+- A removed cache answers *removed by the instance operator* in a signed-out browser.
+- The action shows at the top of **Instance admin → Audit log**.
+- A suspended member's next request shows them signed out, and sign-in names the suspension.
+
+## Next
+
+- [Data protection](../compliance/data-protection.md): what the moderation records hold and how long.
+- [A public instance's duties](../compliance/index.md): the contacts a public instance publishes.

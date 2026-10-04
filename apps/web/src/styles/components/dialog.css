@@ -33,6 +33,20 @@
     justify-content: flex-end;
     flex-wrap: wrap;
   }
+  /* a dialog that asks for words: a reason, a report (ui/Confirm.tsx usePrompt) */
+  .prompt-form {
+    display: grid;
+    gap: var(--space-sm);
+  }
+  .prompt-field {
+    display: grid;
+    gap: var(--space-xs);
+    font-size: var(--text-data);
+  }
+  .prompt-field textarea {
+    resize: vertical;
+    min-height: 5rem;
+  }
 
   /* ---- a sheet on a phone (ui/Sheet.tsx): More from the bottom, search from the top ---- */
   .sheet-backdrop {

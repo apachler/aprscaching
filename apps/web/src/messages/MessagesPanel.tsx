@@ -19,6 +19,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
 import { Conversations } from "./Conversations.js";
 import { MeshcomGroupsSection } from "./MeshcomGroupsSection.js";
 import { TransportBadge } from "./transport.js";
+import { ContentMenu } from "../moderation/ContentMenu.js";
 
 type Scope = "all" | "mine";
 type View = "mine" | "air" | "groups";
@@ -145,6 +146,13 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
                       <TransportBadge transport={m.transport} direction={m.direction} />
                       {m.direction === "tx" && <Badge>sent</Badge>}
                       <span className="muted msg-when">{fmt.ago(m.ts)}</span>
+                      {m.fromCall !== "WITHDRAWN" && (
+                        <ContentMenu
+                          target={{ kind: "message", id: m.id, label: `message from ${m.fromCall}` }}
+                          own={mine(m.fromCall)}
+                          onRemoved={messages.reload}
+                        />
+                      )}
                     </div>
                     <div className="comment msg-body">
                       {m.fromCall === "WITHDRAWN" && !m.body ? (

@@ -338,6 +338,21 @@ async function accountExport(
       "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE account_id=?",
       acct,
     ),
+    // what the sysop did about the person's account and content, a suspension in force, and the reports the
+    // person filed. Reports others filed about the person stay with the sysop: they would name the reporter.
+    moderationActions: await rows(
+      env,
+      "SELECT at, action, target_kind, target_label, reason FROM moderation_log WHERE target_account=? ORDER BY id",
+      acct,
+    ),
+    suspension: await env.DB.prepare("SELECT reason, until, at FROM account_suspensions WHERE account_id=?")
+      .bind(acct)
+      .first(),
+    reportsFiled: await rows(
+      env,
+      "SELECT target_kind, target_label, category, text, status, created_at FROM moderation_reports WHERE reporter_account=? ORDER BY id",
+      acct,
+    ),
   };
 }
 
@@ -581,9 +596,18 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
       "account_prefs",
       "callsign_challenges",
       "callsign_claims",
+      "account_suspensions",
       "accounts",
     ])
       stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE account_id=?`).bind(accountId));
+  // A report the person filed stays with the sysop without its reporter. The audit log keeps its rows about
+  // the person: the instance's legitimate-interest record of what was done and why.
+  if (accountId)
+    stmts.push(
+      env.DB.prepare(
+        "UPDATE moderation_reports SET reporter_account=NULL, reporter_call=NULL WHERE reporter_account=?",
+      ).bind(accountId),
+    );
   if (accountId)
     stmts.push(
       env.DB.prepare("DELETE FROM box_commands WHERE box_id IN (SELECT box_id FROM boxes WHERE account_id=?)").bind(
