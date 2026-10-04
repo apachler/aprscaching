@@ -32,6 +32,8 @@ const PER_HOUR = 20;
 const HELD_PER_ADDRESSEE = 10;
 /** Delivered and expired messages stay listed this long, then are deleted. */
 const KEEP_SEC = 30 * 86400;
+/** Addressees one read names, within D1's 100 bound parameters a statement (three more bind the filters). */
+const ADDRESSEES_PER_READ = 90;
 /** The APRS message text limit. */
 const APRS_TEXT_MAX = 67;
 
@@ -228,25 +230,32 @@ export async function sendToHeard(env: Env, h: Heard, text: string, msgNo: strin
 /**
  * Send the messages waiting for the stations of a batch, each back the way its station was heard
  * ({@link sendToHeard}). A station heard only on a MeshCom node no box can transmit through waits. One read
- * covers the whole batch.
+ * covers up to {@link ADDRESSEES_PER_READ} addressees of the batch.
  */
 export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
   const now = nowS();
-  const waiting = (
-    await env.DB.prepare(
-      `SELECT * FROM mailbox_messages WHERE status IN ('held','sent') AND expires_at > ?
-         AND attempts < ? AND (last_attempt IS NULL OR last_attempt <= ?) LIMIT 500`,
-    )
-      .bind(now, MAX_ATTEMPTS, now - RETRY_SEC)
-      .all<MailRow>()
-  ).results;
-  if (!waiting.length) return;
   // one route per station, APRS before MeshCom
   const byCall = new Map<string, Heard>();
   for (const h of heard) {
     const k = h.src.toUpperCase();
     if (!byCall.has(k) || byCall.get(k)!.port === "meshcom") byCall.set(k, h);
   }
+  // Read only the mail these stations can take: addressed to a heard call, or to its base call. However much
+  // mail waits for stations not on the air, it never crowds out theirs.
+  const addressees = [...new Set([...byCall.keys()].flatMap((c) => [c, baseCall(c)]))];
+  const waiting: MailRow[] = [];
+  for (let i = 0; i < addressees.length; i += ADDRESSEES_PER_READ) {
+    const chunk = addressees.slice(i, i + ADDRESSEES_PER_READ);
+    const rows = await env.DB.prepare(
+      `SELECT * FROM mailbox_messages WHERE to_call IN (${chunk.map(() => "?").join(",")})
+         AND status IN ('held','sent') AND expires_at > ?
+         AND attempts < ? AND (last_attempt IS NULL OR last_attempt <= ?) ORDER BY id`,
+    )
+      .bind(...chunk, now, MAX_ATTEMPTS, now - RETRY_SEC)
+      .all<MailRow>();
+    waiting.push(...rows.results);
+  }
+  if (!waiting.length) return;
   const settle = (id: number, to: string, msgNo: string, status: string, tries: number) =>
     env.DB.prepare(
       `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?

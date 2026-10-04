@@ -197,4 +197,19 @@ describe("the Mailbox", () => {
     await expireMailbox(env);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM mailbox_messages").first()).toEqual({ n: 0 });
   });
+
+  it("reaches a heard station however much mail waits for stations not on the air", async () => {
+    const { env, leave } = await sender();
+    const t = Math.floor(Date.now() / 1000);
+    const others = env.DB.prepare(
+      `INSERT INTO mailbox_messages (from_call, from_account, to_call, body, via, created_at, expires_at)
+       VALUES ('OE1ABC', 'a1', ?, 'for someone else', 'app', ?, ?)`,
+    );
+    await env.DB.batch(Array.from({ length: 600 }, (_, i) => others.bind(`OE9Q${i}`, t - 60, t + 86400)));
+    expect((await leave({ from: "OE1ABC", to: "OE5XYZ", text: "you are next" })).status).toBe(201);
+    await heard(env, "OE5XYZ-9", ">on the air");
+    expect((await outbox(env)).map((o) => o.payload)).toEqual([
+      expect.stringMatching(/^:OE5XYZ-9 :de OE1ABC: you are next\{/),
+    ]);
+  });
 });

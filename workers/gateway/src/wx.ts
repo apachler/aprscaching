@@ -72,6 +72,23 @@ export function parseWx(get: (k: string) => string | undefined): WxReading {
   };
 }
 
+/** How far back a station's own `dateutc` may date a reading: a late upload after a short outage. */
+const WX_TIME_MAX_PAST_S = 24 * 3600;
+/** How far ahead it may: clock skew, not a time that would stand as the station's latest for days. */
+const WX_TIME_MAX_AHEAD_S = 5 * 60;
+
+/**
+ * The time a reading is stored under: the station's `dateutc` when it parses and lies within
+ * [now − {@link WX_TIME_MAX_PAST_S}, now + {@link WX_TIME_MAX_AHEAD_S}], else the time it arrived. Pure.
+ */
+export function readingTime(dateutc: string | undefined, now: number): number {
+  if (!dateutc || dateutc === "now") return now;
+  const t = Date.parse(dateutc.replace(" ", "T") + "Z");
+  if (!Number.isFinite(t)) return now;
+  const s = Math.floor(t / 1000);
+  return s >= now - WX_TIME_MAX_PAST_S && s <= now + WX_TIME_MAX_AHEAD_S ? s : now;
+}
+
 /** Merge query params + (form/JSON) body into one getter; PWS pushes are usually GET or x-www-form. */
 async function readParams(req: Request): Promise<(k: string) => string | undefined> {
   const url = new URL(req.url);
@@ -129,14 +146,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
     place = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
   }
 
-  const ts = (() => {
-    const d = get("dateutc");
-    if (d && d !== "now") {
-      const t = Date.parse(d.replace(" ", "T") + "Z");
-      if (Number.isFinite(t)) return Math.floor(t / 1000);
-    }
-    return nowS();
-  })();
+  const ts = readingTime(get("dateutc"), nowS());
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sensor_readings (station, ts, temp_c, humidity, pressure_hpa, wind_dir, wind_kn, gust_kn, rain_mm, rain_24h_mm, luminosity_wm2, source)

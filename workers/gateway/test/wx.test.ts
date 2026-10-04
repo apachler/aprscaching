@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { parseWx, wxUrls, makeWxKey } from "../src/wx.js";
+import { parseWx, wxUrls, makeWxKey, readingTime } from "../src/wx.js";
 
 const bag = (o: Record<string, string>) => (k: string) => o[k.toLowerCase()];
 
@@ -58,5 +58,22 @@ describe("weather direct PWS ingest — paste URLs + key format (the exact strin
     const k = makeWxKey();
     expect(k).toMatch(/^wx_[0-9a-f]{24}$/);
     expect(makeWxKey()).not.toBe(k);
+  });
+});
+
+describe("a PWS reading's time", () => {
+  const now = Date.parse("2026-10-04T12:00:00Z") / 1000;
+  it("takes the station's dateutc within a day back and five minutes ahead", () => {
+    expect(readingTime("2026-10-04 11:30:00", now)).toBe(now - 1800);
+    expect(readingTime("2026-10-04 12:04:00", now)).toBe(now + 240);
+    expect(readingTime("2026-10-03 12:00:00", now)).toBe(now - 86400);
+  });
+  it("stores the arrival time for a time out of that window, unparseable or absent", () => {
+    expect(readingTime("2027-01-01 00:00:00", now)).toBe(now);
+    expect(readingTime("2026-10-04 12:06:00", now)).toBe(now);
+    expect(readingTime("2026-09-30 12:00:00", now)).toBe(now);
+    expect(readingTime("garbage", now)).toBe(now);
+    expect(readingTime("now", now)).toBe(now);
+    expect(readingTime(undefined, now)).toBe(now);
   });
 });

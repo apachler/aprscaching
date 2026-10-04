@@ -14,7 +14,7 @@ import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
-import { bbsCall, bidFor, isOwnBid } from "./bbs.js";
+import { bbsCall, bidFor, isOwnBid, BULLETIN_LIFETIME_SEC } from "./bbs.js";
 
 /** Build a router from the enabled forward rules. */
 async function loadRouter(env: Env): Promise<ForwardRouter> {
@@ -380,10 +380,21 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
       return json({ error: "federation bulletin BID does not match its content" }, { status: 400 });
   }
   const res = await env.DB.prepare(
-    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
-     VALUES (?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
   )
-    .bind(row.bid, row.type, row.from, row.to, row.title || null, row.body, row.posted, row.origin)
+    .bind(
+      row.bid,
+      row.type,
+      row.from,
+      row.to,
+      row.title || null,
+      row.body,
+      row.posted,
+      // a bulletin lives the default lifetime; personal mail waits for its recipient
+      row.type === "B" ? row.posted + BULLETIN_LIFETIME_SEC : null,
+      row.origin,
+    )
     .run();
   // A bulletin addressed to the reserved federation category is carrier traffic: on first sight
   // (BID-new — a re-flooded copy dedups above) its frames go through the trust-gated
