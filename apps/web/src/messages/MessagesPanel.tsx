@@ -157,7 +157,7 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
                 To send a message, connect a TNC in <strong>Settings → My radio (browser)</strong> and switch on
                 transmit.
               </p>
-              <Button onClick={props.onRadio}>Open Settings</Button>
+              <Button onClick={props.onRadio}>Open My radio</Button>
             </>
           ) : (
             <>

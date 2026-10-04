@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRadioLink } from "../rf/RadioLinkHost.js";
+import { LINK_LABEL } from "../rf/radioLink.js";
 import {
   getInstance,
   getSource,
@@ -52,6 +54,8 @@ const APPEARANCE: [LocaleSettings["theme"], string][] = [
 
 export function SettingsPanel(props: {
   settings: LocaleSettings;
+  /** Counts requests to show the browser radio: each new value opens the "My radio (browser)" group and scrolls to it. */
+  radioAsk?: number;
   onApply: (s: LocaleSettings) => void;
   onFly: (lat: number, lon: number) => void;
   /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it with the operator CLI. */
@@ -62,6 +66,7 @@ export function SettingsPanel(props: {
   onClose: () => void;
 }) {
   const { callsign, verified, session } = usePlatform();
+  const radioLinkState = useRadioLink();
   const toast = useToast();
   const confirmDialog = useConfirm();
   const s = props.settings;
@@ -146,6 +151,13 @@ export function SettingsPanel(props: {
     toast("Your account and personal data were erased");
   }
   const [q, setQ] = useState("");
+  const radioAsk = props.radioAsk ?? 0;
+  const radioRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!radioAsk) return;
+    setQ("");
+    radioRef.current?.scrollIntoView({ block: "start" });
+  }, [radioAsk]);
   const match = (title: string, ...kw: string[]) =>
     !q || (title + " " + kw.join(" ")).toLowerCase().includes(q.toLowerCase());
   return (
@@ -239,14 +251,17 @@ export function SettingsPanel(props: {
         )}
 
       {session.signedIn && match("my radio browser RF Web Serial BLE KISS TNC bridge station") && (
-        <Group
-          title="My radio (browser)"
-          status="RF bridge"
-          help="Connect a radio or TNC to this browser over USB or Bluetooth, to hear and send APRS."
-          defaultOpen={false}
-        >
-          <ConnectionsSettings callsign={callsign} verified={verified} />
-        </Group>
+        <div ref={radioRef}>
+          <Group
+            key={radioAsk}
+            title="My radio (browser)"
+            status={radioLinkState.link ? `connected · ${LINK_LABEL[radioLinkState.link]}` : "not connected"}
+            help="Connect a radio or TNC to this browser over USB or Bluetooth, to hear and send APRS. It stays connected while you use the rest of the app."
+            defaultOpen={radioAsk > 0}
+          >
+            <ConnectionsSettings callsign={callsign} verified={verified} />
+          </Group>
+        </div>
       )}
 
       {session.signedIn && match("announce finds APRS-IS status message broadcast") && (

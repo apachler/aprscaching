@@ -9,6 +9,7 @@
 import { ASSET, MANUAL_URL } from "./brand.js";
 import { Button, Hint, Icon } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
+import { RadioChip } from "./rf/RadioChip.js";
 import type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
 
 export function TopBar(props: {
@@ -39,6 +40,8 @@ export function TopBar(props: {
   /** Unseen watchlist alerts; the bell shows only when `onAlerts` is given (signed in). */
   alerts?: number;
   onAlerts?: () => void;
+  /** Open the radio settings: the radio chip shows when this is given (signed in) and a radio is connected. */
+  onRadio?: () => void;
 }) {
   const alerts = props.alerts ?? 0;
   return (
@@ -84,6 +87,7 @@ export function TopBar(props: {
         </Button>
       )}
       <span className="spacer" />
+      {props.onRadio && <RadioChip onOpen={props.onRadio} />}
       {props.onAlerts && (
         <Button
           variant="icon"

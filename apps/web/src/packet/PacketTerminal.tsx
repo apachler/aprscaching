@@ -23,6 +23,7 @@ import type { Ax25Frame } from "@aprscaching/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { BleKissTransport } from "./bleKiss.js";
 import { webBluetoothSupported } from "../rf/bleKiss.js";
+import { holdRadio, radioBusyText } from "../rf/radioLink.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
@@ -208,16 +209,18 @@ export function PacketTerminal(props: {
         if (st) host.hostEmit("session.progress", st); // sched-query tool subscribes + renders
       }, 1000);
       setPortOpen(true);
+      holdRadio("terminal", true);
       notify();
     } catch (e) {
       const m = (e as Error).message || "";
-      if (!CANCELLED.test(m)) setErr(m);
+      if (!CANCELLED.test(m)) setErr(radioBusyText(e as Error, "terminal") ?? m);
     } finally {
       openingRef.current = false;
     }
   }
   /** Stop the poll, withdraw the session.script service and release the link — all of it, every time. */
   function releaseLink(): Promise<void> | undefined {
+    holdRadio("terminal", false);
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = null;
     disposeScriptSvc.current?.();

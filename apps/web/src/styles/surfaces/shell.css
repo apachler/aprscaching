@@ -253,6 +253,14 @@
     font-size: var(--text-caption);
     color: var(--chrome-ink-muted);
   }
+  /* the browser radio link's chip: the radio and its transmit state in words, the RX count in mono */
+  .radio-chip {
+    font-family: var(--font-system);
+    font-weight: 500;
+  }
+  .radio-chip-n {
+    font-family: var(--font-mono);
+  }
   /* a destination that needs attention (platform/useAttention.ts): a dot by the icon, with words for a screen reader */
   .nav-dot {
     display: inline-block;
@@ -368,6 +376,10 @@
     .idchip {
       padding: 0 var(--space-sm);
       gap: var(--space-xs);
+    }
+    /* the phone keeps the radio chip to its icon and RX count; the hint and the settings carry the rest */
+    .radio-chip-x {
+      display: none;
     }
     .tabbar {
       display: flex;

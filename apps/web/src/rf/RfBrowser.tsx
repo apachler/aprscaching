@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useReducer, useRef, useState } from "react";
-import {
-  WebSerialKiss,
-  WebBluetoothKiss,
-  webSerialSupported,
-  webBluetoothSupported,
-  type RfFrame,
-  type RfLink,
-} from "./kiss.js";
-import { WebAudioAfsk, WebSerialMeshtastic, webAudioSupported } from "./extralinks.js";
+import { useEffect, useReducer, useState } from "react";
+import { webSerialSupported, webBluetoothSupported } from "./kiss.js";
+import { webAudioSupported } from "./extralinks.js";
 import { encodeAprsPosition, encodeAprsMessage, ackReply, syncBackBatch, type LocalMessage } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
+import { radioLink, useRadioLink } from "./RadioLinkHost.js";
+import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
 import { nextMsgNo } from "./msgNo.js";
 import { devicePublicKey } from "../crypto.js";
@@ -28,22 +23,15 @@ import {
   Icon,
   Segmented,
   InfoTip,
+  ManualLink,
 } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 
-const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
-type LinkKind = "serial" | "ble" | "audio" | "mesh";
-const LINK_LABEL: Record<LinkKind, string> = {
-  serial: "USB radio",
-  ble: "Bluetooth radio",
-  audio: "Soundcard (AFSK)",
-  mesh: "Meshtastic node",
-};
-
 /**
- * Shack → RF (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE) and
- * decode live RF here, no server. Optionally forward to a gateway — signed with
- * your device key for a public gateway, or with an ingest secret for self-host. Chromium-only.
+ * Settings → My radio (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE), a radio's audio
+ * through the soundcard, or a Meshtastic node, and decode live RF here, no server. Optionally forward to a gateway
+ * — signed with your device key for a public gateway, or with an ingest secret for self-host. This is a view over
+ * the app-wide radio link (RadioLinkHost.tsx): closing Settings or collapsing the group keeps the radio connected.
  */
 export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const confirmDialog = useConfirm();
@@ -56,53 +44,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
-  // Transmit, gated on callsign control-verification — OFF by default; only available on a control-verified callsign + explicit opt-in.
-  const [txOn, setTxOn] = useState(false);
-  // The opt-in holds for the verified callsign it was given under: a change of callsign or of verification
-  // switches transmit off, and it stays off until the operator opts in again.
-  const txKey = props.verified ? props.callsign.toUpperCase() : null;
-  const [txKeySeen, setTxKeySeen] = useState(txKey);
-  if (txKeySeen !== txKey) {
-    setTxKeySeen(txKey);
-    setTxOn(false);
-  }
-  const [ssid, setSsid] = useState("7");
+  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret } = useRadioLink();
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
   const [msg, setMsg] = useState({ to: "", text: "" });
   const [txBusy, setTxBusy] = useState(false);
-  const txCall = ssid && ssid !== "0" ? `${base}-${ssid}` : base;
-
-  const [link, setLink] = useState<LinkKind | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [frames, setFrames] = useState<RfFrame[]>([]);
-  const [count, setCount] = useState(0);
-  const [fwdOn, setFwdOn] = useState(false);
-  const [mode, setMode] = useState<"signed" | "secret">(signedIn ? "signed" : "secret");
-  // Only the gateway URL persists. The ingest secret lives in memory for this page's life: written to
-  // storage it would sit readable by any script on the origin, long after the RF session ends.
-  const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
-    try {
-      return localStorage.getItem(FWD_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const [ingestSecret, setIngestSecret] = useState("");
-  const secretCfg = { url: gatewayUrl, secret: ingestSecret };
-
-  const linkRef = useRef<RfLink | null>(null);
-  const fwd = useRef({ on: false, mode, secretCfg, callsign: props.callsign });
-  fwd.current = { on: fwdOn, mode, secretCfg, callsign: props.callsign };
-  const fwdErr = useRef(false); // throttle: surface a forward error only once per session
-
-  useEffect(
-    () => () => {
-      const l = linkRef.current;
-      linkRef.current = null;
-      void l?.disconnect();
-    },
-    [],
-  );
+  const txCall = radioLink.txCall();
 
   // Field station: re-render when the local sink updates (live stations + inbox).
   const [, forceField] = useReducer((n: number) => n + 1, 0);
@@ -111,11 +57,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   /** ACK a message heard for us over the radio — gated on callsign control-verification, reuses the KISS TX path. */
   async function ackMessage(mm: LocalMessage) {
     const info = ackReply(mm, props.callsign);
-    const l = linkRef.current;
-    if (!info || !l || !props.verified || !txOn) return;
+    if (!info || !radioLink.canTransmit()) return;
     setTxBusy(true);
     try {
-      await l.send({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info });
+      await radioLink.transmit({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info });
       toast(`ACK ${mm.msgNo} → ${mm.from}`);
     } catch (e) {
       toast(`TX failed: ${(e as Error).message}`);
@@ -138,12 +83,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       toast("Nothing new to sync.");
       return;
     }
-    const c = fwd.current;
     const send =
-      c.mode === "signed" && c.callsign.length >= 3
-        ? ingestSigned(packets, c.callsign)
-        : c.secretCfg.secret
-          ? ingestPackets(packets, c.secretCfg.secret, c.secretCfg.url || undefined)
+      mode === "signed" && signedIn
+        ? ingestSigned(packets, props.callsign)
+        : secret
+          ? ingestPackets(packets, secret, gatewayUrl || undefined)
           : null;
     if (!send) {
       toast("Turn on forwarding to a gateway first (above).");
@@ -158,67 +102,6 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     }
   }
 
-  function onFrame(f: RfFrame) {
-    setFrames((prev) => [f, ...prev].slice(0, 100));
-    setCount((n) => n + 1);
-    fieldStation.feed(f); // off-grid sink: live stations + local inbox, gateway-independent
-    const c = fwd.current;
-    if (!c.on) return;
-    const p = [f.packet];
-    const send =
-      c.mode === "signed" && c.callsign.length >= 3
-        ? ingestSigned(p, c.callsign)
-        : c.secretCfg.secret
-          ? ingestPackets(p, c.secretCfg.secret, c.secretCfg.url || undefined)
-          : null;
-    if (send)
-      send.catch((e) => {
-        if (!fwdErr.current) {
-          fwdErr.current = true;
-          toast(`Forwarding failed: ${(e as Error).message}`);
-        }
-      });
-  }
-
-  async function connect(kind: LinkKind) {
-    setBusy(true);
-    try {
-      // A lost link is torn down like a Disconnect; a link already torn down (or never up) reports nothing.
-      const onClose = (err?: Error) => {
-        if (linkRef.current !== l) return;
-        linkRef.current = null;
-        setLink(null);
-        void l.disconnect();
-        if (err) toast(`Radio disconnected: ${err.message}`);
-      };
-      const l: RfLink & { connect(): Promise<void> } =
-        kind === "serial"
-          ? new WebSerialKiss(onFrame, onClose)
-          : kind === "ble"
-            ? new WebBluetoothKiss(onFrame, onClose)
-            : kind === "audio"
-              ? new WebAudioAfsk(onFrame, onClose)
-              : new WebSerialMeshtastic(onFrame, onClose);
-      await l.connect();
-      linkRef.current = l;
-      setLink(kind);
-      fwdErr.current = false;
-      toast(LINK_LABEL[kind] + " connected");
-    } catch (e) {
-      const m = (e as Error).message || "";
-      if (!/No port selected|chooser|cancel|User cancelled|Permission denied|NotAllowed/i.test(m))
-        toast(`Could not connect: ${m}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function disconnect() {
-    const l = linkRef.current;
-    linkRef.current = null;
-    setLink(null);
-    await l?.disconnect();
-  }
-
   async function enableForward(on: boolean) {
     if (on && mode === "signed" && signedIn) {
       const key = await devicePublicKey();
@@ -228,26 +111,15 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       }
       await registerKey({ callsign: props.callsign, publicKey: key, label: "browser RF" }).catch(() => {}); // ensure the key is registered
     }
-    fwdErr.current = false;
-    setFwdOn(on);
-  }
-  function saveGatewayUrl(url: string) {
-    const u = url.trim();
-    setGatewayUrl(u);
-    try {
-      localStorage.setItem(FWD_KEY, u);
-    } catch {
-      /* ignore */
-    }
+    radioLink.setForward(on);
   }
 
   // Transmit, gated on callsign control-verification + opt-in; every send is a deliberate, confirmed action.
   async function tx(payload: string, what: string): Promise<boolean> {
-    const l = linkRef.current;
-    if (!l || !props.verified || !txOn) return false;
+    if (!radioLink.canTransmit()) return false;
     setTxBusy(true);
     try {
-      await l.send({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload });
+      await radioLink.transmit({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload });
       toast(`Transmitted: ${what}`);
       return true;
     } catch (e) {
@@ -302,71 +174,70 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   if (!serialOk && !bleOk && !audioOk)
     return (
       <p className="muted">
-        Browser-direct RF needs <strong>Web Serial</strong>, <strong>Web Bluetooth</strong> or
-        <strong> Web Audio</strong> — Chromium-based desktop/Android browsers over HTTPS. On other browsers, run the
-        operator-local <span className="mono"> apps/ingest</span> instead. RX never implies trust — finds are still
-        gated by the verification engine.
+        Connecting a radio here needs <strong>Web Serial</strong>, <strong>Web Bluetooth</strong> or{" "}
+        <strong>Web Audio</strong>: a Chromium-based browser (Chrome, Edge) on a computer or an Android phone, over
+        HTTPS. Without one, a small computer beside the radio feeds the instance instead:{" "}
+        <ManualLink page="run/radios/ingest-box">set up an ingest box</ManualLink>. What a radio hears never makes a
+        find verified on its own.
       </p>
     );
 
   const heardN = fieldStation.heardForSync().length;
   // forwarding matters once there is something to forward: a live radio, or frames heard off-grid
   const canForward = link != null || heardN > 0;
+  const connectBtn = (kind: LinkKind, label: string, hint: string, primary = false) => (
+    <Button
+      variant={primary ? "primary" : undefined}
+      onClick={() => void radioLink.connect(kind)}
+      disabled={busy}
+      hint={hint}
+    >
+      {busy ? "…" : label}
+    </Button>
+  );
 
   return (
     <>
-      <p className="muted">Hear your own radio in this browser — no server needed.</p>
+      <p className="muted">
+        Hear your own radio in this browser — no server needed. The radio stays connected while you use the rest of the
+        app, until you disconnect it or close the page.
+      </p>
 
       <div className="row gap-2">
         {link ? (
-          <Button variant="danger" onClick={disconnect}>
+          <Button variant="danger" onClick={() => void radioLink.disconnect()}>
             Disconnect
           </Button>
         ) : (
           <>
-            {serialOk && (
-              <Button
-                variant="primary"
-                onClick={() => connect("serial")}
-                disabled={busy}
-                hint="Pick the USB serial port of a KISS TNC"
-              >
-                {busy ? "…" : "Connect USB radio"}
-              </Button>
-            )}
-            {bleOk && (
-              <Button
-                onClick={() => connect("ble")}
-                disabled={busy}
-                hint="Pair a Bluetooth KISS TNC, such as a Mobilinkd"
-              >
-                {busy ? "…" : "Connect Bluetooth"}
-              </Button>
-            )}
-            {audioOk && (
-              <Button
-                onClick={() => connect("audio")}
-                disabled={busy}
-                hint="Decode 1200-baud APRS audio from your radio through the sound card, with no TNC"
-              >
-                {busy ? "…" : "Soundcard AFSK"}
-              </Button>
-            )}
-            {serialOk && (
-              <Button
-                onClick={() => connect("mesh")}
-                disabled={busy}
-                hint="Read the positions a Meshtastic node hears, over USB"
-              >
-                {busy ? "…" : "Meshtastic node"}
-              </Button>
-            )}
+            {serialOk && connectBtn("serial", "Connect USB radio", "Pick the USB serial port of a KISS TNC", true)}
+            {bleOk && connectBtn("ble", "Connect Bluetooth", "Pair a Bluetooth KISS TNC, such as a Mobilinkd")}
+            {audioOk &&
+              connectBtn(
+                "audio",
+                "Soundcard AFSK",
+                "Decode 1200-baud APRS audio from your radio through the sound card, with no TNC",
+              )}
+            {serialOk && connectBtn("mesh", "Meshtastic node", "Read the positions a Meshtastic node hears, over USB")}
           </>
         )}
         <span className="muted" role="status">
           {link ? `● live (${LINK_LABEL[link]}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}
         </span>
       </div>
+      {(!serialOk || !bleOk) && (
+        <p className="muted fine">
+          {!serialOk && !bleOk
+            ? "USB radios, Bluetooth TNCs and Meshtastic nodes need Web Serial and Web Bluetooth, which only Chromium-based browsers (Chrome, Edge) offer"
+            : !serialOk
+              ? "USB radios and Meshtastic nodes need Web Serial, which only Chromium-based desktop browsers (Chrome, Edge) offer"
+              : "Bluetooth TNCs need Web Bluetooth, which only Chromium-based browsers (Chrome, Edge) offer"}
+          {audioOk && !serialOk && !bleOk ? ", so this browser can use only the soundcard modem. " : ". "}
+          <ManualLink page="shack/my-radio" anchor="what-you-need">
+            What you need
+          </ManualLink>
+        </p>
+      )}
 
       <Disclosure label="What your radio can verify">
         <p className="muted fine m-0">
@@ -400,7 +271,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                 <Segmented
                   label="Auth"
                   value={mode}
-                  onChange={setMode}
+                  onChange={(m) => radioLink.setMode(m)}
                   options={[
                     {
                       value: "signed",
@@ -418,9 +289,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     Gateway base URL{" "}
                     <input
                       className="mono"
-                      defaultValue={secretCfg.url}
+                      defaultValue={gatewayUrl}
                       placeholder="https://your-gateway"
-                      onBlur={(e) => saveGatewayUrl(e.target.value)}
+                      onBlur={(e) => radioLink.setGatewayUrl(e.target.value)}
                     />
                   </label>
                   <label>
@@ -428,13 +299,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     <input
                       className="mono"
                       type="password"
-                      defaultValue={secretCfg.secret}
+                      defaultValue={secret}
                       placeholder="INGEST_SECRET"
-                      onBlur={(e) => setIngestSecret(e.target.value.trim())}
+                      onBlur={(e) => radioLink.setSecret(e.target.value)}
                     />
                   </label>
                   <p className="muted fine">
-                    {secretCfg.secret
+                    {secret
                       ? "Kept in memory for this session only; enter it again after a reload."
                       : "Forwarding starts once the ingest secret is set. It is kept in memory for this session only."}
                   </p>
@@ -458,7 +329,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           ) : (
             <>
               <Row label="Enable transmit" help="You are a licensed operator and are responsible for what you send">
-                <Switch label="Enable transmit" checked={txOn} onChange={setTxOn} />
+                <Switch label="Enable transmit" checked={txOn} onChange={(v) => radioLink.setTxOn(v)} />
               </Row>
               {txOn && (
                 <>
@@ -475,7 +346,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       value={ssid}
                       inputMode="numeric"
                       maxLength={2}
-                      onChange={(e) => setSsid(e.target.value.replace(/[^0-9]/g, ""))}
+                      onChange={(e) => radioLink.setSsid(e.target.value)}
                       aria-label="SSID"
                     />
                     <span className="muted"> → {txCall}</span>
