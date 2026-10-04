@@ -32,6 +32,22 @@ with an `until`: the rotation time plus a grace, 7 days by default (`FED_ROTATIO
 - treats a rotated-away key as revoked for good once that cutoff passes, on every carrier: HTTP sync, FBB
   bulletins, HF beacons and packet circuits alike. A later descriptor cannot revive it.
 
+## Keys are compared before trust
+
+A URL says where a peer answers, not who holds its key, so no peer is `trusted` because of how it was added.
+
+- **Added by address** in Instance admin, a peer's descriptor is fetched and its key fingerprint shown: SHA-256
+  of the raw Ed25519 key, its first 16 hex digits. The peer is added `unvetted` with that key pinned, and only when the
+  fingerprint sent back is still the key's, so the key stored is the key compared.
+- **Raising a peer to `trusted`** needs a pinned key. A peer with none, such as one found by discovery, syncs as
+  `unvetted` first. A fingerprint sent with the request must be the pinned key's.
+- **A `FED_PEERS` entry** starts `unvetted`, unless it pins a fingerprint (`<url>#<fingerprint>`). Then the
+  first sync refuses a key that does not match it, and a key that matches raises the peer to `trusted` once.
+  Later the pin follows the rotation chain like any other.
+- **Removing a peer** deletes its row and pinned key. What it published stays, with no row to vouch for it: it
+  counts as from an unknown origin, hidden by default and never a corroborating voice. Added again, the peer
+  starts `unvetted` and its key is fetched and compared afresh.
+
 ## One row per instance
 
 A peer's instance id (its hostname, such as `oe.example.net`) is bound to the peer row that first proved it,

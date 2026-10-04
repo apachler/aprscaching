@@ -8,6 +8,10 @@ import {
   adminAddStation,
   listFederationPeers,
   setPeerTrust,
+  lookUpPeer,
+  addPeer,
+  removePeer,
+  type FedPeerPreview,
   add44netPeer,
   getFedDescriptor,
   ApiError,
@@ -73,8 +77,10 @@ import {
   useLoad,
   Disclosure,
   Icon,
+  InfoTip,
   ManualLink,
 } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { ImportsAdmin } from "./ImportsAdmin.js";
 
@@ -1684,20 +1690,69 @@ function Net44Check() {
   );
 }
 
-// ---------------------------------------------------------------- federation peers + trust
+/** A fingerprint in mono, with a button that copies it. */
+function Fingerprint(props: { value: string; label: string }) {
+  const toast = useToast();
+  return (
+    <div className="fed-fp">
+      <span className="mono">{props.value}</span>
+      <Button
+        variant="icon-subtle"
+        aria-label={`Copy ${props.label}`}
+        hint={`Copy ${props.label}`}
+        onClick={() =>
+          void copyText(props.value).then((ok) =>
+            toast(ok ? "Fingerprint copied" : "Copy failed — select the fingerprint and copy it manually"),
+          )
+        }
+      >
+        <Icon name="copy" cp437="≡" />
+      </Button>
+    </div>
+  );
+}
+
+const TRUST_BADGE: Record<FedPeer["trust"], "found" | "warn" | "dnf"> = {
+  trusted: "found",
+  unvetted: "warn",
+  blocked: "dnf",
+};
+
 function FederationAdmin() {
-  const fmt = useFmt();
   const toast = useToast();
   const confirmDialog = useConfirm();
   const list = useLoad(() => listFederationPeers(), []);
   const peers = list.data?.peers;
   const self = list.data?.self;
   const refresh = list.reload;
-  const trust = async (p: FedPeer, t: "trusted" | "unvetted" | "blocked", done: string) => {
+  const [adding, setAdding] = useState(false);
+  const trust = async (p: FedPeer, t: FedPeer["trust"], done: string) => {
+    const name = p.instance ?? p.url;
+    if (t === "trusted") {
+      if (!p.fingerprint) return;
+      const ok = await confirmDialog({
+        title: `Trust ${name}?`,
+        message: (
+          <>
+            <p>The key this instance has pinned for {name} has the fingerprint</p>
+            <p className="mono">{p.fingerprint}</p>
+            <p>
+              <strong>Did you compare this fingerprint with the other sysop?</strong> Read it to each other over a
+              channel you already trust, such as a phone call or on the air.
+            </p>
+            <p className="muted">
+              A trusted peer&apos;s caches show on the map, and it counts toward Radio-verified finds.
+            </p>
+          </>
+        ),
+        confirmLabel: "Yes, they match: trust it",
+      });
+      if (!ok) return;
+    }
     if (
       t === "blocked" &&
       !(await confirmDialog({
-        title: `Block ${p.instance ?? p.url}?`,
+        title: `Block ${name}?`,
         message: "What this instance signs is quarantined from now on. Unvet or trust it to undo.",
         confirmLabel: "Block",
         danger: true,
@@ -1705,8 +1760,33 @@ function FederationAdmin() {
     )
       return;
     try {
-      await setPeerTrust(p.url, t);
+      await setPeerTrust(p.url, t, t === "trusted" ? (p.fingerprint ?? undefined) : undefined);
       toast(done);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  const remove = async (p: FedPeer) => {
+    const name = p.instance ?? p.url;
+    const ok = await confirmDialog({
+      title: `Remove ${name}?`,
+      message: (
+        <>
+          <p>This instance stops syncing with it and forgets its key.</p>
+          <p className="muted">
+            What it published stays here, hidden on the map like an unvetted peer&apos;s. Added again, it starts
+            unvetted and you compare its fingerprint afresh. To hide everything it published, block it instead.
+          </p>
+        </>
+      ),
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await removePeer(p.url);
+      toast(`${name} removed`);
       refresh();
     } catch (e) {
       toast((e as Error).message);
@@ -1715,18 +1795,39 @@ function FederationAdmin() {
   return (
     <>
       <FederationSyncStatus onSynced={refresh} />
-      <Fed44netWizard onAdmitted={refresh} />
-      {self && (
-        <p className="muted fine">
-          {self.fingerprint ? (
-            <>
-              This instance&apos;s key fingerprint: <span className="mono">{self.fingerprint}</span>. Read it to a
-              peer&apos;s sysop by phone or on the air, and compare theirs with the one listed under their instance.
-            </>
-          ) : (
-            "This instance has no federation key: its feeds go out unsigned."
-          )}
-        </p>
+      {self?.fingerprint && (
+        <div className="fed-self">
+          <div className="row">
+            <span>
+              Your key fingerprint
+              {self.instance ? (
+                <>
+                  {" "}
+                  (<span className="mono">{self.instance}</span>)
+                </>
+              ) : null}
+            </span>
+            <InfoTip text={TERMS["key-fingerprint"]} label="What is a key fingerprint?" />
+          </div>
+          <Fingerprint value={self.fingerprint} label="your key fingerprint" />
+          <div className="comment">Read it to each sysop who adds this instance, and have them read theirs to you.</div>
+        </div>
+      )}
+      {self && !self.fingerprint && (
+        <p className="muted fine">This instance has no federation key: its feeds go out unsigned.</p>
+      )}
+      {adding ? (
+        <AddPeer
+          onClose={() => setAdding(false)}
+          onAdded={() => {
+            setAdding(false);
+            refresh();
+          }}
+        />
+      ) : (
+        <Button variant="primary" className="fed-add" onClick={() => setAdding(true)}>
+          Add peer
+        </Button>
       )}
       {list.error ? (
         <ErrorState onRetry={refresh}>Couldn&apos;t load the peer list.</ErrorState>
@@ -1735,93 +1836,228 @@ function FederationAdmin() {
           Loading…
         </p>
       ) : peers.length === 0 ? (
-        <EmptyState>No federation peers configured.</EmptyState>
+        <EmptyState>No peers yet. Add one by its address, or by callsign over 44Net below.</EmptyState>
       ) : (
         <ul className="logs">
-          {peers.map((p) => {
-            const name = p.instance ?? p.url;
-            // a discovered peer is listed but never synced until the operator picks a level for it
-            const waiting = !Number(p.enabled) && p.trust !== "blocked";
-            return (
-              <li key={p.url}>
-                <Badge
-                  kind={waiting ? undefined : p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
-                  title={
-                    waiting
-                      ? "Found by discovery; never synced until you pick a trust level"
-                      : `Last sync ${p.health}; trust: ${p.trust}`
-                  }
-                >
-                  {waiting ? "not enabled" : p.health}
-                </Badge>
-                <span className="mono">{name}</span>
-                <span className="muted">
-                  {" "}
-                  · {p.trust}
-                  {p.added_via ? ` (${p.added_via})` : ""}
-                  {p.signed ? " · signed" : ""}
-                </span>
-                <div className="comment">
-                  {waiting
-                    ? "discovered · not synced until you enable it"
-                    : `${p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · ${p.mirrored_total} mirrored`}
-                  {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
-                  {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
-                  {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
-                </div>
-                <div className="comment">
-                  {p.fingerprint ? (
-                    <>
-                      key <span className="mono">{p.fingerprint}</span>
-                    </>
-                  ) : (
-                    "no key pinned yet: the first signed sync pins one"
-                  )}
-                </div>
-                {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
-                <div className="row">
-                  {waiting && (
-                    <Button
-                      variant="primary"
-                      aria-label={`Enable ${name} as unvetted`}
-                      hint="Start mirroring it, hidden on the map until you trust it"
-                      onClick={() => void trust(p, "unvetted", `${name} enabled, unvetted`)}
-                    >
-                      Enable
-                    </Button>
-                  )}
-                  <Button
-                    disabled={p.trust === "trusted"}
-                    aria-label={`Trust ${name}`}
-                    hint="Mirror it, show it on the map and count it toward Tier A corroboration"
-                    onClick={() => void trust(p, "trusted", `${name} trusted`)}
-                  >
-                    Trust
-                  </Button>
-                  <Button
-                    disabled={p.trust === "unvetted"}
-                    aria-label={`Unvet ${name}`}
-                    hint="Keep mirroring it, but hide it on the map by default"
-                    onClick={() => void trust(p, "unvetted", `${name} unvetted`)}
-                  >
-                    Unvet
-                  </Button>
-                  <Button
-                    variant="danger"
-                    disabled={p.trust === "blocked"}
-                    aria-label={`Block ${name}`}
-                    hint="Never mirror or show anything it signs"
-                    onClick={() => void trust(p, "blocked", `${name} blocked`)}
-                  >
-                    Block
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
+          {peers.map((p) => (
+            <PeerRow key={p.url} peer={p} onTrust={trust} onRemove={remove} />
+          ))}
         </ul>
       )}
+      <Disclosure label="Add a 44Net peer by callsign">
+        <Fed44netWizard onAdmitted={refresh} />
+      </Disclosure>
     </>
+  );
+}
+
+/** One peer: health, trust level, key fingerprint, last pull and push, and what the sysop can do with it. */
+function PeerRow(props: {
+  peer: FedPeer;
+  onTrust: (p: FedPeer, t: FedPeer["trust"], done: string) => Promise<void>;
+  onRemove: (p: FedPeer) => Promise<void>;
+}) {
+  const fmt = useFmt();
+  const p = props.peer;
+  const name = p.instance ?? p.url;
+  // a discovered peer is listed but never synced until the operator picks a level for it
+  const waiting = !Number(p.enabled) && p.trust !== "blocked";
+  const pulled = p.last_ok
+    ? `last pull ${fmt.ago(p.last_ok)}`
+    : waiting
+      ? "not synced until you enable it"
+      : "never pulled";
+  const pushes = [
+    p.last_push_in ? `pushed here ${fmt.ago(p.last_push_in)}` : null,
+    p.last_push_out ? `last push to it ${fmt.ago(p.last_push_out)}` : null,
+  ].filter(Boolean);
+  return (
+    <li className="fed-peer">
+      <div className="row">
+        <Badge
+          kind={waiting ? undefined : p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
+          title={waiting ? "Found by discovery; never synced until you pick a trust level" : `Last sync ${p.health}`}
+        >
+          {waiting ? "not enabled" : p.health}
+        </Badge>
+        <span className="mono">{name}</span>
+        <Badge kind={TRUST_BADGE[p.trust]}>{p.trust}</Badge>
+        <InfoTip text={TERMS["peer-trust"]} label="What do the trust levels mean?" />
+      </div>
+      <div className="comment">
+        {p.instance && <span className="mono">{p.url}</span>}
+        {p.added_via ? `${p.instance ? " · " : ""}added via ${p.added_via}` : ""}
+        {p.configured ? " · listed in FED_PEERS" : ""}
+      </div>
+      {p.fingerprint ? (
+        <Fingerprint value={p.fingerprint} label={`the key fingerprint of ${name}`} />
+      ) : (
+        <div className="comment">No key pinned yet: it is pinned on the first sync.</div>
+      )}
+      {p.pinned_fingerprint && p.fingerprint !== p.pinned_fingerprint && (
+        <div className="comment">
+          FED_PEERS pins <span className="mono">{p.pinned_fingerprint}</span>
+        </div>
+      )}
+      <div className="comment">
+        {[pulled, ...pushes].join(" · ")}
+        {p.mirrored_total > 0 && ` · ${p.mirrored_total} mirrored`}
+        {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
+        {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
+        {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+      </div>
+      {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
+      <div className="row">
+        {waiting && (
+          <Button
+            variant="primary"
+            aria-label={`Enable ${name} as unvetted`}
+            hint="Start mirroring it, hidden on the map until you trust it"
+            onClick={() => void props.onTrust(p, "unvetted", `${name} enabled, unvetted`)}
+          >
+            Enable
+          </Button>
+        )}
+        <Button
+          disabled={p.trust === "trusted" || !p.fingerprint}
+          aria-label={`Trust ${name}`}
+          hint={
+            p.fingerprint
+              ? "Compare its fingerprint with its sysop, then show it on the map and count it toward Radio-verified finds"
+              : "No key pinned yet: let it sync as unvetted first, then compare its fingerprint"
+          }
+          onClick={() => void props.onTrust(p, "trusted", `${name} trusted`)}
+        >
+          Trust
+        </Button>
+        <Button
+          disabled={p.trust === "unvetted"}
+          aria-label={`Unvet ${name}`}
+          hint="Keep mirroring it, but hide it on the map by default"
+          onClick={() => void props.onTrust(p, "unvetted", `${name} unvetted`)}
+        >
+          Unvet
+        </Button>
+        <Button
+          variant="danger"
+          disabled={p.trust === "blocked"}
+          aria-label={`Block ${name}`}
+          hint="Never mirror or show anything it signs"
+          onClick={() => void props.onTrust(p, "blocked", `${name} blocked`)}
+        >
+          Block
+        </Button>
+        <Button
+          variant="danger"
+          disabled={p.configured}
+          aria-label={`Remove ${name}`}
+          hint={
+            p.configured
+              ? "Listed in FED_PEERS: take it out there and restart the gateway to remove it"
+              : "Stop syncing with it and forget its key"
+          }
+          onClick={() => void props.onRemove(p)}
+        >
+          Remove
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Add a peer by its address. Looking it up fetches its descriptor and shows its instance id and key fingerprint;
+ * the sysop compares that with the other sysop, then adds it unvetted. Trusting it stays a separate step.
+ */
+function AddPeer(props: { onClose: () => void; onAdded: () => void }) {
+  const toast = useToast();
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<FedPeerPreview | null>(null);
+  const lookUp = async () => {
+    if (!url.trim()) return;
+    setBusy(true);
+    setError(null);
+    setPreview(null);
+    try {
+      setPreview((await lookUpPeer(url.trim())).preview);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const add = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await addPeer(preview.url, preview.fingerprint);
+      toast(`${preview.instance} added, unvetted`);
+      props.onAdded();
+    } catch (e) {
+      setError((e as Error).message);
+      // a key that changed since the look-up comes back with the new one, to compare again
+      const fresh = e instanceof ApiError ? (e.data as { preview?: FedPeerPreview }).preview : undefined;
+      setPreview(fresh ?? null);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fed-addpeer">
+      <div className="row">
+        <input
+          type="url"
+          inputMode="url"
+          placeholder="https://aprs.example.net"
+          value={url}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setPreview(null);
+            setError(null);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && !busy && void lookUp()}
+          aria-label="The other instance's address"
+        />
+        <Button disabled={busy || !url.trim()} onClick={() => void lookUp()}>
+          {busy && !preview ? "Looking up…" : "Look up"}
+        </Button>
+        <Button disabled={busy} onClick={props.onClose}>
+          Cancel
+        </Button>
+      </div>
+      <div className="comment">The address the other sysop gave you: their instance&apos;s public URL.</div>
+      {error && (
+        <div className="comment error" role="alert">
+          {error}
+        </div>
+      )}
+      {preview && (
+        <div className="confirmbox">
+          <div>
+            <span className="mono">{preview.instance}</span> at <span className="mono">{preview.url}</span>
+            {preview.operator && (
+              <>
+                {" "}
+                · run by <span className="mono">{preview.operator}</span>
+              </>
+            )}
+          </div>
+          <Fingerprint value={preview.fingerprint} label={`the key fingerprint of ${preview.instance}`} />
+          <div className="comment">
+            Compare this fingerprint with the one its sysop reads to you. It is added unvetted: mirrored, hidden on the
+            map, and trusted only when you choose Trust.
+          </div>
+          <div className="row">
+            <Button variant="primary" disabled={busy} onClick={() => void add()}>
+              {busy ? "Adding…" : "Add as unvetted"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

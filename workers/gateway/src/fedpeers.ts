@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * fedpeers.ts — the peer table: trust levels, seeding from FED_PEERS and the signed registry, the keys
- * each origin's frames verify under, and the operator's peer and trust endpoints.
+ * each origin's frames verify under, and the operator's peer endpoints: list, add by address, set trust
+ * and remove.
+ *
+ * Every way in leaves a peer short of `trusted` until its sysop's key fingerprint has been compared: added
+ * by address it starts `unvetted` with its key pinned, and raising it to `trusted` is a separate step; a
+ * FED_PEERS entry starts `trusted` only when it pins the fingerprint its key then matches.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
-import { trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import {
   isInstanceId,
   keyFingerprint,
   loadRegistry,
+  normalizeFingerprint,
   ownKeyFingerprint,
   parseAcceptKeys,
+  parseFedPeers,
+  registryKeyAllowed,
   usableKeys,
   type RegistryEntry,
 } from "./federation.js";
@@ -41,6 +49,8 @@ export interface PeerRow {
   accept_keys?: string | null; // verified key set (JSON [{x, until?}]) — see resolvePeerKeys
   verified_via?: string | null; // identity attestation, e.g. 'ardc-lot' (never a data-trust input)
   operator_call?: string | null; // the ARDC-verified base call of a 44net peer; the quorum's operator
+  approved_at?: number | null; // when an operator (or a matching pinned fingerprint) first trusted it
+  pinned_fingerprint?: string | null; // the key fingerprint a FED_PEERS entry pins (`<url>#<fingerprint>`)
 }
 
 /** This instance's id — the namespace no peer may write into. */
@@ -49,24 +59,20 @@ export function ours(env: Env): string | null {
 }
 
 /**
- * Seed fed_peers from the FED_PEERS env (idempotent). FED_PEERS are operator-curated, so they are
- * `manual` + `trusted` by definition — a manual peer the operator explicitly `blocked` stays
- * blocked (quarantine wins over re-seeding); `approved_at` is stamped once and preserved.
+ * Seed fed_peers from the FED_PEERS env (idempotent). A new entry starts `unvetted`, like a peer added in
+ * Instance admin: a URL says where a peer is, not who holds its key. An entry that pins a key fingerprint
+ * (`<url>#<fingerprint>`) records it, and the first sync whose key matches it raises the peer to `trusted`
+ * (fedpull.ts). Re-seeding never changes a trust level the operator set.
  */
 export async function seedPeers(env: Env): Promise<void> {
-  const urls = (env.FED_PEERS ?? "")
-    .split(",")
-    .map((s) => trimTrailingSlashes(s.trim()))
-    .filter(Boolean);
-  for (const url of urls) {
+  for (const { url, fingerprint } of parseFedPeers(env.FED_PEERS)) {
     await env.DB.prepare(
-      `INSERT INTO fed_peers (url, trust, added_via, approved_at) VALUES (?, 'trusted', 'manual', ?)
+      `INSERT INTO fed_peers (url, trust, added_via, pinned_fingerprint) VALUES (?, 'unvetted', 'manual', ?)
        ON CONFLICT(url) DO UPDATE SET
-         added_via   = 'manual',
-         trust       = CASE WHEN fed_peers.trust = 'blocked' THEN 'blocked' ELSE 'trusted' END,
-         approved_at = COALESCE(fed_peers.approved_at, excluded.approved_at)`,
+         added_via          = 'manual',
+         pinned_fingerprint = excluded.pinned_fingerprint`,
     )
-      .bind(url, nowS())
+      .bind(url, fingerprint)
       .run();
   }
   // registry discovery: seed peers from the verified signed registry as `unvetted` (operator
@@ -159,12 +165,16 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   await seedPeers(env);
   const rows = (
     await env.DB.prepare(
-      `SELECT url, instance, public_key IS NOT NULL AS signed, public_key, trust, added_via, approved_at,
-            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, moves_cursor,
-            enabled, last_sync, last_ok, last_error, sync_ok, sync_err, mirrored_total, last_counts
+      `SELECT url, instance, public_key, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
+            pinned_fingerprint, rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor,
+            tombstones_cursor, moves_cursor, enabled, last_sync, last_ok, last_error, sync_ok, sync_err,
+            mirrored_total, last_counts,
+            (SELECT MAX(m.submitted_at) FROM fed_submit_marks m WHERE m.instance = fed_peers.instance) AS last_push_in,
+            (SELECT h.last_ok_at FROM fed_hub_status h WHERE h.hub = fed_peers.url) AS last_push_out
        FROM fed_peers ORDER BY url`,
-    ).all<Record<string, unknown>>()
+    ).all<Record<string, unknown> & { public_key: string | null; url: string }>()
   ).results;
+  const configured = new Set(parseFedPeers(env.FED_PEERS).map((p) => p.url));
   // derive a health signal + error rate so an operator scans state without doing the math.
   const peers = await Promise.all(
     rows.map(async ({ public_key, ...p }) => {
@@ -174,8 +184,8 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? "new" : lastErrored ? "error" : "ok";
       return {
         ...p,
-        // the key this instance pinned, for the sysop to compare with the peer's own out of band
-        fingerprint: await keyFingerprint(public_key as string | null),
+        fingerprint: await keyFingerprint(public_key),
+        configured: configured.has(p.url), // listed in FED_PEERS: removed there, not here
         lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
         errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
         health,
@@ -185,21 +195,230 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   return json({ self: { instance: ours(env), fingerprint: await ownKeyFingerprint(env) }, peers });
 }
 
+/** A descriptor fetch gives up after this long. */
+const DESCRIPTOR_TIMEOUT_MS = 8000;
+/** Largest descriptor read when adding a peer. */
+const MAX_DESCRIPTOR_BYTES = 256 * 1024;
+const RAW_KEY_RE = /^[A-Za-z0-9_-]{43}$/; // 32 bytes, base64url without padding
+
+/** What adding a peer shows its sysop before anything is stored. */
+interface PeerPreview {
+  url: string;
+  instance: string;
+  fingerprint: string;
+  operator: string | null;
+}
+
+class PeerAddRefused extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly preview?: PeerPreview,
+  ) {
+    super(message);
+  }
+}
+
+/** A peer's base URL as typed: http(s), no credentials, query or fragment, without trailing slashes. */
+function peerBaseUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password || u.search || u.hash)
+    return null;
+  return trimTrailingSlashes(`${u.origin}${u.pathname}`);
+}
+
+/** Fetch a would-be peer's descriptor and read who it says it is and the key it signs with. */
+async function lookUpPeer(
+  env: Env,
+  url: string,
+): Promise<{ instance: string; publicKey: string; operator: string | null }> {
+  let res: Response;
+  try {
+    res = await fedFetch(env, `${url}/.well-known/aprscaching`, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(DESCRIPTOR_TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw new PeerAddRefused(`${url} did not answer: ${(e as Error).message}`, 502);
+  }
+  if (!res.ok) throw new PeerAddRefused(`${url} answered ${res.status} for its federation descriptor`, 502);
+  const body = await readCappedBody(res, MAX_DESCRIPTOR_BYTES);
+  type Descriptor = { instance?: unknown; signed?: unknown; publicKey?: unknown; operator?: unknown };
+  let wk: Descriptor | null;
+  try {
+    wk = body ? (JSON.parse(new TextDecoder().decode(body)) as Descriptor | null) : null;
+  } catch {
+    wk = null;
+  }
+  if (!wk || typeof wk !== "object") throw new PeerAddRefused(`${url} serves no federation descriptor`, 502);
+  if (!isInstanceId(wk.instance)) throw new PeerAddRefused(`${url} names an invalid instance id`, 502);
+  if (wk.signed !== true || typeof wk.publicKey !== "string" || !RAW_KEY_RE.test(wk.publicKey))
+    throw new PeerAddRefused(`${wk.instance} publishes no signing key, so nothing it serves could be verified`, 409);
+  return {
+    instance: wk.instance,
+    publicKey: wk.publicKey,
+    operator: typeof wk.operator === "string" ? wk.operator : null,
+  };
+}
+
+/**
+ * POST /federation/peers — add a peer by its address. Sysop-only. Body `{ url, fingerprint? }`.
+ *
+ * Without `fingerprint` it only looks the peer up: it fetches the peer's descriptor and answers with its
+ * instance id, URL and key fingerprint, for the sysop to compare with the other sysop. With the fingerprint
+ * that look-up showed, it adds the peer `unvetted` with that key pinned; a key that changed in between is
+ * refused, so the key stored is the one compared. A peer is never trusted on add: that is the trust
+ * endpoint's job, asked for separately.
+ */
+export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (gate) return gate;
+  const b = (await req.json().catch(() => null)) as { url?: unknown; fingerprint?: unknown } | null;
+  const url = peerBaseUrl(b?.url);
+  if (!url)
+    return json({ error: "url must be the peer's http(s) base URL, e.g. https://aprs.example.net" }, { status: 400 });
+  try {
+    const listed = await env.DB.prepare("SELECT trust FROM fed_peers WHERE url = ?")
+      .bind(url)
+      .first<{ trust: string }>();
+    if (listed) throw new PeerAddRefused(`${url} is already a peer (${listed.trust}): change its trust instead`, 409);
+    const d = await lookUpPeer(env, url);
+    if (d.instance === ours(env)) throw new PeerAddRefused(`${url} is this instance`, 400);
+    const fingerprint = await keyFingerprint(d.publicKey);
+    if (!fingerprint) throw new PeerAddRefused(`${d.instance} publishes a malformed signing key`, 409);
+    const preview: PeerPreview = {
+      url,
+      instance: d.instance,
+      fingerprint,
+      operator: d.operator,
+    };
+    // one row per instance id: a second URL for a known instance is a stale address or an impostor, and a
+    // blocked instance stays blocked under any address
+    const holder = await env.DB.prepare(
+      "SELECT url, trust FROM fed_peers WHERE instance = ? ORDER BY trust = 'blocked' DESC LIMIT 1",
+    )
+      .bind(d.instance)
+      .first<{ url: string; trust: TrustLevel }>();
+    if (holder)
+      throw new PeerAddRefused(
+        holder.trust === "blocked"
+          ? `${d.instance} is blocked here (at ${holder.url}): remove that peer first to add it again`
+          : `${d.instance} is already a peer at ${holder.url}: remove that peer first to move it`,
+        409,
+        preview,
+      );
+    let registry: Map<string, RegistryEntry>;
+    try {
+      registry = await loadRegistry(env);
+    } catch {
+      throw new PeerAddRefused("the federation registry is misconfigured on this instance", 503);
+    }
+    if (!registryKeyAllowed(registry.get(d.instance), d.publicKey))
+      throw new PeerAddRefused(`${d.instance} signs with a key the registry does not bind to it`, 409, preview);
+    if (b?.fingerprint === undefined) return json({ preview });
+    if ((typeof b.fingerprint === "string" ? normalizeFingerprint(b.fingerprint) : null) !== preview.fingerprint)
+      throw new PeerAddRefused(
+        `${d.instance}'s key is not the one you compared: look it up again and compare the new fingerprint`,
+        409,
+        preview,
+      );
+    try {
+      await env.DB.prepare(
+        `INSERT INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via, enabled)
+         VALUES (?, ?, ?, ?, 'unvetted', 'admin', 1)`,
+      )
+        .bind(url, d.instance, d.publicKey, JSON.stringify([{ x: d.publicKey }]))
+        .run();
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test((e as Error).message))
+        throw new PeerAddRefused(`${d.instance} was added meanwhile`, 409, preview);
+      throw e;
+    }
+    return json({ ok: true, peer: { ...preview, trust: "unvetted" } }, { status: 201 });
+  } catch (e) {
+    if (e instanceof PeerAddRefused)
+      return json({ error: e.message, ...(e.preview && { preview: e.preview }) }, { status: e.status });
+    throw e;
+  }
+}
+
+/**
+ * DELETE /federation/peers?url=<url> — remove a peer and its pinned key. Sysop-only. A peer listed in
+ * FED_PEERS comes back at the next seeding, so it is taken out of FED_PEERS first.
+ *
+ * What the peer published stays mirrored and is treated like anything from an unknown origin: hidden on the
+ * map and in offline packs unless the viewer includes unvetted peers, and never a corroborating voice. No
+ * frame of its applies until it is added again, and then it starts `unvetted` with its key fetched and
+ * compared afresh. Blocking, not removing, is what hides everything it published.
+ */
+export async function handlePeerRemove(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (gate) return gate;
+  const url = trimTrailingSlashes((new URL(req.url).searchParams.get("url") ?? "").trim());
+  if (!url) return json({ error: "url required" }, { status: 400 });
+  const row = await env.DB.prepare("SELECT url, instance FROM fed_peers WHERE url = ?")
+    .bind(url)
+    .first<{ url: string; instance: string | null }>();
+  if (!row) return json({ error: "unknown peer" }, { status: 404 });
+  if (parseFedPeers(env.FED_PEERS).some((p) => p.url === url))
+    return json(
+      { error: `${url} is listed in FED_PEERS: take it out there and restart the gateway, then remove it here` },
+      { status: 409 },
+    );
+  await env.DB.prepare("DELETE FROM fed_peers WHERE url = ?").bind(url).run();
+  // a spoke that pushed here: its marks go too, so it starts over as a new spoke if it pushes again
+  if (row.instance && url === `submit:${row.instance}`)
+    await env.DB.prepare("DELETE FROM fed_submit_marks WHERE instance = ?").bind(row.instance).run();
+  return json({ ok: true, url });
+}
+
 /**
  * Operator control: set a peer's trust level. Sysop-only (signed-in instance operator) or the
  * operator secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
  * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
+ *
+ * `trusted` needs a pinned key: until a peer's key is known there is no fingerprint to compare, and trusting
+ * it would trust whichever key answers first. A `fingerprint` in the body (the one the sysop compared) must
+ * be the pinned key's, so a key that moved since the comparison is refused.
  */
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
-  const b = (await req.json().catch(() => null)) as { url?: string; trust?: string } | null;
+  const b = (await req.json().catch(() => null)) as { url?: string; trust?: string; fingerprint?: unknown } | null;
   const trust = b?.trust as TrustLevel | undefined;
-  if (!b?.url || !trust || !TRUST_LEVELS.includes(trust))
+  if (typeof b?.url !== "string" || !trust || !TRUST_LEVELS.includes(trust))
     return json({ ok: false, error: "url + trust (trusted|unvetted|blocked) required" }, { status: 400 });
   const url = trimTrailingSlashes(b.url.trim());
-  const exists = await env.DB.prepare("SELECT url FROM fed_peers WHERE url = ?").bind(url).first<{ url: string }>();
+  const exists = await env.DB.prepare("SELECT url, public_key FROM fed_peers WHERE url = ?")
+    .bind(url)
+    .first<{ url: string; public_key: string | null }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
+  if (trust === "trusted") {
+    if (!exists.public_key)
+      return json(
+        {
+          ok: false,
+          error:
+            "no key is pinned for this peer yet: let it sync as unvetted, then compare its fingerprint and trust it",
+        },
+        { status: 409 },
+      );
+    if (
+      b.fingerprint !== undefined &&
+      (typeof b.fingerprint === "string" ? normalizeFingerprint(b.fingerprint) : null) !==
+        (await keyFingerprint(exists.public_key))
+    )
+      return json(
+        { ok: false, error: "the peer's pinned key is not the one you compared: reload and compare again" },
+        { status: 409 },
+      );
+  }
   try {
     await env.DB.prepare(
       // choosing a level for a discovered peer (which starts disabled) is the operator enabling it

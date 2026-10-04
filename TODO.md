@@ -806,6 +806,14 @@ lands with a regression test that fails without it.
       signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
       without the internet. The `<call>.ampr.org` identity binding is in
       [`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#peers-by-callsign).
+- [x] **Peers added and removed in Instance admin** — a sysop adds a peer by its URL (the look-up shows its
+      instance id and key fingerprint, and the peer is added `unvetted`), raises it to `trusted` in a separate
+      step that repeats the fingerprint, and removes it with its pinned key. A `FED_PEERS` entry starts
+      `unvetted` unless it pins the fingerprint its key then matches (`<url>#<fingerprint>`).
+- [ ] **A peer directory** _(P3 · M)_ — a browsable list of instances that want peers, to pick from in Instance
+      admin instead of exchanging URLs by hand. _Why:_ the signed registry already binds names to keys, and a
+      directory adds discovery, not trust; joining today takes one exchange of URLs and fingerprints between
+      two sysops, which a young network can afford.
 - [ ] **Registry DNS lookup through `DOH_URL`** _(P3 · S)_ — `FED_REGISTRY_DNS` always asks Cloudflare's
       resolver (`federation.ts` `registryFromDns`), unlike 44net onboarding and `ampr.org` verification,
       which use `DOH_URL`. _Why:_ an instance on HAMNET without the internet cannot locate its registry by DNS;

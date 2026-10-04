@@ -385,7 +385,7 @@ Every shape with a gateway. A LAN instance gets one check, `federation.off` or `
 | `FED_AUTO_PROMOTE is not 0` | set it to `0`, so only you promote a peer to `trusted` |
 | `FED_CORROBORATION_QUORUM is below 2` | set it to `2` or more, so no single peer lifts a find to Tier A |
 | `peer <url> is not https` | use the peer's `https://` address |
-| `peer <url> is on 44Net and starts trusted` | remove it from `FED_PEERS`: a 44Net peer is admitted `unvetted`, and you promote it yourself |
+| `peer <url> is on 44Net: admit it from Instance admin` | remove it from `FED_PEERS`: a 44Net peer is admitted `unvetted`, and you promote it yourself |
 | `a hub without FED_SUBMIT_INSTANCES` | list the spokes that may push to this hub |
 | `a registry without FED_REGISTRY_KEY` | pin the registry's authority key |
 
@@ -393,9 +393,12 @@ Every shape with a gateway. A LAN instance gets one check, `federation.off` or `
 
 ### `federation.peer.<host>`
 
-- **Tests:** each peer in `FED_PEERS` answers at `/.well-known/aprscaching`.
-- **Message:** `peer <url> does not answer` (warn).
-- **Fix:** check the URL, or ask the peer's operator.
+- **Tests:** each peer in `FED_PEERS` answers at `/.well-known/aprscaching`, and signs with the key whose
+  fingerprint the entry pins after `#`, if it pins one.
+- **Message:** `peer <url> does not answer` (warn), or `peer <url> signs with key <fingerprint>, not the
+  fingerprint FED_PEERS pins` (warn).
+- **Fix:** check the URL, or ask the peer's operator. For a key that does not match, compare fingerprints
+  with its sysop again and correct `FED_PEERS`.
 - **See:** [Join the network](federation/index.md#joining-the-network).
 
 ## The 44Net tunnel and name (`net44`)

@@ -46,10 +46,15 @@ records in the field back to it. The phone needs no inbound connection, so this 
     ```bash
     INSTANCE=oe8apr-pocket                     # its own name, set once
     FED_PRIVATE_KEY=<node ~/aprscaching/tools/fedkey/genkey.mjs --raw>   # its own key, never the home one's
-    FED_PEERS=https://aprs.example.net         # follow the home instance
+    FED_PEERS=https://aprs.example.net#<fingerprint>   # follow the home instance, its key fingerprint pinned
     FED_HUB_URL=https://aprs.example.net       # push this station's records to it
     FED_SUBMIT_SECRET=<the home instance's FED_SUBMIT_SECRET>
     ```
+
+    The fingerprint is the home instance's, from **Instance admin → Federation → Your key fingerprint** there.
+    With it the phone trusts the home instance once its key matches. The setup questions add the home instance
+    without one: it starts `unvetted` on the phone, so trust it under the phone's **Instance admin →
+    Federation** after comparing the fingerprint its row shows.
 
 3. **On the home instance**, promote the phone once under **Instance admin → Federation**. Its first push
    registers it `unvetted`, so its caches arrive hidden on the map until you do.

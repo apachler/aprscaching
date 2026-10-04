@@ -118,7 +118,7 @@ app do not read these.
 | `FED_REGISTRY` / `FED_REGISTRY_KEY` | Signed instance registry + the pinned authority key that verifies it (required whenever a registry is configured) | — |
 | `FED_REGISTRY_DNS` | Alternative registry source: a DNS `TXT` record name whose `url=` locates the document; verified under `FED_REGISTRY_KEY` (without it the server refuses to start) | — |
 | `FED_OPERATOR` | Operator label, self-published in `/.well-known` beside the service call (`SERVICE_CALL`) | — |
-| `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
+| `FED_PEERS` | Comma-separated peer base URLs to sync from. An entry starts `unvetted`. `<url>#<fingerprint>` pins the peer's key fingerprint (16 hex digits, from its sysop or `node tools/fedkey/fingerprint.mjs`): a peer whose key matches starts `trusted`, one whose key does not is refused | — |
 | `FED_SYNC_REGION` | `S,W,N,E` in decimal degrees: pull only the caches inside this box from peers that filter by region (`sync-cache-bbox`); deletes are never filtered. Changing it reads the caches feed again from the start | whole feed |
 | `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |
 | `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |

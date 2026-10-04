@@ -40,7 +40,7 @@ wait_health() {
 }
 
 run_federation() {
-  local pubport subport tmp key subkey pubpub pub2 pub3 hist reg registry registry_key ppid spid rc=0
+  local pubport subport tmp key subkey pubpub pubfp pub2 pub3 hist reg registry registry_key ppid spid rc=0
   pubport=$(free_port); subport=$(free_port)
   while [[ "$subport" == "$pubport" ]]; do subport=$(free_port); done
   tmp="$(mktemp -d)"
@@ -48,6 +48,8 @@ run_federation() {
   key=$(node tools/fedkey/genkey.mjs --raw)
   subkey=$(node tools/fedkey/genkey.mjs --raw) # corroboration questions are signed
   pubpub=$(pubkey "$key")
+  # the subscriber pins the publisher's key fingerprint in FED_PEERS, so the publisher starts trusted there
+  pubfp=$(node tools/fedkey/fingerprint.mjs "$pubpub" --raw)
   pub2=$(pubkey "$(node tools/fedkey/genkey.mjs --raw)")
   pub3=$(pubkey "$(node tools/fedkey/genkey.mjs --raw)")
   hist="[{\"x\":\"$pub2\",\"since\":1},{\"x\":\"$pub3\",\"since\":1,\"revoked\":true}]"
@@ -55,16 +57,17 @@ run_federation() {
   registry=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$reg")
   registry_key=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$reg")
   local common=(INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" ALLOW_DEV_TOKENS=1)
-  # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers.
+  # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers, and
+  # FED_ALLOW_PRIVATE lets it add the subscriber, on loopback, by address.
   setsid env "${common[@]}" DB_PATH="$tmp/pub.db" PORT="$pubport" INSTANCE=oe.pub FED_PRIVATE_KEY="$key" \
     FED_KEY_HISTORY="$hist" FIRST_PARTY_SITES=OE8XXX FED_OPERATOR=OE8APR SERVICE_CALL=OE8APR-12 \
-    FED_RELAY_SECRET=relaysecret \
+    FED_RELAY_SECRET=relaysecret FED_ALLOW_PRIVATE=1 \
     FED_ENDPOINTS="[{\"transport\":\"https\",\"address\":\"http://127.0.0.1:${pubport}\",\"priority\":10}]" \
     pnpm --filter @aprscaching/node-gateway start >"$tmp/pub.log" 2>&1 &
   ppid=$!
   # A two-instance network has one corroborating peer, so the subscriber accepts a quorum of one.
   setsid env "${common[@]}" DB_PATH="$tmp/sub.db" PORT="$subport" INSTANCE=oe.sub FED_PRIVATE_KEY="$subkey" \
-    FED_PEERS="http://127.0.0.1:${pubport}" FED_CORROBORATION_QUORUM=1 FED_SUBMIT_SECRET=submitsecret \
+    FED_PEERS="http://127.0.0.1:${pubport}#${pubfp}" FED_CORROBORATION_QUORUM=1 FED_SUBMIT_SECRET=submitsecret \
     FED_RELAY_SECRET=relaysecret FED_REGISTRY="$registry" FED_REGISTRY_KEY="$registry_key" \
     pnpm --filter @aprscaching/node-gateway start >"$tmp/sub.log" 2>&1 &
   spid=$!

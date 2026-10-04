@@ -30,6 +30,10 @@ export const TERMS = {
   "service-call": "The callsign this instance listens on for FOUND, DNF and other messages from the air.",
   sysop: "The ham who runs this instance: sets it up, links it to others and can verify a callsign by hand.",
   federation: "How instances share caches, finds and keys as signed records; a peer is one instance yours trusts.",
+  "peer-trust":
+    "Trusted peers show on the map and count toward Tier A; unvetted ones are mirrored but hidden; blocked are ignored.",
+  "key-fingerprint":
+    "A checksum of an instance's signing key. Sysops compare theirs over a channel they trust before trusting a peer.",
   provenance: "How a packet reached the instance, and whether one of its own receiving stations heard it directly.",
   meshcom: "A LoRa mesh network for licensed amateurs; the instance listens to a node over its ExtUDP interface.",
   watchlist: "The callsigns you follow. You get an alert when the network hears one of them.",

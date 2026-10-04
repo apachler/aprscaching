@@ -5,6 +5,7 @@
 //
 //   PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
 
+import { createHash } from "node:crypto";
 import {
   cborDecode as miniDecode,
   buildFrame,
@@ -356,7 +357,8 @@ ok(
 );
 
 // ---- peer trust tiers + quarantine ----
-// The subscriber's only peer is the publisher, listed in FED_PEERS → it must be manual + trusted.
+// The subscriber's only peer is the publisher, listed in FED_PEERS with its key fingerprint pinned → it
+// starts trusted once its key matches, and stays manual.
 const pall = await call(SUB, "GET", "/federation/peers");
 const peerRec = (pall.data?.peers ?? []).find((p) => p.instance === pubInstance) ?? {};
 ok(
@@ -1168,6 +1170,59 @@ for (let i = 0; i < 80 && !got429; i++) {
   if (r.status === 429) got429 = true;
 }
 ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
+
+// ---- adding and removing a peer by address (Instance admin) ----
+{
+  const OPH = { "x-operator-secret": OPERATOR_SECRET };
+  const subWk = await call(SUB, "GET", "/.well-known/aprscaching");
+  const subFp = createHash("sha256")
+    .update(Buffer.from(subWk.data?.publicKey ?? "", "base64url"))
+    .digest("hex")
+    .slice(0, 16)
+    .replace(/(.{4})(?=.)/g, "$1 ");
+  const look = await call(PUB, "POST", "/federation/peers", { url: SUB }, OPH);
+  ok(
+    "looking a peer up by address shows its instance and key fingerprint",
+    look.status === 200 &&
+      look.data?.preview?.instance === subWk.data?.instance &&
+      look.data?.preview?.fingerprint === subFp,
+    JSON.stringify(look.data),
+  );
+  const added = await call(PUB, "POST", "/federation/peers", { url: SUB, fingerprint: subFp }, OPH);
+  ok(
+    "a peer added by address starts unvetted",
+    added.status === 201 && added.data?.peer?.trust === "unvetted",
+    JSON.stringify(added.data),
+  );
+  const raised = await call(
+    PUB,
+    "POST",
+    "/federation/peers/trust",
+    { url: SUB, trust: "trusted", fingerprint: subFp },
+    OPH,
+  );
+  ok(
+    "trusting it is a separate step, with the compared fingerprint",
+    raised.data?.trust === "trusted",
+    JSON.stringify(raised.data),
+  );
+  const removed = await call(PUB, "DELETE", `/federation/peers?url=${encodeURIComponent(SUB)}`, undefined, OPH);
+  const after = await call(PUB, "GET", "/federation/peers", undefined, OPH);
+  ok(
+    "removing a peer deletes it",
+    removed.status === 200 && !(after.data?.peers ?? []).some((p) => p.url === SUB),
+    JSON.stringify(removed.data),
+  );
+  const back = await call(PUB, "POST", "/federation/peers", { url: SUB, fingerprint: subFp }, OPH);
+  ok(
+    "a removed peer added again starts unvetted",
+    back.status === 201 && back.data?.peer?.trust === "unvetted",
+    JSON.stringify(back.data),
+  );
+  await call(PUB, "DELETE", `/federation/peers?url=${encodeURIComponent(SUB)}`, undefined, OPH);
+  const envListed = await call(SUB, "DELETE", `/federation/peers?url=${encodeURIComponent(PUB)}`, undefined, OPH);
+  ok("a peer FED_PEERS lists is not removed here -> 409", envListed.status === 409, `status=${envListed.status}`);
+}
 
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

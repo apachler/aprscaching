@@ -31,7 +31,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FIRST_PARTY_SITES: "Receiving-site calls preset as trusted for Tier A (Instance admin adds more)",
   MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
   CACHE_MOVE_LIMIT_M: "Metres an owner may move a cache from where it was first found (0 keeps it there)",
-  FED_PEERS: "Comma-separated base URLs of federation peers to sync from",
+  FED_PEERS: "Comma-separated base URLs of federation peers to sync from; <url>#<fingerprint> pins a peer's key",
   FED_DISCOVER: "1 learns the peers that trusted peers advertise",
   FED_CORROBORATION_QUORUM: "Distinct corroborating identities required to promote a find to Tier A",
   FED_AUTO_PROMOTE: "Confirmed corroborations that promote an unvetted peer to trusted (0 = off)",
@@ -499,7 +499,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "Operator label, self-published in `/.well-known` beside the service call (`SERVICE_CALL`)",
         "—",
       ],
-      ["`FED_PEERS`", "Comma-separated peer base URLs to sync from", "—"],
+      [
+        "`FED_PEERS`",
+        "Comma-separated peer base URLs to sync from. An entry starts `unvetted`. `<url>#<fingerprint>` pins the peer's key fingerprint (16 hex digits, from its sysop or `node tools/fedkey/fingerprint.mjs`): a peer whose key matches starts `trusted`, one whose key does not is refused",
+        "—",
+      ],
       [
         "`FED_SYNC_REGION`",
         "`S,W,N,E` in decimal degrees: pull only the caches inside this box from peers that filter by region (`sync-cache-bbox`); deletes are never filtered. Changing it reads the caches feed again from the start",
