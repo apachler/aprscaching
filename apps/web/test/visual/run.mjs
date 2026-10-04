@@ -106,7 +106,7 @@ const SURFACES = [
     wait: ".ccard",
     steps: [
       ["click", ".ccard:has-text('Schlossberg')"],
-      ["click", "button[title^='Edit']"],
+      ["click", "role=button[name='Edit's]"],
     ],
     after: ".stage-edit-list",
   },

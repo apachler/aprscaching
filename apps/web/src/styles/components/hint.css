@@ -69,5 +69,10 @@
   /* The "i" beside a term or a group header: a quiet icon button, a 44px target on touch (hittarget.css). */
   .infotip {
     vertical-align: middle;
+    align-items: center;
+    justify-content: center;
+    /* WCAG 2.5.8: at least 24px even where the glyph is a single character (Phosphor) */
+    min-inline-size: calc(var(--hit) / 2 + 2px);
+    min-block-size: calc(var(--hit) / 2 + 2px);
   }
 }
