@@ -16,21 +16,26 @@ or erase someone else's account.
 
 ## Export
 
-`POST /api/account/<call>/export` returns a full, machine-readable copy of the account's data. Secrets such as
-passkey public keys and push keys stay out of it.
+`POST /api/account/<call>/export` returns a full, machine-readable copy of the account's data, whichever held
+call names it. It covers every base call the account holds and every SSID of them: the email address (and one
+waiting for confirmation), the profile and preferences, caches, finds, positions, the APRS messages the person
+sent or was sent, keys, stations, mail and the rest of the account-scoped rows. Secrets such as passkey public
+keys and push keys stay out of it.
 
 ## Erase
 
 `POST /api/account/<call>/delete` erases the whole account: every base call it holds.
 
-- **Anonymised:** finds, owned caches and messages pass to a withdrawn marker, served as `WITHDRAWN`. The marker
-  can never be registered as a call.
-- **Archived:** owned caches are archived and their uploaded media removed. A sysop can offer them for
+- **Anonymised:** finds, owned caches and the APRS messages the person sent or was sent, from any SSID, pass to a
+  withdrawn marker, served as `WITHDRAWN`. The marker can never be registered as a call.
+- **Archived:** owned caches are archived and their uploaded media and stage audio clues removed. A sysop can offer them for
   [adoption](../day-to-day/cache-adoption.md); the adoption trail keeps its rows with the marker in place of the
   person's call, and drops the notes on them.
-- **Deleted:** every personal row: passkeys, email links, held calls and their verifications, positions under
-  the call, device keys, watches, alerts, favourites, saved views, push subscriptions, boxes, ratings, API keys,
+- **Deleted:** every personal row: passkeys, email links, held calls and their verifications, positions and the
+  map's station entry under the call and every SSID of it, device keys, watches, alerts, favourites, saved views, push subscriptions, boxes, ratings, API keys,
   adoption requests and personal BBS mail.
+- **Kept:** the Shack raw-packet ring and NET/ROM MHeard rows, which record what the instance heard on the air;
+  they age out on their retention below.
 - **Freed:** the base calls, for a new registration.
 - **Propagated:** a PII-free tombstone tells federation peers to purge their mirrored copies
   ([Erasure across the network](#erasure-across-the-network)).

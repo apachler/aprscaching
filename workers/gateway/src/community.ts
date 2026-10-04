@@ -233,7 +233,7 @@ export async function handleActivity(req: Request, env: Env): Promise<Response> 
       `SELECT l.id, l.logger_call AS loggerCall, l.ts, l.log_type AS logType, l.verified, l.tier,
             c.id AS cacheId, c.code AS cacheCode, c.title AS cacheTitle
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE 1=1${bb.sql}${ks.sql} ORDER BY l.ts DESC, l.id DESC LIMIT ?`,
+       WHERE c.fed_scope != 'unlisted'${bb.sql}${ks.sql} ORDER BY l.ts DESC, l.id DESC LIMIT ?`,
     )
       .bind(...bb.binds, ...ks.binds, pg.limit + 1)
       .all()

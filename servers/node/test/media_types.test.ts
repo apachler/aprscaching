@@ -72,8 +72,13 @@ describe("cache media", () => {
     expect(photo.headers.get("content-security-policy")).toContain("sandbox");
     expect(photo.headers.get("content-disposition")).toBeNull();
 
-    w.media.items.set("cache/1/media/page.html", { bytes: new Uint8Array([60]), contentType: "text/html" });
-    const page = await serve(w.env)(new Request("https://gw.test/api/media/cache/1/media/page.html"));
+    w.media.items.set("cache/1/media/00000000-0000-4000-8000-000000000001.html", {
+      bytes: new Uint8Array([60]),
+      contentType: "text/html",
+    });
+    const page = await serve(w.env)(
+      new Request("https://gw.test/api/media/cache/1/media/00000000-0000-4000-8000-000000000001.html"),
+    );
     expect(page.headers.get("content-type")).toBe("application/octet-stream");
     expect(page.headers.get("content-disposition")).toBe("attachment");
   });

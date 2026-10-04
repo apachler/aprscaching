@@ -114,6 +114,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
     sent: "warn",
     queued: "",
     failed: "dnf",
+    expired: "dnf",
   };
 
   return (

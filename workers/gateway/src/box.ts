@@ -27,6 +27,7 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified } from "./callsign.js";
 import { serviceCall } from "./servicecall.js";
 import { boxPrincipal } from "./boxprincipal.js";
+import { BOX_COMMAND_QUEUED_TTL_S } from "./retention.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
@@ -226,11 +227,17 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
     )
       .bind(boxId, JSON.stringify(parseBoxCaps(url)), nowS())
       .run();
+  const stale = nowS() - BOX_COMMAND_QUEUED_TTL_S;
+  await env.DB.prepare(
+    "UPDATE box_commands SET status='expired', result='not collected in time' WHERE box_id = ? AND status = 'queued' AND created_at < ?",
+  )
+    .bind(boxId, stale)
+    .run();
   const rows = (
     await env.DB.prepare(
-      "SELECT id, callsign, kind, payload, sig, created_at AS createdAt FROM box_commands WHERE box_id = ? AND status = 'queued' ORDER BY created_at LIMIT 50",
+      "SELECT id, callsign, kind, payload, sig, created_at AS createdAt FROM box_commands WHERE box_id = ? AND status = 'queued' AND created_at >= ? ORDER BY created_at LIMIT 50",
     )
-      .bind(boxId)
+      .bind(boxId, stale)
       .all<{ id: number; payload: string | null }>()
   ).results;
   if (rows.length) {
