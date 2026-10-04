@@ -42,6 +42,7 @@ export const CONFIG_KEYS = {
   FED_OPERATOR: { type: "string", units: ["gateway"] },
   FIRST_PARTY_SITES: { type: "calls", units: ["gateway"] },
   MIN_TRUST: { type: "enum", units: ["gateway"], default: "B", values: ["A", "B"] },
+  CACHE_MOVE_LIMIT_M: { type: "number", units: ["gateway"], default: "100" },
   FED_PEERS: { type: "list", units: ["gateway", "pocket"] },
   FED_DISCOVER: { type: "enum", units: ["gateway"], default: "0", values: ["0", "1", "false", "true", "no", "yes"] },
   FED_CORROBORATION_QUORUM: { type: "int", units: ["gateway"], default: "2" },

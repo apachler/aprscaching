@@ -285,7 +285,17 @@ export interface CacheDetail extends CacheSummary {
   /** A living cache: the time of its station's position, which is the cache's; null while the station has none. */
   stationHeardAt?: number | null;
   /** For the cache's owner only: the settings the edit form starts from that the fields above do not carry. */
-  own?: { minTrust: "A" | "B" | null; rendezvous: boolean };
+  own?: {
+    minTrust: "A" | "B" | null;
+    rendezvous: boolean;
+    /** How far the owner moves the cache: free before its first find, then `limitM` from where it was found
+     *  (`pinned` for its own coordinates, `stagePins` for its stages; null and empty before the first find). */
+    move: {
+      limitM: number;
+      pinned: { lat: number; lon: number } | null;
+      stagePins: Array<{ stageNo: number; lat: number; lon: number }>;
+    };
+  };
 }
 
 // ---- audio-cache: staged multi-cache ----

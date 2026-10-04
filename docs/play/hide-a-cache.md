@@ -135,6 +135,13 @@ Open your cache and tap **Edit**, next to the favourite heart. Only the owner se
       for a living cache the rendezvous switch.
 2. Tap **Save changes**. The cache page shows the new version.
 
+**Moving a found cache.** Until its first find, a cache moves anywhere. The first find fixes where it was
+found, and from then on **Move to** takes it at most 100 m from that place; your sysop may set another limit.
+The form shows the limit, and the distance from the found place as you type. Every past find still points to
+the place its finder visited. To move a cache further, archive it and hide a new one at the new place. If the
+coordinates were wrong from the start, ask your sysop to correct them. A living cache follows its station and
+has no limit.
+
 **Status.** **Disabled** keeps the cache on the map and refuses finds, for a cache that needs repair.
 **Archived** takes it off the map, for a cache that is gone; the app asks first. Either one can be set back to
 **Active** here.
@@ -142,7 +149,9 @@ Open your cache and tap **Edit**, next to the favourite heart. Only the owner se
 **Stages.** A multi-stage or audio cache has **Stages** at the end of the form: the open start and the locked
 stages in order, each with its unlock, position and clue. **Add a stage** and **Remove the last stage** change
 the list; **Save stages** stores it. A finder who unlocked a stage you changed, or one after it, unlocks those
-stages again, so the app asks before it saves. An audio stage's clip uploads once the stage is saved.
+stages again, so the app asks before it saves. An audio stage's clip uploads once the stage is saved. Once the
+cache has a find, each stage it had then moves within the same limit as the cache and stays part of the cache:
+its **Remove** button is off. A stage you add later is free until a find includes it.
 
 ## Cache adoption
 

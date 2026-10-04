@@ -40,6 +40,7 @@ import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
 import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
+import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cacheplace.js";
 
 // ---- database row shapes (snake_case) ----
 export interface CacheDbRow {
@@ -411,7 +412,11 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     stageCount: stages,
     ...(row.type === "aprs_living" && { stationHeardAt }),
     ...(isOwner && {
-      own: { minTrust: (row.min_trust as "A" | "B" | null) ?? null, rendezvous: !!row.rendezvous },
+      own: {
+        minTrust: (row.min_trust as "A" | "B" | null) ?? null,
+        rendezvous: !!row.rendezvous,
+        move: await moveRule(env, id),
+      },
     }),
   };
   return json({ cache: detail });
@@ -585,6 +590,13 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   if (m.type !== existing.type) {
     const heritage = await heritageRefusal(req, env, m.type);
     if (heritage) return json({ error: heritage }, { status: 403 });
+  }
+  // A found cache moves only a short way from where it was found; a living one follows its station instead.
+  if (m.type !== "aprs_living" && (m.lat !== existing.lat || m.lon !== existing.lon)) {
+    const pin = (await placePins(env, id)).get(CACHE_POINT);
+    const to = m.lat != null && m.lon != null ? { lat: m.lat, lon: m.lon } : null;
+    const tooFar = moveRefusal(env, existing.code, pin, to);
+    if (tooFar) return json({ error: tooFar }, { status: 409 });
   }
   const now = nowS();
   await env.DB.prepare(
@@ -978,6 +990,8 @@ export async function commitFind(
   const logId = Number(ins.meta?.last_row_id) || undefined;
   const now = nowS();
   if (score.retry && logId) await scheduleRetry(env, logId, at, score.retry);
+  // the first find pins the cache where it stands, so later moves stay near the place its finders visited
+  await pinPlaces(env, cacheId);
 
   // award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);

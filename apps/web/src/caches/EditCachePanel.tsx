@@ -8,6 +8,7 @@ import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { StagesEditor } from "./StagesEditor.js";
 import { CountrySelect } from "./CountrySelect.js";
+import { checkMove, moveLine } from "./moveLimit.js";
 
 const STATUSES: { v: CacheStatus; label: string; help: string }[] = [
   { v: "active", label: "Active", help: "On the map and takes finds." },
@@ -58,6 +59,10 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
   const living = c.type === "aprs_living";
   const staged = c.type === "multi" || c.type === "audio" || c.stageCount > 0;
 
+  const move = c.own?.move;
+  const typedAt = moveTo.trim() ? parseCoordinates(moveTo) : null;
+  const moveCheck = move ? checkMove(move.limitM, move.pinned, typedAt) : null;
+
   const tagList = parseTags;
   const tagErr = tagProblem(tagList(f.tags));
 
@@ -98,6 +103,10 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
     }
     if (tagErr) {
       setErr(tagErr);
+      return;
+    }
+    if (moveCheck?.over) {
+      setMoveErr(true);
       return;
     }
     if (Object.keys(b).length === 0) {
@@ -187,8 +196,8 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
               autoComplete="off"
               spellCheck={false}
               placeholder="47.07355, 15.43785 or JN77rb"
-              aria-invalid={moveErr || undefined}
-              aria-describedby="edit-move-help"
+              aria-invalid={moveErr || moveCheck?.over || undefined}
+              aria-describedby={move ? "edit-move-help edit-move-limit" : "edit-move-help"}
               onChange={(e) => {
                 setMoveTo(e.target.value);
                 setMoveErr(false);
@@ -196,10 +205,15 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
             />
           </label>
           <p id="edit-move-help" className={moveErr ? "error fine" : "muted fine"}>
-            {moveErr
+            {moveErr && !moveCheck?.over
               ? "Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator."
               : "Decimal degrees (lat, lon) or a Maidenhead locator. Leave it empty to keep the cache where it is."}
           </p>
+          {move && (
+            <p id="edit-move-limit" className={moveCheck?.over ? "error fine" : "muted fine"} aria-live="polite">
+              {moveLine(move.limitM, move.pinned, moveCheck)}
+            </p>
+          )}
         </>
       )}
 
@@ -287,6 +301,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
           cacheId={c.id}
           ownerCall={callsign}
           start={c.lat != null && c.lon != null ? { lat: c.lat, lon: c.lon } : null}
+          move={move}
         />
       )}
     </Panel>
