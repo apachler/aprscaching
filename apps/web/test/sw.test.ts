@@ -113,8 +113,16 @@ describe("the offline app shell", () => {
     const w = load({ active: true });
     await w.fire("install");
     expect(w.calls.skipWaiting).toBe(0);
-    await w.fire("message", { data: { type: "SKIP_WAITING" } });
+    await w.fire("message", { origin: ORIGIN, data: { type: "SKIP_WAITING" } });
     expect(w.calls.skipWaiting).toBe(1);
+  });
+
+  it("ignores a take-over request from another origin", async () => {
+    const w = load({ active: true });
+    await w.fire("install");
+    await w.fire("message", { origin: "https://elsewhere.example", data: { type: "SKIP_WAITING" } });
+    await w.fire("message", { data: { type: "SKIP_WAITING" } });
+    expect(w.calls.skipWaiting).toBe(0);
   });
 
   it("deletes older shells on activate", async () => {

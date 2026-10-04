@@ -49,8 +49,10 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// The app posts this when the user taps Reload on the update notice.
+// The app posts this when the user taps Reload on the update notice. Only a page of this origin may
+// ask the waiting worker to take over.
 self.addEventListener("message", (event) => {
+  if (event.origin !== self.location.origin) return;
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
