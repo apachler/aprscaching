@@ -118,7 +118,7 @@ describe("portable backup rows", () => {
       expect(JSON.parse(r.out).migratedForward).toEqual([newest()]);
       expect(tool(["schema", dst]).out.trim()).toBe(newest());
       // the newest migration may add columns to caches: every value the older backup held arrives unchanged
-      expect(snapshot(dst).caches).toMatchObject(snapshot(src).caches);
+      expect(snapshot(dst).caches).toMatchObject(snapshot(src).caches!);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -7,7 +7,7 @@ WorkingDirectory=/opt/aprscaching
 EnvironmentFile=/opt/aprscaching/deploy/.env
 # The env file is the gateway's too: the ingest's environment drops every gateway-only secret (secret in
 # packages/shared/src/configkeys.ts and not read by the ingest).
-UnsetEnvironment=OPERATOR_SECRET SESSION_SECRET FED_PRIVATE_KEY FED_CORROBORATION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET OKAPI_KEY EMAIL_API_KEY VAPID_PRIVATE TUNNEL_TOKEN CF_API_TOKEN
+UnsetEnvironment=OPERATOR_SECRET SESSION_SECRET FED_PRIVATE_KEY FED_CORROBORATION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET OKAPI_KEY GMA_API_KEY EMAIL_API_KEY VAPID_PRIVATE TUNNEL_TOKEN CF_API_TOKEN
 ExecStart=/usr/bin/pnpm --filter @aprscaching/ingest start
 Restart=always
 RestartSec=5

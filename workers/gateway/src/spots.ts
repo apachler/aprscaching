@@ -353,7 +353,7 @@ const receptionUrl = (env: Env, source: SpotSource): string => {
 };
 
 /** GMA's spot feed; it answers only with the instance's GMA_API_KEY. */
-export const GMA_SPOTS_URL = "https://www.gma.rocks/api/spots/25/";
+const GMA_SPOTS_URL = "https://www.gma.rocks/api/spots/25/";
 
 const SOTA_SOURCE: SourceDef = {
   source: "sota",

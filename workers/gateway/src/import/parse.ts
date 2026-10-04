@@ -123,10 +123,25 @@ const ATTRIBUTION_MAX_CHARS = 1000;
 const ATTRIBUTION_MAX_PARTS = 24;
 
 const codePoint = (n: number): string => (Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "");
+/**
+ * Drop every tag in one pass: from a `<` to the next `>`, or to the end when no `>` follows, so no part
+ * of a tag survives. A tag becomes a space, which keeps words on either side of `<br>` or `</p>` apart.
+ */
+function stripTags(html: string): string {
+  let out = "";
+  let i = 0;
+  while (i < html.length) {
+    const open = html.indexOf("<", i);
+    if (open < 0) return out + html.slice(i);
+    out += html.slice(i, open) + " ";
+    const close = html.indexOf(">", open + 1);
+    if (close < 0) return out;
+    i = close + 1;
+  }
+  return out;
+}
 function htmlText(html: string): string {
-  return html
-    .replace(/<(br|\/p|\/div|\/li)\b[^>]*>/gi, " ")
-    .replace(/<[^>]*>/g, "")
+  return stripTags(html)
     .replace(/&#(\d+);/g, (_, d: string) => codePoint(Number(d)))
     .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => codePoint(parseInt(h, 16)))
     .replace(/&nbsp;/g, " ")
