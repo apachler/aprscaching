@@ -23,6 +23,11 @@ services:
     # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
     # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
     # ports: ["192.168.1.10:1799:1799/udp"]
+    # A serial TNC or PTT line: pass the device in. The image's user (UID 10001) is in `dialout`, GID 20 on Debian,
+    # Ubuntu and Raspberry Pi OS; where the host's device group has another GID (`stat -c %g /dev/ttyUSB0`), add
+    # that GID with group_add.
+    # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
+    # group_add: ["18"]
     # The settings come from .env alone (INGEST_URL, e.g. https://gateway.<you>.workers.dev/ingest; the APRS-IS
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.

@@ -66,7 +66,9 @@ new file with the next number; a file that has been applied is never edited.
 
 `deploy/Dockerfile` builds the full image from the repository root: it installs the workspace with the pinned
 pnpm, builds every package (the web app into `apps/web/dist` inside the image) and starts the gateway by
-default. The same image runs the ingest through a compose `command:` override.
+default. The same image runs the ingest through a compose `command:` override. Its services run as the
+unprivileged user `aprscaching` (UID and GID 10001, in `dialout` for serial devices), which owns `/data` and
+`/srv/web`; the code under `/app` stays root-owned.
 
 ```bash
 docker build -f deploy/Dockerfile -t aprscaching:local .

@@ -4,6 +4,8 @@
 # shellcheck disable=SC2034 # DOC_* is the doctor context, read by deploy/lib/doctor.sh
 
 : "${SHAPE_ENV:=$DEPLOY_DIR/.env}"
+# The UID and GID the image's services run as (deploy/Dockerfile).
+SELFHOST_UID=10001
 
 # The compose files of this installation: the tunnel overlay when a tunnel token is set.
 selfhost_compose() {
@@ -91,7 +93,7 @@ selfhost_publishes() {
 }
 
 shape_doctor_extra() {
-  local svc running size version want="gateway ingest caddy"
+  local svc running size version foreign="" want="gateway ingest caddy"
   have docker || { failc service.docker "docker is not installed here" "install Docker, or use --shape"; return 0; }
   running="$(selfhost_compose ps --status running --format '{{.Service}}' 2>/dev/null || true)"
   [ -z "$(env_file_get "$SHAPE_ENV" TUNNEL_TOKEN)" ] || want="$want cloudflared"
@@ -117,6 +119,17 @@ shape_doctor_extra() {
   fi
   if doc_public && selfhost_compose port --protocol udp ingest 1799 2>/dev/null | grep -qE '^(0\.0\.0\.0|\[::\]):[1-9]'; then
     warnc service.meshcom_port "MeshCom's 1799/udp is published on every address of a public host" "publish it on the LAN address only"
+  fi
+  # The gateway runs as UID 10001 and must write the data directory, the database and its secrets. Checked
+  # through a one-off container as that user, so a gateway that cannot start is checked too; with no image built
+  # yet there is nothing to check. A file it only reads, such as an offline map copied in, may belong to root.
+  if docker image inspect aprscaching:local >/dev/null 2>&1; then
+    foreign="$(selfhost_run gateway sh -c 'for f in /data /data/media /data/*.db /data/*.db-wal /data/*.db-shm /data/*.secret; do
+      [ ! -e "$f" ] || [ -w "$f" ] || echo "$f"; done' 2>/dev/null | head -n 1 || true)"
+  fi
+  if [ -n "$foreign" ]; then
+    failc service.data_owner "the gateway (UID $SELFHOST_UID) cannot write $foreign in the data volume" \
+      "deploy/aprscaching update, or: docker compose run --rm --no-deps --user 0 gateway chown -R $SELFHOST_UID:$SELFHOST_UID /data"
   fi
   size="$(selfhost_compose exec -T gateway sh -c 'du -k "${DB_PATH:-/data/aprscaching.db}" | cut -f1' 2>/dev/null || true)"
   [ -z "$size" ] || pass resources.database "the database is $((size / 1024)) MiB"
@@ -154,4 +167,15 @@ shape_start() { selfhost_compose up -d; }
 # ---- update (deploy/lib/update.sh): this checkout, rebuilt and restarted by compose; the gateway applies
 # new migrations when it starts.
 shape_git() { git -C "$DEPLOY_DIR/.." "$@"; }
-shape_update_apply() { selfhost_compose up -d --build; }
+shape_update_apply() { selfhost_compose build && selfhost_own_volumes && selfhost_compose up -d; }
+
+# The image runs as UID 10001. A file in the data or web volume that another owner holds (a file written as
+# root) is handed to it, by a one-off root container that only changes ownership.
+selfhost_own_volumes() {
+  local svc dir
+  for svc in gateway:/data webdist:/srv/web; do
+    dir="${svc#*:}"
+    selfhost_run --user 0 "${svc%%:*}" find "$dir" ! -user "$SELFHOST_UID" -exec chown "$SELFHOST_UID:$SELFHOST_UID" {} + ||
+      { warn "Handing $dir to UID $SELFHOST_UID failed."; return 1; }
+  done
+}
