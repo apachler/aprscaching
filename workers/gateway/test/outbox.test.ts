@@ -32,10 +32,8 @@ describe("outbox rows", () => {
     const rows = [row(1), row(2, { payload: ">a\nb" }), row(3), row(4, { src_call: "X\0" })];
     const db = {
       prepare(sql: string) {
-        return {
-          all: async () => ({ results: sql.startsWith("SELECT") ? rows : [] }),
-          bind: (...args: unknown[]) => ({ sql, args }),
-        };
+        const all = async () => ({ results: sql.startsWith("SELECT") ? rows : [] });
+        return { all, bind: (...args: unknown[]) => ({ sql, args, all }) };
       },
       async batch(stmts: { sql: string; args: unknown[] }[]) {
         for (const s of stmts) if (s.sql.includes("status='failed'")) failed.push(s.args[0]);
