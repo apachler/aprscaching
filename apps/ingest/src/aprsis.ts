@@ -2,6 +2,8 @@
 import net from "node:net";
 import { EventEmitter } from "node:events";
 import { Backoff } from "./backoff.js";
+import { LineBuffer } from "./lines.js";
+import { SOFTWARE_VERSION } from "./version.js";
 
 export interface AprsIsOpts {
   host: string;
@@ -16,7 +18,7 @@ export interface AprsIsOpts {
 /** Persistent APRS-IS client: connects, logs in with a filter, auto-reconnects, emits lines. */
 export class AprsIs extends EventEmitter {
   private sock?: net.Socket;
-  private buf = "";
+  private lines = new LineBuffer();
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
   private backoff: Backoff;
@@ -66,7 +68,7 @@ export class AprsIs extends EventEmitter {
     const gen = ++this.gen;
     this.sock?.removeAllListeners();
     this.sock?.destroy();
-    this.buf = ""; // never carry a partial line across connections
+    this.lines.reset(); // never carry a partial line across connections
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
@@ -75,17 +77,13 @@ export class AprsIs extends EventEmitter {
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
-      s.write(`user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching 0.0 filter ${this.filter()}\r\n`);
+      s.write(
+        `user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching ${SOFTWARE_VERSION} filter ${this.filter()}\r\n`,
+      );
       this.emit("up");
     });
     s.on("data", (chunk: string) => {
-      this.buf += chunk;
-      let i;
-      while ((i = this.buf.indexOf("\n")) >= 0) {
-        const line = this.buf.slice(0, i).replace(/\r$/, "");
-        this.buf = this.buf.slice(i + 1);
-        if (line && !line.startsWith("#")) this.emit("line", line);
-      }
+      for (const line of this.lines.push(chunk)) if (line && !line.startsWith("#")) this.emit("line", line);
     });
     s.on("error", () => {
       /* close always follows — reconnect handled there */

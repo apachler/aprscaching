@@ -2,7 +2,7 @@
 // Numeric env validation (a blank BATCH_MS must NOT become a 1 ms loop / port 0) and the dotenv
 // loader the documented `pnpm dev`/`start` paths rely on.
 import { describe, it, expect, afterEach } from "vitest";
-import { numEnv, portEnv, loadDotEnv } from "../src/config.js";
+import { numEnv, portEnv, loadDotEnv, gatewayUrls } from "../src/config.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -41,6 +41,26 @@ describe("numEnv validates + floors", () => {
     expect(portEnv("T_PORT", 14580)).toBe(14580); // blank → default, never 0
     process.env.T_PORT = "70000";
     expect(portEnv("T_PORT", 14580)).toBe(65535); // clamped into range
+  });
+});
+
+describe("gatewayUrls", () => {
+  it("derives the base from the ingest endpoint", () => {
+    expect(gatewayUrls("https://gw.example/ingest")).toEqual({
+      ingest: "https://gw.example/ingest",
+      base: "https://gw.example",
+    });
+  });
+  it("drops trailing slashes before deriving the base", () => {
+    expect(gatewayUrls("https://gw.example/ingest/")).toEqual({
+      ingest: "https://gw.example/ingest",
+      base: "https://gw.example",
+    });
+    expect(gatewayUrls("https://gw.example/aprs/ingest//").base).toBe("https://gw.example/aprs");
+  });
+  it("falls back to the local gateway when unset or blank", () => {
+    expect(gatewayUrls(undefined).ingest).toBe("http://127.0.0.1:8787/ingest");
+    expect(gatewayUrls("  ").base).toBe("http://127.0.0.1:8787");
   });
 });
 

@@ -7,7 +7,8 @@ import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { validateConfig, type Packet } from "@aprscaching/shared";
-import { loadDotEnv, numEnv, portEnv } from "./config.js";
+import { gatewayUrls, loadDotEnv, numEnv, portEnv } from "./config.js";
+import { Delivery } from "./deliver.js";
 import { txLimitFromEnv } from "./txlimit.js";
 import { callWarnings } from "./callroles.js";
 import { gatewayFetch, loadBoxKey, useBoxKey } from "./gatewayauth.js";
@@ -30,7 +31,8 @@ try {
   console.error(`[ingest] FATAL: ${(e as Error).message}`);
   process.exit(1);
 }
-const INGEST_URL = env.INGEST_URL ?? "http://127.0.0.1:8787/ingest";
+// INGEST_URL names the ingest endpoint; every other gateway route hangs off its base.
+const { ingest: INGEST_URL, base: GATEWAY_BASE } = gatewayUrls(env.INGEST_URL);
 const SECRET = env.INGEST_SECRET ?? "change-me";
 const BATCH_MS = numEnv("BATCH_MS", 1500, { min: 100 }); // floor so a blank value can't tight-loop
 
@@ -59,8 +61,16 @@ const enqueue = (p: Packet) => {
   if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
   batch.push(p);
 };
-let spool: Packet[] = []; // undelivered packets, retried next tick
-const MAX_SPOOL = numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }); // bounded (drop-oldest) so a long outage can't OOM the Pi
+// Undelivered packets wait here for the next flush, bounded (drop-oldest) so a long outage can't OOM the Pi.
+const delivery = new Delivery({
+  maxQueue: numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }),
+  post: (packets) =>
+    gatewayFetch(INGEST_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
+      body: JSON.stringify({ packets }),
+    }),
+});
 
 // Graceful stop: best-effort flush of the pending batch + spool so a systemd/Docker restart or
 // host shutdown loses as few heard packets as possible, then exit. Registered after the buffers
@@ -72,22 +82,13 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   for (const stop of onShutdown) stop();
   console.log(`[ingest] ${signal} — flushing pending packets…`);
-  const packets = spool.concat(batch);
+  delivery.add(batch);
   batch = [];
-  spool = [];
-  if (packets.length) {
-    try {
-      await gatewayFetch(INGEST_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
-        body: JSON.stringify({ packets }),
-        signal: AbortSignal.timeout(3000),
-      });
-      console.log(`[ingest] flushed ${packets.length} packet(s)`);
-    } catch {
-      console.error(`[ingest] flush failed — dropping ${packets.length} packet(s)`);
-    }
-  }
+  // A flush joins one already running; the deadline keeps a dead gateway from holding up the stop.
+  const deadline = new Promise<void>((r) => setTimeout(r, 5000).unref());
+  await Promise.race([delivery.flush(), deadline]);
+  if (delivery.size) console.error(`[ingest] flush incomplete — dropping ${delivery.size} packet(s)`);
+  else console.log("[ingest] pending packets flushed");
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
@@ -100,7 +101,8 @@ import type { FrameLink } from "./link.js";
 let serviceLink: FrameLink | null = null;
 
 // Runtime switches the remote-control poller flips. `tx` is the master RF transmit switch; digi/igate
-// stay null unless that function is configured. The KISS TNC (when present) is the remote-TX radio.
+// stay null unless that function is configured. The KISS TNC (when present) is the remote-TX radio. Each
+// transmitting function still needs its own opt-in (DIGI_CALL, IGATE_TX=1, BOX_TX=1) before `tx` matters.
 const station: BoxState = { tx: true, digi: null, igate: null };
 let boxRadio: BoxRadio | null = null;
 
@@ -176,7 +178,7 @@ if (env.KISS_TNC_HOST) {
       const cdigi = new ConnectedDigipeater(kiss, {
         mycall: env.DIGI_CALL,
         aliases: [...aliases],
-        viscousMs: env.DIGI_VISCOUS_MS ? Number(env.DIGI_VISCOUS_MS) : undefined,
+        viscousMs: numEnv("DIGI_VISCOUS_MS", 0, { min: 0, max: 10_000 }) || undefined,
       });
       rawSubs.push((b) => {
         if (station.tx && station.digi) cdigi.onRaw(b);
@@ -185,20 +187,22 @@ if (env.KISS_TNC_HOST) {
     }
   }
 
-  // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
+  // APRS IGate (RF -> APRS-IS). Needs a real callsign + passcode. The APRS-IS -> RF direction transmits, so
+  // it is a separate opt-in: IGATE_TX=1.
   if (env.IGATE_CALL && env.IGATE_PASS) {
+    const igateTx = env.IGATE_TX === "1";
     const igate = new Igate(kiss, {
       host: env.APRSIS_HOST ?? "rotate.aprs2.net",
       port: portEnv("APRSIS_PORT", 14580),
       call: env.IGATE_CALL,
       pass: env.IGATE_PASS,
       filter: env.IGATE_FILTER,
-      localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
+      localTtlSec: numEnv("IGATE_LOCAL_TTL", 1800, { min: 60, max: 86_400 }),
       txPath: (env.IGATE_TX_PATH ?? "")
         .split(",")
         .map((p) => p.trim().toUpperCase())
         .filter(Boolean),
-      canTx: () => station.tx && station.igate === true,
+      canTx: () => igateTx && station.tx && station.igate === true,
       ...txLimitFromEnv("igate"),
     });
     station.igate = true;
@@ -206,7 +210,9 @@ if (env.KISS_TNC_HOST) {
       if (station.igate) igate.onRf(f);
     });
     igate.start();
-    console.log(`[igate] enabled as ${env.IGATE_CALL}`);
+    console.log(
+      `[igate] enabled as ${env.IGATE_CALL} (${igateTx ? "RF <-> APRS-IS" : "receive only; IGATE_TX=1 passes messages to RF"})`,
+    );
   }
 }
 // Meshtastic — licensed nodes only, from the node's protobuf TCP API (MESHTASTIC_HOST, port 4403) and/or
@@ -329,7 +335,7 @@ if (serviceLink) {
   const { startConnectedServices } = await import("./connected.js");
   await startConnectedServices({
     link: serviceLink,
-    gwBase: INGEST_URL.replace(/\/ingest$/, ""),
+    gwBase: GATEWAY_BASE,
     secret: SECRET,
     env,
   });
@@ -377,40 +383,23 @@ aprs.on("line", (line: string) => {
   batch.push(pkt);
 });
 
-let spoolLoggedAt = 0;
-setInterval(async () => {
-  const packets = spool.concat(batch); // retry anything spooled from a prior failure, then the new batch
+setInterval(() => {
+  if (shuttingDown) return;
+  delivery.add(batch);
   batch = [];
-  spool = [];
-  if (!packets.length) return;
-  try {
-    const res = await gatewayFetch(INGEST_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
-      body: JSON.stringify({ packets }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`); // a 401/413/500 is NOT success
-  } catch (e) {
-    // keep the packets and retry next tick, bounded (drop-oldest) so an hours-long gateway
-    // outage can't grow memory without limit. Rate-limit the log so a dead gateway can't flood the SD card.
-    spool = packets.slice(-MAX_SPOOL);
-    const nowMs = Date.now();
-    if (nowMs - spoolLoggedAt > 30_000) {
-      console.error(`[forward] gateway unreachable (${(e as Error).message}); spooled ${spool.length}/${MAX_SPOOL}`);
-      spoolLoggedAt = nowMs;
-    }
-  }
+  void delivery.flush(); // joins a flush still waiting on a slow gateway instead of posting the same packets twice
 }, BATCH_MS);
 
 aprs.start();
 
 let uplinkWarned = false;
+let uplinkStarted = false; // declared before the first learnServiceCall() can read it
 const callWarned = new Set<string>();
 // The gateway names its service call: the APRS-IS feed asks for messages addressed to it, and a station of
 // this box sharing it would have its own commands ignored and, on MeshCom, acked by its own node.
 async function learnServiceCall(): Promise<void> {
   try {
-    const r = await gatewayFetch(`${INGEST_URL.replace(/\/+$/, "")}/check`, { headers: { "x-ingest-secret": SECRET } });
+    const r = await gatewayFetch(`${INGEST_URL}/check`, { headers: { "x-ingest-secret": SECRET } });
     if (!r.ok) return;
     const { serviceCall, sites } = (await r.json()) as { serviceCall?: string; sites?: string[] };
     if (!serviceCall) return;
@@ -459,7 +448,7 @@ const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
 if (env.BBS_FORWARD === "1" && forwardCall && (env.KISS_TNC_HOST || axudpPort)) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
-    base: INGEST_URL.replace(/\/ingest$/, ""),
+    base: GATEWAY_BASE,
     secret: SECRET,
     mycall: forwardCall,
     kiss: env.KISS_TNC_HOST ? { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) } : undefined,
@@ -479,7 +468,7 @@ if (env.BOX_ID) {
   const { BoxPoller, parseBoxPath } = await import("./boxpoll.js");
   const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
   new BoxPoller({
-    base: INGEST_URL.replace(/\/ingest$/, ""),
+    base: GATEWAY_BASE,
     secret: SECRET,
     boxId: env.BOX_ID,
     boxCall,
@@ -499,7 +488,6 @@ if (env.BOX_ID) {
 
 // ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
 import { AprsUplink, uplinkLogin } from "./uplink.js";
-let uplinkStarted = false;
 /**
  * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, announced finds and
  * weather. Started once, under the login `uplinkLogin` chose.
@@ -526,10 +514,13 @@ function startUplink(serviceCall: string, servicePass: string): void {
       })
     : null;
   cwop?.start();
-  const base = INGEST_URL.replace(/\/ingest$/, "");
+  const base = GATEWAY_BASE;
   let outboxFailing = false;
   let outboxLoggedAt = 0;
+  let outboxPolling = false; // a poll still waiting on the gateway is not overlapped by the next one
   setInterval(async () => {
+    if (outboxPolling) return;
+    outboxPolling = true;
     try {
       const r = await gatewayFetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`); // a 401/500 poll is a failure, not "no items"
@@ -558,6 +549,8 @@ function startUplink(serviceCall: string, servicePass: string): void {
         console.error(`[uplink] outbox poll failed (${(e as Error).message}); retrying`);
         outboxLoggedAt = nowMs;
       }
+    } finally {
+      outboxPolling = false;
     }
   }, 4000);
   console.log(`[uplink] publishing the gateway's outbox to APRS-IS as ${SERVICE_CALL}`);

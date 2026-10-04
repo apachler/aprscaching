@@ -5,6 +5,8 @@ import type { ParsedFrame } from "@aprscaching/aprs";
 import type { KissTnc } from "./kiss.js";
 import { Backoff } from "./backoff.js";
 import { TokenBucket } from "./txlimit.js";
+import { LineBuffer } from "./lines.js";
+import { SOFTWARE_VERSION } from "./version.js";
 
 export interface IgateOpts {
   host: string;
@@ -16,7 +18,7 @@ export interface IgateOpts {
   txPath?: string[]; // RF path of gated messages (default none: the addressee was heard locally)
   retryMs?: number;
   idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
-  canTx?: () => boolean; // runtime RF-transmit switch for the APRS-IS -> RF direction (default always on)
+  canTx?: () => boolean; // RF-transmit switch for the APRS-IS -> RF direction (absent: never transmits)
   /** Token bucket for the APRS-IS -> RF direction (`IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC`). */
   burst?: number;
   refillSec?: number;
@@ -34,7 +36,7 @@ const base = (c: string) => c.split("-")[0]!.toUpperCase();
 export class Igate {
   private sock?: net.Socket;
   private ready = false;
-  private buf = "";
+  private lines = new LineBuffer();
   private heard = new Map<string, number>(); // base callsign -> last heard ts(ms)
   private localTtl: number;
   private gen = 0; // connection generation — a replaced socket can never reconnect
@@ -83,7 +85,7 @@ export class Igate {
     const f = parseTNC2(line);
     if (!f) return;
     const addr = txIgateTarget(f, this.o.call, this.heardLocally);
-    if (!addr || !(this.o.canTx?.() ?? true)) return;
+    if (!addr || !(this.o.canTx?.() ?? false)) return;
     if (!this.bucket.take()) {
       console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
       return;
@@ -117,7 +119,7 @@ export class Igate {
     this.sock?.removeAllListeners();
     this.sock?.destroy();
     this.ready = false;
-    this.buf = "";
+    this.lines.reset();
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
@@ -125,20 +127,13 @@ export class Igate {
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       s.write(
-        `user ${this.o.call} pass ${this.o.pass} vers aprscaching-igate 0.0 filter ${this.o.filter ?? "t/m"}\r\n`,
+        `user ${this.o.call} pass ${this.o.pass} vers aprscaching-igate ${SOFTWARE_VERSION} filter ${this.o.filter ?? "t/m"}\r\n`,
       );
       this.ready = true;
       console.log("[igate] APRS-IS connected");
     });
     s.on("data", (chunk: string) => {
-      this.buf += chunk;
-      let i;
-      while ((i = this.buf.indexOf("\n")) >= 0) {
-        const line = this.buf.slice(0, i).replace(/\r$/, "");
-        this.buf = this.buf.slice(i + 1);
-        if (!line || line.startsWith("#")) continue;
-        this.onIsLine(line);
-      }
+      for (const line of this.lines.push(chunk)) if (line && !line.startsWith("#")) this.onIsLine(line);
     });
     s.on("error", () => {
       /* close always follows — reconnect handled there */

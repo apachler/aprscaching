@@ -81,6 +81,9 @@ export class KissTnc {
   private connect() {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
+    // A quiet channel sends nothing for hours, so silence proves nothing; TCP keepalive probes find a TNC
+    // host that vanished (power cut, Wi-Fi drop) and close the socket, which reconnects.
+    s.setKeepAlive(true, 30_000);
     this.rx.reset(); // never carry a partial frame across a reconnect
     s.on("connect", () => {
       this.connected = true;

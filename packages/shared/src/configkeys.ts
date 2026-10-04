@@ -180,6 +180,7 @@ export const CONFIG_KEYS = {
   IGATE_PASS: { type: "string", units: ["ingest"], secret: true },
   IGATE_FILTER: { type: "string", units: ["ingest"] },
   IGATE_LOCAL_TTL: { type: "int", units: ["ingest"], default: "1800" },
+  IGATE_TX: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
   IGATE_TX_PATH: { type: "list", units: ["ingest"] },
   IGATE_TX_BURST: { type: "int", units: ["ingest"], default: "6" },
   IGATE_TX_REFILL_SEC: { type: "number", units: ["ingest"], default: "10" },

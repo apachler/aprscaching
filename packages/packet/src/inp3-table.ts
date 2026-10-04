@@ -20,8 +20,41 @@ export interface Inp3Route {
   dirty: boolean; // changed since the last update we sent → include in the next triggered RIF
 }
 
+const DEFAULT_MAX_ROUTES = 500; // table cap so a flood of RIFs can't grow it unbounded
+const DEFAULT_MAX_LEARNS_PER_WINDOW = 200; // per-neighbour learn budget (RIPs/window)
+const DEFAULT_LEARN_WINDOW_MS = 60_000;
+
+export interface Inp3TableConfig {
+  /** Cap the table size; a new destination past the cap evicts the slowest route if the newcomer is faster. */
+  maxRoutes?: number;
+  /** Cap how many RIPs one neighbour can apply per window, so a peer spraying RIFs can't churn the table. */
+  maxLearnsPerWindow?: number;
+  learnWindowMs?: number;
+  clock?: () => number;
+}
+
 export class Inp3Table {
   private byDest = new Map<string, Inp3Route>();
+  private learnBudget = new Map<string, { count: number; resetAt: number }>(); // per-neighbour, fixed window
+
+  constructor(private opts: Inp3TableConfig = {}) {}
+
+  /** Consume one unit of a neighbour's fixed-window learn budget; false once spent. */
+  private learnAllowed(nb: string): boolean {
+    const max = this.opts.maxLearnsPerWindow ?? DEFAULT_MAX_LEARNS_PER_WINDOW;
+    const win = this.opts.learnWindowMs ?? DEFAULT_LEARN_WINDOW_MS;
+    const now = (this.opts.clock ?? Date.now)();
+    const b = this.learnBudget.get(nb);
+    if (!b || now >= b.resetAt) {
+      // drop spent windows so the budget map stays as small as the set of recent neighbours
+      for (const [k, v] of this.learnBudget) if (now >= v.resetAt) this.learnBudget.delete(k);
+      this.learnBudget.set(nb, { count: 1, resetAt: now + win });
+      return true;
+    }
+    if (b.count >= max) return false;
+    b.count++;
+    return true;
+  }
 
   /**
    * Apply one RIP learnt from `neighbor` over a link whose own tt to that neighbour is `linkTt`.
@@ -44,6 +77,7 @@ export class Inp3Table {
 
     const hops = rip.hops + 1;
     if (hops > INP_MAX_HOPS) return "ignored"; // beyond the horizon — never add
+    if (!this.learnAllowed(nb)) return "ignored"; // this neighbour's budget is spent for the window
 
     const tt = rip.tt + linkTt; // our tt to the destination = the neighbour's tt + our tt to the neighbour
     const route: Inp3Route = {
@@ -57,6 +91,14 @@ export class Inp3Table {
     };
 
     if (!cur) {
+      // a genuinely new destination — enforce the table cap by evicting the slowest route
+      const max = this.opts.maxRoutes ?? DEFAULT_MAX_ROUTES;
+      if (this.byDest.size >= max) {
+        let worst: Inp3Route | null = null;
+        for (const r of this.byDest.values()) if (!worst || r.tt > worst.tt) worst = r;
+        if (!worst || tt >= worst.tt) return "ignored"; // table full of faster routes → drop the newcomer
+        this.byDest.delete(worst.dest);
+      }
       this.byDest.set(key, route);
       return "added";
     }

@@ -9,12 +9,27 @@
 import { SessionServer, type Service } from "@aprscaching/packet";
 import { parseAddr } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
+import { numEnv } from "./config.js";
 
 export interface ConnectedStackOpts {
   link: FrameLink;
   gwBase: string;
   secret: string;
   env: NodeJS.ProcessEnv;
+}
+
+/** Shortest NODES broadcast interval: every broadcast keys the transmitter, and routes need minutes to settle. */
+export const NETROM_BROADCAST_MIN_MS = 5 * 60_000;
+
+/**
+ * The NET/ROM node's broadcast interval and assumed neighbour path quality from env: a non-numeric value
+ * falls back to the default, the interval has a floor of five minutes, and the quality is clamped to 0–255.
+ */
+export function netromSettings(env: NodeJS.ProcessEnv): { broadcastMs: number; pathQuality: number } {
+  return {
+    broadcastMs: numEnv("NETROM_BROADCAST_MS", 300_000, { min: NETROM_BROADCAST_MIN_MS, max: 86_400_000 }, env),
+    pathQuality: numEnv("NETROM_PATH_QUALITY", 192, { min: 0, max: 255 }, env),
+  };
 }
 
 /** Wire the NET/ROM node + BBS services onto the link per env config. Returns true when anything started. */
@@ -28,8 +43,7 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
     const node = new NetromNodeRunner(link, {
       mycall: env.NETROM_CALL,
       alias: env.NETROM_ALIAS,
-      broadcastMs: env.NETROM_BROADCAST_MS ? Number(env.NETROM_BROADCAST_MS) : undefined,
-      pathQuality: env.NETROM_PATH_QUALITY ? Number(env.NETROM_PATH_QUALITY) : undefined,
+      ...netromSettings(env),
       inp3: env.NETROM_INP3 === "1",
       gatewayBase: gwBase,
       secret,

@@ -51,8 +51,13 @@ function readDotEnv(file: string): void {
  * outside `[min,max]` is clamped (warned). `Number(env.X ?? d)` returns 0 for an empty string (the `??`
  * only guards null/undefined), which would become a tight flush loop or port 0.
  */
-export function numEnv(name: string, def: number, opts: { min?: number; max?: number } = {}): number {
-  const raw = process.env[name];
+export function numEnv(
+  name: string,
+  def: number,
+  opts: { min?: number; max?: number } = {},
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const raw = env[name];
   if (raw == null || raw.trim() === "") return def;
   const n = Number(raw);
   if (!Number.isFinite(n)) {
@@ -72,3 +77,12 @@ export function numEnv(name: string, def: number, opts: { min?: number; max?: nu
 
 /** A TCP/UDP port from env, validated to [1,65535] (a blank/NaN port must not dial 0). */
 export const portEnv = (name: string, def: number): number => numEnv(name, def, { min: 1, max: 65535 });
+
+/**
+ * The gateway's ingest endpoint and the base every other gateway route hangs off, from INGEST_URL. Trailing
+ * slashes are dropped first, so `https://gw.example/ingest/` names the same endpoint as `…/ingest`.
+ */
+export function gatewayUrls(raw: string | undefined): { ingest: string; base: string } {
+  const ingest = (raw?.trim() || "http://127.0.0.1:8787/ingest").replace(/\/+$/, "");
+  return { ingest, base: ingest.replace(/\/ingest$/, "") };
+}

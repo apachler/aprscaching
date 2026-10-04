@@ -179,4 +179,38 @@ describe("FBB forwarding scheduler end-to-end", () => {
     await fwd.tick(); // still due, because a refused partner is not marked as run
     expect(calls).toEqual(["DB0RF-1"]);
   });
+
+  it("disconnects a link whose connect fails, so it releases what it holds", async () => {
+    let disconnects = 0;
+    const link: ForwardLink = {
+      connect: async () => {
+        throw new Error("connect script failed: *** busy");
+      },
+      send: () => {},
+      onData: () => {},
+      onClose: () => {},
+      disconnect: () => {
+        disconnects++;
+      },
+    };
+    const fwd = new BbsForwarder({ api: fakeApi([], {}).api, linkFactory: () => link });
+    await expect(fwd.runSession(partner())).rejects.toThrow(/busy/);
+    expect(disconnects).toBe(1);
+  });
+
+  it("disconnects a link whose connect never settles, once, at the connect timeout", async () => {
+    let disconnects = 0;
+    const link: ForwardLink = {
+      connect: () => new Promise<void>(() => {}),
+      send: () => {},
+      onData: () => {},
+      onClose: () => {},
+      disconnect: () => {
+        disconnects++;
+      },
+    };
+    const fwd = new BbsForwarder({ api: fakeApi([], {}).api, linkFactory: () => link, connectTimeoutMs: 20 });
+    await expect(fwd.runSession(partner())).rejects.toThrow(/connect timeout/);
+    expect(disconnects).toBe(1);
+  });
 });

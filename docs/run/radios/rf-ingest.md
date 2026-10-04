@@ -108,16 +108,17 @@ only when its call is trusted ([How MeshCom traffic is trusted](meshcom.md#how-m
 
 ## IGate
 
-An IGate passes traffic between RF and APRS-IS in both directions. It needs a KISS TNC and both `IGATE_CALL`
-and `IGATE_PASS`.
+An IGate passes traffic between RF and APRS-IS. It needs a KISS TNC and both `IGATE_CALL` and `IGATE_PASS`.
+With those two set it receives only: the RX direction needs no transmitter. Passing APRS-IS messages down to
+RF transmits, so it also needs `IGATE_TX=1`.
 
 - **RX-IGate** passes each RF frame up to APRS-IS with a `qAR,<yourcall>` construct. That copy is for the
   APRS-IS network: no instance attests it, because anyone with a public passcode can send the same line.
   Your hearings count toward Tier A through the box's own batch to the gateway, as in
   [Receiving site and Tier A](#receiving-site-and-tier-a).
-- **TX-IGate** passes APRS-IS messages, acks and rejects included, down to RF, but only to stations heard
-  locally within `IGATE_LOCAL_TTL` seconds (default 1800, 30 minutes) and only when the sender is not heard
-  locally itself. It honours the APRS-IS to RF do-not-gate tokens (`TCPXX`, `NOGATE`, `RFONLY`; the `TCPIP*`
+- **TX-IGate**, with `IGATE_TX=1`, passes APRS-IS messages, acks and rejects included, down to RF, but only
+  to stations heard locally within `IGATE_LOCAL_TTL` seconds (default 1800, 30 minutes) and only when the
+  sender is not heard locally itself. It honours the APRS-IS to RF do-not-gate tokens (`TCPXX`, `NOGATE`, `RFONLY`; the `TCPIP*`
   every APRS-IS client message carries does not block it) and skips third-party frames and its own traffic.
   Each message goes out under `IGATE_CALL` in third-party format, `}SENDER>DEST,TCPIP,IGATE_CALL*:<message>`,
   so the station identifies as itself on air. `IGATE_TX_PATH` sets its RF path (default none, since the

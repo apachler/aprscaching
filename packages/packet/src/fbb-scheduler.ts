@@ -151,20 +151,26 @@ export class BbsForwarder {
     const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid, compress: this.o.compress });
     const link = this.o.linkFactory(p);
 
-    // Bound the connect. If it never settles, disconnect and throw so `busy` is released
-    // (the caller's finally) instead of the partner being wedged forever.
+    // Bound the connect. A connect that fails or never settles is disconnected, which releases the link's
+    // socket, timers and subscriptions, and throws so `busy` is released (the caller's finally) instead of
+    // the partner being wedged forever.
     let connectTimer: ReturnType<typeof setTimeout> | null = null;
-    await Promise.race([
-      link.connect(),
-      new Promise<void>((_res, rej) => {
-        connectTimer = setTimeout(() => {
-          link.disconnect();
-          rej(new Error("connect timeout"));
-        }, this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
-      }),
-    ]).finally(() => {
+    try {
+      await Promise.race([
+        link.connect(),
+        new Promise<void>((_res, rej) => {
+          connectTimer = setTimeout(
+            () => rej(new Error("connect timeout")),
+            this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } catch (e) {
+      link.disconnect();
+      throw e;
+    } finally {
       if (connectTimer !== null) clearTimeout(connectTimer);
-    });
+    }
 
     // Only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
     // close mid-body the messages were NOT delivered — leave them queued (BID dedup makes re-send safe).

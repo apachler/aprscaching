@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { encodeFrame, decodeFrame, parseAddr } from "@aprscaching/ax25";
-import { stripIpv4Header, axipToPacket, frameToAxip, parseAxipPeers } from "../src/axip.js";
+import {
+  stripIpv4Header,
+  axipToPacket,
+  frameToAxip,
+  parseAxipPeers,
+  axipBindAccepts,
+  ipv4Dest,
+  AxipPort,
+} from "../src/axip.js";
 import { appendAxipCrc, stripAxipCrc } from "../src/axudp.js";
 
 /** A bare AX.25 UI/APRS frame (the AXIP IP-payload). */
@@ -101,5 +109,45 @@ describe("AXIP ingest — IP proto-93 encapsulation", () => {
 
   it("parses AXIP peers (host only — no port, unlike AXUDP)", () => {
     expect(parseAxipPeers("db0abc.ampr.org, 44.9.9.9")).toEqual([{ host: "db0abc.ampr.org" }, { host: "44.9.9.9" }]);
+  });
+});
+
+describe("AXIP_BIND", () => {
+  /** A proto-93 datagram addressed to `dest`. */
+  const to = (dest: [number, number, number, number]) => {
+    const d = ipv4Proto93(ax25Frame("DL1ABC", "APRS", ">bind"));
+    d.set(dest, 16);
+    return d;
+  };
+
+  it("reads the destination address from the IPv4 header", () => {
+    expect(ipv4Dest(to([44, 1, 2, 3]))).toBe("44.1.2.3");
+    expect(ipv4Dest(ax25Frame("DL1ABC", "APRS", ">bare"))).toBeNull();
+  });
+
+  it("takes only datagrams addressed to the bound address", () => {
+    expect(axipBindAccepts("44.1.2.3", to([44, 1, 2, 3]))).toBe(true);
+    expect(axipBindAccepts("44.1.2.3", to([192, 168, 1, 9]))).toBe(false);
+    expect(axipBindAccepts("44.1.2.3", ax25Frame("DL1ABC", "APRS", ">bare"))).toBe(false);
+  });
+
+  it("takes every address without a bind or with the wildcard", () => {
+    expect(axipBindAccepts(undefined, to([192, 168, 1, 9]))).toBe(true);
+    expect(axipBindAccepts("", to([192, 168, 1, 9]))).toBe(true);
+    expect(axipBindAccepts("0.0.0.0", to([192, 168, 1, 9]))).toBe(true);
+  });
+
+  it("an AXIP port with a bind ignores datagrams to other addresses", async () => {
+    const got: string[] = [];
+    const port = new AxipPort({ bind: "44.1.2.3", peers: [{ host: "10.0.0.1" }] }, (p) => got.push(p.payload));
+    const from = (dest: [number, number, number, number]) => {
+      const d = to(dest);
+      d.set([10, 0, 0, 1], 12);
+      return d;
+    };
+    await port.allowlist.refresh();
+    port.receive(from([192, 168, 1, 9]));
+    port.receive(from([44, 1, 2, 3]));
+    expect(got).toEqual([">bind"]);
   });
 });

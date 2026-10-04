@@ -4,10 +4,16 @@
 import { describe, it, expect } from "vitest";
 import net from "node:net";
 import { AprsIs } from "../src/aprsis.js";
-import { AprsUplink, uplinkLogin } from "../src/uplink.js";
+import { AprsUplink, parseLogresp, uplinkLogin } from "../src/uplink.js";
+import { SOFTWARE_VERSION } from "../src/version.js";
 
-/** A TCP server that records every line it receives. */
-function lineServer(): Promise<{ port: number; lines: string[]; close: () => void }> {
+/**
+ * A TCP server that records every line it receives and answers a login with `# logresp`, as an APRS-IS
+ * server does (`logresp: null` answers nothing).
+ */
+function lineServer(
+  o: { logresp?: "verified" | "unverified" | null } = {},
+): Promise<{ port: number; lines: string[]; connections: () => number; close: () => void }> {
   return new Promise((resolve) => {
     const lines: string[] = [];
     const socks: net.Socket[] = [];
@@ -19,8 +25,12 @@ function lineServer(): Promise<{ port: number; lines: string[]; close: () => voi
         buf += c;
         let i;
         while ((i = buf.indexOf("\n")) >= 0) {
-          lines.push(buf.slice(0, i).replace(/\r$/, ""));
+          const line = buf.slice(0, i).replace(/\r$/, "");
+          lines.push(line);
           buf = buf.slice(i + 1);
+          const call = /^user (\S+)/.exec(line)?.[1];
+          const answer = o.logresp === undefined ? "verified" : o.logresp;
+          if (call && answer) s.write(`# logresp ${call} ${answer}, server T2TEST\r\n`);
         }
       });
     });
@@ -28,6 +38,7 @@ function lineServer(): Promise<{ port: number; lines: string[]; close: () => voi
       resolve({
         port: (srv.address() as net.AddressInfo).port,
         lines,
+        connections: () => socks.length,
         close: () => {
           for (const s of socks) s.destroy();
           srv.close();
@@ -67,7 +78,7 @@ describe("APRS-IS uplink", () => {
     const srv = await lineServer();
     const up = new AprsUplink({ host: "127.0.0.1", port: srv.port, serviceCall: "OE8APR-15", servicePass: "1234" });
     up.start();
-    await until(() => srv.lines.length === 1);
+    await until(() => up.verified);
     expect(up.publish({ src_call: "OE8APR-15", tocall: "APZACG", payload: ":OE5XYZ-7 :ack12" })).toBe(true);
     expect(up.publish({ src_call: "OE5XYZ-7", tocall: "APZACG", payload: ">Found AC-1234" })).toBe(true);
     await until(() => srv.lines.length === 3);
@@ -76,6 +87,65 @@ describe("APRS-IS uplink", () => {
       "OE8APR-15>APZACG,TCPIP*::OE5XYZ-7 :ack12",
       "OE8APR-15>APZACG,TCPIP*:}OE5XYZ-7>APZACG,TCPIP*:>Found AC-1234",
     ]);
+  });
+});
+
+describe("APRS-IS uplink verification", () => {
+  it("logs in under the release version and publishes only once the server verifies the login", async () => {
+    const srv = await lineServer({ logresp: null });
+    const up = new AprsUplink({ host: "127.0.0.1", port: srv.port, serviceCall: "OE8APR-15", servicePass: "1234" });
+    up.start();
+    await until(() => srv.lines.length === 1);
+    expect(srv.lines[0]).toBe(`user OE8APR-15 pass 1234 vers aprscaching ${SOFTWARE_VERSION}`);
+    expect(SOFTWARE_VERSION).toMatch(/^\d+\.\d+\.\d+/);
+    expect(up.publish({ src_call: "OE8APR-15", tocall: "APZACG", payload: ">x" })).toBe(false);
+    srv.close();
+  });
+
+  it("publishes nothing when the server answers the login as unverified", async () => {
+    const srv = await lineServer({ logresp: "unverified" });
+    const errors: string[] = [];
+    const orig = console.error;
+    console.error = (m: string) => errors.push(m);
+    try {
+      const up = new AprsUplink({ host: "127.0.0.1", port: srv.port, serviceCall: "OE8APR-15", servicePass: "1" });
+      up.start();
+      await until(() => errors.length > 0);
+      expect(up.verified).toBe(false);
+      expect(up.publish({ src_call: "OE8APR-15", tocall: "APZACG", payload: ">x" })).toBe(false);
+      expect(errors[0]).toMatch(/did not verify OE8APR-15/);
+    } finally {
+      console.error = orig;
+      srv.close();
+    }
+  });
+
+  it("reconnects when the server goes silent past the idle timeout", async () => {
+    const srv = await lineServer();
+    const up = new AprsUplink({
+      host: "127.0.0.1",
+      port: srv.port,
+      serviceCall: "OE8APR-15",
+      servicePass: "1234",
+      idleMs: 50,
+      retryMs: 10,
+    });
+    up.start();
+    await until(() => srv.connections() >= 2);
+    srv.close();
+    expect(srv.connections()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("reads the login answer", () => {
+    expect(parseLogresp("# logresp OE8APR-15 verified, server T2AUSTRIA")).toEqual({
+      call: "OE8APR-15",
+      verified: true,
+    });
+    expect(parseLogresp("# logresp N0CALL unverified, server T2AUSTRIA")).toEqual({
+      call: "N0CALL",
+      verified: false,
+    });
+    expect(parseLogresp("# aprsc 2.1.19")).toBeNull();
   });
 });
 
