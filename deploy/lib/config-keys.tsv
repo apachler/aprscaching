@@ -47,6 +47,7 @@ AMPR_REQUIRE_DNSSEC	enum	gateway		0|1|false|true	0	0	selfhost,cloudflare,baremet
 LOTW_CA_PEM	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	PEM certificates of the ARRL LoTW CAs trusted for callsign verification
 OKAPI_BASE	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching node to import caches from, e.g. https://www.opencaching.de
 OKAPI_KEY	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching OKAPI consumer key for that node
+IMPORT_ALLOW	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated import sources whose permission the operator holds (wwff, iota, gcau)
 SERVICE_CALL	call	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	The instance's on-air call for radio commands and mail; default the sysop's call -15
 RADIO_REPLIES	enum	gateway		0|1	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 sends a text reply to each FOUND, DNF and NOTE radio command
 API_RATE_WINDOW_SEC	int	gateway	60		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Length of the public read-API rate-limit window, in seconds
@@ -57,6 +58,7 @@ SPOTS_SOURCES	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Co
 SPOTS_TTL_SEC	int	gateway	120		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Seconds between upstream spot polls; never below a source's own floor
 SPOTS_USER_AGENT	string	gateway	APRScaching (+https://github.com/apachler/aprscaching)		0	0	selfhost,cloudflare,baremetal,pocket,desktop	User-Agent sent to spot upstreams
 SPOTS_RECEPTION_URLS	json	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	JSON endpoints of the reception networks {pskreporter,dxcluster,rbn}
+GMA_API_KEY	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	API key from GMA (gma.rocks); GMA spots are polled only with one
 BASEMAP_STYLE	string	gateway	https://tiles.openfreemap.org/styles/liberty		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Map widget basemap: a MapLibre style URL, or offline for the built-in grid
 BASEMAP_HOSTS	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Extra comma-separated origins the basemap style loads tiles or fonts from
 APP_URL	url	gateway,pocket			0	1	selfhost,cloudflare,baremetal,pocket,desktop	Public origin people open, e.g. https://aprs.example.net

@@ -215,7 +215,7 @@ export function DetailPanel(props: {
         <span className="dataval">{c.code}</span>
       </div>
       <p className="muted mt-1">
-        by <span className="mono">{c.ownerCall}</span>
+        by {c.sourceOwner ? <span>{c.sourceOwner}</span> : <span className="mono">{c.ownerCall}</span>}
         {away != null && (
           <>
             {" · "}
@@ -300,16 +300,42 @@ export function DetailPanel(props: {
         </div>
       )}
 
-      {c.source !== "native" && c.sourceUrl && (
-        <p className="imported">
-          ⤓ Imported from <strong>{c.sourceName ?? c.source}</strong> ·{" "}
-          <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">
-            view source ↗
-          </a>
-        </p>
+      {c.source !== "native" && (c.sourceUrl || c.sourceAttribution) && (
+        <div className="imported">
+          <p>
+            ⤓ Imported from <strong>{c.sourceName ?? c.source}</strong>
+            {c.sourceUrl && (
+              <>
+                {" · "}
+                <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">
+                  view on {c.sourceName ?? "the source"} ↗
+                </a>
+              </>
+            )}
+          </p>
+          {c.sourceAttribution && (
+            <p className="imported-note">
+              {c.sourceAttribution.map((part, i) =>
+                part.href && /^https?:\/\//i.test(part.href) ? (
+                  <a key={i} href={part.href} target="_blank" rel="noreferrer noopener">
+                    {part.text}
+                  </a>
+                ) : (
+                  <span key={i}>{part.text}</span>
+                ),
+              )}
+            </p>
+          )}
+        </div>
       )}
 
-      <ShareCache code={c.code} title={c.title} gpx={c.lat != null && c.lon != null} onToast={toast} />
+      {/* imported places stay under their source's terms, so only native caches download as GPX */}
+      <ShareCache
+        code={c.code}
+        title={c.title}
+        gpx={c.source === "native" && c.lat != null && c.lon != null}
+        onToast={toast}
+      />
 
       <p>
         <strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}

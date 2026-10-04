@@ -5,7 +5,8 @@
   "changelog-path": "CHANGELOG.md",
   "packages": {
     ".": {
-      "package-name": "aprscaching"
+      "package-name": "aprscaching",
+      "extra-files": [{ "type": "generic", "path": "workers/gateway/src/version.ts" }]
     }
   }
 }

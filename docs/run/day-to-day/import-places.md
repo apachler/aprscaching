@@ -4,14 +4,16 @@ This page is for the sysop. It shows how to import places from other programs (s
 islands) as caches on your instance.
 
 Every imported place carries its source and a link back. Duplicates across sources collapse to the ham-radio
-program's entry, and imported places never leave your instance. Running an import again updates the places in
-place.
+program's entry. Imported places show on your instance only: federation never shares them, and the GPX and KML
+exports leave them out, because a GPX or KML file cannot carry a source's licence and credit. Running an import
+again updates the places in place.
 
 ## Before you start
 
 - The instance's `INGEST_SECRET`: the importer is part of the ingest plane, so any machine that knows the
   secret can run an import.
-- The licence of each source you import. OpenCaching content in particular carries conditions (see `TODO.md`).
+- The licence of each source you import (see [Licences of the sources](#licences-of-the-sources)), and the
+  provider's permission where its terms ask for one.
 
 ## Import a source
 
@@ -37,6 +39,28 @@ The body says what to import:
 | `osm` | `bbox`, `region` = OSM tag (default `natural=peak`) | `{"bbox":[13,46.5,16,48],"region":"historic=castle"}` |
 | `wikidata` | `region` = class (default `Q8502` mountain; `Q23413` castle, `Q39715` lighthouse), optional `bbox`, `limit` | `{"region":"Q23413","bbox":[13,46.5,16,48]}` |
 | `geojson` | `url` of a GeoJSON file, optional `sourceName`, `type`, `deepLink` | `{"url":"https://example.org/castles.geojson"}` |
+
+## Licences of the sources
+
+Each source's own terms apply to its data on your instance. Read them before you import.
+
+| Source | Licence or terms | What your instance does |
+|---|---|---|
+| `opencaching` | CC BY-NC-ND 3.0 DE (Opencaching.de); OKAPI asks that each cache show its `attribution_note` and link to the cache page | Keeps the owner's name and the attribution note, and shows both on the cache page with a link to the listing |
+| `gcau` | CC BY-NC-SA 2.5; the GPX feed needs a signed-in account | Refused until you name it in `IMPORT_ALLOW`; the importer does not keep each owner's credit |
+| `wwff` | The directory may not be reproduced without WWFF's prior permission | Refused until you name it in `IMPORT_ALLOW` |
+| `iota` | Personal, non-commercial home use only | Refused until you name it in `IMPORT_ALLOW` |
+| `osm` | ODbL: credit OpenStreetMap, and share a public derivative database under the same licence | Links each place to its OpenStreetMap node |
+| `wikidata` | CC0 | Links each place to its Wikidata item |
+| `sota`, `pota` | No stated licence; poll politely | Links each place to its programme page |
+| `bunker`, `geojson` | The provider's own terms | Links each place where the data gives a link |
+
+`GET /api/import`, with the same `x-ingest-secret` header, lists every source and whether your instance may
+import it. A source that needs permission answers `403` with what it needs; once the provider grants it, add
+the source to `IMPORT_ALLOW` (for example `IMPORT_ALLOW=wwff`) and restart the gateway.
+
+Each import request names your instance to the provider, with its address and `OPERATOR_EMAIL`, so the
+provider can reach you.
 
 ## Check that it worked
 

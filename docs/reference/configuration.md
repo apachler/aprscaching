@@ -138,10 +138,12 @@ app do not read these.
 | `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits | `60` / `60` / `600` |
 | `SPOTS_ENABLED` | Enable outbound activity-spot polling | off |
 | `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT` | Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream | all / `120` / names aprscaching |
-| `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA, SOTA and GMA use their public APIs | — |
+| `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs | — |
+| `GMA_API_KEY` | API key from GMA (gma.rocks), sent with each GMA spot poll. GMA's spot API answers only with a key, so without one GMA spots are off and the instance sends GMA no request | — |
 | `EMAIL_FROM` / `EMAIL_API_KEY` | Sender address and API key of a Resend-compatible email provider, for sign-in links and the watch-alert digest. Absent ⇒ no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT` | Web-push keys (absent ⇒ push off) | — |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |
+| `IMPORT_ALLOW` | Import sources whose terms need the provider's permission, comma-separated: `wwff`, `iota`, `gcau`. Name one only once that provider has granted this instance its use; an import of an unnamed one is refused with the permission it needs | none |
 | `BASEMAP_STYLE` | Basemap of the embeddable map widget (`/embed`): a MapLibre style URL, or `offline` for the self-contained grid, which loads nothing from outside the instance. The widget's content-security policy lets it fetch only from this gateway and the style's origin. A value that is neither `offline` nor an http(s) URL counts as `offline`. The web app's own basemap is the build-time `VITE_BASEMAP` / `VITE_BASEMAP_STYLE` | OpenFreeMap `liberty` |
 | `BASEMAP_HOSTS` | Extra origins the `BASEMAP_STYLE` style loads tiles, glyphs or sprites from, comma-separated (`https://tiles.example.net,https://fonts.example.net`), for a style that spreads them over several hosts | — |
 | `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL | — |
@@ -231,7 +233,7 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 | `VITE_APP_URL` | The instance's public URL. Its origin makes the landing page's canonical link and Open Graph URLs absolute; without it the build leaves the canonical link and `og:url` out and serves `og:image` from its own path | (unset) |
 | `VITE_BASEMAP` | `offline` uses the self-contained graticule; else the online vector basemap | online |
 | `VITE_BASEMAP_STYLE` | MapLibre style URL for the vector basemap (self-hosted tiles, commercial provider) | OpenFreeMap `liberty` |
-| `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOX Sentinel-2 cloudless 2016 (CC-BY 4.0) |
+| `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOxCloudless 2016 layer (EOX; free for non-commercial use) |
 | `VITE_TOOL_REGISTRY` | Signed tool-registry URL | `/tools/registry.json` |
 | `VITE_TOOL_REGISTRY_AUTHORITY` | Pinned Ed25519 authority key the registry is verified against | (built-in) |
 <!-- /config-table -->

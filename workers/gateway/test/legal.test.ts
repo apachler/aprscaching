@@ -43,4 +43,27 @@ describe("legal pages", () => {
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("privacy names who receives data, the email provider and push services only when configured", async () => {
+    const bare = await handlePrivacyPage(configured).text();
+    expect(bare).toContain("Who receives data");
+    expect(bare).toContain("tiles.openfreemap.org");
+    expect(bare).toContain("OpenTopoMap");
+    expect(bare).toContain("tiles.maps.eox.at");
+    expect(bare).toContain("APRS-IS");
+    expect(bare).toContain("Federation peers");
+    expect(bare).not.toContain("Email provider");
+    expect(bare).not.toContain("push services");
+    expect(bare).toContain("Settings → Your data");
+
+    const full = await handlePrivacyPage({
+      ...configured,
+      EMAIL_API_KEY: "re_x",
+      EMAIL_FROM: "noreply@example.net",
+      VAPID_PUBLIC: "pub",
+      VAPID_PRIVATE: "priv",
+    } as Env).text();
+    expect(full).toContain("Email provider</strong> (api.resend.com)");
+    expect(full).toContain("Browser push services");
+  });
 });

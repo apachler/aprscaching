@@ -7,6 +7,7 @@ import {
   CreateCacheRequest,
   UpdateCacheRequest,
   LogRequest,
+  type AttributionPart,
   type CacheSummary,
   type CacheDetail,
   type CacheLogEntry,
@@ -60,6 +61,8 @@ export interface CacheDbRow {
   min_trust: string | null;
   source_url: string | null;
   source_name: string | null;
+  source_owner?: string | null;
+  source_attribution?: string | null;
   fed_scope: string;
   drive_in: number | null;
   country: string | null;
@@ -103,12 +106,31 @@ export function toSummary(r: CacheDbRow): CacheSummary {
     source: r.source,
     sourceName: r.source_name,
     sourceUrl: r.source_url,
+    sourceOwner: r.source_owner ?? null,
+    sourceAttribution: attributionOf(r.source_attribution),
     minTrust: (r.min_trust as "A" | "B" | null) ?? null,
     fedScope: (r.fed_scope as CacheSummary["fedScope"]) ?? "public",
     driveIn: !!r.drive_in,
     country: r.country ?? null,
     tags: splitTags(r.tags),
   };
+}
+
+/** The stored attribution note (a JSON array of text runs); null when absent or unreadable. */
+function attributionOf(stored: string | null | undefined): AttributionPart[] | null {
+  if (!stored) return null;
+  try {
+    const v: unknown = JSON.parse(stored);
+    if (!Array.isArray(v)) return null;
+    const parts = v
+      .filter((p): p is { text: string; href?: unknown } => typeof p?.text === "string")
+      .map((p) =>
+        typeof p.href === "string" && /^https?:\/\//i.test(p.href) ? { text: p.text, href: p.href } : { text: p.text },
+      );
+    return parts.length ? parts : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Stored tags are a comma-joined string; expose as an array (empty when null). */

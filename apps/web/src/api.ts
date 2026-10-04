@@ -204,6 +204,8 @@ export async function getCache(
       source: c.source,
       sourceName: c.sourceName,
       sourceUrl: c.sourceUrl,
+      sourceOwner: c.sourceOwner,
+      sourceAttribution: c.sourceAttribution,
       minTrust: c.minTrust,
       fedScope: c.fedScope,
       driveIn: c.driveIn,

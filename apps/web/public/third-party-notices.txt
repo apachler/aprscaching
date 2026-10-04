@@ -25,8 +25,8 @@ Fonts: Fredoka and IBM Plex Mono (SIL Open Font License 1.1 - full texts at
 Map data & imagery: (c) OpenStreetMap contributors (ODbL) - (c) OpenFreeMap,
 (c) OpenMapTiles (the default vector tiles and style) - OpenTopoMap: map data
 (c) OpenStreetMap contributors, SRTM; map style (c) OpenTopoMap (CC-BY-SA) -
-Sentinel-2 cloudless by EOX IT Services GmbH (contains modified
-Copernicus Sentinel data).
+EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains
+modified Copernicus Sentinel data 2016).
 
 
 react / react-dom / scheduler

@@ -8,7 +8,7 @@ import { whenStyleReady } from "./mapPaint.js";
 /**
  * Basemap layer switcher: Vector (default) · Topo · Satellite. Raster is OPT-IN per
  * css.md — vector is the default and raster tiles load only when the operator picks them. Both
- * defaults are keyless and free: Topo = OpenTopoMap, Satellite = EOX Sentinel-2 cloudless 2016 (CC-BY 4.0).
+ * defaults are keyless: Topo = OpenTopoMap, Satellite = EOxCloudless (EOX), free for non-commercial use.
  * A licensed high-res provider (MapTiler / Mapbox / Esri) can be dropped in via VITE_SAT_TILES +
  * VITE_SAT_ATTRIBUTION. Both raster layers are inserted *below* the data overlays (markers are DOM,
  * always on top) and toggled by visibility, so switching is instant and never re-creates the style.
@@ -21,16 +21,18 @@ const TOPO_TILES = [
   "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
   "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
 ];
-const TOPO_ATTR = "© OpenTopoMap (CC-BY-SA) · © OpenStreetMap contributors";
-// EOX Sentinel-2 cloudless, pinned to the 2016 layer — the one published under plain CC-BY 4.0
-// (later years are CC BY-NC-SA; an instance that wants them, or a licensed high-res provider,
-// overrides via VITE_SAT_TILES + VITE_SAT_ATTRIBUTION). Attribution wording per EOX, year-matched.
+// OpenTopoMap's required wording: OSM data, SRTM elevation, and its own style
+const TOPO_ATTR =
+  'Map data: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: © <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)';
+// EOxCloudless, the 2016 layer. EOX licenses it free for non-commercial use (CC BY-NC-SA 4.0) and sells a
+// licence for commercial use; the attribution is EOX's own wording, year-matched to the layer. An instance
+// with another provider overrides both via VITE_SAT_TILES + VITE_SAT_ATTRIBUTION.
 const SAT_TILES =
   (import.meta.env.VITE_SAT_TILES as string | undefined) ??
   "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg";
 const SAT_ATTR =
   (import.meta.env.VITE_SAT_ATTRIBUTION as string | undefined) ??
-  '<a href="https://s2maps.eu">Sentinel-2 cloudless</a> by <a href="https://eox.at">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016) · CC-BY 4.0';
+  'EOxCloudless <a href="https://cloudless.eox.at">https://cloudless.eox.at</a> by <a href="https://eox.at">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016)';
 
 /** Insert the two raster basemap layers once, beneath any data overlay (mt-* / spots / caches). */
 function ensureRaster(m: maplibregl.Map) {

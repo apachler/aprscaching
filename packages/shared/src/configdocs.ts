@@ -58,6 +58,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   LOTW_CA_PEM: "PEM certificates of the ARRL LoTW CAs trusted for callsign verification",
   OKAPI_BASE: "OpenCaching node to import caches from, e.g. https://www.opencaching.de",
   OKAPI_KEY: "OpenCaching OKAPI consumer key for that node",
+  IMPORT_ALLOW: "Comma-separated import sources whose permission the operator holds (wwff, iota, gcau)",
   SERVICE_CALL: "The instance's on-air call for radio commands and mail; default the sysop's call -15",
   RADIO_REPLIES: "1 sends a text reply to each FOUND, DNF and NOTE radio command",
   API_RATE_WINDOW_SEC: "Length of the public read-API rate-limit window, in seconds",
@@ -68,6 +69,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SPOTS_TTL_SEC: "Seconds between upstream spot polls; never below a source's own floor",
   SPOTS_USER_AGENT: "User-Agent sent to spot upstreams",
   SPOTS_RECEPTION_URLS: "JSON endpoints of the reception networks {pskreporter,dxcluster,rbn}",
+  GMA_API_KEY: "API key from GMA (gma.rocks); GMA spots are polled only with one",
   BASEMAP_STYLE: "Map widget basemap: a MapLibre style URL, or offline for the built-in grid",
   BASEMAP_HOSTS: "Extra comma-separated origins the basemap style loads tiles or fonts from",
   APP_URL: "Public origin people open, e.g. https://aprs.example.net",
@@ -544,7 +546,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`SPOTS_RECEPTION_URLS`",
-        'Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA, SOTA and GMA use their public APIs',
+        'Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs',
+        "—",
+      ],
+      [
+        "`GMA_API_KEY`",
+        "API key from GMA (gma.rocks), sent with each GMA spot poll. GMA's spot API answers only with a key, so without one GMA spots are off and the instance sends GMA no request",
         "—",
       ],
       [
@@ -554,6 +561,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       ["`VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT`", "Web-push keys (absent ⇒ push off)", "—"],
       ["`OKAPI_BASE` / `OKAPI_KEY`", "OpenCaching import node + consumer key", "—"],
+      [
+        "`IMPORT_ALLOW`",
+        "Import sources whose terms need the provider's permission, comma-separated: `wwff`, `iota`, `gcau`. Name one only once that provider has granted this instance its use; an import of an unnamed one is refused with the permission it needs",
+        "none",
+      ],
       [
         "`BASEMAP_STYLE`",
         "Basemap of the embeddable map widget (`/embed`): a MapLibre style URL, or `offline` for the self-contained grid, which loads nothing from outside the instance. The widget's content-security policy lets it fetch only from this gateway and the style's origin. A value that is neither `offline` nor an http(s) URL counts as `offline`. The web app's own basemap is the build-time `VITE_BASEMAP` / `VITE_BASEMAP_STYLE`",
@@ -701,7 +713,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "`VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION`",
         "Satellite raster layer URL + attribution",
-        "EOX Sentinel-2 cloudless 2016 (CC-BY 4.0)",
+        "EOxCloudless 2016 layer (EOX; free for non-commercial use)",
       ],
       ["`VITE_TOOL_REGISTRY`", "Signed tool-registry URL", "`/tools/registry.json`"],
       ["`VITE_TOOL_REGISTRY_AUTHORITY`", "Pinned Ed25519 authority key the registry is verified against", "(built-in)"],

@@ -74,8 +74,8 @@ Foundation, Inc. APRScaching is an **independent, unofficial** implementation bu
 (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). APRScaching is not affiliated with, sponsored by, or endorsed
 by APRS Foundation, Inc. The APRScaching game and this application are the author's (OE8APR) own work.
 
-Meshtastic® is a registered trademark of Meshtastic LLC. Parks on the Air® is a registered service mark of Parks on
-the Air, Inc. Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook of
+Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software components are released under various
+licenses, see GitHub for details. Parks on the Air® is a registered service mark of Parks on the Air, Inc. Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook of
 The World® are registered trademarks of the American Radio Relay League, Inc. (ARRL). Geocaching® is a registered
 trademark of Groundspeak, Inc. (Geocaching HQ); “geocaching” here names the outdoor activity. APRScaching is not
 affiliated with, sponsored by, or endorsed by Groundspeak, Inc. (Geocaching HQ), Geocaching Australia, Meshtastic
@@ -84,7 +84,8 @@ on the Air (WWBOTA), Islands on the Air (IOTA), or the TAK Product Center.
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; vector tiles © OpenFreeMap, © OpenMapTiles.
 Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA))
-and Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data). Imported places name
+and EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016).
+Imported places name
 and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
 Radio Country Files by Jim Reisert, AD1C (MIT).
 
