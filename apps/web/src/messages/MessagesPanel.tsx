@@ -135,7 +135,13 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
                     {m.direction === "tx" && <Badge>sent</Badge>}
                     <span className="muted msg-when">{fmt.ago(m.ts)}</span>
                   </div>
-                  <div className="comment msg-body">{m.body}</div>
+                  <div className="comment msg-body">
+                    {m.fromCall === "WITHDRAWN" && !m.body ? (
+                      <span className="muted">Withdrawn: the sender erased their account.</span>
+                    ) : (
+                      m.body
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

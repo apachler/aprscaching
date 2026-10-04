@@ -11,13 +11,14 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
-import { accountActionMessage } from "@aprscaching/shared";
+import { accountActionMessage, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
 import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN } from "./auth.js";
 import { verificationOf, verificationsOf } from "./callsign.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
+import { serviceCall } from "./servicecall.js";
 
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
@@ -362,6 +363,7 @@ async function eraseCall(
   cs: string,
 ): Promise<{ tombstones: TombstoneItem[]; mediaKeys: string[] }> {
   const marker = `${WITHDRAWN}#${[...crypto.getRandomValues(new Uint8Array(5))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  const service = serviceCall(env);
   // Capture this callsign's federated find ids BEFORE anonymising — once logger_call is the withdrawn
   // marker we can't find them, and peers mirrored them with the real call (PII). The finds feed is
   // append-only by id, so an UPDATE never re-serves the anonymised row → a tombstone is the only way
@@ -422,9 +424,20 @@ async function eraseCall(
     env.DB.prepare(
       "UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=? OR owner_call LIKE ?",
     ).bind(marker, nowS(), cs, `${cs}-%`),
-    // the message log names the person as sender or addressee, from the base call or any SSID of it
-    env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=? OR from_call LIKE ?").bind(marker, cs, `${cs}-%`),
-    env.DB.prepare("UPDATE messages SET to_call=? WHERE to_call=? OR to_call LIKE ?").bind(marker, cs, `${cs}-%`),
+    // The message log names the person as sender or addressee, from the base call or any SSID of it. The text
+    // the person wrote is deleted; the row stays under the marker with an empty body, so the other side's
+    // conversation shows a withdrawn message rather than a gap. Messages others sent the person are theirs
+    // and stay, addressed to the marker. The service call shares the sysop's base call but carries the
+    // instance's traffic, never the sysop's own, so its rows are left alone.
+    env.DB.prepare(
+      "UPDATE messages SET from_call=?, body='' WHERE (from_call=? OR from_call LIKE ?) AND from_call != ?",
+    ).bind(marker, cs, `${cs}-%`, service),
+    env.DB.prepare("UPDATE messages SET to_call=? WHERE (to_call=? OR to_call LIKE ?) AND to_call != ?").bind(
+      marker,
+      cs,
+      `${cs}-%`,
+      service,
+    ),
     // The adoption trail stays for the instance, anonymised: the person's calls become the marker and the
     // notes on rows naming them (which may describe them) are dropped.
     env.DB.prepare(
@@ -476,9 +489,14 @@ async function eraseCall(
 
 /** Erase every account-scoped row: sign-in material (passkeys, pending ceremonies, email links), the
  *  held calls (freeing each base call), and the person's subscriptions, watches, views, boxes, keys,
- *  ratings, directory entries and personal mail. Public bulletins stay, attributed to the marker. */
+ *  ratings, directory entries, personal mail, and every bulletin and queued radio message the person wrote. */
 async function eraseAccount(env: Env, accountId: string | null, emails: string[], calls: string[]): Promise<void> {
-  const by = (col: string) => anyCall(col, calls);
+  const service = serviceCall(env);
+  const by = (col: string) => {
+    const c = anyCall(col, calls);
+    // the service call's traffic is the instance's, even though it shares the sysop's base call
+    return { sql: `(${c.sql} AND ${col} != ?)`, binds: [...c.binds, service] };
+  };
   const del = (sql: string, ...cols: string[]) =>
     env.DB.prepare(cols.reduce((q, col) => q.replace("$CALLS", by(col).sql), sql)).bind(
       ...cols.flatMap((col) => by(col).binds),
@@ -498,10 +516,21 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
     del("DELETE FROM near_cache_messages WHERE $CALLS", "call"),
     del("DELETE FROM meshcom_group_messages WHERE $CALLS", "from_call"),
     ...(accountId ? [env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=?").bind(accountId)] : []),
+    // The bulletins and NTS traffic the person posted go with them; replies others posted stay in the thread.
+    // A federation carrier bulletin holds signed frames, not the person's words, so it stays to be forwarded,
+    // attributed to the marker.
+    env.DB.prepare(`DELETE FROM bbs_messages WHERE to_call != ? AND ${by("from_call").sql}`).bind(
+      FED_BBS_CATEGORY,
+      ...by("from_call").binds,
+    ),
     env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
       WITHDRAWN,
       ...by("from_call").binds,
     ),
+    // radio messages queued or sent for the person, and those addressed to them (the addressee is the
+    // nine-character field that opens an APRS message payload)
+    del("DELETE FROM aprs_outbox WHERE $CALLS", "src_call"),
+    del("DELETE FROM aprs_outbox WHERE kind='message' AND $CALLS", "rtrim(substr(payload, 2, 9))"),
   ];
   for (const e of emails) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(e));
   if (accountId)

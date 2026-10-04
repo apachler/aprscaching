@@ -31,6 +31,12 @@ const SCOPED: Array<[string, string]> = [
     "bbs_messages",
     "SELECT COUNT(*) AS n FROM bbs_messages WHERE type='P' AND (from_call='DL1GDP' OR to_call='DL1GDP')",
   ],
+  ["bbs bulletins", "SELECT COUNT(*) AS n FROM bbs_messages WHERE type='B' AND from_call='DL1GDP'"],
+  [
+    "aprs_outbox",
+    "SELECT COUNT(*) AS n FROM aprs_outbox WHERE src_call LIKE 'DL1GDP%' OR payload LIKE ':DL1GDP%' OR payload LIKE '%gerd%'",
+  ],
+  ["message text", "SELECT COUNT(*) AS n FROM messages WHERE body='out'"],
   ["callsign_challenges", "SELECT COUNT(*) AS n FROM callsign_challenges WHERE account_id=?"],
   ["near_cache_messages", "SELECT COUNT(*) AS n FROM near_cache_messages WHERE call='DL1GDP'"],
   ["meshcom_group_messages", "SELECT COUNT(*) AS n FROM meshcom_group_messages WHERE from_call LIKE 'DL1GDP%'"],
@@ -126,6 +132,22 @@ async function seeded() {
     ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'DL1GDP-7', 'OE8APR', 'out', 'tx')", t],
     ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'OE8APR', 'DL1GDP', 'in', 'rx')", t],
     ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'OE8APR', 'OE5XYZ', 'other', 'rx')", t],
+    // a bulletin the person posted and another station's reply to it
+    [
+      "INSERT INTO bbs_messages (id, type, from_call, to_call, subject, body, posted_at) VALUES (900, 'B', 'DL1GDP', 'ALL', 'qrv', 'gerd here', ?)",
+      t,
+    ],
+    [
+      "INSERT INTO bbs_messages (type, from_call, to_call, subject, body, posted_at, reply_to, thread_id) VALUES ('B', 'OE8APR', 'ALL', 'Re: qrv', 'welcome', ?, 900, 900)",
+      t,
+    ],
+    // radio messages queued for the person and addressed to the person
+    [
+      "INSERT INTO aprs_outbox (ts, src_call, kind, payload) VALUES (?, 'DL1GDP-7', 'message', ':OE8APR   :from gerd')",
+      t,
+    ],
+    ["INSERT INTO aprs_outbox (ts, src_call, kind, payload) VALUES (?, 'OE8APR-15', 'message', ':DL1GDP-7 :mail')", t],
+    ["INSERT INTO aprs_outbox (ts, src_call, kind, payload) VALUES (?, 'OE8APR-15', 'message', ':OE5XYZ   :mail')", t],
     // an audio clue on a stage of the person's cache
     [
       "INSERT INTO cache_stages (cache_id, stage_no, unlock, media_key, media_bytes) VALUES (?, 1, 'audio', 'cache/1/stage/1/clue-00000000000a.mpeg', 3)",
@@ -211,8 +233,19 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
     for (const [table, n] of Object.entries(after)) expect(n, `left in ${table}`).toBe(0);
     expect(deleted).toContain("media/gdpr-1");
     expect(deleted).toContain("cache/1/stage/1/clue-00000000000a.mpeg");
-    // the message between two other stations stays
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM messages").first<{ n: number }>())?.n).toBe(3);
+    // The person's message text is gone but its place in the conversation stays, withdrawn; the message the
+    // other station sent them stays, and so does the one between two other stations.
+    const msgs = (await call(env, "GET", "/api/messages")).data.messages as Array<{ fromCall: string; body: string }>;
+    expect(msgs.map((m) => [m.fromCall, m.body]).sort()).toEqual([
+      ["OE8APR", "in"],
+      ["OE8APR", "other"],
+      ["WITHDRAWN", ""],
+    ]);
+    // the reply another station posted to the person's bulletin stays; other outbound traffic stays
+    const bulletins = (await env.DB.prepare("SELECT body FROM bbs_messages WHERE type='B'").all<{ body: string }>())
+      .results;
+    expect(bulletins.map((b) => b.body)).toEqual(["welcome"]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM aprs_outbox").first<{ n: number }>())?.n).toBe(1);
     // another station's group message stays
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM meshcom_group_messages").first<{ n: number }>())?.n).toBe(
       1,
@@ -224,5 +257,28 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
 
     const again = await emailSignup(env, "new@example.test", CS);
     expect(again.status).toBe(200);
+  });
+
+  it("a sysop's erasure leaves the service call's traffic, which is the instance's", async () => {
+    const { env, cookie } = await seeded();
+    (env as Env & { ADMIN_CALLSIGNS: string }).ADMIN_CALLSIGNS = CS;
+    const t = Math.floor(Date.now() / 1000);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'DL1GDP-15', 'OE8APR', 'logged', 'tx')",
+      ).bind(t),
+      env.DB.prepare(
+        "INSERT INTO aprs_outbox (ts, src_call, kind, payload) VALUES (?, 'DL1GDP-15', 'message', ':OE8APR   :logged')",
+      ).bind(t),
+    ]);
+    expect((await call(env, "POST", `/api/account/${CS}/delete`, {}, { cookie })).status).toBe(200);
+    expect(await env.DB.prepare("SELECT from_call, body FROM messages WHERE from_call='DL1GDP-15'").first()).toEqual({
+      from_call: "DL1GDP-15",
+      body: "logged",
+    });
+    expect(
+      (await env.DB.prepare("SELECT COUNT(*) AS n FROM aprs_outbox WHERE src_call='DL1GDP-15'").first<{ n: number }>())
+        ?.n,
+    ).toBe(1);
   });
 });
