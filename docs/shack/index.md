@@ -67,8 +67,9 @@ for with **Approve + run**. Before you approve, the app shows who signed it:
 | **Author key CHANGED since you last trusted it — refused** | The author key differs from the one you accepted. | blocked |
 | **Signature INVALID — refused** | The signature does not match the manifest. | blocked |
 
-A plugin runs in a sealed-off sandbox. It reaches the network, your location, or a scheduled beacon only when
-you grant that permission. A plugin that transmits passes the same callsign check as you, and no plugin
+A plugin runs in a sealed-off sandbox, apart from your session and the keys this browser holds for you. It
+reaches the network, your location, or a scheduled beacon only when you grant that permission, and the network
+only at the addresses its import prompt lists. A plugin that transmits passes the same callsign check as you, and no plugin
 changes how finds are verified.
 
 ## Next

@@ -17,11 +17,27 @@ export interface ToolManifest {
   remote?: boolean; // its /commands may be invoked by a REMOTE connected peer (PMS; D)
   description?: string;
   entry?: string; // imported tools: the script URL/path the sandbox runs (built-ins omit it)
+  connect?: string[]; // the https:/wss: origins a tool granted 'network' may reach — required with 'network'
   pubkey?: string; // author's raw Ed25519 public key (base64url) — the key `signature` verifies against
   signature?: string; // optional detached Ed25519 signature over the canonical manifest
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const MAX_CONNECT = 8;
+
+/** Normalise one `connect` entry to its origin; only https: and wss: origins with no path qualify. */
+export function connectOrigin(x: unknown): string | null {
+  if (typeof x !== "string") return null;
+  let u: URL;
+  try {
+    u = new URL(x);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "wss:") return null;
+  if (u.username || u.password || (u.pathname !== "/" && u.pathname !== "") || u.search || u.hash) return null;
+  return `${u.protocol}//${u.host}`;
+}
 
 /** Validate an untrusted manifest object. Returns the normalised manifest or an error string. */
 export function validateManifest(input: unknown): { ok: true; manifest: ToolManifest } | { ok: false; error: string } {
@@ -40,6 +56,17 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
     return { ok: false, error: "entry must be a string URL/path" };
   if (m.pubkey !== undefined && typeof m.pubkey !== "string")
     return { ok: false, error: "pubkey must be a base64url string" };
+  let connect: string[] | undefined;
+  if (m.connect !== undefined) {
+    if (!Array.isArray(m.connect) || m.connect.length > MAX_CONNECT)
+      return { ok: false, error: `connect must be a list of at most ${MAX_CONNECT} origins` };
+    const origins = m.connect.map(connectOrigin);
+    if (origins.some((o) => o === null))
+      return { ok: false, error: "connect entries must be https:// or wss:// origins, without a path" };
+    connect = [...new Set(origins as string[])];
+  }
+  if ((m.permissions as unknown[]).includes("network") && !connect?.length)
+    return { ok: false, error: "a tool asking for network lists the origins it reaches in connect" };
   const surfaces =
     Array.isArray(m.surfaces) && m.surfaces.length ? [...new Set(m.surfaces as Surface[])] : (["web"] as Surface[]);
   return {
@@ -54,6 +81,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
       remote: m.remote === true || undefined,
       description: typeof m.description === "string" ? m.description : undefined,
       entry: typeof m.entry === "string" ? m.entry : undefined,
+      connect,
       pubkey: typeof m.pubkey === "string" ? m.pubkey : undefined,
       signature: typeof m.signature === "string" ? m.signature : undefined,
     },

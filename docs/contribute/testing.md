@@ -87,6 +87,11 @@ real headless Chromium: it bundles the actual web-app decoder code, synthesises 
 "cq de test", feeds it in as a fake microphone, and asserts the decoded text. Skips cleanly (exit 0)
 when no Chromium is available; CI installs one in the `e2e-audio` job.
 
+`pnpm run e2e:tools` (`tools/e2e/tool-sandbox.mjs`) loads imported tools into the real plugin sandbox in
+headless Chromium and asserts what they reach: the example tool's command and decoder work, a tool without
+the `network` grant reaches no network and none of the app's storage, and a tool with it reaches its
+`connect` origin only, without the page's cookie. It skips the same way and runs in the `e2e-audio` job.
+
 `tools/webauthn/virtual-authenticator.mjs` is a **manual** check that drives a full passkey
 register + login (and a tampered-signature rejection) against a running gateway via a Playwright
 virtual authenticator. It is not wired into CI — the WebAuthn logic is unit-tested; this validates
@@ -194,7 +199,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |

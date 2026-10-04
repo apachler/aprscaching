@@ -19,6 +19,7 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `remote` | no | `true` lets a remote connected station invoke the tool's commands |
 | `description` | no | One line for the registry and the import prompt |
 | `entry` | for an imported tool | The URL or path of the JavaScript module the sandbox runs |
+| `connect` | with `network` | The `https://` or `wss://` origins the tool reaches, at most 8, without a path |
 | `pubkey` | to sign | The author's raw Ed25519 public key, base64url |
 | `signature` | to sign | A detached Ed25519 signature over the canonical manifest (every field but `signature`) |
 
@@ -34,7 +35,7 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `map` | Add a declarative map layer |
 | `ipc` | Publish and subscribe on the bus between tools, and offer or call named services |
 | `beacon` | Schedule a beacon. Needs a separate grant and passes the transmit gate |
-| `network` | Make an outbound request. Needs a separate grant |
+| `network` | Make an outbound request to the origins in `connect`. Needs a separate grant |
 | `tx` | Transmit a frame. Needs a separate grant and passes the transmit gate |
 | `geo` | Read the device's location. Needs a separate grant |
 
@@ -50,6 +51,21 @@ capability lets a tool change how finds are verified.
 | `bbs` | The BBS |
 | `node` | The NET/ROM node console |
 | `map` | The map |
+
+## Where a tool runs
+
+An imported tool's script runs in a Web Worker inside a hidden, sandboxed frame with an opaque origin. From
+there the tool:
+
+- reaches nothing of the app's: its cookies, session, local storage, IndexedDB (where the device key lives),
+  Cache Storage and service worker belong to another origin;
+- reaches the network only with the `network` grant, and then only the origins in `connect`. The frame's
+  Content-Security-Policy blocks every other request, the app's own origin and API included. A request carries
+  no cookies of the user's;
+- talks to the app only through the host's messages: its commands, decoders, panel and colour rules, and the
+  bus between tools when it holds `ipc`.
+
+Removing a tool removes its frame, which ends the worker.
 
 ## What a tool emits
 
