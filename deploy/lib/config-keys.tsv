@@ -192,6 +192,7 @@ BACKUP_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	S3-compatible bucke
 R2_ENDPOINT	url	deploy			0	0	selfhost,baremetal,desktop	Endpoint URL of the S3-compatible backup bucket
 BACKUP_RETENTION_DAYS	int	deploy	30		0	0	selfhost,baremetal,desktop	Days a backup snapshot is kept
 BACKUP_PRUNE_BUCKET	enum	deploy	0	0|1	0	0	selfhost,baremetal,desktop	1 deletes expired bucket snapshots too, for buckets with no lifecycle rule
+BACKUP_KEEP	int	deploy	14		0	0	selfhost,baremetal,desktop	Backup archives kept in their local destination; older ones are deleted
 CF_API_TOKEN	string	deploy			1	0	selfhost	Cloudflare API token for the CDN cache rules
 CF_ZONE_ID	string	deploy			0	0	selfhost	Cloudflare zone the CDN cache rules apply to
 POCKET_ALERTS	enum	pocket	0	0|1	0	0	pocket	1 vibrates on a new direct message to your call

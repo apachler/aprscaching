@@ -9,6 +9,13 @@ env_file_get() {
   { grep -E "^$2=" "$1" || true; } | tail -n 1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//"
 }
 
+# The right-hand side of KEY's last assignment in FILE as written, quotes and all: copying a line from one
+# .env to another keeps its value intact. Empty when the file or the key is absent.
+env_file_raw() {
+  [ -f "$1" ] || return 0
+  { grep -E "^$2=" "$1" || true; } | tail -n 1 | cut -d= -f2-
+}
+
 # Whether FILE assigns KEY (even an empty value).
 env_file_has() { [ -f "$1" ] && grep -qE "^$2=" "$1"; }
 

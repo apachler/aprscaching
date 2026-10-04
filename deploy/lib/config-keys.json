@@ -191,6 +191,7 @@
 {"name":"R2_ENDPOINT","type":"url","units":["deploy"],"default":"","values":[],"secret":false,"publicRequired":false,"shapes":["selfhost","baremetal","desktop"],"hint":"Endpoint URL of the S3-compatible backup bucket"},
 {"name":"BACKUP_RETENTION_DAYS","type":"int","units":["deploy"],"default":"30","values":[],"secret":false,"publicRequired":false,"shapes":["selfhost","baremetal","desktop"],"hint":"Days a backup snapshot is kept"},
 {"name":"BACKUP_PRUNE_BUCKET","type":"enum","units":["deploy"],"default":"0","values":["0","1"],"secret":false,"publicRequired":false,"shapes":["selfhost","baremetal","desktop"],"hint":"1 deletes expired bucket snapshots too, for buckets with no lifecycle rule"},
+{"name":"BACKUP_KEEP","type":"int","units":["deploy"],"default":"14","values":[],"secret":false,"publicRequired":false,"shapes":["selfhost","baremetal","desktop"],"hint":"Backup archives kept in their local destination; older ones are deleted"},
 {"name":"CF_API_TOKEN","type":"string","units":["deploy"],"default":"","values":[],"secret":true,"publicRequired":false,"shapes":["selfhost"],"hint":"Cloudflare API token for the CDN cache rules"},
 {"name":"CF_ZONE_ID","type":"string","units":["deploy"],"default":"","values":[],"secret":false,"publicRequired":false,"shapes":["selfhost"],"hint":"Cloudflare zone the CDN cache rules apply to"},
 {"name":"POCKET_ALERTS","type":"enum","units":["pocket"],"default":"0","values":["0","1"],"secret":false,"publicRequired":false,"shapes":["pocket"],"hint":"1 vibrates on a new direct message to your call"},

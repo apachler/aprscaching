@@ -6,7 +6,9 @@ services:
       # every request arrives through the tunnel, so Cloudflare's cf-connecting-ip is the client
       TRUST_CF: "1"
   caddy:
-    ports: [] # no public ports; the tunnel reaches caddy on the internal network
+    # No published ports: the tunnel reaches caddy on the internal network. `!reset` drops the base file's
+    # ports (a plain `[]` merges with them and publishes 80/443 anyway); it needs Docker Compose 2.24 or newer.
+    ports: !reset []
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run

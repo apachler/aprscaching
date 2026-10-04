@@ -64,7 +64,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-[ -f "$ENV_FILE" ] || cp "$HERE/.env.example" "$ENV_FILE"
+# The .env holds the instance's secrets: created owner-only, and narrowed to owner-only when it is wider.
+[ -f "$ENV_FILE" ] || (umask 077 && cp "$HERE/.env.example" "$ENV_FILE")
+chmod 600 "$ENV_FILE"
 
 # ---- .env helpers ----------------------------------------------------------------------------------
 # The active value of KEY (empty when absent or only present as a commented template line).
@@ -240,7 +242,7 @@ if [ "$MODE" != lan ]; then
     [ -n "$FED_REGKEY_IN" ] || { echo "The registry needs its authority key (--fed-registry-key)." >&2; exit 2; }
   fi
   if [ "$NET44_SET" -eq 0 ]; then
-    ask NET44_IN "This instance's 44Net name, if it has one (e.g. aprscaching.${CALL,,}.ampr.org; blank = none)" ""
+    ask NET44_IN "This instance's 44Net name, if it has one (e.g. aprscaching.$(printf '%s' "$CALL" | tr '[:upper:]' '[:lower:]').ampr.org; blank = none)" ""
   fi
 fi
 

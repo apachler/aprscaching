@@ -7,16 +7,19 @@
 CF_WORKER_DIR="$DEPLOY_DIR/../workers/gateway"
 
 # init cloudflare: the advanced shape, kept to the existing one-shot. It says what it costs, runs
-# cloudflare/deploy-cf.sh, and records the Worker's and the app's URLs for status and doctor.
+# cloudflare/deploy-cf.sh, and records the Worker's and the app's URLs and the sysop calls: status and doctor
+# read the URLs, and every later publish sets APP_URL and ADMIN_CALLSIGNS in the Worker again.
 shape_init() {
-  local api="${API_BASE:-}" app=""
+  local api="${API_BASE:-}" app="${APP_URL:-}" admins="${ADMIN_CALLSIGNS:-}" problem
   while [ $# -gt 0 ]; do
     case "$1" in
       --api-base) api="$2"; shift ;;
       --app-url) app="$2"; shift ;;
+      --admin-callsigns) admins="$2"; shift ;;
       -h | --help)
-        printf '%s\n' "deploy/aprscaching init cloudflare [--api-base URL] [--app-url URL]" \
-          "Runs deploy/cloudflare/deploy-cf.sh (wrangler, logged in) and records the Worker's and the app's URLs."
+        printf '%s\n' "deploy/aprscaching init cloudflare [--api-base URL] [--app-url URL] [--admin-callsigns CALLS]" \
+          "Runs deploy/cloudflare/deploy-cf.sh (wrangler, logged in) and records the Worker's and the app's URLs" \
+          "and the sysop calls, which every publish sets in the Worker as APP_URL and ADMIN_CALLSIGNS."
         return 0
         ;;
       *) die "Unknown option $1." ;;
@@ -32,13 +35,16 @@ shape_init() {
   have wrangler || die "wrangler is not installed." "npm i -g wrangler, then wrangler login."
   ask api "The Worker's public URL (e.g. https://api.example.net or https://aprscaching.<you>.workers.dev)" "$api" --api-base
   ask app "The app's public URL on Pages (e.g. https://aprs.example.net)" "$app" --app-url
-  API_BASE="$api" bash "$DEPLOY_DIR/cloudflare/deploy-cf.sh"
-  shape_record cloudflare "" "api=${api%/}" "app=${app%/}"
+  ask admins "Your callsign, the instance's sysop (more: comma-separated)" "$admins" --admin-callsigns
+  admins="$(printf '%s' "$admins" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
+  problem="$(cfg_check APP_URL "$app" || true)$(cfg_check ADMIN_CALLSIGNS "$admins" || true)"
+  [ -z "$problem" ] || die "$problem"
+  API_BASE="$api" APP_URL="${app%/}" ADMIN_CALLSIGNS="$admins" bash "$DEPLOY_DIR/cloudflare/deploy-cf.sh"
+  shape_record cloudflare "" "api=${api%/}" "app=${app%/}" "admins=$admins"
   step "Next"
-  info "1. Set the Worker's APP_URL to $app (wrangler.toml [vars]) if deploy-cf.sh did not."
-  info "2. Your RF box: create a code in Instance admin -> Ingest boxes, then on the box run"
+  info "1. Your RF box: create a code in Instance admin -> Ingest boxes, then on the box run"
   info "   deploy/aprscaching init ingest-box --gateway ${api%/}"
-  info "3. Check it: deploy/aprscaching doctor (with OPERATOR_SECRET in the environment to read Setup)."
+  info "2. Check it: deploy/aprscaching doctor (with OPERATOR_SECRET in the environment to read Setup)."
 }
 
 # rotate-secret NAME: a fresh value stored in the Worker with wrangler, which redeploys it.
@@ -165,7 +171,9 @@ shape_update_apply() {
   cf_need
   api="${APRSCACHING_API_BASE:-$(cf_recorded api || true)}"
   [ -n "$api" ] || die "The Worker's URL is not known here." "Set APRSCACHING_API_BASE=https://…"
-  API_BASE="$api" bash "$DEPLOY_DIR/cloudflare/publish.sh"
+  # a deploy replaces the Worker's vars, so the recorded APP_URL and sysop calls go along again
+  API_BASE="$api" APP_URL="${APRSCACHING_APP_URL:-$(cf_recorded app || true)}" \
+    ADMIN_CALLSIGNS="${ADMIN_CALLSIGNS:-$(cf_recorded admins || true)}" bash "$DEPLOY_DIR/cloudflare/publish.sh"
 }
 shape_rollback_db() {
   local at

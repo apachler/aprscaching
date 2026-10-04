@@ -49,6 +49,41 @@ check "unset removes the key" eq "$(env_file_get "$E" NEW_KEY)" ""
 check "keys lists assignments in order" eq "$(env_file_keys "$E" | tr '\n' ' ')" "APRSIS_HOST APP_URL TAIL Q "
 env_file_secure "$TMP/new.env"
 check "secure creates a missing file owner-only" eq "$(file_mode "$TMP/new.env")" "600"
+printf 'OPERATOR_NAME="Club Station OE8XYZ"\nRETENTION={"positions": 30}\n' >>"$E"
+check "raw keeps the quotes a shell-sourced .env needs" eq "$(env_file_raw "$E" OPERATOR_NAME)" '"Club Station OE8XYZ"'
+check "  … and JSON as written" eq "$(env_file_raw "$E" RETENTION)" '{"positions": 30}'
+
+# ---- the deploy files: what reaches the image and the ingest ------------------------------------------------
+# The gateway-only secrets: secret in the schema, and not read by the ingest.
+GW_SECRETS="$(awk -F'\t' '!/^#/ && $6 == 1 && $3 !~ /ingest/ {print $1}' "$DEPLOY/lib/config-keys.tsv")"
+blanks_all() { # blanks_all TEXT: every gateway-only secret is set to "" in TEXT
+  local k missing=""
+  for k in $GW_SECRETS; do grep -qE "^ +$k: \"\"\$" <<<"$1" || missing="$missing $k"; done
+  eq "${missing:-none}" none
+}
+INGEST_SVC="$(sed -n '/^  ingest:/,/^  [a-z]*:/p' "$DEPLOY/docker-compose.yml")"
+check "the stack's ingest blanks every gateway-only secret" blanks_all "$INGEST_SVC"
+check "the ingest box blanks every gateway-only secret" blanks_all "$(cat "$DEPLOY/compose.ingest-only.yml")"
+check "the ingest unit unsets every gateway-only secret" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-ingest.service'); for k in $(echo $GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
+check "the ingest's settings come from .env, not as empty \${KEY} strings" \
+  bash -c "! grep -v '^ *#' <<<\"\$1\$2\" | grep -E '\\\$\\{[A-Z_]+(:-)?\\}'" _"$INGEST_SVC" "$(cat "$DEPLOY/compose.ingest-only.yml")"
+check "the tunnel overlay resets Caddy's ports" grep -qE '^    ports: !reset \[\]' "$DEPLOY/compose.home.yml"
+for p in '**/.env' '**/.env.*' '!**/*.example' '**/*.secret' '**/.dev.vars' 'deploy/.shape' 'deploy/backups' '**/data' '**/*.db'; do
+  check "the image leaves out $p" grep -qxF -- "$p" "$DEPLOY/../.dockerignore"
+done
+check "Compose 2.24 is new enough" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; selfhost_compose_supported 2.24.0 && selfhost_compose_supported v2.29.1 && selfhost_compose_supported 5.4.0"
+check "  … 2.23 is not" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; ! selfhost_compose_supported 2.23.3"
+CFG=$'services:\n  caddy:\n    image: caddy:2\n    ports:\n      - target: 80\n  gateway:\n    image: x\nvolumes:\n  caddy: {}\n'
+check "a merged config that publishes Caddy's ports is found" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; selfhost_publishes caddy <<<\"\$1\"" _ "$CFG"
+check "  … and one without them is not" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; ! selfhost_publishes gateway <<<\"\$1\"" _ "$CFG"
+if have docker && docker compose version >/dev/null 2>&1; then
+  merged() { (cd "$DEPLOY" && TUNNEL_TOKEN=t INGEST_SECRET=s docker compose --env-file /dev/null "$@" config 2>/dev/null); }
+  check "with the tunnel overlay, Caddy publishes no port" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; ! selfhost_publishes caddy <<<\"\$1\"" _ \
+    "$(merged -f docker-compose.yml -f compose.home.yml)"
+  check "  … without it, 80 and 443" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; selfhost_publishes caddy <<<\"\$1\"" _ "$(merged -f docker-compose.yml)"
+else
+  echo "skip the merged compose configuration (needs docker compose)"
+fi
 
 # ---- the schema --------------------------------------------------------------------------------------------
 check "a schema key is known" cfg_known KISS_TNC_PORT
@@ -135,6 +170,7 @@ setup() { "$S" --non-interactive --no-network "$@" </dev/null >"$TMP/out" 2>"$TM
 P="$TMP/pub.env"
 check "a public instance is set up" setup --env-file "$P" --call OE8APR --domain aprs.example.net \
   --fed-peers https://peer.example.org --net44-name aprscaching.oe8apr.ampr.org
+check "  … in an owner-only .env" eq "$(file_mode "$P")" 600
 check "  … with auto-promotion off" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "0"
 check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORROBORATION_QUORUM)" "2"
 check "  … with discovery off" eq "$(env_file_get "$P" FED_DISCOVER)" "0"
@@ -419,10 +455,24 @@ check "  … by its own name" grep -q "object put -bn acs-backups --file $TMP/a.
 : >"$OCI_LOG"
 mkdir -p "$TMP/arch-local"
 for d in 01 02 03 04 05; do cp "$TMP/a.tar.gz" "$TMP/arch-local/aprscaching-selfhost-202610${d}T020000Z.tar.gz"; done
-check "after an upload this disk keeps the newest three archives" \
+cp "$TMP/a.tar.gz" "$TMP/arch-local/aprscaching-pocket-20261001T020000Z.tar.gz"
+check "an upload leaves the local archives to the retention" \
   bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' SHAPE=selfhost bk '$TMP/bucket.env' bk_upload '$TMP/arch-local/aprscaching-selfhost-20261005T020000Z.tar.gz' >/dev/null"
-check "  … and drops the older ones" eq "$(cd "$TMP/arch-local" && ls | tr '\n' ' ')" \
-  "aprscaching-selfhost-20261003T020000Z.tar.gz aprscaching-selfhost-20261004T020000Z.tar.gz aprscaching-selfhost-20261005T020000Z.tar.gz "
+check "  … which keeps them all" eq "$(find "$TMP/arch-local" -name 'aprscaching-selfhost-*' | wc -l | tr -d ' ')" 5
+printf 'BACKUP_KEEP=3\n' >"$TMP/keep.env"
+check "the local destination keeps the newest BACKUP_KEEP archives, uploaded or not" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' SHAPE=selfhost bk '$TMP/keep.env' eval 'bk_keep; bk_prune \"$TMP/arch-local\"' >/dev/null"
+check "  … drops the older ones, and leaves another shape's alone" eq "$(cd "$TMP/arch-local" && ls | tr '\n' ' ')" \
+  "aprscaching-pocket-20261001T020000Z.tar.gz aprscaching-selfhost-20261003T020000Z.tar.gz aprscaching-selfhost-20261004T020000Z.tar.gz aprscaching-selfhost-20261005T020000Z.tar.gz "
+check "  … 14 when BACKUP_KEEP is unset" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/a.env' eval 'bk_keep; echo \$BK_KEEP' | grep -qx 14"
+printf 'BACKUP_KEEP=0\n' >"$TMP/keep0.env"
+check "  … and BACKUP_KEEP=0 is refused" bash -c "$(declare -f bk); TMP='$TMP'; DEPLOY='$DEPLOY'; ! bk '$TMP/keep0.env' bk_keep 2>/dev/null"
+printf 'BACKUP_BUCKET=b\n' >"$TMP/s3only.env"
+check "a BACKUP_BUCKET without R2_ENDPOINT keeps backups on this host, and doctor says so" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/s3only.env' eval 'DOC_ENV=\$SHAPE_ENV; doc_backup_destination' | grep -q '^warn BACKUP_BUCKET is set without R2_ENDPOINT, so nothing is uploaded: backups stay on this host'"
+printf 'OCI_BUCKET=b\n' >"$TMP/ocinocli.env"
+check "an OCI_BUCKET without the oci CLI is no upload either" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/ocinocli.env' eval 'have() { [ \"\$1\" != oci ]; }; DOC_ENV=\$SHAPE_ENV; doc_backup_destination' | grep -q '^warn OCI_BUCKET is set, but the oci CLI .*: backups stay on this host'"
 : >"$OCI_LOG"
 check "without OCI_BUCKET nothing is uploaded" bk "$TMP/a.env" bk_upload "$TMP/a.tar.gz"
 check "  … not even tried" test ! -s "$OCI_LOG"

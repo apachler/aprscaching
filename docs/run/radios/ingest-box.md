@@ -127,7 +127,8 @@ Without the helper, the box runs `deploy/compose.ingest-only.yml`, the ingest co
     docker compose -f compose.ingest-only.yml up -d --build
     ```
 
-The container receives every setting in `deploy/.env` and blanks `OPERATOR_SECRET` and `SESSION_SECRET`.
+The container receives every setting in `deploy/.env` and blanks the gateway's own secrets
+(`OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY` and the rest), should the file hold any.
 Inside it, `localhost` is the container: [From a container](rf-ingest.md#from-a-container).
 
 **From a checkout without Docker**, the settings go in `.env` at the top of the repository (copy

@@ -64,19 +64,24 @@ services:
     # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
     # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
     # ports: ["192.168.1.10:1799:1799/udp"]
+    # The APRS-IS login, filter and INGEST_SECRET come from .env alone: a key .env leaves out stays unset
+    # here, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:
-      APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
-      APRSIS_PORT: ${APRSIS_PORT:-14580}
-      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN}
-      APRSIS_PASSCODE: ${APRSIS_PASSCODE}
-      APRSIS_FILTER: ${APRSIS_FILTER}
+      # inside the stack the gateway is the `gateway` service, not the ingest's localhost default
       INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
-      INGEST_SECRET: ${INGEST_SECRET}
-      BATCH_MS: ${BATCH_MS:-2000}
-      # .env reaches this container too: blank the gateway-only secrets so the ingest box never holds them
+      # .env reaches this container too: blank every gateway-only secret (secret in
+      # packages/shared/src/configkeys.ts and not read by the ingest), so the ingest never holds one
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
       FED_PRIVATE_KEY: ""
+      FED_CORROBORATION_SECRET: ""
+      FED_SUBMIT_SECRET: ""
+      FED_RELAY_SECRET: ""
+      OKAPI_KEY: ""
+      EMAIL_API_KEY: ""
+      VAPID_PRIVATE: ""
+      TUNNEL_TOKEN: ""
+      CF_API_TOKEN: ""
     depends_on:
       gateway: { condition: service_healthy }
     restart: unless-stopped

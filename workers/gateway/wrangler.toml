@@ -4,7 +4,7 @@ compatibility_date = "2026-04-07"
 compatibility_flags = ["nodejs_compat"]
 
 # routes (set after domain is on Cloudflare):
-# routes = [{ pattern = "api.aprscaching.com", custom_domain = true }]
+# routes = [{ pattern = "api.aprscaching.net", custom_domain = true }]
 
 [[durable_objects.bindings]]
 name = "ROOMS"
@@ -32,11 +32,14 @@ bucket_name = "aprscaching-media"   # audio-cache clue storage
 crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-sync every 15 min
 
 [vars]
-# INGEST_SECRET is a SECRET, never a [vars] default — set it before first deploy:
-#   wrangler secret put INGEST_SECRET          (required; sessions are refused while it is unset/'change-me')
-#   wrangler secret put SESSION_SECRET         (recommended: decouples user sessions from the ingest credential)
-# For local `wrangler dev`, put both in workers/gateway/.dev.vars (gitignored).
-INSTANCE = "aprscaching.local"   # canonical federation instance id (use your domain in prod)
+# Secrets are never [vars] defaults — set them before the first deploy (deploy/cloudflare/deploy-cf.sh does):
+#   wrangler secret put INGEST_SECRET     (required: the ingest plane is closed while it is unset or 'change-me')
+#   wrangler secret put SESSION_SECRET    (required for sign-in: the Worker mints no session without it)
+#   wrangler secret put OPERATOR_SECRET   (optional: the operator's scripts; unset closes those paths)
+# For local `wrangler dev`, put them in workers/gateway/.dev.vars (gitignored).
+# APP_URL and ADMIN_CALLSIGNS come from deploy/cloudflare/publish.sh (`--var`), which takes them from
+# deploy-cf.sh or the values `deploy/aprscaching init cloudflare` recorded. INSTANCE and RP_ID follow from
+# APP_URL's host; set INSTANCE here only for a federation id that differs from it.
 # FED_PEERS = "https://peer.example/"          # advertised peer instances
 # Position storage (docs/reference/cloudflare-costs.md "Cost on D1"): a fix is stored once its station moved this many
 # metres or this many seconds passed; protected stations and RF hearings are always stored. 0 stores every fix.
@@ -47,7 +50,6 @@ INSTANCE = "aprscaching.local"   # canonical federation instance id (use your do
 # D1_DAILY_WRITE_BUDGET = "90000"
 # The embeddable map widget (/embed) loads MapLibre from the Pages site at APP_URL; its basemap is BASEMAP_STYLE
 # (a MapLibre style URL, or "offline" for the self-contained grid; unset = OpenFreeMap liberty).
-# APP_URL = "https://aprscaching.example"
 # BASEMAP_STYLE = "offline"
 # Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
 #   wrangler secret put FED_PRIVATE_KEY

@@ -94,7 +94,7 @@ With **Nightly backups to a bucket** (the default) the stack creates:
 Every night, at a random time between 02:30 and 03:30 UTC, the `aprscaching-backup.timer` runs
 `deploy/aprscaching backup --with-media`. The archive holds the database, the settings, the generated secrets
 and the media. It goes to the bucket under `archives/`, signed in as the VM itself (instance principal; no
-API key on the VM). The VM keeps the newest three on its own disk. The first backup runs at the end of the
+API key on the VM). The VM keeps the newest three on its own disk (`BACKUP_KEEP=3`). The first backup runs at the end of the
 first boot, so a broken policy shows in the boot log at once. `deploy/aprscaching doctor` reports the age of
 the newest archive in the bucket.
 
