@@ -64,6 +64,10 @@ ok(
 const addRule = await call(A, "POST", "/api/bbs/forward", { partner: "OE1BBB-1", route: "OE", transport: "rf-fbb" });
 ok("A: route OE -> OE1BBB-1", addRule.status === 201, JSON.stringify(addRule.data));
 
+// Only mail from a control-verified call is forwarded over FBB; the sysop's own call is verified by the operator.
+const verified = await call(A, "POST", "/verify/operator", { callsign: "OE1AAA" });
+ok("A: sysop call OE1AAA verified", verified.data?.verified === true, JSON.stringify(verified.data));
+
 // ---- post the message that must travel A -> B over the AXUDP AX.25 link ----
 const post = await call(A, "POST", "/api/bbs/messages", {
   fromCall: "OE1AAA",

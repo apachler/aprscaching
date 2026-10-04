@@ -423,9 +423,30 @@ export class NetromNodeRunner {
       console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)}`);
       void this.mirror();
     }
+    this.answerNewNode(f.src);
     // A NODES broadcaster is a node on our channel — adopt it as an INP3 neighbour (measure its RTT,
     // exchange RIFs), so INP3 bootstraps off NODES discovery without any static neighbour config.
     if (this.inp3) this.ensureNeighbor(f.src);
+  }
+
+  /** Nodes whose NODES broadcast we have heard, so a newcomer is answered once. */
+  private readonly heardNodes = new Set<string>();
+  private lastAnswerMs = 0;
+
+  /**
+   * A node heard for the first time gets our table straight away instead of at the next interval, so two
+   * nodes that came up at different times find each other without waiting minutes. It costs one broadcast
+   * per new neighbour, and at most one a minute, since every broadcast keys the transmitter.
+   */
+  private answerNewNode(src: Ax25Address): void {
+    const key = addrStr(src);
+    if (this.heardNodes.has(key)) return;
+    if (this.heardNodes.size >= 1000) this.heardNodes.clear();
+    this.heardNodes.add(key);
+    const now = Date.now();
+    if (now - this.lastAnswerMs < 60_000) return;
+    this.lastAnswerMs = now;
+    this.broadcast();
   }
 
   /** Process a NET/ROM network packet that arrived INSIDE a connected L2 session to our node

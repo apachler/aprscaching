@@ -55,3 +55,33 @@ describe("NetromNodeRunner NODES learning", () => {
     expect(routes.some((r) => r.call === "OE9TNN" && r.alias === "TNN")).toBe(true);
   });
 });
+
+describe("NetromNodeRunner answers a newly heard node", () => {
+  const broadcastFrom = (call: string, alias: string) =>
+    encodeFrame({
+      dst: parseAddr("NODES"),
+      src: parseAddr(call),
+      command: true,
+      type: "UI",
+      pf: false,
+      pid: PID_NETROM,
+      info: nodesInfo(alias),
+    });
+  const ourBroadcasts = (sent: Ax25Frame[]) =>
+    sent.filter((f) => f.pid === PID_NETROM && f.dst.call === "NODES" && f.src.call === "OE1ACS").length;
+
+  it("sends one NODES broadcast for a new node, none for a node already heard", () => {
+    const { node, sent } = runner();
+    node.onRaw(broadcastFrom("OE9NOS-1", "NOS"));
+    expect(ourBroadcasts(sent)).toBe(1);
+    node.onRaw(broadcastFrom("OE9NOS-1", "NOS"));
+    expect(ourBroadcasts(sent)).toBe(1);
+  });
+
+  it("answers at most once a minute however many new nodes appear", () => {
+    const { node, sent } = runner();
+    node.onRaw(broadcastFrom("OE9NOS-1", "NOS"));
+    node.onRaw(broadcastFrom("OE9TWO-1", "TWO"));
+    expect(ourBroadcasts(sent)).toBe(1);
+  });
+});
