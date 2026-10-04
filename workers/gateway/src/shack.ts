@@ -10,7 +10,7 @@ import { json } from "./app.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";
-import { sessionIdentity } from "./auth.js";
+import { sessionIdentity, displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall } from "./servicecall.js";
@@ -132,7 +132,12 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
   return json({
-    messages: page.items,
+    // an erased person's side reads as `WITHDRAWN`; a message they sent keeps its place with an empty body
+    messages: page.items.map((m) => ({
+      ...m,
+      fromCall: m.fromCall == null ? m.fromCall : displayCall(m.fromCall),
+      toCall: m.toCall == null ? m.toCall : displayCall(m.toCall),
+    })),
     nextCursor: page.nextCursor,
     hasMore: page.hasMore,
     serviceCall: serviceCall(env),

@@ -27,14 +27,19 @@ keys and push keys stay out of it.
 
 `POST /api/account/<call>/delete` erases the whole account: every base call it holds.
 
-- **Anonymised:** finds, owned caches and the APRS messages the person sent or was sent, from any SSID, pass to a
+- **Anonymised:** finds, owned caches and the APRS messages the person was sent, from any SSID, pass to a
   withdrawn marker, served as `WITHDRAWN`. The marker can never be registered as a call.
+- **Withdrawn:** the text of every APRS message the person sent is deleted. The message keeps its place in the
+  log under the marker with an empty body, so the other side's conversation shows a withdrawn message rather
+  than a gap. The service call's traffic is the instance's, so a sysop's erasure leaves it.
 - **Archived:** owned caches are archived and their uploaded media and stage audio clues removed. A sysop can offer them for
   [adoption](../day-to-day/cache-adoption.md); the adoption trail keeps its rows with the marker in place of the
   person's call, and drops the notes on them.
 - **Deleted:** every personal row: passkeys, email links, held calls and their verifications, positions and the
   map's station entry under the call and every SSID of it, device keys, watches, alerts, favourites, saved views, push subscriptions, boxes, ratings, API keys,
-  adoption requests and personal BBS mail.
+  adoption requests, personal BBS mail in both directions, the bulletins and NTS traffic the person posted (replies
+  others posted stay), Mailbox mail, near-cache radio messages, MeshCom group messages, and the radio messages
+  queued for or addressed to the person.
 - **Kept:** the Shack raw-packet ring and NET/ROM MHeard rows, which record what the instance heard on the air;
   they age out on their retention below.
 - **Freed:** the base calls, for a new registration.

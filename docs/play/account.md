@@ -85,8 +85,8 @@ Open **Settings → Your data**.
 
 - **Export my data** downloads a full copy of everything the instance holds about you. It includes how each of
   your callsigns was verified.
-- **Erase my account** removes your account, your keys and your personal data. Your finds stay, but without
-  your name or callsign on them. The app asks **Permanently erase OE8APR?** first; tap **Erase everything**
+- **Erase my account** removes your account, your keys and your personal data, including the text of every
+  message, mail and bulletin you wrote. Your finds stay, but without your name or callsign on them. The app asks **Permanently erase OE8APR?** first; tap **Erase everything**
   to go ahead. The app then signs you out and closes Settings.
 
 !!! warning
