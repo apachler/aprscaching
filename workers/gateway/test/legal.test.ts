@@ -65,5 +65,15 @@ describe("legal pages", () => {
     } as Env).text();
     expect(full).toContain("Email provider</strong> (api.resend.com)");
     expect(full).toContain("Browser push services");
+
+    // SMTP takes precedence: the page names the mail server, not Resend
+    const smtp = await handlePrivacyPage({
+      ...configured,
+      EMAIL_API_KEY: "re_x",
+      EMAIL_FROM: "noreply@example.net",
+      SMTP_HOST: "mail.example.net",
+    } as Env).text();
+    expect(smtp).toContain("Email provider</strong> (mail.example.net)");
+    expect(smtp).not.toContain("api.resend.com");
   });
 });

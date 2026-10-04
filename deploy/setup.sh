@@ -26,6 +26,10 @@
 #          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
 #          --fed-registry-key KEY (required with FED_REGISTRY/FED_REGISTRY_DNS) ·
 #          --net44-name NAME (this instance's 44Net name, e.g. aprscaching.oe8apr.ampr.org)
+# Mail (sign-in links, the watch digest): --mail smtp|resend|none (left out non-interactively: kept as it is) ·
+#          --email-from ADDRESS · --smtp-host HOST · --smtp-port PORT (587) · --smtp-secure starttls|tls|none ·
+#          --smtp-user USER · --smtp-pass PASSWORD · --resend-key KEY. The SMTP password and the Resend key may
+#          come from the SMTP_PASS and EMAIL_API_KEY environment variables instead, off the command line.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
@@ -36,6 +40,8 @@ NETWORK=1
 ASSUME_YES=0
 CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" TUNNEL="" SITE="" SITE_SET=0 APP_PORT="" NO_TUNNEL=0 NEXT_STEPS=1
 FED_PEERS_IN="" FED_PEERS_SET=0 FED_SUBMIT_IN="" FED_REGKEY_IN="" NET44_IN="" NET44_SET=0
+MAIL="" MAIL_FROM="" SMTP_HOST_IN="" SMTP_PORT_IN="" SMTP_SECURE_IN="" SMTP_USER_IN=""
+SMTP_PASS_IN="${SMTP_PASS:-}" RESEND_KEY_IN="${EMAIL_API_KEY:-}"
 
 usage() { awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"; }
 while [ $# -gt 0 ]; do
@@ -56,6 +62,14 @@ while [ $# -gt 0 ]; do
     --fed-submit-instances) FED_SUBMIT_IN="$2"; shift ;;
     --fed-registry-key) FED_REGKEY_IN="$2"; shift ;;
     --net44-name) NET44_IN="$2"; NET44_SET=1; shift ;;
+    --mail) MAIL="$2"; shift ;;
+    --email-from) MAIL_FROM="$2"; shift ;;
+    --smtp-host) SMTP_HOST_IN="$2"; shift ;;
+    --smtp-port) SMTP_PORT_IN="$2"; shift ;;
+    --smtp-secure) SMTP_SECURE_IN="$2"; shift ;;
+    --smtp-user) SMTP_USER_IN="$2"; shift ;;
+    --smtp-pass) SMTP_PASS_IN="$2"; shift ;;
+    --resend-key) RESEND_KEY_IN="$2"; shift ;;
     --no-network) NETWORK=0 ;;
     --yes) ASSUME_YES=1 ;;
     -h | --help) usage; exit 0 ;;
@@ -71,6 +85,23 @@ chmod 600 "$ENV_FILE"
 # ---- .env helpers ----------------------------------------------------------------------------------
 # The active value of KEY (empty when absent or only present as a commented template line).
 current() { grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true; }
+
+# The value of KEY with the quotes a shell-sourced .env needs taken off.
+unquoted() {
+  local v
+  v="$(current "$1")"
+  case "$v" in \"*\" | \'*\') v="${v:1:${#v}-2}" ;; esac
+  printf '%s' "$v"
+}
+
+# VALUE as .env holds it: bare when it is plain, else in single quotes, which Compose, systemd and a shell that
+# sources the file all read literally (a value holding a single quote is refused before it gets here).
+quoted() {
+  case "$1" in
+    *[!A-Za-z0-9._~+/=@:,-]*) printf "'%s'" "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
 
 # The shipped placeholder of KEY in .env.example (N0CALL, 00000, :80, …) — it counts as unset.
 template() { grep -E "^$1=" "$HERE/.env.example" | tail -n 1 | cut -d= -f2- || true; }
@@ -133,6 +164,25 @@ ask() { # ask VAR "prompt" default
   else
     printf -v "$1" '%s' "$3"
   fi
+}
+
+# ask_secret VAR "prompt": read without echo; a blank answer keeps what VAR already holds.
+ask_secret() {
+  local reply
+  [ "$INTERACTIVE" -eq 1 ] || return 0
+  read -rsp "$2: " reply
+  echo
+  [ -z "$reply" ] || printf -v "$1" '%s' "$reply"
+}
+
+# Turn KEY off: its active line becomes a commented one, so the value stays visible but is not read.
+unset_var() {
+  local tmp
+  grep -qE "^$1=" "$ENV_FILE" || return 0
+  tmp="$(mktemp)"
+  K="$1" awk 'BEGIN{k=ENVIRON["K"]} index($0, k"=")==1 {print "# "$0; next} {print}' "$ENV_FILE" >"$tmp"
+  cat "$tmp" >"$ENV_FILE" && rm -f "$tmp"
+  echo "  turned off $1"
 }
 
 # ---- questions ---------------------------------------------------------------------------------------
@@ -252,6 +302,67 @@ if [ "$SITE_SET" -eq 0 ]; then
 fi
 SITE="$(printf '%s' "$SITE" | tr '[:lower:]' '[:upper:]')"
 
+# Mail follows the gateway's rule: SMTP when SMTP_HOST is set, else Resend when EMAIL_API_KEY is set, else none.
+if [ -n "$(current SMTP_HOST)" ]; then mail_now=smtp
+elif [ -n "$(current EMAIL_API_KEY)" ]; then mail_now=resend
+else mail_now=none; fi
+if [ -z "$MAIL" ] && [ "$INTERACTIVE" -eq 1 ]; then
+  echo "How should the instance send mail (sign-in links, address confirmations, the watch digest)?"
+  echo "  1) an SMTP server: your own mail server or a hosted mailbox"
+  echo "  2) the Resend API"
+  echo "  3) no mail: members sign in with passkeys, or with a one-time link you mint"
+  case "$mail_now" in smtp) d=1 ;; resend) d=2 ;; *) d=3 ;; esac
+  read -rp "Choose 1-3 [$d]: " m
+  case "${m:-$d}" in 1) MAIL=smtp ;; 2) MAIL=resend ;; *) MAIL=none ;; esac
+fi
+MAIL="${MAIL:-keep}"
+case "$MAIL" in
+  smtp | resend)
+    from_default="$(unquoted EMAIL_FROM)"
+    [ -n "$from_default" ] || [ "$MODE" = lan ] || from_default="aprscaching <noreply@$DOMAIN_IN>"
+    ask MAIL_FROM "Sender address (EMAIL_FROM)" "${MAIL_FROM:-$from_default}"
+    [ -n "$MAIL_FROM" ] || { echo "A sender address is required (--email-from)." >&2; exit 2; }
+    ;;
+esac
+case "$MAIL" in
+  smtp)
+    ask SMTP_HOST_IN "SMTP server (e.g. mail.example.net)" "${SMTP_HOST_IN:-$(current SMTP_HOST)}"
+    [ -n "$SMTP_HOST_IN" ] || { echo "An SMTP server is required (--smtp-host)." >&2; exit 2; }
+    ask SMTP_PORT_IN "SMTP port (587 for STARTTLS, 465 for TLS)" "${SMTP_PORT_IN:-$(current SMTP_PORT)}"
+    SMTP_PORT_IN="${SMTP_PORT_IN:-587}"
+    secure_default=starttls
+    [ "$SMTP_PORT_IN" != 465 ] || secure_default=tls
+    ask SMTP_SECURE_IN "Connection security: starttls, tls or none" "${SMTP_SECURE_IN:-$secure_default}"
+    case "$SMTP_SECURE_IN" in starttls | tls | none) ;; *)
+      echo "The connection security is starttls, tls or none (--smtp-secure)." >&2
+      exit 2
+      ;;
+    esac
+    # A hosted mailbox logs in with the full address: offer the sender's own, "-" for none.
+    user_default="${SMTP_USER_IN:-$(unquoted SMTP_USER)}"
+    [ -n "$user_default" ] || [ "$INTERACTIVE" -eq 0 ] || user_default="$(printf '%s' "$MAIL_FROM" | sed -E 's/.*<([^>]*)>.*/\1/')"
+    ask SMTP_USER_IN "SMTP login, often the full address (- = no login)" "$user_default"
+    [ "$SMTP_USER_IN" != - ] || SMTP_USER_IN=""
+    if [ -n "$SMTP_USER_IN" ]; then
+      ask_secret SMTP_PASS_IN "SMTP password (blank = keep the current one)"
+      [ -n "$SMTP_PASS_IN$(current SMTP_PASS)" ] || { echo "The SMTP login needs its password (--smtp-pass or SMTP_PASS)." >&2; exit 2; }
+    fi
+    ;;
+  resend)
+    ask_secret RESEND_KEY_IN "Resend API key (blank = keep the current one)"
+    [ -n "$RESEND_KEY_IN$(current EMAIL_API_KEY)" ] || { echo "A Resend API key is required (--resend-key or EMAIL_API_KEY)." >&2; exit 2; }
+    ;;
+  none | keep) ;;
+  *) echo "--mail is smtp, resend or none." >&2; exit 2 ;;
+esac
+for v in "$MAIL_FROM" "$SMTP_USER_IN" "$SMTP_PASS_IN" "$RESEND_KEY_IN"; do
+  case "$v" in *"'"*)
+    echo "A mail setting holds a single quote, which cannot be written here; put it into $ENV_FILE by hand." >&2
+    exit 2
+    ;;
+  esac
+done
+
 # Further admin calls after the first stay as they are; only the first is this operator's answer.
 admin_rest="$(printf '%s' "$existing_admin" | tr '[:lower:]' '[:upper:]' | tr ', ' '\n\n' | sed '1d' | { grep -vxF -e "$CALL" -e '' || true; } | paste -sd, -)"
 # The receiving sites: this box's site first, then every other site already listed (a MeshCom node's call,
@@ -301,6 +412,30 @@ else
     echo "  WARN: FED_PEERS holds a 44Net or non-https peer, which starts trusted. Onboard 44Net peers from Instance admin."
   fi
 fi
+case "$MAIL" in
+  smtp)
+    setvar EMAIL_FROM "$(quoted "$MAIL_FROM")"
+    setvar SMTP_HOST "$SMTP_HOST_IN"
+    setvar SMTP_PORT "$SMTP_PORT_IN"
+    setvar SMTP_SECURE "$SMTP_SECURE_IN"
+    if [ -n "$SMTP_USER_IN" ]; then
+      setvar SMTP_USER "$(quoted "$SMTP_USER_IN")"
+      [ -z "$SMTP_PASS_IN" ] || setvar SMTP_PASS "$(quoted "$SMTP_PASS_IN")" secret
+    else
+      unset_var SMTP_USER
+      unset_var SMTP_PASS
+    fi
+    ;;
+  resend)
+    setvar EMAIL_FROM "$(quoted "$MAIL_FROM")"
+    [ -z "$RESEND_KEY_IN" ] || setvar EMAIL_API_KEY "$(quoted "$RESEND_KEY_IN")" secret
+    unset_var SMTP_HOST # set, SMTP would carry the mail instead
+    ;;
+  none)
+    unset_var SMTP_HOST
+    unset_var EMAIL_API_KEY
+    ;;
+esac
 ensure_secret INGEST_SECRET
 ensure_secret OPERATOR_SECRET
 if [ -n "$(current FED_PRIVATE_KEY)" ]; then
@@ -339,7 +474,7 @@ cat <<EOF
   2. Health:  curl -fsS $HEALTH
   3. Sign in: open $APP_URL and create the account for $CALL.
 EOF
-if [ "$MODE" = lan ]; then
+if [ "$MODE" = lan ] && [ -z "$(current SMTP_HOST)$(current EMAIL_API_KEY)" ]; then
   cat <<EOF
      Plain http has no passkeys and this box sends no email, so sign in with a one-time link:
        docker compose exec gateway node tools/admin/signin-link.mjs $CALL
@@ -348,6 +483,14 @@ fi
 cat <<EOF
   4. Verify:  docker compose exec gateway node tools/admin/verify-call.mjs $CALL
      This confirms your call with OPERATOR_SECRET and opens Instance admin (the Admin rail entry).
+EOF
+if [ -n "$(current EMAIL_FROM)" ] && [ -n "$(current SMTP_HOST)$(current EMAIL_API_KEY)" ]; then
+  cat <<EOF
+     Mail:    docker compose exec gateway node tools/admin/mail-test.mjs <your address>
+     This sends one test mail and prints the mail server's answer when it is refused.
+EOF
+fi
+cat <<EOF
   5. Finish:  Instance admin -> Setup ($APP_URL) lists what is left to configure, in order.
 Keep OPERATOR_SECRET off any separate ingest box; that box needs only INGEST_SECRET.
 EOF

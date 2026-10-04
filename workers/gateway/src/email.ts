@@ -21,13 +21,14 @@ import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
 import { appBase, gatewayBase } from "./sitemap.js";
 import { hotspotOrigin, linkOrigin } from "./visitor.js";
+import { sendEmail } from "./mail.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
  * passkeys. `start` issues a one-time token and emails a link. Opening the link (GET) only shows a
  * confirm step; the confirm (POST with the same token) consumes it and opens a session, creating the
  * account on first register. A GET never signs anyone in, so a page that makes a browser load someone
- * else's link cannot log the victim into the attacker's account. When no email provider is configured
+ * else's link cannot log the victim into the attacker's account. When no mail transport is configured
  * (dev/CI), `start` returns the token in-band so headless flows and first-run can proceed without mail.
  *
  * The same token store and confirm step carry the operator-issued sign-in link (`handleOperatorLink`),
@@ -311,7 +312,7 @@ async function confirmedAccount(env: Env, email: string, callsign: string): Prom
 /**
  * Mail a confirmation link for an address given at passkey registration. The address stays pending — it
  * signs nobody in, receives no mail and recovers nothing — until its owner opens the link. Without a mail
- * provider the token comes back in-band only on an instance that opts into dev tokens.
+ * transport the token comes back in-band only on an instance that opts into dev tokens.
  */
 export async function sendEmailConfirmation(
   req: Request,
@@ -443,22 +444,4 @@ async function createAccount(env: Env, cs: string, email: string | null, now: nu
     return json({ error: "callsign already claimed" }, { status: 409 });
   }
   return { account_id: id, callsign: cs };
-}
-
-/** The email provider's send endpoint (a Resend-compatible JSON API); the privacy page names its host. */
-export const EMAIL_API_URL = "https://api.resend.com/emails";
-
-/** Pluggable sender. Resend-compatible JSON API; returns false (dev mode) when unconfigured. */
-export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
-  if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return false;
-  try {
-    const res = await fetch(EMAIL_API_URL, {
-      method: "POST",
-      headers: { authorization: `Bearer ${env.EMAIL_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
 }

@@ -6,7 +6,7 @@ callsign and support key management, signing, and verification.
 ## Instance operation — `deploy/`
 
 ```bash
-cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
+cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, mail, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
 deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
 deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret, net44 (see Deployment helpers)
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
@@ -33,7 +33,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 
 | Command | Options |
 |---|---|
-| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
+| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
 | `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
@@ -87,6 +87,17 @@ OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.1
 ```
 
 See [Off-grid sign-in](../run/day-to-day/sign-in-links.md#off-grid-sign-in).
+
+## Mail test — `tools/admin/` {#mail-test}
+
+```bash
+docker compose exec gateway node tools/admin/mail-test.mjs you@example.net                    # Docker stack, from deploy/
+BASE=http://127.0.0.1:8787 OPERATOR_SECRET=… node tools/admin/mail-test.mjs you@example.net     # from a checkout
+```
+
+Sends one test mail over the gateway's own transport (SMTP when `SMTP_HOST` is set, else the Resend API) by
+posting to `/api/admin/mail-test` with `OPERATOR_SECRET`. It prints the transport on success and the server's
+reason on a refusal, and exits non-zero then. See [Send mail](../run/day-to-day/mail.md).
 
 ## Licence registers — `tools/licence/` {#licence-registers}
 

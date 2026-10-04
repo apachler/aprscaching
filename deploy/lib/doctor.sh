@@ -162,6 +162,42 @@ doc_config_required() {
   fi
 }
 
+# ---- mail ---------------------------------------------------------------------------------------------------
+# Which transport carries the gateway's mail, by its rule: SMTP when SMTP_HOST is set, else Resend when
+# EMAIL_API_KEY is set, else none. An SMTP server must answer on its port from here; a test mail is
+# tools/admin/mail-test.mjs.
+doc_mail() {
+  local from host port secure
+  [ -n "$DOC_ENV" ] && [ -f "$DOC_ENV" ] || return 0
+  [ "$SHAPE" != ingest-box ] || return 0 # an ingest box sends no mail
+  from="$(doc_get EMAIL_FROM)"
+  host="$(doc_get SMTP_HOST)"
+  if [ -z "$host" ] && [ -z "$(doc_get EMAIL_API_KEY)" ]; then
+    pass mail.transport "no mail transport: sign-in is by passkey or one-time link (Setup checklist: Email delivery)"
+    return 0
+  fi
+  if [ -z "$from" ]; then
+    warnc mail.transport "$([ -n "$host" ] && echo SMTP_HOST || echo EMAIL_API_KEY) is set but EMAIL_FROM is not, so no mail is sent" \
+      "set EMAIL_FROM in $DOC_ENV"
+    return 0
+  fi
+  if [ -z "$host" ]; then
+    pass mail.transport "mail from $from goes out over the Resend API (api.resend.com)"
+    return 0
+  fi
+  port="$(doc_get SMTP_PORT)"
+  port="${port:-587}"
+  secure="$(doc_get SMTP_SECURE)"
+  [ -n "$secure" ] || { [ "$port" = 465 ] && secure=tls || secure=starttls; }
+  pass mail.transport "mail from $from goes out over SMTP $host:$port ($secure)"
+  if tcp_open "$host" "$port"; then
+    pass mail.smtp "$host:$port answers; send a test with tools/admin/mail-test.mjs <address>"
+  else
+    warnc mail.smtp "$host:$port does not answer from this host" \
+      "check SMTP_HOST and SMTP_PORT, and that the host may connect out on that port"
+  fi
+}
+
 # ---- gateway ------------------------------------------------------------------------------------------------
 doc_gateway() {
   local db schema commit newest head
@@ -673,6 +709,7 @@ run_doctor() {
   declare -F shape_doctor_context >/dev/null || die "'doctor' is not available for the $SHAPE shape."
   shape_doctor_context
   doc_config
+  doc_mail
   doc_gateway
   doc_setup_checklist
   doc_ingest

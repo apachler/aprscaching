@@ -117,6 +117,28 @@ ingest box `deploy/.env`. Desktop keeps no `.env` the doctor reads.
 - **Fix:** set it to your gateway's `/ingest` URL in `deploy/.env`.
 - **See:** [Set up an ingest box](radios/ingest-box.md).
 
+## Mail (`mail`)
+
+How the gateway sends mail, read from the `.env`. The ingest box sends none and skips this group.
+
+### `mail.transport`
+
+- **Tests:** which transport carries the mail: SMTP when `SMTP_HOST` is set, else the Resend API when
+  `EMAIL_API_KEY` is set, else none. No transport passes; the Setup checklist's `EMAIL` item says whether
+  members still have a way to sign in.
+- **Message:** `SMTP_HOST is set but EMAIL_FROM is not, so no mail is sent` (warn), or the same for
+  `EMAIL_API_KEY`.
+- **Fix:** set `EMAIL_FROM` in the `.env` and restart.
+- **See:** [Send mail](day-to-day/mail.md).
+
+### `mail.smtp`
+
+- **Tests:** the SMTP server answers on `SMTP_HOST`:`SMTP_PORT` from this host. It does not log in or send.
+- **Message:** `<host>:<port> does not answer from this host` (warn).
+- **Fix:** check the host name and port, and that the host may connect out on that port: some providers
+  block 25 and 587 until asked. Then send a test mail ([Send mail](day-to-day/mail.md#send-a-test-mail)).
+- **See:** [Send mail](day-to-day/mail.md).
+
 ## The gateway (`gateway`)
 
 Every shape with a gateway: all but the ingest box. Self-host asks through this host's Caddy, with the
@@ -200,7 +222,7 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `FED_REGISTRY_KEY` | blocking | a registry is configured without its authority key | [Hubs, relays and the registry](federation/hubs-and-relays.md) |
 | `OPERATOR` | recommended | `OPERATOR_NAME`, `OPERATOR_ADDRESS` or `OPERATOR_EMAIL` missing: `/imprint` and `/privacy` warn | set all three ([duties](compliance/index.md)) |
 | `SOURCE_REPO` | optional | unset: the source link names the upstream repository | set your fork if you changed the code ([`source.fork`](#sourcefork)) |
-| `EMAIL` | blocking, recommended or optional | no mail delivery; blocking when nobody has a way to sign in | set `EMAIL_FROM` and `EMAIL_API_KEY`, or use [sign-in links](day-to-day/sign-in-links.md) |
+| `EMAIL` | blocking, recommended or optional | no mail delivery; blocking when nobody has a way to sign in | set `EMAIL_FROM` and an SMTP server or a Resend key ([Send mail](day-to-day/mail.md)), or use [sign-in links](day-to-day/sign-in-links.md) |
 | `VAPID` | optional | no web push; notifications go by email digest | set `VAPID_PUBLIC` and `VAPID_PRIVATE` |
 | `db:ingest` | blocking | no packet in the last hour (a warning, never a failure) | see [`ingest.credentials`](#ingestcredentials), or connect a radio ([quick starts](radios/quick-starts.md)) |
 | `db:peers` | optional | no enabled federation peer | [Join the network](federation/index.md#joining-the-network) |

@@ -112,6 +112,18 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
       expect(body).not.toContain(secret);
   });
 
+  it("names the SMTP transport, never its password", async () => {
+    const env = baseEnv({
+      EMAIL_FROM: "op@example.net",
+      SMTP_HOST: "mail.example.net",
+      SMTP_USER: "op@example.net",
+      SMTP_PASS: "smtp-password-value-456",
+    });
+    const body = await (await get(env, "OE8APR")).text();
+    expect(body).toContain("SMTP mail.example.net:587 (starttls)");
+    expect(body).not.toContain("smtp-password-value-456");
+  });
+
   it("every env item is marked read-only (source: env)", async () => {
     const items = await itemsOf(await get(baseEnv(), "OE8APR"));
     for (const i of items.filter((x) => !x.key.startsWith("db:"))) expect(i.source).toBe("env");

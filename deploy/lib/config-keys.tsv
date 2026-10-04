@@ -64,7 +64,12 @@ APP_URL	url	gateway,pocket			0	1	selfhost,baremetal,pocket,desktop	Public origin
 CORS_ORIGINS	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Extra comma-separated origins allowed credentialed CORS
 RP_ID	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Passkey (WebAuthn) domain; defaults to the host of APP_URL
 EMAIL_FROM	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Sender address for sign-in links and digest mail
-EMAIL_API_KEY	string	gateway			1	0	selfhost,baremetal,pocket,desktop	API key of the Resend-compatible email provider
+EMAIL_API_KEY	string	gateway			1	0	selfhost,baremetal,pocket,desktop	Resend API key; mail goes out over Resend when SMTP_HOST is unset
+SMTP_HOST	string	gateway			0	0	selfhost,baremetal,pocket,desktop	SMTP server that sends the mail; set, it is used instead of Resend
+SMTP_PORT	int	gateway	587		0	0	selfhost,baremetal,pocket,desktop	SMTP server port: 587 for STARTTLS, 465 for TLS
+SMTP_SECURE	enum	gateway		starttls|tls|none	0	0	selfhost,baremetal,pocket,desktop	starttls, tls or none; default tls on port 465, else starttls
+SMTP_USER	string	gateway			0	0	selfhost,baremetal,pocket,desktop	SMTP login, often the full sender address; unset sends without login
+SMTP_PASS	string	gateway			1	0	selfhost,baremetal,pocket,desktop	SMTP password of SMTP_USER
 ALLOW_DEV_TOKENS	enum	gateway		0|1|false|true	0	0	selfhost,baremetal,pocket,desktop	1 returns sign-in tokens in-band when email is unset (dev and CI only)
 OPERATOR_LINKS_FOR_ANY_CALL	enum	gateway,pocket		0|1	0	0	selfhost,baremetal,pocket,desktop	1 lets the operator's sign-in link serve every call, not only admin calls
 VAPID_PUBLIC	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Web-push VAPID public key (base64url)

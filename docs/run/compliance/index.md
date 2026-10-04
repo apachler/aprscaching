@@ -35,6 +35,10 @@ while neither is set. A separate address keeps reports apart from other mail, fo
 `SECURITY_CONTACT=mailto:security@aprscaching.net` on the project's own instance. Web push names the same
 operator address to the push services, unless `VAPID_SUBJECT` says otherwise.
 
+`/privacy` also names who receives personal data from the instance. When mail is on it names the mail
+server's host: `SMTP_HOST`, or `api.resend.com` for the Resend API ([Send mail](../day-to-day/mail.md)). An
+instance that sends no mail names none. Push services appear only with web push configured.
+
 ## Check that it worked
 
 Run `deploy/aprscaching doctor`:

@@ -13,13 +13,13 @@
  *
  * The privacy text states what the software ACTUALLY does (session cookie only, callsign accounts,
  * public-broadcast APRS positions, federation per fed_scope, export/erase self-service), and names
- * who receives data, listing the email provider and the push services only when they are configured. Until the
- * OPERATOR_* variables are set, both pages render a visible not-yet-configured warning so an
- * operator cannot ship the placeholders unnoticed.
+ * who receives data, listing the mail transport's host and the push services only when they are
+ * configured. Until the OPERATOR_* variables are set, both pages render a visible not-yet-configured
+ * warning so an operator cannot ship the placeholders unnoticed.
  */
 import type { Env } from "./env.js";
 import { escapeHtml } from "./util/html.js";
-import { EMAIL_API_URL } from "./email.js";
+import { mailTransport } from "./mail.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -71,8 +71,9 @@ the software.</p>`,
 /** Who receives personal data from this instance or from the visitor's browser, as list items. */
 function recipients(env: Env): string {
   const items: string[] = [];
-  if (env.EMAIL_API_KEY && env.EMAIL_FROM)
-    items.push(`<li><strong>Email provider</strong> (${escapeHtml(new URL(EMAIL_API_URL).host)}) — your e-mail
+  const mail = mailTransport(env);
+  if (mail)
+    items.push(`<li><strong>Email provider</strong> (${escapeHtml(mail.host)}) — your e-mail
   address and the text of each sign-in or digest mail, so that it can deliver them.</li>`);
   if (env.VAPID_PUBLIC && env.VAPID_PRIVATE)
     items.push(`<li><strong>Browser push services</strong> — when you turn on notifications, the push service of

@@ -207,6 +207,38 @@ L="$TMP/lan.env"
 check "a LAN instance is set up" setup --env-file "$L" --call OE8APR --lan-host 10.0.0.5 --app-port 8080
 check "  … on its own port" eq "$(env_file_get "$L" APP_URL)" "http://10.0.0.5:8080"
 check "  … with no federation peers" eq "$(env_file_get "$L" FED_PEERS)" ""
+M="$TMP/mail.env"
+export SMTP_PASS=mailbox-pw # the password from the environment, off the command line
+check "mail over SMTP is set up" setup --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers "" \
+  --mail smtp --email-from "aprscaching <noreply@aprs.example.net>" --smtp-host mail.example.net \
+  --smtp-user noreply@aprs.example.net
+unset SMTP_PASS
+check "  … names the mail test" grep -q "tools/admin/mail-test.mjs" "$TMP/out"
+check "  … and shows no password" bash -c "! grep -q mailbox-pw '$TMP/out' '$TMP/err'"
+check "  … with its server" eq "$(env_file_get "$M" SMTP_HOST)" "mail.example.net"
+check "  … on port 587" eq "$(env_file_get "$M" SMTP_PORT)" "587"
+check "  … over STARTTLS" eq "$(env_file_get "$M" SMTP_SECURE)" "starttls"
+check "  … logging in as the address" eq "$(env_file_get "$M" SMTP_USER)" "noreply@aprs.example.net"
+check "  … with the password from the environment" eq "$(env_file_get "$M" SMTP_PASS)" "mailbox-pw"
+check "  … and the sender" eq "$(env_file_get "$M" EMAIL_FROM)" "aprscaching <noreply@aprs.example.net>"
+check "a re-run without --mail keeps it" setup --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers ""
+check "  … unchanged" eq "$(env_file_get "$M" SMTP_HOST)" "mail.example.net"
+check "port 465 is TLS from the first byte" setup --env-file "$TMP/m465.env" --call OE8APR --domain aprs.example.net \
+  --fed-peers "" --mail smtp --email-from noreply@aprs.example.net --smtp-host mail.example.net --smtp-port 465 --smtp-user -
+check "  … tls" eq "$(env_file_get "$TMP/m465.env" SMTP_SECURE)" "tls"
+check "  … and no login" eq "$(env_file_get "$TMP/m465.env" SMTP_USER)" ""
+if setup --env-file "$TMP/mbad.env" --call OE8APR --domain a.example.net --fed-peers "" --mail smtp \
+  --email-from a@a.example.net --smtp-host h --smtp-secure ssl; then
+  bad "an unknown connection security is refused"
+else
+  ok "an unknown connection security is refused"
+fi
+check "switching to Resend" setup --yes --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers "" \
+  --mail resend --resend-key re_test_key
+check "  … writes its key" eq "$(env_file_get "$M" EMAIL_API_KEY)" "re_test_key"
+check "  … and turns SMTP off, which would win" eq "$(env_file_get "$M" SMTP_HOST)" ""
+check "no mail turns both off" setup --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers "" --mail none
+check "  … Resend too" eq "$(env_file_get "$M" EMAIL_API_KEY)" ""
 if setup --env-file "$TMP/t.env" --call OE8APR --domain a.example.net --tunnel-token t --no-tunnel; then
   bad "--no-tunnel refuses a tunnel token"
 else
@@ -305,7 +337,17 @@ if have python3; then
     check "  … a recent backup passes" eq "$(status_of resources.backup)" pass
     check "  … the source link passes" eq "$(status_of source.link)" pass
     check "  … no secret appears in the report" bash -c "! grep -qE '$ING|$OPS' '$TMP/out' '$TMP/err'"
+    check "  … no mail transport is no failure" eq "$(status_of mail.transport)" pass
     chmod 600 "$PD/.env"
+    printf 'EMAIL_FROM=noreply@example.net\nSMTP_HOST=127.0.0.1\nSMTP_PORT=%s\nSMTP_PASS=mailbox-0123456789\n' "$PORT_STUB" >>"$PD/.env"
+    doctor --json || true
+    check "SMTP is named as the mail transport" grep -q "over SMTP 127.0.0.1:$PORT_STUB (starttls)" "$TMP/out"
+    check "  … and a server that answers passes" eq "$(status_of mail.smtp)" pass
+    check "  … without showing its password" bash -c "! grep -q mailbox-0123456789 '$TMP/out' '$TMP/err'"
+    env_file_set "$PD/.env" SMTP_PORT 1
+    doctor --json || true
+    check "an SMTP server that does not answer warns" eq "$(status_of mail.smtp)" warn
+    env_file_unset "$PD/.env" SMTP_HOST
     env_file_set "$PD/.env" INGEST_SECRET "wrong-0123456789abcdef0123456789"
     doctor --json || true
     check "a wrong ingest secret fails" eq "$(status_of ingest.credentials)" fail

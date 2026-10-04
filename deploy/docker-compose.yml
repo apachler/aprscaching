@@ -87,6 +87,7 @@ services:
       OKAPI_KEY: ""
       GMA_API_KEY: ""
       EMAIL_API_KEY: ""
+      SMTP_PASS: ""
       VAPID_PRIVATE: ""
       TUNNEL_TOKEN: ""
       CF_API_TOKEN: ""
