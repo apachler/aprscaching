@@ -55,8 +55,30 @@ export function normalizeTheme(t: unknown): Theme {
 const KEY = "acs.locale";
 const IMPERIAL_REGIONS = new Set(["US", "LR", "MM"]); // United States, Liberia, Myanmar
 
+const FALLBACK_LOCALE = "en-US";
+
+function canonical(tag: string): string | undefined {
+  try {
+    return Intl.getCanonicalLocales(tag)[0];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A locale tag every `Intl` constructor accepts. Browsers can report POSIX-style tags (`en-US@posix`,
+ * `en_US.UTF-8`, `C`) that `Intl` rejects with a RangeError, so TAG is canonicalised, then retried without
+ * its `@modifier` / `.codeset` suffix and with `_` read as `-`, and otherwise falls back to `en-US`.
+ */
+export function canonicalLocale(tag: string | undefined | null): string {
+  const raw = (tag ?? "").trim();
+  if (!raw) return FALLBACK_LOCALE;
+  const stripped = raw.replace(/[@.].*$/s, "").replace(/_/g, "-");
+  return canonical(raw) ?? (stripped ? canonical(stripped) : undefined) ?? FALLBACK_LOCALE;
+}
+
 export function browserLocale(): string {
-  return (typeof navigator !== "undefined" && navigator.language) || "en-US";
+  return canonicalLocale(typeof navigator !== "undefined" ? navigator.language : undefined);
 }
 export function browserTimeZone(): string {
   try {
@@ -122,7 +144,7 @@ const KN_TO_KMH = 1.852,
   M_TO_MI = 0.000621371;
 
 export function makeFormatters(settings: LocaleSettings): Formatters {
-  const locale = settings.locale || browserLocale();
+  const locale = settings.locale ? canonicalLocale(settings.locale) : browserLocale();
   const timeZone = settings.timeZone || browserTimeZone();
   const imperial = settings.units === "imperial";
   const nf = (max: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: max });
