@@ -58,7 +58,8 @@ Every station of yours is your callsign with its own SSID. Give each role its SS
 Each setting switches its role on, so the box never sets one for you. A callsign setting takes a base of up
 to six letters and digits with a digit in it, and an SSID from 0 to 15; anything else stops the start with
 the setting's name. Once the gateway answers, the box logs an error for a station on the service call, and
-for a receiving site or MeshCom node the gateway's `FIRST_PARTY_SITES` does not list.
+for a receiving site or MeshCom node the gateway does not trust (**Instance admin → Trusted receiving
+stations**, or `FIRST_PARTY_SITES`).
 
 ## Receiving site and Tier A
 

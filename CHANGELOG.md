@@ -22,6 +22,12 @@ or as a single Bun desktop binary, and federating with other instances into one 
   a signed tool-plugin system, weather stations, telemetry graphs, and a raw-packet view.
 - **RF ingest, operator-owned** — `apps/ingest` (KISS-over-TCP, IGate, digipeater) and a browser
   Web Serial / Web Bluetooth / soundcard-AFSK path; APRS-IS + AXUDP/AXIP internet transports.
+- **MeshCom & Meshtastic** — MeshCom receive over UDP and KISS, a nodes and links map layer, read-only
+  group chat, service-call answers and an APRS/MeshCom Mailbox; messages name the network that carried them;
+  Meshtastic over Web Serial, a node's TCP API and MQTT.
+- **Field play** — a compass Find view, the "you're near" prompt and an opt-in near-cache radio message,
+  trusted receiving stations and lent receivers in Instance admin, and a packet terminal that connects a
+  USB or Bluetooth KISS TNC.
 - **Federation** — signed cache/find/key/tombstone/account-move feeds, peer trust tiers, corroboration
   quorum, a signed instance registry, and push-to-hub for NAT'd peers.
 - **Identity** — passkeys (WebAuthn), email magic-link, multiple verified base callsigns per account,
@@ -29,7 +35,8 @@ or as a single Bun desktop binary, and federating with other instances into one 
 - **Public read API** with free per-IP limits and free keys; GPX/KML/ADIF exports; embeddable map
   widget + QR; live activity spots (POTA/SOTA/GMA, DX/RBN/PSKReporter).
 - **Tri-runtime** — one shared handler set across Node+SQLite, Cloudflare Worker+D1, and Bun+bun:sqlite,
-  all conformance-green; five deployment topologies.
+  all conformance-green; the Self-host, Desktop, Pocket and Cloudflare-split deployment shapes plus an
+  Oracle Cloud one-click stack.
 - **Governance** — AGPL §13 source link (`/.well-known/source`), recognition-only donations,
   GDPR export/erase with federated tombstones.
 - **Sysop onboarding** — a "first hour as sysop" walkthrough plus an in-app Setup checklist

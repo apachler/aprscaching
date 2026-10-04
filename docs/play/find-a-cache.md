@@ -91,7 +91,7 @@ calibrate it, away from cars and metal.
 ## The "you're near" prompt
 
 When you come within 150 m of a cache, the app shows a banner: **You're near AC-1234**, with **Log it** and
-**Dismiss**. **Log it** opens the cache sheet. Each cache prompts once a session, and a dismissed one stays quiet.
+**✕** to dismiss. **Log it** opens the cache sheet. Each cache prompts once a session, and a dismissed one stays quiet.
 
 Two things can tell the app you are near:
 

@@ -16,7 +16,9 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
     `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
     security-critical and must never be settable at runtime or exposed to the client — supply them only
     through the environment (or `wrangler secret`). Other secrets: `APRSIS_PASSCODE`, `IGATE_PASS`,
-    `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`.
+    `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
+    `MESHCOM_KISS_PASS`, `MESHTASTIC_MQTT_URL` (when it carries credentials), `BOX_KEY`, `TUNNEL_TOKEN`,
+    `CF_API_TOKEN`.
 
 !!! note "Runtime coverage"
     **Every gateway variable below works on every runtime** — the Node and Bun servers forward the
@@ -240,7 +242,9 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 
 ## Deploy scripts
 
-Read by the scripts under `deploy/`, not by the gateway or the ingest box. They live in the same `.env`.
+Read by the scripts under `deploy/`, not by the gateway or the ingest box. `deploy/aprscaching` reads them from
+the shape's `.env`; `deploy/backup.sh` reads only its environment, so pass them on its cron line (its `DB_PATH`
+defaults to `/opt/aprscaching/data/aprscaching.db`).
 
 <!-- config-table:deploy -->
 | Variable | Read by | Purpose | Default |

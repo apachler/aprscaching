@@ -21,6 +21,7 @@ import { isCallsignVerified } from "./callsign.js";
 import { budgetStatus } from "./budget.js";
 import { amprCallOf } from "./fed44net.js";
 import { configured44net } from "./fed44netcheck.js";
+import { attestedSites } from "./attestedsites.js";
 
 type WriteBudgetStatus = Awaited<ReturnType<typeof budgetStatus>>;
 
@@ -62,7 +63,19 @@ async function count(env: Env, sql: string, ...binds: unknown[]): Promise<number
   }
 }
 
-function envItems(env: Env): SetupItem[] {
+/** Every receiving site this instance attests; on a failed read, the FIRST_PARTY_SITES preset alone. */
+async function attestedOrPreset(env: Env): Promise<string[]> {
+  try {
+    return [...(await attestedSites(env))].sort();
+  } catch {
+    return (env.FIRST_PARTY_SITES ?? "")
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((s) => s.toUpperCase());
+  }
+}
+
+function envItems(env: Env, sites: string[]): SetupItem[] {
   const items: SetupItem[] = [];
   const push = (i: SetupItem) => items.push(i);
 
@@ -187,20 +200,19 @@ function envItems(env: Env): SetupItem[] {
   });
 
   // ---- trust — what Tier A and federation need
-  {
-    const sites = (env.FIRST_PARTY_SITES ?? "").split(/[\s,]+/).filter(Boolean);
-    push({
-      key: "FIRST_PARTY_SITES",
-      level: "optional",
-      label: "First-party RF sites",
-      group: "trust",
-      status: sites.length ? "ok" : "warn",
-      source: "env",
-      detail: sites.length
-        ? `${sites.length} attested site call${sites.length === 1 ? "" : "s"} (${sites.join(", ")}) — Tier A can originate here`
-        : "none listed — Tier A needs a listed site or a station trusted under Ingest boxes (transport never equals trust)",
-    });
-  }
+  // The id stays the env key the doctor and the docs name; the count is every trusted receiving station: the
+  // FIRST_PARTY_SITES preset, the stations trusted in Instance admin, and the trusted enrolled boxes' sites.
+  push({
+    key: "FIRST_PARTY_SITES",
+    level: "optional",
+    label: "Trusted receiving stations",
+    group: "trust",
+    status: sites.length ? "ok" : "warn",
+    source: "env",
+    detail: sites.length
+      ? `${sites.length} trusted receiving station${sites.length === 1 ? "" : "s"} (${sites.join(", ")}) — Tier A can originate here`
+      : "none trusted — trust your receiver under Instance admin → Trusted receiving stations, or list it in FIRST_PARTY_SITES (transport never equals trust)",
+  });
   push({
     key: "FED_PRIVATE_KEY",
     level: "recommended",
@@ -414,5 +426,6 @@ export async function handleAdminSetup(req: Request, env: Env): Promise<Response
   applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values
   // the write budget's counter: today's count, level and alerts, which the admin banner shows
   const budget = await budgetStatus(env);
-  return json({ items: [...envItems(env), ...(await dbItems(env, callsign, budget))], budget });
+  const sites = await attestedOrPreset(env);
+  return json({ items: [...envItems(env, sites), ...(await dbItems(env, callsign, budget))], budget });
 }

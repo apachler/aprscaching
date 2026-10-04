@@ -21,10 +21,13 @@ function operatorRow(sql: string): Record<string, unknown> | null {
 const verifiedRows = (sql: string) =>
   sql.includes("FROM callsign_verifications") ? [{ callsign: "OE8APR", method: "operator", verified_at: 1 }] : [];
 
-/** Mock DB answering the checklist's COUNT probes (keyed on table name) + the session lookups. */
-const db = (counts: Record<string, number>) => ({
+/** Mock DB answering the checklist's COUNT probes (keyed on table name), the session lookups and the trusted rows. */
+const db = (counts: Record<string, number>, trusted: { site: string; box: string | null }[] = []) => ({
   prepare(sql: string) {
     return {
+      async all() {
+        return { results: sql.includes("FROM trusted_sites") ? trusted : [] };
+      },
       bind() {
         return {
           async first() {
@@ -139,6 +142,25 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
     expect(find(items, "FIRST_PARTY_SITES").status).toBe("ok");
     expect(find(items, "FIRST_PARTY_SITES").detail).toContain("OE8XBM-10");
     expect(find(items, "OPERATOR").status).toBe("ok");
+  });
+
+  it("counts the stations trusted in Instance admin and through enrolled boxes, not only FIRST_PARTY_SITES", async () => {
+    const env = baseEnv({
+      DB: db({}, [
+        { site: "oe8xyz-10", box: null },
+        { site: "OE8LNT-3", box: "box-1" },
+      ]),
+    } as unknown as Partial<Env>);
+    const item = find(await itemsOf(await get(env, "OE8APR")), "FIRST_PARTY_SITES");
+    expect(item.status).toBe("ok");
+    expect(item.detail).toContain("2 trusted receiving stations");
+    expect(item.detail).toContain("OE8XYZ-10");
+    expect(item.detail).toContain("OE8LNT-3");
+  });
+
+  it("names Instance admin when no station is trusted", async () => {
+    const item = find(await itemsOf(await get(baseEnv(), "OE8APR")), "FIRST_PARTY_SITES");
+    expect(item.detail).toContain("Instance admin → Trusted receiving stations");
   });
 });
 

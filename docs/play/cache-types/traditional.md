@@ -29,7 +29,7 @@ A find reaches one of three tiers:
 
 | Tier | You get it when |
 |---|---|
-| **Radio-verified** | A receiving station the instance runs, and that is not yours, heard your APRS position within 150 m of the pin. Your position must be from the 30 minutes before you log. |
+| **Radio-verified** | A receiving station the instance trusts, and that is not yours, heard your APRS position within 150 m of the pin. Your position must be from the 30 minutes before you log. |
 | **Location-verified** | Your phone's location, taken when you log, is within 150 m of the pin plus its accuracy. |
 | **Logged** | Nothing independent placed you there. The find is on record but not verified. |
 
@@ -54,10 +54,11 @@ Tap **+ Hide a cache** (on a phone, **Hide**) and pick **Traditional** under **T
 | **Drive-in**, **Country**, **Tags** | off, none, none | Up to 12 tags. |
 | **Who can rate** | **Finders only** | Or **Anyone signed in**, or **Nobody (disabled)**. |
 | **Federation scope** | **Public** | Or **Unlisted**, or **Local only**. |
+| **Radio-verified finds only** | off | Sets this cache's minimum to **Radio-verified**. |
 
-The fields from **Hint** down are under **Advanced**. After you hide the cache, add photos in its **Media**
-section. To ask for **Radio-verified** finds only, or to edit, disable or archive the cache: this is not in
-the app yet; ask your sysop.
+The fields from **Hint** down are under **Advanced**, with the **Radio-verified finds only** switch. After you
+hide the cache, add photos in its **Media** section. To change, disable or archive it later, tap **Edit**
+([Edit your cache](../hide-a-cache.md#edit-your-cache)).
 
 ## Example
 
@@ -69,7 +70,7 @@ from the pin, so the find is **Location-verified**.
 
 - Allow location access when you log. Without it, the find stays **Logged** unless a receiving station heard
   you.
-- Beacon your position near the cache before you log. Where the instance runs its own receivers, that can
+- Beacon your position near the cache before you log. Where the instance trusts a receiver near you, that can
   make the find **Radio-verified**.
 - Make an offline pack before you go somewhere without coverage. See [Hunting without signal](../offline.md).
 

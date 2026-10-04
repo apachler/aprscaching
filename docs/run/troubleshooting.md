@@ -198,10 +198,11 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `SESSION_SECRET` | blocking | unset, weak, or the same as a machine secret: nobody can sign in | set a dedicated secret ([Secrets](../reference/secrets.md)) |
 | `OPERATOR_SECRET` | recommended | unset: operator scripts are closed; the web surface still works | set it |
 | `ADMIN_CALLSIGNS` | blocking | always met when the checklist answers | — |
+| `SERVICE_CALL` | recommended | `APRSCG` (no `ADMIN_CALLSIGNS`), or not a call of an `ADMIN_CALLSIGNS` base call | name an operator in `ADMIN_CALLSIGNS`, or set `SERVICE_CALL` to one of your calls with a free SSID |
 | `APP_URL` | recommended | unset: passkeys are closed; links fall back to the request host | set the public `https://` origin |
 | `INSTANCE` | recommended | unset: federation records need a domain | set `APP_URL`; `INSTANCE` follows its host |
 | `RP_ID` | optional | unset: the passkey domain is missing | set `APP_URL`; `RP_ID` follows its host |
-| `FIRST_PARTY_SITES` | optional | no attested site: no find reaches Tier A | name your receiver's call ([RF ingest](radios/rf-ingest.md#receiving-site-and-tier-a)) |
+| `FIRST_PARTY_SITES` | optional | no trusted receiving station: no find reaches Tier A | trust your receiver's call under **Instance admin → Trusted receiving stations**, or list it here ([RF ingest](radios/rf-ingest.md#receiving-site-and-tier-a)) |
 | `FED_PRIVATE_KEY` | recommended | unset: feeds go out unsigned | see [`federation.key`](#federationkey) |
 | `44net` | optional | the 44net endpoint is not a name under `<call>.ampr.org` | [44Net name and identity](networks/44net-identity.md#3-name-and-identity) |
 | `FED_REGISTRY_KEY` | blocking | a registry is configured without its authority key | [Hubs, relays and the registry](federation/hubs-and-relays.md) |

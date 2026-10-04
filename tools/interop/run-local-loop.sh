@@ -38,8 +38,8 @@ for i in $(seq 1 60); do
 done
 
 # Both nodes speak INP3 (NETROM_INP3) alongside NODES, so the triggered RIF / L3RTT path is exercised
-# live. LZHUF-B1 compressed forwarding is validated against the real byte-capable F6FBB peer (the fbb
-# interop job, fbbcomp on), not this ASCII gate where compression can only negotiate back to ASCII.
+# live. LZHUF-B1 compressed forwarding is covered by unit tests; this ASCII gate can only negotiate
+# compression back to ASCII, and the fbb interop job forwards uncompressed.
 setsid env $COMMON INGEST_URL=http://127.0.0.1:9601/ingest INGEST_SECRET="$INGEST_SECRET" \
   AXUDP_PORT=10501 AXUDP_PEERS=127.0.0.1:10502 \
   NETROM_CALL=OE1AAA-7 NETROM_ALIAS=ACSA NETROM_BROADCAST_MS=3000 NETROM_INP3=1 \

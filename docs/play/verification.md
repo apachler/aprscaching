@@ -72,8 +72,9 @@ about where you were.
   instance can hear you there, the find becomes **Radio-verified**.
 - **Log with the callsign you beacon with.** The station must hear the exact callsign you log with: a beacon
   from `OE8APR-7` does not verify a find logged as `OE8APR`. A find logged by radio uses the radio's callsign.
-- **No receiving station nearby?** Ask your sysop where the instance listens. A sysop can add one
-  ([Set up an ingest box](../run/radios/ingest-box.md)).
+- **No receiving station nearby?** Ask your sysop where the instance listens. A sysop can add one, or trust a receiver
+  a member lends ([Set up an ingest box](../run/radios/ingest-box.md),
+  [Lend a receiver](../run/radios/lend-a-receiver.md)).
 
 ## Caches that need a better badge
 

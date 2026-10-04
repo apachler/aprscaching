@@ -17,13 +17,13 @@ it, who must never hold it and how to change it. It also sets out how sessions e
 | `BOX_KEY` | An enrolled ingest box's own Ed25519 key; it signs the box's requests in place of `INGEST_SECRET` | no | anyone; it stays on that box | revoke the box in Instance admin and enroll it again |
 
 The three plane secrets must differ: the Node and Bun servers refuse to boot on an `OPERATOR_SECRET` or
-`SESSION_SECRET` equal to `INGEST_SECRET`. Generate each with `openssl rand -hex 32`.
+`SESSION_SECRET` equal to `INGEST_SECRET`. Generate each with `openssl rand -hex 24` (what `setup.sh` and `rotate-secret` use).
 `deploy/aprscaching doctor` fails on a secret that is weak, an example value or shorter than 16 characters.
 
 Other credentials an instance may hold: `APRSIS_PASSCODE`, `IGATE_PASS` and `APRSIS_SERVICE_PASS` (APRS-IS
 logins, public by design and never a proof of identity), `MESHCOM_KISS_PASS` (a MeshCom node's KISS
-password), `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
-`TUNNEL_TOKEN` and `CF_API_TOKEN`. Each is described in [Configuration](configuration.md).
+password), `MESHTASTIC_MQTT_URL` (a broker URL with credentials in it), `EMAIL_API_KEY`, `VAPID_PRIVATE`,
+`OKAPI_KEY`, `TUNNEL_TOKEN` and `CF_API_TOKEN`. Each is described in [Configuration](configuration.md).
 
 `ADMIN_CALLSIGNS` is not a secret, but it is security-critical: it decides who is a sysop
 ([Who is a sysop](#who-is-a-sysop)). It is read from the environment only and never settable at runtime.

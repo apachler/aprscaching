@@ -31,7 +31,7 @@ Log it like any cache: **✓ Log a find**, **Couldn't find it** or **Add a note*
 
 | Tier | You get it when |
 |---|---|
-| **Radio-verified** | A receiving station the instance runs, and that is not yours, heard your position next to the station's, as above. Your position must be from the 30 minutes before you log. |
+| **Radio-verified** | A receiving station the instance trusts, and that is not yours, heard your position next to the station's, as above. Your position must be from the 30 minutes before you log. |
 | **Location-verified** | Your phone's location, taken when you log, is within 150 m of the station, plus its accuracy. The station's position counts when it was heard at most 5 minutes from that moment. |
 | **Logged** | Nothing independent placed you with the station. |
 

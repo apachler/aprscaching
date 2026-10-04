@@ -110,7 +110,8 @@ To check the data flow:
   **Raw packets** name the `meshcom` port.
 
 The trust rules of [MeshCom](../radios/meshcom.md#how-meshcom-traffic-is-trusted) hold unchanged. The scripts
-never add the node's call to `FIRST_PARTY_SITES`.
+never trust the node's call: trust it yourself under **Instance admin → Trusted receiving stations** (or
+`FIRST_PARTY_SITES`).
 
 ## A USB TNC on the phone
 
@@ -142,7 +143,7 @@ per app, so `termux-usb` (Termux:API) hands the bridge the device.
     the TNC and restarts the bridge when the TNC is unplugged and plugged in again.
 
 4. **Optional:** to make what the TNC hears count toward Tier A, set `RF_SITE_CALL` to this station's call and
-   list it in `FIRST_PARTY_SITES` ([Receiving site and Tier A](../radios/rf-ingest.md#receiving-site-and-tier-a)).
+   trust it under **Instance admin → Trusted receiving stations**, or list it in `FIRST_PARTY_SITES` ([Receiving site and Tier A](../radios/rf-ingest.md#receiving-site-and-tier-a)).
 
 **Only CDC-ACM devices work**, since they need no driver of their own. The bridge refuses FTDI, Silicon Labs
 CP210x, WCH CH340 and Prolific PL2303 chips by name.

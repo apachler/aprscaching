@@ -245,7 +245,7 @@ describe("retries, limits and replies", () => {
     beaconAtCache();
     await handleRadioMessage(env, onAir({ msgNo: undefined }));
     await handleRadioMessage(env, onAir({ text: "NOTE AC-0001 thanks", msgNo: undefined }));
-    expect(outbox()).toEqual(["APRSCG :OE8APR-7 :AC-0001 found, logged Tier A"]);
+    expect(outbox()).toEqual(["APRSCG :OE8APR-7 :AC-0001 found, Radio-verified"]);
   });
 
   it("replies and acks come from SERVICE_CALL when set", async () => {

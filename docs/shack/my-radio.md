@@ -56,8 +56,8 @@ instance. Your own beacons stay out of the replay.
       enter it again after a reload.
 
 Packets your browser forwards never verify a find: at most a find is **Logged** (Tier C). Your own radio is
-not an independent witness of your own position, and only the instance's own receiving station can make a
-find **Radio-verified**. **What your radio can verify**, under the connect buttons, says the same. The
+not an independent witness of your own position: only a receiving station the instance trusts, hearing the
+frame on its own radio, can make a find **Radio-verified**. **What your radio can verify**, under the connect buttons, says the same. The
 packets still put stations on the map and messages in the log.
 
 ## Transmit

@@ -194,8 +194,8 @@ hotspot's subnet change (some phones pick a new one after a reboot), run `meshco
 enter the new commands on the node.
 
 Traffic from the node shows on the map at once, and none of it changes a trust tier by itself: a direct
-hearing by your own node counts toward Tier A only once you add the node's call to `FIRST_PARTY_SITES`, as
-on any ingest box ([MeshCom](../../docs/run/radios/meshcom.md#how-meshcom-traffic-is-trusted)).
+hearing by your own node counts toward Tier A only once you trust the node's call under Instance admin → Trusted receiving stations
+(or list it in `FIRST_PARTY_SITES`), as on any ingest box ([MeshCom](../../docs/run/radios/meshcom.md#how-meshcom-traffic-is-trusted)).
 
 ## Visitors over https
 

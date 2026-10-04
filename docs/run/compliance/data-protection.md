@@ -2,7 +2,8 @@
 
 This page is for the sysop. It explains what members can export and erase, how long the instance keeps the
 rest, and how an erasure reaches the other instances in the network, so you can answer a data-protection
-request and write your `/privacy` page.
+request. The gateway serves `/privacy` from `OPERATOR_NAME`, `OPERATOR_ADDRESS` and `OPERATOR_EMAIL`
+([A public instance's duties](index.md#name-the-operator)).
 
 Members run export and erasure themselves ([Your data](../../play/account.md#your-data) is their side). You do
 not need to act on a request by hand.

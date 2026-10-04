@@ -25,7 +25,8 @@ preferences, media, tools, their own data) stay under **Settings** and are not p
 | **Cache adoption** | offer caches for adoption, decide requests, assign an owner | [Cache adoption](cache-adoption.md) |
 | **Federation** | the peer list with health and reputation, each peer's trust (`trusted`, `unvetted`, `blocked`), a manual sync | [Join the network](../federation/index.md) |
 | **Forwarding** | FBB partner BBSes (callsign, protocol, intervals, time bands, message types), routing rules, and the White Pages directory that steers personal mail | [Packet: BBS and NET/ROM node](../radios/packet-node.md) |
-| **Ingest boxes** | enroll a box and revoke one | [Set up an ingest box](../radios/ingest-box.md) |
+| **Trusted receiving stations** | trust a receiving station's own on-air hearings for Radio-verified finds and on-air callsign verification: **Trust station** by site call, remove one; `FIRST_PARTY_SITES` calls show read-only | [RF ingest and transports](../radios/rf-ingest.md) |
+| **Ingest boxes** | enroll a box, revoke one, and **Trust this station's hearings** for a lent receiver | [Set up an ingest box](../radios/ingest-box.md), [Lend a receiver](../radios/lend-a-receiver.md) |
 | **Ingest & transports** | the data plane: the transports and the TAK/CoT feed | [RF ingest and transports](../radios/rf-ingest.md) |
 
 The TAK/CoT feed, `GET /api/cot?bbox=`, serves the live station list as Cursor-on-Target for ATAK, WinTAK and

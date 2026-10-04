@@ -102,8 +102,8 @@ becomes verified), and is not recorded in `radio_commands`.
 
 ## Acknowledgements and replies
 
-Every numbered message gets a protocol ack; a text reply (a fixed text such as `AC-1234 found, logged
-Tier A`, or why it was not logged) is sent only when the instance operator turns replies on
+Every numbered message gets a protocol ack; a text reply (a fixed text such as `AC-1234 found,
+Radio-verified`, or why it was not logged) is sent only when the instance operator turns replies on
 (`RADIO_REPLIES=1`). Both travel back **the way the message came**:
 
 | The message was heard | The answer goes |

@@ -111,7 +111,7 @@ for your own node only.
     MESHCOM_KISS_PASS=<PASSWORD>
     ```
 
-The box logs `[meshcom-kiss] sending through 192.168.1.50:8001`. It sends nothing through a node without a
+The box logs `[meshcom-kiss] sending through 192.168.1.50:8001 as calls of OE8APR`. It sends nothing through a node without a
 KISS password, since anyone on your network could then transmit under your call; it logs an error and keeps
 answering under the node's call. The node serves one KISS client at a time, so another program can't use its
 KISS port while the box holds it.
@@ -153,14 +153,15 @@ A node reports four kinds of traffic, and the box treats them differently:
 | sent it itself (its own position, messages, notices) | internet-sourced | No |
 
 In plain words: MeshCom corroborates a find only when your own node heard the finder's station directly, and
-only once you vouch for that node. Vouch for it on the gateway by adding its callsign to `FIRST_PARTY_SITES`
-([Configuration](../../reference/configuration.md)). As with every receiver, your own node never
+only once you vouch for that node. Vouch for it on the gateway under **Instance admin → Trusted receiving stations** (**Trust station** with
+its callsign), or preset it in `FIRST_PARTY_SITES` ([Configuration](../../reference/configuration.md)). As with every receiver, your own node never
 corroborates your own finds. Relays and server copies still show on the map and in the monitor; they prove
 nothing about where a station was.
 
 **Callsign verification** follows the same rule. A player's `VERIFY <code>` direct message to the service
 call, from any SSID of their call, verifies the call only when your node heard it directly over
-LoRa and the node's callsign is in `FIRST_PARTY_SITES`. A copy relayed by another node, or passed on by the
+LoRa and the node's callsign is a trusted receiving station on the gateway (Instance admin, or
+`FIRST_PARTY_SITES`). A copy relayed by another node, or passed on by the
 MeshCom server, is dropped without an answer and costs the player no attempt. The verification names your
 node as the station that heard it. With [answering](#answering-radio-commands-optional) set up, the node
 acks the message and confirms the verification. The player's steps are in
@@ -204,7 +205,7 @@ it listens over ExtUDP, which carries the signal report and the sender's device,
 | `rejected: {"not-allowlisted": …}` rising | The node's address changed (give it a DHCP reservation), or something else on the LAN sends to 1799. |
 | The node restarts when ExtUDP is on | Firmware older than 4.35u: update it. |
 | Players' `FOUND` messages never arrive | The instance's service call has no digit (`SERVICE_CALL`), or your node uses the service call's SSID and takes the messages as its own. |
-| Positions but no Tier A | The node's callsign is missing from `MESHCOM_NODE=<ip>=<CALL>` or from the gateway's `FIRST_PARTY_SITES`, or the frames are relayed rather than heard directly. |
+| Positions but no Tier A | The node's callsign is missing from `MESHCOM_NODE=<ip>=<CALL>` or is not a trusted receiving station on the gateway (**Instance admin → Trusted receiving stations**, or `FIRST_PARTY_SITES`), or the frames are relayed rather than heard directly. |
 
 ## Next
 

@@ -7,8 +7,25 @@ import {
   splitMessageNumber,
   isTrustedMessage,
   HELP_TEXT,
+  foundText,
   type RadioMessage,
 } from "../src/radiolog.js";
+import type { FindScore } from "../src/caches.js";
+
+describe("foundText", () => {
+  const score = (verified: boolean, tier: "A" | "B" | "C") => ({ result: { verified, tier } }) as unknown as FindScore;
+
+  it("names the tier the way the player sees it, never as a tier letter", () => {
+    expect(foundText("AC-1234", score(true, "A"))).toBe("AC-1234 found, Radio-verified");
+    expect(foundText("AC-1234", score(true, "B"))).toBe("AC-1234 found, Location-verified");
+    expect(foundText("AC-1234", score(false, "B"))).toBe("AC-1234 found, logged, not verified");
+    expect(foundText("AC-1234", score(true, "C"))).toBe("AC-1234 found, logged, not verified");
+  });
+
+  it("fits one APRS message", () => {
+    expect(foundText("AC-ZZZZZZ", score(true, "B")).length).toBeLessThanOrEqual(67);
+  });
+});
 
 describe("parseRadioCommand", () => {
   it("parses FOUND with and without log text", () => {
