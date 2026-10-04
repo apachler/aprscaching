@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import type * as maplibregl from "maplibre-gl";
+import { SITE_CALL_RE } from "@aprscaching/shared";
 import {
   getFederationSync,
   syncFederationNow,
@@ -84,6 +85,8 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
   const setup = useLoad(() => getAdminSetup(), []);
   // group filter (ui-ux.md §2: settings pages with >3 groups are searchable)
   const [q, setQ] = useState("");
+  // a box's trust switch changes the trusted-stations list too, so it reloads on each change
+  const [trustRev, setTrustRev] = useState(0);
   const show = (...words: string[]) => !q.trim() || words.some((w) => w.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <Panel
@@ -102,7 +105,9 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
       </p>
       {setup.data && <WriteBudgetBanner budget={setup.data.budget} onDocs={props.onDocs} />}
       <label className="srch">
-        <span className="srch-ic">⌕</span>
+        <span className="srch-ic" aria-hidden="true">
+          ⌕
+        </span>
         <input
           value={q}
           placeholder="Search admin sections…"
@@ -143,12 +148,12 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
       )}
       {show("trusted", "stations", "sites", "receiving", "tier a", "trust", "first_party_sites") && (
         <Group title="Trusted receiving stations" status="Radio-verified finds" defaultOpen={false}>
-          <TrustedStationsAdmin />
+          <TrustedStationsAdmin rev={trustRev} />
         </Group>
       )}
       {show("boxes", "ingest", "enroll", "code", "revoke", "key", "trust", "lend", "receiver") && (
         <Group title="Ingest boxes" status="enrollment & trust" defaultOpen={false}>
-          <BoxesAdmin />
+          <BoxesAdmin onTrustChanged={() => setTrustRev((n) => n + 1)} />
         </Group>
       )}
       {show("ingest", "transports", "ports", "tak", "cot", "feed") && (
@@ -255,7 +260,8 @@ function StationsAdmin() {
 
 // ---------------------------------------------------------------- manual callsign verification
 
-const CALL_RE = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
+// the gateway's own pattern, so a form never accepts a call the server refuses
+const CALL_RE = SITE_CALL_RE;
 
 /**
  * Verify a callsign by hand for an operator no attested receiving site can hear. Each one carries a note
@@ -409,11 +415,11 @@ const SOURCE_LABEL: Record<TrustedStation["source"], string> = {
  * FIRST_PARTY_SITES are listed read-only, and an enrolled box's trust is switched under Ingest boxes. Each
  * station shows since when and by whom it is trusted, and the finds it verified.
  */
-function TrustedStationsAdmin() {
+function TrustedStationsAdmin(props: { rev: number }) {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
-  const list = useLoad(() => listTrustedStations(), []);
+  const list = useLoad(() => listTrustedStations(), [props.rev]);
   const [site, setSite] = useState("");
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -441,7 +447,8 @@ function TrustedStationsAdmin() {
     if (
       !(await confirmDialog({
         title: `Stop trusting ${s.site}?`,
-        message: "Its hearings stop counting for Radio-verified finds at once. Finds it verified keep their tier.",
+        message:
+          "Its hearings stop counting for Radio-verified finds within a minute. Finds it verified keep their tier.",
         confirmLabel: "Stop trusting",
         danger: true,
       }))
@@ -518,7 +525,7 @@ function TrustedStationsAdmin() {
                   ? `trusted since ${fmt.date(s.trustedAt)} by ${s.trustedByCall ?? s.trustedBy}`
                   : "FIRST_PARTY_SITES · change it in the configuration"}
               </div>
-              <VerifiedFinds id={s.site} sites={[s.site]} load={() => getStationFinds(s.site)} />
+              <VerifiedFinds sites={[s.site]} load={() => getStationFinds(s.site)} />
             </li>
           ))}
         </ul>
@@ -536,7 +543,7 @@ function TrustedStationsAdmin() {
  * Tier A only once it is listed in FIRST_PARTY_SITES, or once the sysop switches on "Trust this station's
  * hearings" for the box — the way a ham lends their own receiver to this instance.
  */
-function BoxesAdmin() {
+function BoxesAdmin(props: { onTrustChanged: () => void }) {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
@@ -582,6 +589,7 @@ function BoxesAdmin() {
       await revokeBox(b.box);
       toast(`${b.label ?? b.box} revoked`);
       refresh();
+      props.onTrustChanged(); // a revoked box's trusted sites leave the list
     } catch (e) {
       toast((e as Error).message);
     }
@@ -633,7 +641,15 @@ function BoxesAdmin() {
           <p>Enter this code on the box before {fmt.time(issued.expiresAt)}. It works once and is not shown again.</p>
           <p className="box-code__value mono">{issued.code}</p>
           <div className="row">
-            <Button onClick={() => void copyText(issued.code).then(() => toast("Code copied"))}>Copy</Button>
+            <Button
+              onClick={() =>
+                void copyText(issued.code).then((ok) =>
+                  toast(ok ? "Code copied" : "Copy failed — select the code and copy it by hand"),
+                )
+              }
+            >
+              Copy
+            </Button>
             <Button variant="inline" onClick={() => setIssued(null)}>
               Done
             </Button>
@@ -690,7 +706,15 @@ function BoxesAdmin() {
                     ? ` · last seen ${fmt.ago(b.lastSeenAt)}`
                     : " · not seen yet"}
               </div>
-              {!b.revokedAt && <BoxTrustRow box={b} onChanged={refresh} />}
+              {!b.revokedAt && (
+                <BoxTrustRow
+                  box={b}
+                  onChanged={() => {
+                    refresh();
+                    props.onTrustChanged();
+                  }}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -703,7 +727,7 @@ function BoxesAdmin() {
  * "Trust this station's hearings" for one enrolled box: off by default. Switching it on asks for the receiving
  * site call the box hears with (a box limited to a callsign takes only sites of that call; the gateway refuses
  * any other); on, it shows since when and by whom, and the finds the station verified. Switching it off asks
- * first, since the station's hearings stop counting for Tier A at once.
+ * first, since the station's hearings stop counting for Tier A within a minute.
  */
 function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
   const { box: b } = props;
@@ -745,7 +769,8 @@ function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
     if (
       !(await confirmDialog({
         title: `Stop trusting ${name}?`,
-        message: "Its hearings stop counting for Radio-verified finds at once. Finds it verified keep their tier.",
+        message:
+          "Its hearings stop counting for Radio-verified finds within a minute. Finds it verified keep their tier.",
         confirmLabel: "Stop trusting",
         danger: true,
       }))
@@ -813,52 +838,62 @@ function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
           </div>
         </div>
       )}
-      {trust && <VerifiedFinds named id={b.box} sites={trust.sites} load={() => getBoxFinds(b.box)} />}
+      {trust && <VerifiedFinds named sites={trust.sites} load={() => getBoxFinds(b.box)} />}
     </div>
   );
 }
 
-/** The finds a trusted station verified since it was trusted: the count in the label, the latest on open. */
+type FindsLoad = () => Promise<{
+  count: number;
+  recent: { code: string; loggerCall: string; ts: number; site: string }[];
+}>;
+
+/**
+ * The finds a trusted station verified since it was trusted, loaded when the disclosure opens: a list of stations
+ * then costs one request per station the sysop looks at, not one per row.
+ */
 function VerifiedFinds(props: {
-  load: () => Promise<{ count: number; recent: { code: string; loggerCall: string; ts: number; site: string }[] }>;
+  load: FindsLoad;
   sites: string[];
   /** name the sites in the label (a box can attest several) */
   named?: boolean;
-  /** what identifies the station, so a change reloads */
-  id: string;
 }) {
-  const fmt = useFmt();
-  const finds = useLoad(() => props.load(), [props.id, props.sites.join(",")]);
-  const n = finds.data?.count;
-  const label = finds.error
-    ? "Verified finds"
-    : n === undefined
-      ? "Verified finds…"
-      : `Verified ${n} find${n === 1 ? "" : "s"}${props.named ? ` · ${props.sites.join(", ")}` : ""}`;
   return (
-    <Disclosure label={label}>
-      {finds.error ? (
-        <ErrorState onRetry={finds.reload}>Couldn&apos;t load the finds.</ErrorState>
-      ) : !finds.data ? (
-        <p className="muted" role="status">
-          Loading…
-        </p>
-      ) : finds.data.recent.length === 0 ? (
-        <EmptyState>No find verified by this station yet.</EmptyState>
-      ) : (
-        <ul className="logs">
-          {finds.data.recent.map((f) => (
-            <li key={`${f.code}-${f.loggerCall}`}>
-              <span className="mono">{f.code}</span> · <span className="mono">{f.loggerCall}</span>
-              <span className="muted">
-                {" "}
-                · {fmt.ago(f.ts)} · heard by <span className="mono">{f.site}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <Disclosure label={`Verified finds${props.named ? ` · ${props.sites.join(", ")}` : ""}`}>
+      <VerifiedFindsList load={props.load} />
     </Disclosure>
+  );
+}
+
+function VerifiedFindsList(props: { load: FindsLoad }) {
+  const fmt = useFmt();
+  const finds = useLoad(() => props.load(), []);
+  if (finds.error) return <ErrorState onRetry={finds.reload}>Couldn&apos;t load the finds.</ErrorState>;
+  if (!finds.data)
+    return (
+      <p className="muted" role="status">
+        Loading…
+      </p>
+    );
+  const { count, recent } = finds.data;
+  if (count === 0 || recent.length === 0) return <EmptyState>No find verified by this station yet.</EmptyState>;
+  return (
+    <>
+      <p className="muted fine">
+        {count} find{count === 1 ? "" : "s"} verified{count > recent.length ? `; the latest ${recent.length}` : ""}:
+      </p>
+      <ul className="logs">
+        {recent.map((f) => (
+          <li key={`${f.code}-${f.loggerCall}`}>
+            <span className="mono">{f.code}</span> · <span className="mono">{f.loggerCall}</span>
+            <span className="muted">
+              {" "}
+              · {fmt.ago(f.ts)} · heard by <span className="mono">{f.site}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -1431,13 +1466,24 @@ function Net44Check() {
 function FederationAdmin() {
   const fmt = useFmt();
   const toast = useToast();
+  const confirmDialog = useConfirm();
   const list = useLoad(() => listFederationPeers().then((r) => r.peers), []);
-  const peers: FedPeer[] = list.data ?? [];
+  const peers = list.data;
   const refresh = list.reload;
-  const trust = async (url: string, t: "trusted" | "unvetted" | "blocked") => {
+  const trust = async (p: FedPeer, t: "trusted" | "unvetted" | "blocked", done: string) => {
+    if (
+      t === "blocked" &&
+      !(await confirmDialog({
+        title: `Block ${p.instance ?? p.url}?`,
+        message: "What this instance signs is quarantined from now on. Unvet or trust it to undo.",
+        confirmLabel: "Block",
+        danger: true,
+      }))
+    )
+      return;
     try {
-      await setPeerTrust(url, t);
-      toast(`Peer ${t}`);
+      await setPeerTrust(p.url, t);
+      toast(done);
       refresh();
     } catch (e) {
       toast((e as Error).message);
@@ -1448,47 +1494,81 @@ function FederationAdmin() {
       <FederationSyncStatus onSynced={refresh} />
       <Fed44netWizard onAdmitted={refresh} />
       {list.error ? (
-        <ErrorState onRetry={refresh}>Couldn't load the peer list.</ErrorState>
+        <ErrorState onRetry={refresh}>Couldn&apos;t load the peer list.</ErrorState>
+      ) : peers === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : peers.length === 0 ? (
+        <EmptyState>No federation peers configured.</EmptyState>
       ) : (
-        peers.length === 0 && <EmptyState>No federation peers configured.</EmptyState>
+        <ul className="logs">
+          {peers.map((p) => {
+            const name = p.instance ?? p.url;
+            // a discovered peer is listed but never synced until the operator picks a level for it
+            const waiting = !Number(p.enabled) && p.trust !== "blocked";
+            return (
+              <li key={p.url}>
+                <Badge
+                  kind={waiting ? undefined : p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
+                  title={`trust: ${p.trust}`}
+                >
+                  {waiting ? "not enabled" : p.health}
+                </Badge>
+                <span className="mono">{name}</span>
+                <span className="muted">
+                  {" "}
+                  · {p.trust}
+                  {p.added_via ? ` (${p.added_via})` : ""}
+                  {p.signed ? " · signed" : ""}
+                </span>
+                <div className="comment">
+                  {waiting
+                    ? "discovered · not synced until you enable it"
+                    : `${p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · ${p.mirrored_total} mirrored`}
+                  {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
+                  {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
+                  {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+                </div>
+                {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
+                <div className="row">
+                  {waiting && (
+                    <Button
+                      variant="primary"
+                      aria-label={`Enable ${name} as unvetted`}
+                      onClick={() => void trust(p, "unvetted", `${name} enabled, unvetted`)}
+                    >
+                      Enable
+                    </Button>
+                  )}
+                  <Button
+                    disabled={p.trust === "trusted"}
+                    aria-label={`Trust ${name}`}
+                    onClick={() => void trust(p, "trusted", `${name} trusted`)}
+                  >
+                    Trust
+                  </Button>
+                  <Button
+                    disabled={p.trust === "unvetted"}
+                    aria-label={`Unvet ${name}`}
+                    onClick={() => void trust(p, "unvetted", `${name} unvetted`)}
+                  >
+                    Unvet
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={p.trust === "blocked"}
+                    aria-label={`Block ${name}`}
+                    onClick={() => void trust(p, "blocked", `${name} blocked`)}
+                  >
+                    Block
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
-      <ul className="logs">
-        {peers.map((p) => (
-          <li key={p.url}>
-            <Badge
-              kind={p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
-              title={`trust: ${p.trust}`}
-            >
-              {p.health}
-            </Badge>
-            <span className="mono">{p.instance ?? p.url}</span>
-            <span className="muted">
-              {" "}
-              · {p.trust}
-              {p.added_via ? ` (${p.added_via})` : ""}
-              {p.signed ? " · signed" : ""}
-            </span>
-            <div className="comment">
-              {p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · {p.mirrored_total} mirrored
-              {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
-              {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
-              {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
-            </div>
-            {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
-            <div className="row">
-              <Button disabled={p.trust === "trusted"} onClick={() => trust(p.url, "trusted")}>
-                Trust
-              </Button>
-              <Button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
-                Unvet
-              </Button>
-              <Button variant="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
-                Block
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
     </>
   );
 }
@@ -1775,30 +1855,43 @@ function ForwardingAdmin() {
       })),
     [],
   );
-  const partners: ForwardPartner[] = lists.data?.partners ?? [];
-  const rules: ForwardRuleRow[] = lists.data?.rules ?? [];
+  const partners: ForwardPartner[] | undefined = lists.data?.partners;
+  const rules: ForwardRuleRow[] | undefined = lists.data?.rules;
   const refresh = lists.reload;
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Partial<ForwardPartner> & { call: string }>(EMPTY_PARTNER);
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [rule, setRule] = useState({ partner: "", route: "" });
 
-  const savePartner = async (p: Partial<ForwardPartner> & { call: string }) => {
+  const togglePartner = async (p: ForwardPartner, enabled: boolean) => {
     try {
-      await saveForwardPartner(p);
-      toast(`Partner ${p.call.toUpperCase()} saved`);
+      await saveForwardPartner({ ...p, enabled });
+      toast(`Forwarding to ${p.call} ${enabled ? "on" : "off"}`);
       refresh();
     } catch (e) {
       toast((e as Error).message);
     }
   };
+  // the form keeps what was typed until the partner is saved, so a refused save is corrected, not retyped
   const submitPartner = async () => {
     if (!form.call.trim()) {
-      toast("A partner callsign is required");
+      setFormErr("Enter the partner BBS's callsign.");
       return;
     }
-    await savePartner(form);
-    setForm(EMPTY_PARTNER);
-    setAdding(false);
+    setSaving(true);
+    setFormErr(null);
+    try {
+      await saveForwardPartner(form);
+      toast(`Partner ${form.call.trim().toUpperCase()} saved`);
+      setForm(EMPTY_PARTNER);
+      setAdding(false);
+      refresh();
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
   const removePartner = async (p: ForwardPartner) => {
     if (
@@ -1825,6 +1918,7 @@ function ForwardingAdmin() {
     }
     try {
       await saveForwardRule({ partner: rule.partner, route: rule.route, transport: "rf-fbb" });
+      toast(`Rule ${rule.route.trim().toUpperCase()} added`);
       setRule({ partner: "", route: "" });
       refresh();
     } catch (e) {
@@ -1854,7 +1948,11 @@ function ForwardingAdmin() {
     <>
       <h4 className="set-subh">Partners</h4>
       {lists.error ? (
-        <ErrorState onRetry={refresh}>Couldn't load partners and rules.</ErrorState>
+        <ErrorState onRetry={refresh}>Couldn&apos;t load partners and rules.</ErrorState>
+      ) : partners === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
       ) : partners.length === 0 ? (
         <EmptyState>No forwarding partners. Add a BBS to exchange mail with over RF.</EmptyState>
       ) : (
@@ -1864,7 +1962,7 @@ function ForwardingAdmin() {
               <Switch
                 label={`Forwarding to ${p.call}`}
                 checked={p.enabled}
-                onChange={(v) => savePartner({ ...p, enabled: v })}
+                onChange={(v) => void togglePartner(p, v)}
               />
               <span className="mono">{p.call}</span>
               <span className="muted">
@@ -1891,6 +1989,7 @@ function ForwardingAdmin() {
               className="mono"
               placeholder="OE8XBM-1"
               value={form.call}
+              aria-invalid={!!formErr && !form.call.trim()}
               onChange={(e) => setForm((f) => ({ ...f, call: e.target.value }))}
             />
           </label>
@@ -1942,13 +2041,19 @@ function ForwardingAdmin() {
               onChange={(e) => setForm((f) => ({ ...f, timebands: e.target.value }))}
             />
           </label>
+          {formErr && (
+            <p className="error fine" role="alert">
+              {formErr}
+            </p>
+          )}
           <div className="row">
-            <Button variant="primary" onClick={submitPartner}>
-              Save partner
+            <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submitPartner()}>
+              {saving ? "Saving…" : "Save partner"}
             </Button>
             <Button
               onClick={() => {
                 setForm(EMPTY_PARTNER);
+                setFormErr(null);
                 setAdding(false);
               }}
             >
@@ -1963,7 +2068,13 @@ function ForwardingAdmin() {
       <h4 className="set-subh">
         Routing rules <span className="muted">· region → partner</span>
       </h4>
-      {rules.length === 0 ? (
+      {lists.error ? (
+        <p className="muted">The rules show once the list loads.</p>
+      ) : rules === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : rules.length === 0 ? (
         <EmptyState>No rules — mail routes to the default federation catch-all.</EmptyState>
       ) : (
         <ul className="logs">
@@ -1999,7 +2110,7 @@ function ForwardingAdmin() {
           value={rule.partner}
           onChange={(e) => setRule((x) => ({ ...x, partner: e.target.value }))}
         />
-        <Button onClick={submitRule}>Add rule</Button>
+        <Button onClick={() => void submitRule()}>Add rule</Button>
       </div>
     </>
   );
@@ -2010,7 +2121,7 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
   const fmt = useFmt();
   const toast = useToast();
   const list = useLoad(() => getPorts().then((r) => r.ports), []);
-  const ports: PortStat[] = list.data ?? [];
+  const ports: PortStat[] | undefined = list.data;
   const feedUrl = (() => {
     const b = props.map?.getBounds();
     return b ? cotUrl([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]) : "";
@@ -2019,12 +2130,14 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
     <>
       <h4 className="set-subh">
         Transports{" "}
-        <span className="muted">
-          · {ports.length} port{ports.length === 1 ? "" : "s"} · 24h RX
-        </span>
+        <span className="muted">{ports ? `· ${ports.length} port${ports.length === 1 ? "" : "s"} ` : ""}· 24h RX</span>
       </h4>
       {list.error ? (
-        <ErrorState onRetry={list.reload}>Couldn't load port statistics.</ErrorState>
+        <ErrorState onRetry={list.reload}>Couldn&apos;t load port statistics.</ErrorState>
+      ) : ports === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
       ) : ports.length === 0 ? (
         <EmptyState>No traffic yet.</EmptyState>
       ) : (

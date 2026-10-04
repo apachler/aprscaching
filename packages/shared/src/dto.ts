@@ -480,3 +480,9 @@ export interface BbsMessage {
   /** Personal mail you sent: the partner BBSes FBB forwarding passed it to. */
   forwardedTo?: string[];
 }
+
+/**
+ * A station callsign: a base call with an optional numeric SSID (`OE8ABC`, `OE8ABC-10`). The gateway takes
+ * receiving-site calls in this form only, and the web app checks its forms against the same pattern.
+ */
+export const SITE_CALL_RE = /^[A-Z0-9]{3,9}(-[0-9]{1,2})?$/;

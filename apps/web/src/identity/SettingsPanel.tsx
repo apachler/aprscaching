@@ -149,7 +149,9 @@ export function SettingsPanel(props: {
       onClose={props.onClose}
     >
       <label className="srch">
-        <span className="srch-ic">⌕</span>
+        <span className="srch-ic" aria-hidden="true">
+          ⌕
+        </span>
         <input
           value={q}
           placeholder="Search settings…"

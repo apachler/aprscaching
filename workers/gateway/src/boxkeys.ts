@@ -25,7 +25,7 @@
  * may name only sites of that base call, and it is trusted only for sites of that base call. Revoking the box
  * ends its trust.
  */
-import { SIG_DOMAIN, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
+import { SIG_DOMAIN, SITE_CALL_RE, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
 import { b64urlToBytes } from "./util/b64.js";
 import { nowS } from "./util/time.js";
@@ -37,7 +37,7 @@ import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
 import { forgetAttestedSites } from "./attestedsites.js";
-import { SITE_CALL, verifiedFinds } from "./trustedsites.js";
+import { verifiedFinds } from "./trustedsites.js";
 
 /** A signature is fresh this long either side of the gateway's clock. */
 const FRESH_S = 300;
@@ -192,7 +192,7 @@ export async function handleTrustBox(req: Request, env: Env, box: string): Promi
   ];
   if (sites.length === 0) return json({ error: "name the receiving site call the box hears with" }, { status: 400 });
   if (sites.length > SITES_MAX) return json({ error: `at most ${SITES_MAX} sites per box` }, { status: 400 });
-  const bad = sites.find((s) => !SITE_CALL.test(s));
+  const bad = sites.find((s) => !SITE_CALL_RE.test(s));
   if (bad) return json({ error: `${bad} is not a station call` }, { status: 400 });
   if (row.callsign) {
     const foreign = sites.find((s) => baseCall(s) !== row.callsign);
