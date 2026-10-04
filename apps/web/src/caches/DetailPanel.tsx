@@ -16,7 +16,7 @@ import {
   type CacheRating,
   type Spot,
 } from "../api.js";
-import type { CacheLogEntry } from "@aprscaching/shared";
+import { webLink, type CacheLogEntry } from "@aprscaching/shared";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { ExportButton } from "../exports/ExportButton.js";
 import { useFmt, useTheme } from "../format.js";
@@ -147,6 +147,7 @@ export function DetailPanel(props: {
     }
   }
   const minTier: Tier = c.minTrust ?? "B"; // the site default minimum is B
+  const sourceLink = webLink(c.sourceUrl); // only an http(s) address becomes a link
   const here = useKnownPosition(props.here);
   const away = here && c.lat != null && c.lon != null ? haversine(here.lat, here.lon, c.lat, c.lon) : null;
   const grid = c.lat != null && c.lon != null ? maidenhead(c.lat, c.lon, 10) : null;
@@ -300,14 +301,14 @@ export function DetailPanel(props: {
         </div>
       )}
 
-      {c.source !== "native" && (c.sourceUrl || c.sourceAttribution) && (
+      {c.source !== "native" && (sourceLink || c.sourceAttribution) && (
         <div className="imported">
           <p>
             ⤓ Imported from <strong>{c.sourceName ?? c.source}</strong>
-            {c.sourceUrl && (
+            {sourceLink && (
               <>
                 {" · "}
-                <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">
+                <a href={sourceLink} target="_blank" rel="noreferrer noopener">
                   view on {c.sourceName ?? "the source"} ↗
                 </a>
               </>
@@ -363,7 +364,7 @@ export function DetailPanel(props: {
         </p>
       </Disclosure>
 
-      <CacheMedia cacheId={c.id} isOwner={callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
+      <CacheMedia cacheId={c.id} isOwner={!!c.own && !props.offlineFrom} onToast={toast} />
 
       {c.source === "native" && <AdoptionSection cacheId={c.id} code={c.code} onSignIn={props.onSignIn} />}
 

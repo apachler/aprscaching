@@ -16,7 +16,7 @@ const SRC = "mc-links";
 const LAYERS = ["mc-links-direct", "mc-links-relay"];
 
 /** The layer colour from the theme token, as MapLibre needs it (map/mapPaint.ts). */
-const lineColor = (): string => tokenHex("--meshcom", "#b0417f");
+const lineColor = (): string => tokenHex("--meshcom");
 
 export function MeshcomLinks(props: { map: maplibregl.Map | null; links: MeshcomLink[]; styleEpoch: number }) {
   const { map, links, styleEpoch } = props;

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { getInstance, registerKey, logFind, errorText, type LogResult, type AppGeo } from "../api.js";
+import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "../api.js";
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
 import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon } from "../ui/index.js";
-import type { LogType } from "@aprscaching/shared";
+import { TEXT_LIMITS, type LogType } from "@aprscaching/shared";
+import { refusalMessage } from "../caches/formLimits.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { TermHelp } from "../platform/TermHelp.js";
@@ -130,7 +131,7 @@ export function LogForm(props: {
       setNoteOpen(false);
       props.onLogged();
     } catch (e) {
-      setErr(errorText(e));
+      setErr(refusalMessage(e));
     } finally {
       setBusy(null);
     }
@@ -195,7 +196,13 @@ export function LogForm(props: {
         {result.logType === "found" &&
           (noteOpen ? (
             <div className="mt-3">
-              <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
+              <textarea
+                rows={2}
+                placeholder="Add a note…"
+                value={note}
+                maxLength={TEXT_LIMITS.logComment}
+                onChange={(e) => setNote(e.target.value)}
+              />
               <div className="row end">
                 <Button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
                   Post
@@ -265,7 +272,13 @@ export function LogForm(props: {
       </div>
       {noteOpen && (
         <div className="mt-2">
-          <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
+          <textarea
+            rows={2}
+            placeholder="Note…"
+            value={note}
+            maxLength={TEXT_LIMITS.logComment}
+            onChange={(e) => setNote(e.target.value)}
+          />
           <div className="row end">
             {props.isOwner && (
               <Button

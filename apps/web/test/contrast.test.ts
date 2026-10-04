@@ -149,6 +149,13 @@ const PAIRS: Pair[] = [
   { name: "danger text on a panel", fg: "var(--bad-text)", bg: "var(--surface)", min: 4.5 },
   { name: "success text on a panel", fg: "var(--ok-text)", bg: "var(--surface)", min: 4.5 },
   { name: "award chip", fg: "var(--award-ink)", bg: "var(--award-bg)", min: 4.5 },
+  ...["--type-sand", "--type-blue", "--type-green", "--type-clay"].map((t): Pair => ({
+    name: `role glyph on a ${t.slice(7)} station pin`,
+    fg: "var(--ink-tier)",
+    bg: `var(${t})`,
+    min: 3,
+  })),
+  { name: "role glyph on a node station pin", fg: "var(--role-node-ink)", bg: "var(--type-grey)", min: 3 },
   { name: "letter on a Tier A chip", fg: "var(--ink-tier)", bg: "var(--tier-a)", min: 4.5 },
   { name: "letter on a Tier B chip", fg: "var(--ink-tier)", bg: "var(--tier-b)", min: 4.5 },
   { name: "letter on a Tier C chip", fg: "var(--ink-tier)", bg: "var(--tier-c)", min: 4.5 },

@@ -1,22 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { StationRole } from "@aprscaching/shared";
-import { BRAND } from "./brand.js";
 
-/** `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji). */
+/**
+ * `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji). The pin's colour
+ * comes from the stylesheet by `role` (`button.station-pin[data-role]`, a brand-palette token per role).
+ */
 export interface RoleMeta {
+  role: StationRole;
   label: string;
-  color: string;
   glyph: string;
   cog: string;
 }
 
-/** Marker colour (brand palette) + glyph per operated-station role — our own glyph set (ui-ux.md). */
+/** Glyph per operated-station role — our own glyph set (ui-ux.md). */
 export const ROLE_META: Record<StationRole, RoleMeta> = {
-  weather: { label: "Weather", color: BRAND.beige2, glyph: "☼", cog: "☼" },
-  digipeater: { label: "Digipeater", color: BRAND.blue, glyph: "#", cog: "#" },
-  igate: { label: "IGate", color: BRAND.green, glyph: "⇅", cog: "↕" },
-  node: { label: "Node", color: BRAND.grey, glyph: "⬡", cog: "○" },
-  relay: { label: "Relay", color: BRAND.beige, glyph: "↻", cog: "→" },
+  weather: { role: "weather", label: "Weather", glyph: "☼", cog: "☼" },
+  digipeater: { role: "digipeater", label: "Digipeater", glyph: "#", cog: "#" },
+  igate: { role: "igate", label: "IGate", glyph: "⇅", cog: "↕" },
+  node: { role: "node", label: "Node", glyph: "⬡", cog: "○" },
+  relay: { role: "relay", label: "Relay", glyph: "↻", cog: "→" },
 };
 
 /** Priority when a station has several roles — the most infrastructure-defining one wins the glyph. */

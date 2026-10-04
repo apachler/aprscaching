@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import {
   attentionLogs,
   discardAttentionLog,
+  errorText,
   getInstance,
   knownServiceCall,
   queuedLogs,
@@ -78,6 +79,8 @@ export function OutboxPanel(props: { onClose: () => void }) {
             ? "Nothing could be sent yet; it retries on its own"
             : "Still offline",
       );
+    } catch (e) {
+      toast(`Sync failed: ${errorText(e)}`);
     } finally {
       setBusy(false);
     }
@@ -154,6 +157,8 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; whe
     try {
       const r = await retryAttentionLog(props.index, edited ? comment : undefined);
       toast(r.sent ? "Sent" : r.refused ? "Refused again" : "Queued; it goes when the connection allows");
+    } catch (e) {
+      toast(`Retry failed: ${errorText(e)}`);
     } finally {
       setBusy(false);
     }

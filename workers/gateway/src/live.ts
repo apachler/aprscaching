@@ -106,17 +106,42 @@ export async function envelopeForPosition(
     course,
     lastSeen: nowS(),
   };
-  const prompts = (near ?? (await cachesNear(env, lat, lon))).map((c) => ({
-    forCallsign: cs,
-    prompt: {
-      type: "near_cache",
-      cacheId: c.id,
-      code: c.code,
-      title: c.title,
-      distanceM: c.distanceM,
-    } satisfies GeofencePrompt,
-  }));
+  const around = near ?? (await cachesNear(env, lat, lon));
+  const own = around.length ? await ownedAmong(env, cs, around) : new Set<number>();
+  const prompts = around
+    .filter((c) => !own.has(c.id))
+    .map((c) => ({
+      forCallsign: cs,
+      prompt: {
+        type: "near_cache",
+        cacheId: c.id,
+        code: c.code,
+        title: c.title,
+        distanceM: c.distanceM,
+      } satisfies GeofencePrompt,
+    }));
   return { station, prompts: prompts.length ? prompts : undefined };
+}
+
+/**
+ * The caches among `caches` that the station's operator hid: under the station's base call or an SSID of it, or
+ * under any call of the account that holds it. A hider is never prompted to log their own cache.
+ */
+async function ownedAmong(env: Env, callsign: string, caches: NearCache[]): Promise<Set<number>> {
+  const base = baseCall(callsign);
+  const ids = caches.map((c) => c.id);
+  const rows = (
+    await env.DB.prepare(
+      `SELECT c.id FROM caches c WHERE c.id IN (${ids.map(() => "?").join(",")})
+         AND (UPPER(c.owner_call) = ? OR UPPER(c.owner_call) LIKE ? || '-%' OR EXISTS (
+           SELECT 1 FROM account_callsigns ac
+            WHERE ac.account_id = (SELECT account_id FROM account_callsigns WHERE callsign = ?)
+              AND (UPPER(c.owner_call) = ac.callsign OR UPPER(c.owner_call) LIKE ac.callsign || '-%')))`,
+    )
+      .bind(...ids, base, base, base)
+      .all<{ id: number }>()
+  ).results;
+  return new Set(rows.map((r) => r.id));
 }
 
 /** Send envelopes to the region room (DO on Workers, in-memory rooms on Node) via its fetch entry. */

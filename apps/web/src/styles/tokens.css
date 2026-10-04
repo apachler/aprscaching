@@ -83,6 +83,7 @@
     --type-grey: oklch(0.41 0.008 220); /* SOTA summit, bunker */
     --type-clay: oklch(0.64 0.09 48); /* POTA park, castle */
     --type-sand: oklch(0.7 0.11 75); /* audio */
+    --role-node-ink: var(--pin-edge); /* the glyph on a node's station pin, which takes --type-grey */
     --meshcom: oklch(0.55 0.16 350); /* MeshCom ring, tag and links */
     /* the map's own overlays, painted by map/mapPaint.ts (MapLibre reads them as hex at paint time) */
     --map-night: oklch(0.2 0.035 255); /* the night side of the terminator */
@@ -328,6 +329,7 @@
     --type-grey: oklch(0.72 0.06 150);
     --type-clay: oklch(0.82 0.13 75);
     --type-sand: oklch(0.86 0.14 95);
+    --role-node-ink: var(--ink-tier);
 
     /* trust tiers re-hued onto the phosphor ramp: A=green, B=cyan, C=dim green */
     --tier-a: oklch(0.86 0.19 145);

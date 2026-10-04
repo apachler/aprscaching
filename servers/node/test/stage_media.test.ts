@@ -7,7 +7,7 @@ import { authEnv, call, emailSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
-type Stage = { stageNo: number; unlock: string; lat?: number; lon?: number; clue?: string };
+type Stage = { stageNo: number; prevStageNo?: number; unlock: string; lat?: number; lon?: number; clue?: string };
 
 async function world() {
   const objects = new Map<string, Uint8Array>();
@@ -99,5 +99,30 @@ describe("a stage's audio clue", () => {
     expect(w.objects.size).toBe(0);
     expect(w.objects.has(one.body.mediaKey!) || w.objects.has(two.body.mediaKey!)).toBe(false);
     expect((await w.rows()).map((r) => r.media_key)).toEqual([null, null]);
+  });
+
+  it("moves with its stage when a stage before it is removed", async () => {
+    const w = await world();
+    await w.save(three);
+    const one = await w.upload(1);
+    const two = await w.upload(2);
+    // stage 1 removed: the old stage 2 is now stage 1, and says where it came from
+    expect(await w.save([three[0]!, { ...three[2]!, stageNo: 1, prevStageNo: 2 }])).toBe(200);
+    expect((await w.rows()).map((r) => r.media_key)).toEqual([null, two.body.mediaKey]);
+    expect([...w.objects.keys()]).toEqual([two.body.mediaKey]);
+    expect(w.objects.has(one.body.mediaKey!)).toBe(false);
+    const view = (await call(w.env, "GET", `/api/caches/${w.id}/stages`)).data.stages as { mediaUrl: string | null }[];
+    expect(view[1]?.mediaUrl).toBe(`/api/media/${two.body.mediaKey}`);
+    // the clip is served for the stage that holds it now, under the key it was stored with
+    const res = await serve(w.env)(new Request(`https://gw.test/api/media/${two.body.mediaKey}`));
+    expect(res.status).toBe(200);
+  });
+
+  it("goes to one stage only when two name the same previous number", async () => {
+    const w = await world();
+    await w.save(three);
+    const two = await w.upload(2);
+    expect(await w.save([three[0]!, { ...three[1]!, prevStageNo: 2 }, { ...three[2]!, prevStageNo: 2 }])).toBe(200);
+    expect((await w.rows()).map((r) => r.media_key)).toEqual([null, two.body.mediaKey, null]);
   });
 });

@@ -84,6 +84,7 @@ export function useCacheMarkers(
       // rebind title + click each pass so a cache whose title/mirrored/id changed doesn't keep a stale
       // tooltip or route clicks the wrong way (mirrored vs native).
       el.title = `${c.code} — ${c.title}${c.mirrored ? ` · via ${c.origin}` : ""}`;
+      el.setAttribute("aria-label", `${c.code}, ${c.title}${c.mirrored ? `, via ${c.origin}` : ""}`);
       el.onclick = (ev) => {
         ev.stopPropagation();
         pick.current(c);
@@ -143,9 +144,10 @@ export function useStationMarkers(
       const aprs = role ? null : aprsGlyph(s.symbol);
       const label = role ? role.label : aprs?.label;
       el.title = `${s.callsign}${label ? ` · ${label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
+      el.setAttribute("aria-label", `${s.callsign}${label ? `, ${label}` : ""}`);
       el.classList.toggle("role", !!role);
-      el.style.background = role ? role.color : "";
-      el.style.color = role ? "var(--ink-tier)" : "";
+      if (role) el.dataset.role = role.role;
+      else delete el.dataset.role;
       const moving = s.course != null && !!s.speedKn;
       const span = el.querySelector("span") as HTMLElement;
       span.textContent = role
@@ -238,6 +240,7 @@ export function useSpotMarkers(map: maplibregl.Map | null, spots: Spot[], onPick
         pick.current(s);
       };
       el.title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
+      el.setAttribute("aria-label", `Spot: ${el.title}`);
     }
     prune(markers.current, seen);
   }, [map, spots, pick]);

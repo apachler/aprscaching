@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
+import { MEDIA_LIMITS } from "@aprscaching/shared";
 import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMediaItem } from "../api.js";
-import { Button, Icon } from "../ui/index.js";
+import { mediaUploadProblem } from "../media/limits.js";
+import { Button, Icon, useConfirm } from "../ui/index.js";
 
 /**
  * Cache media gallery — photos, audio and files an owner attaches to a cache (hints,
@@ -13,24 +15,37 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
   const [items, setItems] = useState<CacheMediaItem[] | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const confirmDialog = useConfirm();
 
   const [loadErr, setLoadErr] = useState(false);
   useEffect(() => {
     let live = true;
+    let loaded: CacheMediaItem[] = [];
     setLoadErr(false);
     getCacheMedia(props.cacheId)
       .then((r) => {
+        loaded = r.media;
         if (live) setItems(r.media);
+        else revokeLocal(r.media);
       })
       .catch(() => {
         if (live) setLoadErr(true);
       });
     return () => {
       live = false;
+      // an offline pack's images come as local object URLs: they go with the cache they were loaded for
+      revokeLocal(loaded);
     };
   }, [props.cacheId]);
 
   async function upload(file: File) {
+    // a photo is scaled before it goes up, so only its kind is checked here; a sound is sent as it is
+    const problem = mediaUploadProblem(file.type, file.type.startsWith("image/") ? 1 : file.size);
+    if (problem) {
+      props.onToast(problem);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setBusy(true);
     try {
       const { item } = await addCacheMedia(props.cacheId, file, file.name);
@@ -43,7 +58,15 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
       if (fileRef.current) fileRef.current.value = "";
     }
   }
-  async function remove(id: number) {
+  async function remove(it: CacheMediaItem) {
+    const ok = await confirmDialog({
+      title: "Delete this media?",
+      message: `${it.title ?? (it.kind === "image" ? "The photo" : "The file")} is removed from the cache for everyone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    const id = it.id;
     try {
       await deleteCacheMedia(props.cacheId, id);
       setItems((m) => (m ?? []).filter((x) => x.id !== id));
@@ -83,7 +106,11 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
                 </a>
               )}
               {props.isOwner && (
-                <Button className="media-del" aria-label="Delete media" onClick={() => remove(it.id)}>
+                <Button
+                  className="media-del"
+                  aria-label={`Delete ${it.title ?? "media"}`}
+                  onClick={() => void remove(it)}
+                >
                   ✕
                 </Button>
               )}
@@ -91,7 +118,10 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
           ))}
         </div>
       )}
-      {props.isOwner && (
+      {props.isOwner && items.length >= MEDIA_LIMITS.items && (
+        <p className="muted fine">A cache holds at most {MEDIA_LIMITS.items} media items: delete one to add another.</p>
+      )}
+      {props.isOwner && items.length < MEDIA_LIMITS.items && (
         <div className="mt-2">
           <input
             ref={fileRef}
@@ -108,4 +138,9 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
       )}
     </div>
   );
+}
+
+/** Release the local object URLs (an offline pack's images) a media list holds. */
+function revokeLocal(media: CacheMediaItem[]) {
+  for (const m of media) if (m.url.startsWith("blob:")) URL.revokeObjectURL(m.url);
 }

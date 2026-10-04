@@ -8,6 +8,7 @@ import { bearingDeg, bearing8, haversine } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, PROBLEM_TEXT, isFresh, lastFix, watchFixes, type DeviceFix } from "../geo/location.js";
 import type { LocationProblem } from "../geo/location.js";
 import {
+  PIN_ACCURACY_M,
   atThePin,
   compassNeedsPermission,
   courseTracker,
@@ -27,7 +28,10 @@ function useWakeLock() {
     let open = true;
     const take = async () => {
       try {
-        lock = (await navigator.wakeLock?.request("screen")) ?? null;
+        const got = (await navigator.wakeLock?.request("screen")) ?? null;
+        // the view may have closed while the request was pending: a lock taken then is let go at once
+        if (!open) void got?.release().catch(() => {});
+        else lock = got;
       } catch {
         // refused (battery saver, an unfocused page): the screen times out as usual
       }
@@ -62,15 +66,20 @@ export function FindView(props: {
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // what had focus when the view opened, read before any effect moves it
+  const opener = useRef(typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null);
   useModalDialog(ref, props.onClose);
   useWakeLock();
   // the app behind the view is out of reach (taps, Tab and screen readers) while it is open
   useEffect(() => {
     const app = document.getElementById("root");
     if (!app) return;
+    const back = opener.current;
     app.inert = true;
     return () => {
       app.inert = false;
+      // focus went back while the app was still inert, which leaves it on the page body: give it to the opener now
+      if (!document.activeElement || document.activeElement === document.body) back?.focus?.();
     };
   }, []);
   const fmt = useFmt();
@@ -123,6 +132,8 @@ export function FindView(props: {
   const bearing = fix ? bearingDeg(fix.lat, fix.lon, props.lat, props.lon) : null;
   const octant = fix ? bearing8(fix.lat, fix.lon, props.lat, props.lon) : null;
   const here = fix && dist != null && atThePin(dist, fix.accuracyM);
+  // a coarse reading (cell or Wi-Fi) puts the pin "within accuracy" from far away: say so instead
+  const coarse = !!fix && fix.accuracyM > PIN_ACCURACY_M;
   // what the top of the screen faces: the compass, else the way the walker is going, else north
   const facing = compass === "on" ? heading : course;
   const needle = bearing == null ? null : facing == null ? bearing : turn(facing, bearing);
@@ -174,6 +185,12 @@ export function FindView(props: {
           {here && (
             <p className="find-here" role="status">
               You&apos;re within GPS accuracy of the pin — search here.
+            </p>
+          )}
+          {coarse && (
+            <p className="muted fine" role="status">
+              The reading is too coarse (±{fmt.distance(fix!.accuracyM)}) to lead you to the pin: wait for GPS,
+              outdoors.
             </p>
           )}
         </div>

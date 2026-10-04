@@ -62,6 +62,8 @@ import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
 import { fromB64u, toB64u } from "./base64url.js";
+import { stageRefusalText } from "./log/stageUnlock.js";
+import { mediaUploadProblem } from "./media/limits.js";
 
 /**
  * Gateway base URL. A dev server talks to the local gateway on :8787. A production build without
@@ -1361,6 +1363,9 @@ export async function unlockStage(
       body: JSON.stringify({ callsign, appGeo, code }),
     });
   } catch (e) {
+    // a refusal with a reason is an answer, not a failure: the caller words it for the finder
+    const refusal = stageRefusal(e);
+    if (refusal) return { ...refusal, unlocked: false };
     if (!isOffline(e)) throw e;
     const store = await offlineReady();
     const hit = await packCache(store, cacheId);
@@ -1391,10 +1396,19 @@ export async function unlockStage(
     return { unlocked: true, lat: payload.lat ?? undefined, lon: payload.lon ?? undefined, offline: true };
   }
 }
+/** The body of a refused unlock that names why (`reason`), or null for any other error. */
+function stageRefusal(e: unknown): { reason: string; distanceM?: number } | null {
+  if (!(e instanceof ApiError) || e.status >= 500) return null;
+  const d = e.data as { reason?: unknown; distanceM?: unknown } | null;
+  return typeof d?.reason === "string"
+    ? { reason: d.reason, ...(typeof d.distanceM === "number" && { distanceM: d.distanceM }) }
+    : null;
+}
+/** Set the stage list. `prevStageNo` is the number a stage had when the list was loaded, so its clip follows it. */
 export function setStages(
   cacheId: number,
   ownerCall: string,
-  stages: Array<Partial<CacheStage> & { stageNo: number; secret?: string }>,
+  stages: Array<Partial<CacheStage> & { stageNo: number; prevStageNo?: number; secret?: string }>,
 ): Promise<{ ok: boolean; offline: { stageNo: number; offline: boolean; reason?: string }[] }> {
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
@@ -1439,7 +1453,7 @@ export interface CacheMediaItem {
   thumbUrl?: string;
   thumbBytes?: number;
 }
-/** A cache's media; without a connection, the images its offline pack keeps, as local object URLs. */
+/** A cache's media; without a connection, the images its offline pack keeps, as local object URLs the caller revokes. */
 export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
   try {
     return await call(`/api/caches/${cacheId}/media`);
@@ -1475,6 +1489,8 @@ export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMedi
 export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
   const isImage = file.type.startsWith("image/");
   const photo = (isImage && (await resizeImage(file, PHOTO_PX, 0.85))) || file;
+  const problem = mediaUploadProblem(photo.type || file.type, photo.size);
+  if (problem) throw new Error(problem);
   const q = title ? `?title=${encodeURIComponent(title)}` : "";
   const res = await reach(`${API_BASE}/api/caches/${cacheId}/media${q}`, {
     method: "POST",
@@ -1696,7 +1712,14 @@ async function flushUnlocked(): Promise<FlushResult> {
         const status = e instanceof ApiError ? e.status : 0;
         if (status === 0 || status >= 500 || status === 408 || status === 429)
           throw { kind: "retry" } satisfies SendFailure;
-        throw { kind: "refused", status, reason: (e as Error).message } satisfies SendFailure;
+        const refusal = it.kind === "unlock" ? stageRefusal(e) : null;
+        throw {
+          kind: "refused",
+          status,
+          reason: refusal
+            ? stageRefusalText(refusal.reason, refusal.distanceM != null ? `${refusal.distanceM} m` : undefined)
+            : (e as Error).message,
+        } satisfies SendFailure;
       }
     },
     Date.now(),

@@ -11,6 +11,16 @@ import { API_BASE } from "../api.js";
  * runs on every (re)connect with `send`, so the caller re-subscribes; `send` drops a message while
  * disconnected.
  */
+/**
+ * The live socket's absolute ws(s):// URL. The WebSocket constructor takes no relative URL in every browser, so an
+ * empty API base (the API on the page's own origin) resolves against the page.
+ */
+export function liveSocketUrl(apiBase: string, page: { href: string }): string {
+  const url = new URL(`${apiBase}/ws?region=global`, page.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.href;
+}
+
 export function useLiveSocket(handlers: {
   onOpen: (send: (msg: unknown) => void) => void;
   onMessage: (msg: unknown) => void;
@@ -29,9 +39,21 @@ export function useLiveSocket(handlers: {
     let stopped = false;
     let retryMs = 1000;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    const retry = () => {
+      const delay = Math.min(retryMs, 30_000) * (0.5 + Math.random());
+      retryMs = Math.min(retryMs * 2, 30_000);
+      reconnectTimer = setTimeout(connect, delay);
+    };
     const connect = () => {
       if (stopped) return;
-      const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
+      let s: WebSocket;
+      try {
+        s = new WebSocket(liveSocketUrl(API_BASE, location));
+      } catch {
+        // a URL the browser refuses, or a socket it will not open now: try again later, like a dropped one
+        retry();
+        return;
+      }
       ws.current = s;
       s.addEventListener("open", () => {
         retryMs = 1000; // reachable again → reset the backoff
@@ -54,9 +76,7 @@ export function useLiveSocket(handlers: {
       s.addEventListener("close", () => {
         if (stopped || ws.current !== s) return;
         ws.current = null;
-        const delay = Math.min(retryMs, 30_000) * (0.5 + Math.random());
-        retryMs = Math.min(retryMs * 2, 30_000);
-        reconnectTimer = setTimeout(connect, delay);
+        retry();
       });
     };
     connect();

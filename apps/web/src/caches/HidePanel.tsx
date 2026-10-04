@@ -6,13 +6,14 @@ import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad } from "../ui/index.js";
-import { dxccOfCall, type CacheType, type FedScope } from "@aprscaching/shared";
+import { TEXT_LIMITS, dxccOfCall, type CacheType, type FedScope } from "@aprscaching/shared";
+import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
 import { CountrySelect } from "./CountrySelect.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 const SCOPES: { v: FedScope; label: string; help: string }[] = [
   { v: "public", label: "Public", help: "Shared across the whole network." },
-  { v: "unlisted", label: "Unlisted", help: "On the network map, but its description stays on this instance." },
+  { v: "unlisted", label: "Unlisted", help: "Off maps and search; anyone with its link or code still opens it." },
   { v: "local-only", label: "Local only", help: "Never leaves this instance." },
 ];
 
@@ -93,16 +94,17 @@ export function HidePanel(props: {
 
   const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3;
 
-  const tagList = tags
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  const tagList = parseTags(tags);
+  const tagErr = tagProblem(tagList);
 
   async function submit() {
     if (!props.draft) return;
     if (type === "aprs_living" && !stationCall) {
       setErr("Pick the station this living cache follows.");
+      return;
+    }
+    if (tagErr) {
+      setErr(tagErr);
       return;
     }
     setBusy(true);
@@ -129,7 +131,7 @@ export function HidePanel(props: {
       });
       props.onCreated(cache);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(refusalMessage(e));
     } finally {
       setBusy(false);
     }
@@ -194,7 +196,7 @@ export function HidePanel(props: {
       <h4 className="set-subh">Basics</h4>
       <label>
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input value={title} maxLength={TEXT_LIMITS.title} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <label>
         Type
@@ -267,11 +269,16 @@ export function HidePanel(props: {
         </h4>
         <label>
           Hint <span className="muted">(optional)</span>
-          <input value={hint} onChange={(e) => setHint(e.target.value)} />
+          <input value={hint} maxLength={TEXT_LIMITS.hint} onChange={(e) => setHint(e.target.value)} />
         </label>
         <label>
           Description <span className="muted">(optional)</span>
-          <textarea value={description} rows={3} onChange={(e) => setDescription(e.target.value)} />
+          <textarea
+            value={description}
+            rows={3}
+            maxLength={TEXT_LIMITS.description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </label>
         <Row label="Drive-in (car-accessible)">
           <Switch label="Drive-in" checked={driveIn} onChange={setDriveIn} />
@@ -280,9 +287,20 @@ export function HidePanel(props: {
           <CountrySelect value={country} onChange={setCountry} optional />
           <label>
             Tags <span className="muted">(optional)</span>
-            <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="scenic, family, qrp" />
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="scenic, family, qrp"
+              aria-invalid={!!tagErr}
+              aria-describedby={tagErr ? "hide-tags-err" : undefined}
+            />
           </label>
         </div>
+        {tagErr && (
+          <p className="error fine" id="hide-tags-err">
+            {tagErr}
+          </p>
+        )}
         {tagList.length > 0 && (
           <div className="badges">
             {tagList.map((t) => (

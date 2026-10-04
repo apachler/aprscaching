@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getStages, unlockStage, mediaUrl, privateClipUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Icon } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
+import { stageRefusalText } from "./stageUnlock.js";
 
 // Minimal WebNFC shapes (lib.dom doesn't ship them): just what we read off a tag.
 interface NfcRecord {
@@ -17,7 +18,7 @@ interface NfcReadingEvent {
   message?: { records: NfcRecord[] };
 }
 interface NfcReader {
-  scan(): Promise<void>;
+  scan(options?: { signal?: AbortSignal }): Promise<void>;
   onreading: (e: NfcReadingEvent) => void;
 }
 
@@ -30,6 +31,14 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const loc = useLocate();
+  // the running NFC scan: stopped after its first reading, on Cancel, and when the view closes
+  const scan = useRef<AbortController | null>(null);
+  const stopScan = useCallback(() => {
+    scan.current?.abort();
+    scan.current = null;
+  }, []);
+  useEffect(() => stopScan, [stopScan]);
+  const [scanning, setScanning] = useState(false);
 
   const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(() => {
@@ -52,12 +61,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
             r.offline ? "Unlocked from your offline pack; the instance confirms it when you are back online." : null,
           );
           load();
-        } else if (r.reason === "needs_connection")
-          setErr("This stage unlocks online: the instance checks it. Try again with a connection.");
-        else if (r.reason === "too_far") setErr(`Too far — ${fmt.distance(r.distanceM ?? 0)} away.`);
-        else if (r.reason === "bad_code") setErr("That tag/code doesn't match this stage.");
-        else if (r.reason === "no_code") setErr("Scan the NFC tag or enter its code.");
-        else setErr("Not unlocked yet.");
+        } else setErr(stageRefusalText(r.reason, r.distanceM != null ? fmt.distance(r.distanceM) : undefined));
       } catch (e) {
         setErr((e as Error).message);
       } finally {
@@ -94,12 +98,20 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
       setErr("This device can't scan NFC — type the code instead.");
       return;
     }
+    stopScan();
+    const ctl = new AbortController();
+    scan.current = ctl;
     setBusy(stageNo);
+    setScanning(true);
     setErr(null);
     try {
       const reader = new NDEFReader();
-      await reader.scan();
       reader.onreading = (e: NfcReadingEvent) => {
+        // one reading, one unlock: a tag held to the phone keeps reading, and each try counts against the hour
+        if (ctl.signal.aborted) return;
+        ctl.abort();
+        if (scan.current === ctl) scan.current = null;
+        setScanning(false);
         let tagCode = e.serialNumber ?? "";
         for (const rec of e.message?.records ?? []) {
           if (rec.recordType === "text" && rec.data) {
@@ -111,12 +123,21 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
             }
           }
         }
-        finish(stageNo, undefined, tagCode);
+        void finish(stageNo, undefined, tagCode);
       };
+      await reader.scan({ signal: ctl.signal });
     } catch (e) {
-      setErr((e as Error).message || "NFC scan failed.");
+      if (scan.current === ctl) scan.current = null;
+      setScanning(false);
       setBusy(null);
+      if (!ctl.signal.aborted) setErr((e as Error).message || "NFC scan failed.");
     }
+  }
+
+  function cancelScan() {
+    stopScan();
+    setScanning(false);
+    setBusy(null);
   }
 
   // a failed load must not render the cache as stageless — say so, offer retry
@@ -178,10 +199,11 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && s.unlock === "nfc" && (
               <div className="nfc-unlock mt-2">
                 <div className="row gap-2">
-                  <Button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}>
+                  <Button disabled={busy === s.stageNo} onClick={() => void scanNfc(s.stageNo)}>
                     <Icon name="signal" cp437="" className="lead-ic" />
-                    Scan NFC tag
+                    {scanning && busy === s.stageNo ? "Hold the tag to the phone…" : "Scan NFC tag"}
                   </Button>
+                  {scanning && busy === s.stageNo && <Button onClick={cancelScan}>Cancel</Button>}
                 </div>
                 <div className="row gap-2 mt-2">
                   <input
@@ -219,7 +241,11 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
           {note}
         </p>
       )}
-      {err && <p className="error">{err}</p>}
+      {err && (
+        <p className="error" role="alert">
+          {err}
+        </p>
+      )}
     </div>
   );
 }
