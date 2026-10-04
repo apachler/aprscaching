@@ -6,6 +6,7 @@
  * file is a 404, because a security.txt without a Contact field is invalid.
  */
 import type { Env } from "./env.js";
+import { trimEndChars } from "./util/text.js";
 
 const UPSTREAM_REPO = "https://github.com/apachler/aprscaching";
 const YEAR_MS = 365 * 24 * 3600 * 1000;
@@ -32,7 +33,8 @@ function securityContacts(env: Env): string[] {
  * GitHub; any other host has no known path for it, so the field is left out.
  */
 function policyUrl(env: Env): string | null {
-  const repo = (env.SOURCE_REPO?.trim() || UPSTREAM_REPO).replace(/\/+$/, "").replace(/\.git$/, "");
+  const trimmed = trimEndChars(env.SOURCE_REPO?.trim() || UPSTREAM_REPO, "/");
+  const repo = trimmed.endsWith(".git") ? trimmed.slice(0, -4) : trimmed;
   return /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(repo) ? `${repo}/blob/main/SECURITY.md` : null;
 }
 
