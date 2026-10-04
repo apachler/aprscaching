@@ -93,7 +93,7 @@ selfhost_publishes() {
 }
 
 shape_doctor_extra() {
-  local svc running size version foreign want="gateway ingest caddy"
+  local svc running size version foreign="" want="gateway ingest caddy"
   have docker || { failc service.docker "docker is not installed here" "install Docker, or use --shape"; return 0; }
   running="$(selfhost_compose ps --status running --format '{{.Service}}' 2>/dev/null || true)"
   [ -z "$(env_file_get "$SHAPE_ENV" TUNNEL_TOKEN)" ] || want="$want cloudflared"
