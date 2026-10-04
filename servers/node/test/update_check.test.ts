@@ -136,7 +136,8 @@ describe("the nightly task", () => {
     const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network in tests"));
     try {
       await runScheduled(env);
-      expect(spy.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("api.github.com"))).toEqual([]);
+      const hosts = spy.mock.calls.map((c) => new URL(c[0] instanceof Request ? c[0].url : String(c[0])).hostname);
+      expect(hosts.filter((h) => h === "api.github.com")).toEqual([]);
     } finally {
       spy.mockRestore();
     }

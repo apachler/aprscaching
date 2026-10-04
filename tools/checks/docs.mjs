@@ -125,6 +125,7 @@ const INTERNAL = new Set([
   "ROOMS",
   "FED_FETCH_GUARD",
   "HTTPS_LISTENER_PORT",
+  "DESKTOP_APP",
   "NODE_ENV",
   "HOME",
   "PATH",
