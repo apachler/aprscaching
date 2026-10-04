@@ -160,13 +160,18 @@ export function AccountSettings(props: {
                   variant="quiet"
                   disabled={busy || verifying === c.callsign}
                   aria-expanded={verifying === c.callsign}
+                  hint="Prove you hold this callsign: on the air, through ampr.org or with LoTW"
                   onClick={() => setVerifying(c.callsign)}
                 >
                   verify
                 </Button>
               )}
               {!c.active && (
-                <Button disabled={busy} onClick={() => setActive(c.callsign)}>
+                <Button
+                  disabled={busy}
+                  hint="Log finds and hides as this callsign from now on"
+                  onClick={() => setActive(c.callsign)}
+                >
                   Set active
                 </Button>
               )}
@@ -200,7 +205,7 @@ export function AccountSettings(props: {
       <EmailSettings email={email} pendingEmail={pendingEmail ?? null} onChanged={refresh} />
       <Passkeys />
       <div className="row end wrap gap-2 mt-3">
-        <Button onClick={endEverywhere} disabled={busy}>
+        <Button onClick={endEverywhere} disabled={busy} hint="Sign out every device on this account, this one included">
           Sign out everywhere
         </Button>
         <Button variant="danger" onClick={signOut}>

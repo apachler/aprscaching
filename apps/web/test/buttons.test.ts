@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Buttons in the source, read with the TypeScript parser: every button outside the ui/ primitives is the Button
-// component, and every icon-only Button carries an accessible name (WCAG 4.1.2), since its icon has none.
+// component, and every icon-only Button carries an accessible name (WCAG 4.1.2: aria-label, or the hint it takes as
+// its name), since its icon has none.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,7 +61,7 @@ describe("buttons", () => {
   it("have an accessible name when they show only an icon", () => {
     const unnamed = all
       .filter((b) => /^"icon(-subtle)?"$/.test(b.attrs.get("variant") ?? ""))
-      .filter((b) => !b.attrs.has("aria-label") && !b.attrs.has("title") && !b.attrs.has("...spread"))
+      .filter((b) => !["aria-label", "hint", "title", "...spread"].some((a) => b.attrs.has(a)))
       .map((b) => b.where);
     expect(unnamed).toEqual([]);
   });

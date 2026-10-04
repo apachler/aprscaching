@@ -61,6 +61,20 @@
     color: var(--muted);
     font-size: var(--text-data);
   }
+  /* a toggled-off group keeps its one-line help above the reason it is off */
+  .group-off {
+    padding: 0 var(--space-md) var(--space-md);
+  }
+  .group-off .group-reason {
+    padding: 0;
+  }
+  .group-help {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-data);
+  }
+  .group-help + .setrow {
+    border-top: none;
+  }
   /* the label keeps at least 12rem; a control too wide to sit beside it wraps onto its own line */
   .setrow {
     display: flex;

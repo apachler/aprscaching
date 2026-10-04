@@ -29,7 +29,9 @@ import {
   Panel,
   useConfirm,
   useToast,
+  InfoTip,
 } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import type { AttentionLog, QueuedLog } from "./logQueue.js";
 
 /** When the log was made: its signed time, else when it was queued. */
@@ -93,7 +95,11 @@ export function OutboxPanel(props: { onClose: () => void }) {
         <EmptyState>Every log is synced. A log made without a connection waits here until it can be sent.</EmptyState>
       ) : (
         <>
-          <Group title="Needs attention" status={attention.length ? `${attention.length}` : "none"}>
+          <Group
+            title="Needs attention"
+            help="Logs the instance refused: fix and retry each one, or discard it."
+            status={attention.length ? `${attention.length}` : "none"}
+          >
             {attention.length === 0 ? (
               <p className="muted">Nothing was refused.</p>
             ) : (
@@ -109,7 +115,11 @@ export function OutboxPanel(props: { onClose: () => void }) {
               </ul>
             )}
           </Group>
-          <Group title="Waiting to send" status={queue.length ? `${queue.length}` : "none"}>
+          <Group
+            title="Waiting to send"
+            help="Logs made without a connection. They send as soon as one returns."
+            status={queue.length ? `${queue.length}` : "none"}
+          >
             {queue.length === 0 ? (
               <p className="muted">Nothing is waiting.</p>
             ) : (
@@ -218,6 +228,10 @@ function RadioFallback(props: { log: QueuedLog<QueueBody>; serviceCall: string |
   };
   return (
     <Disclosure label="Send it from a radio">
+      <p className="muted fine">
+        Send this as an APRS message to the instance&apos;s service call.{" "}
+        <InfoTip text={TERMS["service-call"]} label="What is the service call?" />
+      </p>
       <CommandBlock label={`APRS message to ${props.serviceCall}`} command={text} />
       <Button variant="quiet" onClick={() => void sent()}>
         I sent it by radio

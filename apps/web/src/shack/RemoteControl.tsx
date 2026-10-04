@@ -4,6 +4,7 @@ import type * as maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Icon } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
@@ -156,7 +157,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       {signedIn && unpaired && <p className="muted">Pair this box to your account before sending it commands.</p>}
 
       <div className="row wrap gap-2">
-        <Button onClick={() => send("status")} disabled={!ready}>
+        <Button onClick={() => send("status")} disabled={!ready} hint="Ask the box to report its ports and settings">
           ↻ Status
         </Button>
         <Button
@@ -169,16 +170,16 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
           <Icon name="place" cp437="" className="lead-ic" />
           Beacon here
         </Button>
-        <Button onClick={() => send("igate", { on: true })} disabled={!canTx}>
+        <Button onClick={() => send("igate", { on: true })} disabled={!canTx} hint={TERMS.igate}>
           IGate on
         </Button>
         <Button onClick={() => send("igate", { on: false })} disabled={!canTx}>
           IGate off
         </Button>
-        <Button onClick={() => send("digi", { on: true })} disabled={!canTx}>
+        <Button onClick={() => send("digi", { on: true })} disabled={!canTx} hint={TERMS.digipeater}>
           Digi on
         </Button>
-        <Button onClick={() => send("tx", { on: false })} disabled={!canTx}>
+        <Button onClick={() => send("tx", { on: false })} disabled={!canTx} hint="Stop the box from transmitting">
           TX off
         </Button>
       </div>

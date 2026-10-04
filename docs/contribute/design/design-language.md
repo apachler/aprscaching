@@ -167,7 +167,8 @@ in every theme.
 - Every control works with a keyboard. Focus is always visible and never hidden behind a sheet or the top bar.
 - Touch targets are at least 44 px, and never under 24 px with spacing.
 - The map is never the only way to reach something: Nearby, search and the zoom buttons work without dragging.
-- Help sits in the same place on every surface: the manual button in the top bar.
+- Help is one step away everywhere: a control shows a one-line hint on hover and keyboard focus, the small
+  **i** explains a term on a tap, and **Manual** in the nav opens the published manual in a new tab.
 - Status messages (toasts, an incoming message) are announced politely.
 
 ## Next

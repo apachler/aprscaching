@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getMeshcomNodes, type MeshcomNode } from "../api.js";
 import { useFmt } from "../format.js";
+import { Hint } from "../ui/index.js";
 import {
   batteryText,
   deviceText,
@@ -47,9 +48,12 @@ export function MeshcomSection(props: { callsign: string }) {
         </p>
       ))}
       {sent && (
-        <p className="muted" title={SENT_VIA_HINT}>
-          {sent}. {node.via === "node" ? "Everything sent through this node is forwarded only by them." : SENT_VIA_HINT}
-        </p>
+        <Hint text={SENT_VIA_HINT}>
+          <p className="muted">
+            {sent}.{" "}
+            {node.via === "node" ? "Everything sent through this node is forwarded only by them." : SENT_VIA_HINT}
+          </p>
+        </Hint>
       )}
       <p className="fine">
         <a href={meshmapUrl(node.callsign)} target="_blank" rel="noopener noreferrer">

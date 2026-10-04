@@ -177,7 +177,6 @@ const SURFACES = [
   { name: "tools", as: "user", query: "?view=tools" },
   { name: "rig", as: "user", query: "?view=rig" },
   { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
-  { name: "docs", as: "user", query: "?view=docs&doc=index" },
   { name: "admin", as: "sysop", query: "?view=admin" },
   { name: "node", as: "sysop", query: "?view=node" },
   { name: "remote", as: "sysop", query: "?view=remote" },

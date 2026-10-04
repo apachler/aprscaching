@@ -8,8 +8,6 @@ export interface PlatformValue {
   session: SessionState;
   /** The MapLibre map, or null until its container mounts. */
   map: maplibregl.Map | null;
-  /** Open the in-app manual at a page (and an anchor in it). */
-  openDocs?: (slug: string, anchor?: string) => void;
 }
 
 export const PlatformContext = createContext<PlatformValue | null>(null);

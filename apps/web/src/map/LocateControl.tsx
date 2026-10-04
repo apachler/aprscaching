@@ -163,7 +163,7 @@ export function LocateControl(props: { map: maplibregl.Map | null; onFix: (lat: 
             data-blocked={blocked && mode === "off" ? "" : undefined}
             aria-pressed={mode !== "off"}
             aria-label={blocked && mode === "off" ? blockedLabel : LABEL[mode]}
-            title={blocked && mode === "off" ? blockedLabel : LABEL[mode]}
+            hint={blocked && mode === "off" ? blockedLabel : LABEL[mode]}
             onClick={onClick}
           >
             <Icon name="locate" size={18} />

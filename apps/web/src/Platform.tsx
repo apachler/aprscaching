@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as maplibregl from "maplibre-gl";
 import "./styles/vendor/maplibre.css";
 import "./styles/index.css";
@@ -100,8 +100,6 @@ import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
 import { MeshcomLinks } from "./meshcom/MeshcomLinks.js";
 import { GRATICULE_PAINT, paintFromTokens, useAppliedTheme } from "./map/mapPaint.js";
-// The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
-const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // Keyless online basemap by default: OpenFreeMap's OSM vector tiles (free, no key, no usage caps —
@@ -265,8 +263,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     spotFiltersRef.current = spotFilters;
   }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
-  const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
-  const [docAnchor, setDocAnchor] = useState("");
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
   const [sysopKnown, setSysopKnown] = useState(false); // the operator check has answered (or nobody is signed in)
   const sysopRef = useRef(sysop);
@@ -492,7 +488,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (operatorOnly && !sysopKnown) return;
     deepLinked.current = true;
     if (!v) return;
-    if (v.kind === "panel" && v.key === "docs") setDocSlug(new URLSearchParams(initialQuery).get("doc") || "index");
     openView(v);
   }, [initialQuery, openView, sysopKnown]);
 
@@ -830,15 +825,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedApps.map((a) => a.id)]);
   const tabKeys = new Set(TAB_ITEMS.map((i) => i.key));
   const moreKeys = new Set<string>(MORE_ITEMS.map((i) => i.key));
-  const openDocs = useCallback(
-    (slug: string, anchor = "") => {
-      setDocSlug(slug);
-      setDocAnchor(anchor);
-      openView(panel("docs"));
-    },
-    [openView],
-  );
-  const ctx = useMemo(() => ({ session, map, openDocs }), [session, map, openDocs]);
+  const ctx = useMemo(() => ({ session, map }), [session, map]);
 
   // the bell's count: unseen watchlist alerts, polled while signed in and on every panel change
   const [unseenAlerts, setUnseenAlerts] = useState(0);
@@ -875,7 +862,6 @@ export default function Platform({ session, startTour }: { session: SessionState
             onNearby={() => openView(panel("nearby"))}
             onActivity={() => openView(panel("activity"))}
             onProfile={() => openView(panel("profile"))}
-            onDocs={() => openView(panel("docs"))}
             sysop={sysop}
             onAdmin={() => openView(panel("admin"))}
             alerts={unseenAlerts}
@@ -995,7 +981,6 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onFly={(lat, lon) => flyTo(lat, lon, 12)}
                 operatorPending={operatorPending}
                 onSignIn={() => openView(panel("signin"))}
-                onDocs={() => openView(panel("docs"))}
                 onTour={() => {
                   openView(MAP);
                   setTourOpen(true);
@@ -1003,25 +988,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onClose={closeView}
               />
             )}
-            {isPanel("admin") && sysop && (
-              <AdminPanel
-                onDocs={(slug) => {
-                  setDocSlug(slug);
-                  openView(panel("docs"));
-                }}
-                onClose={closeView}
-              />
-            )}
-            {isPanel("docs") && (
-              <Suspense fallback={null}>
-                <DocsPanel
-                  key={`${docSlug}#${docAnchor}`}
-                  initialSlug={docSlug}
-                  initialAnchor={docAnchor}
-                  onClose={closeView}
-                />
-              </Suspense>
-            )}
+            {isPanel("admin") && sysop && <AdminPanel onClose={closeView} />}
 
             <div className="mapwrap">
               <div ref={setMapNode} className="map" data-tour="map" />
@@ -1170,8 +1137,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               onClose={() => setMoreOpen(false)}
               onPick={(key) => {
                 setMoreOpen(false);
-                if (key === "docs") openView(panel("docs"));
-                else onNav(key);
+                onNav(key);
               }}
             />
           )}

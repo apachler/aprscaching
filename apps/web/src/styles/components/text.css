@@ -28,4 +28,9 @@
     margin-inline-end: var(--space-xs);
     flex: none;
   }
+  /* a link that leaves the app (the manual) ends in the external-link icon */
+  .ext-ic {
+    vertical-align: -0.1em;
+    margin-inline-start: var(--space-2xs);
+  }
 }

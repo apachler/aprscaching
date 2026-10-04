@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // @vitest-environment jsdom
-// Every ```mermaid block in the repository's Markdown parses with the Mermaid the app and the manual ship, so a
-// diagram never reaches a reader as a syntax error; and the in-app renderer leaves each block as a placeholder
-// that shows its source until it is drawn.
+// Every ```mermaid block in the repository's Markdown parses with the Mermaid the published manual ships
+// (tools/dev/docs-theme.mjs copies this package's locked build into the site), so a diagram never reaches a reader
+// as a syntax error.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { renderMarkdown } from "../src/docs/markdown.js";
 
 const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const FILES = execFileSync("git", ["ls-files", "*.md"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
@@ -31,19 +30,5 @@ describe("Mermaid diagrams in the docs", () => {
   it.each(DIAGRAMS.map((d) => [`${d.file}:${d.line}`, d.source] as const))("%s parses", async (_where, source) => {
     const { default: mermaid } = await import("mermaid");
     await expect(mermaid.parse(source)).resolves.toBeTruthy();
-  });
-
-  it("the in-app renderer keeps a diagram's source in a placeholder", () => {
-    const html = renderMarkdown("```mermaid\nflowchart LR\n  a --> b\n```", "x");
-    expect(html).toBe(
-      '<div class="doc-diagram" data-mermaid><pre><code class="lang-mermaid">flowchart LR\n  a --&gt; b</code></pre></div>',
-    );
-  });
-
-  it("an admonition title renders its inline Markdown", () => {
-    const html = renderMarkdown('!!! tip "New here? [Start here](play/index.md)"\n    Body.', "index");
-    expect(html).toContain(
-      '<p class="doc-adm-t">New here? <a href="?view=docs&doc=play%2Findex" data-doc="play/index"',
-    );
   });
 });

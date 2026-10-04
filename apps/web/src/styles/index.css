@@ -30,6 +30,7 @@
 @import "./components/command.css";
 @import "./components/switch.css";
 @import "./components/tour.css";
+@import "./components/hint.css";
 @import "./components/dialog.css";
 @import "./components/hittarget.css";
 @import "./components/density.css";
@@ -51,7 +52,6 @@
 @import "./surfaces/messages.css";
 @import "./surfaces/offline.css";
 @import "./surfaces/landing.css";
-@import "./surfaces/docs.css";
 @import "./themes/phosphor.css";
 @import "./surfaces/demo.css";
 @import "./utilities.css";

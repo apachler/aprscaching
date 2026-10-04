@@ -96,7 +96,7 @@ Austria: Fernmeldebehörde. Germany: Bundesnetzagentur.
 
 Type: Fredoka and IBM Plex Mono (SIL Open Font License 1.1); the Phosphor theme's CP437 face is from The Ultimate
 Oldschool PC Font Pack v2.2 by VileR (int10h.org), CC BY-SA 4.0. Built on open source, among others React, MapLibre
-GL, uPlot, zod, Mermaid, pmtiles, fflate and node-forge: the web app serves the copyright notices and licence texts
+GL, uPlot, zod, pmtiles, fflate and node-forge: the web app serves the copyright notices and licence texts
 of every library in its bundle at `/third-party-notices.txt`. The desktop app includes the Bun runtime (MIT, with
 JavaScriptCore under the LGPL 2.1); its notices ship beside the binary. The same credits appear in-app under
 *Settings → Help & credits*.

@@ -13,11 +13,13 @@ import {
   LicenceBadge,
   ErrorState,
   Icon,
+  InfoTip,
+  Hint,
 } from "../ui/index.js";
 import { badgeInfo } from "./badges.js";
 import { RadioLogs } from "./RadioLogs.js";
 import { usePlatform } from "../platform/PlatformContext.js";
-import { TermHelp } from "../platform/TermHelp.js";
+import { TERMS } from "../terms.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
@@ -100,11 +102,7 @@ export function ProfilePanel(props: {
             ) : (
               <>
                 <Badge title="Verify control of your callsign to enable transmit">unverified</Badge>{" "}
-                <Button
-                  variant="quiet"
-                  title="Verify control of your callsign in Settings → Account"
-                  onClick={props.onSettings}
-                >
+                <Button variant="quiet" hint="Open Settings to prove you hold this callsign" onClick={props.onSettings}>
                   Verify callsign
                 </Button>
               </>
@@ -146,17 +144,25 @@ export function ProfilePanel(props: {
             </div>
           )}
           {profile && (profile.corroborations ?? 0) > 0 && (
-            <p title="Finds your receiving stations heard on the air and made Radio-verified">
-              <Badge kind="tierA">⇅ Infrastructure</Badge> <strong>{profile.corroborations}</strong> finds corroborated{" "}
-              <TermHelp term="corroboration" />
+            <p>
+              <Badge kind="tierA" title="Finds your receiving stations heard on the air and made Radio-verified">
+                ⇅ Infrastructure
+              </Badge>{" "}
+              <strong>{profile.corroborations}</strong> finds corroborated{" "}
+              <InfoTip text={TERMS.corroboration} label="What is corroboration?" />
             </p>
           )}
           {profile && profile.badges.length > 0 && (
             <div className="badges">
               {profile.badges.map((b) => {
                 const info = badgeInfo(b.badge);
-                return (
-                  <span key={b.badge} className="award" title={info.how || undefined}>
+                const award = <span className="award">{info.name}</span>;
+                return info.how ? (
+                  <Hint key={b.badge} text={info.how}>
+                    {award}
+                  </Hint>
+                ) : (
+                  <span key={b.badge} className="award">
                     {info.name}
                   </span>
                 );
@@ -173,11 +179,11 @@ export function ProfilePanel(props: {
       <Group title="Advanced — the Shack" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
         <div className="row wrap">
-          <Button onClick={props.onShack}>
+          <Button onClick={props.onShack} hint="Open the radio apps launcher">
             <Icon name="antenna" cp437="" className="lead-ic" />
             Shack
           </Button>
-          <Button onClick={props.onMail}>
+          <Button onClick={props.onMail} hint="Read and write packet-radio mail and bulletins">
             <Icon name="message" cp437="" className="lead-ic" />
             BBS
           </Button>

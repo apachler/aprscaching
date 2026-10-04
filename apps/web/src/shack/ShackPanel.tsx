@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Panel, Icon, Button } from "../ui/index.js";
+import { Panel, Icon, Button, InfoTip, Hint } from "../ui/index.js";
 import type { ShackApp, ShackAppId } from "./apps.js";
-import { TermHelp } from "../platform/TermHelp.js";
+import { TERMS } from "../terms.js";
 
 /**
  * Shack — a pure app launcher. Every shack app (terminal, BBS, decoder, NET/ROM node, tools,
@@ -29,8 +29,7 @@ export function ShackPanel(props: {
       <p className="muted">
         Your <strong>field station</strong>: these apps drive a radio straight from this browser (Web Serial / Bluetooth
         / audio) or run on the platform — so you can operate off-grid with just a laptop and a rig, no server box.
-        Launch one, or pin it to the left rail.
-        <TermHelp term="shack" />
+        Launch one, or pin it to the left rail. <InfoTip text={TERMS.shack} label="What is the Shack?" />
       </p>
 
       <div className="shack-apps" role="list">
@@ -44,10 +43,9 @@ export function ShackPanel(props: {
                   <span className="shack-app-label">
                     {app.label}
                     {app.sysop && (
-                      <span className="shack-app-op" title="Operator only — administers this instance's server RF box">
-                        {" "}
-                        · operator
-                      </span>
+                      <Hint text="For the instance's operator only: it runs this instance's own radio box">
+                        <span className="shack-app-op"> · operator</span>
+                      </Hint>
                     )}
                   </span>
                   <span className="shack-app-blurb muted">{app.blurb}</span>
@@ -57,7 +55,7 @@ export function ShackPanel(props: {
                 variant="icon"
                 className={`shack-pin${pinned ? " on" : ""}`}
                 aria-pressed={pinned}
-                title={pinned ? `Unpin ${app.label} from the rail` : `Pin ${app.label} to the rail`}
+                hint={pinned ? `Unpin ${app.label} from the rail` : `Pin ${app.label} to the rail`}
                 onClick={() => props.onTogglePin(app.id)}
               >
                 <Icon name={pinned ? "pin-off" : "pin"} size={16} />

@@ -13,10 +13,10 @@
  *  4. Links — every relative link in the root documents and READMEs (outside the mkdocs build, which
  *     checks its own) points at a file that exists.
  *  5. Diagrams — a fenced block in the manual, the READMEs or the rules draws no picture in box-drawing
- *     characters: a diagram is a ```mermaid block, which the manual and the in-app reader both draw. Real
+ *     characters: a diagram is a ```mermaid block, which the manual draws. Real
  *     terminal output that uses them is marked by an `<!-- ascii-ok: <what it is> -->` line right above it.
  *  6. Stale references — pages move without redirects, so every reference to a manual page or heading in any
- *     tracked file (paths, published URLs, in-app slugs, the doctor's hints) must still resolve.
+ *     tracked file (paths, published URLs, the app's manual links, the doctor's hints) must still resolve.
  *  7. Lists — a list item MkDocs would read as paragraph text, for want of a blank line before it.
  *
  * Pure word and path matching over the tracked files, with no dependency, so it runs before install.
@@ -187,8 +187,9 @@ for (const f of PROSE.filter((f) => !f.startsWith("docs/"))) {
 
 // ---------------------------------------------------------------- 6. no stale references to the manual
 // Manual pages move without redirects, so every reference to one, in any tracked file, must name a page (and a
-// heading) that exists: `docs/…md` paths in code, scripts and comments, the published URL, the in-app reader's
-// `doc=` slugs, the doctor's `$DOCS_URL/…` hints and the configuration schema's links (relative to
+// heading) that exists: `docs/…md` paths in code, scripts and comments, the published URL, the web app's
+// `manualUrl("page", "anchor")` calls and `<ManualLink page="…" anchor="…">` links, the doctor's `$DOCS_URL/…`
+// hints and the configuration schema's links (relative to
 // docs/reference/, where they are rendered). Links inside the manual are checked by `mkdocs build --strict`.
 /** The published manual: a page is `<site>/<path>/`, the home page the bare site. */
 const SITE_URL = /apachler\.github\.io\/aprscaching\/([\w/-]*?)\/?(?:#([\w-]+))?(?=[)\s"'>`]|$)/g;
@@ -217,7 +218,8 @@ function anchorsOf(page) {
       for (let n = 1; !id && set.has(a); n++) a = `${slug(h[1])}_${n}`;
       set.add(a);
     }
-    for (const m of read(`docs/${page}`).matchAll(/\{\s*#([\w-]+)\s*\}|<a id="([\w-]+)"/g)) set.add(m[1] ?? m[2]);
+    for (const m of read(`docs/${page}`).matchAll(/\{\s*#([\w-]+)\s*\}|<(?:a|span) id="([\w-]+)"/g))
+      set.add(m[1] ?? m[2]);
     anchorCache.set(page, set);
   }
   return anchorCache.get(page);
@@ -246,8 +248,10 @@ for (const f of TEXT) {
         const page = !p ? "index.md" : existsSync(join(root, "docs", `${p}.md`)) ? `${p}.md` : `${p}/index.md`;
         checkRef(f, i + 1, page, m[2], m[0]);
       }
-      for (const m of text.matchAll(/(?:[?&]doc=|onDocs\(")([\w/%-]+)(?:#([\w-]+))?/g))
-        checkRef(f, i + 1, `${decodeURIComponent(m[1])}.md`, m[2], m[0]);
+      for (const m of text.matchAll(/manualUrl\(\s*"([\w/-]+)"(?:\s*,\s*"([\w-]+)")?/g))
+        checkRef(f, i + 1, `${m[1]}.md`, m[2], m[0]);
+      for (const m of text.matchAll(/<ManualLink\b[^>]*?\bpage="([\w/-]+)"(?:[^>]*?\banchor="([\w-]+)")?/g))
+        checkRef(f, i + 1, `${m[1]}.md`, m[2], m[0]);
       for (const m of text.matchAll(/\$DOCS_URL\/([\w./-]+\.md)(?:#([\w-]+))?/g)) checkRef(f, i + 1, m[1], m[2], m[0]);
       if (f === "packages/shared/src/configdocs.ts")
         for (const m of text.matchAll(/\]\(([\w./-]+\.md)(?:#([\w-]+))?\)/g))

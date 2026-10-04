@@ -14,6 +14,8 @@ import { Disclosure } from "./Disclosure.js";
  */
 export function Group(props: {
   title: string;
+  /** One line on what the group is for, shown at the top of its body. */
+  help?: ReactNode;
   status?: string;
   defaultOpen?: boolean;
   reason?: ReactNode;
@@ -44,13 +46,15 @@ export function Group(props: {
       </header>
       {open &&
         (masterOff ? (
-          props.reason && (
-            <p id={bodyId} className="group-reason">
-              {props.reason}
-            </p>
+          (props.reason || props.help) && (
+            <div id={bodyId} className="group-off">
+              {props.help && <p className="muted group-help">{props.help}</p>}
+              {props.reason && <p className="group-reason">{props.reason}</p>}
+            </div>
           )
         ) : (
           <div id={bodyId} className="group-body">
+            {props.help && <p className="muted group-help">{props.help}</p>}
             {props.children}
           </div>
         ))}

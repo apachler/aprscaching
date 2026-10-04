@@ -309,7 +309,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
               <div className="muted fine">{t.manifest.description}</div>
               <div className="tool-surfaces">
                 {t.manifest.surfaces.map((s) => (
-                  <Badge key={s}>{s}</Badge>
+                  <Badge key={s} title="Where this tool shows up">
+                    {s}
+                  </Badge>
                 ))}
               </div>
               <div className="tool-perms">perms: {perms(t.manifest.permissions)}</div>
@@ -393,7 +395,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 <span className="muted fine">
                   v{e.version} · {e.author}
                 </span>{" "}
-                <Badge kind="found">verified</Badge>
+                <Badge kind="found" title="Listed in the signed tool registry this instance trusts">
+                  verified
+                </Badge>
                 {e.description && <div className="muted fine">{e.description}</div>}
               </div>
               <Button

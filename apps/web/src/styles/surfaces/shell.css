@@ -96,6 +96,23 @@
   .topbar button.icon {
     color: var(--chrome-ink);
   }
+  /* the manual: a link out of the app, in the look of the top bar's icon buttons */
+  .topbar .help-ic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--hit);
+    min-height: var(--hit);
+    border-radius: var(--radius-control);
+    color: var(--chrome-ink);
+  }
+  .topbar .help-ic:hover {
+    background: var(--chrome-hover-bg);
+  }
+  .topbar .help-ic:focus-visible {
+    outline: 2px solid var(--chrome-ink);
+    outline-offset: 2px;
+  }
   /* the alert bell (TopBar.tsx): the unseen count on the accent, over the icon's corner */
   .topbar .bell-ic {
     position: relative;
@@ -116,7 +133,8 @@
     box-shadow: 0 0 0 2px var(--topbar-bg);
   }
   /* ---- operator nav rail + 3-pane docking (≥1024px) ---- */
-  .rail button {
+  .rail button,
+  .rail .rail-link {
     width: 48px;
     height: 48px;
     border: none;
@@ -131,8 +149,10 @@
     gap: 3px;
     font-size: var(--text-micro);
     letter-spacing: 0.01em;
+    text-decoration: none;
   }
-  .rail button:hover {
+  .rail button:hover,
+  .rail .rail-link:hover {
     background: color-mix(in oklch, var(--ink) 8%, transparent);
     color: var(--ink);
   }
@@ -140,7 +160,8 @@
     background: var(--selected-bg);
     color: var(--heading);
   }
-  .rail button:focus-visible {
+  .rail button:focus-visible,
+  .rail .rail-link:focus-visible {
     outline: 2px solid var(--heading);
     outline-offset: 2px;
   }
@@ -280,6 +301,15 @@
     font-weight: 500;
     text-align: left;
   }
+  a.more-item {
+    text-decoration: none;
+  }
+  .more-hint {
+    display: block;
+    color: var(--muted);
+    font-size: var(--text-caption);
+    font-weight: 400;
+  }
   .more-item:hover {
     background: color-mix(in oklch, var(--ink) 6%, transparent);
   }
@@ -331,13 +361,9 @@
       width: 80px;
     }
     /* a phone's row holds wordmark + filter + search + alerts + identity: a smaller wordmark and a tighter
-     identity chip keep the chip's status whole instead of clipping it at the edge. The manual is in the More
-     sheet, so its top-bar button makes room for the bell. */
+     identity chip keep the chip's status whole instead of clipping it at the edge. */
     .topbar .logo {
       height: 21px;
-    }
-    .topbar .help-ic {
-      display: none;
     }
     .idchip {
       padding: 0 var(--space-sm);

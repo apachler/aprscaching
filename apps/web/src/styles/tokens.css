@@ -205,7 +205,7 @@
     --shade: oklch(0 0 none);
     --tint: oklch(1 0 none);
 
-    /* diagrams (Mermaid, in the in-app manual and the published one): brand-tinted boxes, hairline edges */
+    /* diagrams (Mermaid, in the published manual): brand-tinted boxes, hairline edges */
     --diagram-node-bg: color-mix(in oklab, var(--brand) 22%, var(--surface)); /* oklab: no hue swing toward white */
     --diagram-node-line: var(--heading);
     --diagram-ink: var(--ink);

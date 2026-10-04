@@ -11,7 +11,7 @@
  *     (color-mix of the brand, say) are worked out again for the scheme Material puts on the body;
  *   - absolute /fonts/ URLs become relative to the stylesheet.
  * It copies the fonts and brand images the manual uses into docs/assets/, and Mermaid's browser build from the
- * web app's locked dependency into docs/assets/vendor/ (not committed: the docs workflow runs this first).
+ * web app's locked dev dependency into docs/assets/vendor/ (not committed: the docs workflow runs this first).
  *
  * If tokens.css changes shape (a theme selector or the layer wrapper this relies on goes missing), it fails
  * rather than writing a theme with a scheme silently missing.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * A design token as a plain colour, for the places that cannot read CSS custom properties or OKLCH: MapLibre
- * paint, Mermaid and the browser's theme-color meta. The browser resolves the token (var(), OKLCH, color-mix);
+ * paint and the browser's theme-color meta. The browser resolves the token (var(), OKLCH, color-mix);
  * cssColorToHex turns what getComputedStyle reports into #rrggbb.
  */
 

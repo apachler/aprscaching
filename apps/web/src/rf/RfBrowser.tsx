@@ -17,7 +17,19 @@ import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
 import { NAV_MAX_AGE_MS } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Row, Switch, EmptyState, Disclosure, useToast, useConfirm, Icon, Segmented } from "../ui/index.js";
+import {
+  Button,
+  Row,
+  Switch,
+  EmptyState,
+  Disclosure,
+  useToast,
+  useConfirm,
+  Icon,
+  Segmented,
+  InfoTip,
+} from "../ui/index.js";
+import { TERMS } from "../terms.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
@@ -313,12 +325,21 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
         ) : (
           <>
             {serialOk && (
-              <Button variant="primary" onClick={() => connect("serial")} disabled={busy}>
+              <Button
+                variant="primary"
+                onClick={() => connect("serial")}
+                disabled={busy}
+                hint="Pick the USB serial port of a KISS TNC"
+              >
                 {busy ? "…" : "Connect USB radio"}
               </Button>
             )}
             {bleOk && (
-              <Button onClick={() => connect("ble")} disabled={busy}>
+              <Button
+                onClick={() => connect("ble")}
+                disabled={busy}
+                hint="Pair a Bluetooth KISS TNC, such as a Mobilinkd"
+              >
                 {busy ? "…" : "Connect Bluetooth"}
               </Button>
             )}
@@ -326,7 +347,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <Button
                 onClick={() => connect("audio")}
                 disabled={busy}
-                title="Decode APRS audio from a radio via the soundcard — no TNC"
+                hint="Decode 1200-baud APRS audio from your radio through the sound card, with no TNC"
               >
                 {busy ? "…" : "Soundcard AFSK"}
               </Button>
@@ -335,7 +356,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <Button
                 onClick={() => connect("mesh")}
                 disabled={busy}
-                title="Read a Meshtastic/LoRa node's positions over USB"
+                hint="Read the positions a Meshtastic node hears, over USB"
               >
                 {busy ? "…" : "Meshtastic node"}
               </Button>
@@ -375,7 +396,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           </Row>
           {fwdOn && (
             <>
-              <Row label="Auth">
+              <Row label="Auth" help="How the gateway knows the frames come from you">
                 <Segmented
                   label="Auth"
                   value={mode}
@@ -441,7 +462,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               </Row>
               {txOn && (
                 <>
-                  <Row label="TX callsign">
+                  <Row
+                    label={
+                      <>
+                        TX callsign <InfoTip text={TERMS.ssid} label="What is an SSID?" />
+                      </>
+                    }
+                  >
                     <span className="mono">{base}-</span>
                     <input
                       className="field-sm mono"
@@ -472,7 +499,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     <Button
                       onClick={() => void fillMyLocation()}
                       disabled={!!loc.waiting}
-                      title="Use my location"
+                      hint="Fill in your current location"
                       aria-label="Use my location"
                     >
                       <Icon name="place" cp437="@" className="lead-ic" />
@@ -538,7 +565,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <Button
                 onClick={syncBack}
                 disabled={heardN === 0}
-                title="Replay locally-heard frames to a gateway when back online"
+                hint="Send the frames heard here while offline to a gateway, now that you are online"
               >
                 Sync {heardN} heard
               </Button>

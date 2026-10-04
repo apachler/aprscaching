@@ -46,7 +46,7 @@ the real benefit, not novelty.
 - **Theming MUST be token-driven**: a theme is a token set on the root, `:root` (Dark, the default) overridden by
   `:root[data-theme="light"]` and `:root[data-theme="phosphor"]`, each with its `color-scheme`. JS only picks the
   theme (Auto resolves the system preference; the head script applies it before the first paint) — **no JS theme
-  recomputation, no inline color math.** A colour that must exist outside CSS (MapLibre paint, Mermaid, the
+  recomputation, no inline color math.** A colour that must exist outside CSS (MapLibre paint, the
   `theme-color` meta) is read from its token at use time (`tokenColor.ts`), never duplicated as a literal.
 - **Scales are role-named.** Type, space, radius, elevation and motion come from `--text-*`, `--space-*`,
   `--radius-*`, `--elevation-*` and `--motion-*`, named for the role they play (`--text-label`,

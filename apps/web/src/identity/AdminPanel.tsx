@@ -69,6 +69,7 @@ import {
   useLoad,
   Disclosure,
   Icon,
+  ManualLink,
 } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -79,7 +80,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
  * rendered when `/api/admin/whoami` reports the signed-in account is an operator (ADMIN_CALLSIGNS); every
  * write here is sysop-gated server-side, so this is a convenience surface over already-protected endpoints.
  */
-export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () => void }) {
+export function AdminPanel(props: { onClose: () => void }) {
   const { callsign, map } = usePlatform();
   // the Setup checklist
   const setup = useLoad(() => getAdminSetup(), []);
@@ -116,47 +117,92 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
       </label>
 
       {show("setup", "checklist", "install", "secrets", "wizard") && (
-        <Group title="Setup" status="first-install checklist" defaultOpen={true}>
-          <SetupAdmin setup={setup} onDocs={props.onDocs} />
+        <Group
+          title="Setup"
+          status="first-install checklist"
+          help="What this instance still needs before sign-in, ingest and the public network work."
+          defaultOpen={true}
+        >
+          <SetupAdmin setup={setup} />
         </Group>
       )}
       {show("verification", "verify", "callsign", "manual", "licence", "sysop") && (
-        <Group title="Callsign verification" status="manual" defaultOpen={false}>
+        <Group
+          title="Callsign verification"
+          status="manual"
+          help="Mark a callsign as verified by hand, for an operator no receiving station can hear."
+          defaultOpen={false}
+        >
           <VerificationAdmin />
         </Group>
       )}
       {show("stations", "club", "member", "digipeater", "igate", "list") && (
-        <Group title="Stations for members" status="club stations" defaultOpen={false}>
+        <Group
+          title="Stations for members"
+          status="club stations"
+          help="List a club station under a member who does not hold its call, so they can manage it."
+          defaultOpen={false}
+        >
           <StationsAdmin />
         </Group>
       )}
       {show("adoption", "adopt", "caches", "owner", "withdrawn", "assign", "orphan") && (
-        <Group title="Cache adoption" status="owners" defaultOpen={false}>
+        <Group
+          title="Cache adoption"
+          status="owners"
+          help="Offer withdrawn or abandoned caches to new owners, and approve or assign one."
+          defaultOpen={false}
+        >
           <AdoptionAdmin />
         </Group>
       )}
       {show("federation", "peers", "trust", "44net", "sync") && (
-        <Group title="Federation" status="peers & trust" defaultOpen={false}>
+        <Group
+          title="Federation"
+          status="peers & trust"
+          help="The instances this one mirrors caches and finds from, and how far it trusts each."
+          defaultOpen={false}
+        >
           <FederationAdmin />
         </Group>
       )}
       {show("forwarding", "fbb", "bbs", "partners", "rules", "mail") && (
-        <Group title="Forwarding" status="FBB / BBS" defaultOpen={false}>
+        <Group
+          title="Forwarding"
+          status="FBB / BBS"
+          help="The partner BBSes this instance forwards packet mail to over FBB, and the routing rules."
+          defaultOpen={false}
+        >
           <ForwardingAdmin />
         </Group>
       )}
       {show("trusted", "stations", "sites", "receiving", "tier a", "trust", "first_party_sites") && (
-        <Group title="Trusted receiving stations" status="Radio-verified finds" defaultOpen={false}>
+        <Group
+          title="Trusted receiving stations"
+          status="Radio-verified finds"
+          help="The attested sites: receiving stations whose direct hearings can make a find Radio-verified."
+          defaultOpen={false}
+        >
           <TrustedStationsAdmin rev={trustRev} />
         </Group>
       )}
       {show("boxes", "ingest", "enroll", "code", "revoke", "key", "trust", "lend", "receiver") && (
-        <Group title="Ingest boxes" status="enrollment & trust" defaultOpen={false}>
+        <Group
+          title="Ingest boxes"
+          status="enrollment & trust"
+          help="Let an operator's own radio computer send what it hears here, each with its own key."
+          defaultOpen={false}
+        >
           <BoxesAdmin onTrustChanged={() => setTrustRev((n) => n + 1)} />
         </Group>
       )}
       {show("ingest", "transports", "ports", "tak", "cot", "feed") && (
-        <Group title="Ingest & transports" status="data plane" defaultOpen={false}>
+        <Group
+          title="Ingest & transports"
+          status="data plane"
+          help="How packets reach this instance: its ports and transports, and the TAK / CoT feed."
+          defaultOpen={false}
+        >
           <IngestAdmin map={map} />
         </Group>
       )}
@@ -1120,7 +1166,7 @@ function AdoptionAdmin() {
                             <Button
                               disabled={busy !== null || c.noticeEndsAt > now}
                               aria-busy={busy === `r${r.id}`}
-                              title={c.noticeEndsAt > now ? "The owner's notice period is still running" : undefined}
+                              hint={c.noticeEndsAt > now ? "The owner's notice period is still running" : undefined}
                               onClick={() => void decide(c, r, "approve")}
                             >
                               Approve
@@ -1296,7 +1342,7 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
       <Button
         aria-expanded={false}
         disabled={props.disabled}
-        title={props.disabled ? "The owner's notice period is still running" : undefined}
+        hint={props.disabled ? "The owner's notice period is still running" : undefined}
         onClick={() => setOpen(true)}
       >
         Assign…
@@ -1375,7 +1421,6 @@ function SetupRow(props: { item: SetupItem }) {
  */
 function SetupAdmin(props: {
   setup: { data?: { items: SetupItem[] }; error: string | null; loading: boolean; reload: () => void };
-  onDocs: (slug: string) => void;
 }) {
   const { error, loading, reload: refresh } = props.setup;
   const items = props.setup.data?.items;
@@ -1427,9 +1472,7 @@ function SetupAdmin(props: {
       <p className="muted fine">
         Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
         <span className="mono">deploy/.env</span> or the systemd unit) and restart.{" "}
-        <Button variant="inline" onClick={() => props.onDocs("run/first-hour")}>
-          Your first hour as sysop
-        </Button>
+        <ManualLink page="run/first-hour">Your first hour as sysop</ManualLink>
       </p>
       <Button onClick={refresh} disabled={loading}>
         {loading ? "Checking…" : "Re-check"}
@@ -1526,7 +1569,11 @@ function FederationAdmin() {
               <li key={p.url}>
                 <Badge
                   kind={waiting ? undefined : p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
-                  title={`trust: ${p.trust}`}
+                  title={
+                    waiting
+                      ? "Found by discovery; never synced until you pick a trust level"
+                      : `Last sync ${p.health}; trust: ${p.trust}`
+                  }
                 >
                   {waiting ? "not enabled" : p.health}
                 </Badge>
@@ -1551,6 +1598,7 @@ function FederationAdmin() {
                     <Button
                       variant="primary"
                       aria-label={`Enable ${name} as unvetted`}
+                      hint="Start mirroring it, hidden on the map until you trust it"
                       onClick={() => void trust(p, "unvetted", `${name} enabled, unvetted`)}
                     >
                       Enable
@@ -1559,6 +1607,7 @@ function FederationAdmin() {
                   <Button
                     disabled={p.trust === "trusted"}
                     aria-label={`Trust ${name}`}
+                    hint="Mirror it, show it on the map and count it toward Tier A corroboration"
                     onClick={() => void trust(p, "trusted", `${name} trusted`)}
                   >
                     Trust
@@ -1566,6 +1615,7 @@ function FederationAdmin() {
                   <Button
                     disabled={p.trust === "unvetted"}
                     aria-label={`Unvet ${name}`}
+                    hint="Keep mirroring it, but hide it on the map by default"
                     onClick={() => void trust(p, "unvetted", `${name} unvetted`)}
                   >
                     Unvet
@@ -1574,6 +1624,7 @@ function FederationAdmin() {
                     variant="danger"
                     disabled={p.trust === "blocked"}
                     aria-label={`Block ${name}`}
+                    hint="Never mirror or show anything it signs"
                     onClick={() => void trust(p, "blocked", `${name} blocked`)}
                   >
                     Block

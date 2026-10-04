@@ -70,8 +70,7 @@ markdown_extensions:
       permalink: true
   - pymdownx.highlight:
       anchor_linenums: true
-  # ```mermaid blocks become diagrams, drawn by docs/javascripts/diagrams.js; the in-app reader draws the same
-  # blocks the same way (apps/web/src/docs/diagrams.ts). The class is not "mermaid", so Material's own
+  # ```mermaid blocks become diagrams, drawn by docs/javascripts/diagrams.js. The class is not "mermaid", so Material's own
   # Mermaid integration, which would fetch it from a CDN on every page, stays off.
   - pymdownx.superfences:
       custom_fences:

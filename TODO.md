@@ -680,7 +680,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       Settings → Help & credits.
 - [x] **Third-party notices surface** — `/third-party-notices.txt` reproduces the copyright notices and
       license texts of every library compiled into the bundle (react, maplibre-gl, uplot, zod, pmtiles, fflate,
-      mermaid, node-forge, …; `@mapbox/jsonlint-lines-primitives` takes the upstream jsonlint notice), linked
+      node-forge, …; `@mapbox/jsonlint-lines-primitives` takes the upstream jsonlint notice), linked
       from Help & credits; `apps/web/vite-notices.ts` fails the build when a bundled package has no entry.
       Minified bundles strip headers, so the notices file is the durable surface.
 - [ ] **APRS mark re-check** _(S)_ — the USPTO record for reg. 2058846 (APRS) lists Tucson Amateur Packet

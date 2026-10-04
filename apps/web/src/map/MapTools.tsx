@@ -363,7 +363,7 @@ export function MapTools(props: {
         <Button
           className={grid ? "on" : ""}
           aria-pressed={grid}
-          title="Grid overlay"
+          hint="Show a Maidenhead locator and latitude/longitude grid"
           aria-label="Grid overlay"
           onClick={() => setGrid((v) => !v)}
         >
@@ -372,7 +372,7 @@ export function MapTools(props: {
         <Button
           className={rings ? "on" : ""}
           aria-pressed={rings}
-          title="Range rings"
+          hint="Show distance rings around the map centre"
           aria-label="Range rings"
           onClick={() => setRings((v) => !v)}
         >
@@ -381,7 +381,7 @@ export function MapTools(props: {
         <Button
           className={ruler ? "on" : ""}
           aria-pressed={ruler}
-          title="Ruler (distance + bearing)"
+          hint="Tap two points to measure distance and bearing"
           aria-label="Ruler"
           onClick={() => {
             setRuler((v) => !v);
@@ -393,7 +393,7 @@ export function MapTools(props: {
         <Button
           className={term ? "on" : ""}
           aria-pressed={term}
-          title="Day/night terminator"
+          hint="Shade the part of the world in darkness now"
           aria-label="Day and night"
           onClick={() => setTerm((v) => !v)}
         >
@@ -404,8 +404,10 @@ export function MapTools(props: {
           aria-pressed={arc}
           disabled={!home}
           aria-label="Bearing from home"
-          title={
-            home ? "Bearing from home QTH to the selected cache" : "Set your home locator in your profile to enable"
+          hint={
+            home
+              ? "Draw the great-circle line from your home locator to the selected cache"
+              : "Set your home locator in your profile to draw bearings"
           }
           onClick={() => setArc((v) => !v)}
         >

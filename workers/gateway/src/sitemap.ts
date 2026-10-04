@@ -115,7 +115,7 @@ ${groupHtml}
 <li><a href="${e(gw)}/api/sitemap">/api/sitemap</a><div class=m>JSON surface manifest + feed catalogue.</div></li>
 <li><a href="${e(gw)}/api/v1">/api/v1</a><div class=m>Public read API — free, rate-limited.</div></li>
 </ul></section>
-<footer><a href="${e(gw)}/support">Support</a> · <a href="${e(gw)}/source">Source (AGPL-3.0)</a></footer>`;
+<footer><a href="https://apachler.github.io/aprscaching/">Manual</a> · <a href="${e(gw)}/support">Support</a> · <a href="${e(gw)}/source">Source (AGPL-3.0)</a></footer>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 

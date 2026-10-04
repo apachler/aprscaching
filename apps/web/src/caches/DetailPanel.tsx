@@ -31,6 +31,8 @@ import {
   MinTier,
   Disclosure,
   TIER_NAME,
+  TIER_DESC,
+  Hint,
   DtBars,
   Stat,
   LoadMore,
@@ -38,6 +40,8 @@ import {
   useConfirm,
   copyText,
   type Tier,
+  InfoTip,
+  ManualLink,
 } from "../ui/index.js";
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
@@ -49,7 +53,7 @@ import { EditCachePanel } from "./EditCachePanel.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
-import { TermHelp } from "../platform/TermHelp.js";
+import { TERMS } from "../terms.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -175,11 +179,15 @@ export function DetailPanel(props: {
       actions={
         <>
           {c.own && !props.offlineFrom && (
-            <Button title={`Edit ${c.code}`} onClick={() => setEditing(true)}>
+            <Button hint={`Edit the listing of ${c.code}`} onClick={() => setEditing(true)}>
               Edit
             </Button>
           )}
-          <Button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>
+          <Button
+            className={`heart${fav.on ? " on" : ""}`}
+            hint={fav.on ? "Take back your favourite" : "Give this cache a favourite; the number counts every player's"}
+            onClick={toggleFav}
+          >
             {fav.on ? "♥" : "♡"} {fav.count}
           </Button>
         </>
@@ -346,7 +354,11 @@ export function DetailPanel(props: {
             · <em>{c.status}</em>
           </>
         )}
-        {c.needsMaintenance && <span className="warn"> · ⚠ needs maintenance</span>}
+        {c.needsMaintenance && (
+          <Hint text="The last three find attempts were all DNFs, so the owner should check the cache">
+            <span className="warn"> · ⚠ needs maintenance</span>
+          </Hint>
+        )}
       </p>
       {c.description && <p className="desc">{c.description}</p>}
       {c.hint && (
@@ -360,7 +372,8 @@ export function DetailPanel(props: {
       >
         <MinTier tier={minTier} />
         <p className="muted fine">
-          Tier A, B and C say how a find was confirmed. <TermHelp term="tier" />
+          Tier A, B and C say how a find was confirmed. <InfoTip text={TERMS.tier} label="What do the tiers mean?" />{" "}
+          <ManualLink page="play/verification">How finds are verified</ManualLink>
         </p>
       </Disclosure>
 
@@ -651,7 +664,7 @@ function ShareCache(props: { code: string; title: string; gpx: boolean; onToast:
         >
           <Icon name="share" size={15} /> Copy link
         </Button>
-        <Button onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Button onClick={() => setOpen((o) => !o)} aria-expanded={open} hint="Show a QR code that opens this cache">
           ▦ QR
         </Button>
         {props.gpx && (
@@ -694,7 +707,7 @@ function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; s
   return (
     <div className="logrow">
       {l.logType === "found" ? (
-        <TierChip tier={tier} title={`${TIER_NAME[tier]} · Tier ${tier}`} />
+        <TierChip tier={tier} title={`${TIER_NAME[tier]} (Tier ${tier}): ${TIER_DESC[tier]}`} />
       ) : (
         <Badge kind={l.logType}>{l.logType}</Badge>
       )}
@@ -702,9 +715,11 @@ function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; s
         <div className="logrow-h">
           <span className="call">{l.loggerCall}</span>
           {l.signerKey && (
-            <span className="signed" title="device-signed">
-              <Icon name="shield-check" size={14} />
-            </span>
+            <Hint text="Signed on the finder's device with its own key">
+              <span className="signed" role="img" aria-label="Device-signed">
+                <Icon name="shield-check" size={14} />
+              </span>
+            </Hint>
           )}
           <span className="logrow-when">{props.ago}</span>
         </div>
