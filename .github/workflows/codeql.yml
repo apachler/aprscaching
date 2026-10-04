@@ -1,8 +1,10 @@
 name: CodeQL
 
 on:
+  # dev is the default branch, so its analysis is what the Security tab shows: scanning every push there
+  # keeps the open findings current with the code instead of a week behind.
   push:
-    branches: [main]
+    branches: [dev, main]
   pull_request:
   schedule:
     - cron: "27 3 * * 1" # weekly, Monday 03:27 UTC
