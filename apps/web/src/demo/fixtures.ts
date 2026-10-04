@@ -884,6 +884,14 @@ const ROUTES: Route[] = [
       ],
     }),
   ],
+  [
+    "GET",
+    /^\/api\/keys$/,
+    () => ({
+      cap: 5,
+      keys: [{ id: 1, name: "logbook sync", prefix: "acg_3f9c21d0", createdAt: NOW - 12 * DAY, lastUsedAt: NOW - DAY }],
+    }),
+  ],
   ["GET", /^\/api\/my\/stations$/, () => page({ stations: MY_STATIONS })],
   ["GET", /^\/api\/watch$/, () => ({ watching: [{ callsign: "OE6XRR-9", addedAt: NOW - 9 * DAY }], unseen: 2 })],
   ["GET", /^\/api\/watch\/alerts$/, () => page({ alerts: WATCH_ALERTS })],

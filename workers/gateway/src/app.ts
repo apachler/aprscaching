@@ -135,6 +135,7 @@ import {
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications, handleAdminCallsigns } from "./admin.js";
 import { handleClaimStart, handleClaimStatus } from "./claims.js";
+import { handleMyApiKeys, handleRevokeMyApiKey, handleAdminApiKeys, handleAdminRevokeApiKey } from "./apikeys.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleMailTest } from "./mail.js";
 import { handleStationStatus } from "./station_status.js";
@@ -492,6 +493,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const adminCall = /^\/api\/admin\/callsigns\/([A-Za-z0-9-]{3,12})$/.exec(p);
   if (adminCall) return handleAdminCallsigns(req, env, adminCall[1]!);
   if (p === "/api/admin/adoptions") return handleAdminAdoptions(req, env);
+  if (p === "/api/admin/api-keys" && m === "GET") return handleAdminApiKeys(req, env);
+  const adminKey = /^\/api\/admin\/api-keys\/(\d+)$/.exec(p);
+  if (adminKey && m === "DELETE") return handleAdminRevokeApiKey(req, env, Number(adminKey[1]));
+  if (p === "/api/keys") return handleMyApiKeys(req, env);
+  const myKey = /^\/api\/keys\/(\d+)$/.exec(p);
+  if (myKey && m === "DELETE") return handleRevokeMyApiKey(req, env, Number(myKey[1]));
   const adminAdopt = /^\/api\/admin\/adoptions\/(\d+)(\/assign)?$/.exec(p);
   if (adminAdopt) return handleAdminAdoptions(req, env, { cacheId: Number(adminAdopt[1]), assign: !!adminAdopt[2] });
   const adminPlace = /^\/api\/admin\/caches\/(\d+)\/place$/.exec(p);

@@ -90,6 +90,7 @@ export const CONFIG_KEYS = {
   API_RATE_WINDOW_SEC: { type: "int", units: ["gateway"], default: "60" },
   API_RATE_ANON: { type: "int", units: ["gateway"], default: "60" },
   API_RATE_KEYED: { type: "int", units: ["gateway"], default: "600" },
+  API_KEYS_PER_ACCOUNT: { type: "int", units: ["gateway"], default: "5" },
   SPOTS_ENABLED: { type: "enum", units: ["gateway"], values: ["0", "1", "false", "no", "true", "yes"] },
   SPOTS_SOURCES: { type: "list", units: ["gateway"] },
   SPOTS_TTL_SEC: { type: "int", units: ["gateway"], default: "120" },

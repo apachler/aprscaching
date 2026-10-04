@@ -1073,6 +1073,33 @@ export function releaseCallsign(callsign: string, reason: string, holder: string
 export function revokeManualVerification(callsign: string): Promise<{ revoked: boolean }> {
   return call(`/api/admin/verifications/${encodeURIComponent(callsign)}`, { method: "DELETE" });
 }
+// ---- read-API keys ----
+/** A read-API key as its owner and the sysop see it: its name and prefix, never the key itself. */
+export interface ApiKey {
+  id: number;
+  name: string;
+  prefix: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+/** The signed-in account's read-API keys and how many it may hold. */
+export function listApiKeys(): Promise<{ keys: ApiKey[]; cap: number }> {
+  return call(`/api/keys`);
+}
+/** Create a key; the answer is the only time the full key is shown. */
+export function createApiKey(name: string): Promise<ApiKey & { key: string }> {
+  return call(`/api/keys`, { method: "POST", body: JSON.stringify({ name }) });
+}
+export function revokeApiKey(id: number): Promise<{ revoked: boolean }> {
+  return call(`/api/keys/${id}`, { method: "DELETE" });
+}
+/** Every read-API key on the instance, with the owner's call (sysop). */
+export function listAllApiKeys(): Promise<{ keys: (ApiKey & { owner: string | null })[]; cap: number }> {
+  return call(`/api/admin/api-keys`);
+}
+export function adminRevokeApiKey(id: number): Promise<{ revoked: boolean }> {
+  return call(`/api/admin/api-keys/${id}`, { method: "DELETE" });
+}
 // ---- ingest box enrollment ----
 /** An enrolled ingest box; enrolledBy / revokedBy are account ids, or "operator" for the operator secret. */
 export interface EnrolledBox {

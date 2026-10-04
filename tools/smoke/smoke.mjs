@@ -1539,14 +1539,17 @@ ok(
     Array.isArray(apiIdx.data?.endpoints),
   JSON.stringify(apiIdx.data?.rateLimits),
 );
-const issueRes = await call("POST", "/api/v1/keys", { label: "smoke" });
+const keyOwner = await signUp("OE7KEY");
+const issueRes = await call("POST", "/api/keys", { name: "smoke" }, { cookie: keyOwner });
 const apiKey = issueRes.data?.key;
 ok(
-  "POST /api/v1/keys issues a free key",
+  "POST /api/keys gives a signed-in account a free key",
   issueRes.status === 201 && typeof apiKey === "string" && apiKey.startsWith("acg_"),
   // the issued key is a credential: report its shape, never its value
   `status=${issueRes.status} key=${typeof apiKey === "string" ? "issued (value redacted)" : "missing"}`,
 );
+const anonKey = await call("POST", "/api/v1/keys", { label: "smoke" });
+ok("POST /api/v1/keys mints no anonymous key (410)", anonKey.status === 410, String(anonKey.status));
 const v1caches = await call("GET", "/api/v1/caches?bbox=14,46,16,48", undefined, { authorization: "Bearer " + apiKey });
 ok(
   "GET /api/v1/caches (keyed) returns seeded caches",

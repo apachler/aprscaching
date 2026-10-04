@@ -64,6 +64,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   API_RATE_WINDOW_SEC: "Length of the public read-API rate-limit window, in seconds",
   API_RATE_ANON: "Read-API requests per window without a key",
   API_RATE_KEYED: "Read-API requests per window with a free key",
+  API_KEYS_PER_ACCOUNT: "Read-API keys one account may hold at once; 0 lets nobody create one",
   SPOTS_ENABLED: "1 enables outbound activity-spot polling",
   SPOTS_SOURCES: "Comma-separated spot sources to poll (else every built-in source)",
   SPOTS_TTL_SEC: "Seconds between upstream spot polls; never below a source's own floor",
@@ -543,6 +544,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "Public read-API rate limits",
         "`60` / `60` / `600`",
       ],
+      ["`API_KEYS_PER_ACCOUNT`", "Read-API keys one account may hold at once; `0` lets nobody create one", "`5`"],
       ["`SPOTS_ENABLED`", "Enable outbound activity-spot polling", "off"],
       [
         "`SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT`",

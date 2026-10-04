@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// What the public surfaces hold back: the activity feeds leave unlisted caches out, an API key names an owner
-// only for a session holding that call, a box never collects a command queued too long ago, and a media object
-// has one key.
+// What the public surfaces hold back: the activity feeds leave unlisted caches out, a box never collects a
+// command queued too long ago, and a media object has one key.
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call } from "./helpers/authflow.js";
 import { addCache } from "./helpers/fedpeer.js";
 import { handleBoxPoll } from "@aprscaching/gateway/box";
 import { makeFsMedia } from "../src/media.js";
@@ -33,23 +32,6 @@ describe("the activity feed", () => {
         path,
       ).toEqual([listed]);
     }
-  });
-});
-
-describe("a free API key", () => {
-  it("names its owner only for a session whose account holds the call", async () => {
-    const env = authEnv();
-    const me = await emailSignup(env, "keys@example.test", "DL1KEY");
-    expect(me.status).toBe(200);
-    const owner = async (body: unknown, headers: Record<string, string> = {}) => {
-      const res = await call(env, "POST", "/api/v1/keys", body, headers);
-      expect(res.status).toBe(201);
-      return (await call(env, "GET", `/api/v1/keys/${res.data.key}`)).data.ownerCall;
-    };
-    expect(await owner({ ownerCall: "DL1KEY" })).toBeNull();
-    expect(await owner({ ownerCall: "OE8APR" }, { cookie: me.cookie })).toBeNull();
-    expect(await owner({ ownerCall: "dl1key-7" }, { cookie: me.cookie })).toBe("DL1KEY-7");
-    expect(await owner({}, { cookie: me.cookie })).toBeNull();
   });
 });
 

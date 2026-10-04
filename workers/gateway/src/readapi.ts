@@ -2,12 +2,12 @@
 /**
  * readapi.ts — the public read API. A versioned, documented, read-only surface
  * under /api/v1 that reuses the existing read handlers behind a rate-limit gate. Free + per-IP
- * limited; a free api_key raises the limit (recognition model — keys are never paywalled). The app's
- * internal /api/* endpoints are untouched, so this can't regress the app.
+ * limited; a free key raises the limit and gates nothing. A signed-in account creates its keys under
+ * Settings → Developer (apikeys.ts). The app's internal /api/* endpoints are untouched, so this can't regress
+ * the app.
  *
  *   GET  /api/v1                      index: endpoint catalogue + limits + how to get a key
- *   POST /api/v1/keys                 issue a free key (optional {label, ownerCall})
- *   GET  /api/v1/keys/:key            key info (tier, owner, created)
+ *   GET  /api/v1/key                  the presented key's name, prefix, creation and last use
  *   GET  /api/v1/caches?bbox=         caches in a (capped) bbox
  *   GET  /api/v1/caches/:code         cache detail + logbook
  *   GET  /api/v1/activity             recent finds/hides/DNFs
@@ -24,7 +24,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
-import { sessionIdentity, accountHoldsCall } from "./auth.js";
+import { lookupApiKey, describeApiKey } from "./apikeys.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./shack.js";
@@ -67,7 +67,7 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/station/:call.kml", desc: "position history as a KML track" },
   { method: "GET", path: "/api/v1/spots?bbox=", desc: "live activity spots" },
   { method: "GET", path: "/api/v1/licence/:call", desc: "callsign validity from public licence registers" },
-  { method: "POST", path: "/api/v1/keys", desc: "issue a free API key" },
+  { method: "GET", path: "/api/v1/key", desc: "the API key this request presents" },
 ];
 
 /** Pull an API key from Authorization: Bearer / x-api-key / ?key=. */
@@ -87,16 +87,11 @@ export async function readGate(
   let tier: "anon" | "keyed" = "anon";
   let max = anonMax(env);
   if (raw) {
-    const row = await env.DB.prepare("SELECT key FROM api_keys WHERE key = ?").bind(raw).first();
+    const row = await lookupApiKey(env, raw);
     if (row) {
-      key = raw;
+      key = String(row.id);
       tier = "keyed";
       max = keyedMax(env);
-      try {
-        await env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE key = ?").bind(nowS(), raw).run();
-      } catch {
-        /* best-effort */
-      }
     }
   }
   const bucket = key ? `apikey:${key}` : `apiip:${clientIp(req, env)}`;
@@ -115,7 +110,7 @@ function apiIndex(env: Env): Response {
     version: "v1",
     access: "read-only · free",
     rateLimits: { window_seconds: windowSec(env), anonymous: anonMax(env), with_key: keyedMax(env) },
-    keys: "POST /api/v1/keys for a free key; send it as Authorization: Bearer <key> or ?key=.",
+    keys: "Signed in, create a free key under Settings → Developer; send it as Authorization: Bearer <key> or ?key=.",
     pagination:
       "Linear lists (activity) accept ?limit= & ?cursor=; responses carry nextCursor + hasMore. Pass nextCursor back as ?cursor= for the next page (keyset, not offset).",
     bbox_max_degrees: MAX_BBOX_DEG,
@@ -123,38 +118,12 @@ function apiIndex(env: Env): Response {
   });
 }
 
-async function issueKey(req: Request, env: Env): Promise<Response> {
-  // throttle issuance per IP so the free endpoint can't be farmed
-  if (await rateLimitedDurable(env, `apikeyissue:${clientIp(req, env)}`, Date.now(), 5, 60_000))
-    return json({ error: "too many key requests; try again shortly" }, { status: 429 });
-  const body = (await req.json().catch(() => ({}))) as { label?: string; ownerCall?: string };
-  const key = "acg_" + crypto.randomUUID().replace(/-/g, "");
-  // A key names its owner only for a session whose account holds that call; anyone else's key stays anonymous.
-  const asked = typeof body.ownerCall === "string" ? body.ownerCall.trim().toUpperCase() : "";
-  const me = asked ? await sessionIdentity(req, env) : null;
-  const ownerCall = me && (await accountHoldsCall(env, me.accountId, asked)) ? asked : null;
-  await env.DB.prepare("INSERT INTO api_keys (key, owner_call, label, rate_tier, created_at) VALUES (?,?,?, 'free', ?)")
-    .bind(key, ownerCall, body.label?.slice(0, 80) || null, nowS())
-    .run();
-  return json(
-    {
-      key,
-      tier: "free",
-      limits: { window_seconds: windowSec(env), with_key: keyedMax(env) },
-      usage: "Send as 'Authorization: Bearer <key>' or '?key=<key>'. Free; raises your rate limit.",
-    },
-    { status: 201 },
-  );
-}
-
-async function keyInfo(env: Env, key: string): Promise<Response> {
-  const row = await env.DB.prepare(
-    "SELECT owner_call AS ownerCall, label, rate_tier AS tier, created_at AS createdAt, last_used_at AS lastUsedAt FROM api_keys WHERE key = ?",
-  )
-    .bind(key)
-    .first();
-  if (!row) return json({ error: "unknown key" }, { status: 404 });
-  return json(row);
+/** GET /api/v1/key — the presented key's own record: a script checks its key without the app. */
+async function keyInfo(req: Request, env: Env): Promise<Response> {
+  const raw = extractKey(req);
+  const row = raw ? await describeApiKey(env, raw) : null;
+  if (!row) return json({ error: "present a valid key as Authorization: Bearer <key>" }, { status: 401 });
+  return json({ ...row, tier: "free" });
 }
 
 /** Reject a bbox larger than the cap (cost control); returns null if OK or absent. */
@@ -174,13 +143,16 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   const m = req.method;
   if (rest === "" || rest === "/")
     return m === "GET" ? apiIndex(env) : json({ error: "method not allowed" }, { status: 405 });
-  if (rest === "/keys" && m === "POST") return issueKey(req, env);
-  const keyM = /^\/keys\/([A-Za-z0-9_]+)$/.exec(rest);
-  if (keyM && m === "GET") return keyInfo(env, keyM[1]!);
+  if (rest === "/keys" && m === "POST")
+    return json(
+      { error: "keys belong to an account: sign in and create one under Settings → Developer" },
+      { status: 410 },
+    );
 
   if (m !== "GET") return json({ error: "read-only API" }, { status: 405 });
   const g = await readGate(req, env);
   if (g instanceof Response) return g;
+  if (rest === "/key") return keyInfo(req, env);
 
   // exports — GPX / KML / ADIF
   if (rest === "/caches.gpx") return bboxTooLarge(req) ?? handleCachesGpx(req, env);

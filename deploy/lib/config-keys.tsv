@@ -53,6 +53,7 @@ RADIO_REPLIES	enum	gateway		0|1	0	0	selfhost,baremetal,pocket,desktop	1 sends a 
 API_RATE_WINDOW_SEC	int	gateway	60		0	0	selfhost,baremetal,pocket,desktop	Length of the public read-API rate-limit window, in seconds
 API_RATE_ANON	int	gateway	60		0	0	selfhost,baremetal,pocket,desktop	Read-API requests per window without a key
 API_RATE_KEYED	int	gateway	600		0	0	selfhost,baremetal,pocket,desktop	Read-API requests per window with a free key
+API_KEYS_PER_ACCOUNT	int	gateway	5		0	0	selfhost,baremetal,pocket,desktop	Read-API keys one account may hold at once; 0 lets nobody create one
 SPOTS_ENABLED	enum	gateway		0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	1 enables outbound activity-spot polling
 SPOTS_SOURCES	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Comma-separated spot sources to poll (else every built-in source)
 SPOTS_TTL_SEC	int	gateway	120		0	0	selfhost,baremetal,pocket,desktop	Seconds between upstream spot polls; never below a source's own floor

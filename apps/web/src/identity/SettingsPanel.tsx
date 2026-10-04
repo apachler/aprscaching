@@ -38,6 +38,7 @@ import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
 import { AnnounceSettings } from "./AnnounceSettings.js";
 import { NearRadioSettings } from "./NearRadioSettings.js";
+import { ApiKeys } from "./ApiKeys.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { AboutInstance, BugReportLink } from "./AboutInstance.js";
 import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "../credits.js";
@@ -336,6 +337,17 @@ export function SettingsPanel(props: {
               {fmt.distance(1234)} · {fmt.speed(36)} · {fmt.temp(18)}
             </span>
           </Row>
+        </Group>
+      )}
+
+      {session.signedIn && match("developer API key keys read API token script app integration revoke") && (
+        <Group
+          title="Developer"
+          status="API keys"
+          help="Keys for your own apps and scripts that read this instance; the read API stays free without one."
+          defaultOpen={false}
+        >
+          <ApiKeys />
         </Group>
       )}
 

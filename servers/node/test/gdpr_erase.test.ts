@@ -24,7 +24,7 @@ const SCOPED: Array<[string, string]> = [
   ["cache_media", "SELECT COUNT(*) AS n FROM cache_media WHERE media_key='media/gdpr-1'"],
   ["rendezvous_log", "SELECT COUNT(*) AS n FROM rendezvous_log WHERE call_a='DL1GDP-9' OR call_b='DL1GDP-9'"],
   ["entitlements", "SELECT COUNT(*) AS n FROM entitlements WHERE account_id=?"],
-  ["api_keys", "SELECT COUNT(*) AS n FROM api_keys WHERE owner_call='DL1GDP'"],
+  ["api_keys", "SELECT COUNT(*) AS n FROM api_keys WHERE account_id=?"],
   ["auth_challenges", "SELECT COUNT(*) AS n FROM auth_challenges WHERE callsign='DL1GDP'"],
   ["white_pages", "SELECT COUNT(*) AS n FROM white_pages WHERE callsign='DL1GDP'"],
   [
@@ -92,7 +92,11 @@ async function seeded() {
     ],
     ["INSERT INTO rendezvous_log (cache_a, cache_b, call_a, call_b, ts) VALUES (1, 2, 'DL1GDP-9', 'OE8APR-9', ?)", t],
     ["INSERT INTO entitlements (account_id, key, granted_at) VALUES (?, 'supporter_badge', ?)", acct, t],
-    ["INSERT INTO api_keys (key, owner_call, created_at) VALUES ('k-gdpr', 'DL1GDP', ?)", t],
+    [
+      "INSERT INTO api_keys (key_hash, prefix, account_id, name, created_at) VALUES ('h-gdpr', 'acg_12345678', ?, 'logger', ?)",
+      acct,
+      t,
+    ],
     [
       "INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES ('c-gdpr', 'DL1GDP', 'webauthn_login', 'x', ?)",
       t * 2,

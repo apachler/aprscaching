@@ -23,6 +23,7 @@ preferences, media, tools, their own data) stay under **Settings** and are not p
 | **Callsigns** | look a call up, verify it by hand, release it from an account, list and revoke manual verifications | [Callsign verification](callsign-verification.md) |
 | **Stations for members** | list a club station for the member who runs it, when that member does not hold the club call: give the member's callsign, the station's callsign and its position (blank takes a heard station's) | [Stations for members](#stations-for-members) |
 | **Cache adoption** | offer caches for adoption, decide requests, assign an owner | [Cache adoption](cache-adoption.md) |
+| **API keys** | every member's read-API key with its owner, name, prefix and last use; **Revoke** one that is misused | [API reference](../../reference/api.md#public-read-api) |
 | **Federation** | the peer list with health and reputation, each peer's trust (`trusted`, `unvetted`, `blocked`), a manual sync | [Join the network](../federation/index.md) |
 | **Forwarding** | FBB partner BBSes (callsign, protocol, intervals, time bands, message types), routing rules, and the White Pages directory that steers personal mail | [Packet: BBS and NET/ROM node](../radios/packet-node.md) |
 | **Trusted receiving stations** | trust a receiving station's own on-air hearings for Radio-verified finds and on-air callsign verification: **Trust station** by site call, remove one; `FIRST_PARTY_SITES` calls show read-only | [RF ingest and transports](../radios/rf-ingest.md) |
