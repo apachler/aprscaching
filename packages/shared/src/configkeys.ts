@@ -165,7 +165,7 @@ export const CONFIG_KEYS = {
   DIGI_VISCOUS_MS: { type: "int", units: ["ingest"] },
   NETROM_CALL: { type: "call", units: ["ingest"] },
   NETROM_ALIAS: { type: "string", units: ["ingest"] },
-  NETROM_BROADCAST_MS: { type: "int", units: ["ingest"], default: "300000" },
+  NETROM_BROADCAST_MS: { type: "int", units: ["ingest"], default: "3600000" },
   NETROM_PATH_QUALITY: { type: "int", units: ["ingest"], default: "192" },
   NETROM_INP3: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
   NODE_PERSONALITY: { type: "string", units: ["ingest"], default: "netrom" },

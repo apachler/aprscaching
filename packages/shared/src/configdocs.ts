@@ -636,7 +636,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "NET/ROM node",
-        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`300000`, at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
+        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
       ],
       [
         "BBS (inbound + forwarding)",

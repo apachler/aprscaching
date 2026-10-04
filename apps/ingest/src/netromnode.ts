@@ -35,6 +35,7 @@ import {
 import { decodeFrame, parseAddr, addrStr, PID_NETROM, type Ax25Address } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { gatewayFetch } from "./gatewayauth.js";
+import { NETROM_BROADCAST_DEFAULT_MS } from "./connected.js";
 
 const NODES_DST = { call: "NODES", ssid: 0 };
 
@@ -330,7 +331,7 @@ export class NetromNodeRunner {
   }
 
   start(): void {
-    const bMs = Math.max(this.o.broadcastMs ?? 300_000, 60_000); // a NODES broadcast keys the transmitter
+    const bMs = Math.max(this.o.broadcastMs ?? NETROM_BROADCAST_DEFAULT_MS, 60_000); // a NODES broadcast keys the transmitter
     const dMs = this.o.decayMs ?? bMs;
     this.broadcast();
     setInterval(() => this.broadcast(), bMs);

@@ -134,7 +134,7 @@ export const ENV_FILES = [
       { key: "NETROM_CALL", value: "" },
       "# node alias, e.g. GRAZ",
       { key: "NETROM_ALIAS", value: "" },
-      "# NODES broadcast interval ms (blank = spec default ~300000)",
+      "# NODES broadcast interval ms (blank = 3600000, one hour; at least 300000)",
       { key: "NETROM_BROADCAST_MS", value: "" },
       "# link quality assumed for a directly-heard neighbour (blank = 192)",
       { key: "NETROM_PATH_QUALITY", value: "" },
