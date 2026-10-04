@@ -39,7 +39,7 @@ const ROLE_LABEL: Record<StationRole, string> = {
   digipeater: "Digipeater",
   igate: "IGate",
   node: "Node",
-  relay: "Relay",
+  repeater: "Repeater",
 };
 
 /**
@@ -322,7 +322,7 @@ function StationFields(props: {
         <legend>
           Roles{" "}
           <InfoTip
-            text="A digipeater repeats packets on the air; an IGate copies what it hears to APRS-IS."
+            text="Weather: a weather station. Digipeater: repeats APRS packets on the air. IGate: copies what it hears to APRS-IS. Node: a packet node such as NET/ROM. Repeater: a voice repeater you run."
             label="What do the roles mean?"
           />
         </legend>

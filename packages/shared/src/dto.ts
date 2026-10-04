@@ -420,7 +420,7 @@ export interface StationDetail extends StationSummary {
 
 // ---- operated-stations registry: the operator's own stations ----
 /** The roles a user's operated station can carry. Weather is one capability; the rest are RF infra. */
-export const STATION_ROLES = ["weather", "digipeater", "igate", "node", "relay"] as const;
+export const STATION_ROLES = ["weather", "digipeater", "igate", "node", "repeater"] as const;
 export type StationRole = (typeof STATION_ROLES)[number];
 /** A weather-capable station's PWS push key + ready-to-paste ingest URLs (null until issued). */
 export interface StationWxKey {

@@ -18,11 +18,11 @@ export const ROLE_META: Record<StationRole, RoleMeta> = {
   digipeater: { role: "digipeater", label: "Digipeater", glyph: "#", cog: "#" },
   igate: { role: "igate", label: "IGate", glyph: "⇅", cog: "↕" },
   node: { role: "node", label: "Node", glyph: "⬡", cog: "○" },
-  relay: { role: "relay", label: "Relay", glyph: "↻", cog: "→" },
+  repeater: { role: "repeater", label: "Repeater", glyph: "↻", cog: "→" },
 };
 
 /** Priority when a station has several roles — the most infrastructure-defining one wins the glyph. */
-const ROLE_PRIORITY: StationRole[] = ["digipeater", "igate", "node", "relay", "weather"];
+const ROLE_PRIORITY: StationRole[] = ["digipeater", "igate", "node", "repeater", "weather"];
 
 /** The meta to draw for a station's role set, or null if it carries no (known) roles. */
 export function roleMeta(roles: string[] | undefined): RoleMeta | null {
