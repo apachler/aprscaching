@@ -95,6 +95,23 @@ Open **Settings → Your data**.
 
 Both need you signed in. Signed out, the group shows **Sign in** instead.
 
+## Move to another instance
+
+The app has no button yet for moving your account to another instance; a guided move is planned. Until then,
+ask the sysop of the instance you want to move to: the instances can carry your callsign and your device keys
+across, and other instances then credit your earlier finds to your new home.
+
+What a move does not take along:
+
+- your passkeys, which work only on the instance where you made them: sign in on the new instance by email
+  link, then add a passkey there;
+- your callsign verification: you verify your callsign again on the new instance;
+- your profile, settings and watchlist, which start empty;
+- caches you own, which stay on the old instance.
+
+Take **Export my data** first, so you keep a full copy either way. Sysops find the details in
+[Data protection](../run/compliance/data-protection.md#move-to-another-instance).
+
 ## Next
 
 - [The Shack at a glance](../shack/index.md): when you want to operate your radio.

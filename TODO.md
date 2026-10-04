@@ -494,6 +494,13 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Future ideas
 
+- [ ] **Guided move to another instance** _(P2 · M)_ — moving an account exists only as API calls
+      (`/api/account/<call>/bundle`, `/move`, `POST /api/account/import`, `workers/gateway/src/account.ts`), with no
+      UI. Add **Settings → Your data → Move to another instance** (enter the new instance, build and sign the bundle
+      with the device key) and **Bring my account from another instance** at sign-up on the target. Lock the old
+      account with a pointer to its new home (check what the source does today), carry settings and the watchlist,
+      and offer owned caches for adoption on the old instance or move them when both sysops agree. The callsign
+      lands unverified by design; passkeys cannot move (bound to their domain).
 - [ ] **How a station was heard, on the map** _(P2 · M)_ — the station panel and the pins name no transport
       for APRS: track replay says RF or IS, and only a MeshCom hearing has its own panel section. Show a "Heard
       via" line and a badge (APRS-IS, RF on a TNC, MeshCom) and let the Nearby list filter by it. The gateway
