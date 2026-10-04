@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "../util/time.js";
-import { ingestSecretOk } from "../auth.js";
+import { requireSysop } from "../admin.js";
 /** Import engine: upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
 import { json } from "../app.js";
@@ -43,17 +43,25 @@ const attributionJson = (r: ImportedCache): string | null =>
  * Insert new imported caches, update existing ones (matched on source + external_id), and
  * de-duplicate ACROSS sources by proximity: a record is skipped if a higher-priority cache is
  * already within DEDUP_RADIUS, and inserting a higher-priority record archives weaker nearby
- * duplicates. Native (user) caches are never touched.
+ * duplicates. A listing the sysop removed (import_removals) is withheld. Native (user) caches are never touched.
  */
 export async function upsertImported(
   env: Env,
   records: ImportedCache[],
-): Promise<{ imported: number; updated: number; skipped: number; deduped: number; superseded: number }> {
+): Promise<{
+  imported: number;
+  updated: number;
+  skipped: number;
+  deduped: number;
+  superseded: number;
+  withheld: number;
+}> {
   let imported = 0,
     updated = 0,
     skipped = 0,
     deduped = 0,
-    superseded = 0;
+    superseded = 0,
+    withheld = 0;
   const now = nowS();
   for (const r of records) {
     if (!isFinite(r.lat) || !isFinite(r.lon) || !r.externalId || !r.title) {
@@ -63,6 +71,14 @@ export async function upsertImported(
     // a listing link from a source's data is kept only as an http(s) address: the detail view renders it as a link
     const sourceUrl = webLink(r.sourceUrl);
     try {
+      // a listing the sysop removed stays removed, whatever the source still offers
+      const removed = await env.DB.prepare("SELECT 1 AS x FROM import_removals WHERE source = ? AND external_id = ?")
+        .bind(r.source, r.externalId)
+        .first();
+      if (removed) {
+        withheld++;
+        continue;
+      }
       const existing = await env.DB.prepare("SELECT id FROM caches WHERE source = ? AND external_id = ?")
         .bind(r.source, r.externalId)
         .first<{ id: number }>();
@@ -160,7 +176,7 @@ export async function upsertImported(
       skipped++; /* e.g. a cross-source code collision — skip, keep going */
     }
   }
-  return { imported, updated, skipped, deduped, superseded };
+  return { imported, updated, skipped, deduped, superseded, withheld };
 }
 
 export async function runImport(env: Env, sourceId: string, scope: ImportScope): Promise<unknown> {
@@ -173,9 +189,10 @@ export async function runImport(env: Env, sourceId: string, scope: ImportScope):
   return { source: sourceId, fetched: records.length, ...res };
 }
 
-/** POST /api/import/:source — admin-only (x-ingest-secret). Body = ImportScope JSON. */
+/** POST /api/import/:source — the sysop (a session, or x-operator-secret for a script). Body = ImportScope JSON. */
 export async function handleImport(req: Request, env: Env, sourceId: string): Promise<Response> {
-  if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
   if (!SOURCES[sourceId])
     return json({ error: `unknown source '${sourceId}'`, sources: Object.keys(SOURCES) }, { status: 404 });
   const scope = (await req.json().catch(() => ({}))) as ImportScope;
@@ -187,9 +204,10 @@ export async function handleImport(req: Request, env: Env, sourceId: string): Pr
   }
 }
 
-/** GET /api/import — admin-only (x-ingest-secret): each source and whether this instance may import it. */
-export function handleImportSources(req: Request, env: Env): Response {
-  if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+/** GET /api/import — the sysop: each source and whether this instance may import it. */
+export async function handleImportSources(req: Request, env: Env): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
   return json({
     sources: Object.values(SOURCES).map((s) => {
       const blocked = importBlocked(env, s.id);
@@ -198,4 +216,122 @@ export function handleImportSources(req: Request, env: Env): Response {
         : { id: s.id, sourceName: s.sourceName, state: "ready" };
     }),
   });
+}
+
+const PLACES_PAGE = 50;
+
+interface ImportedPlaceRow {
+  id: number;
+  code: string;
+  title: string;
+  source: string;
+  source_name: string | null;
+  external_id: string | null;
+  status: string;
+}
+
+/**
+ * GET /api/admin/imports?q=&source= — the sysop finds imported places by code, title or source id (at most 50,
+ * newest import first), and sees the listings removed so far.
+ */
+export async function handleImportedPlaces(req: Request, env: Env): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
+  const url = new URL(req.url);
+  const q = (url.searchParams.get("q") ?? "").trim().slice(0, 80);
+  const source = (url.searchParams.get("source") ?? "").trim().toLowerCase();
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const places = (
+    await env.DB.prepare(
+      `SELECT id, code, title, source, source_name, external_id, status FROM caches
+        WHERE source != 'native' AND (? = '' OR source = ?)
+          AND (? = '' OR code LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR external_id LIKE ? ESCAPE '\\')
+        ORDER BY imported_at DESC, id DESC LIMIT ?`,
+    )
+      .bind(source, source, q, like, like, like, PLACES_PAGE)
+      .all<ImportedPlaceRow>()
+  ).results;
+  const removed = (
+    await env.DB.prepare(
+      "SELECT source, external_id, code, note, removed_at FROM import_removals ORDER BY removed_at DESC LIMIT ?",
+    )
+      .bind(PLACES_PAGE)
+      .all<{ source: string; external_id: string; code: string | null; note: string | null; removed_at: number }>()
+  ).results;
+  return json({
+    places: places.map((p) => ({
+      id: p.id,
+      code: p.code,
+      title: p.title,
+      source: p.source,
+      sourceName: p.source_name,
+      externalId: p.external_id,
+      status: p.status,
+    })),
+    removed: removed.map((r) => ({
+      source: r.source,
+      externalId: r.external_id,
+      code: r.code,
+      note: r.note,
+      removedAt: r.removed_at,
+    })),
+  });
+}
+
+/** Every row that belongs to one cache, keyed by its id. */
+const CACHE_ROWS = [
+  "cache_logs",
+  "cache_ratings",
+  "cache_media",
+  "cache_stages",
+  "stage_unlocks",
+  "favorites",
+  "watches",
+  "watch_alerts",
+  "near_cache_messages",
+  "cache_adoption_offers",
+  "cache_adoption_requests",
+  "cache_adoptions",
+];
+
+/**
+ * DELETE /api/admin/imports/:id {note?} — remove one imported place, at the request of its source or of the
+ * listing's owner (OpenCaching's terms ask for it). The place goes with every row attached to it (logs,
+ * ratings, media, alerts), and its source and listing id are recorded, so a later import of the same source
+ * does not bring it back. A native cache is never removed here.
+ */
+export async function handleRemoveImportedPlace(req: Request, env: Env, id: number): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
+  const place = await env.DB.prepare(
+    "SELECT id, code, title, source, source_name, external_id, status FROM caches WHERE id = ?",
+  )
+    .bind(id)
+    .first<ImportedPlaceRow>();
+  if (!place) return json({ error: "no such place" }, { status: 404 });
+  if (place.source === "native" || !place.external_id)
+    return json({ error: "not an imported place: a member's cache is not removed here" }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as { note?: unknown };
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 200) || null : null;
+
+  const keys = (
+    await env.DB.prepare(
+      `SELECT media_key AS k FROM cache_media WHERE cache_id = ?
+       UNION SELECT media_key AS k FROM cache_stages WHERE cache_id = ? AND media_key IS NOT NULL`,
+    )
+      .bind(id, id)
+      .all<{ k: string }>()
+  ).results;
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO import_removals (source, external_id, code, note, removed_at) VALUES (?,?,?,?,?)
+       ON CONFLICT(source, external_id) DO UPDATE SET code = excluded.code, note = excluded.note,
+         removed_at = excluded.removed_at`,
+    ).bind(place.source, place.external_id, place.code, note, nowS()),
+    ...CACHE_ROWS.map((t) => env.DB.prepare(`DELETE FROM ${t} WHERE cache_id = ?`).bind(id)),
+    env.DB.prepare("UPDATE radio_commands SET cache_id = NULL WHERE cache_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM caches WHERE id = ?").bind(id),
+  ]);
+  for (const { k } of keys) await Promise.resolve(env.MEDIA?.delete?.(k)).catch(() => undefined);
+  return json({ removed: true, code: place.code, source: place.source, externalId: place.external_id });
 }

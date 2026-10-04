@@ -6,6 +6,7 @@ import { upsertImported } from "@aprscaching/gateway/import";
 import { addCache, instanceEnv, serve } from "./helpers/fedpeer.js";
 
 const BBOX = "bbox=15,47,16,48";
+const operator = { "x-operator-secret": "test-operator-secret", "content-type": "application/json" };
 const ingest = { "x-ingest-secret": "test-ingest-secret", "content-type": "application/json" };
 
 async function importOc(env: ReturnType<typeof instanceEnv>) {
@@ -108,7 +109,7 @@ describe("import sources that need the provider's permission", () => {
       return new Response("", { status: 500 });
     }) as typeof globalThis.fetch;
     const res = await fetch(
-      new Request("https://terms.example/api/import/wwff", { method: "POST", headers: ingest, body: "{}" }),
+      new Request("https://terms.example/api/import/wwff", { method: "POST", headers: operator, body: "{}" }),
     );
     expect(res.status).toBe(403);
     const { error } = (await res.json()) as { error: string };
@@ -125,7 +126,7 @@ describe("import sources that need the provider's permission", () => {
         "reference,status,name,latitude,longitude,website\nOEFF-0001,active,Hohe Tauern,47.1,12.6,\n",
       )) as typeof globalThis.fetch;
     const res = await fetch(
-      new Request("https://terms.example/api/import/wwff", { method: "POST", headers: ingest, body: "{}" }),
+      new Request("https://terms.example/api/import/wwff", { method: "POST", headers: operator, body: "{}" }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ source: "wwff", imported: 1 });
@@ -134,8 +135,10 @@ describe("import sources that need the provider's permission", () => {
   it("lists each source with its state for the sysop", async () => {
     const env = instanceEnv("terms.example", null, { IMPORT_ALLOW: "iota" });
     const fetch = serve(env);
-    expect((await fetch(new Request("https://terms.example/api/import"))).status).toBe(401);
-    const res = await fetch(new Request("https://terms.example/api/import", { headers: ingest }));
+    expect((await fetch(new Request("https://terms.example/api/import"))).status).toBe(403);
+    // the ingest secret runs the ingest plane, not the sysop's imports
+    expect((await fetch(new Request("https://terms.example/api/import", { headers: ingest }))).status).toBe(403);
+    const res = await fetch(new Request("https://terms.example/api/import", { headers: operator }));
     const { sources } = (await res.json()) as { sources: { id: string; state: string; needs?: string }[] };
     const by = Object.fromEntries(sources.map((s) => [s.id, s]));
     expect(by.wwff).toMatchObject({ state: "needs-permission" });
@@ -143,5 +146,57 @@ describe("import sources that need the provider's permission", () => {
     expect(by.gcau!.needs).toContain("Geocaching Australia");
     expect(by.iota).toMatchObject({ state: "ready" });
     expect(by.sota).toMatchObject({ state: "ready" });
+  });
+});
+
+describe("removing one imported place", () => {
+  it("removes the place with its rows, records it, and a re-import does not bring it back", async () => {
+    const env = instanceEnv("terms.example", null);
+    const fetch = serve(env);
+    const id = await importOc(env);
+    await env.DB.prepare("INSERT INTO favorites (callsign, cache_id) VALUES ('DL1FAV', ?)").bind(id).run();
+
+    const listed = await fetch(new Request("https://terms.example/api/admin/imports?q=OC12", { headers: operator }));
+    const { places } = (await listed.json()) as { places: { id: number; code: string; source: string }[] };
+    expect(places).toEqual([expect.objectContaining({ id, code: "OC1234", source: "opencaching" })]);
+
+    const del = (path: string, headers: Record<string, string>) =>
+      fetch(new Request(`https://terms.example${path}`, { method: "DELETE", headers, body: '{"note":"owner asked"}' }));
+    expect((await del(`/api/admin/imports/${id}`, ingest)).status).toBe(403);
+    const res = await del(`/api/admin/imports/${id}`, operator);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ removed: true, code: "OC1234", externalId: "OC1234" });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM caches WHERE id = ?").bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM favorites WHERE cache_id = ?").bind(id).first()).toEqual({
+      n: 0,
+    });
+
+    const again = await upsertImported(env, [
+      {
+        source: "opencaching",
+        externalId: "OC1234",
+        code: "OC1234",
+        type: "traditional",
+        title: "Am Schlossberg",
+        lat: 47.2,
+        lon: 15.2,
+        sourceName: "OpenCaching",
+        sourceUrl: "https://www.opencaching.de/OC1234",
+      },
+    ]);
+    expect(again).toMatchObject({ imported: 0, withheld: 1 });
+    const after = await fetch(new Request("https://terms.example/api/admin/imports", { headers: operator }));
+    expect(((await after.json()) as { removed: unknown[] }).removed).toEqual([
+      expect.objectContaining({ source: "opencaching", externalId: "OC1234", note: "owner asked" }),
+    ]);
+  });
+
+  it("never removes a member's cache", async () => {
+    const env = instanceEnv("terms.example", null);
+    const id = await addCache(env);
+    const res = await serve(env)(
+      new Request(`https://terms.example/api/admin/imports/${id}`, { method: "DELETE", headers: operator }),
+    );
+    expect(res.status).toBe(400);
   });
 });

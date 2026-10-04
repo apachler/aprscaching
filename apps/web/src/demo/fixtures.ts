@@ -917,6 +917,24 @@ const ROUTES: Route[] = [
   ["GET", /^\/api\/admin\/sites$/, () => ({ sites: trustedStations() })],
   [
     "GET",
+    /^\/api\/admin\/imports$/,
+    () => ({
+      places: [
+        {
+          id: 9001,
+          code: "OC1A2B",
+          title: "Am Schlossberg",
+          source: "opencaching",
+          sourceName: "Opencaching.de",
+          externalId: "OC1A2B",
+          status: "active",
+        },
+      ],
+      removed: [],
+    }),
+  ],
+  [
+    "GET",
     /^\/api\/admin\/sites\/([^/]+)\/finds$/,
     (m) => {
       const site = decodeURIComponent(m[1] ?? "");
