@@ -33,8 +33,14 @@ import {
   handlePasskeyLoginBegin,
   handlePasskeyLoginFinish,
 } from "./auth.js";
-import { handleEmailStart, handleEmailVerify, handleOperatorLink } from "./email.js";
-import { handleProfileUpdate } from "./profile.js";
+import {
+  handleEmailChange,
+  handleEmailResend,
+  handleEmailStart,
+  handleEmailVerify,
+  handleOperatorLink,
+} from "./email.js";
+import { handleMyProfile, handleProfileUpdate } from "./profile.js";
 import { handleWxSubmit, handleWxKey, handleWxTx } from "./wx.js";
 import {
   handleMyStations,
@@ -576,10 +582,13 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/passkey/login/finish" && m === "POST") return handlePasskeyLoginFinish(req, env);
   if (p === "/auth/email/start" && m === "POST") return handleEmailStart(req, env);
   if (p === "/auth/email/verify" && (m === "POST" || m === "GET")) return handleEmailVerify(req, env);
+  if (p === "/auth/email/change" && m === "POST") return handleEmailChange(req, env);
+  if (p === "/auth/email/resend" && m === "POST") return handleEmailResend(req, env);
   if (p === "/auth/operator-link" && m === "POST") return handleOperatorLink(req, env);
   if (p === "/auth/session" && m === "GET") return handleSession(req, env);
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
+  if (p === "/api/my/profile" && m === "GET") return handleMyProfile(req, env);
 
   // weather user-origination — PWS push (Ecowitt / WU) under <call>-13
   if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST"))

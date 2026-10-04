@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getWxKey, issueWxKey, type WxKeyInfo } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, useConfirm, useToast } from "../ui/index.js";
+import { Button, ErrorState, copyText, useConfirm, useLoad, useToast } from "../ui/index.js";
 import { WxTxToggles } from "./WxTxToggles.js";
 import { SerialWeather } from "./SerialWeather.js";
 
@@ -16,17 +16,22 @@ export function WeatherStation(props: { callsign: string }) {
   const confirmDialog = useConfirm();
   const toast = useToast();
   const fmt = useFmt();
-  const [info, setInfo] = useState<WxKeyInfo | null>(null);
+  const signedIn = props.callsign.length >= 3;
+  // Until the current key has been read there is no knowing whether issuing would replace one, so the
+  // issue button waits for a successful read.
+  const {
+    data: info,
+    setData: setInfo,
+    error,
+    reload,
+  } = useLoad<WxKeyInfo | undefined>(
+    () => (signedIn ? getWxKey() : Promise.resolve(undefined)),
+    [signedIn, props.callsign],
+  );
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (props.callsign.length < 3) return;
-    getWxKey()
-      .then(setInfo)
-      .catch(() => {});
-  }, [props.callsign]);
-
   async function issue() {
+    if (!info) return;
     if (
       info?.key &&
       !(await confirmDialog({
@@ -47,12 +52,19 @@ export function WeatherStation(props: { callsign: string }) {
       setBusy(false);
     }
   }
-  const copy = (v: string, what: string) => {
-    navigator.clipboard?.writeText(v);
-    toast(`${what} copied`);
+  const copy = async (v: string, what: string) => {
+    toast((await copyText(v)) ? `${what} copied` : "Copy failed — select the text and copy manually");
   };
 
-  if (props.callsign.length < 3) return <p className="muted">Sign in to set up a weather station.</p>;
+  if (!signedIn) return <p className="muted">Sign in to set up a weather station.</p>;
+  if (!info)
+    return error ? (
+      <ErrorState onRetry={reload}>Couldn&apos;t load your weather station&apos;s key. Try again.</ErrorState>
+    ) : (
+      <p className="muted" aria-busy="true">
+        Loading your weather station…
+      </p>
+    );
   return (
     <>
       <p className="muted">
@@ -82,7 +94,7 @@ export function WeatherStation(props: { callsign: string }) {
               <Button
                 variant="icon-subtle"
                 aria-label="Copy Ecowitt URL"
-                onClick={() => copy(info.ecowittPath ?? "", "Ecowitt URL")}
+                onClick={() => void copy(info.ecowittPath ?? "", "Ecowitt URL")}
               >
                 copy
               </Button>
@@ -95,7 +107,7 @@ export function WeatherStation(props: { callsign: string }) {
               <Button
                 variant="icon-subtle"
                 aria-label="Copy Weather Underground URL"
-                onClick={() => copy(info.wuUrl ?? "", "WU URL")}
+                onClick={() => void copy(info.wuUrl ?? "", "WU URL")}
               >
                 copy
               </Button>

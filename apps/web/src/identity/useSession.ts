@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, getSession, logout, logoutAll, type Session } from "../api.js";
 import { forgetSession, recallSession, rememberSession, type SessionStore } from "./sessionMemory.js";
+import { disablePush } from "../push.js";
 
 const store: SessionStore = {
   get: (k) => localStorage.getItem(k),
@@ -39,13 +40,17 @@ export function useSession() {
     window.addEventListener("online", online);
     return () => window.removeEventListener("online", online);
   }, [refresh]);
+  // This browser's push subscription delivers the signed-in account's alerts, so it ends with the session:
+  // removed from the gateway while the session still authorises that, then unsubscribed in the browser.
   const signOut = useCallback(async () => {
+    await disablePush().catch(() => {});
     await logout().catch(() => {});
     forgetSession(store);
     setS({ callsign: null });
   }, []);
   /** Sign out on every device; throws when the server refused, so the caller can say so. */
   const signOutEverywhere = useCallback(async () => {
+    await disablePush().catch(() => {});
     await logoutAll();
     forgetSession(store);
     setS({ callsign: null });

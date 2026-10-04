@@ -36,7 +36,11 @@ address gets *That email doesn't match …'s account*.
 
 An email you type when you create the account with a passkey waits for confirmation. The instance sends a
 link to it; open it within 24 hours and tap **Sign in**. Until then **Settings → Account** shows the address
-as **waiting for confirmation**, and it does not sign you in.
+as **waiting for confirmation**, and it does not sign you in. **Resend** there mails the link again.
+
+To add an email later, or change it, open **Settings → Account**, tap **Add email** or **Change**, type the
+address and tap **Send confirmation**. The new address waits for confirmation the same way. Your old address
+keeps signing you in until you open the link. An address that belongs to another account is refused.
 
 Your passkey belongs to your account, not to one callsign. It signs you in from any callsign your account
 holds, with or without an SSID, also after you switch your active callsign.

@@ -60,10 +60,11 @@ export async function enablePush(): Promise<"on" | "denied" | "unconfigured" | "
   }
 }
 
+/** Disable push: tell the gateway to drop this browser's subscription, then unsubscribe it here. */
 export async function disablePush(): Promise<void> {
   if (!pushSupported()) return;
-  const reg = await navigator.serviceWorker.getRegistration();
-  const sub = reg && (await reg.pushManager.getSubscription());
+  const reg = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+  const sub = reg && (await reg.pushManager.getSubscription().catch(() => null));
   if (sub) {
     await unsubscribePush(sub.endpoint).catch(() => {});
     await sub.unsubscribe().catch(() => {});

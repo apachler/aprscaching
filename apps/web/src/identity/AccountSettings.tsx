@@ -6,6 +6,10 @@ import {
   changeCallsign,
   addCallsign,
   listCallsigns,
+  changeEmail,
+  resendEmailConfirmation,
+  errorText,
+  type EmailConfirmation,
   type HeldCallsign,
 } from "../api.js";
 import {
@@ -193,25 +197,7 @@ export function AccountSettings(props: {
           </Button>
         </div>
       </Advanced>
-      {email && (
-        <div className="setrow">
-          <div className="setrow-l">
-            <div>Email</div>
-          </div>
-          <div className="setrow-c muted">{email}</div>
-        </div>
-      )}
-      {!email && pendingEmail && (
-        <div className="setrow">
-          <div className="setrow-l">
-            <div>Email</div>
-            <div className="muted fine">Open the link we sent to confirm it. Until then it does not sign you in.</div>
-          </div>
-          <div className="setrow-c muted">
-            {pendingEmail} <Badge kind="warn">waiting for confirmation</Badge>
-          </div>
-        </div>
-      )}
+      <EmailSettings email={email} pendingEmail={pendingEmail ?? null} onChanged={refresh} />
       <Passkeys />
       <div className="row end wrap gap-2 mt-3">
         <Button onClick={endEverywhere} disabled={busy}>
@@ -231,6 +217,139 @@ export function AccountSettings(props: {
         Only <strong>you control this call</strong> shows that the call is yours.
       </p>
     </Group>
+  );
+}
+
+/**
+ * The account's sign-in and recovery email: the confirmed address, one waiting for confirmation (with a way
+ * to mail its link again), and a form to add a first address or change it. A new address waits for its
+ * owner to open the link; the confirmed one keeps working until then.
+ */
+function EmailSettings(props: { email: string | null; pendingEmail: string | null; onChanged: () => void }) {
+  const toast = useToast();
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; kind: "ok" | "error"; devLink?: string } | null>(null);
+
+  /** Say how the confirmation mail went: sent, shown here on an instance without mail, or not sent. */
+  function report(r: EmailConfirmation) {
+    if (!r.pendingEmail) {
+      setMsg({ text: `${r.email ?? "Your address"} stays your email.`, kind: "ok" });
+      return;
+    }
+    if (r.devLink) setMsg({ text: "This instance sends no mail.", kind: "ok", devLink: r.devLink });
+    else setMsg({ text: `We sent a confirmation link to ${r.pendingEmail}.`, kind: "ok" });
+    toast("Confirmation link sent");
+  }
+
+  async function submit() {
+    const e = draft.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
+      setMsg({ text: "Enter a valid email address.", kind: "error" });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      report(await changeEmail(e));
+      setDraft("");
+      setEditing(false);
+      props.onChanged();
+    } catch (err) {
+      setMsg({ text: errorText(err), kind: "error" });
+      // a refused mail still leaves the address waiting; show it
+      props.onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      report(await resendEmailConfirmation());
+    } catch (err) {
+      setMsg({ text: errorText(err), kind: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="setrow">
+        <div className="setrow-l">
+          <div>Email</div>
+          <div className="muted fine">
+            {props.email
+              ? "Signs you in with a one-time link and recovers the account."
+              : "Add one to sign in with a one-time link and to recover the account."}
+          </div>
+        </div>
+        <div className="setrow-c">
+          {props.email ? <span className="muted">{props.email}</span> : <span className="muted">No email</span>}
+          <Button
+            variant="quiet"
+            disabled={busy}
+            aria-expanded={editing}
+            onClick={() => {
+              setEditing((v) => !v);
+              setMsg(null);
+            }}
+          >
+            {props.email || props.pendingEmail ? "Change" : "Add email"}
+          </Button>
+        </div>
+      </div>
+      {props.pendingEmail && props.pendingEmail !== props.email && (
+        <div className="setrow">
+          <div className="setrow-l">
+            <div className="mono">{props.pendingEmail}</div>
+            <div className="muted fine">Open the link we sent to confirm it. Until then it does not sign you in.</div>
+          </div>
+          <div className="setrow-c">
+            <Badge kind="warn">waiting for confirmation</Badge>
+            <Button variant="quiet" disabled={busy} onClick={resend}>
+              Resend
+            </Button>
+          </div>
+        </div>
+      )}
+      {editing && (
+        <div className="row">
+          <input
+            type="email"
+            autoComplete="email"
+            value={draft}
+            placeholder="you@example.com"
+            aria-label={props.email ? "New email address" : "Email address"}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+          />
+          <Button variant="primary" disabled={busy} onClick={submit}>
+            Send confirmation
+          </Button>
+        </div>
+      )}
+      {msg && (
+        <p
+          className={`mt-2 ${msg.kind === "error" ? "error" : "muted"}`}
+          role={msg.kind === "error" ? "alert" : undefined}
+        >
+          {msg.text}
+          {msg.devLink && (
+            <>
+              {" "}
+              <a href={msg.devLink}>Open the confirmation link</a>
+            </>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

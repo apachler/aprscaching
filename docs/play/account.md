@@ -85,13 +85,13 @@ Open **Settings → Your data**.
   your callsigns was verified.
 - **Erase my account** removes your account, your keys and your personal data. Your finds stay, but without
   your name or callsign on them. The app asks **Permanently erase OE8APR?** first; tap **Erase everything**
-  to go ahead.
+  to go ahead. The app then signs you out and closes Settings.
 
 !!! warning
     Erasing cannot be undone. It covers the whole account: every callsign it holds, with their SSIDs. Your
     passkeys stop working. Other instances that copied your records erase them too.
 
-Both need a recent browser. If the app says *This browser can't sign*, use a current Chrome, Firefox or Safari.
+Both need you signed in. Signed out, the group shows **Sign in** instead.
 
 ## Next
 

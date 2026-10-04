@@ -1,38 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { getProfile, updateProfile, type ProfileEdit } from "../api.js";
-import { Button, Row, Switch, useToast } from "../ui/index.js";
+import { getMyProfile, updateProfile, type ProfileEdit } from "../api.js";
+import { Button, ErrorState, Row, Switch, useLoad, useToast } from "../ui/index.js";
 
-/** Settings → Profile: edit the thin, opt-in ham profile. Sanitised + validated server-side. */
+/**
+ * Settings → Profile: edit the thin, opt-in ham profile. Sanitised + validated server-side. The form is
+ * seeded from the owner's own read, which carries hidden fields and the show/hide switch; until that read
+ * has answered there is nothing to save, so a save never blanks a hidden profile or makes it public.
+ */
 export function ProfileEditor(props: { callsign: string }) {
   const toast = useToast();
-  const [p, setP] = useState<ProfileEdit>({ profilePublic: true, links: [] });
+  const signedIn = props.callsign.length >= 3;
+  const { data, error, reload } = useLoad(
+    () => (signedIn ? getMyProfile() : Promise.resolve(undefined)),
+    [signedIn, props.callsign],
+  );
+  const [p, setP] = useState<ProfileEdit | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (props.callsign.length < 3) return;
-    getProfile(props.callsign)
-      .then((r) => {
-        const c = r.profile ?? {};
-        setP({
-          displayName: c.displayName ?? "",
-          homeGrid: c.homeGrid ?? "",
-          avatarUrl: c.avatarUrl ?? "",
-          bio: c.bio ?? "",
-          publicContact: c.publicContact ?? "",
-          links: c.links ?? [],
-          profilePublic: true,
-        });
-      })
-      .catch(() => {});
-  }, [props.callsign]);
+    if (!data) return;
+    const c = data.profile;
+    setP({
+      displayName: c.displayName ?? "",
+      homeGrid: c.homeGrid ?? "",
+      avatarUrl: c.avatarUrl ?? "",
+      bio: c.bio ?? "",
+      publicContact: c.publicContact ?? "",
+      links: c.links ?? [],
+      profilePublic: c.profilePublic,
+    });
+  }, [data]);
 
+  /** Edit the loaded form; nothing to edit before it has loaded. */
+  const edit = (f: (s: ProfileEdit) => ProfileEdit) => setP((s) => (s ? f(s) : s));
   const setLink = (i: number, k: "label" | "url", v: string) =>
-    setP((s) => ({ ...s, links: (s.links ?? []).map((l, j) => (j === i ? { ...l, [k]: v } : l)) }));
-  const addLink = () => setP((s) => ({ ...s, links: [...(s.links ?? []), { label: "", url: "" }].slice(0, 5) }));
-  const removeLink = (i: number) => setP((s) => ({ ...s, links: (s.links ?? []).filter((_, j) => j !== i) }));
+    edit((s) => ({ ...s, links: (s.links ?? []).map((l, j) => (j === i ? { ...l, [k]: v } : l)) }));
+  const addLink = () => edit((s) => ({ ...s, links: [...(s.links ?? []), { label: "", url: "" }].slice(0, 5) }));
+  const removeLink = (i: number) => edit((s) => ({ ...s, links: (s.links ?? []).filter((_, j) => j !== i) }));
 
   async function save() {
+    if (!p) return;
     setBusy(true);
     try {
       await updateProfile({ ...p, links: (p.links ?? []).filter((l) => l.url.trim()) });
@@ -44,7 +52,15 @@ export function ProfileEditor(props: { callsign: string }) {
     }
   }
 
-  if (props.callsign.length < 3) return <p className="muted">Sign in to set up your profile.</p>;
+  if (!signedIn) return <p className="muted">Sign in to set up your profile.</p>;
+  if (!p)
+    return error ? (
+      <ErrorState onRetry={reload}>Couldn&apos;t load your profile, so it can&apos;t be edited yet.</ErrorState>
+    ) : (
+      <p className="muted" aria-busy="true">
+        Loading your profile…
+      </p>
+    );
   return (
     <>
       <p className="muted">
@@ -54,7 +70,7 @@ export function ProfileEditor(props: { callsign: string }) {
         <Switch
           label="Show my profile publicly"
           checked={p.profilePublic !== false}
-          onChange={(v) => setP((s) => ({ ...s, profilePublic: v }))}
+          onChange={(v) => edit((s) => ({ ...s, profilePublic: v }))}
         />
       </Row>
       <label>
@@ -63,7 +79,7 @@ export function ProfileEditor(props: { callsign: string }) {
           value={p.displayName ?? ""}
           maxLength={60}
           placeholder={props.callsign}
-          onChange={(e) => setP((s) => ({ ...s, displayName: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, displayName: e.target.value }))}
         />
       </label>
       <label>
@@ -73,7 +89,7 @@ export function ProfileEditor(props: { callsign: string }) {
           value={p.homeGrid ?? ""}
           maxLength={10}
           placeholder="JN77bc12de"
-          onChange={(e) => setP((s) => ({ ...s, homeGrid: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, homeGrid: e.target.value }))}
         />
       </label>
       <label>
@@ -81,7 +97,7 @@ export function ProfileEditor(props: { callsign: string }) {
         <input
           value={p.avatarUrl ?? ""}
           placeholder="https://…/me.png"
-          onChange={(e) => setP((s) => ({ ...s, avatarUrl: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, avatarUrl: e.target.value }))}
         />
       </label>
       <label>
@@ -91,7 +107,7 @@ export function ProfileEditor(props: { callsign: string }) {
           rows={3}
           maxLength={500}
           placeholder="A line or two about your station / operating."
-          onChange={(e) => setP((s) => ({ ...s, bio: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, bio: e.target.value }))}
         />
       </label>
       <label>
@@ -99,7 +115,7 @@ export function ProfileEditor(props: { callsign: string }) {
         <input
           value={p.publicContact ?? ""}
           placeholder="you@example.com"
-          onChange={(e) => setP((s) => ({ ...s, publicContact: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, publicContact: e.target.value }))}
         />
       </label>
 
@@ -110,11 +126,17 @@ export function ProfileEditor(props: { callsign: string }) {
             className="field-sm"
             value={l.label}
             placeholder="label"
+            aria-label={`Link ${i + 1} label`}
             maxLength={40}
             onChange={(e) => setLink(i, "label", e.target.value)}
           />
-          <input value={l.url} placeholder="https://…" onChange={(e) => setLink(i, "url", e.target.value)} />
-          <Button variant="icon" aria-label="Remove link" onClick={() => removeLink(i)}>
+          <input
+            value={l.url}
+            placeholder="https://…"
+            aria-label={`Link ${i + 1} URL`}
+            onChange={(e) => setLink(i, "url", e.target.value)}
+          />
+          <Button variant="icon" aria-label={`Remove link ${i + 1}`} onClick={() => removeLink(i)}>
             ✕
           </Button>
         </div>
