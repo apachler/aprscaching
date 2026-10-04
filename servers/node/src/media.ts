@@ -10,7 +10,13 @@ export function makeFsMedia(root: string): MediaStore {
   // Don't rely on a `..`-strip (defeatable by `....//`); allowlist the key shape our server
   // builds AND assert path.resolve containment so no key can ever escape the media root.
   const safe = (key: string): string => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) || key.includes("..")) throw new Error(`unsafe media key: ${key}`);
+    // every segment non-empty and never `.` or `..`, so one object has exactly one key
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) ||
+      key.includes("..") ||
+      key.split("/").some((seg) => seg === "" || /^\.+$/.test(seg))
+    )
+      throw new Error(`unsafe media key: ${key}`);
     const file = path.resolve(base, key);
     if (file !== base && !file.startsWith(base + path.sep)) throw new Error(`media key escapes store: ${key}`);
     return file;

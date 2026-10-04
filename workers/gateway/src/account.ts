@@ -113,80 +113,72 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
   const auth = await authorize(env, req, callsign, "export");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
+  // The export covers the whole person — the account behind the call, whichever held call names it, and
+  // every base call it holds with their SSIDs.
+  const scope = await accountScope(env, cs);
+  const acct = scope.accountId ?? "";
+  const by = (col: string) => anyCall(col, scope.calls);
+  const q = (sql: string, col: string) => rows(env, sql.replace("$CALLS", by(col).sql), ...by(col).binds);
   // control-verification comes from its one store and is shown on the rows it concerns
   const verification = await verificationOf(env, cs);
   const verifiedFlag = verification ? 1 : 0;
-  const accountRow = await env.DB.prepare("SELECT callsign, created_at, near_radio FROM accounts WHERE callsign=?")
-    .bind(cs)
-    .first<{ callsign: string; created_at: number; near_radio: number }>();
+  const accountRow = await env.DB.prepare(
+    `SELECT callsign, email, pending_email, created_at, display_name, home_grid, avatar_url, bio, links, public_contact,
+            profile_public, announce_is, announce_tocall, notify_digest, tier, hide_nag, near_radio
+       FROM accounts WHERE account_id=?`,
+  )
+    .bind(acct)
+    .first<Record<string, unknown> & { callsign: string }>();
   const data = {
     instance: instanceOf(env, req),
     callsign: cs,
     exportedAt: nowS(),
     account: accountRow && {
-      callsign: accountRow.callsign,
+      ...accountRow,
       verified: verifiedFlag,
       verify_method: verification?.method ?? null,
-      created_at: accountRow.created_at,
       verified_at: verification?.verifiedAt ?? null,
-      near_radio: accountRow.near_radio,
     },
-    caches: await rows(
-      env,
-      "SELECT id, code, title, type, status, lat, lon, created_at FROM caches WHERE owner_call=? OR owner_call LIKE ?",
-      cs,
-      `${cs}-%`,
+    caches: await q(
+      "SELECT id, code, title, type, status, lat, lon, created_at FROM caches WHERE $CALLS",
+      "owner_call",
     ),
-    logs: await rows(
-      env,
-      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, signer_key, signed_at FROM cache_logs WHERE logger_call=? OR logger_call LIKE ? ORDER BY ts",
-      cs,
-      `${cs}-%`,
+    logs: await q(
+      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, signer_key, signed_at FROM cache_logs WHERE $CALLS ORDER BY ts",
+      "logger_call",
     ),
-    positions: await rows(
-      env,
-      "SELECT ts, lat, lon, heard_via, source FROM positions WHERE callsign=? ORDER BY ts",
-      cs,
+    positions: await q(
+      "SELECT callsign, ts, lat, lon, heard_via, source FROM positions WHERE $CALLS ORDER BY ts",
+      "callsign",
     ),
-    keys: (
-      await rows(
-        env,
-        "SELECT callsign, public_key, label, created_at FROM callsign_keys WHERE callsign=? OR callsign LIKE ?",
-        cs,
-        `${cs}-%`,
-      )
-    ).map((k) => ({ ...(k as Record<string, unknown>), verified: verifiedFlag })),
-    favorites: await rows(env, "SELECT cache_id FROM favorites WHERE callsign=?", cs),
-    watches: await rows(env, "SELECT cache_id FROM watches WHERE callsign=?", cs),
-    achievements: await rows(env, "SELECT badge, earned_at FROM achievements WHERE callsign=?", cs),
-    verifications: await rows(
+    // the APRS message log rows the person sent or was sent, on any of their calls
+    messages: await rows(
       env,
-      "SELECT method, status, verified_at, verified_by, note FROM callsign_verifications WHERE callsign=?",
-      cs,
+      `SELECT ts, from_call, to_call, body, ack, direction, transport FROM messages WHERE ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY ts`,
+      ...by("from_call").binds,
+      ...by("to_call").binds,
     ),
-    stations: await rows(
-      env,
-      "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE callsign=? OR callsign LIKE ?",
-      cs,
-      `${cs}-%`,
+    keys: (await q("SELECT callsign, public_key, label, created_at FROM callsign_keys WHERE $CALLS", "callsign")).map(
+      (k) => ({ ...(k as Record<string, unknown>), verified: verifiedFlag }),
     ),
-    radioCommands: await rows(
-      env,
-      "SELECT from_call, command, cache_code, body, raw_text, port, status, reason, sent_at, decided_at FROM radio_commands WHERE from_call=? OR from_call LIKE ? ORDER BY sent_at",
-      cs,
-      `${cs}-%`,
+    favorites: await q("SELECT callsign, cache_id FROM favorites WHERE $CALLS", "callsign"),
+    watches: await q("SELECT callsign, cache_id FROM watches WHERE $CALLS", "callsign"),
+    achievements: await q("SELECT callsign, badge, earned_at FROM achievements WHERE $CALLS", "callsign"),
+    verifications: await q(
+      "SELECT callsign, method, status, verified_at, verified_by, note FROM callsign_verifications WHERE $CALLS",
+      "callsign",
     ),
-    weatherKeys: await rows(
-      env,
-      "SELECT callsign, station_id, created_at, last_seen FROM wx_keys WHERE callsign=?",
-      cs,
+    stations: await q(
+      "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE $CALLS",
+      "callsign",
     ),
-    uiPrefs: await env.DB.prepare(
-      "SELECT prefs FROM account_prefs WHERE account_id=(SELECT account_id FROM accounts WHERE callsign=?)",
-    )
-      .bind(cs)
-      .first(),
-    ...(await accountExport(env, cs)),
+    radioCommands: await q(
+      "SELECT from_call, command, cache_code, body, raw_text, port, status, reason, sent_at, decided_at FROM radio_commands WHERE $CALLS ORDER BY sent_at",
+      "from_call",
+    ),
+    weatherKeys: await q("SELECT callsign, station_id, created_at, last_seen FROM wx_keys WHERE $CALLS", "callsign"),
+    uiPrefs: await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=?").bind(acct).first(),
+    ...(await accountExport(env, scope)),
   };
   return json(data, { headers: { "content-disposition": `attachment; filename="aprscaching-${cs}.json"` } });
 }
@@ -214,8 +206,10 @@ async function heldCallsExport(env: Env, accountId: string): Promise<Record<stri
 
 /** The account-scoped part of the export: every row keyed by the account or any call it holds.
  *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
-async function accountExport(env: Env, cs: string): Promise<Record<string, unknown>> {
-  const { accountId, emails, calls } = await accountScope(env, cs);
+async function accountExport(
+  env: Env,
+  { accountId, emails, calls }: Awaited<ReturnType<typeof accountScope>>,
+): Promise<Record<string, unknown>> {
   const acct = accountId ?? "";
   const by = (col: string) => anyCall(col, calls);
   const q = (sql: string, m: { sql: string; binds: string[] }, ...extra: string[]) =>
@@ -395,6 +389,14 @@ async function eraseCall(
       .bind(cs, `${cs}-%`)
       .all<{ id: number; media_key: string; thumb_key: string | null }>()
   ).results;
+  // the stages' audio clues on those caches: a recording of the owner's voice, so the objects go with them
+  const clips = (
+    await env.DB.prepare(
+      "SELECT s.media_key FROM cache_stages s JOIN caches c ON c.id=s.cache_id WHERE s.media_key IS NOT NULL AND (c.owner_call=? OR c.owner_call LIKE ?)",
+    )
+      .bind(cs, `${cs}-%`)
+      .all<{ media_key: string }>()
+  ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
     // A pending later corroboration carries the call in its question: it goes with the person.
@@ -412,12 +414,17 @@ async function eraseCall(
     env.DB.prepare(
       "UPDATE cache_logs SET logger_call=?, comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=? OR logger_call LIKE ?",
     ).bind(marker, cs, `${cs}-%`),
+    env.DB.prepare(
+      "UPDATE cache_stages SET media_key=NULL, media_bytes=NULL WHERE cache_id IN (SELECT id FROM caches WHERE owner_call=? OR owner_call LIKE ?)",
+    ).bind(cs, `${cs}-%`),
     // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
     env.DB.prepare(
       "UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=? OR owner_call LIKE ?",
     ).bind(marker, nowS(), cs, `${cs}-%`),
-    env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=?").bind(marker, cs),
+    // the message log names the person as sender or addressee, from the base call or any SSID of it
+    env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=? OR from_call LIKE ?").bind(marker, cs, `${cs}-%`),
+    env.DB.prepare("UPDATE messages SET to_call=? WHERE to_call=? OR to_call LIKE ?").bind(marker, cs, `${cs}-%`),
     // The adoption trail stays for the instance, anonymised: the person's calls become the marker and the
     // notes on rows naming them (which may describe them) are dropped.
     env.DB.prepare(
@@ -429,19 +436,21 @@ async function eraseCall(
     ),
     env.DB.prepare("DELETE FROM cache_adoption_requests WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     ...media.map((m) => env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(m.id)),
-    env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
+    // the track of every SSID (a tracker on OE8APR-9) and the map's latest state for each of them
+    env.DB.prepare("DELETE FROM positions WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
+    env.DB.prepare("DELETE FROM stations WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM account_moves WHERE callsign=?").bind(cs),
-    env.DB.prepare("DELETE FROM favorites WHERE callsign=?").bind(cs),
-    env.DB.prepare("DELETE FROM watches WHERE callsign=?").bind(cs),
-    env.DB.prepare("DELETE FROM achievements WHERE callsign=?").bind(cs),
-    env.DB.prepare("DELETE FROM stage_unlocks WHERE callsign=?").bind(cs),
+    env.DB.prepare("DELETE FROM favorites WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
+    env.DB.prepare("DELETE FROM watches WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
+    env.DB.prepare("DELETE FROM achievements WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
+    env.DB.prepare("DELETE FROM stage_unlocks WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=?").bind(cs),
     env.DB.prepare(
       "DELETE FROM account_events WHERE callsign=? AND action IN ('sysop_verified', 'sysop_revoked')",
     ).bind(cs),
     env.DB.prepare("DELETE FROM account_stations WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
-    env.DB.prepare("DELETE FROM wx_keys WHERE callsign=?").bind(cs),
+    env.DB.prepare("DELETE FROM wx_keys WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM radio_commands WHERE from_call=? OR from_call LIKE ?").bind(cs, `${cs}-%`),
     // account-level UI prefs — delete BEFORE the accounts row (the subselect needs account_id)
     env.DB.prepare(
@@ -458,7 +467,10 @@ async function eraseCall(
       ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
       ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
     ],
-    mediaKeys: media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
+    mediaKeys: [
+      ...media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
+      ...clips.map((c) => c.media_key),
+    ],
   };
 }
 

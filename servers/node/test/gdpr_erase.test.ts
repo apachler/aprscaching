@@ -34,6 +34,10 @@ const SCOPED: Array<[string, string]> = [
   ["callsign_challenges", "SELECT COUNT(*) AS n FROM callsign_challenges WHERE account_id=?"],
   ["near_cache_messages", "SELECT COUNT(*) AS n FROM near_cache_messages WHERE call='DL1GDP'"],
   ["meshcom_group_messages", "SELECT COUNT(*) AS n FROM meshcom_group_messages WHERE from_call LIKE 'DL1GDP%'"],
+  ["positions", "SELECT COUNT(*) AS n FROM positions WHERE callsign LIKE 'DL1GDP%'"],
+  ["stations", "SELECT COUNT(*) AS n FROM stations WHERE callsign LIKE 'DL1GDP%'"],
+  ["messages", "SELECT COUNT(*) AS n FROM messages WHERE from_call LIKE 'DL1GDP%' OR to_call LIKE 'DL1GDP%'"],
+  ["cache_stages", "SELECT COUNT(*) AS n FROM cache_stages WHERE media_key IS NOT NULL"],
   ["accounts", "SELECT COUNT(*) AS n FROM accounts WHERE account_id=?"],
 ];
 
@@ -111,6 +115,22 @@ async function seeded() {
       t,
     ],
     ["UPDATE accounts SET near_radio = 1 WHERE account_id = ?", acct],
+    ["UPDATE accounts SET display_name = 'Gerd', home_grid = 'JN77' WHERE account_id = ?", acct],
+    // a tracker on an SSID, and the map's latest state for it
+    [
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, transport) VALUES ('DL1GDP-9', ?, 47, 15, 'rf', 'tnc')",
+      t,
+    ],
+    ["INSERT INTO stations (callsign, lat, lon, last_seen) VALUES ('DL1GDP-9', 47, 15, ?)", t],
+    // APRS messages the person sent from an SSID and was sent, and one between two other stations
+    ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'DL1GDP-7', 'OE8APR', 'out', 'tx')", t],
+    ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'OE8APR', 'DL1GDP', 'in', 'rx')", t],
+    ["INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?, 'OE8APR', 'OE5XYZ', 'other', 'rx')", t],
+    // an audio clue on a stage of the person's cache
+    [
+      "INSERT INTO cache_stages (cache_id, stage_no, unlock, media_key, media_bytes) VALUES (?, 1, 'audio', 'cache/1/stage/1/clue-00000000000a.mpeg', 3)",
+      cacheId,
+    ],
   ] as const;
   for (const [sql, ...binds] of seed)
     await env.DB.prepare(sql)
@@ -162,6 +182,21 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
     expect(exp.data.passkeys[0]).not.toHaveProperty("public_key");
     expect(exp.data.watchCalls).toHaveLength(1);
     expect(exp.data.apiKeys).toHaveLength(1);
+    expect(exp.data.account).toMatchObject({ email: "gdpr@example.test", display_name: "Gerd", home_grid: "JN77" });
+    expect(exp.data.positions).toEqual([expect.objectContaining({ callsign: "DL1GDP-9" })]);
+    expect(exp.data.messages.map((m: { body: string }) => m.body).sort()).toEqual(["in", "out"]);
+  });
+
+  it("the export by a held call that is not the active one finds the account", async () => {
+    const { env, cookie, acct } = await seeded();
+    await env.DB.prepare("INSERT INTO account_callsigns (account_id, callsign, added_at) VALUES (?, 'DL2GDP', 1)")
+      .bind(acct)
+      .run();
+    const exp = await call(env, "POST", "/api/account/DL2GDP/export", {}, { cookie });
+    expect(exp.status).toBe(200);
+    expect(exp.data.account).toMatchObject({ callsign: CS, email: "gdpr@example.test" });
+    expect(exp.data.callsigns.map((c: { callsign: string }) => c.callsign).sort()).toEqual(["DL1GDP", "DL2GDP"]);
+    expect(exp.data.positions).toHaveLength(1);
   });
 
   it("erasure leaves no personal row, removes media, disables the passkey and frees the call", async () => {
@@ -175,6 +210,9 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
     const after = await counts(env, acct);
     for (const [table, n] of Object.entries(after)) expect(n, `left in ${table}`).toBe(0);
     expect(deleted).toContain("media/gdpr-1");
+    expect(deleted).toContain("cache/1/stage/1/clue-00000000000a.mpeg");
+    // the message between two other stations stays
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM messages").first<{ n: number }>())?.n).toBe(3);
     // another station's group message stays
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM meshcom_group_messages").first<{ n: number }>())?.n).toBe(
       1,

@@ -597,7 +597,7 @@ export interface BoxCommand {
   callsign?: string;
   kind: string;
   payload?: unknown;
-  status: "queued" | "sent" | "done" | "failed";
+  status: "queued" | "sent" | "done" | "failed" | "expired";
   result?: string;
   createdAt: number;
   sentAt?: number | null;

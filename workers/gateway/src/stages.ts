@@ -237,8 +237,15 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
 const clueShownLocked = (s: { stage_no: number; unlock: string | null }) => s.stage_no === 0 || s.unlock === "audio";
 
 // ---- serve a media clue: a stage's clip follows its clue, other cache media is public ----
+/** The exact key shapes the server stores media under — a gallery item, its thumbnail, a stage's audio clue.
+ *  Only these are served: a key with an empty or dot segment could name the same object as a gated clue
+ *  while slipping past the stage pattern below. */
+const SERVED_MEDIA_KEY =
+  /^cache\/[1-9]\d*\/(?:media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.thumb)?|stage\/(?:0|[1-9]\d*)\/clue-[0-9a-f]{12})\.[a-z0-9-]{1,16}$/;
+
 export async function handleGetMedia(req: Request, env: Env, key: string): Promise<Response> {
   if (!env.MEDIA) return new Response("media not configured", { status: 501 });
+  if (!SERVED_MEDIA_KEY.test(key)) return new Response("not found", { status: 404 });
   let cacheControl = "public, max-age=86400";
   const stageKey = /^cache\/(\d+)\/stage\/(\d+)\//.exec(key);
   if (stageKey) {

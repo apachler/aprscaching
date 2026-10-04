@@ -49,6 +49,9 @@ const DAY_S = 24 * 3600;
  * retries through the outbox — a Mailbox message is queued afresh each time its station is heard.
  */
 export const OUTBOX_QUEUED_TTL_S = 3600;
+/** A queued box command the box has not collected within this window is expired, not handed out: an operator who
+ *  keyed a beacon or a transmit an hour ago no longer expects it on the air when the box comes back. */
+export const BOX_COMMAND_QUEUED_TTL_S = 3600;
 /** Sent outbox items, kept to trace what the box published. */
 const OUTBOX_SENT_KEEP_S = 7 * DAY_S;
 /** Box commands in any state: the box log shows the latest few, and a week-old queued command is no longer wanted. */

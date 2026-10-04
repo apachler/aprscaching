@@ -24,6 +24,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
+import { sessionIdentity, accountHoldsCall } from "./auth.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./shack.js";
@@ -128,8 +129,12 @@ async function issueKey(req: Request, env: Env): Promise<Response> {
     return json({ error: "too many key requests; try again shortly" }, { status: 429 });
   const body = (await req.json().catch(() => ({}))) as { label?: string; ownerCall?: string };
   const key = "acg_" + crypto.randomUUID().replace(/-/g, "");
+  // A key names its owner only for a session whose account holds that call; anyone else's key stays anonymous.
+  const asked = typeof body.ownerCall === "string" ? body.ownerCall.trim().toUpperCase() : "";
+  const me = asked ? await sessionIdentity(req, env) : null;
+  const ownerCall = me && (await accountHoldsCall(env, me.accountId, asked)) ? asked : null;
   await env.DB.prepare("INSERT INTO api_keys (key, owner_call, label, rate_tier, created_at) VALUES (?,?,?, 'free', ?)")
-    .bind(key, body.ownerCall?.toUpperCase() || null, body.label?.slice(0, 80) || null, nowS())
+    .bind(key, ownerCall, body.label?.slice(0, 80) || null, nowS())
     .run();
   return json(
     {

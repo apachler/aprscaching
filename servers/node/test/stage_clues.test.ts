@@ -39,9 +39,9 @@ async function world() {
     { cookie: owner.cookie },
   );
   for (const n of [1, 2])
-    await env.MEDIA!.put(`cache/${id}/stage/${n}/clue.mp3`, new Uint8Array([1, 2, 3]), "audio/mpeg");
+    await env.MEDIA!.put(`cache/${id}/stage/${n}/clue-00000000000a.mp3`, new Uint8Array([1, 2, 3]), "audio/mpeg");
   await env.DB.prepare(
-    "UPDATE cache_stages SET media_key = 'cache/' || cache_id || '/stage/' || stage_no || '/clue.mp3' WHERE cache_id = ? AND stage_no > 0",
+    "UPDATE cache_stages SET media_key = 'cache/' || cache_id || '/stage/' || stage_no || '/clue-00000000000a.mp3' WHERE cache_id = ? AND stage_no > 0",
   )
     .bind(id)
     .run();
@@ -51,7 +51,7 @@ async function world() {
       mediaUrl: string | null;
     }[];
   const clip = async (n: number, cookie: string) =>
-    (await call(env, "GET", `/api/media/cache/${id}/stage/${n}/clue.mp3`, undefined, { cookie })).status;
+    (await call(env, "GET", `/api/media/cache/${id}/stage/${n}/clue-00000000000a.mp3`, undefined, { cookie })).status;
   return { env, owner, finder, id, stages, clip };
 }
 
@@ -78,5 +78,23 @@ describe("a locked stage's clue", () => {
       "decode the tones",
     ]);
     expect(await w.clip(1, w.owner.cookie)).toBe(200);
+  });
+});
+
+describe("a media key", () => {
+  it("is served only in the exact shape the server stores it under", async () => {
+    const w = await world();
+    // the canonical key of the open audio stage plays
+    expect(await w.clip(2, w.finder.cookie)).toBe(200);
+    for (const key of [
+      `cache//${w.id}/stage/2/clue-00000000000a.mp3`,
+      `cache/${w.id}/stage//2/clue-00000000000a.mp3`,
+      `cache/${w.id}/stage/02/clue-00000000000a.mp3`,
+      `cache/${w.id}/stage/2/clue.mp3`,
+      `cache/${w.id}/other/thing.mp3`,
+    ]) {
+      await w.env.MEDIA!.put(key, new Uint8Array([1]), "audio/mpeg");
+      expect((await call(w.env, "GET", `/api/media/${key}`, undefined, { cookie: w.finder.cookie })).status).toBe(404);
+    }
   });
 });
