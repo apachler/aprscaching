@@ -96,6 +96,18 @@ describe("Delivery", () => {
     expect(ids(d.queued())).toEqual(ids(many(8)));
   });
 
+  it("drops a packet with a field past its length ceiling before it is queued", async () => {
+    const gw = gateway();
+    const logs: string[] = [];
+    const d = new Delivery({ post: gw.post, maxQueue: 100, log: (m) => logs.push(m) });
+    d.add([pkt(1), { ...pkt(2), payload: ">" + "x".repeat(600) }, { ...pkt(3), src: "X".repeat(20) }, pkt(4)]);
+    expect(ids(d.queued())).toEqual([1, 4]);
+    expect(d.dropped).toBe(2);
+    expect(logs[0]).toMatch(/length ceiling/);
+    await d.flush();
+    expect(gw.batches.map(ids)).toEqual([[1, 4]]);
+  });
+
   it("caps the queue by dropping the oldest packets", () => {
     const d = new Delivery({ post: async () => ({ ok: true, status: 200 }), maxQueue: 10, log: () => {} });
     d.add(many(25));

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { FbbForwarder } from "../src/fbb-forward.js";
+import { FbbForwarder, FBB_MAX_LINE } from "../src/fbb-forward.js";
+import { encodeBinaryTransfer } from "../src/fbb-binary.js";
+import { fbbCrc16 } from "../src/lzhuf.js";
 import { type FbbMessage, type FbbStore } from "../src/fbb-session.js";
 
 /** Same in-memory store as the line-level FBB test, reused at the byte level. */
@@ -144,5 +146,67 @@ describe("FBB byte-stream forwarder", () => {
     }
     expect(B.inbox.map((m) => m.bid)).toEqual(["1_OE8"]);
     expect(B.inbox[0]).toMatchObject({ body: "one liner" });
+  });
+
+  it("ends the session with FQ when a line runs past the line ceiling", () => {
+    const enc = (t: string) => new TextEncoder().encode(t);
+    const dec = (b: Uint8Array | null) => (b ? new TextDecoder().decode(b) : "");
+    const partial = new FbbForwarder(makeStore([]), { initiator: false });
+    expect(partial.onData(enc("x".repeat(FBB_MAX_LINE)))).toBeNull(); // at the ceiling: still buffered
+    expect(partial.done).toBe(false);
+    expect(dec(partial.onData(enc("x")))).toBe("FQ\r");
+    expect(partial.done && partial.aborted).toBe(true);
+    expect(partial.onData(enc("[FBB-7.0-AFHM$]\r"))).toBeNull(); // nothing after the end
+
+    const whole = new FbbForwarder(makeStore([]), { initiator: false });
+    expect(dec(whole.onData(enc("y".repeat(FBB_MAX_LINE + 1) + "\r")))).toBe("FQ\r");
+    expect(whole.aborted).toBe(true);
+  });
+
+  it("keeps a long trickle of partial-line bytes bounded and still reads the line when it ends", () => {
+    const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Hi", body: "trickle" })]);
+    const B = makeStore([]);
+    const a = new FbbForwarder(A, { initiator: true });
+    const b = new FbbForwarder(B, { initiator: false });
+    const open = a.start()!;
+    // a long run of blank separators arrives byte by byte ahead of the SID, then the real exchange
+    for (let i = 0; i < 4000; i++) b.onData(new Uint8Array([0x0a]));
+    const q: Array<{ to: "a" | "b"; bytes: Uint8Array }> = [{ to: "b", bytes: open }];
+    let guard = 4000;
+    while (q.length && guard-- > 0) {
+      const { to, bytes } = q.shift()!;
+      const out = (to === "a" ? a : b).onData(bytes);
+      if (out) q.push({ to: to === "a" ? "b" : "a", bytes: out });
+    }
+    expect(B.inbox.map((m) => m.bid)).toEqual(["1_OE8"]);
+    expect(b.aborted).toBe(false);
+  });
+
+  it("ends the session with FQ, storing nothing, when a compressed body cannot be decompressed", () => {
+    const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Hi", body: "hello" })]);
+    const B = makeStore([]);
+    const a = new FbbForwarder(A, { initiator: true, compress: true });
+    const b = new FbbForwarder(B, { initiator: false, compress: true });
+    // a B1 stream with a valid CRC whose declared size is far above the receive ceiling
+    const sizeAndStream = new Uint8Array([0xff, 0xff, 0xff, 0x7f, 0x12, 0x34]);
+    const crc = fbbCrc16(sizeAndStream);
+    const b1 = new Uint8Array([crc & 0xff, crc >> 8, ...sizeAndStream]);
+    const header = new TextEncoder().encode("Hi\x000\x00");
+    const session = (a as unknown as { session: { takeBinary(): Uint8Array[] } }).session;
+    const take = session.takeBinary.bind(session);
+    session.takeBinary = () => take().map(() => encodeBinaryTransfer(header, b1));
+
+    const sentByB: string[] = [];
+    const q: Array<{ to: "a" | "b"; bytes: Uint8Array }> = [{ to: "b", bytes: a.start()! }];
+    let guard = 4000;
+    while (q.length && guard-- > 0) {
+      const { to, bytes } = q.shift()!;
+      const out = (to === "a" ? a : b).onData(bytes);
+      if (out && to === "b") sentByB.push(new TextDecoder("latin1").decode(out));
+      if (out) q.push({ to: to === "a" ? "b" : "a", bytes: out });
+    }
+    expect(B.inbox).toEqual([]);
+    expect(b.done && b.aborted).toBe(true);
+    expect(sentByB.at(-1)).toBe("FQ\r");
   });
 });

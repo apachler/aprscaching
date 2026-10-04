@@ -17,7 +17,7 @@
  *
  * Pure + zero-I/O: the encoder returns bytes, the decoder is fed bytes and yields completed transfers.
  */
-import { lzhufEncodeB1, lzhufDecodeB1, toCrlf } from "./lzhuf.js";
+import { lzhufEncodeB1, lzhufDecodeB1, toCrlf, LZHUF_MAX_SIZE } from "./lzhuf.js";
 
 export const SOH = 0x01; // header block marker
 export const STX = 0x02; // data block marker
@@ -170,18 +170,20 @@ export function fbbCompressedLength(body: string): number {
 /**
  * Decode a received binary transfer back into the message. `prior` is the already-held prefix of the B1
  * stream (its length must equal the header's resume offset); the transfer's data is appended before
- * decompression. Returns the decoded body text and whether the B1 CRC verified.
+ * decompression. Returns the decoded body text and whether the B1 CRC verified. Throws `LzhufError` when
+ * the stream declares more than `maxSize` decoded bytes or ends before its declared size.
  */
 export function decodeFbbCompressed(
   t: BinaryTransfer,
   prior?: Uint8Array,
+  maxSize = LZHUF_MAX_SIZE,
 ): { title: string; body: string; crcOk: boolean } {
   const { title, offset } = parseBinaryHeader(t.header);
   const head = prior && offset > 0 ? prior.subarray(0, offset) : new Uint8Array(0);
   const stream = new Uint8Array(head.length + t.data.length);
   stream.set(head, 0);
   stream.set(t.data, head.length);
-  const { data, crcOk } = lzhufDecodeB1(stream);
+  const { data, crcOk } = lzhufDecodeB1(stream, maxSize);
   return { title, body: fromCrlf(data), crcOk: crcOk && t.checksumOk };
 }
 

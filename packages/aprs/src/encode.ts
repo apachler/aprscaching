@@ -26,13 +26,18 @@ function degMin(deg: number, isLat: boolean): string {
 /** Strip control chars APRS info fields must not carry (and trim). */
 const clean = (s: string): string => s.replace(/[\r\n\x00-\x1f\x7f]/g, "").trim();
 
+/** An APRS symbol: exactly two printable ASCII characters (0x21–0x7E), table then code. */
+export const isAprsSymbol = (s: string): boolean => /^[\x21-\x7e]{2}$/.test(s);
+
 /**
  * Uncompressed APRS position report (no timestamp): `!lat/lon>comment`. `symbol` is a 2-char
- * table+code (default "/>" = car); comment is cleaned + length-capped.
+ * table+code (default "/>" = car; anything that is not `isAprsSymbol` falls back to it); comment is
+ * cleaned + length-capped.
  */
 export function encodeAprsPosition(lat: number, lon: number, symbol = "/>", comment = ""): string {
-  const table = symbol[0] ?? "/",
-    code = symbol[1] ?? ">";
+  const sym = isAprsSymbol(symbol) ? symbol : "/>";
+  const table = sym[0]!,
+    code = sym[1]!;
   return `!${degMin(lat, true)}${table}${degMin(lon, false)}${code}${clean(comment).slice(0, 43)}`;
 }
 

@@ -18,6 +18,12 @@ const decLine = (b: Uint8Array): string => {
   return s;
 };
 
+/**
+ * The longest command line the forwarder buffers: 8 KiB. FBB command lines (SID, proposals, FS replies,
+ * titles) are far shorter, so a peer that sends more without a line break ends the session.
+ */
+export const FBB_MAX_LINE = 8 * 1024;
+
 function concat(chunks: Uint8Array[]): Uint8Array {
   let n = 0;
   for (const c of chunks) n += c.length;
@@ -33,10 +39,16 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 /** One side of an FBB forwarding exchange over a byte link. Command lines are CR-terminated (FBB wire). */
 export class FbbForwarder {
   private session: FbbSession;
-  private buf: Uint8Array = new Uint8Array(0);
+  private mem: Uint8Array = new Uint8Array(1024); // received bytes not yet consumed live in mem[0, held)
+  private held = 0;
+  private buf: Uint8Array = new Uint8Array(0); // the unconsumed bytes during one onData call
   private binDecoder: BinaryTransferDecoder | null = null; // active only while reading compressed bodies
   private binRemaining = 0; // compressed message transfers still to read this block
+  private scanned = 0; // bytes of `buf` already searched for a line break
   done = false;
+  /** The session ended because the peer's input could not be processed (an over-long line, a body that
+   *  cannot be decompressed), not by an ordinary FQ. */
+  aborted = false;
 
   constructor(store: FbbStore, opts: { initiator: boolean; sid?: string; compress?: boolean }) {
     this.session = new FbbSession(store, opts);
@@ -52,7 +64,9 @@ export class FbbForwarder {
 
   /** Feed received link bytes; returns bytes to transmit (or null) and sets `done` when the session ends. */
   onData(bytes: Uint8Array): Uint8Array | null {
-    this.buf = concat([this.buf, bytes]);
+    if (this.done) return null;
+    this.append(bytes);
+    this.buf = this.mem.subarray(0, this.held);
     const out: Uint8Array[] = [];
     let pos = 0;
     while (pos < this.buf.length) {
@@ -62,17 +76,35 @@ export class FbbForwarder {
         const transfers = this.binDecoder!.push(this.buf.subarray(pos, pos + 1));
         pos++;
         for (const t of transfers) {
-          this.frame(this.session.feedBinary(t), out);
+          const r = this.session.feedBinary(t);
+          this.frame(r.out, out);
           this.drainBinary(out);
+          if (r.done) {
+            this.binRemaining = 0;
+            this.binDecoder = null;
+            this.done = this.aborted = true;
+            break;
+          }
           if (--this.binRemaining === 0) {
             this.binDecoder = null;
             break;
           }
         }
+        if (this.done) {
+          pos = this.buf.length;
+          break;
+        }
         continue;
       }
       const nl = this.nextNewline(pos);
-      if (nl < 0) break; // partial line — keep the tail buffered
+      // a partial line stays buffered; one longer than the line ceiling, complete or not, ends the session
+      if ((nl < 0 ? this.buf.length : nl) - pos > FBB_MAX_LINE) {
+        this.frame(["FQ"], out);
+        this.done = this.aborted = true;
+        pos = this.buf.length;
+        break;
+      }
+      if (nl < 0) break;
       const line = decLine(this.buf.subarray(pos, nl));
       pos = nl + 1;
       if (line === "") continue; // skip blank separators between CR/LF pairs
@@ -90,15 +122,41 @@ export class FbbForwarder {
         this.binDecoder = new BinaryTransferDecoder();
       }
     }
-    this.buf = this.buf.subarray(pos);
+    // Keep only the unconsumed tail: a held partial line is at most FBB_MAX_LINE bytes, so moving it
+    // to the front costs no more than the line itself.
+    if (this.done) this.held = 0;
+    else if (pos > 0) {
+      this.mem.copyWithin(0, pos, this.held);
+      this.held -= pos;
+    }
+    if (this.held === 0 && this.mem.length > 64 * 1024) this.mem = new Uint8Array(1024); // after a large body
+    this.buf = new Uint8Array(0);
+    this.scanned = Math.max(0, this.scanned - pos);
     return out.length ? concat(out) : null;
   }
 
-  private nextNewline(from: number): number {
-    for (let i = from; i < this.buf.length; i++) {
-      const b = this.buf[i]!;
-      if (b === 0x0d || b === 0x0a) return i;
+  /** Add received bytes behind the held ones, growing the store by doubling. */
+  private append(bytes: Uint8Array): void {
+    const need = this.held + bytes.length;
+    if (need > this.mem.length) {
+      const grown = new Uint8Array(Math.max(need, this.mem.length * 2));
+      grown.set(this.mem.subarray(0, this.held));
+      this.mem = grown;
     }
+    this.mem.set(bytes, this.held);
+    this.held = need;
+  }
+
+  /** The next line break at or after `from`, never rescanning bytes an earlier call already searched. */
+  private nextNewline(from: number): number {
+    for (let i = Math.max(from, this.scanned); i < this.buf.length; i++) {
+      const b = this.buf[i]!;
+      if (b === 0x0d || b === 0x0a) {
+        this.scanned = i + 1;
+        return i;
+      }
+    }
+    this.scanned = this.buf.length;
     return -1;
   }
 

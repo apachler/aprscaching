@@ -27,8 +27,12 @@ export async function maybeAnnounceFind(
   if (!acct?.announce_is) return false;
   if (!(await isCallsignVerified(env, callsign))) return false;
 
-  const title = cacheTitle ? ` (${cacheTitle})` : "";
-  const payload = `>Found ${cacheCode}${title} via aprscaching.net`.slice(0, 120);
+  // A title or code can arrive by import or federation without the request schema's check, and the
+  // status goes out as one APRS-IS line, so control characters are dropped here too.
+  const oneLine = (v: string) => v.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  const t = cacheTitle ? oneLine(cacheTitle) : "";
+  const title = t ? ` (${t})` : "";
+  const payload = `>Found ${oneLine(cacheCode)}${title} via aprscaching.net`.slice(0, 120);
   await env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)")
     .bind(nowS(), callsign, acct.announce_tocall ?? "APZACG", payload)
     .run();

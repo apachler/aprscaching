@@ -9,7 +9,7 @@
  * refuses as malformed or too large (400, 413, 422) would be refused again on every retry, so it is split
  * to deliver the rest and the packet it still refuses alone is dropped. Only one flush runs at a time.
  */
-import { INGEST_BATCH_MAX, type Packet } from "@aprscaching/shared";
+import { INGEST_BATCH_MAX, Packet } from "@aprscaching/shared";
 
 /** Statuses that say the batch itself is unacceptable: retrying it unchanged cannot succeed. */
 const REFUSED = new Set([400, 413, 422]);
@@ -47,10 +47,18 @@ export class Delivery {
     return this.queue.slice();
   }
 
-  /** Queue packets for the next flush. */
+  /**
+   * Queue packets for the next flush. A packet the gateway's schema refuses (a field past its length
+   * ceiling) is dropped here, so it never costs a refused POST and a split.
+   */
   add(packets: Packet[]): void {
-    if (!packets.length) return;
-    this.queue.push(...packets);
+    const ok = packets.filter((p) => Packet.safeParse(p).success);
+    if (ok.length < packets.length) {
+      this.dropped += packets.length - ok.length;
+      this.log(`dropped ${packets.length - ok.length} packet(s) with a field past its length ceiling`);
+    }
+    if (!ok.length) return;
+    this.queue.push(...ok);
     this.cap();
   }
 

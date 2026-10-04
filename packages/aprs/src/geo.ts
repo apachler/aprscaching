@@ -1,4 +1,16 @@
 // SPDX-License-Identifier: MIT
+/** A position on the globe: both values finite, latitude within ±90°, longitude within ±180°. */
+export function isValidLatLon(lat: unknown, lon: unknown): lat is number {
+  return (
+    typeof lat === "number" &&
+    typeof lon === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180
+  );
+}
+
 export function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const R = 6371000;
   const dLat = ((bLat - aLat) * Math.PI) / 180;

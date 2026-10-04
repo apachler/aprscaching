@@ -23,6 +23,24 @@ const T = N_CHAR * 2 - 1; // 627 — size of the Huffman table
 const R = T - 1; // 626 — position of the root
 const MAX_FREQ = 0x8000; // tree-rebuild threshold
 
+/**
+ * The largest decoded size a frame may declare unless the caller names another ceiling: 1 MiB, the
+ * same bound the FBB block-stream decoder puts on a transfer. A frame declaring more is refused before
+ * any output is allocated.
+ */
+export const LZHUF_MAX_SIZE = 1024 * 1024;
+
+/**
+ * Zero bytes the bit reader may read past the end of the stream: it prefetches up to two bytes ahead of
+ * the bits it uses, so a complete stream never needs more. A stream that does ends before its declared size.
+ */
+const MAX_PAD = 4;
+
+/** A frame that cannot be decoded: its declared size is above the ceiling, or its stream ends early. */
+export class LzhufError extends Error {
+  override name = "LzhufError";
+}
+
 // Position-code tables (the classic Okumura public-domain tables (identical in the FBB source)). Upper 6 position bits are table-coded; the
 // lower 6 ride verbatim.
 // prettier-ignore
@@ -111,6 +129,7 @@ class Coder {
   private out: number[] = [];
   private inp: Uint8Array = new Uint8Array(0);
   private ip = 0;
+  private pad = 0; // zero bytes read past the end of the input
   private getbuf = 0;
   private getlen = 0;
   private putbuf = 0;
@@ -228,7 +247,9 @@ class Coder {
 
   // ---- bit input ----
   private nextByte(): number {
-    return this.ip < this.inp.length ? this.inp[this.ip++]! : 0;
+    if (this.ip < this.inp.length) return this.inp[this.ip++]!;
+    if (++this.pad > MAX_PAD) throw new LzhufError("the stream ends before its declared size");
+    return 0;
   }
   private getBit(): number {
     while (this.getlen <= 8) {
@@ -395,6 +416,7 @@ class Coder {
   decode(stream: Uint8Array, size: number): Uint8Array {
     this.inp = stream;
     this.ip = 0;
+    this.pad = 0;
     this.getbuf = 0;
     this.getlen = 0;
     this.startHuff();
@@ -433,8 +455,17 @@ export function lzhufEncodeB0(raw: Uint8Array): Uint8Array {
   const stream = raw.length ? new Coder().encode(raw) : new Uint8Array(0);
   return concat(le32(raw.length), stream);
 }
-export function lzhufDecodeB0(frame: Uint8Array): Uint8Array {
-  const size = rd32(frame, 0);
+/** The size a frame declares, refused above `maxSize` (default `LZHUF_MAX_SIZE`) or past the frame's end. */
+function declaredSize(b: Uint8Array, o: number, maxSize: number): number {
+  if (b.length < o + 4) throw new LzhufError("the frame is shorter than its size field");
+  const size = rd32(b, o);
+  if (size > maxSize) throw new LzhufError(`the frame declares ${size} bytes, above the ${maxSize}-byte ceiling`);
+  return size;
+}
+
+/** B0 decode. Throws `LzhufError` when the declared size is above `maxSize` or the stream ends early. */
+export function lzhufDecodeB0(frame: Uint8Array, maxSize = LZHUF_MAX_SIZE): Uint8Array {
+  const size = declaredSize(frame, 0, maxSize);
   if (size === 0) return new Uint8Array(0);
   return new Coder().decode(frame.subarray(4), size);
 }
@@ -446,12 +477,17 @@ export function lzhufEncodeB1(raw: Uint8Array): Uint8Array {
   const crc = fbbCrc16(sizeAndStream);
   return concat(new Uint8Array([crc & 0xff, (crc >> 8) & 0xff]), sizeAndStream);
 }
-export function lzhufDecodeB1(frame: Uint8Array): { data: Uint8Array; crcOk: boolean } {
+/**
+ * B1 decode. The CRC is checked first: a frame whose CRC fails is not decompressed and comes back empty
+ * with `crcOk` false. Throws `LzhufError` when the declared size is above `maxSize` or the stream ends early.
+ */
+export function lzhufDecodeB1(frame: Uint8Array, maxSize = LZHUF_MAX_SIZE): { data: Uint8Array; crcOk: boolean } {
+  if (frame.length < 6) throw new LzhufError("the frame is shorter than its header");
   const crc = frame[0]! | (frame[1]! << 8);
   const body = frame.subarray(2);
-  const size = rd32(body, 0);
-  const crcOk = fbbCrc16(body) === crc;
-  return { data: new Coder().decode(body.subarray(4), size), crcOk };
+  const size = declaredSize(body, 0, maxSize);
+  if (fbbCrc16(body) !== crc) return { data: new Uint8Array(0), crcOk: false };
+  return { data: new Coder().decode(body.subarray(4), size), crcOk: true };
 }
 
 function concat(a: Uint8Array, b: Uint8Array): Uint8Array {

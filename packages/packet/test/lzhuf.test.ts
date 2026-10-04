@@ -3,7 +3,16 @@
 // CRLF normalization, and the FBB CRC-16 vector. Byte-exactness against real FBB lives in
 // lzhuf-oracle.test.ts (skips when the compiled oracle isn't present).
 import { describe, it, expect } from "vitest";
-import { lzhufEncodeB0, lzhufDecodeB0, lzhufEncodeB1, lzhufDecodeB1, fbbCrc16, toCrlf } from "../src/lzhuf.js";
+import {
+  lzhufEncodeB0,
+  lzhufDecodeB0,
+  lzhufEncodeB1,
+  lzhufDecodeB1,
+  fbbCrc16,
+  toCrlf,
+  LzhufError,
+  LZHUF_MAX_SIZE,
+} from "../src/lzhuf.js";
 
 const corpus = [
   "",
@@ -48,5 +57,33 @@ describe("LZHUF B0/B1 round-trips", () => {
   it("uses the FBB TransIt CRC-16 (poly 0x1021, seed 0, MSB-first)", () => {
     // "123456789" is the canonical CRC-16/XMODEM check vector = 0x31C3
     expect(fbbCrc16(new TextEncoder().encode("123456789"))).toBe(0x31c3);
+  });
+
+  it("refuses a declared size above the ceiling before decoding", () => {
+    const raw = new TextEncoder().encode("a".repeat(5000));
+    expect(() => lzhufDecodeB0(lzhufEncodeB0(raw), 4999)).toThrow(LzhufError);
+    expect(lzhufDecodeB0(lzhufEncodeB0(raw), 5000)).toHaveLength(5000);
+    const huge = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0x00]);
+    expect(() => lzhufDecodeB0(huge)).toThrow(/ceiling/);
+    const sizeAndStream = new Uint8Array([0x01, 0x00, 0x10, 0x00]); // LZHUF_MAX_SIZE + 1
+    expect(LZHUF_MAX_SIZE + 1).toBe(0x100001);
+    const crc = fbbCrc16(sizeAndStream);
+    expect(() => lzhufDecodeB1(new Uint8Array([crc & 0xff, crc >> 8, ...sizeAndStream]))).toThrow(LzhufError);
+  });
+
+  it("refuses a stream that ends before its declared size", () => {
+    const packed = lzhufEncodeB0(new TextEncoder().encode("The quick brown fox jumps over the lazy dog. ".repeat(20)));
+    expect(() => lzhufDecodeB0(packed.subarray(0, packed.length - 20))).toThrow(/ends before/);
+    expect(() => lzhufDecodeB0(new Uint8Array([0x00, 0x00, 0x01, 0x00]))).toThrow(LzhufError); // 64 KiB from nothing
+    expect(() => lzhufDecodeB0(new Uint8Array([0x10]))).toThrow(LzhufError); // shorter than its size field
+  });
+
+  it("checks the B1 CRC before decompressing", () => {
+    const sizeAndStream = new Uint8Array([0x00, 0x00, 0x01, 0x00]); // 64 KiB declared, no stream
+    const crc = fbbCrc16(sizeAndStream) ^ 0x0101;
+    expect(lzhufDecodeB1(new Uint8Array([crc & 0xff, crc >> 8, ...sizeAndStream]))).toEqual({
+      data: new Uint8Array(0),
+      crcOk: false,
+    });
   });
 });

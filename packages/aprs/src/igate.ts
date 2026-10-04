@@ -28,10 +28,21 @@ export function pathBlocksTxGating(path: string[]): boolean {
   return path.some((p) => NO_TX_GATE_TOKENS.includes(baseCall(p)));
 }
 
+/**
+ * The info field as an IGate relays it: cut at the first CR, LF or NUL. Many TNCs end the info field
+ * with a CR, and an APRS-IS line ends at its first line break, so anything after one is not part of the
+ * packet.
+ */
+export function igatePayload(payload: string): string {
+  const cut = payload.search(/[\r\n\0]/);
+  return cut < 0 ? payload : payload.slice(0, cut);
+}
+
 /** RX-IGate: should this RF-heard frame be relayed to APRS-IS? */
 export function shouldRxIgate(f: ParsedFrame, gateCall: string): boolean {
-  if (!f.payload) return false;
-  if (isThirdParty(f.payload)) return false;
+  const payload = igatePayload(f.payload);
+  if (!payload) return false;
+  if (isThirdParty(payload)) return false;
   if (pathBlocksGating(f.path)) return false;
   if (baseCall(f.src) === baseCall(gateCall)) return false; // don't gate our own beacons
   return true;
@@ -39,11 +50,12 @@ export function shouldRxIgate(f: ParsedFrame, gateCall: string): boolean {
 
 /**
  * Build the APRS-IS line for an RF-heard frame: the original header + path, then `,qAR,GATECALL`,
- * then the info field. The path keeps its has-been-repeated marks as heard.
+ * then the info field cut at its first line break (`igatePayload`). The path keeps its has-been-repeated
+ * marks as heard.
  */
 export function rxIgateLine(f: ParsedFrame, gateCall: string): string {
   const via = f.path.length ? "," + f.path.join(",") : "";
-  return `${f.src}>${f.dst}${via},qAR,${gateCall.toUpperCase()}:${f.payload}`;
+  return `${f.src}>${f.dst}${via},qAR,${gateCall.toUpperCase()}:${igatePayload(f.payload)}`;
 }
 
 /** The addressee of an APRS message (`:ADDRESSEE :text…`), trimmed, or null if not a message. */

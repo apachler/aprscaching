@@ -4,7 +4,8 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
-import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { encodeAprsMessage, encodeAprsPosition, isAprsSymbol } from "@aprscaching/aprs";
 
 /**
  * tx.ts — gated user TX via the ingest box. A signed-in, control-verified user asks the peer to inject
@@ -25,6 +26,12 @@ interface UserTxBody {
   tocall?: string;
 }
 
+/** A TOCALL a client may name: a callsign-shaped destination, 1–6 letters or digits and an optional SSID. */
+const TOCALL = /^[A-Z0-9]{1,6}(-\d{1,2})?$/;
+
+/** User transmissions an account may queue an hour. */
+export const TX_PER_HOUR = 30;
+
 /**
  * Pure: validate a user-TX request and build the outbox row fields (kind + APRS info payload). Returns an
  * error string for a bad request. No auth/DB here — the handler gates on control-verification first.
@@ -34,6 +41,7 @@ export function buildTxPayload(
 ): { ok: true; kind: string; payload: string; tocall: string } | { ok: false; error: string } {
   const kind = String(body.kind ?? "").toLowerCase();
   const tocall = String(body.tocall ?? "APZACG").toUpperCase(); // default self-assigned TOCALL
+  if (!TOCALL.test(tocall)) return { ok: false, error: "tocall must be 1–6 letters or digits, with an optional SSID" };
   if (kind === "message") {
     const to = String(body.addressee ?? "")
       .toUpperCase()
@@ -47,10 +55,12 @@ export function buildTxPayload(
       lon = Number(body.lon);
     if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
       return { ok: false, error: "a beacon needs a valid lat/lon" };
+    const symbol = String(body.symbol ?? "/>");
+    if (!isAprsSymbol(symbol)) return { ok: false, error: "symbol must be two printable ASCII characters" };
     return {
       ok: true,
       kind: "beacon",
-      payload: encodeAprsPosition(lat, lon, String(body.symbol ?? "/>"), String(body.comment ?? "").slice(0, 120)),
+      payload: encodeAprsPosition(lat, lon, symbol, String(body.comment ?? "").slice(0, 120)),
       tocall,
     };
   }
@@ -68,6 +78,8 @@ export async function handleUserTx(req: Request, env: Env): Promise<Response> {
   }
   const built = buildTxPayload((await req.json().catch(() => ({}))) as UserTxBody);
   if (!built.ok) return json({ error: built.error }, { status: 400 });
+  if (await rateLimitedDurable(env, `tx:${me.accountId}`, Date.now(), TX_PER_HOUR, 3600_000))
+    return json({ error: `at most ${TX_PER_HOUR} transmissions an hour` }, { status: 429 });
 
   const ins = await env.DB.prepare(
     "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload, target) VALUES (?,?,?,?,?, 'is')",

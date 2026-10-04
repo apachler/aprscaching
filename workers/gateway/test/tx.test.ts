@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { buildTxPayload, handleUserTx } from "../src/tx.js";
+import { buildTxPayload, handleUserTx, TX_PER_HOUR } from "../src/tx.js";
 import { sessionDb, sessionRequest } from "./sessiondb.js";
 import type { Env } from "../src/env.js";
 import { thirdPartyEncap } from "@aprscaching/aprs";
@@ -25,6 +25,32 @@ describe("gated user TX payload", () => {
     expect(buildTxPayload({ kind: "nope" }).ok).toBe(false);
   });
 
+  it("accepts a callsign-shaped tocall and refuses any other", () => {
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x", tocall: "apzacg-1" })).toMatchObject({
+      ok: true,
+      tocall: "APZACG-1",
+    });
+    for (const tocall of ["APZACG,WIDE1-1", "APZACG:x", "APZ\r\nX", "", "APZACGXX", "AP-123", "AP ZA"]) {
+      const r = buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x", tocall });
+      expect(r, tocall).toMatchObject({ ok: false, error: expect.stringMatching(/tocall/) });
+    }
+  });
+
+  it("refuses a symbol that is not two printable ASCII characters", () => {
+    expect(buildTxPayload({ kind: "beacon", lat: 47, lon: 15, symbol: "\\k" }).ok).toBe(true);
+    for (const symbol of ["/", "/>>", "/\n", " >", "/\u00e4", ""]) {
+      const r = buildTxPayload({ kind: "beacon", lat: 47, lon: 15, symbol });
+      expect(r, JSON.stringify(symbol)).toMatchObject({ ok: false, error: expect.stringMatching(/symbol/) });
+    }
+  });
+
+  it("keeps line breaks and NUL out of message text and beacon comments", () => {
+    const m = buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "a\r\nOE1ABC>APRS:b\0c" });
+    expect(m.ok && m.payload).toBe(":OE1XYZ   :aOE1ABC>APRS:bc");
+    const b = buildTxPayload({ kind: "beacon", lat: 47, lon: 15, comment: "x\ry\nz" });
+    expect(b.ok && b.payload).toMatch(/xyz$/);
+  });
+
   it("the enqueued payload wraps correctly as third-party when the box drains it", () => {
     const r = buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "ping" });
     // the ingest box (validate-at-deploy) encapsulates the outbox row under the peer's login:
@@ -40,7 +66,7 @@ describe("handleUserTx — control-verification gate", () => {
   const SESSION_SECRET = "strong-session-secret-xyz";
   // Mock DB: the session lookups for acct-1 holding OE8APR, the callsign_verifications lookup, and a
   // capture of the aprs_outbox insert binds.
-  const txDb = (status: string | null, sink: { rows: unknown[][]; verifiedLookups: unknown[] }) =>
+  const txDb = (status: string | null, sink: { rows: unknown[][]; verifiedLookups: unknown[] }, sentThisHour = 0) =>
     sessionDb(
       { accountId: "acct-1", base: "OE8APR" },
       {
@@ -49,7 +75,8 @@ describe("handleUserTx — control-verification gate", () => {
             bind(...args: unknown[]) {
               return {
                 async first() {
-                  return null;
+                  // the durable rate limiter's counter, this request included
+                  return sql.includes("rate_limits") ? { count: sentThisHour + 1 } : null;
                 },
                 // the verification store answers only verified rows
                 async all() {
@@ -105,5 +132,18 @@ describe("handleUserTx — control-verification gate", () => {
     expect(res.status).toBe(201);
     expect(sink.verifiedLookups).toEqual(["OE8APR"]);
     expect(sink.rows[0]![1]).toBe("OE8APR-7");
+  });
+
+  it(`429 once an account has queued ${TX_PER_HOUR} transmissions this hour`, async () => {
+    const under = sinkOf();
+    const envUnder = { SESSION_SECRET, DB: txDb("verified", under, TX_PER_HOUR - 1) } as unknown as Env;
+    const ok = await handleUserTx(await post("OE8APR", { kind: "beacon", lat: 47, lon: 15 }, envUnder), envUnder);
+    expect(ok.status).toBe(201);
+    const over = sinkOf();
+    const envOver = { SESSION_SECRET, DB: txDb("verified", over, TX_PER_HOUR) } as unknown as Env;
+    const res = await handleUserTx(await post("OE8APR", { kind: "beacon", lat: 47, lon: 15 }, envOver), envOver);
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toMatch(/an hour/);
+    expect(over.rows).toEqual([]);
   });
 });

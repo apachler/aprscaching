@@ -10,6 +10,7 @@ import {
   pathBlocksTxGating,
   messageAddressee,
   pathBlocksGating,
+  igatePayload,
 } from "../src/index.js";
 import type { ParsedFrame } from "../src/index.js";
 
@@ -68,6 +69,15 @@ describe("RX-IGate", () => {
     expect(shouldRxIgate(f([], "OE1ABC", "}third>party:data"), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f([], "OE8XXX-1"), "OE8XXX")).toBe(false);
     expect(pathBlocksGating(["WIDE1-1", "NOGATE"])).toBe(true);
+  });
+  it("relays the info field up to its first CR or LF, and nothing when that leaves it empty", () => {
+    const fr = f(["WIDE2-1"], "OE1ABC", ">status\rN0CALL>APRS:extra\r\n");
+    expect(shouldRxIgate(fr, "OE8XXX")).toBe(true);
+    expect(rxIgateLine(fr, "OE8XXX")).toBe("OE1ABC>APRS,WIDE2-1,qAR,OE8XXX:>status");
+    expect(rxIgateLine(f([], "OE1ABC", ">a\nb"), "OE8XXX")).toBe("OE1ABC>APRS,qAR,OE8XXX:>a");
+    expect(rxIgateLine(f([], "OE1ABC", ">a\0b"), "OE8XXX")).toBe("OE1ABC>APRS,qAR,OE8XXX:>a");
+    expect(shouldRxIgate(f([], "OE1ABC", "\r\n>later"), "OE8XXX")).toBe(false);
+    expect(igatePayload(">plain")).toBe(">plain");
   });
 });
 

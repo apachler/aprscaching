@@ -4,22 +4,33 @@ import { z } from "zod";
 export const PacketKind = z.enum(["position", "message", "weather", "telemetry", "status", "object", "item", "other"]);
 export type PacketKind = z.infer<typeof PacketKind>;
 
+/**
+ * Field ceilings for an ingested packet. An APRS-IS line is at most 512 bytes and an AX.25 info field 256,
+ * so the payload and the whole line fit 512. A callsign is at most 9 characters (MeshCom's SSID letters
+ * included); 16 leaves room for the other station names APRS-IS carries. A path element may be a q-construct
+ * server name or the 32-hex-digit form of an IPv6 address.
+ */
+export const PACKET_LINE_MAX = 512;
+const CALL_MAX = 16;
+const PATH_ELEM_MAX = 32;
+const PATH_MAX = 32;
+
 export const Packet = z.object({
-  src: z.string(),
-  dst: z.string().optional(),
-  path: z.array(z.string()).default([]),
-  payload: z.string(),
+  src: z.string().max(CALL_MAX),
+  dst: z.string().max(CALL_MAX).optional(),
+  path: z.array(z.string().max(PATH_ELEM_MAX)).max(PATH_MAX).default([]),
+  payload: z.string().max(PACKET_LINE_MAX),
   kind: PacketKind.default("other"),
   parsed: z.record(z.string(), z.unknown()).optional(),
   heardVia: z.enum(["rf", "aprs_is", "app"]).default("aprs_is"),
-  igateCall: z.string().optional(),
-  port: z.string().default("aprs-is"),
+  igateCall: z.string().max(CALL_MAX).optional(),
+  port: z.string().max(64).default("aprs-is"),
   // The ingest box (its BOX_ID) and the station on it that received this frame over its own radio —
   // where an answer to the sender can be transmitted from. Routing only: never a trust input.
   box: z.string().max(64).optional(),
   rxCall: z.string().max(16).optional(),
   ts: z.number(),
-  raw: z.string().optional(),
+  raw: z.string().max(PACKET_LINE_MAX).optional(),
 });
 export type Packet = z.infer<typeof Packet>;
 

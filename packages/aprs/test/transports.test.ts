@@ -28,6 +28,24 @@ describe("AX.25 + KISS", () => {
     ax[14] = 0x00; // clobber the control byte (UI = 0x03)
     expect(decodeAx25(ax)).toBeNull();
   });
+  it("rejects an address byte outside A–Z, 0–9 and space", () => {
+    const ok = encodeAx25({ src: "OE8APR", dst: "APRS", path: ["WIDE1-1"], payload: ">x" });
+    expect(decodeAx25(ok)).not.toBeNull();
+    for (const [at, ch] of [
+      [7, ">"],
+      [8, "a"],
+      [15, ","],
+      [2, "\r"],
+      [3, ":"],
+    ] as const) {
+      const bad = Uint8Array.from(ok);
+      bad[at] = ch.charCodeAt(0) << 1;
+      expect(decodeAx25(bad), `byte ${at} = ${JSON.stringify(ch)}`).toBeNull();
+    }
+    const odd = Uint8Array.from(ok);
+    odd[8] = odd[8]! | 0x01; // the extension bit belongs to the SSID byte only
+    expect(decodeAx25(odd)).toBeNull();
+  });
 });
 
 describe("formatPosition (Meshtastic normalisation)", () => {
