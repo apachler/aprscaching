@@ -18,25 +18,26 @@ from OPEN specs (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). Never copy 
 (KN4MKB) closed-source code/assets.
 
 ## Stack
-pnpm monorepo. apps/web = React+MapLibre → Cloudflare Pages. workers/gateway = Worker + Durable
-Objects + D1 + R2. **Canonical host = `aprscaching.net`** (the network peer + marketing landing +
-platform); `aprscaching.com` 301-redirects to `.net` (pre-auth, edge). `INSTANCE`/`APP_URL`/`RP_ID`
-= `.net`; API host `api.aprscaching.net`. WebAuthn `rpId` binds to one domain, so `.com` is a pure
-redirect, never a sign-in origin.
+pnpm monorepo. apps/web = React+MapLibre, served by the gateway's host (Caddy, the Node server or the desktop
+binary) on the same origin as the API. workers/gateway = the runtime-neutral gateway app (it holds no Worker; TODO.md
+tracks moving it out of `workers/`) run by `servers/node` (Node + SQLite) and `servers/bun` (Bun +
+`bun:sqlite`). **Canonical host = `aprscaching.net`** (the network peer + marketing landing + platform);
+`aprscaching.com` 301-redirects to `.net` (pre-auth, edge). `INSTANCE`/`APP_URL`/`RP_ID` = `.net`. WebAuthn
+`rpId` binds to one domain, so `.com` is a pure redirect, never a sign-in origin.
 apps/ingest = the operator-local RF/APRS-IS ingest (Pi/PC/mini-PC; a cloud box MAY run an IS-only
 feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs = pure parser (runs in
-Worker, Node, Bun, browser). packages/shared = zod contracts.
+Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts.
 
 ## Deployment
-Three shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker stack (gateway + ingest + Caddy)
-on a Pi, mini-PC or VM, reached through Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind
-Cloudflare's CDN · **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations embedded) ·
-**Cloudflare split** (advanced: D1 bills per row written, so Self-host behind a Cloudflare Tunnel/CDN is the
-recommended way to use Cloudflare) — Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`) plus the operator's
-ingest-only box. **Pocket** (`deploy/pocket/`) runs the Self-host gateway and ingest on an Android phone in
-Termux, as a field station. **Tri-runtime, all CI-conformance-green:**
-Node+SQLite (Self-host, `servers/node`) · CF Worker+D1 (Cloudflare split, `workers/gateway`) · Bun+`bun:sqlite`
-(Desktop, `servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every shape
+Shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker stack (gateway + ingest + Caddy)
+on a Pi, mini-PC or VM, reached through Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`, `deploy/cloudflared/`),
+optionally behind Cloudflare's CDN (`deploy/cloudflare/cache-rules.sh`, `TRUST_CF`); the same stack runs
+**bare metal** under systemd and one-click on **Oracle Cloud** Always Free (`deploy/oci/`) · **Desktop** — the Bun
+single binary (`deploy/desktop/`, SPA + migrations embedded) · **Pocket** (`deploy/pocket/`) runs the Self-host
+gateway and ingest on an Android phone in Termux, as a field station · an **ingest box**
+(`compose.ingest-only.yml`) feeds any remote gateway. **Two runtimes, both CI-conformance-green:**
+Node+SQLite (Self-host, bare metal, Pocket, Oracle Cloud; `servers/node`) · Bun+`bun:sqlite` (Desktop,
+`servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every shape
 (local `apps/ingest` / `compose.ingest-only.yml` *or* browser Web Serial/BLE). `deploy/setup.sh` writes a
 self-host `.env` in one step (`--non-interactive` for scripts); `INSTANCE` and `RP_ID` default to `APP_URL`'s
 host. Every instance MUST expose the AGPL §13 Source link + back up its DB; the rest of `deploy/` is
@@ -72,8 +73,7 @@ pnpm --filter @aprscaching/aprs exec vitest run test/foo.test.ts -t "name"   # o
 tools/dev/smoke.sh geofence                                   # one smoke suite
 tools/dev/smoke.sh federation                                 # two-instance federation e2e
 
-pnpm --filter @aprscaching/gateway migrate && pnpm dev:gateway   # wrangler dev on a local D1
-pnpm --filter @aprscaching/node-gateway dev                      # same app on Node + SQLite
+pnpm dev:gateway      # the gateway on Node + SQLite (migrations applied at boot)
 pnpm dev:ingest       # needs .env (copy .env.example)
 pnpm dev:web
 ```
@@ -82,21 +82,21 @@ pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse c
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
 the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
 
-## Architecture: one gateway, three runtimes
+## Architecture: one gateway, two runtimes
 - `workers/gateway/src/app.ts` exports a runtime-neutral `handle()` (plus `runScheduled` /
   `runFrequentSync`); routing is the `p === "/…"` table plus regex segment routes in that file. Each
   feature is one module beside it (`verify.ts`, `webauthn.ts`, `ingest.ts`, …); federation is
   `federation.ts` (descriptor, keys, registry) plus `fedpull.ts` / `fedapply.ts` / `fedpush.ts` /
   `fedpeers.ts`, and every incoming signed frame is admitted by `fedapply.ts` `admitFrame()`.
-- `servers/node` and `servers/bun` import that same app and supply the Cloudflare bindings
-  themselves: a D1-compatible shim over better-sqlite3 / `bun:sqlite` (`d1.ts`), a socket adapter
-  over the shared `rooms-core.ts` for the `RegionRoom` Durable Object (live WebSocket fan-out),
-  filesystem media for R2, and the shared `migrate.ts` runner. Bun reuses the Node host modules, and the
+- `servers/node` and `servers/bun` import that same app and supply its bindings (`runtime.ts`):
+  the `SqlDatabase` shim over better-sqlite3 / `bun:sqlite` (`d1.ts`, the D1 statement shape), a socket
+  adapter over the shared in-memory `rooms-core.ts` (live WebSocket fan-out), filesystem media and
+  offline tiles, and the shared `migrate.ts` runner. Bun reuses the Node host modules, and the
   desktop launcher wraps `servers/bun/server.ts`'s `createServer()`. Fix behaviour in
   `workers/gateway`, never in one runtime's shim.
-- The schema lives once in `db/migrations/*.sql` (one `0001_baseline.sql`; changes are new numbered files); wrangler applies it to D1
-  (`migrations_dir = "../../db/migrations"`) and the Node/Bun servers apply it at boot.
-- CI proves parity by running the same `tools/smoke/*` suites against all three runtimes.
+- The schema lives once in `db/migrations/*.sql` (one `0001_baseline.sql`; changes are new numbered files);
+  the Node/Bun servers apply it at boot (`migrate.ts`).
+- CI proves parity by running the same `tools/smoke/*` suites against both runtimes.
 - Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested site,
   and writes need a shared `INGEST_SECRET` on both gateway and client.
 
@@ -166,8 +166,8 @@ planning chat — print it in chat, do NOT commit it. Rebuild it fresh from the 
 old copy. Gather: `git log --oneline -25`; `ls db/migrations` + `ls docs`; `ls workers/gateway/src`
 (+ `apps/web/src`, `packages/aprs/src`); the route table via `grep -oE 'p === "[^"]+"' workers/
 gateway/src/app.ts` plus the regex segment-routes lower in `app.ts`; `pnpm -r test` + the three
-smoke suites for green status. Cover: what's built, the runtimes (Worker/D1 + Node/SQLite + Bun,
-tri-runtime CI), the trust model (tiers A/B/C vs account/callsign verification — keep them distinct),
+smoke suites for green status. Cover: what's built, the runtimes (Node/SQLite + Bun,
+both in CI conformance), the trust model (tiers A/B/C vs account/callsign verification — keep them distinct),
 identity/auth (passkey + email, multiple base-call accounts), federation, schema (the
 `0001_baseline.sql` domains plus any later migration), the API surface, web-app structure, licensing, and the deferred items in `TODO.md`.
 Keep it dense and current; flag what is NOT done.

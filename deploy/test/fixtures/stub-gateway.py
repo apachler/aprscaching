@@ -49,7 +49,6 @@ class Handler(BaseHTTPRequestHandler):
                     {"key": "OPERATOR", "label": "Imprint", "level": "recommended", "status": "missing", "detail": "incomplete"},
                     {"key": "db:ingest", "label": "Ingest feeding", "level": "blocking", "status": "missing", "detail": "no packets"},
                 ],
-                "budget": {"used": 10, "budget": 100, "level": "ok"},
             })
         elif path == "/.well-known/source":
             self.send(200, {"protocol": "aprscaching-source/1", "repo": "https://example.org/acs", "commit": "abc123"})

@@ -48,7 +48,7 @@ gateway answer means no Setup checklist and no network route.
 ## Settings (`config`)
 
 The settings file of the shape: Self-host `deploy/.env`, bare metal and Pocket their own `.env`, the
-ingest box `deploy/.env`. The Cloudflare split and Desktop keep no `.env` the doctor reads.
+ingest box `deploy/.env`. Desktop keeps no `.env` the doctor reads.
 
 ### `config.file`
 
@@ -104,19 +104,11 @@ ingest box `deploy/.env`. The Cloudflare split and Desktop keep no `.env` the do
 ### `config.public`
 
 - **Tests:** a public instance (an `https://` `APP_URL`) sets every key the configuration reference marks
-  as required for a public instance of its shape. `SESSION_SECRET` counts only on the Cloudflare split:
-  self-hosted gateways generate it.
+  as required for a public instance of its shape. `SESSION_SECRET` does not count: the gateway generates
+  it.
 - **Message:** `a public instance should set: <keys>` (warn).
 - **Fix:** set them in the `.env` and restart.
 - **See:** [Your first hour](first-hour.md#the-checklist) and [A public instance's duties](compliance/index.md).
-
-### `config.api`
-
-- **Tests:** on the Cloudflare split, the doctor knows the Worker's URL. `init cloudflare` records it.
-- **Message:** `the Worker's URL is not known here` (fail).
-- **Fix:** `export APRSCACHING_API_BASE=https://<worker URL>`, and `APRSCACHING_APP_URL` for the app, then
-  run the doctor again.
-- **See:** [Cloudflare split](install/cloudflare-split.md).
 
 ### `config.ingest_url`
 
@@ -211,23 +203,14 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `EMAIL` | blocking, recommended or optional | no mail delivery; blocking when nobody has a way to sign in | set `EMAIL_FROM` and `EMAIL_API_KEY`, or use [sign-in links](day-to-day/sign-in-links.md) |
 | `VAPID` | optional | no web push; notifications go by email digest | set `VAPID_PUBLIC` and `VAPID_PRIVATE` |
 | `db:ingest` | blocking | no packet in the last hour (a warning, never a failure) | see [`ingest.credentials`](#ingestcredentials), or connect a radio ([quick starts](radios/quick-starts.md)) |
-| `D1_DAILY_WRITE_BUDGET` | optional | the write budget is past 80 % | [Write budget](../reference/cloudflare-costs.md#write-budget) |
 | `db:peers` | optional | no enabled federation peer | [Join the network](federation/index.md#joining-the-network) |
 | `db:partners` | optional | always met: a count of forwarding partners | — |
 | `db:caches` | optional | no active cache yet | hide the first cache |
 | `db:verify` | recommended | your callsign is not control-verified | **You → Verify callsign** ([Callsign verification](day-to-day/callsign-verification.md)) |
 
-### `setup.budget`
-
-- **Tests:** the D1 write budget, where one is set: always on the Cloudflare split, and on a self-hosted
-  gateway with `D1_DAILY_WRITE_BUDGET` set.
-- **Message:** `D1 writes today: <used> of <budget> (<level>)`; it warns at `warn` (80 %) and `over`.
-- **Fix:** lower what the instance stores, or raise the budget.
-- **See:** [Write budget](../reference/cloudflare-costs.md#write-budget).
-
 ## Ingest and radios (`ingest`)
 
-Every shape with an ingest: all but the Cloudflare split.
+Every shape with an ingest.
 
 ### `ingest.credentials`
 
@@ -350,9 +333,7 @@ A public instance only: one whose `APP_URL` starts with `https://`.
 
 ## Federation (`federation`)
 
-Every shape with a gateway. A LAN instance gets one check, `federation.off` or `federation.lan`. On the
-Cloudflare split the Worker's settings are not readable from your machine, and the Setup checklist reports
-them instead.
+Every shape with a gateway. A LAN instance gets one check, `federation.off` or `federation.lan`.
 
 ### `federation.off`
 
@@ -538,24 +519,6 @@ container.
 - **Fix:** `sudo systemctl enable --now aprscaching-ingest`; read `journalctl -u aprscaching-ingest -n 50`.
 - **See:** [Self-host without Docker](install/self-host-bare-metal.md).
 
-## The web app on the Cloudflare split (`pages`)
-
-The Cloudflare split only: the web app on Cloudflare Pages.
-
-### `pages.app`
-
-- **Tests:** the app at the recorded app URL answers with its page.
-- **Message:** `the app at <url> does not answer` (fail).
-- **Fix:** deploy the Pages project.
-- **See:** [Cloudflare split](install/cloudflare-split.md).
-
-### `pages.api_base`
-
-- **Tests:** the app was built for this Worker: its code contains the Worker's URL (`VITE_API_BASE`).
-- **Message:** `the app at <url> was built for another gateway` (fail).
-- **Fix:** rebuild the app with `VITE_API_BASE=<worker URL>` and deploy it again.
-- **See:** [Cloudflare split](install/cloudflare-split.md).
-
 ## Disk, database and backups (`resources`)
 
 Disk, database and backups. The ingest box has none of these checks; Desktop has no backup check.
@@ -583,7 +546,6 @@ across those places counts:
 | Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Else `deploy/backups/`, also when a bucket is set but its CLI is missing, since nothing then uploads |
 | Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/storage/shared/aprscaching-backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
 | Desktop | the archives of `deploy/aprscaching backup` (`deploy/backups/`); without one it warns rather than fails |
-| Cloudflare split | none: it always passes, because D1 Time Travel keeps the database restorable for 30 days (7 on Workers Free) |
 
 - **Message:** `no backup destination is set` (fail).
 - **Message:** `no backup in <dir> …` (fail; warn on Desktop).

@@ -14,7 +14,7 @@
  * and takes the hex HMAC-SHA256 of the nonce, keyed with the password. A node that opens without a nonce
  * is left alone.
  *
- * Node and Bun only — never in the Worker bundle.
+ * Node and Bun only.
  */
 import net from "node:net";
 import { createHmac } from "node:crypto";

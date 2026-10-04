@@ -30,7 +30,6 @@ exceptions:
   - HTTPS
   - API
   - CLI
-  - D1
   - R2
   - Cloudflare
   - Docker

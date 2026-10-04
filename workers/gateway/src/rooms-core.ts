@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * In-memory region rooms for the self-host runtimes — the Node and Bun analogue of the RegionRoom
- * Durable Object. No hibernation (a self-host process is always up), but the same subscribe/broadcast
- * fan-out, so the live layer (station deltas, geofence prompts) works off Cloudflare too. Delivery
- * follows `deliveriesFor`, exactly as the Durable Object does.
+ * In-memory region rooms for the live layer (station deltas, geofence prompts) on Node and Bun: each
+ * client subscribes, and every envelope the ingest dispatches is delivered per `deliveriesFor`.
  *
  * Runtime-neutral: each runtime adapts its WebSocket to {@link RoomSocket} (servers/node over `ws`,
  * servers/bun over Bun.serve) and forwards the socket's messages, pongs and close to the member.
@@ -11,13 +9,9 @@
  * A half-open client (a phone that lost coverage) keeps its TCP socket up but never reads. The
  * ping/pong sweep reaps it, and a client whose send queue backs up is dropped before its buffer can
  * exhaust the process.
- *
- * The rooms also hold the daily write budget's counter (budget.ts), in memory: the guard is opt-in on a
- * self-host runtime, and a restart starts the day's count again from zero.
  */
 import { Subscribe } from "@aprscaching/shared";
 import { deliveriesFor, type LiveEnvelope } from "./live.js";
-import { BudgetCounter, memoryBudgetStore } from "./budget.js";
 
 const HEARTBEAT_MS = 30_000;
 /** Bytes queued to one client past which it is not draining and is dropped. */
@@ -50,8 +44,6 @@ interface State {
 
 export class RoomsCore {
   private rooms = new Map<string, Map<RoomSocket, State>>();
-  /** The daily D1 write budget's counter, as the Durable Object keeps it on Cloudflare. */
-  readonly budgetCounter = new BudgetCounter(memoryBudgetStore());
 
   /** `heartbeatMs: 0` runs no timer (the caller sweeps). */
   constructor(opts: { heartbeatMs?: number } = {}) {
@@ -108,7 +100,7 @@ export class RoomsCore {
     }
   }
 
-  /** Deliver live envelopes to each member per its subscription (the Durable Object's semantics). */
+  /** Deliver live envelopes to each member per its subscription (live.ts `deliveriesFor`). */
   dispatch(region: string, envelopes: LiveEnvelope[]): void {
     const room = this.rooms.get(region);
     if (!room) return;
@@ -144,4 +136,26 @@ function drop(room: Map<RoomSocket, State>, socket: RoomSocket): void {
     /* already gone */
   }
   room.delete(socket);
+}
+
+/**
+ * The room's internal endpoint. Only the gateway itself reaches it, over the `ROOMS` binding: the public
+ * /ws route forwards the client's own request, whose path is /ws, so a client cannot broadcast.
+ *
+ *   POST /dispatch {envelopes}   fan the envelopes out (204)
+ *
+ * Anything else is 426: the room otherwise only takes a WebSocket upgrade.
+ */
+export async function serveRoom(req: Request, fanOut: (envelopes: unknown[]) => void): Promise<Response> {
+  if (new URL(req.url).pathname === "/dispatch" && req.method === "POST") {
+    const body = (await req.json().catch(() => null)) as { envelopes?: unknown[] } | null;
+    if (!body || !Array.isArray(body.envelopes))
+      return new Response(JSON.stringify({ error: "bad dispatch" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    fanOut(body.envelopes);
+    return new Response(null, { status: 204 });
+  }
+  return new Response("expected websocket", { status: 426 });
 }

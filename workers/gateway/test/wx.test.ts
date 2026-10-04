@@ -47,9 +47,9 @@ describe("weather direct PWS ingest — Ecowitt/WU parse", () => {
 
 describe("weather direct PWS ingest — paste URLs + key format (the exact strings a PWS is pointed at)", () => {
   it("wxUrls builds the Ecowitt path + WU-Rapidfire URL with the station id encoded", () => {
-    const u = wxUrls("https://api.aprscaching.net", "OE8APR-13", "wx_abc123");
-    expect(u.ecowittPath).toBe("https://api.aprscaching.net/api/wx/submit?key=wx_abc123");
-    expect(u.wuUrl).toBe("https://api.aprscaching.net/api/wx/updateweatherstation?ID=OE8APR-13&PASSWORD=wx_abc123");
+    const u = wxUrls("https://gw.example.net", "OE8APR-13", "wx_abc123");
+    expect(u.ecowittPath).toBe("https://gw.example.net/api/wx/submit?key=wx_abc123");
+    expect(u.wuUrl).toBe("https://gw.example.net/api/wx/updateweatherstation?ID=OE8APR-13&PASSWORD=wx_abc123");
     // the WU ID carries a callsign-SSID; '-' is safe but the station must be URL-encoded in general
     expect(wxUrls("https://x", "OE8/P-13", "k").wuUrl).toContain("ID=OE8%2FP-13&PASSWORD=k");
   });

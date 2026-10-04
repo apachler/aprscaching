@@ -6,7 +6,7 @@
 # checks in shape_doctor_extra. Sourced by deploy/aprscaching after common.sh, env.sh and config.sh.
 # shellcheck shell=bash
 
-DOC_ENV=""          # the .env the shape keeps its settings in (empty: none, e.g. the Cloudflare Worker)
+DOC_ENV=""          # the .env the shape keeps its settings in (empty: none)
 DOC_BASE=""         # the gateway as this host reaches it (http://127.0.0.1:8080), empty without a gateway
 DOC_PUBLIC=""       # the public origin (APP_URL)
 DOC_INGEST=""       # the ingest's /ingest URL as this host reaches it, empty without an ingest
@@ -36,7 +36,7 @@ doc_see() {
   local a
   case "$1" in
     config.value.*) a=configvaluekey ;;
-    setup.checklist | setup.budget) a="${1//./}" ;;
+    setup.checklist) a="${1//./}" ;;
     setup.*) a=setupitem ;;
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
@@ -150,8 +150,8 @@ doc_config_required() {
   [ -n "$DOC_BASE" ] && doc_public || return 0
   while IFS= read -r k; do
     case "$k" in
-      SESSION_SECRET) [ "$SHAPE" = cloudflare ] || continue ;; # self-host servers generate it
-      INGEST_SECRET) continue ;;                                 # checked above
+      SESSION_SECRET) continue ;; # the servers generate it
+      INGEST_SECRET) continue ;;  # checked above
     esac
     [ -n "$(doc_get "$k")" ] || missing+=("$k")
   done < <(cfg_keys_for "$SHAPE" 1)
@@ -240,9 +240,6 @@ doc_setup_items() {
     B="$1" node -e '
       const j = JSON.parse(process.env.B);
       for (const i of j.items) console.log([i.key, i.level, i.status, `${i.label}: ${i.detail}`.replace(/[\t\n]/g, " ")].join("\t"));
-      const b = j.budget;
-      if (b && b.budget > 0)
-        console.log(["budget", "recommended", b.level === "ok" ? "ok" : "warn", `D1 writes today: ${b.used} of ${b.budget} (${b.level})`].join("\t"));
     ' 2>/dev/null
   elif have python3; then
     B="$1" python3 -c '
@@ -250,9 +247,6 @@ import json, os
 j = json.loads(os.environ["B"])
 for i in j["items"]:
     print("\t".join([i["key"], i["level"], i["status"], " ".join(("%s: %s" % (i["label"], i["detail"])).split())]))
-b = j.get("budget") or {}
-if b.get("budget", 0) > 0:
-    print("\t".join(["budget", "recommended", "ok" if b["level"] == "ok" else "warn", "D1 writes today: %s of %s (%s)" % (b["used"], b["budget"], b["level"])]))
 ' 2>/dev/null
   else
     echo $'checklist\trecommended\twarn\tneither node nor python3 is installed here to read the Setup checklist; open Instance admin -> Setup'
@@ -394,7 +388,7 @@ doc_network() {
 # ---- federation ---------------------------------------------------------------------------------------------
 doc_federation() {
   local peers p unsafe=()
-  [ -n "$DOC_BASE" ] || [ "$SHAPE" = cloudflare ] || return 0
+  [ -n "$DOC_BASE" ] || return 0
   peers="$(doc_get FED_PEERS)"
   if ! doc_public; then
     if [ -z "$peers$(doc_get FED_HUB_URL)" ]; then pass federation.off "federation is off on this LAN instance"; else
@@ -402,7 +396,7 @@ doc_federation() {
     fi
     return 0
   fi
-  [ -n "$DOC_ENV" ] || return 0 # the Worker's settings are not readable here; Setup reports them
+  [ -n "$DOC_ENV" ] || return 0 # no settings file to read here; Setup reports them
   if [ -n "$(doc_get FED_PRIVATE_KEY)" ]; then pass federation.key "the federation signing key is set"; else
     warnc federation.key "no FED_PRIVATE_KEY: feeds go out unsigned and peers cannot verify them" \
       "node tools/fedkey/genkey.mjs --raw, into FED_PRIVATE_KEY"

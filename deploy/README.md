@@ -1,7 +1,7 @@
 # deploy/
 
-Provisioning assets for the deployment shapes — **Self-host** (recommended; behind Cloudflare's Tunnel and CDN
-if you want Cloudflare), **Desktop**, and the **Cloudflare split** (advanced: its D1 bill grows with the feed). Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
+Provisioning assets for the deployment shapes — **Self-host** (recommended; on your own box or a one-click
+Oracle Cloud VM, behind Cloudflare's Tunnel and CDN if you want Cloudflare), **Desktop**, and **Pocket**. Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
 browser (Web Serial/BLE); the gateway/core is the variable.
 
 ## Files
@@ -15,15 +15,14 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 | `Dockerfile` | multi-arch (amd64+arm64) image for gateway + ingest |
 | `docker-compose.yml` | **Self-host** stack: gateway + ingest + Caddy |
 | `compose.home.yml` | self-host override: Cloudflare Tunnel ingress (no open ports) |
-| `compose.ingest-only.yml` | operator RF box → a remote gateway (the **Cloudflare split**, or any gateway elsewhere) |
+| `compose.ingest-only.yml` | an ingest box feeding any remote gateway (the operator's RF box, or an APRS-IS feed) |
 | `.env.example` | all config with sane defaults (generated from the schema by `tools/config/generate.mjs`) |
 | `Caddyfile` | TLS + SPA + reverse proxy |
 | `cloudflared/config.yml` | named-tunnel ingress (alternative to `TUNNEL_TOKEN`) |
 | `systemd/*.service` | bare-metal alternative to Docker; `aprscaching init baremetal` installs them |
 | `oci/main.tf`, `oci/schema.yaml`, `oci/cloud-init.yaml`, `oci/README-stack.md` | OCI one-click self-host stack (published per release by `scripts/build-oci-stack.sh`) |
-| `cloudflare/deploy-cf.sh` | **Cloudflare split** one-shot (D1/R2/Worker/Pages) |
 | `cloudflare/cache-rules.sh` | self-host behind Cloudflare's CDN: cache/bypass rules |
-| `backup.sh` | SQLite snapshot → object storage (cron); the Cloudflare split uses D1 Time Travel instead |
+| `backup.sh` | SQLite snapshot → object storage (cron) |
 
 ## Quick start per shape
 ```bash
@@ -39,9 +38,8 @@ CF_API_TOKEN=… CF_ZONE_ID=… ./cloudflare/cache-rules.sh
 # Desktop (no Node/Docker): build executables for every OS from one machine
 bash desktop/build-exe.sh v1.0.0
 
-# Cloudflare split (advanced; D1 bills every row written): Worker + D1 + R2 + Pages, RF ingest on your own box
-./cloudflare/deploy-cf.sh
-INGEST_URL=https://api.example.net/ingest docker compose -f compose.ingest-only.yml up -d --build
+# Ingest box: the RF ingest next to the radio, feeding a gateway elsewhere
+INGEST_URL=https://aprs.example.net/ingest docker compose -f compose.ingest-only.yml up -d --build
 ```
 
 After the first start, sign in and confirm your call:
@@ -61,15 +59,4 @@ on a schedule.
   include `MEDIA_DIR` (uploaded cache media) in the host backup.
 - **Pocket (Termux on a phone):** `pocket/backup.sh` writes the snapshot, the `.env` and the media to the
   phone's shared storage and keeps the newest seven (see `pocket/README.md`).
-- **Cloudflare split (D1 + R2):** `backup.sh` does not apply. D1 Time Travel is always on and restores the
-  database to any minute of the last 30 days on Workers Paid (7 days on Workers Free), per
-  https://developers.cloudflare.com/d1/reference/time-travel/ (checked 2026-09-30):
-  `npx wrangler d1 time-travel info aprscaching --timestamp=2026-09-29T03:00:00Z` shows the bookmark for a
-  moment, and `npx wrangler d1 time-travel restore aprscaching --timestamp=2026-09-29T03:00:00Z` restores it
-  (run from `workers/gateway`; it overwrites the database in place and prints the bookmark that undoes it).
-  For history beyond the window, cron
-  `npx wrangler d1 export aprscaching --remote --output backup-$(date +%F).sql` on any box with a Cloudflare
-  API token. R2 media (`aprscaching-media`) is not covered by Time Travel and needs its own plan — e.g. a
-  nightly `rclone sync` from R2's S3-compatible endpoint, or `npx wrangler r2 object get
-  aprscaching-media/<key> --remote --file <key>` for single objects. Details:
-  `docs/run/day-to-day/backups.md`.
+- Details: `docs/run/day-to-day/backups.md`.

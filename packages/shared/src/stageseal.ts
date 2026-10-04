@@ -13,7 +13,7 @@
  * WebCrypto only, so it runs in the browser, Node, Bun and Workers alike.
  */
 
-/** PBKDF2 rounds: the most Cloudflare Workers allow. */
+/** PBKDF2 rounds: within what every WebCrypto runtime allows (Cloudflare Workers caps it at 100 000). */
 export const STAGE_KDF_ITERATIONS = 100_000;
 /** The least estimated entropy (bits) a tag code needs to be sealed into packs. */
 export const STAGE_MIN_CODE_BITS = 40;

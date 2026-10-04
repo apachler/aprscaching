@@ -13,7 +13,6 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
-      "**/.wrangler/**", // generated worker dev bundles
       "site/**",
       "coverage/**",
       "**/*.d.ts",
@@ -32,7 +31,7 @@ export default tseslint.config(
       globals: { ...globals.browser, ...globals.node, ...globals.worker, ...globals.serviceworker },
     },
     rules: {
-      // The codebase deliberately uses `any` at runtime boundaries (D1/KISS/protobuf shims, DTOs).
+      // The codebase deliberately uses `any` at runtime boundaries (database/KISS/protobuf shims, DTOs).
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/no-empty-object-type": "off",
@@ -42,7 +41,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
       ],
       // TypeScript already resolves identifiers; `no-undef` only produces false positives here
-      // (Cloudflare Worker globals like WebSocketPair, DOM/Node union, etc.).
+      // (Bun globals, the DOM/Node union, etc.).
       "no-undef": "off",
       // Control chars appear legitimately in ANSI/AFSK/KISS parsing regexes.
       "no-control-regex": "off",

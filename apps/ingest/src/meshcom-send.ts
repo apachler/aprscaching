@@ -9,7 +9,7 @@
  * Every attempt is audited without its text. ExtUDP has no acknowledgement, so the best outcome is
  * "handed to node" — never "delivered"; the node reports refusals (QRS/QRT) back on the listener.
  *
- * Node and Bun only — never in the Worker bundle (tools/checks/worker-bundle.mjs).
+ * Node and Bun only.
  */
 import dgram from "node:dgram";
 import { appendFile } from "node:fs/promises";

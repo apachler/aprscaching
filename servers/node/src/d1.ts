@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * A D1-compatible adapter over a synchronous SQLite driver — better-sqlite3 here (makeD1), bun:sqlite
- * in servers/bun (which reuses d1Over). Presents the same `SqlDatabase` surface the gateway handlers
- * use (prepare → bind → run/first/all, plus batch), so the *exact same* business logic runs unchanged
- * on Cloudflare D1 and on local SQLite.
+ * The gateway's database adapter over a synchronous SQLite driver — better-sqlite3 here (makeD1),
+ * bun:sqlite in servers/bun (which reuses d1Over). Presents the async `SqlDatabase` surface the gateway
+ * handlers use (prepare → bind → run/first/all, plus batch; the D1 statement shape), so the *exact same*
+ * business logic runs on both drivers.
  *
- * SQLite drivers are synchronous; results are wrapped in resolved Promises to match D1's async API.
+ * SQLite drivers are synchronous; results are wrapped in resolved Promises to match the async API.
  */
 import type BetterSqlite3 from "better-sqlite3";
 import type { SqlDatabase, SqlStatement, SqlResult } from "@aprscaching/gateway/runtime";
@@ -26,12 +26,12 @@ export interface SqliteDriver {
   transaction<T>(fn: () => T): T;
 }
 
-/** D1 accepts null/number/string; the SQLite drivers reject `undefined` (and booleans). Real D1
- *  throws `D1_TYPE_ERROR` on an `undefined` bind — silently coercing it to null here would hide the bug
- *  on Node/Bun and let it 500 only on Workers. Throw the same way so parity failures surface in CI. */
+/** Binds accept null/number/string; booleans become 0/1. An `undefined` bind is a caller bug (a
+ *  missing field), so it throws rather than being stored as null — the bug surfaces in a test, not as a
+ *  silently empty column. */
 function norm(values: unknown[]): unknown[] {
   return values.map((v) => {
-    if (v === undefined) throw new Error("D1_TYPE_ERROR: undefined bind value (use null) — Cloudflare D1 parity");
+    if (v === undefined) throw new Error("undefined bind value (use null)");
     return typeof v === "boolean" ? (v ? 1 : 0) : v;
   });
 }
@@ -56,8 +56,8 @@ class Stmt implements SqlStatement {
     const s = this.db.prepare(this.sql);
     if (s.reader) {
       const results = s.all(...this.params) as unknown[];
-      // A plain SELECT reports zeroed meta (as D1 does); a `… RETURNING` writer must carry
-      // real rows-affected / last rowid so handlers that read `meta.changes` behave the same on D1.
+      // A plain SELECT reports zeroed meta; a `… RETURNING` writer must carry real rows-affected /
+      // last rowid so handlers that read `meta.changes` see what the statement changed.
       if (!isDml(this.sql)) return { results, meta: { last_row_id: 0, changes: 0 } };
       const m = this.db.prepare("SELECT changes() AS c, last_insert_rowid() AS r").get() as { c: number; r: number };
       return { results, meta: { last_row_id: Number(m.r), changes: Number(m.c) } };
@@ -78,7 +78,7 @@ class Stmt implements SqlStatement {
   }
 }
 
-/** A D1-compatible database over any synchronous SQLite driver. */
+/** The gateway's database over any synchronous SQLite driver. */
 export function d1Over(db: SqliteDriver): SqlDatabase {
   return {
     prepare(query: string): SqlStatement {
@@ -90,7 +90,7 @@ export function d1Over(db: SqliteDriver): SqlDatabase {
   };
 }
 
-/** A D1-compatible database over better-sqlite3. */
+/** The gateway's database over better-sqlite3. */
 export function makeD1(db: BetterSqlite3.Database): SqlDatabase {
   return d1Over({
     prepare: (sql) => db.prepare(sql) as SqliteStatement,

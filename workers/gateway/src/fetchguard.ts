@@ -7,8 +7,7 @@
  * LAN (a router admin page, a metadata service), so every federation fetch on Node and Bun resolves
  * the host first and refuses loopback, private, link-local, CGNAT and unspecified addresses. The
  * operator's own configuration is trusted: an origin listed in FED_PEERS or FED_HUB_URL is allowed
- * whatever it resolves to, and FED_ALLOW_PRIVATE=1 lifts the check for an all-LAN network. Cloudflare
- * Workers need no guard — their egress never reaches a private network.
+ * whatever it resolves to, and FED_ALLOW_PRIVATE=1 lifts the check for an all-LAN network.
  *
  * The check runs before the fetch and again before every redirect hop; a resolver that answers
  * differently the second time (DNS rebinding) is outside what a pre-flight check can see.
@@ -112,7 +111,7 @@ export function operatorOrigins(env: { FED_PEERS?: string; FED_HUB_URL?: string 
 
 /**
  * The fetch every federation call makes: the runtime's guard (when it installed one on the env) runs
- * first. Workers install none.
+ * first; without one (a test env) the plain fetch runs.
  */
 export async function fedFetch(
   env: { FED_FETCH_GUARD?: FetchGuard },

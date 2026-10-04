@@ -98,7 +98,7 @@ export async function recordWatchHeard(env: Env, heard: { src: string; lat: numb
   const pos = new Map<string, { lat: number; lon: number }>();
   for (const h of heard) pos.set(baseCall(h.src), { lat: h.lat, lon: h.lon });
   const calls = [...pos.keys()];
-  // one JSON parameter, not one per call: D1 caps a statement at 100 bound parameters
+  // one JSON parameter, not one per call: a statement binds one value however many calls were heard
   const watchers = (
     await env.DB.prepare(
       "SELECT account_id AS acct, callsign FROM watch_calls WHERE callsign IN (SELECT value FROM json_each(?))",

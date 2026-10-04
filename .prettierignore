@@ -1,7 +1,6 @@
 # Dependencies & build output
 **/node_modules/
 **/dist/
-**/.wrangler/
 site/
 coverage/
 

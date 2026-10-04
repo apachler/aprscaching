@@ -9,7 +9,7 @@
  * hearing names the receiving node as its gate, and the gateway lifts that toward Tier A only when the
  * node's call is an attested site. It never transmits; the sender is separate and off by default.
  *
- * Node and Bun only — the Workers build never includes this file (tools/checks/worker-bundle.mjs).
+ * Node and Bun only.
  */
 import dgram from "node:dgram";
 import { networkInterfaces } from "node:os";

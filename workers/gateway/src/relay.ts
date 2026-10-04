@@ -7,7 +7,7 @@ import { secretOk } from "./auth.js";
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
  * cannot be dialled inbound STILL serve its feed to the commons, by reusing the **poll-based rendezvous
  * seam** the remote-control box already uses (box.ts — the ECHOCAT pattern), NOT a persistent WebSocket.
- * That keeps it tri-runtime-clean (plain D1 + HTTP, no runtime-divergent socket infra):
+ * That keeps it runtime-neutral (plain SQL + HTTP, no runtime-divergent socket infra):
  *
  *   A requester enqueues a relay query FOR a spoke instance  → POST /federation/relay/:instance/query
  *   The spoke leases queries addressed to it (over its own outbound poll) → GET  /federation/relay/lease

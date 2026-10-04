@@ -10,8 +10,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 ## Before you start
 
 - **An installed instance that answers `/health`:** [Self-host with Docker](install/self-host-docker.md),
-  [without Docker](install/self-host-bare-metal.md), [Desktop](install/desktop.md),
-  [Pocket](install/pocket.md) or the [Cloudflare split](install/cloudflare-split.md).
+  [on Oracle Cloud](install/oracle-cloud.md), [without Docker](install/self-host-bare-metal.md),
+  [Desktop](install/desktop.md) or [Pocket](install/pocket.md).
 - **Where your settings live, and how a change takes effect:**
 
     | Shape | Settings | Apply a change |
@@ -20,7 +20,6 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     | Self-host without Docker | `/opt/aprscaching/deploy/.env` | `sudo systemctl restart aprscaching-gateway aprscaching-ingest` |
     | Desktop | the environment you start it with | quit the app and start it again |
     | Pocket | `~/.aprscaching/.env` | `bash ~/aprscaching/deploy/pocket/restart.sh` |
-    | Cloudflare split | `[vars]` in `workers/gateway/wrangler.toml`; secrets with `wrangler secret put` | deploy again: `deploy/aprscaching update`, or `API_BASE=<the Worker's URL> bash deploy/cloudflare/publish.sh` |
 
 ## The checklist
 
@@ -46,7 +45,7 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     | Self-host with Docker, from `deploy/` | `docker compose exec gateway node tools/admin/verify-call.mjs OE8APR` |
     | Self-host without Docker | `sudo -u aprscaching bash -c 'cd /opt/aprscaching && set -a && . deploy/.env && PORT=8080 node tools/admin/verify-call.mjs OE8APR'` |
     | Pocket | `cd ~/aprscaching && set -a && . ~/.aprscaching/.env && set +a && node tools/admin/verify-call.mjs OE8APR` |
-    | Desktop and Cloudflare split, from a checkout | `BASE=<the gateway's URL> OPERATOR_SECRET=<the secret> node tools/admin/verify-call.mjs OE8APR` |
+    | Desktop, from a checkout | `BASE=<the gateway's URL> OPERATOR_SECRET=<the secret> node tools/admin/verify-call.mjs OE8APR` |
 
     It uses `OPERATOR_SECRET` and accepts only a call in `ADMIN_CALLSIGNS`. The Desktop app keeps its operator
     secret in `operator.secret` in its data directory. **Settings → Account** shows the command too, and the

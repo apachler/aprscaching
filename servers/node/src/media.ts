@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MediaStore } from "@aprscaching/gateway/runtime";
 
-/** Filesystem-backed MediaStore (the Node analogue of an R2 bucket). Content-type kept in a sidecar. */
+/** Filesystem-backed MediaStore. Content-type kept in a sidecar. */
 export function makeFsMedia(root: string): MediaStore {
   fs.mkdirSync(root, { recursive: true });
   const base = path.resolve(root);

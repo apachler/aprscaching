@@ -7,7 +7,7 @@
 // MIT `packages/*/src`) — the code that runs unattended against hostile input — and NOT the web app, which
 // leans on DOM `any` and would drown the signal. Run it via `pnpm lint:types`; CI runs it as its own job.
 //
-// Philosophy mirrors the fast config: the by-design `any` at runtime boundaries (D1 rows, KISS/AX.25 byte
+// Philosophy mirrors the fast config: the by-design `any` at runtime boundaries (database rows, KISS/AX.25 byte
 // shims, protobuf, COSE) means the `no-unsafe-*` / `no-explicit-any` family is OFF — those are not defects
 // here. What stays ON (error) is the bug-catching set that is genuinely green today; softer stylistic
 // type-aware rules are warnings to tighten over time (see TODO.md).
@@ -15,7 +15,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "**/.wrangler/**", "**/*.d.ts", "**/*.test.ts", "**/test/**"],
+    ignores: ["**/node_modules/**", "**/dist/**", "**/*.d.ts", "**/*.test.ts", "**/test/**"],
   },
   {
     files: ["workers/gateway/src/**/*.ts", "packages/*/src/**/*.ts"],
@@ -29,7 +29,7 @@ export default tseslint.config(
     },
     rules: {
       // --- OFF: by-design `any` at runtime boundaries (kept consistent with the fast config). These
-      //     fire on D1/KISS/protobuf/COSE shims that are `any` on purpose; they are noise, not defects.
+      //     fire on database/KISS/protobuf/COSE shims that are `any` on purpose; they are noise, not defects.
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
@@ -61,12 +61,6 @@ export default tseslint.config(
       // type-view-stable bug catchers — no-floating-promises, no-misused-promises, await-thenable,
       // no-for-in-array, no-redundant-type-constituents, restrict-plus-operands, … .
     },
-  },
-  {
-    // The Durable Object hibernation API mandates async webSocketMessage/Close/Error signatures;
-    // the handler bodies are synchronous by design.
-    files: ["workers/gateway/src/room.ts"],
-    rules: { "@typescript-eslint/require-await": "off" },
   },
   {
     // SYNC_DEFS carries a plain data property named `apply` (a standalone applier function, no

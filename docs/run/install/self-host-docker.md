@@ -73,8 +73,7 @@ the shape for the other [helper commands](../day-to-day/helper-command.md). `--n
     it inside the image instead.
 
     A public instance gets the safe federation settings written out, and a LAN instance starts with federation
-    off ([Running federation safely](../federation/index.md#running-federation-safely)). Every instance gets
-    `D1_DAILY_WRITE_BUDGET=0`: SQLite costs the same whatever it writes.
+    off ([Running federation safely](../federation/index.md#running-federation-safely)).
 
 4. Start the stack. `SOURCE_COMMIT` names the commit the instance's source link shows, since the image cannot
    see `.git`:
@@ -123,25 +122,8 @@ Each long-running service restarts unless stopped, and its logs are capped at ab
 
 ## On Oracle Cloud
 
-The [one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
-starts this same stack on one Always Free Ampere A1 VM. It takes 2 OCPUs and 12 GB of memory, the whole
-allowance of an Always-Free-only tenancy. It adds a reserved public IP and nightly backups to a bucket, and opens SSH only
-through OCI Bastion.
-
-Its first boot installs Docker from Docker's signed apt repository and clones the release. It stops when the
-tag points at another commit than the release names. It then runs `deploy/aprscaching init selfhost`, which
-generates the secrets on the VM, starts the stack and runs `doctor`. The stack's fields, the first boot and
-restoring a lost VM are in `deploy/oci/README-stack.md`.
-
-### Staying on the free tier
-
-Oracle may reclaim an Always Free A1 instance that stays idle for seven days (CPU, network and memory all under
-20 %). It may suspend a free account unused for 30 days
-([Free Tier FAQ](https://www.oracle.com/cloud/free/faq/), as of 1 October 2026).
-
-Upgrade the tenancy to Pay As You Go and set a budget alert. Always Free resources stay free, and the instance
-is not reclaimed. Run the stack with Docker Compose on the VM: Container Instances and Kubernetes do not suit
-one SQLite instance on the free tier (`deploy/oci/README-stack.md`, *Staying on the free tier*).
+The one-click Oracle Cloud stack starts this same stack on a free Always Free VM:
+[Self-host on Oracle Cloud](oracle-cloud.md).
 
 ## Logs
 

@@ -1,5 +1,6 @@
-# Ingest-only: forward RF/IS to a REMOTE gateway (e.g. a Cloudflare Worker). No local DB/SPA.
-# This is the operator's local RF box in the Cloudflare split, and the generic "operator RF node".
+# Ingest-only: an ingest box that forwards RF/IS to a gateway elsewhere (INGEST_URL). No local DB/SPA.
+# This is the operator's local RF node feeding any remote gateway: a Self-host instance on another box,
+# an Oracle Cloud instance, or a shared gateway.
 # Up:  docker compose -f compose.ingest-only.yml up -d --build
 
 # Cap container logs so an unattended Pi can't fill its SD card (the json-file driver is

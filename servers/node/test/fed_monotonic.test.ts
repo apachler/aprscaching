@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Mirror upserts are version-monotonic — a replayed OLDER signed record must never roll
 // a mirror back (e.g. to pre-redaction content). Runs the REAL upsert SQL against real SQLite via
-// the same D1 shim the node-gateway serves with.
+// the same database shim the node-gateway serves with.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { makeD1 } from "../src/d1.js";

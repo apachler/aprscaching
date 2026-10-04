@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The instance's offline map. The operator provides one regional PMTiles archive of vector tiles (an
- * OpenStreetMap extract, e.g. cut from a Protomaps build): on Node and Bun a file (OFFLINE_TILES_PATH),
- * on Cloudflare an object in the TILES bucket (OFFLINE_TILES_KEY), served here at /tiles/offline.pmtiles
- * by byte range; or a copy hosted elsewhere that allows offline use (OFFLINE_TILES_URL). A phone making an
+ * OpenStreetMap extract, e.g. cut from a Protomaps build): a file on the server (OFFLINE_TILES_PATH),
+ * served here at /tiles/offline.pmtiles by byte range; or a copy hosted elsewhere that allows offline use (OFFLINE_TILES_URL). A phone making an
  * offline pack reads the archive's directory and fetches only the tiles of its pack's square.
  *
  * Nothing here contacts a third-party tile service: the tiles are the operator's own.

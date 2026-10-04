@@ -12,7 +12,7 @@ Docker, DNS and networking; it never assumes you know the code.
 
 An instance has two parts that deploy separately:
 
-- the **gateway**: the API and the data. It runs on your box, as a desktop app, or on Cloudflare.
+- the **gateway**: the API and the data. It runs on your box, on a cloud VM, on a phone or as a desktop app.
 - the **RF ingest**: the program that carries what your radios hear into the gateway. It always runs on your
   own equipment, next to the radio.
 
@@ -21,10 +21,10 @@ An instance has two parts that deploy separately:
 
 ## Your journey
 
-1. [Choose a shape](choose-a-shape.md): Self-host, Desktop, Pocket or the Cloudflare split.
+1. [Choose a shape](choose-a-shape.md): Self-host, Oracle Cloud, Desktop or Pocket.
 2. Install it: [Self-host with Docker](install/self-host-docker.md) (recommended),
-   [Self-host without Docker](install/self-host-bare-metal.md), [Desktop](install/desktop.md),
-   [Cloudflare split](install/cloudflare-split.md) or [Pocket](install/pocket.md).
+   [Self-host on Oracle Cloud](install/oracle-cloud.md), [Self-host without Docker](install/self-host-bare-metal.md),
+   [Desktop](install/desktop.md) or [Pocket](install/pocket.md).
 3. [Your first hour](first-hour.md): from "it answers" to a public, verified, backed-up instance.
 4. Connect radios: start with the [quick starts](radios/quick-starts.md). Hams can also
    [lend their receivers](radios/lend-a-receiver.md) to your instance.

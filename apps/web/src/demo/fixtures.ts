@@ -42,7 +42,6 @@ import type {
   SourceInfo,
   SupportInfo,
   VerifyMethods,
-  WriteBudget,
 } from "../api.js";
 
 export type Persona = "user" | "sysop" | "out";
@@ -586,7 +585,7 @@ const PORTS: PortStat[] = [
   { port: "meshcom", rx: 204, tx: 0, lastBucket: NOW - 5 * MIN },
 ];
 
-const SETUP: { items: SetupItem[]; budget: WriteBudget } = {
+const SETUP: { items: SetupItem[] } = {
   items: [
     {
       key: "operator",
@@ -634,7 +633,6 @@ const SETUP: { items: SetupItem[]; budget: WriteBudget } = {
       detail: "Nightly to the bucket.",
     },
   ],
-  budget: { level: "off", budget: 0, used: null },
 };
 
 const SOURCE: SourceInfo = {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Runtime-neutral request handling: routing, CORS, JSON helper, and the scheduled job.
- * Imported by index.ts (Cloudflare Worker) and by the portable Node server — so both runtimes
- * serve byte-identical behaviour. This module never touches Workers-only globals.
+ * Imported by the Node server and the Bun server — so both runtimes serve byte-identical behaviour.
+ * This module touches no runtime-specific globals; each server supplies the bindings in `Env`.
  */
 import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
@@ -128,7 +128,6 @@ import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleStationStatus } from "./station_status.js";
-import { meterWrites, flushWrites, runBudgetDigest } from "./budget.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -222,7 +221,6 @@ export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pa
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   applyDerivedDefaults(env);
-  meterWrites(env); // every D1 write counts toward the daily write budget, when one is set
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   const res = await route(req, env, ctx);
   // gossip ping: a successful federated write coalesces into one "come pull" to our peers
@@ -233,7 +231,7 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
 
 /**
  * Frequent federation tasks: pull from peers, push to a hub, answer relay queries. Cheap +
- * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
+ * safe to run every few minutes — the servers' frequent interval calls THIS, not the full nightly job.
  */
 export function runFrequentSync(env: Env, opts: { resync?: boolean } = {}): Promise<FrequentSyncResult> {
   // one at a time: the interval, the reconnect probe and an operator's Sync now share the running one
@@ -251,7 +249,6 @@ export interface FrequentSyncResult {
 
 async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<FrequentSyncResult> {
   applyDerivedDefaults(env);
-  meterWrites(env);
   let push: PushResult | null = null;
   try {
     await syncAllPeers(env);
@@ -273,19 +270,15 @@ async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<F
   } catch (e) {
     console.error("relay poll:", (e as Error).message);
   }
-  await flushWrites(env);
   return { push };
 }
 
 /**
  * The full nightly job: TTL-prune every always-growing table, then the federation sync and
- * the watch-alert digests. Node/Bun run this once at boot + daily; the Worker runs it on the `0 4` cron.
+ * the watch-alert digests. Node and Bun run this once at boot and then daily.
  */
 export async function runScheduled(env: Env): Promise<void> {
   applyDerivedDefaults(env);
-  // The prune's deletes count toward the write budget like any write, but it runs whatever the level:
-  // it only ever shrinks the tables.
-  meterWrites(env);
   const now = nowS();
   // Prune in bounded batches (pruneBounded), range-scanned via idx_pos_source_ts.
   await pruneBounded(
@@ -325,12 +318,6 @@ export async function runScheduled(env: Env): Promise<void> {
   } catch (e) {
     console.error("digests:", (e as Error).message);
   }
-  // the sysops' write-budget alerts not yet mailed (the flush hands the job's writes to the counter)
-  try {
-    await runBudgetDigest(env);
-  } catch (e) {
-    console.error("write budget digest:", (e as Error).message);
-  }
 }
 
 /**
@@ -344,22 +331,16 @@ export async function runScheduled(env: Env): Promise<void> {
  * for at-a-glance ops visibility and for `deploy/aprscaching doctor`, which compares it with the checkout
  * (no secrets).
  */
-/**
- * The newest applied migration: the self-host runner records them in `_migrations`, wrangler in
- * `d1_migrations`. Null when neither table answers.
- */
+/** The newest applied migration, as the migration runner records it in `_migrations`; null when unread. */
 async function schemaVersion(env: Env): Promise<string | null> {
-  for (const table of ["_migrations", "d1_migrations"]) {
-    try {
-      const row = await env.DB.prepare(`SELECT name FROM ${table} ORDER BY name DESC LIMIT 1`).first<{
-        name: string;
-      }>();
-      if (row?.name) return row.name;
-    } catch {
-      // the other runner's table
-    }
+  try {
+    const row = await env.DB.prepare("SELECT name FROM _migrations ORDER BY name DESC LIMIT 1").first<{
+      name: string;
+    }>();
+    return row?.name ?? null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function handleHealth(req: Request, env: Env): Promise<Response> {

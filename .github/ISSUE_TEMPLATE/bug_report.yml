@@ -24,7 +24,6 @@ body:
         - Web app (browser PWA)
         - Node self-host (servers/node)
         - Bun desktop binary (servers/bun)
-        - Cloudflare Worker + D1 (workers/gateway)
         - Ingest box (apps/ingest)
         - Not sure
     validations:
@@ -46,4 +45,4 @@ body:
     id: env
     attributes:
       label: Environment
-      description: OS, browser (if web), Node/Bun version, deployment shape (Self-host, Desktop, Cloudflare split) if relevant.
+      description: OS, browser (if web), Node/Bun version, deployment shape (Self-host, Oracle Cloud, Desktop, Pocket) if relevant.

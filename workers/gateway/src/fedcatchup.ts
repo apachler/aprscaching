@@ -11,7 +11,7 @@
  *   hand; a hub sees per spoke when it last submitted, and marks a quiet spoke stale. Display only: none
  *   of it changes trust.
  *
- * The Worker runs on its cron and needs none of the scheduling; Node and Bun drive it from host.ts.
+ * Node and Bun drive the scheduling from servers/node/src/host.ts.
  */
 import type { Env } from "./env.js";
 import { json, runFrequentSync, type FrequentSyncResult } from "./app.js";

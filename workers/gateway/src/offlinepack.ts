@@ -47,7 +47,7 @@ const NATIVE_IN_BOX =
   "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND fed_scope != 'unlisted'";
 /** A cache unfound for this long is flagged in the owner's pack. */
 const QUIET_S = 180 * 86_400;
-/** The most calls of one account the owner's pack matches (D1 binds at most 100 parameters). */
+/** The most calls of one account the owner's pack matches (keeps the query's bound parameters under 100). */
 const MAX_OWN_CALLS = 8;
 
 export async function handleOfflinePack(req: Request, env: Env): Promise<Response> {
@@ -58,7 +58,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     .split(",")
     .map((t) => t.trim())
     .filter((t) => /^[a-z_]{1,32}$/.test(t))
-    .slice(0, 12); // D1 binds at most 100 parameters, and the generation query repeats the list four times
+    .slice(0, 12); // the generation query repeats the list four times; this keeps it under 100 parameters
   const includeUnvetted = u.searchParams.get("includeUnvetted") === "1";
   const instance = env.INSTANCE ?? u.host;
   const mine = "mine" in area;
@@ -165,7 +165,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     );
 
   // The latest logs, the stage shape and the images of the native caches, each in one query over the box
-  // (an IN list of thousands of ids would exceed D1's bound-parameter limit), kept for the caches in the area.
+  // (an IN list of thousands of ids would bind thousands of parameters), kept for the caches in the area.
   const ids = new Set(native.map((r) => r.id));
   const logs = (
     await env.DB.prepare(

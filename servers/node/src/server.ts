@@ -2,8 +2,8 @@
 /**
  * aprscaching node-gateway — the portable self-host runtime.
  *
- * Same handlers as the Cloudflare Worker (imported from @aprscaching/gateway/app), wired to:
- *   • SQLite via a D1-compatible shim (d1.ts)   • in-memory region rooms over `ws` (rooms.ts)
+ * Same handlers as the Bun server (imported from @aprscaching/gateway/app), wired to:
+ *   • SQLite via the database shim (d1.ts)   • in-memory region rooms over `ws` (rooms.ts)
  *   • a node:http(s) <-> Web Request/Response bridge (listen.ts) • a nightly TTL interval
  *
  * Run: `pnpm --filter @aprscaching/node-gateway start`  (env: PORT, DB_PATH, INGEST_SECRET, OPERATOR_SECRET, …)

@@ -14,12 +14,12 @@ move it to another shape; at the end a scheduled backup runs and `doctor` report
 Caches, finds, accounts and keys are the record of your instance; positions age out on their own. A complete
 backup holds:
 
-- **the database**, SQLite on every shape except the Cloudflare split, where it is D1;
+- **the database**, SQLite on every shape;
 - **the settings**, the shape's `.env`, with the secrets in it;
 - **the generated secrets** beside the database (`session.secret`; on the desktop also the ingest and operator
   secrets);
 - **the media**: uploaded cache media and audio clues. They are files (`MEDIA_DIR`; in the Docker stack
-  `/data/media` in the `data` volume), or the R2 bucket on the Cloudflare split, never rows in the database.
+  `/data/media` in the `data` volume), never rows in the database.
   `MEDIA_QUOTA_MB` (default 1024) caps how much the instance stores, so size it to the disk or bucket.
 
 Pick the tool for your shape:
@@ -28,7 +28,6 @@ Pick the tool for your shape:
 |---|---|---|
 | Self-host, bare metal, Desktop | `deploy/aprscaching backup`, scheduled | a portable archive: rows, settings, secrets, optionally media |
 | Self-host, bare metal (SQLite file on the host) | `deploy/backup.sh` from cron | a gzipped SQLite snapshot only |
-| Cloudflare split | D1 Time Travel, plus a copy of the R2 media | — |
 | Pocket | `deploy/pocket/backup.sh`, or `deploy/aprscaching backup` | an archive in the phone's shared storage |
 
 **When to use which.** `deploy/aprscaching backup` writes the one archive that `restore` reads on any shape:
@@ -72,9 +71,6 @@ with a nightly timer, `aprscaching-backup.timer`, that runs `backup --with-media
 30 3 * * * cd /opt/aprscaching && deploy/aprscaching backup
 ```
 
-On the Cloudflare split, `backup` exports D1 with `wrangler d1 export --no-schema`; R2 media is not part of the
-archive.
-
 ## Scheduled snapshots with backup.sh
 
 `deploy/backup.sh` takes a consistent SQLite `.backup` snapshot while the gateway writes, gzips it and copies it
@@ -107,9 +103,7 @@ it once when you create the bucket: on the `db/` prefix for `backup.sh` snapshot
 `deploy/aprscaching backup` archives.
 
 ```bash
-# Cloudflare R2
-npx wrangler r2 bucket lifecycle add <bucket> expire-db db/ --expire-days 30
-# AWS S3
+# AWS S3 (Cloudflare R2 and other S3-compatible stores: add --endpoint-url "$R2_ENDPOINT")
 aws s3api put-bucket-lifecycle-configuration --bucket <bucket> --lifecycle-configuration \
   '{"Rules":[{"ID":"expire-db","Status":"Enabled","Filter":{"Prefix":"db/"},"Expiration":{"Days":30}}]}'
 # OCI Object Storage (the tenancy also needs a policy that lets the objectstorage-<region> service
@@ -121,32 +115,6 @@ oci os object-lifecycle-policy put -bn <bucket> --items \
 Where a lifecycle rule is not available, `BACKUP_PRUNE_BUCKET=1` makes `backup.sh` delete bucket snapshots older
 than `BACKUP_RETENTION_DAYS` after each upload, judged by the timestamp in the snapshot's name. The bucket key
 then needs delete permission.
-
-## On the Cloudflare split
-
-D1 has **Time Travel**, a point-in-time restore that is always on and costs nothing extra: any minute of the
-last **30 days on Workers Paid**, 7 days on Workers Free. Source: Cloudflare's
-[Time Travel and backups](https://developers.cloudflare.com/d1/reference/time-travel/) page, checked
-2026-09-30. Run these in `workers/gateway`:
-
-```bash
-npx wrangler d1 time-travel info aprscaching                                  # the current bookmark
-npx wrangler d1 time-travel info aprscaching --timestamp=2026-09-29T03:00:00Z  # the bookmark for a past moment
-npx wrangler d1 time-travel restore aprscaching --timestamp=2026-09-29T03:00:00Z
-npx wrangler d1 time-travel restore aprscaching --bookmark=<bookmark>          # undo: the bookmark the last restore printed
-```
-
-A restore overwrites the database in place and cancels in-flight queries. It prints the previous bookmark, so a
-restore can itself be undone. For history older than the retention window, keep a nightly SQL dump too, from any
-box with a Cloudflare API token:
-
-```bash
-npx wrangler d1 export aprscaching --remote --output backup-$(date +%F).sql
-```
-
-Time Travel covers D1 only. The **R2 media** bucket, `aprscaching-media`, needs its own copy: for example a
-nightly `rclone sync` from R2's S3-compatible endpoint to other storage, or
-`npx wrangler r2 object get aprscaching-media/<key> --remote --file <key>` for single objects.
 
 ## Pocket
 
@@ -192,10 +160,6 @@ deploy/aprscaching restore oci://aprscaching-backups/latest      # the newest ar
    `--no-settings` leaves every setting as it is.
 5. It restores the secret files and any media, starts the instance and runs `doctor`.
 
-On the Cloudflare split, `restore` needs D1 at the archive's schema. It prints a Time Travel bookmark first,
-then replaces D1's rows. It sets the archive's secrets with `wrangler secret put` and lists the plain settings
-to put in `wrangler.toml`.
-
 ## Moving between shapes
 
 Take a backup on the old shape, `init` the new one, then `restore` there: for example Pocket to Self-host, or
@@ -215,8 +179,7 @@ Run `deploy/aprscaching doctor` and read the `resources` group:
 
 - `resources.backup` passes while the newest archive is at most 7 days old (`APRS_BACKUP_MAX_DAYS`). It looks
   for `deploy/aprscaching backup` archives in `BACKUP_DIR`, in `deploy/backups`, or under `archives/` in
-  `OCI_BUCKET` when the `oci` CLI is installed. On Pocket it looks in the phone's shared storage. The
-  Cloudflare split always passes, because of Time Travel.
+  `OCI_BUCKET` when the `oci` CLI is installed. On Pocket it looks in the phone's shared storage.
 - `resources.backup_place` warns when the backups stay on this host's disk: no `BACKUP_DIR`, and no bucket
   with the CLI that uploads to it. `BACKUP_BUCKET` takes the snapshots of `deploy/backup.sh`, not these
   archives.

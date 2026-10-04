@@ -96,7 +96,7 @@ One command, hermetic, against a fresh temp SQLite DB:
 tools/teaser/run.sh
 ```
 
-Builds the web app (offline basemap), resets a **local** D1, starts `wrangler dev` + `vite
+Builds the web app (offline basemap), starts the Node gateway on a fresh **local** SQLite file + `vite
 preview`, seeds demo caches/logs, crawls the states, and renders `out/teaser.png` (+ the
 per-surface `.mjs` composers: `board`, `bbs`, `settings`, `shack`, …). Servers torn down on exit.
 

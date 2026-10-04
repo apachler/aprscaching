@@ -5,7 +5,7 @@
  * rotation records), and hand every frame to the shared admission path (fedapply.ts). Per-peer
  * cursors make it incremental; one pull per peer runs at a time.
  *
- * Runtime-neutral (fetch + crypto.subtle + env.DB) → runs on Cloudflare, Node and Bun alike. This
+ * Runtime-neutral (fetch + crypto.subtle + env.DB) → runs on Node and Bun alike. This
  * instance never mirrors itself.
  */
 import { flagOn, type Env } from "./env.js";

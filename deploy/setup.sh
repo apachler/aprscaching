@@ -15,7 +15,7 @@
 # A public instance gets the safe federation posture: auto-promotion off and a corroboration quorum of 2
 # written out, discovery off (FED_DISCOVER=0), only the peers you name, never a
 # 44Net peer as trusted, an explicit spoke list on a hub and a pinned key for any registry. A LAN instance
-# starts with federation off. The D1 write budget is written off: SQLite costs the same whatever it writes.
+# starts with federation off.
 #
 # Options: --env-file PATH (default ./.env) · --no-network (skip the APRS-IS reachability check) ·
 #          --yes (replace existing values without asking) · --app-port PORT (the LAN URL's port, when the
@@ -277,7 +277,6 @@ fi
 # The safe federation posture, written out so the operator sees it. A value the operator chose is kept,
 # and an unsafe one is pointed out rather than replaced.
 default_var() { [ -n "$(current "$1")" ] || { write_line "$1" "$2"; echo "  set $1=$2"; }; }
-default_var D1_DAILY_WRITE_BUDGET 0
 if [ "$MODE" = lan ]; then
   [ -z "$(current FED_PEERS)$(current FED_HUB_URL)" ] ||
     echo "  NOTE: federation is configured (FED_PEERS / FED_HUB_URL) on a LAN instance; kept as it is."

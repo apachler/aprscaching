@@ -17,13 +17,13 @@ const ENV_STRING_KEYS = keysOf("gateway").filter((k): k is GatewayStringKey => k
 export type Env = {
   DB: SqlDatabase;
   TILES?: TileArchive; // the offline map archive (tiles.ts); absent when the operator provides none
-  MEDIA?: MediaStore; // audio-cache clue storage (R2 on CF, FS on Node); optional
+  MEDIA?: MediaStore; // cache media and audio clues (the server's filesystem); optional
   ROOMS: RoomNamespace;
   // The ingest-plane credential: the ingest box presents it (x-ingest-secret) to post packets, drain the
   // outbox, carry BBS mail for the packet BBS, mirror the node table, log finds heard over APRS and poll remote commands.
   // It authorises nothing operator-level and never signs a session.
   INGEST_SECRET: string;
-  /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */
+  /** Installed by Node/Bun: refuses federation fetches to private networks. */
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   /** Installed by the Node server while its https listener runs: that listener's port (visitor.ts). */
   HTTPS_LISTENER_PORT?: string;
@@ -34,8 +34,8 @@ export const flagOn = (v: string | undefined): boolean => v === "1" || v === "tr
 
 /**
  * The malformed settings of a gateway environment (a whole number that is not one, an unknown value of a
- * fixed set, JSON that does not parse). The Node and Bun servers refuse to start on any; the Worker reports
- * them in the Setup checklist, since it has no start to refuse.
+ * fixed set, JSON that does not parse). The Node and Bun servers refuse to start on any; the Setup
+ * checklist reports the same check.
  */
 export function configProblems(env: Partial<Env> | Record<string, unknown>): ConfigProblem[] {
   const src: Record<string, string | undefined> = {};

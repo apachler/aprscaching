@@ -20,7 +20,7 @@ federation peer like any other instance.
 ## How it works
 The launcher wraps the Bun server (`createServer` in `servers/bun/server.ts` — the server the Bun
 conformance lane runs), so the desktop core is the *identical* gateway, schedules (including the
-federation sync) and live rooms as the Worker, Node and Bun runtimes. At build time `gen-assets.ts`
+federation sync) and live rooms as the Node and Bun runtimes. At build time `gen-assets.ts`
 embeds the built SPA + SQL migrations into the executable; the server applies migrations on first run,
 sends every gateway route (`isGatewayPath` in the gateway's `app.ts`, the same split `deploy/Caddyfile`
 makes) through `handle()` and serves everything else as the SPA (router-fallback to `index.html`), and
@@ -73,4 +73,4 @@ Unsigned binaries trip macOS Gatekeeper and Windows SmartScreen.
 ## Caveats
 "One exe" = **one binary per OS/arch** (cross-built from a single machine), ~50–100 MB each (the Bun
 runtime is inside). The desktop app is a single-user local instance — for shared/always-on use, see
-the Self-host and Cloudflare split shapes in `deploy/`.
+the Self-host shape in `deploy/`.

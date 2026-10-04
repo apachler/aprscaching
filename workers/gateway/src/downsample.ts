@@ -2,8 +2,8 @@
 /**
  * downsample.ts — which position fixes the ingest persists.
  *
- * A busy APRS-IS feed repeats the same stationary beacons all day, and on D1 every stored fix costs
- * written rows. The ingest therefore stores a station's fix only when it says something new: the
+ * A busy APRS-IS feed repeats the same stationary beacons all day, and every stored fix grows the
+ * database and its write load. The ingest therefore stores a station's fix only when it says something new: the
  * station has moved at least POS_MIN_MOVE_M since its last stored fix, or POS_MIN_INTERVAL_S has
  * passed. Persistence is all this decides — every fix still reaches the live map, watch alerts,
  * rendezvous and BBS delivery.

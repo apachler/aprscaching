@@ -28,7 +28,7 @@ describe("/health readiness probe", () => {
   });
 
   it("reports the newest applied migration as the schema", async () => {
-    const tables: Record<string, string> = { d1_migrations: "0007_seven.sql" };
+    const tables: Record<string, string> = {};
     const db = {
       prepare: (sql: string) => ({
         first: async () => {
@@ -40,7 +40,7 @@ describe("/health readiness probe", () => {
       }),
     };
     const res = await route(get("/health"), { DB: db } as unknown as Env, ctx);
-    expect(await res.json()).toMatchObject({ ok: true, schema: "0007_seven.sql" });
+    expect(await res.json()).toMatchObject({ ok: true, schema: null });
     tables._migrations = "0008_eight.sql";
     const again = await route(get("/health"), { DB: db } as unknown as Env, ctx);
     expect(await again.json()).toMatchObject({ schema: "0008_eight.sql" });

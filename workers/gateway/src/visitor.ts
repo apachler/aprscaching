@@ -38,7 +38,7 @@ function bareOrigin(candidate: string): URL | null {
 
 /**
  * The hotspot origin `candidate` names — https, an RFC 1918 IPv4 host, the running https listener's port —
- * or null. Closed while no https listener runs (the Worker and Bun never have one).
+ * or null. Closed while no https listener runs (Bun never has one).
  */
 export function hotspotOrigin(candidate: string, env: Env): string | null {
   const port = env.HTTPS_LISTENER_PORT;

@@ -10,7 +10,6 @@ cd deploy && ./setup.sh                  # first-run wizard: writes .env (operat
 deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
 deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret, net44 (see Deployment helpers)
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
-deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
 ```
 
@@ -26,7 +25,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 
 | Option | Effect |
 |---|---|
-| `--shape SHAPE` | act on `selfhost`, `cloudflare`, `ingest-box`, `baremetal`, `pocket` or `desktop` instead of the recorded shape |
+| `--shape SHAPE` | act on `selfhost`, `ingest-box`, `baremetal`, `pocket` or `desktop` instead of the recorded shape |
 | `--non-interactive` | ask nothing; a required value without a default fails and names its flag |
 | `--yes` | confirm every change without asking |
 | `--json` | machine-readable output on stdout (`status`, `doctor`, `backup`) |
@@ -37,7 +36,6 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
 | `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
-| `init cloudflare` | `--api-base`, `--app-url`, `--admin-callsigns` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
 | `status`, `doctor` | none |
 | `backup` | `--dest`, `--with-media`, `--no-settings` |
@@ -51,7 +49,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 
 ```bash
 docker compose exec gateway node tools/admin/verify-call.mjs OE8APR                   # Docker stack, from deploy/
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR   # from a checkout
+BASE=https://aprs.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR   # from a checkout
 ```
 
 Confirms the operator's own callsign so the sysop role opens on a fresh instance. Run it after signing in
@@ -93,7 +91,7 @@ See [Off-grid sign-in](../run/day-to-day/sign-in-links.md#off-grid-sign-in).
 ## Licence registers — `tools/licence/` {#licence-registers}
 
 ```bash
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
+BASE=https://aprs.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
 node tools/licence/import.mjs --source all                    # every register
 node tools/licence/import.mjs --source de --file liste.pdf    # a file already downloaded (.zip, .pdf or pdftotext .txt)
 node tools/licence/import.mjs --source ised --dry-run         # parse and count; send nothing

@@ -11,8 +11,8 @@ describe("the live socket URL", () => {
     expect(liveSocketUrl("", { href: "http://localhost:5173/" })).toBe("ws://localhost:5173/ws?region=global");
   });
   it("takes the API's own host when one is set", () => {
-    expect(liveSocketUrl("https://api.aprscaching.net", { href: "https://aprscaching.net/" })).toBe(
-      "wss://api.aprscaching.net/ws?region=global",
+    expect(liveSocketUrl("https://gw.example.net", { href: "https://aprscaching.net/" })).toBe(
+      "wss://gw.example.net/ws?region=global",
     );
     expect(liveSocketUrl("http://192.168.1.5:8787", { href: "https://x.test/" })).toBe(
       "ws://192.168.1.5:8787/ws?region=global",

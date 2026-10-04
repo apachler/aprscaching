@@ -201,7 +201,7 @@ export interface Verification {
   verifiedAt: number | null;
 }
 
-/** Base calls per query, well under the bound-parameter limit of D1 and SQLite. */
+/** Base calls per query, so one statement binds a bounded number of parameters. */
 const VERIFY_BATCH = 90;
 
 /** The verification of each call's base call, keyed by base call; unverified calls are absent. */

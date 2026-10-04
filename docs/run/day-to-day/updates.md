@@ -26,7 +26,6 @@ deploy/aprscaching update --rollback-window 30     # roll back without asking fo
 3. It moves the checkout to the target and brings the instance onto it:
     - Self-host: rebuild and restart with Docker Compose;
     - bare metal: install, build the web app, restart the units;
-    - Cloudflare split: `cloudflare/publish.sh`;
     - ingest box: rebuild the ingest container.
 
     The gateway applies new migrations when it starts.
@@ -36,8 +35,7 @@ deploy/aprscaching update --rollback-window 30     # roll back without asking fo
     2. then the code, rebuilt and restarted.
 
     The rollback runs at once while the backup is younger than `--rollback-window` (15 minutes). After that
-    it asks first, because a database rollback loses what was written since. On the Cloudflare split the
-    database goes back with D1 Time Travel. An ingest box has no database, so only its code rolls back.
+    it asks first, because a database rollback loses what was written since. An ingest box has no database, so only its code rolls back.
 
 A failure that existed before the update does not trigger a rollback. When you decline the rollback, the helper
 prints the two commands that roll back by hand.

@@ -193,8 +193,8 @@ printf 'shape=pocket\nenv=%s\n' "$ENVF" >"$APRSCACHING_SHAPE_FILE"
 MOCK_PMTU=1492 n44 setup "$TMP/full.conf"
 check "on Pocket, setup prints the app steps with the probed MTU" bash -c "grep -q 'set MTU to 1412' '$TMP/out' && grep -q 'Persistent keepalive to 25' '$TMP/out'"
 check "  … and changes nothing on the host" bash -c "! grep -q 'systemctl\|systemd-run' '$MOCK_LOG'"
-printf 'shape=cloudflare\nenv=\n' >"$APRSCACHING_SHAPE_FILE"
-check "the Cloudflare split has no 44Net helper" fails n44 setup "$TMP/full.conf"
+printf 'shape=ingest-box\nenv=\n' >"$APRSCACHING_SHAPE_FILE"
+check "an ingest box has no 44Net helper" fails n44 setup "$TMP/full.conf"
 
 # ---- the FED_ENDPOINTS edits on their own ------------------------------------------------------------------------------
 fe() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/net44.sh'; \"\$@\"" _ "$@"; }

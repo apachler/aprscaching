@@ -70,7 +70,7 @@ const PRUNE_BATCHES = 40;
 /**
  * Delete the rows `select` names (a `SELECT rowid FROM … WHERE …`, without LIMIT) in bounded batches, so a
  * huge backlog never holds one long write transaction — on the synchronous Node runtime a single mega-DELETE
- * stalls every request until it finishes. The rowid-subquery LIMIT works on D1, better-sqlite3 and bun:sqlite
+ * stalls every request until it finishes. The rowid-subquery LIMIT works on better-sqlite3 and bun:sqlite
  * alike. One run removes at most 200k rows per table; any remainder ages into the next night.
  */
 export async function pruneBounded(env: Env, table: string, select: string, ...binds: unknown[]): Promise<void> {

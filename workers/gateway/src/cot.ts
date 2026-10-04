@@ -145,7 +145,7 @@ const COT_STREAM_MAX_MS = 5 * 60_000;
  * frames, then poll for stations heard since a monotonic cursor and push each as it arrives, with a
  * `: ping` heartbeat every cycle. The stream ends after five minutes (the client reconnects) or when the
  * client disconnects (req.signal abort / stream cancel). Runtime-neutral: the response is a
- * ReadableStream — Workers/Bun stream it natively; the Node shell pipes text/event-stream bodies.
+ * ReadableStream — Bun streams it natively; the Node shell pipes text/event-stream bodies.
  */
 export function handleCotStream(req: Request, env: Env, now: number): Response {
   const u = new URL(req.url);

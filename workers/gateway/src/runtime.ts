@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Runtime-neutral interfaces. The gateway's business logic is written against these so it runs
- * unchanged on Cloudflare (D1 / Durable Objects / R2) and on the portable Node/SQLite server.
- * The Cloudflare bindings are structurally compatible; the Node adapter implements them directly.
- * Only room.ts (the Durable Object) depends on real Workers globals.
+ * unchanged on the Node server and the Bun server, which implement them: the database over a
+ * synchronous SQLite driver (servers/node/src/d1.ts), media and the offline map on the filesystem, and
+ * the live rooms in memory (rooms-core.ts).
  */
 
 export interface SqlResult<T = unknown> {
@@ -29,8 +29,8 @@ export interface ExecCtx {
 }
 
 /**
- * The instance's offline map: one PMTiles archive the operator provides (an R2 object on Cloudflare, a
- * file on Node and Bun), read by byte range so a phone fetches only the tiles of its pack.
+ * The instance's offline map: one PMTiles archive the operator provides (a file on the server), read by
+ * byte range so a phone fetches only the tiles of its pack.
  */
 export interface TileArchive {
   /** The archive's size and a tag that changes with its content; null when there is no archive. */
@@ -39,14 +39,14 @@ export interface TileArchive {
   read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>>;
 }
 
-/** Media blob store (audio clues etc.) — implemented by R2 on CF and the filesystem on Node. */
+/** Media blob store (audio clues etc.) — implemented on the filesystem (servers/node/src/media.ts). */
 export interface MediaStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<{ bytes: Uint8Array; contentType: string } | null>;
   delete?(key: string): Promise<void>;
 }
 
-/** Region-room namespace (Durable Object on CF; an in-memory room registry on Node). */
+/** Region-room namespace — the in-memory room registry (rooms-core.ts), reached by a fetch-shaped call. */
 export interface RoomNamespace {
   idFromName(name: string): unknown;
   get(id: unknown): { fetch(req: Request): Promise<Response> };

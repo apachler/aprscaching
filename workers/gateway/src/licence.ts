@@ -213,7 +213,7 @@ export async function handleLicenceImport(req: Request, env: Env): Promise<Respo
 
   const rows = (body.rows as unknown[]).map(cleanRow).filter((r): r is Row => r !== null);
   // One statement per batch: the rows travel as a single JSON parameter and json_each unpacks them, so
-  // the batch stays far below D1's per-statement parameter cap and per-request query budget.
+  // the batch stays far below any per-statement parameter cap.
   if (rows.length)
     await env.DB.prepare(
       `INSERT INTO licence_registry (callsign, source, status, expires_at, updated_at)

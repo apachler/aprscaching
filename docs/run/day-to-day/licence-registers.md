@@ -19,7 +19,7 @@ Run these in the checkout's root directory:
 
 ```bash
 node tools/licence/import.mjs --list                    # the registers it knows
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
+BASE=https://aprs.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
 node tools/licence/import.mjs --source all              # every register
 node tools/licence/import.mjs --source ised --dry-run   # parse and count, send nothing
 ```

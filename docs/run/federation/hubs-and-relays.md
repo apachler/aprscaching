@@ -88,8 +88,8 @@ instance.
     - `FED_REGISTRY`: the document itself.
     - `FED_REGISTRY_DNS`: the name of a DNS `TXT` record holding `url=https://…`. DNS only says where the
       document lives; a `key=` in the record is ignored, so whoever controls DNS never chooses the signing key.
-3. **Restart.** A registry setting without `FED_REGISTRY_KEY` is a configuration error: Self-host, Desktop and
-   Pocket refuse to start, and on Cloudflare every registry lookup fails closed.
+3. **Restart.** A registry setting without `FED_REGISTRY_KEY` is a configuration error: the gateway refuses
+   to start.
 
 How the registry behaves:
 

@@ -22,7 +22,7 @@ export { CONFIG_KEYS };
 export type ConfigUnit = "gateway" | "server" | "desktop" | "ingest" | "web" | "deploy" | "pocket" | "licence";
 
 /** The deployment shapes the helpers set up; which keys apply to one follows from its units. */
-export type ConfigShape = "selfhost" | "cloudflare" | "baremetal" | "ingest-box" | "pocket" | "desktop";
+export type ConfigShape = "selfhost" | "baremetal" | "ingest-box" | "pocket" | "desktop";
 
 /**
  * Value types. `int` and `number` are what the code parses with Number(); `enum` takes one of `values`
@@ -56,16 +56,16 @@ export type ConfigKeysOf<U extends ConfigUnit> = {
   [K in ConfigKeyName]: U extends (typeof CONFIG_KEYS)[K]["units"][number] ? K : never;
 }[ConfigKeyName];
 
-const ALL_SHAPES: readonly ConfigShape[] = ["selfhost", "cloudflare", "baremetal", "ingest-box", "pocket", "desktop"];
+const ALL_SHAPES: readonly ConfigShape[] = ["selfhost", "baremetal", "ingest-box", "pocket", "desktop"];
 
 /** The shapes a unit runs in. */
 const UNIT_SHAPES: Record<ConfigUnit, readonly ConfigShape[]> = {
-  gateway: ["selfhost", "cloudflare", "baremetal", "pocket", "desktop"],
+  gateway: ["selfhost", "baremetal", "pocket", "desktop"],
   server: ["selfhost", "baremetal", "pocket", "desktop"],
   desktop: ["desktop"],
   ingest: ["selfhost", "baremetal", "ingest-box", "pocket"],
-  web: ["selfhost", "cloudflare", "baremetal", "pocket"],
-  deploy: ["selfhost", "ingest-box", "cloudflare"],
+  web: ["selfhost", "baremetal", "pocket"],
+  deploy: ["selfhost", "ingest-box"],
   pocket: ["pocket"],
   licence: ALL_SHAPES,
 };

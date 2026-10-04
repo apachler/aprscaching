@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { startAprsChallenge, handleOperatorVerify, parseVerifyMessage, verifyText } from "../src/callsign.js";
 import type { Env } from "../src/env.js";
 
-/** A D1 stand-in that holds nothing: these paths must refuse before they touch a row. */
+/** A database stand-in that holds nothing: these paths must refuse before they touch a row. */
 function makeEnv(): Env {
   const db = {
     prepare() {

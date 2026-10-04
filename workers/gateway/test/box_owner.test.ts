@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { handleBoxEnqueue } from "../src/box.js";
 import type { Env } from "../src/env.js";
 
-/** In-memory D1 stand-in: a boxes table + accounts lookup by session cookie. */
+/** In-memory database stand-in: a boxes table + accounts lookup by session cookie. */
 function makeEnv(sessions: Record<string, string>): Env {
   const boxes = new Map<string, string>(); // box_id -> account_id
   const db = {

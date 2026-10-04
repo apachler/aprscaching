@@ -9,8 +9,8 @@ function freshDb() {
   return makeD1(sqlite);
 }
 
-describe("D1-compatible SQLite shim", () => {
-  it("run() reports last_row_id and changes like D1", async () => {
+describe("SQLite database shim", () => {
+  it("run() reports last_row_id and changes", async () => {
     const db = freshDb();
     const r = await db.prepare("INSERT INTO t (name, n) VALUES (?, ?)").bind("a", 1).run();
     expect(r.meta.last_row_id).toBe(1);
@@ -34,14 +34,15 @@ describe("D1-compatible SQLite shim", () => {
     expect(res.results.map((r) => r.name)).toEqual(["a", "b"]);
   });
 
-  it("throws on an undefined bind (Cloudflare D1 parity), coerces boolean -> 0/1", () => {
+  it("throws on an undefined bind, coerces boolean -> 0/1", () => {
     const db = freshDb();
-    // real D1 rejects an undefined bind with D1_TYPE_ERROR — the shim must too, so a latent bug
-    // fails on Node/Bun in CI instead of only 500-ing on Workers.
-    expect(() => db.prepare("INSERT INTO t (name, n) VALUES (?, ?)").bind(undefined, 1)).toThrow(/D1_TYPE_ERROR/);
+    // an undefined bind is a missing field: it fails in a test instead of storing a silent null
+    expect(() => db.prepare("INSERT INTO t (name, n) VALUES (?, ?)").bind(undefined, 1)).toThrow(
+      /undefined bind value/,
+    );
   });
 
-  it("coerces boolean -> 0/1 (a convenience beyond D1)", async () => {
+  it("coerces boolean -> 0/1", async () => {
     const db = freshDb();
     await db.prepare("INSERT INTO t (name, n) VALUES (?, ?)").bind("a", true).run();
     const row = await db.prepare("SELECT name, n FROM t").first<{ name: string | null; n: number }>();
@@ -54,7 +55,7 @@ describe("D1-compatible SQLite shim", () => {
     expect(r.results).toHaveLength(1); // rows came back
     expect(r.meta.changes).toBe(1); // …and meta reflects the write
     expect(r.meta.last_row_id).toBe(1);
-    // a plain SELECT still reports zeroed meta, as D1 does
+    // a plain SELECT still reports zeroed meta
     const sel = await db.prepare("SELECT * FROM t").all();
     expect(sel.meta.changes).toBe(0);
   });

@@ -4,7 +4,7 @@
  * (`/resolve`) and Quad9 (`:5053/dns-query`) serve: `?name=&type=` with `accept: application/dns-json`,
  * answering `{Status, AD, Answer: [{name, type, data}]}`. The dialects differ only in presentation —
  * Google writes owner names with a trailing dot and TXT data unquoted, Cloudflare quotes each
- * character-string — and both normalise here. Plain fetch, so it runs the same on Workers, Node and Bun.
+ * character-string — and both normalise here. Plain fetch, so it runs the same on Node and Bun.
  * The answer carries the resolver's DNSSEC verdict: `AD` is set only when the resolver validated the
  * whole chain from the root, which is what anchors a record cryptographically rather than by where the
  * answer came from.

@@ -64,8 +64,7 @@ The gateway rate-limits by the visitor's address. Behind Cloudflare, every reque
 which names the visitor in the `cf-connecting-ip` header. With `TRUST_CF=1` the gateway keeps that header;
 without it, the gateway drops it, so a client that reaches the box directly cannot pick a new identity on
 every request. Set `TRUST_CF=1` only when Cloudflare is the only way in: the tunnel, or proxied DNS with
-ports 80 and 443 limited to Cloudflare. The Cloudflare split's Worker always trusts the header, since
-Cloudflare's edge sets it there.
+ports 80 and 443 limited to Cloudflare.
 
 ## Check that it worked
 

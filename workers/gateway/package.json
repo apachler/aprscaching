@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "src/app.ts",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/app.ts",
     "./app": "./src/app.ts",
     "./env": "./src/env.ts",
     "./runtime": "./src/runtime.ts",
@@ -35,7 +35,6 @@
     "./ingest": "./src/ingest.ts",
     "./adoption": "./src/adoption.ts",
     "./rooms-core": "./src/rooms-core.ts",
-    "./budget": "./src/budget.ts",
     "./station_status": "./src/station_status.ts",
     "./tombstones": "./src/tombstones.ts",
     "./meshcom": "./src/meshcom.ts",
@@ -45,10 +44,7 @@
     "./outbox": "./src/outbox.ts"
   },
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
     "build": "tsc -p tsconfig.json --noEmit",
-    "migrate": "wrangler d1 migrations apply aprscaching --local",
     "test": "vitest run"
   },
   "dependencies": {
@@ -57,8 +53,7 @@
     "@aprscaching/packet": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260929.1",
-    "wrangler": "^4.143.0",
+    "@types/node": "^26.6.3",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
   },

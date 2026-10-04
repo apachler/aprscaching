@@ -28,7 +28,6 @@ const MT_UINT = 0,
 
 const textEncoder = new TextEncoder();
 // fatal: a signed payload with invalid UTF-8 must be rejected, not silently replaced.
-// (ignoreBOM is spelled out because the workerd type defs require the full options shape.)
 const textDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
 
 class ByteWriter {

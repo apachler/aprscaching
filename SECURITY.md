@@ -64,7 +64,7 @@ network layer (that's the operator's edge/CDN concern).
   instance, and a finding that it does is in scope.
 - The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, or an
   `OPERATOR_SECRET`/`SESSION_SECRET` equal to it. Without `SESSION_SECRET` they generate one beside the
-  database; the Worker mints no session without it. Give an ingest box only `INGEST_SECRET`.
+  database. Give an ingest box only `INGEST_SECRET`.
 - **Sessions are bound to the account.** A cookie names the account and its session generation and is
   honoured only while that account exists at that generation and holds the call. Erasure, a callsign
   change and **Sign out everywhere** (`POST /auth/logout-all`) end every session of the account;
@@ -95,7 +95,7 @@ network layer (that's the operator's edge/CDN concern).
   accepts only a signed answer.
 - Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`,
   VAPID keys, etc.) — use
-  `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
+  the instance's `.env` / environment variables. GitHub **secret scanning** is enabled on this repo;
   rotate anything it flags.
 - Every bug fix, security fixes included, ships with the test that would have caught it. Deferred
   capability work is tracked openly in [`TODO.md`](TODO.md).

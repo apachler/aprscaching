@@ -25,7 +25,7 @@ commit, the tag and the licence. `GET /source` redirects to that commit's tree. 
 verify is marketing; this one you can diff.
 
 **Or self-host and trust no one.** The same code runs as a desktop single binary, on a Raspberry Pi at home, on
-your own VM, or on Cloudflare's edge — see [Is running an instance for me?](run/index.md). The RF ingest is *always*
+your own VM, or on a phone — see [Is running an instance for me?](run/index.md). The RF ingest is *always*
 runnable on your own equipment and is never cloud-only. Run your own instance and the retention schedule, the
 data and the hardware are all yours.
 

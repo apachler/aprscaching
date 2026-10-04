@@ -15,7 +15,7 @@ import { secretOk } from "./auth.js";
  *
  * Plus best-effort abuse limits (also here): an optional shared-secret allowlist, an in-memory
  * fixed-window rate limiter (per-IP + per-callsign), and negative-result memoization. The in-memory
- * stores are per-isolate (so weaker on Workers' fan-out) but zero-cost and a meaningful first defense;
+ * stores are per-process (they forget on restart) but zero-cost and a meaningful first defense;
  * the shared secret + coarse responses are the load-bearing guarantees.
  */
 import type { Env } from "./env.js";
@@ -67,7 +67,7 @@ export function bucketTs(ts: number, bucketSec: number): number {
   return Math.floor(ts / bucketSec) * bucketSec;
 }
 
-// ---- abuse limits (in-memory, per-isolate, best-effort) ----
+// ---- abuse limits (in-memory, per-process, best-effort) ----
 interface RlWindow {
   count: number;
   resetAt: number;
@@ -91,9 +91,9 @@ export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs =
 }
 
 /**
- * The DURABLE fixed-window limiter — one D1/SQLite row per key, incremented and rolled
- * over in a single upsert, so the budget survives isolate fan-out (Workers) and process restarts
- * (Node/Bun) alike. Used by every abuse-facing gate (read API, corroboration, key issuance,
+ * The DURABLE fixed-window limiter — one SQLite row per key, incremented and rolled
+ * over in a single upsert, so the budget survives process restarts and is shared by every process on the
+ * same database. Used by every abuse-facing gate (read API, corroboration, key issuance,
  * signed ingest, passkey begin). Falls back to the in-memory limiter if the DB write fails —
  * degraded protection beats an outage that 500s every read.
  */
@@ -159,8 +159,8 @@ export function stampClientIp(headers: Headers, socketAddr: string | undefined, 
 
 /**
  * Client ip for rate-limit keying, from sources the CLIENT cannot choose.
- *  - cf-connecting-ip: stamped by Cloudflare's edge. On the Worker the edge always sets it; the
- *    self-host runtimes keep it only behind a declared Cloudflare edge (TRUST_CF=1, see stampClientIp).
+ *  - cf-connecting-ip: stamped by Cloudflare's edge. The servers keep it only behind a declared
+ *    Cloudflare edge (TRUST_CF=1, see stampClientIp).
  *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
  *    a self-host box behind Caddy or Cloudflare) — otherwise any direct client could rotate identities per request.
  *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address (stampClientIp), so a

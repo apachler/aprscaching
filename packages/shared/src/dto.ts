@@ -174,7 +174,7 @@ export const RegisterKeyRequest = z.object({
 });
 export type RegisterKeyRequest = z.infer<typeof RegisterKeyRequest>;
 
-// ---- response shapes (worker maps D1 rows -> these camelCase DTOs) ----
+// ---- response shapes (the gateway maps database rows -> these camelCase DTOs) ----
 
 /** One run of an imported place's attribution note: plain text, linked when the source linked it. */
 export interface AttributionPart {

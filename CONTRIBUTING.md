@@ -18,8 +18,8 @@ good it otherwise is. They are documented in `CLAUDE.md` and `.claude/rules/`; t
 - **RF ingest is always operator-runnable** — never cloud-only. See `.claude/rules/ingest-locality.md`.
 - **AGPL §13 source link is launch-blocking.** Every instance exposes `/.well-known/source`; don't
   break it. If you run a *modified* public instance you must publish your source (set `SOURCE_REPO`).
-- **Tri-runtime parity.** Node+SQLite (`servers/node`), Cloudflare Worker+D1 (`workers/gateway`), and
-  Bun+`bun:sqlite` (`servers/bun`) all stay conformance-green. One shared handler set (`@aprscaching/gateway`).
+- **Runtime parity.** Node+SQLite (`servers/node`) and Bun+`bun:sqlite` (`servers/bun`) both stay
+  conformance-green. One shared handler set, the gateway app in `workers/gateway` (`@aprscaching/gateway`).
 - **No emoji in the web UI** (`apps/web/test/no-emoji.mjs` enforces it) and **CSS-over-JavaScript**
   (`.claude/rules/css.md`). The shack aesthetic is ASCII/Phosphor on purpose.
 - **Free in full, recognition-only.** No feature gating, no telemetry phoning home, nothing that
@@ -48,7 +48,7 @@ pnpm run check     # build every unit, run every unit suite (and the web guards)
 | `pnpm verify` | the full pre-PR gate: `check` then `smoke` |
 | `pnpm --filter <package> exec vitest run test/foo.test.ts -t "name"` | one file or one test |
 | `pnpm --filter @aprscaching/web dev` | run the web app |
-| `pnpm --filter @aprscaching/gateway dev` | run the Cloudflare Worker gateway (needs a local D1) |
+| `pnpm --filter @aprscaching/node-gateway dev` | run the gateway on Node + SQLite |
 
 Run **`pnpm verify` before you open a PR**, and `tools/dev/smoke.sh federation` too for federation changes.
 [Testing & verification](docs/contribute/testing.md) maps every suite and CI job.
@@ -145,7 +145,7 @@ same licence as the files it touches** (inbound = outbound).
 - [ ] Tests added/updated for the change (a bug fix ships with the test that would have caught it).
 - [ ] Commits are Conventional Commits and **signed off** (`-s`).
 - [ ] No new emoji in `apps/web`; styling follows `.claude/rules/css.md`.
-- [ ] The invariants above still hold (trust model, ingest locality, tri-runtime, source link).
+- [ ] The invariants above still hold (trust model, ingest locality, runtime parity, source link).
 - [ ] SPDX header on any new source file; `packages/*` stayed MIT-clean.
 
 Small, focused PRs merge fastest. If you're planning something large, open an issue or discussion
