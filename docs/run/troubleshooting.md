@@ -497,6 +497,16 @@ container.
 - **Fix:** remove the `ports:` entry of the `gateway` service.
 - **See:** [Self-host with Docker](install/self-host-docker.md#before-you-start).
 
+### `service.data_owner`
+
+- **Tests:** Self-host: the gateway's user (UID 10001) can write the data directory, `/data/media`, the database
+  files and the generated secrets in the `data` volume.
+- **Message:** `the gateway (UID 10001) cannot write <file> in the data volume` (fail).
+- **Fix:** `deploy/aprscaching update` hands the volume to UID 10001; by hand, in `deploy/`:
+  `docker compose run --rm --no-deps --user 0 gateway chown -R 10001:10001 /data`. A host directory bound to
+  `/data` takes `sudo chown -R 10001:10001 <dir>`.
+- **See:** [The services run as an unprivileged user](install/self-host-docker.md#the-services-run-as-an-unprivileged-user).
+
 ### `service.meshcom_port`
 
 - **Tests:** a public Self-host instance does not publish MeshCom's 1799/udp on every address.

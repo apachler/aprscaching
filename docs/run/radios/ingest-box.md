@@ -147,6 +147,9 @@ Without the helper, the box runs `deploy/compose.ingest-only.yml`, the ingest co
 The container receives every setting in `deploy/.env` and blanks the gateway's own secrets
 (`OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY` and the rest), should the file hold any.
 Inside it, `localhost` is the container: [From a container](rf-ingest.md#from-a-container).
+The ingest runs as an unprivileged user (UID 10001) in the group `dialout`: a serial TNC or PTT line is passed
+in with the `devices:` entry the file shows, and `group_add:` adds the device's group where the host gives it a
+GID other than 20.
 
 **From a checkout without Docker**, the settings go in `.env` at the top of the repository (copy
 `.env.example`), the enroll command appends to `../../.env`, and the ingest starts with

@@ -67,6 +67,9 @@ check "the ingest box blanks every gateway-only secret" blanks_all "$(cat "$DEPL
 check "the ingest unit unsets every gateway-only secret" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-ingest.service'); for k in $(echo $GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
 check "the ingest's settings come from .env, not as empty \${KEY} strings" \
   bash -c "! grep -v '^ *#' <<<\"\$1\$2\" | grep -E '\\\$\\{[A-Z_]+(:-)?\\}'" _"$INGEST_SVC" "$(cat "$DEPLOY/compose.ingest-only.yml")"
+check "the image runs as UID 10001, not as root" grep -qx 'USER 10001' "$DEPLOY/Dockerfile"
+check "  … which owns /data and /srv/web" grep -q 'chown -R 10001:10001 /data /srv/web' "$DEPLOY/Dockerfile"
+check "  … and is the UID the helper hands the volumes to" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; [ \"\$SELFHOST_UID\" = 10001 ]"
 check "the tunnel overlay resets Caddy's ports" grep -qE '^    ports: !reset \[\]' "$DEPLOY/compose.home.yml"
 for p in '**/.env' '**/.env.*' '!**/*.example' '**/*.secret' 'deploy/.shape' 'deploy/backups' '**/data' '**/*.db'; do
   check "the image leaves out $p" grep -qxF -- "$p" "$DEPLOY/../.dockerignore"

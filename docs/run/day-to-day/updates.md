@@ -24,7 +24,8 @@ deploy/aprscaching update --rollback-window 30     # roll back without asking fo
    warning: migrations never run backward.
 2. It runs `doctor` and takes a backup with `deploy/aprscaching backup`.
 3. It moves the checkout to the target and brings the instance onto it:
-    - Self-host: rebuild and restart with Docker Compose;
+    - Self-host: rebuild with Docker Compose, hand any file in the `data` and `webdist` volumes that another
+      owner holds to the image's user (UID 10001), and restart;
     - bare metal: install, build the web app, restart the units;
     - ingest box: rebuild the ingest container.
 

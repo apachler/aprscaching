@@ -37,6 +37,8 @@ services:
       # Caddy is the only way in and sets X-Forwarded-For itself, so the gateway keys per-IP rate
       # limits on the forwarded client address rather than on Caddy's.
       TRUST_PROXY: "1"
+    # The image runs as UID 10001 and the named volume takes that owner. A host directory bound here instead
+    # needs `sudo chown -R 10001:10001 <dir>` once.
     volumes: ["data:/data"]
     restart: unless-stopped
     logging: *default-logging
@@ -64,6 +66,11 @@ services:
     # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
     # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
     # ports: ["192.168.1.10:1799:1799/udp"]
+    # A serial TNC or PTT line: pass the device in. The image's user (UID 10001) is in `dialout`, GID 20 on Debian,
+    # Ubuntu and Raspberry Pi OS; where the host's device group has another GID (`stat -c %g /dev/ttyUSB0`), add
+    # that GID with group_add.
+    # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
+    # group_add: ["18"]
     # The APRS-IS login, filter and INGEST_SECRET come from .env alone: a key .env leaves out stays unset
     # here, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:

@@ -120,6 +120,27 @@ change with `docker compose up -d`.
 
 Each long-running service restarts unless stopped, and its logs are capped at about 30 MB.
 
+## The services run as an unprivileged user
+
+The gateway, the ingest and `webdist` run as the user `aprscaching`, UID and GID `10001`, never as root. The code
+in the image is read-only to them. The `data` and `webdist` volumes belong to that user: a new named volume takes
+the owner from the image, and `deploy/aprscaching update` hands any file in them that another owner holds to
+UID 10001.
+
+- **A host directory instead of the `data` volume** (a bind mount such as `- /srv/aprscaching:/data`) is not
+  changed by Docker. Give it to the user once, before the first start:
+
+    ```bash
+    sudo chown -R 10001:10001 /srv/aprscaching
+    ```
+
+    Without that, the gateway cannot open its database and restarts in a loop; `deploy/aprscaching doctor`
+    names the file it cannot write (`service.data_owner`).
+
+- **A serial TNC or a PTT line** reaches the ingest as a device: uncomment `devices:` under `ingest` in
+  `docker-compose.yml`. The user is in the group `dialout`, GID 20 on Debian, Ubuntu and Raspberry Pi OS. Where
+  the host gives the device another group (`stat -c %g /dev/ttyUSB0`), add that GID with `group_add:`.
+
 ## On Oracle Cloud
 
 The one-click Oracle Cloud stack starts this same stack on a free Always Free VM:

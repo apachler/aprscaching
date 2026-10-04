@@ -14,9 +14,22 @@ RUN pnpm -r build
 
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
-RUN corepack enable
+# pnpm is fetched into a shared COREPACK_HOME at build time, so the unprivileged user runs it without a
+# writable home cache and a container starts without network access.
+ENV NODE_ENV=production COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 COPY --from=build /app /app
+# The services run as the unprivileged user aprscaching (UID and GID 10001), never as root. The code under
+# /app stays root-owned and read-only to it. /data (the database, the generated secrets, the media, backup
+# staging) and /srv/web (the SPA copy Caddy serves) belong to it, so a fresh named volume mounted there takes
+# that owner; a bind-mounted host directory needs `chown -R 10001:10001` once. The user is in `dialout`
+# (GID 20 on Debian, Ubuntu and Raspberry Pi OS), so a serial TNC or PTT passed in with `devices:` opens.
+RUN corepack enable && corepack install \
+ && groupadd --system --gid 10001 aprscaching \
+ && useradd --system --uid 10001 --gid 10001 --groups dialout --create-home --home-dir /home/aprscaching \
+      --shell /usr/sbin/nologin aprscaching \
+ && mkdir -p /data/media /srv/web \
+ && chown -R 10001:10001 /data /srv/web
+USER 10001
 EXPOSE 8080
 # Default = gateway; compose overrides `command:` for the ingest. The built SPA sits at
 # /app/apps/web/dist — the compose `webdist` one-shot copies it into the volume Caddy serves.

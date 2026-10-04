@@ -16,10 +16,16 @@ COPY . .
 RUN pnpm install --frozen-lockfile --filter @aprscaching/node-gateway...
 
 FROM node:24-slim
-ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH"
-RUN corepack enable
+ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH" COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 WORKDIR /app
 COPY --from=build /app /app
+# Runs as the unprivileged user aprscaching (UID and GID 10001), as deploy/Dockerfile does; /data belongs to it.
+RUN corepack enable && corepack install \
+ && groupadd --system --gid 10001 aprscaching \
+ && useradd --system --uid 10001 --gid 10001 --create-home --home-dir /home/aprscaching \
+      --shell /usr/sbin/nologin aprscaching \
+ && mkdir -p /data && chown 10001:10001 /data
+USER 10001
 
 ENV PORT=8787 DB_PATH=/data/aprscaching.db
 VOLUME ["/data"]

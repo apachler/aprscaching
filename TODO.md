@@ -71,9 +71,6 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [ ] **Sign-in mail deliverable** _(S)_ — the `EMAIL_FROM` domain has SPF, DKIM (the provider's selector) and a
       DMARC record (`p=quarantine` once the reports are clean); a sign-in link reaches Gmail, Outlook and GMX
       inboxes, not spam. The three records are documented in Sign-in links or Your first hour.
-- [ ] **Decide whether the image runs as non-root** _(S — owner decision)_ — `deploy/Dockerfile` sets no
-      `USER`, so the gateway and the ingest run as root in their containers. Switching later means changing the
-      ownership of every existing data volume, so the cheapest moment is before the first public deploy.
 - [ ] **Protect `main`** _(S)_ — branch protection on `main` (no direct pushes, the PR checks required), so only
       the release PR and `dev` → `main` merges reach it.
 - [ ] **aprscaching.net live** _(M)_ — DNS points at the public instance; `INSTANCE`, `APP_URL` and `RP_ID` are
