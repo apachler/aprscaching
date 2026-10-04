@@ -167,7 +167,9 @@ async function viaSmtp(
 
 /** The domain of the sender address, which names the Message-ID: `Name <a@b.example>` and `a@b.example` alike. */
 function senderDomain(from: string): string {
-  const addr = /<([^>]+)>/.exec(from)?.[1] ?? from;
+  const open = from.lastIndexOf("<");
+  const close = from.indexOf(">", open);
+  const addr = open >= 0 && close > open ? from.slice(open + 1, close) : from;
   return addr.split("@").pop()?.trim() || "localhost";
 }
 
@@ -183,9 +185,11 @@ function helloName(env: Env): string | undefined {
 /** A failure as one line: the error code, the server's reply code, and its text with every address masked. */
 function reason(e: unknown): string {
   const err = e as { code?: string; responseCode?: number; message?: string };
+  // split on the characters around an address, so masking stays linear in the length of the text
   const text = String(err?.message ?? e)
-    .replace(/[^\s<>"'@]+@[^\s<>"'@]+/g, "<address>")
-    .replace(/\s+/g, " ")
+    .split(/([\s<>"']+)/)
+    .map((part) => (part.includes("@") ? "[address]" : /\s/.test(part) ? part.replace(/\s+/g, " ") : part))
+    .join("")
     .trim();
   return [err?.code, err?.responseCode, text].filter((x) => x !== undefined && x !== "").join(" ");
 }

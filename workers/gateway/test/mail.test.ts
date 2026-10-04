@@ -9,7 +9,7 @@ import { mailTransport, sendEmail, deliverMail, handleMailTest } from "../src/ma
 import type { Env } from "../src/env.js";
 
 type Received = { auth: string[]; from: string; to: string[]; data: string };
-type FakeOpts = { refuseLogin?: boolean; silent?: boolean };
+type FakeOpts = { refuseLogin?: boolean; silent?: boolean; refuseRcpt?: boolean };
 
 /** A local SMTP server speaking just enough of the protocol: EHLO, AUTH PLAIN, MAIL, RCPT, DATA, QUIT. */
 async function fakeSmtp(opts: FakeOpts = {}): Promise<{ port: number; got: Received[]; close: () => Promise<void> }> {
@@ -66,7 +66,7 @@ async function fakeSmtp(opts: FakeOpts = {}): Promise<{ port: number; got: Recei
           say("250 ok");
         } else if (cmd.startsWith("RCPT TO:")) {
           msg.to.push(line.slice(8).trim());
-          say("250 ok");
+          say(opts.refuseRcpt ? `550 5.1.1 ${line.slice(8).trim()}: mailbox unknown` : "250 ok");
         } else if (cmd === "DATA") {
           inData = true;
           say("354 go ahead");
@@ -182,6 +182,17 @@ describe("sendEmail over SMTP", () => {
     const line = String(warn.mock.calls[0]![0]);
     expect(line).toContain("SMTP 127.0.0.1");
     for (const leak of ["mailbox-password", "ham@example.org", "secret body"]) expect(line).not.toContain(leak);
+  });
+
+  it("a refused recipient is reported with the address masked", async () => {
+    const s = await server({ refuseRcpt: true });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await deliverMail(smtpEnv(s.port), "ham@example.org", "s", "t");
+    expect(res.ok).toBe(false);
+    const error = res.ok ? "" : res.error;
+    expect(error).toContain("550");
+    expect(error).toContain("[address]");
+    expect(error).not.toContain("ham@example.org");
   });
 
   it("gives up on a server that never greets within the timeout", async () => {
