@@ -494,6 +494,16 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Future ideas
 
+- [ ] **Visiting finds: log another instance's cache from your home instance** _(P1 · L)_ — a mirrored cache
+      is read-only (`docs/play/find-a-cache.md`, *Caches from other instances*), so a player needs an account on
+      every instance whose caches they hunt. The player logs the mirrored cache at home; the find, signed on the
+      device as every find is, travels to the cache's home instance with the player's published key and the home
+      instance's statement of callsign verification. The cache's instance accepts it only from a trusted peer,
+      checks the signature against the key feed, applies its own find rules and grades it from its own evidence
+      (Tier A only from its own attested receivers; the home instance's verification counts as far as the peer
+      tier allows). It shows as a visitor's find, falls under the cache instance's moderation, and federates back
+      like any find. Open: how visitors rank on each instance's leaderboard, rate limits per peer, and the app
+      flow (Log on a mirrored cache, delivery state while the peer is unreachable).
 - [ ] **Guided move to another instance** _(P2 · M)_ — moving an account exists only as API calls
       (`/api/account/<call>/bundle`, `/move`, `POST /api/account/import`, `workers/gateway/src/account.ts`), with no
       UI. Add **Settings → Your data → Move to another instance** (enter the new instance, build and sign the bundle
