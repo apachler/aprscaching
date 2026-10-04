@@ -17,7 +17,7 @@ const rowKey = (fn: () => void) => (e: React.KeyboardEvent) => {
 
 type Tab = "inbox" | "sent" | "bulletins" | "compose";
 
-/** BBS — store-and-forward APRS mail + (network-federated) bulletins + connected-mode threads. */
+/** BBS — store-and-forward mail moved the F6FBB way, (network-federated) bulletins and connected-mode threads. */
 export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   const fmt = useFmt();
   const toolHost = useToolHost(); // tools targeting the "bbs" surface
@@ -344,8 +344,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
               </Button>
             </div>
             <p className="muted">
-              From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded
-              over APRS when the recipient is next heard; bulletins propagate to federated instances.
+              From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail waits here until the recipient
+              reads it or a partner BBS takes it over FBB forwarding; bulletins propagate to federated instances. To
+              reach a station over APRS when it is next heard, use the Mailbox in Messages.
             </p>
           </>
         )}
