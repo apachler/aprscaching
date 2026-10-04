@@ -544,6 +544,21 @@ export function withdrawMailboxMessage(id: number): Promise<{ ok: true }> {
   return call(`/api/mailbox/${id}`, { method: "DELETE" });
 }
 
+/**
+ * Send an APRS message now through the instance: it goes out on APRS-IS under your verified call, by way of the
+ * instance's ingest box, and joins your conversation with its delivery state.
+ */
+export function sendAprsMessage(m: {
+  to: string;
+  text: string;
+  msgNo?: string;
+}): Promise<{ id: number; srcCall: string; status: "queued" }> {
+  return call(`/api/tx/aprs`, {
+    method: "POST",
+    body: JSON.stringify({ kind: "message", addressee: m.to, text: m.text, msgNo: m.msgNo }),
+  });
+}
+
 export function recordSentMessage(m: {
   from: string;
   to: string;

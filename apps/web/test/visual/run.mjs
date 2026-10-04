@@ -149,10 +149,10 @@ const SURFACES = [
   { name: "activity", as: "user", query: "?view=activity" },
   { name: "messages", as: "user", query: "?view=messages" },
   {
-    name: "mailbox",
+    name: "compose",
     as: "user",
     query: "?view=messages",
-    steps: [["click", "button:has-text('Mailbox')"]],
+    steps: [["click", "button:has-text('New message')"]],
   },
   { name: "ranks", as: "user", query: "?view=ranks" },
   { name: "profile", as: "user", query: "?view=profile" },

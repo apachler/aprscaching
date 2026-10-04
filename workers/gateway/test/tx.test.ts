@@ -12,6 +12,22 @@ describe("gated user TX payload", () => {
     expect(r.ok && r.payload).toBe(":OE1XYZ   :hi there");
   });
 
+  it("numbers a message so the station acknowledges it, and keeps it within the APRS limits", () => {
+    const r = buildTxPayload({ kind: "message", addressee: "oe1xyz-7", text: "hi", msgNo: "A1" });
+    expect(r).toMatchObject({
+      ok: true,
+      payload: ":OE1XYZ-7 :hi{A1",
+      message: { to: "OE1XYZ-7", text: "hi", msgNo: "A1" },
+    });
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x".repeat(68) })).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/67/),
+    });
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x".repeat(67) }).ok).toBe(true);
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ-123", text: "x" }).ok).toBe(false);
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x", msgNo: "{bad" }).ok).toBe(false);
+  });
+
   it("builds a position beacon info field", () => {
     const r = buildTxPayload({ kind: "beacon", lat: 47.07, lon: 15.44, symbol: "/>", comment: "mobile" });
     expect(r.ok && r.kind).toBe("beacon");
@@ -66,7 +82,11 @@ describe("handleUserTx — control-verification gate", () => {
   const SESSION_SECRET = "strong-session-secret-xyz";
   // Mock DB: the session lookups for acct-1 holding OE8APR, the callsign_verifications lookup, and a
   // capture of the aprs_outbox insert binds.
-  const txDb = (status: string | null, sink: { rows: unknown[][]; verifiedLookups: unknown[] }, sentThisHour = 0) =>
+  const txDb = (
+    status: string | null,
+    sink: { rows: unknown[][]; messages: unknown[][]; verifiedLookups: unknown[] },
+    sentThisHour = 0,
+  ) =>
     sessionDb(
       { accountId: "acct-1", base: "OE8APR" },
       {
@@ -88,6 +108,7 @@ describe("handleUserTx — control-verification gate", () => {
                 },
                 async run() {
                   if (sql.startsWith("INSERT INTO aprs_outbox")) sink.rows.push(args);
+                  if (sql.startsWith("INSERT INTO messages")) sink.messages.push(args);
                   return { meta: { last_row_id: 42 } };
                 },
               };
@@ -101,7 +122,7 @@ describe("handleUserTx — control-verification gate", () => {
     if (!callsign) return new Request("http://gw/api/tx", init);
     return sessionRequest(env, "acct-1", callsign, "http://gw/api/tx", init);
   };
-  const sinkOf = () => ({ rows: [] as unknown[][], verifiedLookups: [] as unknown[] });
+  const sinkOf = () => ({ rows: [] as unknown[][], messages: [] as unknown[][], verifiedLookups: [] as unknown[] });
 
   it("401 when signed out", async () => {
     const env = { SESSION_SECRET, DB: txDb(null, sinkOf()) } as unknown as Env;
@@ -123,6 +144,22 @@ describe("handleUserTx — control-verification gate", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toMatchObject({ srcCall: "OE8APR", kind: "beacon", status: "queued" });
     expect(sink.rows[0]![1]).toBe("OE8APR"); // src_call is the verified callsign
+  });
+
+  it("a message joins the sender's conversation as sent through APRS-IS, tied to its outbox row", async () => {
+    const sink = sinkOf();
+    const env = { SESSION_SECRET, DB: txDb("verified", sink) } as unknown as Env;
+    const body = { kind: "message", addressee: "OE1XYZ", text: "hello", msgNo: "7" };
+    const res = await handleUserTx(await post("OE8APR-7", body, env), env);
+    expect(res.status).toBe(201);
+    expect(sink.messages).toHaveLength(1);
+    // ts, from, to, text, msgNo, outbox id
+    expect(sink.messages[0]!.slice(1)).toEqual(["OE8APR-7", "OE1XYZ", "hello", "7", 42]);
+    // a beacon is no message
+    const beacon = sinkOf();
+    const env2 = { SESSION_SECRET, DB: txDb("verified", beacon) } as unknown as Env;
+    await handleUserTx(await post("OE8APR", { kind: "beacon", lat: 47, lon: 15 }, env2), env2);
+    expect(beacon.messages).toEqual([]);
   });
 
   it("an SSID session is gated on the BASE call's verification and transmits under the SSID", async () => {

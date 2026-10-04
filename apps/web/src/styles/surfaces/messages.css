@@ -57,4 +57,43 @@
   .msg-send {
     margin-top: var(--space-md);
   }
+  /* Conversations: a conversation row is one button to open it; a conversation lists oldest first */
+  .msg-thread {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .msg-thread > .msg-row + .msg-row {
+    margin-top: var(--space-xs);
+  }
+  .msg-thread-link {
+    display: block;
+    width: 100%;
+    min-height: var(--hit);
+    text-align: start;
+    font: inherit;
+    color: inherit;
+    background: none;
+    cursor: pointer;
+    border-color: var(--line);
+  }
+  .msg-thread-link:hover {
+    background: color-mix(in oklch, var(--accent) 8%, transparent);
+  }
+  .msg-thread-link .msg-h,
+  .msg-thread-link .msg-body {
+    display: flex;
+  }
+  li + li > .msg-thread-link {
+    margin-top: var(--space-xs);
+  }
+  /* the compose form: recipient, text, delivery and the send action, stacked */
+  .msg-compose {
+    display: grid;
+    gap: var(--space-sm);
+    margin-block: var(--space-sm) var(--space-md);
+  }
+  .msg-compose p {
+    margin: 0;
+  }
 }

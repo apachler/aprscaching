@@ -14,6 +14,7 @@ import { sessionIdentity, displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall } from "./servicecall.js";
+import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -95,6 +96,24 @@ export async function handlePorts(_req: Request, env: Env): Promise<Response> {
 }
 
 // ------------------------------------------------------------- messages (RX)
+/** Where a sent message stands: waiting in the outbox, out on the air, acknowledged by the station, or not sent. */
+type SentState = "queued" | "sent" | "acked" | "failed";
+
+/**
+ * Pure: the delivery state of a sent message. An ack the instance heard wins. A message sent through the instance
+ * (it names an outbox row) is queued until the ingest box reports it sent on APRS-IS, and failed once it is older
+ * than the outbox's queue lifetime without that: the box drains nothing older. Any other sent message went out on
+ * the radio that recorded it.
+ */
+export function sentState(
+  m: { ts: number; ackedAt?: number | null; outboxId?: number | null; sentAt?: number | null },
+  now: number,
+): SentState {
+  if (m.ackedAt) return "acked";
+  if (m.outboxId == null || m.sentAt) return "sent";
+  return m.ts >= now - OUTBOX_QUEUED_TTL_S ? "queued" : "failed";
+}
+
 export async function handleMessages(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const pg = parsePage(u, 50, 200);
@@ -109,7 +128,7 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
     return json({ error: "call must be a callsign" }, { status: 400 });
   let sql =
-    "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction, transport FROM messages WHERE 1=1";
+    "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction, transport, ack, acked_at AS ackedAt, outbox_id AS outboxId, sent_at AS sentAt FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
   if (base) {
     sql += " AND (((from_call = ? OR from_call LIKE ?) AND from_call != ?)";
@@ -131,12 +150,17 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
       .all()
   ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
+  const now = nowS();
   return json({
     // an erased person's side reads as `WITHDRAWN`; a message they sent keeps its place with an empty body
-    messages: page.items.map((m) => ({
+    messages: page.items.map(({ ack, ackedAt, outboxId, sentAt, ...m }) => ({
       ...m,
       fromCall: m.fromCall == null ? m.fromCall : displayCall(m.fromCall),
       toCall: m.toCall == null ? m.toCall : displayCall(m.toCall),
+      // a sent message carries its number and where it stands; a received one carries neither
+      ...(m.direction === "tx"
+        ? { msgNo: ack ?? null, delivery: sentState({ ts: m.ts, ackedAt, outboxId, sentAt }, now) }
+        : {}),
     })),
     nextCursor: page.nextCursor,
     hasMore: page.hasMore,

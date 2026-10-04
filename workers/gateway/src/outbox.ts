@@ -39,8 +39,12 @@ export async function outboxAck(req: Request, env: Env): Promise<Response> {
     return json({ error: "ids must be a list of message ids" }, { status: 400 });
   if (ids.length) {
     const now = nowS();
+    // a message an operator sent through the instance shows as sent in their conversation from here on
     await env.DB.batch(
-      ids.map((id) => env.DB.prepare("UPDATE aprs_outbox SET status='sent', sent_at=? WHERE id=?").bind(now, id)),
+      ids.flatMap((id) => [
+        env.DB.prepare("UPDATE aprs_outbox SET status='sent', sent_at=? WHERE id=?").bind(now, id),
+        env.DB.prepare("UPDATE messages SET sent_at=? WHERE outbox_id=? AND sent_at IS NULL").bind(now, id),
+      ]),
     );
   }
   return json({ ok: true });

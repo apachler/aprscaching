@@ -480,6 +480,10 @@ export interface MessageItem {
   direction: string;
   /** The network that carried it (a `Transport` value); null on a row stored without one. */
   transport?: string | null;
+  /** A sent message: the number the station acknowledges, null when it carried none. */
+  msgNo?: string | null;
+  /** A sent message: queued in the instance's APRS-IS outbox, sent, acknowledged by the station, or not sent. */
+  delivery?: "queued" | "sent" | "acked" | "failed";
 }
 
 /** A MeshCom group heard within the message retention (`*` is the all-stations group). */
