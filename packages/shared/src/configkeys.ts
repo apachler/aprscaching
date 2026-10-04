@@ -127,6 +127,7 @@ export const CONFIG_KEYS = {
   SOURCE_COMMIT: { type: "string", units: ["gateway", "server"] },
   SOURCE_TAG: { type: "string", units: ["gateway"] },
   SOURCE_BUILT_AT: { type: "int", units: ["gateway"] },
+  UPDATE_CHECK: { type: "enum", units: ["gateway"], default: "1", values: ["0", "1", "false", "no", "true", "yes"] },
   INGEST_URL: { type: "url", units: ["ingest"], default: "http://127.0.0.1:8787/ingest" },
   BATCH_MS: { type: "int", units: ["ingest"], default: "1500" },
   INGEST_SPOOL_MAX: { type: "int", units: ["ingest"], default: "5000" },

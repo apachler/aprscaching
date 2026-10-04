@@ -218,6 +218,7 @@ import { handleNodeNodes, handleNodeMheard } from "./node.js";
 import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommands } from "./radiolog.js";
 import { handleMailboxPost, handleMailboxList, handleMailboxWithdraw, expireMailbox } from "./mailbox.js";
 import { handleNearRadioPrefs, pruneNearCacheMessages } from "./nearradio.js";
+import { runUpdateCheck } from "./updatecheck.js";
 export { syncAllPeers } from "./fedpull.js";
 
 /**
@@ -324,6 +325,8 @@ export async function runScheduled(env: Env): Promise<void> {
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await purgeRelayQueue(env);
   await runFrequentSync(env);
+  // the daily look for a newer release (off with UPDATE_CHECK=0); it never throws
+  await runUpdateCheck(env);
   // email each account its un-notified watch alerts (no-op without an email provider)
   try {
     await runDigests(env);

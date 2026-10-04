@@ -267,7 +267,7 @@ for (const f of TEXT) {
   const see = (id) =>
     /^config\.value\./.test(id)
       ? "configvaluekey"
-      : /^setup\.(checklist|budget)$/.test(id)
+      : /^setup\.(checklist|budget|update)$/.test(id)
         ? id.replace(/\./g, "")
         : /^setup\./.test(id)
           ? "setupitem"

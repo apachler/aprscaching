@@ -38,7 +38,7 @@ import type {
   TrustedStation,
   Licence,
   LogResult,
-  SetupItem,
+  AdminSetup,
   SourceInfo,
   SupportInfo,
   VerifyMethods,
@@ -585,7 +585,15 @@ const PORTS: PortStat[] = [
   { port: "meshcom", rx: 204, tx: 0, lastBucket: NOW - 5 * MIN },
 ];
 
-const SETUP: { items: SetupItem[] } = {
+const SETUP: AdminSetup = {
+  update: {
+    current: "1.0.0",
+    latest: "v1.1.0",
+    url: "https://github.com/apachler/aprscaching/releases/tag/v1.1.0",
+    checkedAt: NOW - 3 * 3600,
+    available: true,
+    desktop: false,
+  },
   items: [
     {
       key: "operator",

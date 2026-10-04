@@ -56,7 +56,7 @@ run_federation() {
   reg=$(node tools/fedkey/signregistry.mjs "[{\"instance\":\"oe.pub\",\"url\":\"http://127.0.0.1:${pubport}\",\"key\":\"$pubpub\",\"operator\":\"OE8APR\"}]" --raw)
   registry=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$reg")
   registry_key=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$reg")
-  local common=(INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" ALLOW_DEV_TOKENS=1)
+  local common=(INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" ALLOW_DEV_TOKENS=1 UPDATE_CHECK=0)
   # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers, and
   # FED_ALLOW_PRIVATE lets it add the subscriber, on loopback, by address.
   setsid env "${common[@]}" DB_PATH="$tmp/pub.db" PORT="$pubport" INSTANCE=oe.pub FED_PRIVATE_KEY="$key" \
@@ -93,7 +93,7 @@ run_suite() {
   log="$(mktemp)"
   # start in its own process group so we can reap pnpm AND its node/tsx children on teardown
   setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" \
-    PORT="$port" ALLOW_DEV_TOKENS=1 \
+    PORT="$port" ALLOW_DEV_TOKENS=1 UPDATE_CHECK=0 \
     FIRST_PARTY_SITES="$FIRST_PARTY_SITES" \
     pnpm --filter @aprscaching/node-gateway start >"$log" 2>&1 &
   pid=$!

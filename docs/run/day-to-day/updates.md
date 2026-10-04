@@ -3,6 +3,19 @@
 This page is for the sysop. It shows how to bring an instance to a new release on every shape; at the end the
 instance runs the new code, or is rolled back to the old one if the update broke something.
 
+## How you hear about a new release
+
+Once a day the gateway asks GitHub for the newest APRScaching release. When it is newer than the release the
+instance runs:
+
+- **Instance admin** shows a note at the top with the release notes and the update command. Only sysops see it.
+- `deploy/aprscaching doctor` warns with `setup.update`, naming the release and its page. It is a warning, never
+  a failure, and it clears once the instance runs the new release.
+
+The request names the instance in its User-Agent and carries nothing about a member. The privacy page lists it.
+An instance with no route to GitHub never shows a release. Set `UPDATE_CHECK=0` to stop the request
+([Configuration](../../reference/configuration.md)). You can also watch the repository's releases on GitHub.
+
 ## Before you start
 
 - A checkout with no local changes: `update` refuses one that has them. Commit or stash them first.

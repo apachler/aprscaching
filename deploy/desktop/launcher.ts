@@ -113,6 +113,7 @@ try {
     // AGPL §13 source link: the build stamps BUILD_VERSION (git describe) as the commit/tag
     sourceCommit: VERSION !== "dev" ? VERSION : undefined,
     spa: serveSpa,
+    desktop: true,
   });
 } catch (e) {
   console.error(`aprscaching: ${(e as Error).message}`);

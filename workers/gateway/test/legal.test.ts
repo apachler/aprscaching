@@ -76,4 +76,10 @@ describe("legal pages", () => {
     expect(smtp).toContain("Email provider</strong> (mail.example.net)");
     expect(smtp).not.toContain("api.resend.com");
   });
+
+  it("privacy names GitHub while the daily update check is on", async () => {
+    expect(await handlePrivacyPage(configured).text()).toContain("api.github.com");
+    const off = await handlePrivacyPage({ ...configured, UPDATE_CHECK: "0" } as Env).text();
+    expect(off).not.toContain("api.github.com");
+  });
 });

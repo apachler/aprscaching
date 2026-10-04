@@ -49,6 +49,10 @@ class Handler(BaseHTTPRequestHandler):
                     {"key": "OPERATOR", "label": "Imprint", "level": "recommended", "status": "missing", "detail": "incomplete"},
                     {"key": "db:ingest", "label": "Ingest feeding", "level": "blocking", "status": "missing", "detail": "no packets"},
                 ],
+                "update": {
+                    "current": "1.0.0", "latest": "v1.1.0", "url": "https://example.org/acs/releases/tag/v1.1.0",
+                    "checkedAt": 1, "available": True, "desktop": False,
+                },
             })
         elif path == "/.well-known/source":
             self.send(200, {"protocol": "aprscaching-source/1", "repo": "https://example.org/acs", "commit": "abc123"})

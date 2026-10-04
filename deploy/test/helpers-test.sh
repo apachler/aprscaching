@@ -333,6 +333,8 @@ if have python3; then
     check "  … the ingest credential is accepted" eq "$(status_of ingest.credentials)" pass
     check "  … the Setup checklist is relayed, labelled" grep -q '"Imprint: incomplete"' "$TMP/out"
     check "  … a blocking checklist item fails" eq "$(status_of setup.db:ingest)" fail
+    check "  … a newer release warns, never fails" eq "$(status_of setup.update)" warn
+    check "  … naming the release and the update command" grep -q 'APRScaching v1.1.0 is available: https://example.org/acs/releases/tag/v1.1.0.*deploy/aprscaching update' "$TMP/out"
     check "  … a LAN instance has federation off" eq "$(status_of federation.off)" pass
     check "  … a recent backup passes" eq "$(status_of resources.backup)" pass
     check "  … the source link passes" eq "$(status_of source.link)" pass

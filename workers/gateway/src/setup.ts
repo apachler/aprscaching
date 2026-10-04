@@ -22,6 +22,7 @@ import { isCallsignVerified } from "./callsign.js";
 import { amprCallOf } from "./fed44net.js";
 import { configured44net } from "./fed44netcheck.js";
 import { attestedSites } from "./attestedsites.js";
+import { updateStatus } from "./updatecheck.js";
 
 export interface SetupItem {
   /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
@@ -401,5 +402,9 @@ export async function handleAdminSetup(req: Request, env: Env): Promise<Response
   const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
   applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values
   const sites = await attestedOrPreset(env);
-  return json({ items: [...envItems(env, sites), ...(await dbItems(env, callsign))] });
+  return json({
+    items: [...envItems(env, sites), ...(await dbItems(env, callsign))],
+    // the newest release against the running one; null when UPDATE_CHECK is off
+    update: await updateStatus(env),
+  });
 }

@@ -74,6 +74,10 @@ The licence registry (`licence_registry`) holds public-register facts about call
 source and import date, never a name or address. It is outside export and erasure. Each import replaces a
 register's rows and deletes calls the register no longer lists ([Licence registers](../day-to-day/licence-registers.md)).
 
+Once a day the instance asks GitHub for the newest release (`UPDATE_CHECK`). The request names the instance and
+carries no member data. While the check is on, the privacy page lists GitHub among the recipients
+([How you hear about a new release](../day-to-day/updates.md#how-you-hear-about-a-new-release)).
+
 ## Erasure across the network
 
 Federation peers mirror caches and finds, so an erasure must reach them too. A deletion travels as a **signed,

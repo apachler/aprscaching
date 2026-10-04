@@ -90,6 +90,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   VAPID_SUBJECT: "Contact the push service sees; default mailto:OPERATOR_EMAIL, else https://<instance host>",
   SUPPORT_LINKS: "JSON array of donation links [{label,url}] shown on /support",
   SOURCE_REPO: "Published source URL (AGPL §13); a modified fork must set its own",
+  UPDATE_CHECK: "0 stops the daily request to GitHub that looks for a newer release",
   OPERATOR_NAME: "Person or entity operating this instance, shown on /imprint and /privacy",
   OPERATOR_ADDRESS: "Operator's postal address; commas separate the lines",
   OPERATOR_EMAIL: "Operator's contact address, also the privacy contact",
@@ -302,6 +303,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       ["`SOURCE_REPO`", "AGPL §13 published-source URL — a public fork **must** set this", "upstream"],
       ["`SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT`", "Running-source descriptor", "git HEAD"],
+      [
+        "`UPDATE_CHECK`",
+        "Once a day the gateway asks GitHub (`api.github.com`) for the newest APRScaching release, so **Instance admin** and `deploy/aprscaching doctor` can say when one is out ([Updates](../run/day-to-day/updates.md#how-you-hear-about-a-new-release)). The request names the instance in its User-Agent and carries nothing about a member. `0` stops it, for an off-grid instance or one that should not contact GitHub",
+        "on",
+      ],
       [
         "`ADMIN_CALLSIGNS`",
         "Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign))",
