@@ -95,6 +95,8 @@ describe("sealing NFC stages for offline packs", () => {
     expect(opened?.mediaUrl).toMatch(/^\/api\/media\/cache\/\d+\/stage\/1\/clue-[0-9a-f]+\./);
     const wrong = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: "nope" });
     expect(wrong.status).toBe(403);
+    // a refusal names its reason and says it in words, for a client that only shows the message
+    expect(await wrong.json()).toMatchObject({ unlocked: false, reason: "bad_code", error: expect.any(String) });
     const right = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: SERIAL });
     expect(((await right.json()) as { unlocked: boolean }).unlocked).toBe(true);
   });

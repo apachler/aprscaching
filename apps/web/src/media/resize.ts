@@ -24,7 +24,13 @@ export async function resizeImage(blob: Blob, maxPx: number, quality: number): P
       return null;
     }
     const canvas = new OffscreenCanvas(Math.round(bmp.width * scale), Math.round(bmp.height * scale));
-    canvas.getContext("2d")?.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      // JPEG has no transparency: a transparent area lands on white paper, not on black
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    }
     bmp.close();
     return await canvas.convertToBlob({ type: "image/jpeg", quality });
   } catch {

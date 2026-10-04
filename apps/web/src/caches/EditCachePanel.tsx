@@ -3,7 +3,8 @@ import { useState } from "react";
 import { updateCache, type CacheDetail, type UpdateCacheRequest } from "../api.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { Button, Panel, Row, Switch, Segmented, useToast, useConfirm } from "../ui/index.js";
-import type { CacheStatus, FedScope, RatingPolicy } from "@aprscaching/shared";
+import { TEXT_LIMITS, type CacheStatus, type FedScope, type RatingPolicy } from "@aprscaching/shared";
+import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { StagesEditor } from "./StagesEditor.js";
 import { CountrySelect } from "./CountrySelect.js";
@@ -57,12 +58,8 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
   const living = c.type === "aprs_living";
   const staged = c.type === "multi" || c.type === "audio" || c.stageCount > 0;
 
-  const tagList = (t: string) =>
-    t
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .slice(0, 12);
+  const tagList = parseTags;
+  const tagErr = tagProblem(tagList(f.tags));
 
   /** What changed, as the API takes it. */
   function changes(): UpdateCacheRequest | null {
@@ -99,6 +96,10 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
       setErr("A cache needs a title.");
       return;
     }
+    if (tagErr) {
+      setErr(tagErr);
+      return;
+    }
     if (Object.keys(b).length === 0) {
       props.onClose();
       return;
@@ -120,7 +121,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
       toast(`${c.code} saved`);
       props.onSaved();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(refusalMessage(e));
     } finally {
       setBusy(false);
     }
@@ -131,7 +132,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
       <h4 className="set-subh">Basics</h4>
       <label>
         Title
-        <input value={f.title} maxLength={120} onChange={(e) => set("title", e.target.value)} />
+        <input value={f.title} maxLength={TEXT_LIMITS.title} onChange={(e) => set("title", e.target.value)} />
       </label>
       <Segmented
         label="Status"
@@ -207,14 +208,14 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
       </h4>
       <label>
         Hint
-        <input value={f.hint} maxLength={500} onChange={(e) => set("hint", e.target.value)} />
+        <input value={f.hint} maxLength={TEXT_LIMITS.hint} onChange={(e) => set("hint", e.target.value)} />
       </label>
       <label>
         Description
         <textarea
           value={f.description}
           rows={3}
-          maxLength={4000}
+          maxLength={TEXT_LIMITS.description}
           onChange={(e) => set("description", e.target.value)}
         />
       </label>
@@ -225,9 +226,20 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
         <CountrySelect value={f.country} onChange={(v) => set("country", v)} />
         <label>
           Tags
-          <input value={f.tags} onChange={(e) => set("tags", e.target.value)} placeholder="scenic, family, qrp" />
+          <input
+            value={f.tags}
+            onChange={(e) => set("tags", e.target.value)}
+            placeholder="scenic, family, qrp"
+            aria-invalid={!!tagErr}
+            aria-describedby={tagErr ? "edit-tags-err" : undefined}
+          />
         </label>
       </div>
+      {tagErr && (
+        <p className="error fine" id="edit-tags-err">
+          {tagErr}
+        </p>
+      )}
 
       <h4 className="set-subh">Verification, rating &amp; sharing</h4>
       <Row

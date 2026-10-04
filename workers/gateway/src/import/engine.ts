@@ -5,6 +5,7 @@ import { ingestSecretOk } from "../auth.js";
 import type { Env } from "../env.js";
 import { json } from "../app.js";
 import { haversineMeters } from "@aprscaching/aprs";
+import { webLink } from "@aprscaching/shared";
 import { SOURCES, type ImportedCache, type ImportScope } from "./sources.js";
 
 // Cross-source priority: ham-radio activation programs win over geocaches, which win over generic POI.
@@ -59,6 +60,8 @@ export async function upsertImported(
       skipped++;
       continue;
     }
+    // a listing link from a source's data is kept only as an http(s) address: the detail view renders it as a link
+    const sourceUrl = webLink(r.sourceUrl);
     try {
       const existing = await env.DB.prepare("SELECT id FROM caches WHERE source = ? AND external_id = ?")
         .bind(r.source, r.externalId)
@@ -76,7 +79,7 @@ export async function upsertImported(
             r.type,
             r.lat,
             r.lon,
-            r.sourceUrl,
+            sourceUrl,
             r.sourceName,
             r.description ?? null,
             r.sourceOwner ?? null,
@@ -134,7 +137,7 @@ export async function upsertImported(
           r.lon,
           r.source,
           r.externalId,
-          r.sourceUrl,
+          sourceUrl,
           r.sourceName,
           r.description ?? null,
           r.sourceOwner ?? null,

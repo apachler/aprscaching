@@ -110,6 +110,7 @@
     --type-grey: oklch(0.41 0.008 220);
     --type-clay: oklch(0.64 0.09 48);
     --type-sand: oklch(0.7 0.11 75);
+    --role-node-ink: var(--pin-edge);
     --meshcom: oklch(0.55 0.16 350);
 
     --map-night: oklch(0.2 0.035 255);

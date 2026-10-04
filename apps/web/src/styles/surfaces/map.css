@@ -86,12 +86,28 @@
   button.station-pin > span {
     display: block;
   }
-  /* operated stations carry a role glyph + brand colour (set inline); a touch larger + bolder to read */
+  /* operated stations carry a role glyph + a brand-palette colour per role; a touch larger + bolder to read */
   button.station-pin.role {
     width: 22px;
     height: 22px;
     font-size: var(--text-data);
     font-weight: 700;
+  }
+  button.station-pin.role[data-role="weather"] {
+    background: var(--type-sand);
+  }
+  button.station-pin.role[data-role="digipeater"] {
+    background: var(--type-blue);
+  }
+  button.station-pin.role[data-role="igate"] {
+    background: var(--type-green);
+  }
+  button.station-pin.role[data-role="node"] {
+    background: var(--type-grey);
+    color: var(--role-node-ink);
+  }
+  button.station-pin.role[data-role="relay"] {
+    background: var(--type-clay);
   }
   /* MeshCom nodes: the station pin with a MeshCom ring and an "M" tag, so the difference never rests on
      colour alone; a node heard only through the MeshCom server gets a dashed ring instead */

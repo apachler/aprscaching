@@ -75,9 +75,14 @@ export function courseTracker(minM = 8) {
   };
 }
 
-/** Within this distance of the pin, or of the reading's own accuracy if larger, the needle hands over to the eye. */
+/**
+ * Within this distance of the pin, or of the reading's own accuracy if larger, the needle hands over to the eye —
+ * but only for a reading fine enough to lead there: a fix worse than PIN_ACCURACY_M is never "at the pin".
+ */
 export const SEARCH_HERE_M = 10;
-export const atThePin = (distM: number, accuracyM: number): boolean => distM <= Math.max(SEARCH_HERE_M, accuracyM);
+export const PIN_ACCURACY_M = 30;
+export const atThePin = (distM: number, accuracyM: number): boolean =>
+  accuracyM <= PIN_ACCURACY_M && distM <= Math.max(SEARCH_HERE_M, accuracyM);
 
 type PermissionFn = () => Promise<"granted" | "denied" | "default">;
 const permissionFn = (): PermissionFn | null => {

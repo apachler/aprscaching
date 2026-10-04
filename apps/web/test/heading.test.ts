@@ -70,4 +70,8 @@ describe("at the pin", () => {
     expect(atThePin(12, 4)).toBe(false);
     expect(atThePin(25, 30)).toBe(true);
   });
+  it("never claims the pin on a coarse reading", () => {
+    expect(atThePin(1500, 2000)).toBe(false);
+    expect(atThePin(5, 31)).toBe(false);
+  });
 });

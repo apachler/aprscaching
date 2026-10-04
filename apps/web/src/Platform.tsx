@@ -28,7 +28,8 @@ import {
 import { TopBar } from "./TopBar.js";
 import { Tour, TOUR_STEPS, Button, useToast, Icon, usePoll } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
-import { ASSET, MAP_MARKER } from "./brand.js";
+import { ASSET } from "./brand.js";
+import { tokenHex } from "./shell/tokenColor.js";
 import { buildGraticuleStyle, buildPackTileStyle, buildPhosphorStyle } from "./offlineBasemap.js";
 import { packTilesSummary, registerPackTiles } from "./offline/packTiles.js";
 import { FormatContext, makeFormatters, loadSettings, saveSettings, type LocaleSettings } from "./format.js";
@@ -164,7 +165,8 @@ function placeDraftPin(
 ) {
   setDraft({ lat, lon });
   marker.current?.remove();
-  marker.current = new maplibregl.Marker({ color: MAP_MARKER.draft, draggable: true }).setLngLat([lon, lat]).addTo(m);
+  // MapLibre writes the colour into the pin's SVG, so the token is read as a plain colour (the attention red)
+  marker.current = new maplibregl.Marker({ color: tokenHex("--bad"), draggable: true }).setLngLat([lon, lat]).addTo(m);
   marker.current.on("dragend", () => {
     const ll = marker.current!.getLngLat();
     setDraft({ lat: +ll.lat.toFixed(6), lon: +ll.wrap().lng.toFixed(6) });
@@ -1077,7 +1079,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 </div>
               )}
               {nearPrompt && !hiding && (
-                <div className="geo-banner">
+                <div className="geo-banner" role="status">
                   <span>
                     <Icon name="place" cp437="" className="lead-ic" />
                     You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}

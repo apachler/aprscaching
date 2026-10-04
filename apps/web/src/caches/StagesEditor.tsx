@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MEDIA_LIMITS, mediaMB } from "@aprscaching/shared";
 import { getStages, setStages, uploadStageClip, type CacheStage } from "../api.js";
+import { clipsDropped, type StageDraft } from "./stageEdits.js";
 import { parseCoordinates } from "../map/geo.js";
 import { Button, useToast, useConfirm } from "../ui/index.js";
 
 type Unlock = CacheStage["unlock"];
-interface Draft {
-  unlock: Unlock;
-  clue: string;
-  at: string;
-  radiusM: number;
-  secret: string;
-}
+type Draft = StageDraft;
 
 const UNLOCKS: { v: Unlock; label: string; help: string }[] = [
   { v: "geo", label: "Location", help: "Opens when the finder stands within the radius of the stage before." },
@@ -28,8 +23,9 @@ const fmtAt = (lat: number | null, lon: number | null) =>
 
 /**
  * The owner's stage list: the open start and the locked stages in order. Saving replaces the list; a finder who
- * unlocked a stage that changed unlocks it again, so the form says so before it saves. An audio stage's clip
- * uploads once the stage is saved.
+ * unlocked a stage that changed unlocks it again, and a clip whose stage goes is deleted, so the form says so
+ * before it saves. A stage keeps its clip when one before it is removed. An audio stage's clip uploads once the
+ * list is saved.
  */
 export function StagesEditor(props: {
   cacheId: number;
@@ -40,41 +36,62 @@ export function StagesEditor(props: {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const [rows, setRows] = useState<Draft[] | null>(null);
-  const [saved, setSaved] = useState<number>(0);
+  /** The stages as saved, for what a save changes. */
+  const [saved, setSaved] = useState<{ stageNo: number; unlock: Unlock; clip: boolean }[]>([]);
+  /** The list differs from what is saved: clips upload only to a saved list, whose numbers are the stages'. */
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [offline, setOffline] = useState<{ stageNo: number; offline: boolean; reason?: string }[]>([]);
 
+  const startLat = props.start?.lat ?? null,
+    startLon = props.start?.lon ?? null;
+  const load = useCallback(
+    (live: () => boolean = () => true) =>
+      getStages(props.cacheId)
+        .then((r) => {
+          if (!live()) return;
+          const loaded: Draft[] = r.stages.map((s) => ({
+            unlock: s.unlock,
+            clue: s.clue ?? "",
+            at: fmtAt(s.lat, s.lon),
+            radiusM: s.radiusM,
+            secret: s.secret ?? "",
+            prev: s.stageNo,
+            // the owner sees every stage open, so a stored clip always shows as its URL
+            clip: !!s.mediaUrl,
+          }));
+          // the open start is stage 0; a list that lacks one gets it, so the rows are numbered as the stages are
+          const startRow: Draft = {
+            unlock: "open",
+            clue: "",
+            at: fmtAt(startLat, startLon),
+            radiusM: 60,
+            secret: "",
+            clip: false,
+          };
+          const hasStart = r.stages[0]?.stageNo === 0;
+          setRows(hasStart ? loaded : [startRow, ...loaded]);
+          setSaved(r.stages.map((s) => ({ stageNo: s.stageNo, unlock: s.unlock, clip: !!s.mediaUrl })));
+          setDirty(!hasStart);
+        })
+        .catch(() => live() && setErr("Couldn't load the stages — try again.")),
+    [props.cacheId, startLat, startLon],
+  );
   useEffect(() => {
     let live = true;
-    getStages(props.cacheId)
-      .then((r) => {
-        if (!live) return;
-        const start = {
-          unlock: "open" as Unlock,
-          clue: "",
-          at: fmtAt(props.start?.lat ?? null, props.start?.lon ?? null),
-        };
-        const loaded = r.stages.map((s) => ({
-          unlock: s.unlock,
-          clue: s.clue ?? "",
-          at: fmtAt(s.lat, s.lon),
-          radiusM: s.radiusM,
-          secret: s.secret ?? "",
-        }));
-        // the open start is stage 0; a list that lacks one gets it, so the rows are numbered as the stages are
-        const startRow = { ...start, radiusM: 60, secret: "" };
-        setRows(r.stages[0]?.stageNo === 0 ? loaded : [startRow, ...loaded]);
-        setSaved(r.stages[0]?.stageNo === 0 ? loaded.length : 0);
-      })
-      .catch(() => live && setErr("Couldn't load the stages — try again."));
+    void load(() => live);
     return () => {
       live = false;
     };
-  }, [props.cacheId, props.start?.lat, props.start?.lon]);
+  }, [load]);
 
+  const change = (f: (rs: Draft[]) => Draft[]) => {
+    setRows((rs) => rs && f(rs));
+    setDirty(true);
+  };
   const edit = (i: number, patch: Partial<Draft>) =>
-    setRows((rs) => rs && rs.map((r, n) => (n === i ? { ...r, ...patch } : r)));
+    change((rs) => rs.map((r, n) => (n === i ? { ...r, ...patch } : r)));
 
   /** The list as the API takes it, or the first problem. */
   function payload() {
@@ -86,6 +103,7 @@ export function StagesEditor(props: {
       if (r.unlock === "nfc" && !r.secret.trim()) return `Stage ${n}: an NFC stage needs its tag code.`;
       out.push({
         stageNo: n,
+        ...(r.prev !== undefined && { prevStageNo: r.prev }),
         unlock: n === 0 ? "open" : r.unlock,
         clue: r.clue.trim() || undefined,
         lat: at ? +at.lat.toFixed(6) : undefined,
@@ -103,12 +121,18 @@ export function StagesEditor(props: {
       setErr(p ?? null);
       return;
     }
+    const dropped = rows ? clipsDropped(saved, rows) : [];
     if (
-      saved > 0 &&
+      saved.length > 0 &&
       !(await confirmDialog({
         title: "Save the stages?",
-        message: "Finders who unlocked a stage you changed, or one after it, unlock those stages again.",
+        message:
+          "Finders who unlocked a stage you changed, or one after it, unlock those stages again." +
+          (dropped.length
+            ? ` The audio clip${dropped.length === 1 ? "" : "s"} of stage${dropped.length === 1 ? "" : "s"} ${dropped.join(", ")} (as last saved) ${dropped.length === 1 ? "is" : "are"} deleted.`
+            : ""),
         confirmLabel: "Save stages",
+        danger: dropped.length > 0,
       }))
     )
       return;
@@ -117,8 +141,8 @@ export function StagesEditor(props: {
     try {
       const r = await setStages(props.cacheId, props.ownerCall, p);
       setOffline(r.offline);
-      setSaved(p.length);
       toast(`${p.length - 1} stage${p.length === 2 ? "" : "s"} saved`);
+      await load(); // the saved list, numbered as the stages now are, with the clips that stayed
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -134,6 +158,8 @@ export function StagesEditor(props: {
     }
     try {
       await uploadStageClip(props.cacheId, n, props.ownerCall, file);
+      setRows((rs) => rs && rs.map((r, i) => (i === n ? { ...r, clip: true } : r)));
+      setSaved((ss) => ss.map((s) => (s.stageNo === n ? { ...s, clip: true } : s)));
       toast(`Clip for stage ${n} uploaded`);
     } catch (e) {
       toast((e as Error).message);
@@ -159,7 +185,12 @@ export function StagesEditor(props: {
           <ol className="stage-edit-list">
             {rows.map((r, n) => (
               <li key={n} className="stage-edit">
-                <strong>{n === 0 ? "Start (open to everyone)" : `Stage ${n}`}</strong>
+                <div className="row between">
+                  <strong>{n === 0 ? "Start (open to everyone)" : `Stage ${n}`}</strong>
+                  {n > 0 && (
+                    <Button onClick={() => change((rs) => rs.filter((_, i) => i !== n))}>Remove stage {n}</Button>
+                  )}
+                </div>
                 {n > 0 && (
                   <label>
                     Unlocks by
@@ -222,10 +253,14 @@ export function StagesEditor(props: {
                     <input
                       type="file"
                       accept="audio/*"
-                      disabled={n >= saved}
+                      disabled={dirty || r.prev !== n}
                       onChange={(e) => void upload(n, e.target.files?.[0])}
                     />
-                    {n >= saved && <span className="muted fine">Save the stages first.</span>}
+                    {(dirty || r.prev !== n) && <span className="muted fine">Save the stages first.</span>}
+                    {r.clip && !(dirty || r.prev !== n) && <span className="muted fine">Clip uploaded.</span>}
+                    {r.clip && (dirty || r.prev !== n) && (
+                      <span className="muted fine">Its clip stays with it when you save.</span>
+                    )}
                   </label>
                 )}
                 {r.unlock === "nfc" && offline.find((o) => o.stageNo === n && !o.offline && o.reason) && (
@@ -237,14 +272,11 @@ export function StagesEditor(props: {
           <div className="row">
             <Button
               onClick={() =>
-                setRows((rs) => rs && [...rs, { unlock: "geo", clue: "", at: "", radiusM: 60, secret: "" }])
+                change((rs) => [...rs, { unlock: "geo", clue: "", at: "", radiusM: 60, secret: "", clip: false }])
               }
             >
               Add a stage
             </Button>
-            {rows.length > 1 && (
-              <Button onClick={() => setRows((rs) => rs && rs.slice(0, -1))}>Remove the last stage</Button>
-            )}
           </div>
           {err && (
             <p className="error" role="alert">

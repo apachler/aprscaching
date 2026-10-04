@@ -107,6 +107,8 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
     ownerCall?: string;
     stages?: Array<{
       stageNo: number;
+      /** The number this stage had before the edit, when the owner moved it; its clip follows it. */
+      prevStageNo?: number;
       unlock?: string;
       clue?: string;
       lat?: number;
@@ -133,11 +135,13 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   const before = new Map(
     rows.map((r) => [r.stage_no, JSON.stringify([r.unlock, r.clue, r.lat, r.lon, r.radius_m, r.unlock_secret])]),
   );
-  // A stage's audio clue stays with it while the stage stays, unless it stops being an audio stage. A clue whose
-  // stage is gone, or turned into another kind, is freed, so no stored object outlives the row that counts it.
+  // A stage's audio clue stays with it while the stage stays, unless it stops being an audio stage; a stage the
+  // owner moved (`prevStageNo`, when one before it was removed) takes its clue along. A clue whose stage is gone,
+  // or turned into another kind, is freed, so no stored object outlives the row that counts it.
   const clips = new Map(
     rows.filter((r) => r.media_key).map((r) => [r.stage_no, { ...r, media_key: r.media_key! }] as const),
   );
+  /** The clues kept, by the stage number they had. */
   const kept = new Map<number, { media_key: string; media_bytes: number | null }>();
   const after = new Map<number, string>();
   const stmts = [env.DB.prepare("DELETE FROM cache_stages WHERE cache_id=?").bind(cacheId)];
@@ -145,9 +149,10 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
     const unlock = ["geo", "audio", "open", "nfc"].includes(s.unlock ?? "") ? s.unlock : "geo";
     // for an nfc stage the secret (tag text/serial) is required so it can actually be unlocked
     const secret = unlock === "nfc" ? s.secret?.trim() || null : null;
-    const clip = clips.get(s.stageNo);
-    if (clip && !kept.has(s.stageNo) && (clip.unlock !== "audio" || unlock === "audio")) kept.set(s.stageNo, clip);
-    const media = kept.get(s.stageNo);
+    const from = Number.isInteger(s.prevStageNo) ? s.prevStageNo! : s.stageNo;
+    const clip = clips.get(from);
+    const media = clip && !kept.has(from) && (clip.unlock !== "audio" || unlock === "audio") ? clip : undefined;
+    if (media) kept.set(from, media);
     after.set(
       s.stageNo,
       JSON.stringify([unlock, s.clue ?? null, s.lat ?? null, s.lon ?? null, Math.round(s.radiusM ?? 60), secret]),
@@ -242,10 +247,10 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
   let cacheControl = "public, max-age=86400";
   const stageKey = /^cache\/(\d+)\/stage\/(\d+)\//.exec(key);
   if (stageKey) {
-    const cacheId = Number(stageKey[1]),
-      stageNo = Number(stageKey[2]);
-    const st = await env.DB.prepare("SELECT stage_no, unlock FROM cache_stages WHERE cache_id=? AND stage_no=?")
-      .bind(cacheId, stageNo)
+    const cacheId = Number(stageKey[1]);
+    // The clip answers for the stage that holds it now: a stage the owner moved keeps the key it was stored under.
+    const st = await env.DB.prepare("SELECT stage_no, unlock FROM cache_stages WHERE cache_id=? AND media_key=?")
+      .bind(cacheId, key)
       .first<{ stage_no: number; unlock: string | null }>();
     if (!st) return new Response("not found", { status: 404 });
     if (!clueShownLocked(st)) {
@@ -254,7 +259,7 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
       const cs = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
       const allowed =
         (!!owner && (await mayActAsOwner(req, env, owner))) ||
-        (!!cs && (await unlockedSet(env, cacheId, cs)).has(stageNo));
+        (!!cs && (await unlockedSet(env, cacheId, cs)).has(st.stage_no));
       if (!allowed) return new Response("not found", { status: 404 });
       cacheControl = "private, no-store"; // the clip is the finder's once unlocked, never a shared cache's
     }
@@ -332,7 +337,10 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   // must have reached the previous stage first
   const unlocked = await unlockedSet(env, cacheId, cs);
   if (stageNo - 1 > 0 && !unlocked.has(stageNo - 1))
-    return json({ error: "reach the previous stage first", needStage: stageNo - 1 }, { status: 403 });
+    return json(
+      { error: "reach the previous stage first", reason: "previous_stage", needStage: stageNo - 1 },
+      { status: 403 },
+    );
 
   // geofence gate: be within the previous stage's radius
   if (stage.unlock === "geo") {
@@ -342,7 +350,13 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
     const d = haversineMeters(b.appGeo.lat, b.appGeo.lon, prev.lat, prev.lon);
     if (d > prev.radius_m)
       return json(
-        { unlocked: false, reason: "too_far", distanceM: Math.round(d), radiusM: prev.radius_m },
+        {
+          error: `too far: ${Math.round(d)} m from the stage before, ${prev.radius_m} m needed`,
+          unlocked: false,
+          reason: "too_far",
+          distanceM: Math.round(d),
+          radiusM: prev.radius_m,
+        },
         { status: 403 },
       );
   }
@@ -358,7 +372,10 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
     )
       return json({ error: "too many tries on this tag — try again in an hour", reason: "limited" }, { status: 429 });
     if (normCode(b.code) !== normCode(stage.unlock_secret))
-      return json({ unlocked: false, reason: "bad_code" }, { status: 403 });
+      return json(
+        { error: "that code does not match this stage's tag", unlocked: false, reason: "bad_code" },
+        { status: 403 },
+      );
   }
   // 'audio'/'open' unlock on request (the audio clue is an advisory gate)
 

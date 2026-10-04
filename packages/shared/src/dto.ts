@@ -67,9 +67,18 @@ export const StageUnlockRequest = z.object({
   code: z.string().optional(),
 });
 
-/** Owner "hide a cache" — create a native cache. Owner taken from session, else `ownerCall`. */
+/** The longest text each cache and log field takes; the forms bound their inputs by the same numbers. */
+export const TEXT_LIMITS = {
+  title: 120,
+  hint: 500,
+  description: 4000,
+  tag: 24,
+  tags: 12,
+  logComment: 2000,
+} as const;
+
 /** Free-form cache tags: up to 12, each a short trimmed token (deduped + lowercased by the gateway). */
-export const CacheTags = z.array(z.string().trim().min(1).max(24)).max(12);
+export const CacheTags = z.array(z.string().trim().min(1).max(TEXT_LIMITS.tag)).max(TEXT_LIMITS.tags);
 
 /** Who may rate a cache (owner-gated): only finders (default), any signed-in caller, or nobody. */
 export const RatingPolicy = z.enum(["finders", "all", "off"]);
@@ -87,9 +96,10 @@ export const CacheTitle = z
   .string()
   .trim()
   .min(1)
-  .max(120)
+  .max(TEXT_LIMITS.title)
   .regex(/^[^\u0000-\u001f\u007f]*$/, "the title must not contain control characters");
 
+/** Owner "hide a cache" — create a native cache. Owner taken from session, else `ownerCall`. */
 export const CreateCacheRequest = z.object({
   title: CacheTitle,
   type: CacheType.default("traditional"),
@@ -99,8 +109,8 @@ export const CreateCacheRequest = z.object({
   terrain: DT.default(1.5),
   ownerCall: Callsign.optional(),
   stationCall: Callsign.optional(), // aprs_living: the beaconing station that IS the cache
-  hint: z.string().max(500).optional(),
-  description: z.string().max(4000).optional(),
+  hint: z.string().max(TEXT_LIMITS.hint).optional(),
+  description: z.string().max(TEXT_LIMITS.description).optional(),
   minTrust: MinTrust.optional(),
   fedScope: FedScope.default("public"), // how far this cache federates
   code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
@@ -123,8 +133,8 @@ export const UpdateCacheRequest = z.object({
   difficulty: DT.optional(),
   terrain: DT.optional(),
   stationCall: Callsign.optional(),
-  hint: z.string().max(500).optional(),
-  description: z.string().max(4000).optional(),
+  hint: z.string().max(TEXT_LIMITS.hint).optional(),
+  description: z.string().max(TEXT_LIMITS.description).optional(),
   minTrust: MinTrust.nullable().optional(), // null: back to the instance's minimum
   fedScope: FedScope.optional(), // change federation scope
   driveIn: z.boolean().optional(),
@@ -148,7 +158,7 @@ export const AuthorSig = z.object({
 export const LogRequest = z.object({
   loggerCall: Callsign.optional(), // omitted by signed-in web (attributed to the session)
   logType: LogType.default("found"),
-  comment: z.string().max(2000).optional(),
+  comment: z.string().max(TEXT_LIMITS.logComment).optional(),
   appGeo: AppGeo.optional(),
   author: AuthorSig.optional(),
   // the log waited in the client's offline queue; only labels an unsigned log, whose time is its arrival
