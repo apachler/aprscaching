@@ -1,7 +1,29 @@
+# The build context is the repository root (deploy/Dockerfile copies it whole), so everything an operator
+# keeps beside the checkout stays out: settings and secrets, databases, backups and local data directories.
 **/node_modules
 .git
+.claude
 **/dist
 **/.wrangler
-**/data
 **/out
 *.log
+
+# settings and secrets; the shipped templates (*.example) stay in
+**/.env
+**/.env.*
+!**/*.example
+**/.dev.vars
+**/*.secret
+deploy/.shape
+
+# databases, media and backups (servers/*/data, a bare-metal checkout's data/, deploy/backups)
+**/data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+deploy/backups
+
+# OpenTofu/Terraform working files and state
+deploy/oci/.terraform
+deploy/oci/*.tfstate*
+deploy/oci/*.tfvars

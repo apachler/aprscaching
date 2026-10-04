@@ -3,7 +3,8 @@
 # hears, off-grid. extras/usb_kiss_bridge.py drives the TNC through the file descriptor termux-usb hands
 # over and serves KISS over TCP on 127.0.0.1:8001, where the ingest connects (KISS_TNC_HOST/KISS_TNC_PORT).
 # What the TNC hears is a local TNC's hearing like any other: it names RF_SITE_CALL when set, and counts
-# toward Tier A only once that call is in FIRST_PARTY_SITES.
+# toward Tier A only once that call is trusted under Instance admin → Trusted receiving stations (or listed
+# in FIRST_PARTY_SITES).
 #
 #   bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --list
 #   bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup [--device /dev/bus/usb/001/002] [--baud 9600]
@@ -17,7 +18,7 @@
 # frames through a watchdog: 6 a minute, 3 in a burst). You are the control operator of an automatic station
 # then; read docs/shack/on-air.md first. The station notification shows "USB TNC: TX ON".
 #
-# Only CDC-ACM TNCs work (no driver needed); FTDI, CP210x and CH340 chips are refused by name.
+# Only CDC-ACM TNCs work (no driver needed); FTDI, CP210x, CH340 and PL2303 chips are refused by name.
 # Needs the Termux:API app, `pkg install termux-api python libusb`.
 #
 # Options:

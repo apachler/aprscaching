@@ -189,6 +189,8 @@ else
   "$DIR/deploy/aprscaching" init selfhost "${args[@]}" || stop "deploy/aprscaching init selfhost failed"
   grep -q '^SOURCE_REPO=' "$ENV_FILE" || printf 'SOURCE_REPO=%s\n' "$REPO_URL" >>"$ENV_FILE"
   [ -z "$BUCKET" ] || grep -q '^OCI_BUCKET=' "$ENV_FILE" || printf 'OCI_BUCKET=%s\n' "$BUCKET" >>"$ENV_FILE"
+  # the bucket keeps the history, so the VM's own disk keeps only the newest three archives
+  [ -z "$BUCKET" ] || grep -q '^BACKUP_KEEP=' "$ENV_FILE" || printf 'BACKUP_KEEP=3\n' >>"$ENV_FILE"
   chmod 600 "$ENV_FILE"
   say "wrote $ENV_FILE (INGEST_SECRET and OPERATOR_SECRET generated here)"
 fi

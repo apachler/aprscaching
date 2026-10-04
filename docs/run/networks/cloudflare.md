@@ -35,7 +35,9 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     ```
 
     `compose.home.yml` runs the connector, publishes no ports on Caddy, and sets `TRUST_CF=1` on the
-    gateway ([Visitor addresses](#visitor-addresses)).
+    gateway ([Visitor addresses](#visitor-addresses)). It removes Caddy's ports with `!reset`, which needs
+    Docker Compose 2.24 or newer; `deploy/aprscaching doctor` fails `service.tunnel_ports` when Caddy still
+    publishes them.
 
 ## Put the CDN in front
 
@@ -50,7 +52,8 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     | Paths | Rule |
     |---|---|
     | `/api`, `/auth`, `/ws`, `/ingest`, `/outbox`, `/federation`, `/.well-known`, `/source` | never cached |
-    | `/` and files ending in `.js`, `.css`, `.woff2`, `.pmtiles` | cached at the edge for one day |
+    | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day |
+    | `/`, files ending in `.html`, `/sw.js` and the web manifest | never cached, so a new release reaches every visitor at once |
 
 4. Without the tunnel, let only Cloudflare reach the box: restrict ports 80 and 443 to
    [Cloudflare's address ranges](https://www.cloudflare.com/ips/), and set `TRUST_CF=1` in `deploy/.env`.

@@ -4,10 +4,21 @@ set -euo pipefail
 # API_BASE = the public URL the deployed Worker answers on (workers.dev or your custom domain) —
 # it is baked into the SPA build as VITE_API_BASE, so the Pages site talks to YOUR gateway.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# APP_URL = the Pages site's public URL (INSTANCE and RP_ID follow from its host); ADMIN_CALLSIGNS = the sysop
+# calls, comma-separated. publish.sh sets both as Worker vars.
 API_BASE="${API_BASE:-}"
 if [ -z "$API_BASE" ]; then
   read -rp ">> Public gateway URL for the SPA (e.g. https://api.example.net or https://aprscaching.<you>.workers.dev): " API_BASE
 fi
+APP_URL="${APP_URL:-}"
+if [ -z "$APP_URL" ]; then
+  read -rp ">> Public URL of the app on Pages (e.g. https://aprs.example.net): " APP_URL
+fi
+ADMIN_CALLSIGNS="${ADMIN_CALLSIGNS:-}"
+if [ -z "$ADMIN_CALLSIGNS" ]; then
+  read -rp ">> Your callsign, the instance's sysop (more: comma-separated, e.g. OE8APR,OE8XYZ): " ADMIN_CALLSIGNS
+fi
+ADMIN_CALLSIGNS="$(printf '%s' "$ADMIN_CALLSIGNS" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
 cd "$ROOT/workers/gateway"
 wrangler d1 create aprscaching || true
 echo ">> Paste the database_id into wrangler.toml, then press Enter."; read -r _
@@ -20,5 +31,5 @@ wrangler r2 bucket create aprscaching-media || true
 wrangler secret put INGEST_SECRET
 wrangler secret put OPERATOR_SECRET
 wrangler secret put SESSION_SECRET
-API_BASE="$API_BASE" bash "$ROOT/deploy/cloudflare/publish.sh"
+API_BASE="$API_BASE" APP_URL="$APP_URL" ADMIN_CALLSIGNS="$ADMIN_CALLSIGNS" bash "$ROOT/deploy/cloudflare/publish.sh"
 echo ">> Done. Run the operator RF ingest with INGEST_URL=${API_BASE}/ingest (compose.ingest-only.yml)."

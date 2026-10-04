@@ -27,24 +27,27 @@ cloud VM may add an APRS-IS-only feed the same way, never the RF bridge.
 1. Deploy, from the root of the clone:
 
     ```bash
-    deploy/aprscaching init cloudflare --api-base https://api.example.net --app-url https://aprs.example.net
+    deploy/aprscaching init cloudflare --api-base https://api.example.net --app-url https://aprs.example.net \
+      --admin-callsigns OE8APR
     ```
 
     It states the cost and points to Self-host behind a Cloudflare Tunnel, then asks before it deploys
-    (`--yes` confirms). It runs `deploy/cloudflare/deploy-cf.sh` and records both URLs, so `status` and `doctor`
-    work from this machine afterwards. The script alone does the same without the record.
+    (`--yes` confirms). It runs `deploy/cloudflare/deploy-cf.sh` and records both URLs and the sysop calls, so
+    `status`, `doctor` and `update` work from this machine afterwards. The script alone does the same without
+    the record.
 
 2. Answer the script. It:
 
     1. creates the D1 database `aprscaching` and waits while you paste its `database_id` into
-       `workers/gateway/wrangler.toml`. While it waits, also set `APP_URL` under `[vars]` to the app's URL.
-       The embeddable map widget (`/embed`) is served by the Worker but loads MapLibre from the app at
-       `APP_URL`; the app's `_headers` file lets Pages serve that copy to the Worker's origin;
+       `workers/gateway/wrangler.toml`;
     2. creates the R2 buckets `aprscaching-assets` (the offline map's archive) and `aprscaching-media` (cache media);
     3. asks for `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` (`wrangler secret put`). Give three
        different values, each from `openssl rand -hex 32`;
-    4. applies the migrations to D1, deploys the Worker stamped with its source commit, builds the web app
-       against the Worker's URL and deploys it to Pages.
+    4. applies the migrations to D1, deploys the Worker stamped with its source commit, with the app's URL as
+       `APP_URL` and your calls as `ADMIN_CALLSIGNS`, builds the web app against the Worker's URL and deploys it
+       to Pages. The instance id (`INSTANCE`) and the passkey domain (`RP_ID`) follow from `APP_URL`'s host. The
+       embeddable map widget (`/embed`) is served by the Worker but loads MapLibre from the app at `APP_URL`; the
+       app's `_headers` file lets Pages serve that copy to the Worker's origin.
 
 3. Connect your RF box. Create a one-time code under **Instance admin → Ingest boxes**, then, on the box:
 

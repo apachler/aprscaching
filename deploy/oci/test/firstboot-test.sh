@@ -116,6 +116,7 @@ check "  … installs the OCI CLI from hash-pinned wheels only" \
 check "  … whose oci signs in as the instance" bash -c "'$R/bin-oci' os ns get && grep -q '^oci\[instance_principal\] os ns get' '$MOCK_LOG'"
 check "  … serves :80 on the public address from the API" called "--lan-host 203.0.113.7"
 check "  … sets OCI_BUCKET" grep -qx 'OCI_BUCKET=aprscaching-backups-1a2b3c4d' "$R/opt/deploy/.env"
+check "  … and keeps three archives on the VM's disk" grep -qx 'BACKUP_KEEP=3' "$R/opt/deploy/.env"
 check "  … installs and starts the nightly timer" bash -c "[ -e '$R/units/aprscaching-backup.timer' ] && grep -q 'systemctl enable --now aprscaching-backup.timer' '$MOCK_LOG'"
 check "  … and takes the first backup" bash -c "grep -q 'systemctl start aprscaching-backup.service' '$MOCK_LOG' && grep -q 'the first backup is in the bucket' '$R/firstboot.log'"
 

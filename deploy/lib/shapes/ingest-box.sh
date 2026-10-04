@@ -131,7 +131,8 @@ shape_init() {
   fi
   if [ -n "$kiss" ]; then
     info "A TNC you operate can name this box as its receiving site. It counts for Tier A only once the"
-    info "gateway's sysop lists it in FIRST_PARTY_SITES; leave it blank for someone else's TNC."
+    info "gateway's sysop trusts it under Instance admin -> Trusted receiving stations (or lists it in"
+    info "FIRST_PARTY_SITES); leave it blank for someone else's TNC."
     ask site "The receiving site's callsign-SSID (e.g. ${call:-OE8APR}-10; blank = none)" \
       "${site:-$(env_file_get "$SHAPE_ENV" RF_SITE_CALL)}"
     [ -z "$site" ] || env_file_set "$SHAPE_ENV" RF_SITE_CALL "$(printf '%s' "$site" | tr '[:lower:]' '[:upper:]')"

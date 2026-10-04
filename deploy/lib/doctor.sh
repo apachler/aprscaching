@@ -543,23 +543,35 @@ doc_resources() {
 
 # Self-host and bare metal: where deploy/backup.sh writes, from the settings.
 doc_backup_destination() {
-  local dir
+  local dir why=""
   dir="$(doc_get BACKUP_DIR)"
   if [ -n "$dir" ]; then
     # deploy/backup.sh's snapshots (<time>.db.gz) and deploy/aprscaching backup's archives, side by side
     DOC_BACKUP_DIR="$dir"
     DOC_BACKUP_GLOB="*.db.gz aprscaching-*.tar.gz"
-  elif [ -n "$(doc_get OCI_BUCKET)" ] && have oci; then
-    doc_bucket_backup_age "$(doc_get OCI_BUCKET)"
-  elif [ -n "$(doc_get BACKUP_BUCKET)" ] && [ -n "$(doc_get R2_ENDPOINT)" ] && have aws; then
-    doc_s3_backup_age "$(doc_get BACKUP_BUCKET)" "$(doc_get R2_ENDPOINT)"
-  elif [ -n "$(doc_get OCI_BUCKET)$(doc_get BACKUP_BUCKET)" ]; then
-    pass resources.backup "backups go to a bucket (their age is not checked from here: no oci or aws CLI)"
-  elif compgen -G "$DEPLOY_DIR/backups/aprscaching-*.tar.gz" >/dev/null; then
+    return 0
+  fi
+  # A bucket counts only when its CLI is here to upload to it; otherwise the backups stay on this host.
+  if [ -n "$(doc_get OCI_BUCKET)" ]; then
+    if have oci; then
+      doc_bucket_backup_age "$(doc_get OCI_BUCKET)"
+      return 0
+    fi
+    why="OCI_BUCKET is set, but the oci CLI that uploads to it is not installed"
+  elif [ -n "$(doc_get BACKUP_BUCKET)" ] && [ -n "$(doc_get R2_ENDPOINT)" ]; then
+    if have aws; then
+      doc_s3_backup_age "$(doc_get BACKUP_BUCKET)" "$(doc_get R2_ENDPOINT)"
+      return 0
+    fi
+    why="BACKUP_BUCKET is set, but the aws CLI that uploads to it is not installed"
+  elif [ -n "$(doc_get BACKUP_BUCKET)" ]; then
+    why="BACKUP_BUCKET is set without R2_ENDPOINT, so nothing is uploaded"
+  fi
+  if [ -n "$why" ] || compgen -G "$DEPLOY_DIR/backups/aprscaching-*.tar.gz" >/dev/null; then
     DOC_BACKUP_DIR="$DEPLOY_DIR/backups"
     DOC_BACKUP_GLOB="aprscaching-*.tar.gz"
-    warnc resources.backup_place "backups are only on this host's disk ($DOC_BACKUP_DIR)" \
-      "set BACKUP_DIR to another disk or mount, or copy the archives off this host"
+    warnc resources.backup_place "${why:+$why: }backups stay on this host ($DOC_BACKUP_DIR)" \
+      "set BACKUP_DIR to another disk or mount, set up the bucket's CLI, or copy the archives off this host"
   else
     failc resources.backup "no backup destination is set" "set BACKUP_DIR, OCI_BUCKET or BACKUP_BUCKET, then schedule deploy/aprscaching backup"
   fi

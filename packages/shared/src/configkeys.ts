@@ -249,6 +249,12 @@ export const CONFIG_KEYS = {
     values: ["0", "1"],
     shapes: ["selfhost", "baremetal", "desktop"],
   },
+  BACKUP_KEEP: {
+    type: "int",
+    units: ["deploy"],
+    default: "14",
+    shapes: ["selfhost", "baremetal", "desktop"],
+  },
   CF_API_TOKEN: { type: "string", units: ["deploy"], secret: true, shapes: ["selfhost"] },
   CF_ZONE_ID: { type: "string", units: ["deploy"], shapes: ["selfhost"] },
   POCKET_ALERTS: { type: "enum", units: ["pocket"], default: "0", values: ["0", "1"] },

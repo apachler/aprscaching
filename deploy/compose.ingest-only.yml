@@ -22,17 +22,22 @@ services:
     # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
     # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
     # ports: ["192.168.1.10:1799:1799/udp"]
+    # The settings come from .env alone (INGEST_URL, e.g. https://gateway.<you>.workers.dev/ingest; the APRS-IS
+    # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
+    # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:
-      APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
-      APRSIS_PORT: ${APRSIS_PORT:-14580}
-      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN:-}
-      APRSIS_PASSCODE: ${APRSIS_PASSCODE:-}
-      APRSIS_FILTER: ${APRSIS_FILTER:-}
-      INGEST_URL: ${INGEST_URL:-} # e.g. https://gateway.<you>.workers.dev/ingest
-      # the gateway's shared secret, or nothing for a box enrolled with its own key (BOX_ID + BOX_KEY in .env)
-      INGEST_SECRET: ${INGEST_SECRET:-}
-      # the ingest box holds only INGEST_SECRET — never the gateway's operator or session secret
+      # the ingest box holds only its own credential: blank every gateway-only secret (secret in
+      # packages/shared/src/configkeys.ts and not read by the ingest), should .env hold one
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
+      FED_PRIVATE_KEY: ""
+      FED_CORROBORATION_SECRET: ""
+      FED_SUBMIT_SECRET: ""
+      FED_RELAY_SECRET: ""
+      OKAPI_KEY: ""
+      EMAIL_API_KEY: ""
+      VAPID_PRIVATE: ""
+      TUNNEL_TOKEN: ""
+      CF_API_TOKEN: ""
     restart: unless-stopped
     logging: *default-logging

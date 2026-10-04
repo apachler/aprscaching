@@ -14,8 +14,8 @@ Receive-only by default: every frame the client sends toward the radio is droppe
 (burst --tx-burst), each at most 330 bytes, and never KISS "exit" (0xFF) frames. The station's scripts
 enable --tx only when USB_KISS_TX=1 and the operator's callsign is control-verified.
 
-Only CDC-ACM devices work without their own driver. FTDI, Silicon Labs CP210x and WCH CH340 chips are
-refused with their name.
+Only CDC-ACM devices work without their own driver. FTDI, Silicon Labs CP210x, WCH CH340 and Prolific
+PL2303 chips are refused with their name.
 
 Run by deploy/pocket/extras/usb-kiss.sh, which asks termux-usb for the device and restarts this program
 when the device goes away. --serial PATH drives a serial device node or pty instead (for tests on a PC).

@@ -57,8 +57,11 @@ Run it from the checkout's root directory. It writes `aprscaching-<shape>-<UTC t
 The archive holds the instance's secrets, so it is created readable by its owner only. Keep it off shared
 folders.
 
+Each run keeps the newest 14 of the shape's archives in that place and deletes the older ones, so the disk use
+stays bounded. `BACKUP_KEEP` in `deploy/.env` sets another number.
+
 **To a bucket.** With `OCI_BUCKET` set, `backup` also uploads the archive to that bucket under `archives/` (it
-needs the `oci` CLI) and keeps only the newest three on the local disk. It never deletes from the bucket: expire
+needs the `oci` CLI). It never deletes from the bucket: expire
 `archives/` with a lifecycle rule ([Bucket lifecycle](#bucket-lifecycle)). The OCI one-click stack sets this up
 with a nightly timer, `aprscaching-backup.timer`, that runs `backup --with-media`
 (`deploy/oci/README-stack.md`).
@@ -214,7 +217,9 @@ Run `deploy/aprscaching doctor` and read the `resources` group:
   for `deploy/aprscaching backup` archives in `BACKUP_DIR`, in `deploy/backups`, or under `archives/` in
   `OCI_BUCKET` when the `oci` CLI is installed. On Pocket it looks in the phone's shared storage. The
   Cloudflare split always passes, because of Time Travel.
-- `resources.backup_place` warns when the archives are only on this host's disk.
+- `resources.backup_place` warns when the backups stay on this host's disk: no `BACKUP_DIR`, and no bucket
+  with the CLI that uploads to it. `BACKUP_BUCKET` takes the snapshots of `deploy/backup.sh`, not these
+  archives.
 
 [Troubleshooting](../troubleshooting.md#resourcesbackup) explains each message.
 

@@ -25,7 +25,14 @@ debug.bug
 
 # an instance's settings and secrets (deploy/setup.sh, deploy/aprscaching init), and the shape init recorded
 .env
+.env.*
+!.env.example
+!.env.*.example
 deploy/.shape
+*.secret
+# backup archives (deploy/aprscaching backup) and a bare-metal checkout's data directory
+deploy/backups/
+/data/
 
 # OpenTofu/Terraform working files (validating deploy/oci locally or in CI)
 deploy/oci/.terraform/

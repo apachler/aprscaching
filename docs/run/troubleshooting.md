@@ -491,6 +491,23 @@ container.
 - **Fix:** `docker compose logs cloudflared` in `deploy/`; check the tunnel token.
 - **See:** [Cloudflare Tunnel and CDN](networks/cloudflare.md).
 
+### `service.compose`
+
+- **Tests:** Self-host: Docker Compose is 2.24 or newer, which the stack's compose files need (`!reset` in
+  `compose.home.yml`, optional `env_file` entries).
+- **Message:** `Docker Compose <version> is older than 2.24, which the stack's compose files need` (fail).
+- **Fix:** update the Docker Compose plugin; `docker compose version` shows the one installed.
+- **See:** [Self-host with Docker](install/self-host-docker.md#before-you-start).
+
+### `service.tunnel_ports`
+
+- **Tests:** Self-host with `TUNNEL_TOKEN` set: the merged compose configuration (`docker compose config`)
+  publishes no port for Caddy, so the tunnel is the only way in.
+- **Message:** `TUNNEL_TOKEN is set, but Caddy still publishes ports on the host` (fail).
+- **Fix:** remove the `caddy` service's `ports:` from any other compose file; `compose.home.yml` resets them.
+  Update Docker Compose when it is older than 2.24.
+- **See:** [Cloudflare Tunnel and CDN](networks/cloudflare.md#set-up-the-tunnel).
+
 ### `service.gateway_port`
 
 - **Tests:** Self-host: the gateway's port 8080 is not published on the host.
@@ -562,7 +579,7 @@ across those places counts:
 
 | Shape | Where the doctor looks |
 |---|---|
-| Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Without the CLI it cannot read a bucket's age. Else `deploy/backups/` |
+| Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Else `deploy/backups/`, also when a bucket is set but its CLI is missing, since nothing then uploads |
 | Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/storage/shared/aprscaching-backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
 | Desktop | the archives of `deploy/aprscaching backup` (`deploy/backups/`); without one it warns rather than fails |
 | Cloudflare split | none: it always passes, because D1 Time Travel keeps the database restorable for 30 days (7 on Workers Free) |
@@ -579,10 +596,13 @@ across those places counts:
 
 ### `resources.backup_place`
 
-- **Tests:** backups are not only on this host's disk.
-- **Message:** `backups are only on this host's disk (<dir>)` (warn). A failed disk takes the instance and
-  its backups.
-- **Fix:** set `BACKUP_DIR` to another disk or mount, or copy the archives off this host.
+- **Tests:** backups leave this host's disk: `BACKUP_DIR` is set, or a bucket with the CLI that uploads to it.
+- **Message:** `backups stay on this host (<dir>)` (warn), led by the reason when a bucket is set but nothing
+  uploads to it: the `oci` or `aws` CLI is missing, or `BACKUP_BUCKET` has no `R2_ENDPOINT`. A failed disk takes
+  the instance and its backups. `deploy/aprscaching backup` uploads its archives to `OCI_BUCKET` only;
+  `BACKUP_BUCKET` takes the snapshots of `deploy/backup.sh`.
+- **Fix:** set `BACKUP_DIR` to another disk or mount, install and configure the bucket's CLI, or copy the
+  archives off this host.
 - **See:** [What to back up](day-to-day/backups.md#what-to-back-up).
 
 ## The source link (`source`)

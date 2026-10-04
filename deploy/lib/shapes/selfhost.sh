@@ -75,8 +75,23 @@ shape_doctor_context() {
   DOC_BACKUP_SETTINGS=1
 }
 
+# selfhost_compose_supported VERSION: whether a `docker compose version --short` is 2.24 or newer.
+selfhost_compose_supported() {
+  local v="${1#v}" major minor
+  major="${v%%.*}"
+  minor="${v#*.}"
+  minor="${minor%%.*}"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 0
+  [ "$major" -gt 2 ] || { [ "$major" = 2 ] && [ "$minor" -ge 24 ]; }
+}
+
+# selfhost_publishes SERVICE: whether the `docker compose config` on stdin publishes ports for SERVICE.
+selfhost_publishes() {
+  awk -v s="  $1:" '/^  [^ ]/ { cur = ($0 == s) } /^[^ ]/ { cur = 0 } cur && /^    ports:/ { f = 1 } END { exit !f }'
+}
+
 shape_doctor_extra() {
-  local svc running size want="gateway ingest caddy"
+  local svc running size version want="gateway ingest caddy"
   have docker || { failc service.docker "docker is not installed here" "install Docker, or use --shape"; return 0; }
   running="$(selfhost_compose ps --status running --format '{{.Service}}' 2>/dev/null || true)"
   [ -z "$(env_file_get "$SHAPE_ENV" TUNNEL_TOKEN)" ] || want="$want cloudflared"
@@ -85,6 +100,17 @@ shape_doctor_extra() {
       failc "service.$svc" "$svc is not running" "deploy/aprscaching status; docker compose logs $svc"
     fi
   done
+  # The stack's compose files need Compose 2.24: `!reset` in compose.home.yml, `required:` on env_file.
+  version="$(docker compose version --short 2>/dev/null || true)"
+  if [ -n "$version" ] && ! selfhost_compose_supported "$version"; then
+    failc service.compose "Docker Compose $version is older than 2.24, which the stack's compose files need" \
+      "update the Docker Compose plugin (docker compose version)"
+  fi
+  # Behind the tunnel, Caddy publishes nothing: the merged configuration must leave it without ports.
+  if [ -n "$(env_file_get "$SHAPE_ENV" TUNNEL_TOKEN)" ] && selfhost_compose config 2>/dev/null | selfhost_publishes caddy; then
+    failc service.tunnel_ports "TUNNEL_TOKEN is set, but Caddy still publishes ports on the host" \
+      "remove the caddy service's ports from any other compose file; compose.home.yml resets them"
+  fi
   # `compose port` prints the host address of a published port (and "…:0" when there is none)
   if selfhost_compose port gateway 8080 2>/dev/null | grep -qE ':[1-9][0-9]*$'; then
     warnc service.gateway_port "the gateway's port 8080 is published on the host, bypassing Caddy" "remove the ports: entry of the gateway service"

@@ -10,7 +10,8 @@ the ingest and the built web app inside, so the host needs no Node.js or pnpm.
 
 ## Before you start
 
-- **A Linux box** with Docker Engine and the Compose plugin: `docker compose version` answers.
+- **A Linux box** with Docker Engine and the Compose plugin 2.24 or newer: `docker compose version` answers.
+  The compose files use its `!reset` tag and optional `env_file` entries.
 - **Your callsign and APRS-IS passcode.** The wizard asks for both; a blank passcode runs the feed receive-only.
 - **How people reach the box**, one of:
     - **Caddy with TLS:** a DNS name pointing at the box, with ports 80 and 443 reachable from the internet.

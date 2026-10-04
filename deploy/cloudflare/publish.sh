@@ -5,12 +5,19 @@ set -euo pipefail
 # creating the resources and secrets; deploy/aprscaching update runs it for a new version.
 # API_BASE = the public URL the deployed Worker answers on (workers.dev or your custom domain) — it is
 # baked into the SPA build as VITE_API_BASE, so the Pages site talks to YOUR gateway.
+# APP_URL = the Pages site's public URL; ADMIN_CALLSIGNS = the sysop calls. Both become Worker vars.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 API_BASE="${API_BASE:?set API_BASE to the public URL of the Worker}"
 cd "$ROOT/workers/gateway"
 wrangler d1 migrations apply aprscaching --remote
 SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
-wrangler deploy --var SOURCE_COMMIT:"$SOURCE_COMMIT" --var SOURCE_BUILT_AT:"$(date +%s)" --var SOURCE_REPO:"${SOURCE_REPO:-https://github.com/apachler/aprscaching}"
+VARS=(--var SOURCE_COMMIT:"$SOURCE_COMMIT" --var SOURCE_BUILT_AT:"$(date +%s)" --var SOURCE_REPO:"${SOURCE_REPO:-https://github.com/apachler/aprscaching}")
+# A deploy replaces every var, so the instance's own come along each time: APP_URL (the Pages site's public
+# URL; INSTANCE and RP_ID follow from its host) and ADMIN_CALLSIGNS, from deploy-cf.sh or what init recorded.
+[ -z "${APP_URL:-}" ] || VARS+=(--var APP_URL:"${APP_URL%/}")
+[ -z "${ADMIN_CALLSIGNS:-}" ] || VARS+=(--var ADMIN_CALLSIGNS:"$ADMIN_CALLSIGNS")
+[ -n "${APP_URL:-}" ] || echo ">> APP_URL is not set: the Worker derives no instance id or passkey domain from it." >&2
+wrangler deploy "${VARS[@]}"
 # Build the SPA against the deployed gateway before publishing it — a stale/missing dist (it is
 # gitignored) or a localhost VITE_API_BASE would ship a Pages site that talks to nothing.
 # APP_URL, when set, is the Pages site's public URL: the build makes its canonical and Open Graph links absolute.

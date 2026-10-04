@@ -42,18 +42,40 @@ BK_BUCKET_PREFIX="archives/"
 bk_bucket() { [ -z "${SHAPE_ENV:-}" ] || env_file_get "$SHAPE_ENV" OCI_BUCKET; }
 
 # bk_upload ARCHIVE: copies ARCHIVE to the bucket when OCI_BUCKET is set; fails when it is set and cannot be.
+# BACKUP_BUCKET is deploy/backup.sh's destination for its snapshots: these archives stay on this host.
 bk_upload() {
   local bucket name
   bucket="$(bk_bucket)"
   name="$BK_BUCKET_PREFIX$(basename "$1")"
-  [ -n "$bucket" ] || return 0
+  if [ -z "$bucket" ]; then
+    if [ -n "${SHAPE_ENV:-}" ] && [ -n "$(env_file_get "$SHAPE_ENV" BACKUP_BUCKET)" ]; then
+      warn "BACKUP_BUCKET takes deploy/backup.sh's snapshots, not these archives: this one stays at $1."
+    fi
+    return 0
+  fi
   have oci || die "OCI_BUCKET is set, but the oci CLI is not installed." "The archive stays at $1."
   oci os object put -bn "$bucket" --file "$1" --name "$name" --force >/dev/null ||
     die "The upload to the bucket $bucket failed." "The archive stays at $1."
   info "uploaded: oci://$bucket/$name"
-  # the bucket keeps the history; this disk keeps the newest three
-  find "$(dirname "$1")" -maxdepth 1 -name "aprscaching-$SHAPE-*.tar.gz" -type f | sort -r | tail -n +4 |
-    while IFS= read -r old; do rm -f "$old"; done
+}
+
+# How many of this shape's archives the local destination keeps: BACKUP_KEEP, default 14. Sets BK_KEEP.
+bk_keep() {
+  BK_KEEP=""
+  [ -z "${SHAPE_ENV:-}" ] || BK_KEEP="$(env_file_get "$SHAPE_ENV" BACKUP_KEEP)"
+  BK_KEEP="${BK_KEEP:-14}"
+  case "$BK_KEEP" in '' | *[!0-9]* | 0) die "BACKUP_KEEP must be a whole number of 1 or more." ;; esac
+}
+
+# bk_prune DIR: removes all but the newest BK_KEEP archives of this shape from DIR (the names sort by time).
+# Every backup prunes, uploaded or not, so the destination's disk use stays bounded.
+bk_prune() {
+  local old
+  find "$1" -maxdepth 1 -name "aprscaching-$SHAPE-*.tar.gz" -type f | sort -r | tail -n +"$((BK_KEEP + 1))" |
+    while IFS= read -r old; do
+      rm -f "$old"
+      info "removed the older $(basename "$old")"
+    done
 }
 
 # The newest archive in the bucket, as an object name; empty when there is none.
@@ -118,6 +140,7 @@ run_backup() {
   done
   declare -F shape_db_dump >/dev/null || die "'backup' is not available for the $SHAPE shape."
   dest="${dest:-$(backup_dest_default)}"
+  bk_keep
   (umask 077 && mkdir -p "$dest")
   bk_tmpdir tmp
 
@@ -157,6 +180,7 @@ run_backup() {
   # shellcheck disable=SC2034 # the pre-update backup, read by update.sh
   BACKUP_LAST="$archive"
   bk_upload "$archive"
+  bk_prune "$dest"
   if [ "$APRS_JSON" = 1 ]; then
     printf '{"archive":%s,"schema":%s,"sensitive":true}\n' "$(json_str "$archive")" "$(json_str "$schema")"
   else
@@ -241,7 +265,8 @@ run_restore() {
       while IFS= read -r key; do
         case "$BACKUP_HOST_KEYS" in *" $key "*) continue ;; esac
         cfg_known "$key" && [[ "$(cfg_field "$key" 3)" == *gateway* ]] || continue
-        line="$(env_file_get "$tmp/settings.env" "$key")"
+        # the value exactly as written, quotes included: Pocket's .env is sourced by the shell
+        line="$(env_file_raw "$tmp/settings.env" "$key")"
         env_file_set "$SHAPE_ENV" "$key" "$line"
       done < <(env_file_keys "$tmp/settings.env")
     fi

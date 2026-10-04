@@ -204,6 +204,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   R2_ENDPOINT: "Endpoint URL of the S3-compatible backup bucket",
   BACKUP_RETENTION_DAYS: "Days a backup snapshot is kept",
   BACKUP_PRUNE_BUCKET: "1 deletes expired bucket snapshots too, for buckets with no lifecycle rule",
+  BACKUP_KEEP: "Backup archives kept in their local destination; older ones are deleted",
   CF_API_TOKEN: "Cloudflare API token for the CDN cache rules",
   CF_ZONE_ID: "Cloudflare zone the CDN cache rules apply to",
   POCKET_ALERTS: "1 vibrates on a new direct message to your call",
@@ -751,6 +752,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`deploy/backup.sh`",
         "`1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../run/day-to-day/backups.md#what-to-back-up))",
         "off",
+      ],
+      [
+        "`BACKUP_KEEP`",
+        "`deploy/aprscaching backup`",
+        "The newest this many archives stay in the local destination (`--dest`, `BACKUP_DIR`, else `deploy/backups/`); each backup deletes the older ones, whether or not it was also uploaded",
+        "`14`",
       ],
       [
         "`CF_API_TOKEN` / `CF_ZONE_ID`",
