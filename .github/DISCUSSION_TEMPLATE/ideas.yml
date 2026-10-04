@@ -1,0 +1,29 @@
+title: "[Idea] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share an idea for APRScaching. Search first and add your voice to an existing idea when one fits.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it solve?
+      description: The situation you are in and what is missing or hard today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How it could work, from a player's or a sysop's point of view.
+    validations:
+      required: true
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who it is for
+      multiple: true
+      options:
+        - Players (finding and hiding caches)
+        - Sysops (running an instance)
+        - Radio operators (the Shack)

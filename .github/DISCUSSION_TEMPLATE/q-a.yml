@@ -1,0 +1,40 @@
+title: "[Q] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask about running an instance, radios and TNCs, APRS-IS or the game. Search first: your question may
+        already have an answer here or in the [manual](https://apachler.github.io/aprscaching/). Report a bug as an
+        issue, and a security problem privately as SECURITY.md describes.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do, and what happens instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: shape
+    attributes:
+      label: Where it runs
+      options:
+        - Self-host with Docker
+        - Self-host without Docker
+        - Oracle Cloud
+        - Desktop app
+        - Pocket (Android phone)
+        - Ingest box only
+        - Web app only (I use someone's instance)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag, or what `/.well-known/source` reports.
+  - type: textarea
+    id: radio
+    attributes:
+      label: Radio, TNC and settings
+      description: Only if the question involves RF. Leave out passwords, passcodes and secrets.
