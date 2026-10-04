@@ -2,15 +2,15 @@
 // Media is bounded at every level, so it cannot fill the instance's disk: per item, per cache, per account across
 // its caches, and the instance's own MEDIA_QUOTA_MB.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const media = () => ({ put: async () => {}, get: async () => null, delete: async () => {} });
 
 async function owner(extra: Record<string, unknown> = {}) {
-  const env = authEnv({ MEDIA: media(), ...extra });
-  const who = await emailSignup(env, "limits@example.test", "OE8LIM");
+  const env = authEnv({ MEDIA: media(), HIDE_DAILY_LIMIT: "0", ...extra });
+  const who = await hiderSignup(env, "limits@example.test", "OE8LIM");
   const hide = async () =>
     (
       await call(

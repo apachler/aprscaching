@@ -38,6 +38,7 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
 | `RP_ID` | WebAuthn relying-party id (registrable domain). Set it only to differ from `APP_URL`'s host — for example the parent domain, so passkeys work on several subdomains. Choose it before users register passkeys | `APP_URL`'s host |
 | `SESSION_TTL_DAYS` | Session cookie lifetime | `30` |
 | `MEDIA_QUOTA_MB` | Megabytes of cache media (photos, sound, audio clues) the instance stores in all; past it, uploads are refused. Set it to what the disk or bucket can spare | `1024` |
+| `HIDE_DAILY_LIMIT` | New caches one account may hide in 24 hours (its sysop excepted); `0` lifts the limit. Imports by the instance itself never count | `5` |
 | `SESSION_EPOCH` | Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all` | — |
 | `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in) | off |
 | `TRUST_CF` | Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel | off |

@@ -3,7 +3,15 @@
 // erasure nothing personal is left — the passkey cannot sign in, the base call is free to claim
 // again, and uploaded cache media is removed from the object store.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, newAuthenticator, passkeyLogin, passkeyRegister } from "./helpers/authflow.js";
+import {
+  authEnv,
+  call,
+  emailSignup,
+  markCallVerified,
+  newAuthenticator,
+  passkeyLogin,
+  passkeyRegister,
+} from "./helpers/authflow.js";
 import { freshDb } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -58,6 +66,7 @@ async function seeded() {
   const auth = await newAuthenticator();
   const reg = await passkeyRegister(env, CS, auth);
   expect(reg.status).toBe(200);
+  await markCallVerified(env, CS);
   await env.DB.prepare("UPDATE accounts SET email='gdpr@example.test' WHERE callsign=?").bind(CS).run();
   // a login link leaves an email token behind
   expect((await call(env, "POST", "/auth/email/start", { email: "gdpr@example.test" })).status).toBe(200);

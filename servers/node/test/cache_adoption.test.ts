@@ -40,7 +40,7 @@ async function user(w: World, cs: string, verified = true): Promise<Res> {
 
 /** A cache hidden by `cs`, with one find by someone else, then the owner erases their account. */
 async function withdrawnCache(w: World, cs = "DL1OWN"): Promise<number> {
-  const owner = await user(w, cs, false);
+  const owner = await user(w, cs);
   const created = await call(
     w.env,
     "POST",
@@ -359,7 +359,7 @@ describe("direct assignment", () => {
 
 describe("a cache with an active owner", () => {
   async function ownedCache(w: World) {
-    const owner = await user(w, "DL1OWN", false);
+    const owner = await user(w, "DL1OWN");
     const created = await call(
       w.env,
       "POST",

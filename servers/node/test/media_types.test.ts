@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Cache media is photos and sound only, and the instance serves whatever its store holds as inert content.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 
 function store() {
@@ -17,7 +17,7 @@ function store() {
 async function world() {
   const media = store();
   const env = authEnv({ MEDIA: media });
-  const owner = await emailSignup(env, "media@example.test", "OE8MED");
+  const owner = await hiderSignup(env, "media@example.test", "OE8MED");
   const made = await call(
     env,
     "POST",

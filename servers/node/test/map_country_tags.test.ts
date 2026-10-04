@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The map's cache list carries each cache's country and tags, so the app filters by them.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 
 describe("the map's cache list", () => {
   it("carries the owner's country and tags", async () => {
     const env = authEnv();
-    const owner = await emailSignup(env, "tags@example.test", "OE8TAG");
+    const owner = await hiderSignup(env, "tags@example.test", "OE8TAG");
     const made = await call(
       env,
       "POST",
@@ -32,7 +32,7 @@ describe("the map's cache list", () => {
 
   it("takes a country only as a DXCC prefix, and an owner clears it with an empty one", async () => {
     const env = authEnv();
-    const owner = await emailSignup(env, "dxcc@example.test", "OE8DXC");
+    const owner = await hiderSignup(env, "dxcc@example.test", "OE8DXC");
     const hide = (country: string) =>
       call(
         env,

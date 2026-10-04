@@ -23,7 +23,12 @@ A cache sends strangers to a place. Make sure they are welcome there and safe.
 
 ## Hide your first cache
 
-You need to be signed in. Stand at the spot, or know its coordinates.
+You need to be signed in with a [verified callsign](../glossary.md#verified-callsign): an owner answers for the
+place and for every log on it. Until your callsign is verified, the panel says so and **Hide cache** stays off.
+Stand at the spot, or know its coordinates.
+
+Each account hides at most 5 new caches in 24 hours. Your sysop can change that number. Past it, the panel
+says so; try again the next day.
 
 1. Tap **+ Hide a cache** in the top bar. On a phone, tap **Hide** in the tab bar. The **Hide a cache**
    panel opens.

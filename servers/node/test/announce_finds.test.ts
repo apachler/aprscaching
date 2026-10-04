@@ -2,7 +2,7 @@
 // Announcing finds on APRS-IS is the account's own opt-in: off by default, set from Settings, and followed by a
 // find from any SSID of a verified call the account holds.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, operatorVerify } from "./helpers/authflow.js";
 
 const at = () => Math.floor(Date.now() / 1000);
 const here = () => ({ lat: 47.0001, lon: 15.0001, accuracyM: 10, ts: at() });
@@ -10,7 +10,7 @@ const here = () => ({ lat: 47.0001, lon: 15.0001, accuracyM: 10, ts: at() });
 describe("announce finds", () => {
   it("is off by default, needs a session, and follows the switch", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8ANN" });
-    const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+    const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
     const cache = (title: string) =>
       call(env, "POST", "/api/caches", { title, type: "traditional", lat: 47, lon: 15 }, { cookie: owner.cookie }).then(
         (r) => r.data.cache.id as number,

@@ -32,7 +32,7 @@ export function HidePanel(props: {
   onCancel: () => void;
   onCreated: (c: CacheSummary) => void;
 }) {
-  const { callsign } = usePlatform();
+  const { callsign, verified } = usePlatform();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<CacheType>("traditional");
   const [difficulty, setDifficulty] = useState(1.5);
@@ -93,7 +93,7 @@ export function HidePanel(props: {
     setTyped("");
   }
 
-  const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3;
+  const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3 && verified;
 
   const tagList = parseTags(tags);
   const tagErr = tagProblem(tagList);
@@ -140,6 +140,11 @@ export function HidePanel(props: {
 
   return (
     <Panel side="left" title="Hide a cache">
+      {callsign.length >= 3 && !verified && (
+        <p className="muted" id="hide-verify-reason">
+          Verify your callsign in Settings to hide a cache: an owner answers for the place and for every log on it.
+        </p>
+      )}
       <h4 className="set-subh">Location</h4>
       <p className="muted" role="status" aria-live="polite">
         {props.draft ? (
@@ -347,7 +352,12 @@ export function HidePanel(props: {
       {err && <p className="error">{err}</p>}
       <div className="row end">
         <Button onClick={props.onCancel}>Cancel</Button>
-        <Button variant="primary" disabled={!ready || busy} onClick={submit}>
+        <Button
+          variant="primary"
+          disabled={!ready || busy}
+          aria-describedby={callsign.length >= 3 && !verified ? "hide-verify-reason" : undefined}
+          onClick={submit}
+        >
           {busy ? "Hiding…" : "Hide cache"}
         </Button>
       </div>

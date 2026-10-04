@@ -342,6 +342,17 @@ const playerCode = await call(
   { ...ANON, cookie },
 );
 ok("a player cannot choose a cache code -> 403", playerCode.status === 403, `status=${playerCode.status}`);
+const unverifiedHide = await call(
+  "POST",
+  "/api/caches",
+  { title: "Unverified", type: "traditional", lat: 47, lon: 15, difficulty: 1, terrain: 1 },
+  { ...ANON, cookie },
+);
+ok(
+  "a member whose call is not verified cannot hide a cache -> 403",
+  unverifiedHide.status === 403 && /verify/.test(unverifiedHide.data?.error ?? ""),
+  `status=${unverifiedHide.status} ${JSON.stringify(unverifiedHide.data)}`,
+);
 const sessFav = await call(
   "POST",
   `/api/caches/${sCacheId}/favorite`,
