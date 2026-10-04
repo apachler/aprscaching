@@ -74,3 +74,21 @@ export function applyDerivedDefaults(env: Env): Env {
   if (blank(env.RP_ID)) env.RP_ID = host ?? undefined;
   return env;
 }
+
+/**
+ * The host this instance is reached at: APP_URL's hostname, else INSTANCE when it is a hostname. Text the
+ * instance sends under its own name (a find announced on APRS-IS, the web-push contact) uses it, so each
+ * instance names itself and never another.
+ */
+export function instanceHost(env: Env): string | null {
+  try {
+    if (!blank(env.APP_URL)) {
+      const h = new URL(env.APP_URL as string).hostname;
+      if (h) return h;
+    }
+  } catch {
+    /* an unparseable APP_URL falls through to INSTANCE */
+  }
+  const inst = env.INSTANCE?.trim().toLowerCase() ?? "";
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(inst) ? inst : null;
+}

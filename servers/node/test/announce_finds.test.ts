@@ -39,7 +39,7 @@ describe("announce finds", () => {
       src_call: string;
       payload: string;
     }>();
-    expect(out.results).toEqual([{ src_call: "OE8ANN-7", payload: ">Found AC-0002 (second) via aprscaching.net" }]);
+    expect(out.results).toEqual([{ src_call: "OE8ANN-7", payload: ">Found AC-0002 (second) via gw.test" }]);
 
     await call(env, "POST", "/api/announce", { on: false }, { cookie: me.cookie });
     expect((await find(await cache("third"))).announced).toBeFalsy();

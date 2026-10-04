@@ -33,7 +33,7 @@ export function AnnounceSettings(props: { verified: boolean }) {
     >
       <p className="muted">
         Each verified find goes to APRS-IS as a short status message from your callsign, for example{" "}
-        <span className="mono">Found AC-1234 (Rover on the ridge) via aprscaching.net</span>.
+        <span className="mono">Found AC-1234 (Rover on the ridge) via {location.hostname}</span>.
       </p>
     </Group>
   );

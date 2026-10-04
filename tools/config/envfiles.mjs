@@ -272,6 +272,8 @@ export const ENV_FILES = [
       { key: "OPERATOR_NAME", value: "", off: true },
       { key: "OPERATOR_ADDRESS", value: "", off: true },
       { key: "OPERATOR_EMAIL", value: "", off: true },
+      "# Security contact in /.well-known/security.txt (RFC 9116); default mailto:<OPERATOR_EMAIL>.",
+      { key: "SECURITY_CONTACT", value: "mailto:security@example.net", off: true },
       "",
       "# ---- Federation signing key (gateway only) ----",
       "# Signs this instance's feeds so peers can mirror them. setup.sh generates it with",

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import type { Env } from "./env.js";
+import { instanceHost, type Env } from "./env.js";
 import { isCallsignVerified } from "./callsign.js";
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
@@ -32,7 +32,9 @@ export async function maybeAnnounceFind(
   const oneLine = (v: string) => v.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   const t = cacheTitle ? oneLine(cacheTitle) : "";
   const title = t ? ` (${t})` : "";
-  const payload = `>Found ${oneLine(cacheCode)}${title} via aprscaching.net`.slice(0, 120);
+  // The status names the instance that logged the find, by its own host.
+  const via = instanceHost(env) ?? "APRScaching";
+  const payload = `>Found ${oneLine(cacheCode)}${title} via ${via}`.slice(0, 120);
   await env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)")
     .bind(nowS(), callsign, acct.announce_tocall ?? "APZACG", payload)
     .run();

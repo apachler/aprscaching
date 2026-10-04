@@ -14,7 +14,7 @@
  */
 import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { nowS } from "./util/time.js";
-import type { Env } from "./env.js";
+import { instanceHost, type Env } from "./env.js";
 import { json } from "./app.js";
 import { sendEmail } from "./email.js";
 import { sessionIdentity } from "./auth.js";
@@ -130,6 +130,24 @@ export async function pushAlert(env: Env, accountId: string): Promise<void> {
   }
 }
 
+/**
+ * The VAPID `sub` contact (RFC 8292): VAPID_SUBJECT, else the operator's address, else the instance's own
+ * https origin. Without any of them the claim is left out, which RFC 8292 permits.
+ */
+export function vapidSubject(env: Env): string | null {
+  const set = env.VAPID_SUBJECT?.trim();
+  if (set) return set;
+  const email = env.OPERATOR_EMAIL?.trim();
+  if (email) return `mailto:${email}`;
+  const host = instanceHost(env);
+  return host ? `https://${host}` : null;
+}
+
+const vapidSubjectClaim = (env: Env): { sub?: string } => {
+  const sub = vapidSubject(env);
+  return sub ? { sub } : {};
+};
+
 /** VAPID ES256 JWT for the push service origin. */
 async function vapidJwt(env: Env, aud: string): Promise<string> {
   const pub = b64urlToBytes(env.VAPID_PUBLIC!); // 65-byte uncompressed P-256 point
@@ -144,9 +162,7 @@ async function vapidJwt(env: Env, aud: string): Promise<string> {
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
   const header = bytesToB64url(new TextEncoder().encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
   const body = bytesToB64url(
-    new TextEncoder().encode(
-      JSON.stringify({ aud, exp: nowS() + 12 * 3600, sub: env.VAPID_SUBJECT ?? "mailto:admin@aprscaching.net" }),
-    ),
+    new TextEncoder().encode(JSON.stringify({ aud, exp: nowS() + 12 * 3600, ...vapidSubjectClaim(env) })),
   );
   const sig = new Uint8Array(
     await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(`${header}.${body}`)),
