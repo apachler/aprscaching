@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { listPasskeys, registerPasskey, removePasskey, type Passkey } from "../api.js";
+import { errorText, listPasskeys, registerPasskey, removePasskey, type Passkey } from "../api.js";
 import { Advanced, Button, useConfirm, useLoad, useToast } from "../ui/index.js";
 import { useFmt } from "../format.js";
-import { passkeyProblem, PASSKEY_PROBLEM_TEXT } from "./passkeySupport.js";
+import { passkeyErrorText, passkeyProblem, PASSKEY_PROBLEM_TEXT } from "./passkeySupport.js";
 
 /** How a passkey's device connects, from its WebAuthn transports, in words. */
 function kind(p: Passkey): string {
@@ -37,14 +37,7 @@ export function Passkeys() {
       toast("Passkey added: this device signs you in with it");
       reload();
     } catch (e) {
-      const m = (e as Error).message;
-      // the browser's own cancel, or a passkey this device already holds for the account
-      setMsg({
-        text: /NotAllowed|InvalidState|excluded|already/i.test(m)
-          ? "No passkey added: the browser was cancelled, or this device already holds one for your account."
-          : m.replace(/^.*?: /, ""),
-        kind: "error",
-      });
+      setMsg({ text: passkeyErrorText(e, (x) => errorText(x).replace(/^.*?: /, "")), kind: "error" });
     } finally {
       setBusy(false);
     }

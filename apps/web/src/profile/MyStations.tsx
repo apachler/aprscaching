@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { STATION_ROLES, type StationRole } from "@aprscaching/shared";
 import {
   listMyStations,
@@ -13,7 +13,6 @@ import {
   updateCache,
   type OperatedStation,
   type StationInput,
-  type StationWxKey,
 } from "../api.js";
 import { useFmt } from "../format.js";
 import {
@@ -27,6 +26,7 @@ import {
   copyText,
   useChoice,
   useConfirm,
+  useLoad,
   usePaged,
   useToast,
 } from "../ui/index.js";
@@ -333,17 +333,17 @@ function StationWxKeyPanel(props: { stationId: number }) {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
-  const [info, setInfo] = useState<StationWxKey | null>(null);
-  const [error, setError] = useState(false);
+  // Until the current key has been read there is no knowing whether issuing would replace one, so the
+  // issue button waits for a successful read.
+  const {
+    data: info,
+    setData: setInfo,
+    error,
+    reload,
+  } = useLoad(() => getStationWxKey(props.stationId), [props.stationId]);
   const [busy, setBusy] = useState(false);
-  const load = () => {
-    setError(false);
-    getStationWxKey(props.stationId)
-      .then(setInfo)
-      .catch(() => setError(true));
-  };
-  useEffect(load, [props.stationId]);
   async function issue() {
+    if (!info) return;
     if (
       info?.key &&
       !(await confirmDialog({
@@ -367,11 +367,17 @@ function StationWxKeyPanel(props: { stationId: number }) {
   const copy = async (val: string, what: string) => {
     toast((await copyText(val)) ? `${what} copied` : "Copy failed — select the text and copy manually");
   };
-  if (error)
+  if (!info)
     return (
       <div className="wx-key">
         <h5>Weather push</h5>
-        <ErrorState onRetry={load}>Couldn't load this station's weather-push state.</ErrorState>
+        {error ? (
+          <ErrorState onRetry={reload}>Couldn't load this station's weather-push state.</ErrorState>
+        ) : (
+          <p className="muted" aria-busy="true">
+            Loading…
+          </p>
+        )}
       </div>
     );
   return (

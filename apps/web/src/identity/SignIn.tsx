@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { claim, registerPasskey, loginPasskey, emailStart, errorText, ApiError, type Licence } from "../api.js";
 import { Button, Panel, Icon, LicenceBadge } from "../ui/index.js";
-import { PASSKEY_PROBLEM_TEXT, passkeyProblem } from "./passkeySupport.js";
+import { PASSKEY_PROBLEM_TEXT, passkeyErrorText, passkeyProblem } from "./passkeySupport.js";
 
 type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
 
@@ -13,7 +13,7 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
   const [probe, setProbe] = useState<Probe>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [sent, setSent] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ text: string; devLink?: string } | null>(null);
   const callsign = cs.toUpperCase().trim();
   const noPasskey = passkeyProblem();
   const canPasskey = noPasskey === null;
@@ -40,7 +40,7 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
       await fn();
       props.onDone();
     } catch (e) {
-      setErr(errorText(e).replace(/^.*?: /, ""));
+      setErr(passkeyErrorText(e, (x) => errorText(x).replace(/^.*?: /, "")));
     } finally {
       setBusy(false);
     }
@@ -54,7 +54,11 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
     setErr(null);
     try {
       const r = await emailStart(email.trim(), callsign);
-      setSent(r.devLink ? `Dev: open ${r.devLink}` : `Check ${email} for your sign-in link.`);
+      setSent(
+        r.devLink
+          ? { text: "This instance sends no mail.", devLink: r.devLink }
+          : { text: `Check ${email} for your sign-in link.` },
+      );
     } catch (e) {
       // An email with no account opens a new one for the call, so a held call refuses it: for a returning
       // user that means the email is not the one on their account.
@@ -73,7 +77,15 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
   return (
     <Panel title="Sign in" onClose={props.onClose}>
       {sent ? (
-        <p className="muted mt-3">{sent}</p>
+        <p className="muted mt-3">
+          {sent.text}
+          {sent.devLink && (
+            <>
+              {" "}
+              <a href={sent.devLink}>Open the sign-in link</a>
+            </>
+          )}
+        </p>
       ) : !probe ? (
         <>
           <p className="muted">Sign in with your callsign to claim and log your finds.</p>

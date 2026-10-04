@@ -8,6 +8,7 @@ import {
   deleteAccount,
   getNotifyPrefs,
   setNotifyPrefs,
+  errorText,
   type SourceInfo,
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
@@ -73,15 +74,23 @@ export function SettingsPanel(props: {
   const [pushState, setPushState] = useState<
     "loading" | "unsupported" | "off" | "on" | "denied" | "error" | "unconfigured"
   >("loading");
+  // the push state belongs to the signed-in account: asked again for each session, and unknown without one
   useEffect(() => {
-    if (!session.signedIn) return;
-    (async () => {
-      setPushState(!pushSupported() ? "unsupported" : (await pushSubscribed()) ? "on" : "off");
-    })();
-  }, [session.signedIn]);
+    let live = true;
+    setPushState("loading");
+    if (session.signedIn)
+      void (async () => {
+        const state = !pushSupported() ? "unsupported" : (await pushSubscribed().catch(() => false)) ? "on" : "off";
+        if (live) setPushState(state);
+      })();
+    return () => {
+      live = false;
+    };
+  }, [session.signedIn, session.callsign]);
   async function togglePush() {
     if (pushState === "on") {
-      await disablePush();
+      setPushState("loading");
+      await disablePush().catch(() => {});
       setPushState("off");
     } else {
       setPushState("loading");
@@ -89,16 +98,18 @@ export function SettingsPanel(props: {
     }
   }
 
+  /**
+   * The signature for an export or erase. The signed-in session authorises both on its own, so a browser
+   * without an Ed25519 device key sends none and the session carries the request.
+   */
+  async function accountAuth(action: "export" | "delete") {
+    return signAccountAction(action, callsign, await getInstance());
+  }
+
   async function exportData() {
     setGdpr("Preparing your export…");
     try {
-      const inst = await getInstance();
-      const auth = await signAccountAction("export", callsign, inst);
-      if (!auth) {
-        setGdpr("This browser can't sign (needs Ed25519). Try a recent Chrome/Firefox/Safari.");
-        return;
-      }
-      const data = await exportAccount(callsign, auth);
+      const data = await exportAccount(callsign, await accountAuth("export"));
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
       const a = document.createElement("a");
       a.href = url;
@@ -107,7 +118,7 @@ export function SettingsPanel(props: {
       URL.revokeObjectURL(url);
       setGdpr("Export downloaded.");
     } catch (e) {
-      setGdpr((e as Error).message);
+      setGdpr(errorText(e));
     }
   }
   async function deleteData() {
@@ -123,17 +134,16 @@ export function SettingsPanel(props: {
       return;
     setGdpr("Erasing…");
     try {
-      const inst = await getInstance();
-      const auth = await signAccountAction("delete", callsign, inst);
-      if (!auth) {
-        setGdpr("This browser can't sign (needs Ed25519).");
-        return;
-      }
-      await deleteAccount(callsign, auth);
-      setGdpr("Your account and personal data were erased.");
+      await deleteAccount(callsign, await accountAuth("delete"));
     } catch (e) {
-      setGdpr((e as Error).message);
+      setGdpr(errorText(e));
+      return;
     }
+    // the account is gone: end this browser's session and its push subscription with it
+    setGdpr(null);
+    await session.signOut();
+    props.onClose();
+    toast("Your account and personal data were erased");
   }
   const [q, setQ] = useState("");
   const match = (title: string, ...kw: string[]) =>
@@ -309,13 +319,18 @@ export function SettingsPanel(props: {
 
       {match("Your data export erase delete GDPR DSGVO privacy account") && (
         <Group title="Your data" status="GDPR" defaultOpen={false}>
-          {callsign.length < 3 ? (
-            <p className="muted">Set your callsign (top bar) to export or erase your data.</p>
+          {!session.signedIn || callsign.length < 3 ? (
+            <>
+              <p className="muted">Sign in first to export or erase your data.</p>
+              <div className="row end">
+                <Button onClick={props.onSignIn}>Sign in</Button>
+              </div>
+            </>
           ) : (
             <>
               <p className="muted">
-                Signed with your device key for <span className="mono">{callsign}</span>. Export gives you a full copy;
-                erase anonymises your finds and removes your account, keys and personal data.
+                For the account of <span className="mono">{callsign}</span>. Export gives you a full copy; erase
+                anonymises your finds and removes your account, keys and personal data.
               </p>
               <div className="row">
                 <Button onClick={exportData}>Export my data</Button>

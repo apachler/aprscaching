@@ -272,6 +272,20 @@ export interface ProfileEdit {
 export function updateProfile(p: ProfileEdit): Promise<{ ok: boolean }> {
   return call(`/auth/profile`, { method: "POST", body: JSON.stringify(p) });
 }
+/** The signed-in account's own profile: every field, also while hidden, and the show/hide switch. */
+export function getMyProfile(): Promise<{
+  profile: {
+    displayName: string | null;
+    homeGrid: string | null;
+    avatarUrl: string | null;
+    bio: string | null;
+    links: { label: string; url: string }[];
+    publicContact: string | null;
+    profilePublic: boolean;
+  };
+}> {
+  return call(`/api/my/profile`);
+}
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }
@@ -1571,11 +1585,19 @@ export function markBbsRead(id: number): Promise<{ ok: boolean }> {
 
 // ---- account data lifecycle (GDPR) ----
 type SignedAction = { key: string; sig: string; at: number };
-export function exportAccount(callsign: string, auth: SignedAction): Promise<Record<string, unknown>> {
-  return call(`/api/account/${encodeURIComponent(callsign)}/export`, { method: "POST", body: JSON.stringify(auth) });
+/** Export the account's data: authorised by the signed-in session, or by a device-key signature without one. */
+export function exportAccount(callsign: string, auth?: SignedAction): Promise<Record<string, unknown>> {
+  return call(`/api/account/${encodeURIComponent(callsign)}/export`, {
+    method: "POST",
+    body: JSON.stringify(auth ?? {}),
+  });
 }
-export function deleteAccount(callsign: string, auth: SignedAction): Promise<{ ok: boolean; erased: string }> {
-  return call(`/api/account/${encodeURIComponent(callsign)}/delete`, { method: "POST", body: JSON.stringify(auth) });
+/** Erase the account: authorised by the signed-in session, or by a device-key signature without one. */
+export function deleteAccount(callsign: string, auth?: SignedAction): Promise<{ ok: boolean; erased: string }> {
+  return call(`/api/account/${encodeURIComponent(callsign)}/delete`, {
+    method: "POST",
+    body: JSON.stringify(auth ?? {}),
+  });
 }
 
 /** The owner's edit of a cache: only the fields given change; `minTrust: null` returns it to the instance's minimum. */
@@ -1829,6 +1851,23 @@ export function emailStart(
   callsign?: string,
 ): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, callsign }) });
+}
+/** The answer to an address change or a resend: the address waiting for confirmation, or the confirmed one
+ *  when it was given again. `devLink` comes back only on an instance without mail that opts into dev tokens. */
+export type EmailConfirmation = {
+  ok: boolean;
+  email?: string;
+  pendingEmail: string | null;
+  sent?: boolean;
+  devLink?: string;
+};
+/** Give the signed-in account a new sign-in and recovery address (or its first); it waits for confirmation. */
+export function changeEmail(email: string): Promise<EmailConfirmation> {
+  return call(`/auth/email/change`, { method: "POST", body: JSON.stringify({ email }) });
+}
+/** Mail the confirmation link for the address the account is waiting on again. */
+export function resendEmailConfirmation(): Promise<EmailConfirmation> {
+  return call(`/auth/email/resend`, { method: "POST", body: "{}" });
 }
 /** Switch the signed-in account's active callsign. Switching to a held call preserves its
  *  verification; switching to a new base call adds it (unverified). */

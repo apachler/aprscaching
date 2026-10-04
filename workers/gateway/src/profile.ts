@@ -4,7 +4,8 @@
  * avatar, bio, links, public contact) with a master show/hide. Server-side sanitizes bio + links and
  * validates the grid; everything is account-owned and inside the GDPR export/erase.
  *
- *   POST /auth/profile   update your own profile (session-gated)
+ *   GET  /api/my/profile  read your own profile, every field and the show/hide switch (session-gated)
+ *   POST /auth/profile    update your own profile (session-gated)
  * (GET /api/profile/:call is extended in community.ts to surface the public fields.)
  */
 import type { Env } from "./env.js";
@@ -53,10 +54,53 @@ const emailish = (u: unknown): string | null => {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= 120 ? s.toLowerCase() : null;
 };
 
+/**
+ * GET /api/my/profile — the caller's own profile as the editor needs it: every field, also while the
+ * profile is hidden, and the show/hide switch. The public profile omits both, so an editor seeded from it
+ * would save a hidden profile back as blank and public.
+ */
+export async function handleMyProfile(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to edit your profile" }, { status: 401 });
+  const r = await env.DB.prepare(
+    `SELECT display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl, bio, links,
+            public_contact AS publicContact, profile_public AS profilePublic
+       FROM accounts WHERE account_id=?`,
+  )
+    .bind(me.accountId)
+    .first<{
+      displayName: string | null;
+      homeGrid: string | null;
+      avatarUrl: string | null;
+      bio: string | null;
+      links: string | null;
+      publicContact: string | null;
+      profilePublic: number | null;
+    }>();
+  if (!r) return json({ error: "sign in to edit your profile" }, { status: 401 });
+  let links: unknown;
+  try {
+    links = r.links ? JSON.parse(r.links) : [];
+  } catch {
+    links = [];
+  }
+  return json({
+    profile: {
+      displayName: r.displayName,
+      homeGrid: r.homeGrid,
+      avatarUrl: r.avatarUrl,
+      bio: r.bio,
+      links: Array.isArray(links) ? links : [],
+      publicContact: r.publicContact,
+      profilePublic: (r.profilePublic ?? 1) === 1,
+    },
+  });
+}
+
 /** POST /auth/profile — replace the caller's profile from a full form payload. */
 export async function handleProfileUpdate(req: Request, env: Env): Promise<Response> {
-  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
-  if (!cs) return json({ error: "sign in to edit your profile" }, { status: 401 });
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to edit your profile" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const displayName = sanitizeDisplayName(b.displayName);
@@ -73,9 +117,9 @@ export async function handleProfileUpdate(req: Request, env: Env): Promise<Respo
   const profilePublic = b.profilePublic === false ? 0 : 1;
 
   await env.DB.prepare(
-    `UPDATE accounts SET display_name=?, home_grid=?, avatar_url=?, bio=?, links=?, public_contact=?, profile_public=? WHERE callsign=?`,
+    `UPDATE accounts SET display_name=?, home_grid=?, avatar_url=?, bio=?, links=?, public_contact=?, profile_public=? WHERE account_id=?`,
   )
-    .bind(displayName, homeGrid, avatarUrl, bio, links, publicContact, profilePublic, cs.toUpperCase())
+    .bind(displayName, homeGrid, avatarUrl, bio, links, publicContact, profilePublic, me.accountId)
     .run();
 
   return json({

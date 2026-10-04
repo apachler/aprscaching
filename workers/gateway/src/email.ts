@@ -15,6 +15,7 @@ import {
   isRegistrableCall,
   operatorSecretOk,
   signInPaths,
+  sessionIdentity,
 } from "./auth.js";
 import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
@@ -334,6 +335,72 @@ export async function sendEmailConfirmation(
   if (sent) return { sent };
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") return { sent, devToken: token, devLink: link };
   return { sent };
+}
+
+/**
+ * Mailing a confirmation is bounded per account and per client address, and a change and a resend draw on
+ * the same budget, so neither path mails an inbox more often than the other allows.
+ */
+const CONFIRM_LIMITS = { perIp: 20, perIdentity: 5, windowMs: 3_600_000 };
+
+/** Is `email` the confirmed address of an account other than `accountId`? Such an address stays there. */
+async function confirmedElsewhere(env: Env, email: string, accountId: string): Promise<boolean> {
+  return !!(await env.DB.prepare("SELECT 1 FROM accounts WHERE email = ? AND account_id != ?")
+    .bind(email, accountId)
+    .first());
+}
+
+/** The answer to a change or a resend: the waiting address and how its confirmation mail went. */
+function confirmationSent(email: string, confirmation: Awaited<ReturnType<typeof sendEmailConfirmation>>): Response {
+  if (!confirmation.sent && !confirmation.devToken)
+    return json(
+      { error: "the confirmation mail could not be sent — try again later", pendingEmail: email },
+      { status: 503 },
+    );
+  return json({ ok: true, pendingEmail: email, ...confirmation });
+}
+
+/**
+ * POST /auth/email/change {email} — give the signed-in account a new sign-in and recovery address, or its
+ * first one. The address waits for confirmation like one given at registration; a confirmed address keeps
+ * working until the new one is confirmed. Giving the confirmed address again drops a waiting one.
+ */
+export async function handleEmailChange(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
+  const { email } = (await req.json().catch(() => ({}))) as { email?: unknown };
+  const e = normalEmail(email);
+  if (!e) return json({ error: "invalid email" }, { status: 400 });
+  const acct = await env.DB.prepare("SELECT email FROM accounts WHERE account_id = ?")
+    .bind(me.accountId)
+    .first<{ email: string | null }>();
+  if (!acct) return json({ error: "sign in first" }, { status: 401 });
+  if (acct.email === e) {
+    await env.DB.prepare("UPDATE accounts SET pending_email = NULL WHERE account_id = ?").bind(me.accountId).run();
+    return json({ ok: true, email: e, pendingEmail: null });
+  }
+  if (await confirmedElsewhere(env, e, me.accountId))
+    return json({ error: "that address already belongs to another account" }, { status: 409 });
+  const limited = await authThrottled(env, req, "email-confirm", me.accountId, CONFIRM_LIMITS);
+  if (limited) return limited;
+  await env.DB.prepare("UPDATE accounts SET pending_email = ? WHERE account_id = ?").bind(e, me.accountId).run();
+  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign));
+}
+
+/** POST /auth/email/resend — mail the confirmation link for the address the account is waiting on again. */
+export async function handleEmailResend(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
+  const acct = await env.DB.prepare("SELECT pending_email FROM accounts WHERE account_id = ?")
+    .bind(me.accountId)
+    .first<{ pending_email: string | null }>();
+  const e = acct?.pending_email ?? null;
+  if (!e) return json({ error: "no address is waiting for confirmation" }, { status: 400 });
+  if (await confirmedElsewhere(env, e, me.accountId))
+    return json({ error: "that address already belongs to another account" }, { status: 409 });
+  const limited = await authThrottled(env, req, "email-confirm", me.accountId, CONFIRM_LIMITS);
+  if (limited) return limited;
+  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign));
 }
 
 /** The account an operator link signs in: the holder of the call's base call, or a new one for the call. */
