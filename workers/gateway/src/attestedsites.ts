@@ -6,10 +6,11 @@
  * Every reader of the attested set goes through this module, so the env list and the admin switch can never
  * disagree.
  *
- * Who delivered a frame decides which of these sites it may claim. FIRST_PARTY_SITES and trusted_sites are
- * the instance's own receivers: a frame naming one counts from any ingest credential. A site trusted through a
- * box counts only for frames that box delivered itself ({@link sitesFor}): a lent receiver vouches for its own
- * hearings, and no other box, nor the shared secret, can claim its site.
+ * Who delivered a frame decides which of these sites it may claim ({@link sitesFor}). FIRST_PARTY_SITES and
+ * trusted_sites count only for frames the shared INGEST_SECRET delivered: the instance's own ingest. A frame an
+ * enrolled box delivered claims only the sites trusted through that box, so a box vouches for its own hearings
+ * and for no other receiver, and no other box, nor the shared secret, can claim its site. An operator whose own
+ * box signs with its key trusts that box's site under the box.
  *
  * The trusted rows are read once and kept for a short while per database binding: a batch of radio messages,
  * a find and a peer's corroboration question each cost at most one small read. A change made here drops the
@@ -55,7 +56,7 @@ export function forgetAttestedSites(env: Env): void {
 
 /** The attested sites split by who may claim them. */
 export interface Attestation {
-  /** FIRST_PARTY_SITES ∪ trusted_sites: claimed by any ingest credential. */
+  /** FIRST_PARTY_SITES ∪ trusted_sites: claimed by frames the shared secret delivered. */
   shared: Set<string>;
   /** Each trusted box's sites: claimed only by frames that box delivered. */
   byBox: Map<string, Set<string>>;
@@ -68,10 +69,11 @@ export async function attestation(env: Env): Promise<Attestation> {
   return { shared, byBox: t.byBox };
 }
 
-/** The sites a frame delivered by `box` (null: the shared secret, or no box) may claim. */
+const NONE: ReadonlySet<string> = new Set();
+
+/** The sites a frame delivered by `box` (null: the shared secret) may claim. */
 export function sitesFor(a: Attestation, box?: string | null): Set<string> {
-  const own = box ? a.byBox.get(box) : undefined;
-  return own ? new Set([...a.shared, ...own]) : a.shared;
+  return box ? (a.byBox.get(box) ?? (NONE as Set<string>)) : a.shared;
 }
 
 /**
@@ -83,9 +85,4 @@ export async function attestedSites(env: Env): Promise<Set<string>> {
   const all = new Set(a.shared);
   for (const sites of a.byBox.values()) for (const s of sites) all.add(s);
   return all;
-}
-
-/** Does the sysop trust this enrolled box ("Trust this station's hearings" is on for it)? */
-export async function isTrustedBox(env: Env, box: string): Promise<boolean> {
-  return (await trustedRows(env)).byBox.has(box);
 }

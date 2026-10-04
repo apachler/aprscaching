@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk, ingestOrTrustedBoxOk } from "./auth.js";
+import { ingestSecretOk, ingestOrServiceBoxOk } from "./auth.js";
 import { boxPrincipal } from "./boxprincipal.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
@@ -329,11 +329,11 @@ export function inboundRow(
   };
 }
 
-const ingestOk = ingestOrTrustedBoxOk;
+const ingestOk = ingestOrServiceBoxOk;
 
 /** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
 export async function handleForwardPool(req: Request, env: Env): Promise<Response> {
-  if (!(await ingestOk(req, env))) return new Response("unauthorized", { status: 401 });
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
   const u = new URL(req.url);
   const partner = (u.searchParams.get("partner") ?? "").toUpperCase();
   if (!partner) return json({ error: "partner required" }, { status: 400 });
@@ -374,7 +374,7 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
 
 /** POST /api/bbs/forward/inbound {message} — store an inbound forwarded message (BID-deduped). */
 export async function handleForwardInbound(req: Request, env: Env): Promise<Response> {
-  if (!(await ingestOk(req, env))) return new Response("unauthorized", { status: 401 });
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
   const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), nowS());
   if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
@@ -434,7 +434,7 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
 
 /** POST /api/bbs/forward/sent {partner, bids} — mark messages forwarded to a partner (don't re-offer). */
 export async function handleForwardSent(req: Request, env: Env): Promise<Response> {
-  if (!(await ingestOk(req, env))) return new Response("unauthorized", { status: 401 });
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { partner?: string; bids?: string[] };
   const partner = (b.partner ?? "").toUpperCase();
   if (!partner || !Array.isArray(b.bids) || !b.bids.length)

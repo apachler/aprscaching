@@ -10,6 +10,8 @@ interface BoxPrincipal {
   box: string;
   /** The base call the box was enrolled for, when its code named one. */
   callsign: string | null;
+  /** The sysop lets the box run this instance's services (box_keys.services). */
+  services: boolean;
 }
 
 const principals = new WeakMap<Request, BoxPrincipal>();

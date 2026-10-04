@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { boxPrincipal } from "./boxprincipal.js";
-import { isTrustedBox } from "./attestedsites.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
@@ -736,14 +735,13 @@ export function ingestOrBoxOk(req: Request, env: Env): boolean {
 }
 
 /**
- * The ingest plane's services beyond delivery (the outbox, the packet BBS, FBB forwarding, the NET/ROM node
- * mirror, the federation pages a box carries): the shared INGEST_SECRET, or an enrolled box the sysop trusts
- * in Instance admin ("Trust this station's hearings"). An enrolled box nobody trusts only delivers.
+ * This instance's services an ingest box runs (the APRS-IS outbox, the packet BBS mailbox, FBB forwarding, the
+ * NET/ROM node mirror, White Pages, federation pages and beacons): the shared INGEST_SECRET, or an enrolled box
+ * the sysop marks "Runs this instance's services" (box_keys.services, off by default). Trusting a box's
+ * hearings grants none of these: a lent receiver vouches for what it hears, not for this instance's mail.
  */
-export async function ingestOrTrustedBoxOk(req: Request, env: Env): Promise<boolean> {
-  if (ingestSecretOk(req, env)) return true;
-  const p = boxPrincipal(req);
-  return !!p && (await isTrustedBox(env, p.box));
+export function ingestOrServiceBoxOk(req: Request, env: Env): boolean {
+  return ingestSecretOk(req, env) || !!boxPrincipal(req)?.services;
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */

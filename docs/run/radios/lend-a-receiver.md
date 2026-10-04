@@ -51,11 +51,11 @@ Your box's key delivers hearings; it never acts for a person. With it, your box 
 
 - deliver what your radios hear, and check that its key works;
 - poll and acknowledge its own remote-control commands;
-- once the sysop trusts it, also send the instance's queued messages, serve its packet BBS, run its FBB
-  forwarding, mirror its NET/ROM node table and carry federation pages.
+- once the sysop trusts its hearings, verify finds with what it hears at your site.
 
 It cannot log a find for anyone, act as a cache's owner, create or import caches, or act for another box.
-Those need the instance's own `INGEST_SECRET` or a signed-in player.
+It does not run the instance's services either: its BBS mail, FBB forwarding, node mirror and outbox. Those
+need the instance's own `INGEST_SECRET`, a box the sysop runs, or a signed-in player.
 
 In **Instance admin → Ingest boxes** the sysop sees your box's name, when it was enrolled and last seen, and,
 once it is trusted (your site call also appears under **Trusted receiving stations**, as an enrolled box):

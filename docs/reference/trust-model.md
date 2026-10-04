@@ -60,7 +60,8 @@ The verification engine reads a normalised **provenance** object, never a raw tr
 box heard directly on its own receiver, a local TNC (KISS, AGWPE, WA8DED host mode) or a MeshCom node, at a
 receiving site the sysop trusts (Instance admin → **Trusted receiving stations**, an enrolled box's
 **Trust this station's hearings**, or the configuration preset `FIRST_PARTY_SITES`). A site trusted through an
-enrolled box counts only for the frames that box delivers itself.
+enrolled box counts only for the frames that box delivers itself, and a box's frames claim no other site:
+`FIRST_PARTY_SITES` and the stations added by call count only for frames sent with the shared ingest secret.
 
 - **The site is named on both sides.** The ingest box stamps its frames with `RF_SITE_CALL`, and the gateway
   attests that call.

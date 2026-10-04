@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// What an enrolled box's key may do. It delivers what the box hears and drives the box's own command queue;
-// once the sysop trusts the box it also runs the services an ingest box carries (the outbox, the packet BBS,
-// FBB forwarding, the NET/ROM node mirror). It never acts as the shared secret does: it logs no find, acts
-// for no cache owner and creates or imports no cache. A site trusted through a box attests only the frames
-// that box delivers, for a find's Tier A and for an RF callsign verification alike. These drive the real
+// What an enrolled box's key may do. It delivers what the box hears and drives the box's own command queue.
+// Only once the sysop marks it "Runs this instance's services" does it also run them (the outbox, the packet
+// BBS mailbox, FBB forwarding, the NET/ROM node mirror) and queue transmissions; trusting its hearings grants
+// none of that. It never acts as the shared secret does: it logs no find, acts for no cache owner and creates
+// or imports no cache. A box's frames attest only that box's own trusted sites, and FIRST_PARTY_SITES only the
+// shared secret's frames, for a find's Tier A and for an RF callsign verification alike. These drive the real
 // gateway over a migrated SQLite with the ingest box's own signing code (apps/ingest gatewayauth.ts).
 import { describe, it, expect } from "vitest";
 import { createPrivateKey } from "node:crypto";
@@ -149,9 +150,28 @@ describe("an enrolled box's key", () => {
       expect([401, 403], `${m} ${p}`).toContain((await signed(env, other, m, p, b)).status);
   });
 
-  it("runs the ingest box's services once the sysop trusts the box, and still acts for no station", async () => {
+  it("runs this instance's services only once the sysop allows it, never by trusting its hearings", async () => {
     const { env, lent } = await world();
     await trustLent(env);
+    expect((await signed(env, lent, "GET", "/outbox")).status).toBe(401);
+    expect((await signed(env, lent, "GET", "/api/bbs/session?call=DL2ABC")).status).toBe(401);
+    const tx = { kind: "message", callsign: "OE8VER", payload: { to: "DL1ABC", text: "hi" } };
+    await env.DB.prepare(
+      "INSERT INTO callsign_verifications (callsign, method, status, verified_at) VALUES ('OE8VER', 'operator', 'verified', ?)",
+    )
+      .bind(now())
+      .run();
+    expect((await signed(env, lent, "POST", "/api/box/lent-1/command", tx)).status).toBe(403);
+
+    const services = (on: boolean, headers: Record<string, string>) =>
+      call(env, "POST", "/api/admin/boxes/lent-1/services", { services: on }, headers);
+    expect((await services(true, {})).status).toBe(403);
+    expect((await services(true, INGEST)).status).toBe(403);
+    expect((await services(true, OPS)).status).toBe(200);
+    const listed = await call(env, "GET", "/api/admin/boxes", undefined, OPS);
+    expect(listed.data.boxes.find((b: { box: string }) => b.box === "lent-1").services).toBe(true);
+
+    expect((await signed(env, lent, "POST", "/api/box/lent-1/command", tx)).status).toBe(201);
     expect((await signed(env, lent, "GET", "/outbox")).status).toBe(200);
     expect(
       (await signed(env, lent, "POST", "/api/bbs/messages", { fromCall: "DL1FND", toCall: "DL2ABC", body: "hi" }))
@@ -164,6 +184,9 @@ describe("an enrolled box's key", () => {
     expect((await signed(env, lent, "POST", "/api/node/nodes", node)).status).toBeLessThan(300);
 
     for (const s of await stationActions(env, lent)) expect([401, 403]).toContain(s);
+
+    expect((await services(false, OPS)).status).toBe(200);
+    expect((await signed(env, lent, "GET", "/outbox")).status).toBe(401);
   });
 });
 
@@ -186,19 +209,24 @@ describe("a site trusted through a box", () => {
     expect(await findTier(env, "DL3FND")).toBe("A");
     expect(await ingestBox(env, "DL3FND")).toEqual({ ingest_box: "lent-1" });
     expect(await ingestBox(env, "DL2FND")).toEqual({ ingest_box: null });
-    // the instance's own site counts from any credential
+    // the instance's own sites count only for the shared secret's frames, never a box's
     await signed(env, other, "POST", "/ingest", { packets: [rfPosition("DL4FND", OWN_SITE)] });
-    expect(await findTier(env, "DL4FND")).toBe("A");
+    expect(await findTier(env, "DL4FND")).not.toBe("A");
+    await call(env, "POST", "/ingest", { packets: [rfPosition("DL5FND", OWN_SITE)] }, INGEST);
+    expect(await findTier(env, "DL5FND")).toBe("A");
+    // a box that is the operator's own trusts its site under the box, with one switch
+    const own = { trusted: true, sites: [OWN_SITE] };
+    expect((await call(env, "POST", "/api/admin/boxes/other-1/trust", own, OPS)).status).toBe(200);
+    await signed(env, other, "POST", "/ingest", { packets: [rfPosition("DL6FND", OWN_SITE)] });
+    expect(await findTier(env, "DL6FND")).toBe("A");
   });
 
   it("is listed to the credentials that may claim it", async () => {
     const { env, lent, other } = await world();
     await trustLent(env);
     expect((await call(env, "GET", "/ingest/check", undefined, INGEST)).data.sites).toEqual([OWN_SITE]);
-    expect((await signed(env, other, "GET", "/ingest/check")).data.sites).toEqual([OWN_SITE]);
-    expect(((await signed(env, lent, "GET", "/ingest/check")).data.sites as string[]).sort()).toEqual(
-      [SITE, OWN_SITE].sort(),
-    );
+    expect((await signed(env, other, "GET", "/ingest/check")).data.sites).toEqual([]);
+    expect((await signed(env, lent, "GET", "/ingest/check")).data.sites).toEqual([SITE]);
   });
 
   it("completes an RF callsign verification only from that box", async () => {

@@ -26,6 +26,7 @@ import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } fro
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified } from "./callsign.js";
 import { serviceCall } from "./servicecall.js";
+import { boxPrincipal } from "./boxprincipal.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
@@ -132,6 +133,13 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   // A session may only transmit as a callsign its own account holds; the trusted backend may name any.
   const callsign = (body.callsign ?? me?.callsign ?? "").toUpperCase();
   if (TX_KINDS.has(kind)) {
+    // a box's own key queues a transmission only on a box the sysop lets run this instance's services
+    const p = boxPrincipal(req);
+    if (p && !me && !p.services)
+      return json(
+        { error: "this box does not run this instance's services, so it cannot queue a transmission" },
+        { status: 403 },
+      );
     if (!callsign) return json({ error: "a licensed callsign is required to transmit" }, { status: 400 });
     if (me && !trusted && !(await accountHoldsCall(env, me.accountId, callsign)))
       return json({ error: `${callsign} is not held by your account` }, { status: 403 });
