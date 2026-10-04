@@ -5,10 +5,10 @@ name: release-please
 # release. The initial commit carries a `Release-As: 1.0.0` footer, so the first merge of `dev` into
 # `main` yields the 1.0.0 release PR.
 #
-# A tag pushed with the workflow's own GITHUB_TOKEN starts no other workflow, so the release
-# artifacts (the OCI stack zip and the desktop binaries) are built here, as called workflows, once
-# release-please reports a new release; release-verify then adds the git bundle, the checksums and the
-# signed attestations over all of them.
+# The release artifacts (the OCI stack zip and the desktop binaries) are built here, as called
+# workflows, once release-please reports a new release, and nowhere else: a pushed tag starts no
+# workflow, so each release is built once. release-verify then adds the git bundle, the checksums and
+# the signed attestations over all of them.
 on:
   push:
     branches: [main]

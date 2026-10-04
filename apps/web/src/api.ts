@@ -900,6 +900,8 @@ export interface FedPeer {
   signed: number;
   trust: "trusted" | "unvetted" | "blocked";
   added_via?: string | null; // manual | registry | discovered | auto-promoted
+  /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
+  enabled: number;
   health: "ok" | "error" | "new" | "blocked";
   errorRate: number;
   last_sync: number | null;

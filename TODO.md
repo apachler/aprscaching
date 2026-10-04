@@ -53,7 +53,7 @@ release. Listed in start order — the first two have outside dependencies and l
       open) or anchor positioning is unsupported.
 - [x] **Hosted OCI one-click stack** — `scripts/build-oci-stack.sh` packages `deploy/oci/` flat (Resource
       Manager reads `main.tf` and `schema.yaml` from the zip root) and `.github/workflows/oci-stack.yml`
-      attaches it to the release on every `v*` tag, so the "Deploy to Oracle Cloud" button resolves
+      attaches it to every release (release-please calls it), so the "Deploy to Oracle Cloud" button resolves
       `releases/latest/download/aprscaching-oci-stack.zip` with nothing to upload by hand. Each release's zip
       pins its own tag into `repo_ref`. The stack builds its own VCN/subnet/gateway and resolves the Ubuntu
       aarch64 image itself, so it never asks for an OCID; `schema.yaml` drives the console prompts and

@@ -14,6 +14,7 @@
  * Every route is sysop-gated here, never only hidden in the app.
  */
 import { baseCall } from "@aprscaching/aprs";
+import { SITE_CALL_RE } from "@aprscaching/shared";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
@@ -22,8 +23,6 @@ import { nowS } from "./util/time.js";
 import { parseAttestedSites } from "./provenance.js";
 import { forgetAttestedSites } from "./attestedsites.js";
 
-/** A receiving site call: a base call with an optional SSID. */
-export const SITE_CALL = /^[A-Z0-9]{3,9}(-[0-9]{1,2})?$/;
 /** The most recent verified finds shown per trusted station. */
 const RECENT_FINDS = 10;
 
@@ -103,7 +102,7 @@ export async function handleAddSite(req: Request, env: Env): Promise<Response> {
   if (denied) return denied;
   const b = ((await req.json().catch(() => ({}))) ?? {}) as { site?: unknown };
   const site = typeof b.site === "string" ? b.site.trim().toUpperCase() : "";
-  if (!SITE_CALL.test(site)) return json({ error: "enter the station's call, such as OE8ABC-10" }, { status: 400 });
+  if (!SITE_CALL_RE.test(site)) return json({ error: "enter the station's call, such as OE8ABC-10" }, { status: 400 });
   if (parseAttestedSites(env.FIRST_PARTY_SITES).has(site))
     return json({ error: `${site} is set in configuration (FIRST_PARTY_SITES)` }, { status: 409 });
   const who = (await sessionIdentity(req, env))?.accountId ?? "operator";

@@ -207,14 +207,24 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
-| `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
-| `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |
-| `release-please.yml` — versioning + changelog | push (main) | Release |
+| `release-please.yml` — versioning + changelog, then the three below for a new release | push (main) | Release |
+| `desktop-release.yml` — Bun desktop binaries | called by `release-please.yml` + manual | Release |
+| `oci-stack.yml` — the Oracle Cloud one-click stack zip | called by `release-please.yml` + manual | Release |
+| `release-verify.yml` — git bundle, source archive, `pocket.sh`, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
 
 A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
 `ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
 and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/` or `ci.yml` changes.
 When the diff cannot be read, every job runs.
+
+### Cutting a release
+
+A release is cut by merging the release PR that `release-please.yml` keeps open on `main`. The merge creates the
+`vX.Y.Z` tag and the GitHub release, and the same run builds the desktop binaries and the OCI stack zip, then runs
+`release-verify.yml`, which fails when an expected asset is missing. A `v*` tag pushed by hand starts none of
+these. To rebuild a release's assets, run `desktop-release.yml` or `oci-stack.yml` from the Actions tab with
+**Run workflow** and the tag (for example `v1.0.0`), then run `release-verify.yml` with the same tag, so
+`SHA256SUMS` and the attestations cover the new files.
 
 ## Next
 
