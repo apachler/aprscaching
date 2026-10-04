@@ -97,7 +97,7 @@ reason. A message the instance could not read shows there the same way.
 
 ### Where it lands
 
-- **Heard on the air by one of the instance's own receiving stations**: the log is written at once.
+- **Heard on the air by a receiving station the instance trusts**: the log is written at once.
 - **Sent from the app's own radio bridge** (**Settings** → **My radio (browser)**): written at once too, since
   your device signs it.
 - **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message): it waits under **You** →
@@ -117,7 +117,7 @@ one of two badges:
 ### Acknowledgements and limits
 
 - Your radio gets an acknowledgement when it numbers the message. Most radios number messages that want one.
-- A text reply, such as *AC-1234 found, logged Tier A*, comes only if your sysop turns replies on. `HELP` is
+- A text reply, such as *AC-1234 found, Radio-verified*, comes only if your sysop turns replies on. `HELP` is
   answered either way. You get at most one reply every 10 minutes.
 - A retry of the same message within 30 minutes is only acknowledged again, never logged twice.
 - One callsign may send ten commands an hour, all its SSIDs together. More are ignored, with no

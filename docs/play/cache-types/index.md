@@ -6,7 +6,7 @@ every type on one table; each type has its own page.
 | Type | What it is | "Found" means | Best tier | Map marker |
 |---|---|---|---|---|
 | [**Traditional**](traditional.md) | One container at the pinned spot. | You were at the pin. | **Radio-verified** | green pin, ● |
-| [**Multi-stage**](multi.md) | A chain of stages; each one reveals where the next is. | You were at the pin. Stages are not checked. | **Radio-verified** | blue pin, Ⓜ |
+| [**Multi-stage**](multi.md) | A chain of stages; each one reveals where the next is. | You unlocked every stage and were at the last one. | **Radio-verified** | blue pin, Ⓜ |
 | [**Living (APRS)**](living.md) | An APRS station on the move. | You and the station were in the same place at the same time. | **Radio-verified** | blue beacon icon |
 | [**Audio**](audio.md) | A clue you hear, in the gallery or a stage. | You were at the pin. | **Radio-verified** | sand pin, ♪ |
 | [**Virtual**](virtual.md) | A place to visit, with no container. | You were at the pin. | **Radio-verified** | blue pin, ◇ |
@@ -18,7 +18,7 @@ every type on one table; each type has its own page.
 
 "At the pin" means within 150 m of it, plus the accuracy of your phone's location. Every type can reach all
 three tiers: **Radio-verified**, **Location-verified** and **Logged**. **Radio-verified** needs a receiving
-station that the instance runs, so it appears only where there is one. [How finds are
+station that the instance trusts, so it appears only where there is one. [How finds are
 verified](../verification.md) explains the tiers.
 
 Players hide the first five types with **+ Hide a cache**. The five heritage types (summits, parks, reserves,

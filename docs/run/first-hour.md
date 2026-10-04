@@ -31,8 +31,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     - `INGEST_SECRET` and `OPERATOR_SECRET` are set and differ, and `SESSION_SECRET` is set or left for the
       gateway to generate ([Secrets and credentials](../reference/secrets.md)).
     - `FED_PRIVATE_KEY` is set, the key the instance signs its feeds with.
-    - `RF_SITE_CALL` and `FIRST_PARTY_SITES` name the callsign-SSID of an RF receiver you operate, if you
-      have one yet.
+    - `RF_SITE_CALL` names the callsign-SSID of an RF receiver you operate, if you have one yet; the gateway
+      trusts it under **Instance admin → Trusted receiving stations** (or `FIRST_PARTY_SITES`).
 
     **Check:** `deploy/aprscaching doctor` reports no failure in its `config` and `gateway` groups.
 
@@ -68,11 +68,13 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     `deploy/aprscaching backup` once; `doctor` then passes `resources.backup`. With `deploy/backup.sh`, look
     for `backup: wrote …` or `backup: uploaded …`.
 
-6. **Attest your RF site.** The installer names it on both sides; with a second ingest box, add its
-   `RF_SITE_CALL` to `FIRST_PARTY_SITES`. Only frames a listed site's own receiver heard directly reach
-   Tier A ([why](../reference/trust-model.md#transport-is-not-trust)).
+6. **Trust your RF site.** The installer names it on both sides. With a second ingest box, trust its
+   `RF_SITE_CALL` under **Instance admin → Trusted receiving stations**, or switch on **Trust this station's
+   hearings** for an enrolled box (or add the call to `FIRST_PARTY_SITES`). Only frames a trusted site's own
+   receiver heard directly reach Tier A ([why](../reference/trust-model.md#transport-is-not-trust)).
 
-    **Check:** the *First-party RF sites* item under **Instance admin → Setup** names your site call.
+    **Check:** your site call shows under **Instance admin → Trusted receiving stations**, and the *Trusted
+    receiving stations* item under **Instance admin → Setup** counts it.
 
 7. **Join the network.** Add the peers you know to `FED_PEERS` and ask their operators to add yours: see
    [Join the network](federation/index.md#joining-the-network).

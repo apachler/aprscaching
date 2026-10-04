@@ -48,7 +48,7 @@ Next to each callsign, **Settings → Account** shows whether a public licence r
 | **not in a public register** | No register this instance reads lists the call. |
 
 The register badge shows that a licence exists, not who uses it. Only **✓ you control this call** shows that
-the call is yours. Many countries publish no register, so **not found** is normal. It never stops you from using the call.
+the call is yours. Many countries publish no register, so **not in a public register** is normal. It never stops you from using the call.
 See [Licence registers](../reference/licence-sources.md) for the registers.
 
 ## All settings
@@ -69,6 +69,8 @@ Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, 
 | **Home weather station** | Your own weather station ([Weather stations](../shack/rig-weather.md#weather-stations)) |
 | **My stations** | Your stations and living caches |
 | **My radio (browser)** | A radio connected to the browser ([Connect your radio](../shack/my-radio.md)) |
+| **Announce finds** | Each verified find sent to APRS-IS as a status message; off by default, needs a verified callsign ([Announce your finds](log-a-find.md#announce-your-finds-on-aprs-is)) |
+| **Near-cache radio message** | An APRS or MeshCom message to your radio near a cache; off by default, needs a verified callsign ([The "you're near" prompt](find-a-cache.md#the-youre-near-prompt)) |
 | **Notifications** | **Email digest**, **Browser push** and the **Watchlist** ([Alerts](community.md#alerts-and-the-watchlist)) |
 | **Locale & time** | Language, date and number format, time zone |
 | **Your data** | Export or erase your data |

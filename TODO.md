@@ -9,35 +9,91 @@ are fixed, not listed.
 Each item carries a rough **priority · size** where useful — `P1`–`P3` (higher = sooner) and
 `S`/`M`/`L` (effort). Deferred work is grouped by _why_ it waits, not by area.
 
-## Before 1.0.0 — the launch list (ships once the courtesy contacts are sent and the release pipeline is green)
+## Before 1.0.0 — the launch list
 
-Everything below this section is deliberately post-1.0. These five are in the tag because launch
-timing is what makes them worth doing: copy and onboarding land while first impressions are being
-formed, courtesy contacts go out before the audience finds us, and a release artifact needs a
-release. Listed in start order — the first two have outside dependencies and lead times.
+Everything below this section is deliberately post-1.0. These items are in the tag because launch timing is what
+makes them worth doing: contacts with outside programmes go out before the audience finds us, the public
+instance and its legal pages must answer on the day, and a release artifact needs a release. They are listed in
+start order: the first ones wait on replies from outside, so they start first, and the release itself is last.
 
-- [ ] **OpenCaching import compliance** _(S — start first, it needs a contact round)_ — opencaching.de
-      content is CC BY-NC-ND 3.0 DE, and the German legal code is what the conditions below follow from.
-      Its non-commercial test covers acts "nicht **vorrangig** auf einen geschäftlichen Vorteil oder eine
-      geldwerte Vergütung gerichtet" — the direction of the act, not the identity or funding of the user
-      — so recognition-only donations that never gate a feature do not make the import commercial. Its
-      derivative clause puts collections outside the ND restriction outright: "Nicht als Abwandlung des
-      Schutzgegenstandes gelten seine Aufnahme in eine Sammlung oder ein Sammelwerk." An unmodified
-      import rendered as a collection therefore sits inside the licence; a transformed one does not.
-      Conditions: keep the OKAPI-appended attribution (`© <user>, www.opencaching.de, CC-BY-NC-ND, as of
-<date>`) intact and visible; render OC content verbatim with clickable links, never truncated,
-      reformatted, translated, or merged into a first-party cache record; never re-export OC-derived data
-      through federation; and honour a per-listing removal request, because the licensor of each listing
-      is its individual owner and not the platform. Ask Opencaching Deutschland e.V.
-      (kontakt@opencaching.de) to confirm the reading in writing when requesting the OKAPI consumer key —
-      the same contact round as the courtesy contacts above. Import stays off unless `OKAPI_BASE` +
-      `OKAPI_KEY` are set (`workers/gateway/src/env.ts`), so the tag ships without it if the reply is
-      slow.
-- [ ] **Trademark courtesy contacts** _(S)_ — a courtesy heads-up to POTA
-      (help@parksontheair.com) and to the SOTA Reflector third-party-software category about the spots
-      integration, and to APRS Foundation, Inc. about the use of the APRS® mark, sent before the public
-      launch rather than after it. The trademark and non-affiliation lines they concern are live on the
-      landing page, in Settings → Help & credits, in [`docs/about.md`](docs/about.md) and in the README.
+- [ ] **Third-party contacts** _(S — start first, replies take time)_ — sent before the public launch, not after
+      it. The trademark and non-affiliation lines they concern are live on the landing page, in Settings → Help &
+      credits, in [`docs/about.md`](docs/about.md) and in the README.
+  - [ ] POTA: a courtesy note to help@parksontheair.com about the spots and the park import.
+  - [ ] SOTA: a post in the SOTA Reflector's **Third Party Software** category about the spots, the summit
+        lookups and the region import, asking whether the request rates and the credit line suit the SOTA MT.
+  - [ ] The APRS® mark: ask who holds it today and how to credit it. APRS Foundation, Inc. has no email
+        address, only the form at https://www.aprsfoundation.org/contact-us/; TAPR answers at contact@tapr.org.
+        See _APRS mark re-check_ below.
+  - [ ] WWFF: ask directory@wwff.co for permission to show directory references; `wwff` stays refused until the
+        operator names it in `IMPORT_ALLOW`.
+  - [ ] IOTA: ask info@iota-world.org for permission beyond personal home use; `iota` stays refused the same
+        way.
+  - [ ] GMA: ask support@gma.rocks for an API key; GMA spots stay off until `GMA_API_KEY` is set.
+  - [ ] Optional courtesy notes: ICSSW (oe3mzc@icssw.org) about MeshCom and the MeshMap credit, and
+        OpenTopoMap, which asks to hear how its map is used.
+- [ ] **OpenCaching import compliance** _(S — needs a reply in writing)_ — opencaching.de content is CC BY-NC-ND
+      3.0 DE, and the German legal code is what the conditions below follow from. Its non-commercial test covers
+      acts "nicht **vorrangig** auf einen geschäftlichen Vorteil oder eine geldwerte Vergütung gerichtet" — the
+      direction of the act, not the identity or funding of the user — so recognition-only donations that never
+      gate a feature do not make the import commercial. Its derivative clause puts collections outside the ND
+      restriction outright: "Nicht als Abwandlung des Schutzgegenstandes gelten seine Aufnahme in eine Sammlung
+      oder ein Sammelwerk." An unmodified import rendered as a collection therefore sits inside the licence; a
+      transformed one does not. The importer keeps each cache's OKAPI `attribution_note` and owner and shows
+      them with a link to the listing, and imported places never leave the instance: exports carry native
+      caches only, and federation never re-exports them. A per-listing removal request is honoured, because the
+      licensor of each listing is its owner, not the platform. Left: get the OKAPI consumer key through the
+      self-service form at https://www.opencaching.de/okapi/signup.html, and ask Opencaching Deutschland e.V.
+      (kontakt@opencaching.de, Cc verein@opencaching.de) to confirm this reading in writing; the email is for
+      that confirmation only. Import stays off unless `OKAPI_BASE` + `OKAPI_KEY` are set, or an import request
+      names a node's `{url, key}` (`workers/gateway/src/import/sources.ts`), so the tag ships without it if the
+      reply is slow.
+- [ ] **APRS tocall registration** _(S — needs a reply)_ — `APZACG`, the default tocall in the gateway, the
+      ingest and the browser bridge, lies in the experimental `APZ` range, which aprs-deviceid reserves for
+      development. Request `APACG?` (free in `tocalls.yaml`) through a GitHub issue at
+      https://github.com/aprsorg/aprs-deviceid/issues, then switch the default tocall in the code to the
+      allocated one.
+- [ ] **Support channel and funding wording** _(S — owner decision)_ — GitHub Discussions are off, yet
+      `SUPPORT.md`, `.github/ISSUE_TEMPLATE/config.yml` and [`docs/play/help-faq.md`](docs/play/help-faq.md)
+      link them: enable Discussions, or point those three at issues. `SUPPORT.md`, the README and
+      [`docs/about.md`](docs/about.md) state ARDC grant funding as a fact: keep it only once a grant is awarded.
+- [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, the `VAPID_SUBJECT` default
+      (`mailto:admin@aprscaching.net`, `workers/gateway/src/notify.ts`), an abuse address and a security
+      contact exist and are read; `SECURITY.md` names the security address the owner wants public; optionally a
+      `/.well-known/security.txt` (RFC 9116).
+- [ ] **Imprint and privacy notice for aprscaching.net** _(S — owner and legal review)_ — `OPERATOR_NAME`,
+      `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` set, so `/imprint` meets ECG §5 (name, geographic address, email)
+      and the MedienG §25 disclosure (owner: a small website, or a statement of the editorial line). Review
+      `/privacy` (`workers/gateway/src/legal.ts`) against DSGVO Art. 13: the legal basis per purpose, the
+      retention periods, the full list of rights, the Austrian Datenschutzbehörde as the supervisory authority,
+      the processors (the email provider, and Cloudflare where used) with any third-country transfer, and
+      server and proxy logs.
+- [ ] **Sign-in mail deliverable** _(S)_ — the `EMAIL_FROM` domain has SPF, DKIM (the provider's selector) and a
+      DMARC record (`p=quarantine` once the reports are clean); a sign-in link reaches Gmail, Outlook and GMX
+      inboxes, not spam. The three records are documented in Sign-in links or Your first hour.
+- [ ] **Decide whether the image runs as non-root** _(S — owner decision)_ — `deploy/Dockerfile` sets no
+      `USER`, so the gateway and the ingest run as root in their containers. Switching later means changing the
+      ownership of every existing data volume, so the cheapest moment is before the first public deploy.
+- [ ] **Protect `main`** _(S)_ — branch protection on `main` (no direct pushes, the PR checks required), so only
+      the release PR and `dev` → `main` merges reach it.
+- [ ] **aprscaching.net live** _(M)_ — DNS points at the public instance; `INSTANCE`, `APP_URL` and `RP_ID` are
+      `aprscaching.net` and the API answers on `api.aprscaching.net`; `aprscaching.com` (and `www.`) answer `301`
+      to `.net` at the edge, before any sign-in; TLS and HSTS checked; a passkey registered and used on `.net`;
+      `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
+- [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
+      rehearsed onto a scratch instance; `resources.backup` passes in the doctor.
+- [x] **Docs current with the code** — the manual, this file and the changelog match what `dev` ships: trusted
+      receiving stations, media limits and offline tiles in the API reference, every migration in the data
+      model, the player pages.
+- [x] **CHANGELOG overview current** — the deployment shapes counted right, and MeshCom, the Mailbox, the near
+      prompt and near radio message, the compass Find view and lent receivers listed.
+- [ ] **Release pipeline proven** _(S — last)_ — in the repository settings, enable _Settings → Actions → General
+      → Allow GitHub Actions to create and approve pull requests_ (release-please opens the release PR with
+      `GITHUB_TOKEN`; the setting is off). Run `release-verify.yml` once by `workflow_dispatch` (it has never
+      run). Merge `dev` → `main`; check that the release PR proposes 1.0.0 and puts its generated entry above the
+      hand-written overview in `CHANGELOG.md`; merge it. Confirm the release carries the OCI stack zip, the
+      desktop binaries, `SHA256SUMS` and the attestations, and that the README's "Deploy to Oracle Cloud" button
+      resolves. Then merge `main` back into `dev`, so the version bump lands there.
 - [x] **Privacy-first APRS-map positioning** — the four invariants that differentiate us from incumbent
       APRS maps are stated where a visitor and an operator each meet them: a _What we do with your beacons_
       section on the landing (`apps/web/src/Landing.tsx`), and _Privacy by default_ in
@@ -65,8 +121,14 @@ release. Listed in start order — the first two have outside dependencies and l
 These are blocked on physical radio, a real peer, or a network no CI runner has — not on code.
 
 - [ ] **Pocket with a Bluetooth TNC in the phone's browser** — Web Bluetooth in Brave (enabled in
-      `brave://flags`) with a BLE KISS TNC, and Termux:Boot autostart, are not yet tested on a phone; the
+      `brave://flags`) with a BLE KISS TNC, and Termux:Boot autostart, are untested on a phone; the
       "tested on" table in [`docs/run/install/pocket.md`](docs/run/install/pocket.md) records what is.
+- [ ] **MeshCom KISS on a real node** — the KISS link to a MeshCom node (`MESHCOM_KISS_PORT`, the node's KISS
+      password in `MESHCOM_KISS_PASS`, answers sent through the node under the service call) is built and covered by unit tests, and is
+      untested against node hardware ([`docs/run/radios/meshcom.md`](docs/run/radios/meshcom.md)).
+- [ ] **The packet terminal over a Bluetooth KISS TNC** — the terminal's BLE KISS connection, Mobilinkd's BLE
+      KISS service included, is untested on hardware
+      ([`docs/shack/packet-and-bbs.md`](docs/shack/packet-and-bbs.md)).
 - [ ] **Owned-RF Tier A** — genuine Tier-A corroboration needs a receiver _you_ operate and attest for.
       The provenance seam is built and Tier A is designed-for; standing up the RF site is hardware, not code.
       Its amateur-IP reachability is a 44Net Connect address
@@ -80,9 +142,10 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
       `FA` proposals, `FS !offset` resume) and wired into the FBB session — compression is offered via
       `BBS_FORWARD_COMPRESS` and engages only when the partner's SID also advertises `B` (else it negotiates
       back to ASCII). FBB MD5 link auth (`fbb-auth.ts`) is built and tested. Byte-level round-trips,
-      negotiation, and resume are unit-tested; the live compressed peer is the byte-capable F6FBB container
-      (`fbbcomp`) — the only remaining step is validating an end-to-end compressed session against it at
-      deploy. Wire facts pinned in [`tools/interop/LZHUF-SPEC.md`](tools/interop/LZHUF-SPEC.md).
+      negotiation, and resume are unit-tested. Wire facts pinned in
+      [`tools/interop/LZHUF-SPEC.md`](tools/interop/LZHUF-SPEC.md).
+- [ ] **Compressed FBB session against F6FBB** _(P2 · S)_ — run `fbb-forward.mjs` with `BBS_FORWARD_COMPRESS`
+      against the interop F6FBB (`fbbcomp = OK 3`) and assert B1 negotiation and a compressed delivery.
 - [ ] **Live-radio behaviour** — the pure codecs (KISS/AX.25, Meshtastic protobuf, CW/PSK31, CAT/`rigctld`,
       AXUDP/AXIP) are unit-tested; lighting them up on real hardware (a TNC, a rig, a raw-IP socket, off-air
       weak signals) is a field/deploy step by nature. See [`docs/run/radios/rf-ingest.md`](docs/run/radios/rf-ingest.md).
@@ -92,7 +155,7 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
 The standing bar: each transport driver the box or browser can be configured to use gets one CI leg
 where the counterpart is the reference implementation hams actually run — a unit-tested codec is
 necessary but not sufficient (the AXUDP CRC trailer, `BROADCAST NODES`, and the FBB registration
-gate were all found only against real partners). The protocol × partner matrix in
+gate each show up only against a real partner). The protocol × partner matrix in
 [`tools/interop/README.md`](tools/interop/README.md) is the source of truth; every leg landing
 updates it. Paths CI physically cannot host (Web Serial/BLE KISS, soundcard AFSK on air, real
 radios) stay documented validate-at-deploy entries — visible, never silently absent.
@@ -120,21 +183,19 @@ transport becomes core:
       (hostmode/AGWPE/Multiport) is byte-stream-agnostic; run it headless in Node against the same
       Direwolf/tfkiss partners so ONE conformance suite covers the box drivers and the shack
       drivers alike.
-- [ ] **Client-side conformance legs** — the Station hub's southbound servers dialled by real
-      third-party clients (listed under the hub, which is parked).
 
 ## Station hub — parked until after launch
 
 _The box as protocol driver + universal hardware interface (owner-decided design)._ Parked: it is a
 separate product scope that carries transmit liability, and it does not advance the caching game.
 
-The inversion of the transport work above: today the box _consumes_ protocols; this program makes
+The inversion of the transport work above: the box _consumes_ protocols; this program makes
 it also _serve_ them, so third-party packet software uses our box as its TNC/driver (the TFPCX
 role, over TCP/pty instead of a DOS TSR) — and drives every kind of shack hardware underneath.
 One radio, many applications: every app sees RX, the hub arbitrates TX, and the platform ingest
 taps everything that flows through. Decided scope: all three southbound servers, TNC2 emulation,
-shared arbitration, hardware tier 1 through PACTOR, the full rig program including re-export, the full
-PTT set, GPS, a separate hub daemon, weekly client-conformance legs, and fringe hardware as tier 3.
+shared arbitration, core hardware through PACTOR, the full rig program including re-export, the full
+PTT set, GPS, a separate hub daemon, weekly client-conformance legs, and fringe hardware last.
 
 **Architecture** — new `packages/hub` (pure protocol/driver cores, unit-testable) + a separate
 hub daemon process shipped in the same box image next to the ingest process: crash-isolated,
@@ -154,7 +215,7 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
       app receives RX; TX serialized through a fair per-port queue with per-app budgets; session
       ownership tracked so connected-mode links stay coherent.
 
-**Northbound hardware drivers (tier 1, 4c):**
+**Northbound hardware drivers (core hardware):**
 
 - [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS incl. SMACK CRC variant.
 - [ ] **KISS-TCP + AGW client** _(P1 · S)_ — attach Direwolf/QtSoundModem/other hubs as modems.
@@ -164,12 +225,12 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **SCS PACTOR hostmode** _(P2 · L)_ — PTC-II/P4dragon hostmode incl. PACTOR level
       negotiation; unlocks Winlink-grade HF forwarding through the same BBS/forward stack.
 
-**Rig control, keying, position (5c · 6a · 7a):**
+**Rig control, keying, position:**
 
 - [ ] **rigctld client** _(P1 · S)_ — talk to an existing hamlib rigctld (net) for
       frequency/mode/PTT; band-tag everything the hub ingests.
 - [ ] **Direct CAT serial drivers** _(P2 · M)_ — Icom CI-V, Kenwood, Yaesu protocol families for
-      zero-dependency setups.
+      zero-dependency setups — the codec is `packages/aprs/src/cat.ts`; the hub driver is what's left.
 - [ ] **rigctld-compatible re-export server** _(P2 · M)_ — the hub serves the rigctld wire
       protocol so logging/digimode apps share the rig through us — same bridge idea as packet.
 - [ ] **PTT/keying paths** _(P2 · M)_ — CAT PTT, serial RTS/DTR, CM108 GPIO, Raspberry Pi GPIO;
@@ -183,8 +244,8 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
       of the interop suite: real third-party clients dial OUR servers in CI (Direwolf as AGW/KISS
       client, `call`/axcall via kissattach against our KISS-TCP, tfkiss-driven hostmode session,
       hamlib `rigctl` against the re-export). Every server above lands with its leg.
-- [ ] **Tier-3 fringe hardware** _(P3 · L)_ — Meshtastic serial/BLE, LoRa RNode, RX-only SDR via
-      rtl_tcp: roadmap-listed, attempted opportunistically after tiers 1–2.
+- [ ] **Fringe hardware** _(P3 · L)_ — LoRa RNode, RX-only SDR via rtl_tcp: roadmap-listed, attempted
+      opportunistically after the core hardware.
 
 ## Native packaging
 
@@ -243,12 +304,9 @@ Next release:
       each cache's log (mono-callsign glory) plus daily/weekly find-streak souvenir badges.
 - [ ] **Cache-centric watchlist triggers** _(next release · P1 · S/M)_ — HamAlert-pattern triggers on
       the existing watchlist + push/email-digest plumbing: new cache within X km / in grid Y, FTF still
-      open, living cache activated nearby, your hide was found.
-- [ ] **Shack dashboard** _(next release · P1 · M)_ — a kiosk-able full-screen shack surface: greyline
-      world map, propagation (SFI/K-index), live cache + POTA/SOTA spots, award progress — Pi-friendly
-      over the free read API, in the retro identity. Fills the shack-display gap HamClock's shutdown left
-      open. Built on the tool widget model, so the full program — surface, widgets, feeds, kiosk — is in
-      _Tool ecosystem: marketplace & dashboard widgets_ below.
+      open, living cache activated nearby (a hider is already alerted when their cache is found).
+The **Shack dashboard** (greyline, propagation, spots, award progress, kiosk) is scoped under _Tool ecosystem:
+marketplace & dashboard widgets_ below.
 
 Backlog (P3 unless noted):
 
@@ -270,8 +328,8 @@ Backlog (P3 unless noted):
       check-ins and a check-in streak badge.
 - [ ] **Elmer/mentor pairing** _(M)_ — opt-in mentor matching per region/topic with recognition
       badges for both sides; contact stays in-platform (thin, opt-in profiles).
-- [ ] **Logbook sync (Wavelog/Cloudlog)** _(M)_ — extend the ADIF export into a pull API the
-      self-hosted logbook tools consume (they handle LoTW/eQSL/QRZ onward).
+- [ ] **Logbook sync (Wavelog/Cloudlog)** _(M)_ — builds on the QSO logbook (Future ideas): extend the ADIF
+      export into a pull API the self-hosted logbook tools consume (they handle LoTW/eQSL/QRZ onward).
 - [ ] **Winlink/SMS gateway UI** _(M)_ — friendly compose surfaces over the open APRSLink
       (Winlink↔APRS email) and APRS-SMS gateways from the messages surface.
 - [ ] **Meshtastic cache mode** _(M/L)_ — caches discoverable and loggable over Meshtastic by licensed
@@ -312,8 +370,8 @@ Next release:
 
 - [ ] **`ToolSurface` rename (prerequisite)** _(next release · P1 · S)_ — the tools package exports
       `Surface` (a tool's host surface) while `packages/shared/src/surfaces.ts` exports an unrelated
-      `Surface` (the app's page sitemap), and `apps/web/src/shack/apps.ts` sits between the two. Rename
-      the tools-package type to `ToolSurface` before the package becomes a public contract. Six files,
+      `Surface` (the app's page sitemap), and `apps/web/src/tools/ToolPanels.tsx` imports the tools one.
+      Rename the tools-package type to `ToolSurface` before the package becomes a public contract. Four files,
       mechanical, tests green.
 - [ ] **Dashboard surface, widget nodes + kiosk workspace** _(next release · P1 · M)_ — add
       `dashboard` to the tool surfaces; a widget is a `PanelSpec` rendered on that surface, so the
@@ -336,8 +394,8 @@ Next release:
       TV, Fire TV (browser, or a kiosk launcher for boot-to-app), and old tablets. One install command is
       the pattern those users already know, and it is how the migration actually happens.
 - [ ] **HamClock-migration guide + positioning page** _(next release · P2 · S)_ — the displaced-user
-      window is open now: the original backend sunset in June 2026 and migration write-ups are still
-      circulating. "Run it on the Pi your HamClock used — or on the TV you already own, free." Honest
+      window is open: HamClock's original backend shut down in June 2026 and its users are picking a
+      replacement. "Run it on the Pi your HamClock used — or on the TV you already own, free." Honest
       about OpenHamClock being complementary with a different centre of gravity. Ships with the dashboard
       or it misses the window.
 
@@ -352,7 +410,7 @@ build, and neither gates the release):
       and verifies it independently. A new signed field changes `manifestSigningBytes`, so the shipped
       `hello` tool and `apps/web/public/tools/registry.json` are re-signed in the same change. Must land
       before anyone lists — a required signed field cannot be retrofitted afterwards. Side effect worth
-      having: a script change now forces a version bump and a re-signed manifest.
+      having: a script change forces a version bump and a re-signed manifest.
 - [ ] **Multi-pin registry authority** _(P1 · S)_ — `verifyRegistry` accepts a small allowlist of
       authority keys instead of a single pinned one, so a rotation ships the new key alongside the old and
       older builds keep verifying through the overlap window. Keep the list at three or fewer and cover
@@ -410,23 +468,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   a standing upstream-maintenance cost, and the dashboard is worth running with no first-party server
   at all — that property is the answer to how HamClock died, so it ships proven first.
 
-- [ ] **Station packs for offline use** _(P3 · M)_ — an offline pack also carries the digipeaters, IGates, MeshCom
-  nodes and BBS contacts of its square, for EmComm exercises and for knowing where to beacon with no data. Builds
-  on the locator packs (`GET /api/offline/pack`) and the station read APIs.
-- [ ] **Offline cache drafts** _(P3 · M)_ — hide a cache on site with no connection: a draft with measured
-  coordinates, photos (scaled and thumbnailed in the browser, as uploads are) and text, kept in IndexedDB and
-  submitted for publishing when back online, with its media uploaded then and a review step before it goes live.
-- [x] **PWA offline app shell** — the service worker (`apps/web/public/sw.js`) stores the app shell the
-      build lists (`apps/web/vite-sw.ts`), opens the app from it with no network, waits for the user before a
-      new version replaces the running one, and keeps Web Push; the last signed-in call is remembered on the
-      device for logging offline.
-- [ ] **Run the live mic decode e2e for real** _(P2 · S)_ — the `e2e-audio` CI job installs Chromium with
-  `playwright@1.61.1`, whose revision the repo's `playwright-core` 1.63 does not look for, so
-  `tools/e2e/audio-mic.mjs` prints SKIP and passes without running. Run against a real Chromium, its PSK31
-  decode comes out garbled and different on every run (`" cqde t s nd  teat  q"` for `cq de test`). Fix the
-  decode path (or the synthesised signal's timing), then install the browser with
-  `pnpm exec playwright-core install --with-deps chromium` and fail on a missing browser in CI, as the
-  `e2e-offline` job does.
 - [ ] **10-foot TV mode** _(P2 · S)_ — a kiosk variant for a TV across the room: large type,
       overscan-safe margins, no pointer or hover dependency, and a burn-in guard (slow pixel shift plus a
       dim schedule). One mode covers Fire TV, Android TV, and the Samsung/LG browsers. A free web route is
@@ -461,16 +502,13 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       client↔backend protocol so an orphaned HamClock can point `-b` at an instance. Parked: revisit only
       if the community backends falter and the feed proxy already covers most of the data products.
 
-## Future ideas (not yet built, still wanted)
+## Future ideas
 
-- [ ] **How a station was heard, on the map** _(P2 · M)_ — the station panel and the pins name no
-      transport: MeshCom shows only as `meshcom` in a station's raw packets, and track replay says RF or IS.
-      Show a "Heard via" line and a badge (APRS-IS, RF on a TNC, MeshCom direct with the receiving node,
-      MeshCom relayed), and let the Nearby list filter by it. The gateway stores the transport per position
-      and the receiving node per packet; the stations query, `StationSummary`, the live `StationDelta` and
-      `envelopeForPosition` carry neither yet. MeshCom's relayed hearings and its server copies reach the
-      gateway alike (`aprs_is`); telling them apart needs the ingest to pass the distinction on. The node's own
-      firmware, hardware and battery reach only the ingest log. Display only: no tier changes.
+- [ ] **How a station was heard, on the map** _(P2 · M)_ — the station panel and the pins name no transport
+      for APRS: track replay says RF or IS, and only a MeshCom hearing has its own panel section. Show a "Heard
+      via" line and a badge (APRS-IS, RF on a TNC, MeshCom) and let the Nearby list filter by it. The gateway
+      stores the transport per position; the stations query, `StationSummary`, the live `StationDelta` and
+      `envelopeForPosition` do not carry it. Display only: no tier changes.
 
 - [ ] **Log a mirrored cache here, delivered to its home** _(P2 · L)_ — a cache mirrored from a peer is read-only:
       finds point at a local `caches` row, and only the home instance holds the rules that score a find (its
@@ -489,7 +527,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       - **Box:** new settings `RIGCTLD_HOST` / `RIGCTLD_PORT` (default `127.0.0.1:4532`) in
         `packages/shared/src/configkeys.ts` + `configdocs.ts` (`node tools/config/generate.mjs`). The box opens the
         TCP link and drives `RigctldClient` (`packages/aprs/src/rigctld.ts`, the transport's `send(line)` resolves
-        with the reply lines); it reports `rig` in its capabilities on the commands poll (`apps/ingest/src/boxpoll.ts`
+        with the daemon's reply); it reports `rig` in its capabilities on the commands poll (`apps/ingest/src/boxpoll.ts`
         query, gateway `BoxCaps` in `workers/gateway/src/box.ts`).
       - **Commands:** a box command kind `rig_tune {hz, mode?}` enqueued by the gateway and handled in the
         `boxpoll.ts` switch beside `aprs_msg` / `meshcom_msg`; the result (frequency read back with `f`) returns on
@@ -499,7 +537,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       - **Never PTT:** frequency and mode only. `T` (keying) stays unwired, as transmit is gated on callsign
         control-verification and the box is not a transmit path for the Shack.
       - Docs: `docs/shack/rig-weather.md` (the option), `docs/run/radios/ingest-box.md` (the settings, running
-        `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client now has a user).
+        `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client's user).
       The Station hub's parked **rigctld client** item above is the same client from the hub side.
 
 - [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
@@ -538,9 +576,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       "it's a network" ham-retro aesthetic.
 - [ ] **Ham-radio QSO logbook** _(P3 · M)_ — a worked-stations log (band/mode/freq/RST/grid) with **ADIF**
       import/export and optional LoTW/eQSL/QRZ sync, distinct from the cache logbook.
-- [x] **CoT streaming feed** — `GET /api/cot/stream` is a Server-Sent Events TAK feed alongside the
-      `/api/cot` bbox snapshot: it emits the snapshot then pushes station updates, so ATAK/WinTAK get live
-      pushes. The runtime shells stream `text/event-stream` bodies (the Node shell pipes rather than buffers).
 - [ ] **Live-room region sharding** _(P3 · M)_ — shard the live WebSocket room by geohash so fan-out scales
       past a single global room.
 - [ ] **One-click POI overlay** _(P3 · S)_ — a map-side toggle that live-queries a curated OSM/Wikidata set
@@ -549,45 +584,33 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **Native Meshtastic transports at the ingest box** _(P3 · L)_ — BLE and USB serial at the box, with
       the same licensed-only rule as the node TCP API and MQTT protobuf feeds it reads (the browser path
       already does Meshtastic over Web Serial).
-- [x] **MeshCom transport** — the LoRa ham mesh through a node's ExtUDP JSON interface
-      ([design](docs/contribute/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
-      [operator guide](docs/run/radios/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on
-      Node/Bun/workerd), the RX listener (allowlist, rate cap, dedup with RF upgrade, fan-out, direct LoRa
-      hearings attestable via `FIRST_PARTY_SITES`), the opt-in `MeshcomSender`, and the `meshcom_msg` box
-      command through which gateway features send via the node owner's box.
 - [ ] **MeshCom follow-ups** _(P2 · M)_, in order:
   - bench-test the MeshCom ack for radio commands (`SENDER   :ack<nnn>` handed to the hearing node) on a
     real node ([design](docs/contribute/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
   - replies from the Messages surface to a MeshCom direct message, sent through `MeshcomSender`;
-  - group messages, opt-in per group and rate-limited, if operators ask for them;
+  - sending to a MeshCom group from the Messages surface (the group view is read-only), opt-in per group and
+    rate-limited, if operators ask for it;
   - `rssi`/`snr` as a presence-plausibility signal alongside a direct hearing;
   - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
   - a browser-direct Web Serial/BLE path, after reading the node's serial and BLE protocols from the
     MIT firmware.
-  - **Via-Calls** — done: the destination is the last token of the destination path, so a via path never
-    turns a broadcast or group message into a direct message to a relay; the via list is display
-    metadata, never a link and never trust; the operator's own node's Via setting shows in the station
-    status, the Pocket notification and the box log ([design](docs/contribute/design/meshcom.md#via-calls)).
   - **Watch: automatic via selection and Hey!-based routing** — the firmware's automatic via is commented out
     "for testing" since 2026-07-22 (still so in 4.40a). The disabled code picks the gateway token `HG` on a
     gateway and otherwise the direct neighbour heard within 60 minutes that reports the most neighbours. Once
     it returns, via lists appear without operators setting them, and destinations such as `HG` may reach
     ExtUDP; check the destination rules and the fixtures against it then.
-  - **MeshCom on the map** — done: the node and link store, `/api/meshcom/nodes` and `/links`, the map
-    layer, the links sub-layer and the station panel section
-    ([guide](docs/shack/live-map.md#meshcom-on-the-map)). A network-wide feed from the MeshCom servers is
-    not pursued (owner decision): the map shows what the operator's own node(s) heard and links to MeshMap
-    for the rest.
+  - A network-wide feed from the MeshCom servers is not pursued (owner decision): the map shows what the
+    operator's own node(s) heard and links to MeshMap for the rest
+    ([guide](docs/shack/live-map.md#meshcom-on-the-map)).
   - **Caches on the MeshCom map** ([research](docs/contribute/design/meshcom-tdeck-map.md)) — display only, never
     find evidence. The T-Deck Plus needs firmware 4.35t or later (the screen-rendering fix).
     - [ ] **`CACHES` bot command** _(P2 · M)_ — a MeshCom operator sends `CACHES [grid]` to the bot call
           and gets the nearest caches in one ≤150-byte reply (sender's last beacon when no grid). _Why:_ works
-          on every MeshCom node today, no firmware change. _Notes:_ same command engine and reply path as
+          on every MeshCom node as shipped, no firmware change. _Notes:_ same command engine and reply path as
           [radio find logging](docs/contribute/design/radio-find-logging.md); rate-limited per sender. _Impact:_ first
-          way to discover caches from a handheld without a phone. _Depends on:_ the gateway → box transmit
-          channel and the MeshCom node registry.
+          way to discover caches from a handheld without a phone. _Depends on:_ —
     - [ ] **GPX/CSV cache export per region or grid square** _(P2 · S)_ — `/api/v1` export of caches
           within a Maidenhead square or region in the waypoint format the SD-card overlay reads. _Why:_ feeds
           the overlay and any GPS/mapping tool. _Notes:_ `/api/v1/caches.gpx?bbox=` exists; add `grid=` (a
@@ -601,7 +624,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
           device map without any transmission. _Depends on:_ the grid export.
     - [ ] **Upstream proposal: show received APRS objects on the map** _(P3 · L)_ — a new MeshCom object frame
           type, with expiry and kill-frame support. _Why:_ the dynamic half of the overlay; MeshCom has no
-          object frame today, so the firmware discards objects. _Notes:_ draft in the research page.
+          object frame, so the firmware discards objects. _Notes:_ draft in the research page.
           _Impact:_ events and new caches appear live. _Depends on:_ —
     - [ ] **Upstream proposal: KISS object frames from the client's own call** _(P3 · M)_ — _Why:_ lets a
           client announce objects under the operator's callsign. _Notes:_ draft in the research page; keep
@@ -625,27 +648,30 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
           one-line fix in each function; the issue is drafted in the research page
           ([draft](docs/contribute/design/meshcom-tdeck-map.md#draft-southern-and-western-positions-on-the-t-deck-map)),
           to file on icssw-org/MeshCom-Firmware. _Depends on:_ —
-- [ ] **Bring-your-own-ingest** _(P2 · M)_ — a user binds their local ingest box to a cloud instance
-      they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
-      signed-batch path already authenticates one operator, own-traffic-only), extended with per-user
-      site attestation so a member's IGate can relay third-party RF — sysop-approved, or automated for
-      hams with a 44net-verified hostname via the existing DoH/DNSSEC binding check. Tier-A stays gated
-      on attestation, never on transport.
-- [x] **Instance-served offline tile packs** — the operator's regional PMTiles archive is served at
-  `/tiles/offline.pmtiles` (a file on Node/Bun, the `TILES` bucket on Cloudflare, or `OFFLINE_TILES_URL`);
-  an offline pack keeps the tiles of its square and the offline map draws them
-  ([The offline map](docs/run/install/offline-map.md)).
-- [ ] **Load the map's data without the base style** _(P3 · S)_ — the first cache fetch runs on MapLibre's
+- [ ] **Bring-your-own-ingest, self-service** _(P2 · M)_ — a member binds their own box without a sysop
+      enrollment code, and a box whose 44net-verified hostname passes the DoH/DNSSEC binding check gets its
+      sites trusted automatically. Enrolled boxes and sysop-approved lent receivers (Instance admin → Ingest
+      boxes) already cover the manual path. Tier A stays gated on attestation, never on transport.
+- [ ] **Load the map's data when the base style hangs** _(P3 · S)_ — the first cache fetch runs on MapLibre's
       `load` event (`apps/web/src/platform/useMapInstance.ts`), which fires only once the base style has loaded.
-      When the online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty
-      until the first pan or zoom. Natural shape: also refresh on the style's `error`, or on a short timeout after
-      the map is created.
+      A style request that fails switches to the grid style (on the style's `error`); one that hangs instead
+      leaves the map waiting, and the fallback never triggers. Natural shape: a short timeout after the map is
+      created that switches to the fallback style.
 
-## Legal & attribution follow-ups (from the licensing audit)
+- [ ] **Station packs for offline use** _(P3 · M)_ — an offline pack also carries the digipeaters, IGates, MeshCom
+  nodes and BBS contacts of its square, for EmComm exercises and for knowing where to beacon with no data. Builds
+  on the locator packs (`GET /api/offline/pack`) and the station read APIs.
+- [ ] **Offline cache drafts** _(P3 · M)_ — hide a cache on site with no connection: a draft with measured
+  coordinates, photos (scaled and thumbnailed in the browser, as uploads are) and text, kept in IndexedDB and
+  submitted for publishing when back online, with its media uploaded then and a review step before it goes live.
 
-- [x] **Satellite-layer license** — the shipped satellite layer is EOX `s2cloudless` **2016**, the
-      plain CC-BY 4.0 year, with EOX's year-matched attribution wording; newer (CC BY-NC-SA) years or a
-      licensed provider are an instance override via `VITE_SAT_TILES` + `VITE_SAT_ATTRIBUTION`.
+## Legal & attribution
+
+- [x] **Satellite-layer license** — the shipped satellite layer is EOxCloudless **2016** from EOX's hosted
+      tiles, free for non-commercial use under CC BY-NC-SA 4.0, with EOX's own year-matched attribution; a
+      commercial instance needs EOX's paid licence or another provider, an instance override via
+      `VITE_SAT_TILES` + `VITE_SAT_ATTRIBUTION`. EOX publishes no separate terms for the hosted tiles; ask EOX
+      if an instance's use grows past occasional viewing.
 - [x] **Production vector basemap** — the default vector style is OpenFreeMap `liberty` (keyless,
       no usage caps, OSM attribution from the style); `VITE_BASEMAP_STYLE` points an instance at any
       MapLibre style URL and `VITE_BASEMAP=offline` keeps the self-contained graticule.
@@ -653,13 +679,15 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       `/fonts/` alongside Fredoka/IBM Plex Mono; the CP437 webfont credit (The Ultimate Oldschool PC
       Font Pack, VileR, CC BY-SA 4.0) and the OpenTopoMap/EOX attributions render in
       Settings → Help & credits.
-- [x] **Third-party notices surface** — `/third-party-notices.txt` reproduces the MIT/BSD
-      copyright notices and license texts for react, react-dom, maplibre-gl, uplot, zod, and
-      `@mapbox/jsonlint-lines-primitives` (an MIT-fork with a missing license field — the upstream
-      jsonlint notice applies), linked from Help & credits; minified bundles strip headers, the
-      notices file is the durable surface.
-- [ ] **APRS mark re-check** _(S)_ — re-check USPTO reg. 2058846 (APRS) after the 2027 renewal
-      window; the credits name APRS Foundation, Inc. as the holder. The landing, about and Help & credits
+- [x] **Third-party notices surface** — `/third-party-notices.txt` reproduces the copyright notices and
+      license texts of every library compiled into the bundle (react, maplibre-gl, uplot, zod, pmtiles, fflate,
+      mermaid, node-forge, …; `@mapbox/jsonlint-lines-primitives` takes the upstream jsonlint notice), linked
+      from Help & credits; `apps/web/vite-notices.ts` fails the build when a bundled package has no entry.
+      Minified bundles strip headers, so the notices file is the durable surface.
+- [ ] **APRS mark re-check** _(S)_ — the USPTO record for reg. 2058846 (APRS) lists Tucson Amateur Packet
+      Radio Corporation (TAPR) as the owner, and its renewal is due on 6 May 2027. The credits name APRS
+      Foundation, Inc. as the holder; that credit is pending the owner's confirmation (the APRS® item of
+      _Third-party contacts_ above asks both). Re-check the record after the renewal date. The landing, about and Help & credits
       non-affiliation lines covering it are live (APRS Foundation, Inc., Groundspeak/Geocaching HQ,
       Geocaching Australia, Meshtastic LLC, ARRL, POTA, SOTA, WWFF, WWBOTA, IOTA, TAK Product Center).
 - [ ] **Vendor the third-party test partners (interop peer registry)** _(M)_ — every partner the
@@ -708,10 +736,18 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       promise/assertion bug-catchers while the by-design `any` boundaries stay off. See `eslint.config.types.mjs`.
 - [x] **Burn down the lint warnings** — the fast `pnpm lint` is at **0 warnings**; keep it there (clear
       opportunistically when touching neighbouring code, never let the count grow).
+- [ ] **Run the live mic decode e2e for real** _(P2 · S)_ — the `e2e-audio` CI job installs Chromium with
+      `playwright@1.61.1`, whose revision the repo's `playwright-core` 1.63 does not look for, so
+      `tools/e2e/audio-mic.mjs` prints SKIP and passes without running. Run against a real Chromium, its PSK31
+      decode comes out garbled and different on every run (`" cqde t s nd  teat  q"` for `cq de test`). Fix the
+      decode path (or the synthesised signal's timing), then install the browser with
+      `pnpm exec playwright-core install --with-deps chromium` and fail on a missing browser in CI, as the
+      `e2e-offline` job does.
 - [ ] **Tighten the type-aware warnings** _(P3 · M)_ — promote `lint:types` warnings to errors rule-by-rule
-      as the code is cleaned. **Done so far:** `require-await`, `unbound-method`, `no-base-to-string`, and
+      as the code is cleaned. **Errors:** `require-await`, `unbound-method`, `no-base-to-string`, and
       `restrict-template-expressions` are **errors** (the legitimate exceptions — the Durable Object
-      hibernation handlers must be async; a data property named `apply` — carry a documented inline disable).
+      hibernation handlers must be async; a data property named `apply` — are per-file overrides in
+      `eslint.config.types.mjs`).
       Untrusted request-body fields are coerced through `asStr()` (gateway `app.ts`) / a local equivalent
       (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
       **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
@@ -726,7 +762,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       core of the Node and Bun servers. Self-host behind a Cloudflare Tunnel and CDN covers the Cloudflare use case
       without per-write billing.
 
-## Federation hardening (validation findings)
+## Federation hardening
 
 Each finding and its status is tracked in
 [`docs/reviews/federation-validation-2026-09.md`](docs/reviews/federation-validation-2026-09.md); every fix
@@ -754,13 +790,13 @@ lands with a regression test that fails without it.
       a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
       signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
       without the internet. The `<call>.ampr.org` identity binding is in
-      [`docs/run/federation/index.md`](docs/run/networks/44net-identity.md#peers-by-callsign).
+      [`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#peers-by-callsign).
 - [ ] **Registry DNS lookup through `DOH_URL`** _(P3 · S)_ — `FED_REGISTRY_DNS` always asks Cloudflare's
       resolver (`federation.ts` `registryFromDns`), unlike 44net onboarding and `ampr.org` verification,
       which use `DOH_URL`. _Why:_ an instance on HAMNET without the internet cannot locate its registry by DNS;
-      `FED_REGISTRY` (a document URL) is the workaround meanwhile.
+      `FED_REGISTRY` (a document URL) is the workaround.
 
-## Federation over RF (the wire contracts are in; the bindings land in this order)
+## Federation over RF
 
 The CBOR signed wire format, typed peer endpoints, the two-tier transport seam (sync +
 store-and-forward), and ARDC-verified 44net onboarding are built — see
@@ -799,7 +835,7 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
       verifies each frame against its claimed origin's keys (last-pinned peer key + signed-registry
       binding), applies idempotently by gid, and quarantines unknown or blocked origins — receiving a
       frame lifts no trust and introduces no peer. The rendezvous relay rides the same carrier: `POST
-/federation/relay/<instance>/dispatch` packs a packet-only spoke's queued queries into signed
+      /federation/relay/<instance>/dispatch` packs a packet-only spoke's queued queries into signed
       `relayQuery` frames, the spoke answers off its receive path with signed `relayAnswer` frames, and
       the hub lands them scoped to the answering instance's own queue — signatures bind both directions,
       so no relay secret ever rides the air.
@@ -861,8 +897,5 @@ the reason given:
 
 - [ ] **CI depth & deployment shapes** (next release) — boot the `deploy/` compose stacks in CI
       (full stack + ingest-only: `docker compose up`, wait for the gateway healthcheck, smoke `/health`
-  - the SPA) beyond the current tri-runtime conformance (Node / Worker / Bun), and exercise the
-    federation push-to-hub **rendezvous relay's** corroboration path. Also: full telnet-mode FBB
-    forwarding in the weekly interop loop — register the partner user through the F6FBB sysop console
-    (`xfbbC -c -r`) in the container so the telnet driver forwards end-to-end (the kernel-AX.25 leg
-    already auto-creates users and exercises forwarding over the air).
+      and the SPA) beyond the tri-runtime conformance (Node / Worker / Bun), and exercise the federation
+      push-to-hub **rendezvous relay's** corroboration path.

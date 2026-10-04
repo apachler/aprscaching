@@ -21,7 +21,7 @@ message, and never sent as one.
 ## Read the messages the instance hears
 
 1. Select **Messages** in the left rail. On a phone, select **More**, then **Messages**.
-2. The newest messages come first, each with sender, recipient, age and the network that carried it. A
+2. The **On the air** view lists the newest messages first, each with sender, recipient, age and the network that carried it. A
    message from or to your callsign (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows
    older ones.
 3. To read only your own traffic, select **Mine**: the list keeps the messages from or to any SSID of your
@@ -90,8 +90,8 @@ number) is addressed to no one in particular and stays out of the list: it has i
 
 ## Read MeshCom group chat
 
-When the instance's MeshCom nodes have heard a group message, **Messages** shows a third view, **MeshCom
-groups**. Without one, the view is not there.
+When the instance's MeshCom nodes have heard a group message, **Messages** adds a **MeshCom groups** view beside
+**On the air** and, signed in, **Mailbox**. Without one, the view is not there.
 
 1. Open **Messages** and switch the view to **MeshCom groups**.
 2. Pick a **Group**. Each group shows how many messages the instance keeps; **All (\*)** is the group every
@@ -100,12 +100,12 @@ groups**. Without one, the view is not there.
    directly**, **relayed on the mesh** or **from the MeshCom server**. **Load more** shows older ones.
 
 A message heard by several nodes, or twice, is listed once. The instance keeps group messages as long as the
-other messages, 7 days unless its sysop changes that. The view is read only: sending to a group is not
-available, so write group messages on your own MeshCom node.
+other messages, 7 days unless its sysop changes that. The view is read only.
 
-APRScaching does not send MeshCom messages for you: write them on your own MeshCom node. A direct message to
-the instance's service call is a command (next section). The instance answers it through the node that heard
-it when its sysop allows that ([MeshCom](../run/radios/meshcom.md)).
+You cannot write a MeshCom message in the app: write it on your own MeshCom node. The instance sends MeshCom
+messages only from its service call: answers to commands, Mailbox messages and near-cache messages, through the
+node that heard the station, when its sysop allows that ([MeshCom](../run/radios/meshcom.md)). A direct
+message to the service call is a command (below).
 
 ## Leave a message in the Mailbox
 

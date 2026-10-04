@@ -7,8 +7,8 @@ covers it in full.
 
 **My find shows Logged. Why?**
 Nothing independent placed you at the cache: your phone's location was off, too far away or not allowed, and
-no receiving station heard your beacon. A cache can also ask for a higher tier than yours; the result card then
-says your find is on record but does not count as verified. See
+no receiving station heard your beacon. A cache that needs **Radio-verified** keeps your **Location-verified**
+badge but does not count it as verified; the result card says so. See
 [How finds are verified](verification.md).
 
 **The app asks for my location. What is it used for?**
@@ -17,8 +17,8 @@ the find **Location-verified**. The map also uses it to show where you are and h
 refuse, the find is still logged, as **Logged**. See [Log a find](log-a-find.md).
 
 **I logged the same cache twice.**
-Each cache takes one find from each callsign. The second try shows **You already logged this** and keeps the
-first find. See [Log a find](log-a-find.md).
+Each cache takes one find from each person. Logging it again with the same callsign shows **You already logged
+this** and keeps the first find. See [Log a find](log-a-find.md).
 
 **I have no signal at the cache.**
 Log the find as usual. The app saves it, signs it with the time you made it, and sends it when the signal
@@ -47,9 +47,10 @@ That cache lives on another instance. Log your find there; it shows on your map 
 it. See [Getting to your instance](your-instance.md#instances-and-your-home-instance).
 
 **The "you're near" banner never appears.**
-The banner comes from your APRS position: the instance must receive your beacon near the cache while the app
-is open. Your phone's location alone does not trigger it. See
-[Find a cache](find-a-cache.md#the-youre-near-prompt).
+The app must be open. Either the app has your phone's location (the locate button on the map, **Nearby** or
+**Find**) with a reading accurate to 100 m or better, or the instance hears your APRS beacon from the callsign
+you are signed in with. Each cache prompts once a session, and your own, archived or disabled caches never
+prompt. See [Find a cache](find-a-cache.md#the-youre-near-prompt).
 
 ## Your account
 
@@ -77,8 +78,9 @@ ends. See [Sign out](account.md#sign-out).
 ## The instance
 
 **Who runs this instance?**
-A ham, a club or a group: its [sysop](../glossary.md#sysop). The app does not name the sysop, so ask the
-person or club that gave you the address. See [Getting to your instance](your-instance.md).
+A ham, a club or a group: its [sysop](../glossary.md#sysop). **Settings → Help & credits → About this
+instance** names the sysop's callsign when the instance publishes it; otherwise ask the person or club that gave
+you the address. See [Getting to your instance](your-instance.md#find-out-which-ways-your-instance-offers).
 
 **Where do I report a bug?**
 First search the manual and the project's existing issues. Then ask in

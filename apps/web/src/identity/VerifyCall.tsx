@@ -139,7 +139,7 @@ function siteList(sites: string[]): string {
   return sites.length <= 1 ? (sites[0] ?? "") : `${sites.slice(0, -1).join(", ")} or ${sites[sites.length - 1]}`;
 }
 
-/** Transmit `VERIFY <code>` to the service call; this instance's own receiving site must hear it. */
+/** Transmit `VERIFY <code>` to the service call; a receiving station this instance trusts must hear it. */
 function OnAir(props: { callsign: string; sites: string[]; onVerified: () => void; onNoSite: () => void }) {
   const [ch, setCh] = useState<VerifyChallenge | null>(null);
   const [state, setState] = useState<RfState>("idle");
@@ -193,7 +193,7 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
       <>
         <p className="muted fine">
           Send a short APRS message from <span className="mono">{callsign}</span> (any SSID) with your radio, or a
-          MeshCom message from your node. It counts only when this instance&apos;s own receiving site hears it directly
+          MeshCom message from your node. It counts only when a receiving station this instance trusts hears it directly
           — a copy via APRS-IS, the MeshCom server or other mesh nodes does not.
         </p>
         {props.sites.length > 0 && <Listening sites={props.sites} />}

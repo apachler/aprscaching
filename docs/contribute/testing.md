@@ -199,7 +199,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |
@@ -214,7 +214,9 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
 `ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
-and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/` or `ci.yml` changes.
+and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/`, `deploy/lib/` or `ci.yml` changes. The Deploy helpers
+job runs only when `deploy/aprscaching`, `deploy/lib/`, `deploy/test/`, `deploy/setup.sh`, `deploy/systemd/`,
+`deploy/.env.example`, `deploy/oci/`, `docs/reference/cli.md` or `ci.yml` changes.
 When the diff cannot be read, every job runs.
 
 ### Cutting a release

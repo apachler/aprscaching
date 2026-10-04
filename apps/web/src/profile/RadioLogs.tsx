@@ -83,7 +83,7 @@ export function RadioLogs() {
         Send <span className="mono">FOUND AC-1234</span> (or <span className="mono">DNF</span>,{" "}
         <span className="mono">NOTE</span>, <span className="mono">MAIL</span>, <span className="mono">NEAR ON</span>,{" "}
         <span className="mono">HELP</span>) from your radio to <span className="mono">{service}</span>. A message heard
-        by one of this instance&apos;s own stations is logged at once; one that only came over the internet waits here
+        by a receiving station this instance trusts is logged at once; one that only came over the internet waits here
         for you to confirm.
       </p>
       {error ? (

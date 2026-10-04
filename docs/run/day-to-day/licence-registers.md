@@ -40,7 +40,7 @@ is enough. With cron:
 
 ```bash
 # /etc/cron.d/aprscaching-licence: Sundays 04:30
-30 4 * * 0  aprs  cd /opt/aprscaching && BASE=http://127.0.0.1:8787 OPERATOR_SECRET=… LICENCE_SOURCES=fcc,ised,at,de node tools/licence/import.mjs
+30 4 * * 0  aprscaching  cd /opt/aprscaching && BASE=http://127.0.0.1:8080 OPERATOR_SECRET=… LICENCE_SOURCES=fcc,ised,at,de node tools/licence/import.mjs
 ```
 
 With a systemd service and a `.timer` beside it (`OnCalendar=weekly`):
@@ -49,8 +49,10 @@ With a systemd service and a `.timer` beside it (`OnCalendar=weekly`):
 # /etc/systemd/system/aprscaching-licence.service
 [Service]
 Type=oneshot
+User=aprscaching
 WorkingDirectory=/opt/aprscaching
 EnvironmentFile=/opt/aprscaching/deploy/.env
+Environment=BASE=http://127.0.0.1:8080
 Environment=LICENCE_SOURCES=fcc,ised,at,de
 ExecStart=/usr/bin/node tools/licence/import.mjs
 ```

@@ -128,7 +128,7 @@ One verification covers the callsign and every [SSID](../glossary.md#ssid) of it
 The code is valid for 30 minutes. If it runs out, tap **Get a new code** and send again. After five wrong
 codes, get a new code.
 
-Only a station this instance runs counts, and it must hear you directly over the air. A copy that arrives over
+Only a receiving station this instance trusts counts, and it must hear you directly over the air. A copy that arrives over
 APRS-IS, the internet or other mesh nodes does not count. Anyone can put any callsign on those paths. Your
 APRS-IS passcode proves nothing either.
 

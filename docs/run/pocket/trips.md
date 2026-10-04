@@ -71,13 +71,14 @@ last push, marked stale after `FED_SPOKE_STALE_HOURS` (24) without one.
 
 ### Corroboration
 
-A station vouches for finds only from receiving sites it attests (`FIRST_PARTY_SITES`). A Pocket as installed
+A station vouches for finds only from receiving sites it trusts (**Instance admin → Trusted receiving
+stations**, or `FIRST_PARTY_SITES`). A Pocket as installed
 attests none, so trusting it at home adds no voice to the corroboration quorum.
 
 If the phone attests a site of its own (a USB TNC, a MeshCom node), home and phone are one operator with two keys.
 A peer that added both over 44Net under your callsign counts them as one voice. A peer that added them any other
-way, without a registry entry naming you for both, counts two. Keep the quorum honest: leave `FIRST_PARTY_SITES`
-unset on a phone that follows your home instance.
+way, without a registry entry naming you for both, counts two. Keep the quorum honest: trust no receiving station on a phone
+that follows your home instance, neither in Instance admin nor in `FIRST_PARTY_SITES`.
 
 ### Directly over 44Net
 

@@ -345,11 +345,13 @@ async function insertRow(
   return Number(r.meta?.last_row_id);
 }
 
-/** The reply text for a logged find. */
-const foundText = (code: string, s: FindScore) =>
-  s.result.verified
-    ? `${code} found, logged Tier ${s.result.tier}`
-    : `${code} found, logged unverified (Tier ${s.result.tier})`;
+/** The reply text for a logged find, in the player's tier names: Tier A is Radio-verified, Tier B Location-verified. */
+export const foundText = (code: string, s: Pick<FindScore, "result">) =>
+  s.result.verified && s.result.tier === "A"
+    ? `${code} found, Radio-verified`
+    : s.result.verified && s.result.tier === "B"
+      ? `${code} found, Location-verified`
+      : `${code} found, logged, not verified`;
 
 /** Commit a command's log. Returns the new log id, or `duplicate` when the player already found the cache. */
 async function commitCommand(
