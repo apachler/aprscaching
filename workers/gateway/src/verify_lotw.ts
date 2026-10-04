@@ -21,7 +21,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { markVerified, listeningSites } from "./callsign.js";
+import { recordProof, listeningSites } from "./callsign.js";
 import {
   parseCertificate,
   pemBlocks,
@@ -193,9 +193,10 @@ export async function completeLotwChallenge(req: Request, env: Env): Promise<Res
   if (!(await spendChallenge(env, c, "lotw", challenge))) return noChallenge();
   const by = subjectAttr(chain.anchor, COMMON_NAME_OID) ?? "LoTW";
   const until = new Date(chain.leaf.notAfter).toISOString().slice(0, 10);
-  await markVerified(env, c.cs, "lotw", {
+  const refused = await recordProof(env, c, "lotw", {
     by,
     note: `LoTW certificate serial ${chain.leaf.serialHex}, valid until ${until}`,
   });
-  return json({ verified: true, callsign: c.cs, method: "lotw" });
+  if (refused) return json({ error: refused }, { status: 409 });
+  return json({ verified: true, callsign: c.cs, method: "lotw", claimed: !!c.claim });
 }

@@ -12,6 +12,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, ingestOrServiceBoxOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
+import { handleAdminCallsign } from "./claims.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
 export function adminCalls(env: Env): Set<string> {
@@ -102,4 +103,12 @@ export async function handleAdminVerifications(req: Request, env: Env, callsign?
   if (callsign === undefined && m === "POST") return sysopVerify(req, env, me!.callsign);
   if (callsign !== undefined && m === "DELETE") return sysopRevoke(env, callsign, me!.callsign);
   return new Response("method not allowed", { status: 405 });
+}
+
+/** /api/admin/callsigns/:callsign — look a call up, or release it from its holder (claims.ts). Sysop-only. */
+export async function handleAdminCallsigns(req: Request, env: Env, callsign: string): Promise<Response> {
+  const denied = await requireSysop(req, env);
+  if (denied) return denied;
+  const me = await sessionIdentity(req, env);
+  return handleAdminCallsign(req, env, callsign, me!.callsign);
 }

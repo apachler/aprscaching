@@ -40,11 +40,37 @@ export async function call(
   return { status: res.status, data: await res.json().catch(() => null), cookie };
 }
 
-/** Email sign-up (start → verify). Returns the verify response, or the failing start response. */
+/**
+ * Email sign-up (start → verify). Returns the verify response, or the failing start response. An
+ * ADMIN_CALLSIGNS call registers only through the operator's link, so for one the operator signs in with
+ * the link the way the first-hour flow does, and the address is then set on the account directly.
+ */
 export async function emailSignup(env: Env, email: string, callsign: string, ip?: string): Promise<Res> {
   const start = await call(env, "POST", "/auth/email/start", { email, callsign }, {}, ip);
+  if (start.status === 409 && start.data?.reason === "operator_call") return operatorSignup(env, callsign, email);
   if (start.status !== 200 || !start.data?.devToken) return start;
   return call(env, "POST", "/auth/email/verify", { token: start.data.devToken }, {}, ip);
+}
+
+/** The operator's sign-in link for `callsign`, opened: the account (created when new) and its session. */
+export async function operatorSignup(env: Env, callsign: string, email?: string): Promise<Res> {
+  const link = await call(
+    env,
+    "POST",
+    "/auth/operator-link",
+    { callsign },
+    { "x-operator-secret": "test-operator-secret" },
+  );
+  if (link.status !== 200) return link;
+  const token = new URL(link.data.link).searchParams.get("token");
+  const res = await call(env, "POST", "/auth/email/verify", { token });
+  if (email && res.status === 200)
+    await env.DB.prepare(
+      "UPDATE accounts SET email = ? WHERE account_id = (SELECT account_id FROM account_callsigns WHERE callsign = ?)",
+    )
+      .bind(email.toLowerCase(), callsign.toUpperCase().split("-")[0])
+      .run();
+  return res;
 }
 
 // ---- a software WebAuthn authenticator ----
@@ -197,6 +223,21 @@ export async function passkeyLoginFinish(
     },
     {},
     ip,
+  );
+}
+
+/**
+ * A sysop verifies `callsign` by hand the way Instance admin does: look the call up, then verify it for the
+ * account the lookup showed (`holder`).
+ */
+export async function sysopVerifyCall(env: Env, cookie: string, callsign: string, note = "licence checked") {
+  const seen = await call(env, "GET", `/api/admin/callsigns/${callsign}`, undefined, { cookie });
+  return call(
+    env,
+    "POST",
+    "/api/admin/verifications",
+    { callsign, note, holder: seen.data?.holder?.accountId ?? null },
+    { cookie },
   );
 }
 

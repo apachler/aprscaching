@@ -26,7 +26,13 @@ One account can hold several licensed base callsigns, such as a club call or a c
    you to verify it.
 3. Tap **verify** next to the new callsign ([Verify your callsign](join.md#verify-your-callsign)).
 
-Each callsign is verified on its own. A verified callsign shows **✓ you control this call**.
+Each callsign is verified on its own. A verified callsign shows **✓ you control this call**. An unverified one
+is held, not proven: its licensee can take it over ([Take over your callsign](#take-over-your-callsign)), so
+verify every callsign that is yours.
+
+If **Add** says another account holds the callsign without having proven control, **Take over** opens the
+same steps as [Take over your callsign](#take-over-your-callsign). The callsign then joins your account,
+verified.
 
 **Set active** picks the callsign you operate as. The active one shows **active**. Switching never asks you
 to verify again. Your past finds stay with the callsign you logged them under.
@@ -36,6 +42,35 @@ An [SSID](../glossary.md#ssid) needs no extra step. `-7` (handheld), `-9` (mobil
 
 Finds logged under an SSID, such as `OE8APR-7`, count for the base callsign: on the leaderboard, on your
 profile, for your badges, and for rating a cache you found.
+
+## Take over your callsign
+
+Someone may have signed up with your callsign before you. While that account has not proven control, you can
+take the callsign over by proving that the licence is yours.
+
+1. Tap **Sign in** and type your **Callsign**. The panel says another account holds it.
+2. Tap **Take over**, then **Prove control**.
+3. Pick a **Verification method** and follow it, as in [Verify your callsign](join.md#verify-your-callsign).
+
+When the proof succeeds, the callsign is yours and verified, and you are signed in to a new account. Add a
+passkey or an email under **Settings → Account** right away, so you can sign in again.
+
+The other account keeps what it logged: its finds and caches never move to you. An account that has proven
+control is not taken over this way. If that account holds your licence, ask the sysop of the instance.
+
+The instance operator's own callsign opens only to the licensee who proves control of it, or through the
+operator's sign-in link.
+
+## If you lose a callsign
+
+You lose a callsign when its licensee takes it over, or when the sysop releases it from your account. The app
+tells you under your alerts, and the instance emails you if your account has a confirmed email.
+
+- Your account keeps its other callsigns. The finds and caches you logged under the lost callsign stay yours
+  and now show under your active callsign.
+- If the lost callsign was your only one, your finds and caches show as `FORMER`. Sign in again with an email
+  link and the callsign you operate now: the finds and caches come with you.
+- Your device keys for the lost callsign are removed. Register a key for your active callsign again.
 
 ## The register badge
 
@@ -84,7 +119,7 @@ Dark is the default appearance. Phosphor is a green-screen terminal look.
 Open **Settings → Your data**.
 
 - **Export my data** downloads a full copy of everything the instance holds about you. It includes how each of
-  your callsigns was verified.
+  your callsigns was verified, and every callsign you took over or lost.
 - **Erase my account** removes your account, your keys and your personal data, including the text of every
   message, mail and bulletin you wrote. Your finds stay, but without your name or callsign on them. The app asks **Permanently erase OE8APR?** first; tap **Erase everything**
   to go ahead. The app then signs you out and closes Settings.

@@ -13,6 +13,7 @@ import { baseCall } from "@aprscaching/aprs";
 import { FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { normalEmail, sendEmailConfirmation } from "./email.js";
 import { mailTransport } from "./mail.js";
+import { adminCalls } from "./admin.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -133,13 +134,30 @@ export const isWithdrawnCall = (c: string | null | undefined): boolean => {
   return u === WITHDRAWN || u.startsWith(`${WITHDRAWN}#`);
 };
 
-/** A call as served to readers and peers: any withdrawn marker reads as plain `WITHDRAWN`, so the
- *  per-erasure suffix never links an erased person's rows outside this instance. */
-export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAWN : c);
+/** The marker an account's content shows under once the account holds no call: its last call moved to the
+ *  call's licensee (claims.ts). Each account gets its own suffix (`FORMER#…`), which is also its active-call
+ *  placeholder, so the content follows the account when it takes a call on again. */
+export const FORMER = "FORMER";
+export const formerMarker = (): string =>
+  `${FORMER}#${[...crypto.getRandomValues(new Uint8Array(6))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase()}`;
+export const isFormerMarker = (c: string | null | undefined): boolean =>
+  (c ?? "").toUpperCase().startsWith(`${FORMER}#`);
 
-/** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
+/** A call as served to readers and peers: any withdrawn marker reads as plain `WITHDRAWN`, and any former-holder
+ *  marker as plain `FORMER`, so a per-account suffix never links one person's rows outside this instance. */
+export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAWN : isFormerMarker(c) ? FORMER : c);
+
+/** Base calls that name this instance or a marker, never a person: the erased-owner and former-holder markers
  *  and the service call of an instance with no sysop. A sysop's own service call is their licence. */
-const RESERVED_CALLS = new Set([WITHDRAWN, FALLBACK_SERVICE_CALL]);
+const RESERVED_CALLS = new Set([WITHDRAWN, FORMER, FALLBACK_SERVICE_CALL]);
+
+/** Is `cs` (or its base call) listed in ADMIN_CALLSIGNS? Such a call is registered only through the operator's
+ *  link or a proof of control, never by an unproven sign-up. */
+export const isAdminCall = (env: Env, cs: string): boolean =>
+  [...adminCalls(env)].some((c) => baseCall(c) === baseCall(cs));
 const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
 /** The account holding a base call. `account_callsigns` is the one record of who holds a licence:
@@ -174,15 +192,58 @@ export function holdCall(env: Env, accountId: string, base: string, primary: boo
 /** Can `cs` ever name an account: a well-formed call whose base is not reserved for this instance? */
 export const isRegistrableCall = (cs: string): boolean => REGISTRABLE_CALL.test(cs) && !isReservedCall(cs);
 
-/** Why `cs` cannot open a new account, or null when it can: a malformed or reserved call, or a base
- *  call some account already holds (an SSID never opens a second account on someone else's licence). */
-export async function unclaimableReason(env: Env, cs: string): Promise<string | null> {
-  if (!REGISTRABLE_CALL.test(cs)) return "invalid callsign";
+/** Why a call cannot be taken on without proof of control: its code (`reason` in a 409 answer) and the words. */
+interface CallRefusal {
+  reason: "invalid" | "reserved" | "held" | "held_unverified" | "operator_call";
+  error: string;
+}
+
+/** The refusal of a call some account holds: the holder signs in, or — while the holder has not proven control
+ *  and the call is not the operator's — the licensee takes it over by proving control (claims.ts). */
+async function heldRefusal(env: Env, base: string): Promise<CallRefusal> {
+  if (!isAdminCall(env, base) && !(await isCallsignVerified(env, base)))
+    return {
+      reason: "held_unverified",
+      error:
+        "an account that has not proven control holds this callsign — sign in, or prove you control it to take it over",
+    };
+  return { reason: "held", error: "callsign already claimed — sign in instead" };
+}
+
+/**
+ * Why `cs` cannot be taken on without proof of control, or null when it can: a malformed or reserved call, a
+ * base call some account already holds (an SSID never opens a second account on someone else's licence), or an
+ * ADMIN_CALLSIGNS call, which only the operator's link (`operatorLink`) or a proof of control registers.
+ */
+export async function callRefusal(
+  env: Env,
+  cs: string,
+  o: { operatorLink?: boolean } = {},
+): Promise<CallRefusal | null> {
+  if (!REGISTRABLE_CALL.test(cs)) return { reason: "invalid", error: "invalid callsign" };
   const base = baseCall(cs);
-  if (isReservedCall(base)) return "that callsign is reserved";
-  if (await baseHolder(env, base)) return "callsign already claimed — sign in instead";
+  if (isReservedCall(base)) return { reason: "reserved", error: "that callsign is reserved" };
+  if (await baseHolder(env, base)) return heldRefusal(env, base);
+  if (isAdminCall(env, base) && !o.operatorLink)
+    return {
+      reason: "operator_call",
+      error: "this is the instance operator's callsign — sign in with the operator's link, or prove you control it",
+    };
   return null;
 }
+
+/** Why `cs` cannot open a new account ({@link callRefusal} in words), or null when it can. */
+export async function unclaimableReason(
+  env: Env,
+  cs: string,
+  o: { operatorLink?: boolean } = {},
+): Promise<string | null> {
+  return (await callRefusal(env, cs, o))?.error ?? null;
+}
+
+/** The 4xx answer for a refusal: 400 for a malformed call, 409 otherwise, with its code as `reason`. */
+export const refusalResponse = (r: CallRefusal): Response =>
+  json({ error: r.error, reason: r.reason }, { status: r.reason === "invalid" ? 400 : 409 });
 
 /** Does this account hold the base call of `cs`? Keys and calls bind only to a licence the account holds. */
 export async function accountHoldsCall(env: Env, accountId: string, cs: string): Promise<boolean> {
@@ -243,7 +304,16 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
   const hasPasskey = acct
     ? await env.DB.prepare("SELECT 1 FROM credentials WHERE account_id=? LIMIT 1").bind(acct.accountId).first()
     : null;
-  return json({ callsign: cs, exists: !!acct, hasPasskey: !!hasPasskey, licence: await licenceFor(env, cs) });
+  // whether a licensee who is not this account's owner can take the call over, or must register it by proof
+  const refusal = REGISTRABLE_CALL.test(cs) ? await callRefusal(env, cs) : null;
+  return json({
+    callsign: cs,
+    exists: !!acct,
+    hasPasskey: !!hasPasskey,
+    claimable: refusal?.reason === "held_unverified",
+    operatorCall: refusal?.reason === "operator_call",
+    licence: await licenceFor(env, cs),
+  });
 }
 
 type Cred = {
@@ -277,12 +347,11 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     // Another passkey for a held call is added only from a session of the account that holds it: a new
     // device of the same ham, whichever of the account's calls the session is using.
     const me = await sessionIdentity(req, env);
-    if (!me || me.accountId !== holder)
-      return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
+    if (!me || me.accountId !== holder) return refusalResponse(await heldRefusal(env, baseCall(cs)));
     accountId = holder;
   } else {
-    const refused = await unclaimableReason(env, cs);
-    if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
+    const refused = await callRefusal(env, cs);
+    if (refused) return refusalResponse(refused);
     // Do NOT insert the account here — an unauthenticated begin that pre-claimed the callsign row
     // would let anyone squat W1AW and lock out the real holder. The provisional account id (and
     // email) ride inside the stored challenge and only become a row once the passkey ceremony
@@ -364,8 +433,8 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     if (pending.a) {
       // Passkey proven — NOW create the account. If the callsign was claimed through another path
       // during the ceremony window, refuse rather than bind this passkey to someone else's account.
-      const raced = await unclaimableReason(env, cs);
-      if (raced) return json({ error: raced }, { status: 409 });
+      const raced = await callRefusal(env, cs);
+      if (raced) return refusalResponse(raced);
       try {
         // seed the held-callsign set with this call as the account's primary; the unique base-call index
         // makes a concurrent claim (and the credential's primary key a concurrent registration of the
@@ -563,6 +632,21 @@ export async function handleListCallsigns(req: Request, env: Env): Promise<Respo
   });
 }
 
+/** Why a signed-in account cannot add base call `base` it does not hold: {@link callRefusal}, worded for an
+ *  account that adds a call rather than one that signs in. */
+async function addRefusal(env: Env, base: string): Promise<CallRefusal | null> {
+  const r = await callRefusal(env, base);
+  if (r?.reason === "held") return { ...r, error: "callsign already held by another account" };
+  if (r?.reason === "held_unverified")
+    return {
+      ...r,
+      error: "an account that has not proven control holds this callsign — prove you control it to take it over",
+    };
+  if (r?.reason === "operator_call")
+    return { ...r, error: "this is the instance operator's callsign — prove you control it to add it" };
+  return r;
+}
+
 /**
  * POST /auth/callsigns {callsign} — add another base call to the signed-in account (unverified;
  * verify it by an on-air VERIFY challenge). Does NOT change the active call. A base call can be held by
@@ -574,16 +658,10 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
   const base = baseCall(String(callsign ?? ""));
   if (base.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  if (!REGISTRABLE_CALL.test(base)) return json({ error: "invalid callsign" }, { status: 400 });
-  if (isReservedCall(base)) return json({ error: "that callsign is reserved" }, { status: 409 });
   const holder = await baseHolder(env, base);
-  if (holder)
-    return json(
-      holder === me.accountId
-        ? { error: "you already hold that callsign" }
-        : { error: "callsign already held by another account" },
-      { status: 409 },
-    );
+  if (holder === me.accountId) return json({ error: "you already hold that callsign" }, { status: 409 });
+  const refused = await addRefusal(env, base);
+  if (refused) return refusalResponse(refused);
   try {
     await env.DB.batch(holdCall(env, me.accountId, base, false, nowS()));
   } catch {
@@ -606,12 +684,10 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   const next = baseCall(String(callsign ?? ""));
   if (next.length < 3) return json({ error: "callsign required" }, { status: 400 });
   if (next === me.base) return json({ error: "that is already your active callsign" }, { status: 400 });
-  if (!REGISTRABLE_CALL.test(next)) return json({ error: "invalid callsign" }, { status: 400 });
-  if (isReservedCall(next)) return json({ error: "that callsign is reserved" }, { status: 409 });
-  // a base call held by a DIFFERENT account is off-limits
+  // a base call held by a DIFFERENT account, and an operator call nobody holds, are off-limits
   const owner = await baseHolder(env, next);
-  if (owner && owner !== me.accountId)
-    return json({ error: "callsign already held by another account" }, { status: 409 });
+  const refused = owner === me.accountId ? null : await addRefusal(env, next);
+  if (refused) return refusalResponse(refused);
   const now = nowS();
   // a held call keeps its verification (no re-verify); a brand-new base call is held, unverified
   const verified = owner === me.accountId && (await isCallsignVerified(env, next));

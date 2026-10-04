@@ -327,11 +327,27 @@ describe("sysop manual verification", () => {
     const { env, op } = await sysopEnv();
     const noNote = await call(env, "POST", "/api/admin/verifications", { callsign: "VK2FAR" }, { cookie: op.cookie });
     expect(noNote.status).toBe(400);
+    const body = { callsign: "vk2far-7", note: "checked the licence by video call" };
+    // without naming the holding account the sysop checked, nothing is verified and the holder is shown
+    const unconfirmed = await call(env, "POST", "/api/admin/verifications", body, { cookie: op.cookie });
+    expect(unconfirmed.status).toBe(409);
+    expect(unconfirmed.data).toMatchObject({ reason: "confirm_holder", holder: { activeCallsign: "VK2FAR" } });
+    const wrong = await call(
+      env,
+      "POST",
+      "/api/admin/verifications",
+      { ...body, holder: "someone-else" },
+      {
+        cookie: op.cookie,
+      },
+    );
+    expect(wrong.status).toBe(409);
+    expect(await verified(env, "VK2FAR")).toBe(false);
     const add = await call(
       env,
       "POST",
       "/api/admin/verifications",
-      { callsign: "vk2far-7", note: "checked the licence by video call" },
+      { ...body, holder: unconfirmed.data.holder.accountId },
       { cookie: op.cookie },
     );
     expect(add.status).toBe(201);

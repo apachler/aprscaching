@@ -118,6 +118,22 @@ A copy over APRS-IS, an internet tunnel, the MeshCom server, a mesh relay or the
 verifies a call. The APRS-IS passcode verifies nothing: it is a public hash. Licensing plus
 control-verification is the real gate for anything that keys a transmitter.
 
+### Who holds a callsign
+
+Signing up holds a callsign; it does not prove the licence. So a held call changes hands by proof:
+
+| Holder | How the call can move |
+|---|---|
+| Unverified | Its licensee opens a claim and completes any method above for the call. The call moves to the licensee's account, verified, or to a new account. |
+| Verified | Only the sysop releases it from the account, with a reason. |
+| An `ADMIN_CALLSIGNS` call | Registered only through the operator's sign-in link or a proof of control, never by an unproven sign-up. Once held, the operator settles it. |
+
+The account that loses a call keeps its other calls. What it wrote in the app under the call stays with the
+account and shows under its remaining call, or as `FORMER` when it holds no other; the licensee never inherits
+it. Its device keys on the call go, and the federation hears of it through signed tombstones (the keys and the
+moved finds) and re-served cache records. Positions, stations and messages the radio sent stay with the call.
+Every claim and release is recorded in the holder-change trail, and the previous holder is told.
+
 ## Next
 
 - [How federation stays honest](federation-trust.md): how peers sign and corroborate.

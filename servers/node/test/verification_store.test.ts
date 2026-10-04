@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, operatorVerify, sysopVerifyCall, type Res } from "./helpers/authflow.js";
 import { migrate } from "../src/migrate.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -90,13 +90,7 @@ describe("verification is read from callsign_verifications everywhere", () => {
     const u = await emailSignup(env, "dl1abc@example.test", "DL1ABC");
     const key = newKey();
     await call(env, "POST", "/keys/register", { callsign: "DL1ABC", publicKey: key }, { cookie: u.cookie });
-    const v = await call(
-      env,
-      "POST",
-      "/api/admin/verifications",
-      { callsign: "DL1ABC", note: "licence checked" },
-      { cookie: sysop.cookie },
-    );
+    const v = await sysopVerifyCall(env, sysop.cookie, "DL1ABC");
     expect(v.status).toBe(201);
     expect((await session(env, u.cookie)).verified).toBe(true);
     expect((await call(env, "GET", "/keys/DL1ABC")).data.keys[0].verified).toBe(true);

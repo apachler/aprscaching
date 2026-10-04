@@ -20,7 +20,11 @@
  *  - `operator` — the instance operator confirms an `ADMIN_CALLSIGNS` call with the operator secret
  *    (`tools/admin/verify-call.mjs`), which bootstraps the sysop role on a fresh instance.
  *  - `sysop` — a sysop verifies a call by hand for someone out of range of every attested site, with a
- *    note saying how; it is listed, revocable and logged in `account_events`.
+ *    note saying how and after confirming which account holds the call; it is listed, revocable and logged
+ *    in `account_events`.
+ *
+ * Each method also completes a claim (claims.ts): the licensee of a call an unproven account holds proves
+ * control with the claim's token in place of a session, and the call moves to them.
  *
  * Every verification records its method, who vouched (`verified_by`) and, where useful, a note.
  *
@@ -40,6 +44,16 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
 import { attestedSites } from "./attestedsites.js";
+import type { SqlStatement } from "./runtime.js";
+import {
+  claimByToken,
+  claimOpen,
+  claimPrincipal,
+  rfClaimsFor,
+  completeClaim,
+  callsignView,
+  type Claim,
+} from "./claims.js";
 
 /**
  * The receiving-site calls that can hear a `VERIFY` message: the attested sites, sorted. Site calls are
@@ -82,14 +96,19 @@ export function parseVerifyMessage(text: string): string | null {
  * holder transmits it from their own radio.
  */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
-  const me = await sessionIdentity(req, env);
-  if (!me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
-  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const { callsign, claim: token } = (await req.json().catch(() => ({}))) as { callsign?: string; claim?: unknown };
   const cs = baseCall(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  // a claim's token stands in for a session: its code waits on the claim, apart from the holder's own
+  const claim = token === undefined ? null : await claimByToken(env, token);
+  if (token !== undefined && (!claim || !claimOpen(claim) || claim.callsign !== cs))
+    return json({ error: "no open claim on this callsign — start the claim again" }, { status: 409 });
+  const me = claim ? null : await sessionIdentity(req, env);
+  if (!claim && !me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   // a session proves control only of a licence its account already holds
-  if (!(await accountHoldsCall(env, me.accountId, cs)))
+  if (me && !(await accountHoldsCall(env, me.accountId, cs)))
     return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
+  const starter = claim ? claimPrincipal(claim.id) : me!.accountId;
   // Without an attested receiving site nothing can hear the reply, so a code would only run out.
   const sites = await listeningSites(env);
   if (sites.length === 0)
@@ -102,12 +121,21 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
     );
   const t = Date.now();
   if (
-    (await rateLimitedDurable(env, `aprs-start:acct:${me.accountId}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
-    (await rateLimitedDurable(env, `aprs-start:call:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
+    (await rateLimitedDurable(env, `aprs-start:acct:${starter}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
+    // a claimant's starts and the holder's count apart, so neither can use up the other's
+    (await rateLimitedDurable(env, `aprs-start:${claim ? "claim" : "call"}:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
   )
     return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
   const code = sixDigitCode();
   const now = nowS();
+  if (claim) {
+    await env.DB.prepare(
+      "UPDATE callsign_claims SET rf_code = ?, rf_attempts = 0, rf_created_at = ? WHERE id = ? AND status = 'open'",
+    )
+      .bind(code, now, claim.id)
+      .run();
+    return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC, sites });
+  }
   // A new challenge replaces any pending one but never revokes an existing verification: a verified
   // call stays verified (and keeps its method) while the new code is outstanding.
   await env.DB.prepare(
@@ -118,30 +146,91 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
        status = CASE WHEN callsign_verifications.status = 'verified' THEN 'verified' ELSE 'pending' END,
        challenge=excluded.challenge, account_id=excluded.account_id, attempts=0, created_at=excluded.created_at`,
   )
-    .bind(cs, code, me.accountId, now)
+    .bind(cs, code, starter, now)
     .run();
   return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC, sites });
 }
 
 /** How a call's control was proven. */
-type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
+export type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
 
-/** Mark a base call verified by `method`: the one write of a verification. Every SSID inherits it. */
-export async function markVerified(
+/** The one write of a verification, as a statement for a batch: base call `cs` is verified by `method`. */
+export function verifiedStmt(
+  env: Env,
+  cs: string,
+  method: VerifyMethod,
+  f: { by?: string | null; note?: string | null },
+): SqlStatement {
+  const now = nowS();
+  return env.DB.prepare(
+    `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
+     VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
+     ON CONFLICT(callsign) DO UPDATE SET status='verified', method=excluded.method, challenge=NULL, attempts=0,
+       verified_at=excluded.verified_at, verified_by=excluded.verified_by, note=excluded.note`,
+  ).bind(baseCall(cs), method, now, now, f.by ?? null, f.note ?? null);
+}
+
+/** Mark a base call verified by `method`. Every SSID inherits it. */
+async function markVerified(
   env: Env,
   cs: string,
   method: VerifyMethod,
   f: { by?: string | null; note?: string | null },
 ): Promise<void> {
-  const now = nowS();
-  await env.DB.prepare(
-    `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
-     VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
-     ON CONFLICT(callsign) DO UPDATE SET status='verified', method=excluded.method, challenge=NULL, attempts=0,
-       verified_at=excluded.verified_at, verified_by=excluded.verified_by, note=excluded.note`,
-  )
-    .bind(baseCall(cs), method, now, now, f.by ?? null, f.note ?? null)
+  await verifiedStmt(env, cs, method, f).run();
+}
+
+/**
+ * A verification method succeeded for `c`: verify the call the caller holds, or — for a claim — move the call
+ * to the claimant, verified (claims.ts). Returns the error that refused a claim, or null.
+ */
+export async function recordProof(
+  env: Env,
+  c: { cs: string; claim?: Claim | null },
+  method: VerifyMethod,
+  f: { by?: string | null; note?: string | null },
+): Promise<string | null> {
+  if (!c.claim) {
+    await markVerified(env, c.cs, method, f);
+    return null;
+  }
+  const done = await completeClaim(env, c.claim, method, f);
+  return done.ok ? null : done.error;
+}
+
+/**
+ * A `VERIFY <code>` heard from `cs` that answers an open claim on the call: the code is checked against each
+ * claim's on-air code, and a match completes that claim. Null when no claim waits for a code.
+ */
+async function completeRfClaim(
+  env: Env,
+  cs: string,
+  code: string,
+  site: string | null,
+): Promise<RfChallengeOutcome | null> {
+  const open = (await rfClaimsFor(env, cs)).filter(
+    (c) => c.rfCreatedAt !== null && nowS() - c.rfCreatedAt <= CHALLENGE_TTL_SEC && c.rfAttempts < MAX_ATTEMPTS,
+  );
+  if (open.length === 0) return null;
+  const hit = open.find((c) => timingSafeEqual(c.rfCode ?? "", code));
+  if (!hit) return null;
+  // spend the code before the call moves, so two copies of the message heard at once complete it once
+  const spent = await env.DB.prepare("UPDATE callsign_claims SET rf_code = NULL WHERE id = ? AND rf_code = ?")
+    .bind(hit.id, hit.rfCode)
     .run();
+  if ((spent.meta?.changes ?? 0) !== 1) return "none";
+  const done = await completeClaim(env, hit, "rf_heard", { by: site ? site.toUpperCase() : null });
+  return done.ok ? "verified" : "none";
+}
+
+/** Count a wrong on-air code against every open claim on the call that waits for one. */
+async function failRfClaims(env: Env, cs: string): Promise<boolean> {
+  const r = await env.DB.prepare(
+    "UPDATE callsign_claims SET rf_attempts = rf_attempts + 1 WHERE callsign = ? AND status = 'open' AND rf_code IS NOT NULL",
+  )
+    .bind(cs)
+    .run();
+  return (r.meta?.changes ?? 0) > 0;
 }
 
 /** What an on-air `VERIFY` did: completed the challenge, a wrong code, or nothing to answer. */
@@ -152,7 +241,8 @@ type RfChallengeOutcome = "verified" | "wrong" | "none";
  * heard on the air at an attested site; this checks the rest: the sender's base call is the challenge's
  * call, a challenge is outstanding and within its TTL, the attempts cap is not reached, and the code
  * matches. A wrong code counts an attempt and locks a pending challenge at the cap; an already-verified
- * call keeps its status whatever is sent.
+ * call keeps its status whatever is sent. A code that answers an open claim on the call completes the claim
+ * instead (claims.ts); a wrong code counts against the claims too.
  */
 export async function completeRfChallenge(
   env: Env,
@@ -161,6 +251,20 @@ export async function completeRfChallenge(
   site: string | null,
 ): Promise<RfChallengeOutcome> {
   const cs = baseCall(src);
+  const claimed = await completeRfClaim(env, cs, code, site);
+  if (claimed) return claimed;
+  const own = await completeHolderChallenge(env, cs, code, site);
+  if (own !== "wrong" && own !== "none") return own;
+  return (await failRfClaims(env, cs)) ? "wrong" : own;
+}
+
+/** {@link completeRfChallenge} for the holder's own challenge. */
+async function completeHolderChallenge(
+  env: Env,
+  cs: string,
+  code: string,
+  site: string | null,
+): Promise<RfChallengeOutcome> {
   const row = await env.DB.prepare(
     "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
   )
@@ -262,7 +366,7 @@ export async function handleOperatorVerify(req: Request, env: Env): Promise<Resp
 }
 
 /** Who holds a base call: the account, the call it operates, and the ways it signs in. */
-async function holderIdentity(
+export async function holderIdentity(
   env: Env,
   base: string,
 ): Promise<{ accountId: string; activeCallsign: string; passkeys: number; email: boolean; createdAt: number } | null> {
@@ -316,7 +420,8 @@ export async function listSysopVerifications(env: Env): Promise<Response> {
  * was checked) is required. A call already verified another way is left as it is.
  */
 export async function sysopVerify(req: Request, env: Env, sysopCall: string): Promise<Response> {
-  const { callsign, note } = (await req.json().catch(() => ({}))) as { callsign?: string; note?: string };
+  const body = ((await req.json().catch(() => ({}))) ?? {}) as { callsign?: string; note?: string; holder?: unknown };
+  const { callsign, note } = body;
   const cs = baseCall(String(callsign ?? ""));
   if (!CALL_RE.test(cs)) return json({ error: "a valid callsign is required" }, { status: 400 });
   const why = String(note ?? "").trim();
@@ -332,6 +437,21 @@ export async function sysopVerify(req: Request, env: Env, sysopCall: string): Pr
     .first<{ status: string; method: string | null }>();
   if (cur?.status === "verified")
     return json({ error: `${cs} is already verified (${cur.method ?? "unknown"})` }, { status: 409 });
+  // The verification lands on whichever account holds the call, so the sysop names the account they checked:
+  // `holder` is that account's id (null for a call nobody holds). Without it, or when another account holds
+  // the call now, nothing is verified and the answer shows who holds it.
+  const holder = (await holderIdentity(env, cs))?.accountId ?? null;
+  if (!("holder" in body) || body.holder !== holder)
+    return json(
+      {
+        error: holder
+          ? `confirm that the account holding ${cs} is its licensee before verifying it`
+          : `confirm that nobody holds ${cs} before verifying it`,
+        reason: "confirm_holder",
+        ...(await callsignView(env, cs)),
+      },
+      { status: 409 },
+    );
   const by = baseCall(sysopCall);
   await markVerified(env, cs, "sysop", { by, note: why });
   await logEvent(env, cs, "sysop_verified", { by, note: why });
