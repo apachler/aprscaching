@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk, sessionIdentity, accountHoldsCall } from "./auth.js";
+import { ingestSecretOk, ingestOrServiceBoxOk, sessionIdentity, accountHoldsCall } from "./auth.js";
 /**
  * bbs.ts — the BBS message base: personal mail, bulletins and NTS traffic, moved the F6FBB way only. A
  * station reads and writes it over a connected-mode session (the packet BBS on the ingest box), partner BBSes
@@ -52,13 +52,14 @@ export function isOwnBid(env: Env, bid: string): boolean {
 const mailboxCall = (addr: string): string => (addr.split("@")[0] ?? "").trim().toUpperCase();
 
 /**
- * May the caller act for `call`'s mailbox? The ingest box may (it carries mail for every station it hears
+ * May the caller act for `call`'s mailbox? The ingest box may, on the shared secret or as an enrolled box the
+ * sysop lets run this instance's services (it carries mail for every station it hears
  * and forwards, and its FBB scheduler delivers inbound mail); a signed-in session may when its account holds
  * the call's base call. Anyone else reading or writing a callsign's personal mail would be reading another
  * operator's mail or posting in their name. Returns the response to send, or null to proceed.
  */
 async function requireMailbox(req: Request, env: Env, call: string): Promise<Response | null> {
-  if (ingestSecretOk(req, env)) return null;
+  if (ingestOrServiceBoxOk(req, env)) return null;
   if (req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to use the BBS" }, { status: 401 });
@@ -228,7 +229,7 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
 }
 
 // -------------------------------------- connected-mode BBS session
-const ingestOk = ingestSecretOk;
+const ingestOk = ingestOrServiceBoxOk;
 
 /**
  * GET /api/bbs/session?call=CALL — the per-caller mail snapshot an inbound connected-mode BBS session

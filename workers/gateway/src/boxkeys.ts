@@ -10,20 +10,26 @@
  *   POST /api/admin/boxes/:id/revoke   revoke a box's key, and with it any trust (sysop)
  *   POST /api/admin/boxes/:id/trust    trust the box's receiving sites, or stop: {trusted, sites?} (sysop)
  *   GET  /api/admin/boxes/:id/finds    the finds a trusted box's sites verified (sysop)
+ *   POST /api/admin/boxes/:id/services let the box run this instance's services, or stop: {services} (sysop)
  *   POST /ingest/enroll                a box enrolls: {code, box, key, at, sig} → {box, instance, label, callsign}
  *
  * A signed request carries x-box-id, x-box-at (unix seconds), x-box-nonce and x-box-sig, an Ed25519
  * signature over boxRequestMessage (packages/shared canon.ts): method, path with query, time, nonce and the
  * body's SHA-256. It is fresh for five minutes and accepted once. route() verifies it before any handler
- * runs; a request it verifies holds the ingest plane's rights (ingestSecretOk), scoped to that box where an
- * endpoint names a box.
+ * runs. A request it verifies may deliver what the box hears (/ingest, /ingest/check) and use the box's own
+ * /api/box/:id endpoints (auth.ts ingestOrBoxOk). Only once the sysop marks the box "Runs this instance's
+ * services" may it also run them: the outbox, the packet BBS mailbox, FBB forwarding, the NET/ROM node mirror,
+ * White Pages, federation pages and transmit commands (ingestOrServiceBoxOk). That flag is for a box the sysop
+ * runs; trusting a box's hearings grants none of it. A box key never acts as the shared secret does: it logs
+ * no find, acts for no cache owner, creates and imports no cache.
  *
  * Enrolling grants no trust: an enrolled box is an ingest credential, never an attestation. What it hears
- * counts for Tier A only once the sysop attests its receiving site — in FIRST_PARTY_SITES, as for a box on the
- * shared secret, or with "Trust this station's hearings" in Instance admin (box_trusted_sites), which lets a ham
- * lend their own receiver to an instance they do not run. A box enrolled for a callsign is narrower still: it
- * may name only sites of that base call, and it is trusted only for sites of that base call. Revoking the box
- * ends its trust.
+ * counts for Tier A only once the sysop switches on "Trust this station's hearings" for it in Instance admin
+ * (box_trusted_sites), naming its receiving sites; that is also how a ham lends their own receiver to an
+ * instance they do not run. A box's frames claim only its own trusted sites, never FIRST_PARTY_SITES or the
+ * stations added by call, which count for the shared secret's frames alone (attestedsites.ts). A box enrolled
+ * for a callsign is narrower still: it may name only sites of that base call, and it is trusted only for sites
+ * of that base call. Revoking the box ends its trust and its services.
  */
 import { SIG_DOMAIN, SITE_CALL_RE, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
@@ -38,6 +44,7 @@ import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
 import { forgetAttestedSites } from "./attestedsites.js";
 import { verifiedFinds } from "./trustedsites.js";
+import { readCappedBody } from "./fetchguard.js";
 
 /** A signature is fresh this long either side of the gateway's clock. */
 const FRESH_S = 300;
@@ -54,6 +61,8 @@ const BOX_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const CALL = /^[A-Z0-9]{3,9}$/;
 /** Sites one box may attest: a station has a receiver or two, rarely more. */
 const SITES_MAX = 8;
+/** The largest signed body read: the ingest batch ceiling (ingest.ts). */
+const BODY_MAX = 5 * 1024 * 1024;
 
 const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
@@ -104,7 +113,7 @@ export async function handleListBoxes(req: Request, env: Env): Promise<Response>
   const denied = await requireSysop(req, env, { allowOperatorSecret: true });
   if (denied) return denied;
   const boxes = await env.DB.prepare(
-    `SELECT box_id AS box, label, callsign, enrolled_by AS enrolledBy, enrolled_at AS enrolledAt,
+    `SELECT box_id AS box, label, callsign, services, enrolled_by AS enrolledBy, enrolled_at AS enrolledAt,
             revoked_by AS revokedBy, revoked_at AS revokedAt, last_seen_at AS lastSeenAt
        FROM box_keys ORDER BY enrolled_at DESC`,
   ).all<{ box: string } & Record<string, unknown>>();
@@ -123,6 +132,7 @@ export async function handleListBoxes(req: Request, env: Env): Promise<Response>
   for (const r of trust.results ?? []) byBox.set(r.box, [...(byBox.get(r.box) ?? []), r]);
   const list = (boxes.results ?? []).map((b) => ({
     ...b,
+    services: b.services === 1,
     trust: trustOf(byBox.get(b.box) ?? []),
   }));
   return json({ boxes: list, openCodes: open.results ?? [] });
@@ -239,6 +249,24 @@ export async function handleBoxFinds(req: Request, env: Env, box: string): Promi
   return json({ box, trust, ...finds });
 }
 
+/**
+ * POST /api/admin/boxes/:id/services {services} — "Runs this instance's services": the box may serve the packet
+ * BBS mailbox, FBB forwarding, the NET/ROM node mirror, White Pages, federation frames, the APRS-IS outbox and
+ * transmit commands. Off by default and apart from trusting its hearings: it is for a box the sysop runs.
+ */
+export async function handleBoxServices(req: Request, env: Env, box: string): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
+  const b = ((await req.json().catch(() => ({}))) ?? {}) as { services?: unknown };
+  if (typeof b.services !== "boolean") return json({ error: "services (true or false) is required" }, { status: 400 });
+  const r = await env.DB.prepare("UPDATE box_keys SET services = ? WHERE box_id = ? AND revoked_at IS NULL")
+    .bind(b.services ? 1 : 0, box)
+    .run();
+  if (!r.meta?.changes) return json({ error: "no enrolled box with that id, or it is revoked" }, { status: 404 });
+  console.log(`box ${box} services ${b.services ? "on" : "off"} by ${await actor(req, env)}`);
+  return json({ box, services: b.services });
+}
+
 /** POST /api/admin/boxes/:id/revoke — the box's key stops verifying at once. */
 export async function handleRevokeBox(req: Request, env: Env, box: string): Promise<Response> {
   const denied = await requireSysop(req, env, { allowOperatorSecret: true });
@@ -352,13 +380,15 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
   if (!Number.isFinite(at) || Math.abs(nowS() - at) > FRESH_S || nonce.length < 16) return;
   try {
     const row = await env.DB.prepare(
-      "SELECT public_key, callsign, last_seen_at FROM box_keys WHERE box_id = ? AND revoked_at IS NULL",
+      "SELECT public_key, callsign, services, last_seen_at FROM box_keys WHERE box_id = ? AND revoked_at IS NULL",
     )
       .bind(box)
-      .first<{ public_key: string; callsign: string | null; last_seen_at: number | null }>();
+      .first<{ public_key: string; callsign: string | null; services: number | null; last_seen_at: number | null }>();
     if (!row) return;
     const url = new URL(req.url);
-    const body = new Uint8Array(await req.clone().arrayBuffer());
+    // read through the ingest batch's byte cap: a larger body is never one a box sends, and is not buffered
+    const body = await readCappedBody(req.clone(), BODY_MAX);
+    if (!body) return;
     const ok = await verifyDomain(
       await importVerifyKey(row.public_key),
       b64urlToBytes(sig),
@@ -375,7 +405,7 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
     if (!ok) return;
     // each signature once: a copy replayed inside the freshness window is refused
     if (await rateLimitedDurable(env, `box-once:${await sha256Hex(sig)}`, Date.now(), 1, 2 * FRESH_S * 1000)) return;
-    setBoxPrincipal(req, { box, callsign: row.callsign });
+    setBoxPrincipal(req, { box, callsign: row.callsign, services: row.services === 1 });
     const now = nowS();
     if (!row.last_seen_at || now - row.last_seen_at > 300)
       await env.DB.prepare("UPDATE box_keys SET last_seen_at = ? WHERE box_id = ?").bind(now, box).run();

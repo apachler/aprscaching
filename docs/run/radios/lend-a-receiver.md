@@ -45,6 +45,18 @@ The box sends the instance what its radios hear: positions, messages and weather
 your site call when your TNC or node heard it directly. It sends nothing else from your computer. Every
 request is signed with the box's key, so the sysop can cut your box off alone.
 
+## What your box can and cannot do
+
+Your box's key delivers hearings; it never acts for a person. With it, your box can:
+
+- deliver what your radios hear, and check that its key works;
+- poll and acknowledge its own remote-control commands;
+- once the sysop trusts its hearings, verify finds with what it hears at your site.
+
+It cannot log a find for anyone, act as a cache's owner, create or import caches, or act for another box.
+It does not run the instance's services either: its BBS mail, FBB forwarding, node mirror and outbox. Those
+need the instance's own `INGEST_SECRET`, a box the sysop runs, or a signed-in player.
+
 In **Instance admin → Ingest boxes** the sysop sees your box's name, when it was enrolled and last seen, and,
 once it is trusted (your site call also appears under **Trusted receiving stations**, as an enrolled box):
 
@@ -63,7 +75,9 @@ The switch has three limits:
 - **Your call only.** A box enrolled for your callsign is trusted only for sites of your base call, such as
   `OE8ABC-10`; the gateway refuses any other.
 - **Heard directly only.** A frame counts only when your own receiver heard it on the air and your box
-  delivered it. A copy of the same frame over APRS-IS never counts, since anyone can send one.
+  delivered it. A frame naming your site call that another box, or the instance's own ingest, delivers never
+  counts, and neither does a copy over APRS-IS, since anyone can send one. The same holds for a `VERIFY`
+  message: it verifies a callsign only when your box delivered it.
 - **Never your own finds.** Your station never verifies a find logged by you or by any callsign on your
   account. Your finds need someone else's receiver, the phone's location, or another instance.
 

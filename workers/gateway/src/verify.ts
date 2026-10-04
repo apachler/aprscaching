@@ -55,6 +55,8 @@ export interface PositionRow {
   lon: number;
   heard_via: "rf" | "aprs_is" | "app";
   igate_call?: string | null;
+  /** The enrolled box that delivered the fix (positions.ingest_box), or null. */
+  ingest_box?: string | null;
   /**
    * Provenance seam: set by the boundary (see provenance.ts) when this fix was heard at a
    * site we operate + attest. Tier A is gated on THIS flag alone — never on transport. A packet that

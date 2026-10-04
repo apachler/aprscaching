@@ -2,8 +2,8 @@
 // Ingest boxes enrolled with a one-time code sign their requests with their own key. These drive the real
 // gateway over a migrated SQLite with the ingest box's own signing code (apps/ingest gatewayauth.ts): a code
 // works once and only while fresh, a signature covers the method, path, time and body and is accepted once,
-// revoking one box cuts off that box alone, the shared secret keeps working, a box acts only for itself,
-// and enrolling changes no trust — a site counts for Tier A only once the sysop attests it (box_trust.test.ts).
+// revoking one box cuts off that box alone, the shared secret keeps working, a box acts only for itself
+// (what its key may do is box_scope.test.ts), and enrolling changes no trust — a site counts for Tier A only once the sysop attests it (box_trust.test.ts).
 import { describe, it, expect } from "vitest";
 import { createPrivateKey, sign } from "node:crypto";
 import { SIG_DOMAIN, boxRequestMessage } from "@aprscaching/shared";
@@ -151,7 +151,7 @@ describe("enrollment codes", () => {
 });
 
 describe("signed requests", () => {
-  it("a signed request has the ingest plane's rights", async () => {
+  it("a signed request delivers what the box hears", async () => {
     const env = boxEnv();
     const k = await enrolled(env);
     const check = await signed(env, k, "GET", "/ingest/check");

@@ -175,12 +175,15 @@ ok(
   (list.data?.caches ?? []).some((c) => c.id === id),
 );
 
-// Tier B — in-app geolocation near the cache
-const tb = await call("POST", `/api/caches/${id}/logs`, {
-  loggerCall: "DL1ABC",
-  logType: "found",
-  appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts: now() },
-});
+// Tier B — in-app geolocation near the cache, from the player's own session (the ingest plane has no in-app
+// reading, so a geolocation it sends counts for nothing)
+const dl1abcCookie = await signUp("DL1ABC");
+const tb = await call(
+  "POST",
+  `/api/caches/${id}/logs`,
+  { loggerCall: "DL1ABC", logType: "found", appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts: now() } },
+  { cookie: dl1abcCookie },
+);
 ok("Tier B verified (app_geo)", tb.data?.verified === true && tb.data?.tier === "B", JSON.stringify(tb.data));
 
 // offline pack: the area's caches with their latest logs (a window query every runtime must run), and a
@@ -582,7 +585,6 @@ ok(
   regByIngest.status === 401,
   String(regByIngest.status),
 );
-const dl1abcCookie = await signUp("DL1ABC");
 const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw }, { cookie: dl1abcCookie });
 ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data));
 

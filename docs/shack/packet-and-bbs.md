@@ -49,7 +49,8 @@ you signed in with an account that holds the callsign.
 4. Enter an optional **Subject** and the **Message**, then select **Send**.
 
 Personal mail waits in the BBS until its addressee reads it here or by connecting to the packet BBS, or until
-FBB forwarding passes it to the addressee's home BBS. It is never sent over APRS or MeshCom. **Sent** shows its
+FBB forwarding passes it to the addressee's home BBS. FBB forwarding carries your mail only once your callsign
+is verified; until then it stays on this BBS. It is never sent over APRS or MeshCom. **Sent** shows its
 state: **read**, **forwarded to** a partner BBS, or **waiting**. Bulletins also reach the instances this one
 federates with.
 

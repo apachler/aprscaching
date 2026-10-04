@@ -687,6 +687,7 @@ const BOXES: EnrolledBox[] = [
     revokedAt: null,
     lastSeenAt: NOW - 120,
     trust: null,
+    services: true,
   },
   {
     box: "oe6xyz-hill",
@@ -698,6 +699,7 @@ const BOXES: EnrolledBox[] = [
     revokedAt: null,
     lastSeenAt: NOW - 300,
     trust: { sites: ["OE6XYZ-10"], trustedBy: "demo-sysop", trustedByCall: "OE6XGR", trustedAt: NOW - 20 * DAY },
+    services: false,
   },
 ];
 // Instance admin → Trusted receiving stations: the configuration's preset, one added here, the trusted lent box
@@ -938,6 +940,17 @@ const ROUTES: Route[] = [
         ? null
         : { sites: [`${b.callsign ?? "OE6XGR"}-10`], trustedBy: "demo-sysop", trustedByCall: "OE6XGR", trustedAt: NOW };
       return { trust: b.trust };
+    },
+  ],
+  [
+    "POST",
+    /^\/api\/admin\/boxes\/([^/]+)\/services$/,
+    (m) => {
+      // the fixtures see no body: the switch flips
+      const b = BOXES.find((x) => x.box === decodeURIComponent(m[1] ?? ""));
+      if (!b) return { services: false };
+      b.services = !b.services;
+      return { box: b.box, services: b.services };
     },
   ],
   [

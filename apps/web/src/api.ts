@@ -1043,6 +1043,8 @@ export interface EnrolledBox {
   lastSeenAt: number | null;
   /** The sysop's trust in the box's receiving sites ("Trust this station's hearings"); null while off. */
   trust: BoxTrust | null;
+  /** "Runs this instance's services": the box may serve the BBS mailbox, forwarding, the node mirror and the outbox. */
+  services: boolean;
 }
 /** Who switched a box's trust on and when; trustedBy is an account id, or "operator" for the operator secret. */
 export interface BoxTrust {
@@ -1082,6 +1084,13 @@ export function setBoxTrust(box: string, trusted: boolean, sites: string[] = [])
   return call(`/api/admin/boxes/${encodeURIComponent(box)}/trust`, {
     method: "POST",
     body: JSON.stringify(trusted ? { trusted, sites } : { trusted }),
+  });
+}
+/** Switch "Runs this instance's services" on or off for one box. */
+export function setBoxServices(box: string, services: boolean): Promise<{ services: boolean }> {
+  return call(`/api/admin/boxes/${encodeURIComponent(box)}/services`, {
+    method: "POST",
+    body: JSON.stringify({ services }),
   });
 }
 export function getBoxFinds(box: string): Promise<BoxFinds> {

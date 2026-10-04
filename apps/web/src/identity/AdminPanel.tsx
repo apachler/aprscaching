@@ -33,6 +33,7 @@ import {
   createBoxCode,
   revokeBox,
   setBoxTrust,
+  setBoxServices,
   getBoxFinds,
   listTrustedStations,
   addTrustedStation,
@@ -539,9 +540,9 @@ function TrustedStationsAdmin(props: { rev: number }) {
 /**
  * Let an ingest box in without handing it the shared INGEST_SECRET: a one-time code, typed on the box
  * (`deploy/aprscaching init ingest-box`), registers the box's own key. Each box is listed with when it was last
- * seen, and revoking one cuts that box off alone. Enrolling grants no trust: a box's receiving site counts for
- * Tier A only once it is listed in FIRST_PARTY_SITES, or once the sysop switches on "Trust this station's
- * hearings" for the box — the way a ham lends their own receiver to this instance.
+ * seen, and revoking one cuts that box off alone. Enrolling grants no trust: a box's frames count for Tier A only
+ * once the sysop switches on "Trust this station's hearings" for the box with its receiving site, the way a ham
+ * lends their own receiver to this instance. Running this instance's services is a separate switch.
  */
 function BoxesAdmin(props: { onTrustChanged: () => void }) {
   const toast = useToast();
@@ -715,6 +716,7 @@ function BoxesAdmin(props: { onTrustChanged: () => void }) {
                   }}
                 />
               )}
+              {!b.revokedAt && <BoxServicesRow box={b} onChanged={refresh} />}
             </li>
           ))}
         </ul>
@@ -840,6 +842,54 @@ function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
       )}
       {trust && <VerifiedFinds named sites={trust.sites} load={() => getBoxFinds(b.box)} />}
     </div>
+  );
+}
+
+/**
+ * "Runs this instance's services" for one enrolled box: off by default, and apart from trusting its hearings.
+ * On, the box's key serves the BBS mailbox, FBB forwarding, the node mirror, White Pages, federation frames and
+ * the APRS-IS outbox, and may queue transmissions; that is for a box the sysop runs, so switching it on asks first.
+ */
+function BoxServicesRow(props: { box: EnrolledBox; onChanged: () => void }) {
+  const { box: b } = props;
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const [saving, setSaving] = useState(false);
+  const name = b.label ?? b.box;
+  const change = async (on: boolean) => {
+    if (
+      on &&
+      !(await confirmDialog({
+        title: `Let ${name} run this instance's services?`,
+        message:
+          "Its key can then read and post any station's BBS mail, forward mail, send the APRS-IS outbox and transmit. Only for a box you run yourself.",
+        confirmLabel: "Allow services",
+      }))
+    )
+      return;
+    setSaving(true);
+    try {
+      await setBoxServices(b.box, on);
+      toast(on ? `${name}: runs this instance's services` : `${name}: services off`);
+      props.onChanged();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Row
+      label="Runs this instance's services"
+      help="BBS mailbox, FBB forwarding, node mirror, White Pages, federation frames and the APRS-IS outbox — only for a box you run yourself"
+    >
+      <Switch
+        label={`${name} runs this instance's services`}
+        checked={b.services}
+        disabled={saving}
+        onChange={(v) => void change(v)}
+      />
+    </Row>
   );
 }
 

@@ -715,13 +715,33 @@ export function secretOk(given: string | null | undefined, expected: string | un
   return timingSafeEqual(given ?? "", expected);
 }
 
-/** The ingest-plane credential: does the request carry the ingest box's INGEST_SECRET? */
 /**
- * The ingest plane's credential: the shared INGEST_SECRET, or a request an enrolled box signed with its own
- * key (verified by route() before any handler runs; boxkeys.ts).
+ * The instance's own ingest plane: does the request carry the shared INGEST_SECRET? Whoever holds it runs
+ * this instance's backend and acts for any station: logging a heard find, acting as a cache owner over APRS,
+ * importing, reading every mailbox. An enrolled box's key never passes this check.
  */
 export function ingestSecretOk(req: Request, env: Env): boolean {
-  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) || boxPrincipal(req) !== null;
+  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+}
+
+/**
+ * An ingest box delivering what it hears: the shared INGEST_SECRET, or a request an enrolled box signed with
+ * its own key (verified by route() before any handler runs; boxkeys.ts). Only the delivery endpoints take it:
+ * /ingest, /ingest/check and the box's own /api/box/:id endpoints. A box may be a receiver a ham lends to an
+ * instance they do not run, so its key acts for no station and no owner.
+ */
+export function ingestOrBoxOk(req: Request, env: Env): boolean {
+  return ingestSecretOk(req, env) || boxPrincipal(req) !== null;
+}
+
+/**
+ * This instance's services an ingest box runs (the APRS-IS outbox, the packet BBS mailbox, FBB forwarding, the
+ * NET/ROM node mirror, White Pages, federation pages and beacons): the shared INGEST_SECRET, or an enrolled box
+ * the sysop marks "Runs this instance's services" (box_keys.services, off by default). Trusting a box's
+ * hearings grants none of these: a lent receiver vouches for what it hears, not for this instance's mail.
+ */
+export function ingestOrServiceBoxOk(req: Request, env: Env): boolean {
+  return ingestSecretOk(req, env) || !!boxPrincipal(req)?.services;
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */

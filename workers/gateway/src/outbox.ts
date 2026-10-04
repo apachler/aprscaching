@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk } from "./auth.js";
+import { ingestOrServiceBoxOk } from "./auth.js";
 import type { Env } from "./env.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
 import { json } from "./app.js";
@@ -12,11 +12,11 @@ export const outboxRowOk = (r: Pick<OutboxRow, "src_call" | "tocall" | "payload"
   [r.src_call, r.tocall, r.payload].every((v) => typeof v === "string" && !/[\r\n\0]/.test(v));
 
 /**
- * ingest box pulls queued APRS-IS messages to publish. Auth via x-ingest-secret. A row that is not
- * `outboxRowOk` is never served: it is marked failed, since no retry can make it one line.
+ * The ingest box pulls queued APRS-IS messages to publish: the shared secret, or a box that runs this instance's services.
+ * A row that is not `outboxRowOk` is never served: it is marked failed, since no retry can make it one line.
  */
 export async function outboxPending(req: Request, env: Env): Promise<Response> {
-  if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+  if (!ingestOrServiceBoxOk(req, env)) return new Response("unauthorized", { status: 401 });
   const rows = await env.DB.prepare(
     "SELECT id, src_call, tocall, kind, payload, target FROM aprs_outbox WHERE status='queued' AND ts >= ? ORDER BY ts LIMIT 50",
   )
@@ -31,7 +31,7 @@ export async function outboxPending(req: Request, env: Env): Promise<Response> {
 }
 
 export async function outboxAck(req: Request, env: Env): Promise<Response> {
-  if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+  if (!ingestOrServiceBoxOk(req, env)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => null)) as { ids?: unknown } | null;
   if (!b) return json({ error: "a JSON body {ids} is required" }, { status: 400 });
   const ids: unknown[] = b.ids === undefined ? [] : Array.isArray(b.ids) ? b.ids : [null];

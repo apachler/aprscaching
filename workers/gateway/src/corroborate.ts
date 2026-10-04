@@ -19,7 +19,7 @@ import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin } from "./fedpeers.js";
 import { provenanceOf } from "./provenance.js";
-import { attestedSites } from "./attestedsites.js";
+import { attestation, sitesFor, type Attestation } from "./attestedsites.js";
 import { isInstanceId, loadRegistry } from "./federation.js";
 import { signFedRecord, verifyFedFrame } from "./fedcbor.js";
 import { bodyFromWire, bodyToWire } from "./fedsync.js";
@@ -113,6 +113,8 @@ interface RfPositionRow {
   igate_call: string | null;
   path: string | null;
   transport: string | null;
+  /** the enrolled box that delivered it (positions.ingest_box) */
+  ingest_box?: string | null;
 }
 
 /**
@@ -128,13 +130,14 @@ export function pickLocalEvidence(
   rows: RfPositionRow[],
   q: Pick<CorroborationQuery, "callsign" | "lat" | "lon" | "radiusM">,
   excludeIgates: Set<string>,
-  attested: Set<string>,
+  attested: Attestation | Set<string>,
 ): Omit<Evidence, "instance"> | null {
-  if (attested.size === 0) return null;
+  const a: Attestation = attested instanceof Set ? { shared: attested, byBox: new Map() } : attested;
+  if (a.shared.size === 0 && a.byBox.size === 0) return null;
   const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
   const callBase = baseCall(q.callsign);
   for (const r of rows) {
-    if (!provenanceOf(r, attested).firstPartyAttested) continue; // not heard by a site this instance attests
+    if (!provenanceOf(r, sitesFor(a, r.ingest_box)).firstPartyAttested) continue; // not heard by a site this instance attests
     const ig = r.igate_call ?? "";
     const igBase = baseCall(ig);
     if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
@@ -150,11 +153,11 @@ async function localCorroboration(
   q: CorroborationQuery,
   excludeIgates: Set<string>,
 ): Promise<Omit<Evidence, "instance"> | null> {
-  const attested = await attestedSites(env);
-  if (attested.size === 0) return null;
+  const attested = await attestation(env);
+  if (attested.shared.size === 0 && attested.byBox.size === 0) return null;
   const rows = (
     await env.DB.prepare(
-      `SELECT lat, lon, ts, heard_via, igate_call, path, transport FROM positions
+      `SELECT lat, lon, ts, heard_via, igate_call, path, transport, ingest_box FROM positions
       WHERE callsign = ? AND heard_via = 'rf' AND source != 'service' AND ts BETWEEN ? AND ?
       ORDER BY ts DESC LIMIT 500`,
     )

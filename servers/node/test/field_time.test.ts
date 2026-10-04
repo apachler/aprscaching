@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { authorshipMessage } from "@aprscaching/shared";
 import { FIND_FEED } from "@aprscaching/gateway/federation";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
+import { emailSignup } from "./helpers/authflow.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const INSTANCE = "field.example";
@@ -21,7 +22,12 @@ const b64u = (b: ArrayBuffer) => Buffer.from(b).toString("base64url");
 
 let seq = 0;
 async function setup(opts: { cacheAge?: number; keyAge?: number } = {}) {
-  const env = instanceEnv(INSTANCE, null, { FIRST_PARTY_SITES: SITE }) as unknown as Env;
+  const env = instanceEnv(INSTANCE, null, {
+    FIRST_PARTY_SITES: SITE,
+    ALLOW_DEV_TOKENS: "1",
+    APP_URL: "https://gw.test",
+    RP_ID: "gw.test",
+  }) as unknown as Env;
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
   const pub = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
   await env.DB.prepare("INSERT INTO callsign_keys (callsign, public_key, created_at) VALUES (?, ?, ?)")
@@ -46,8 +52,8 @@ const heard = (env: Env, ts: number) =>
     .bind(LOGGER, ts, LAT, LON, SITE)
     .run();
 
-/** POST a found log as the ingest plane; `at` signs it, `extra` adds body fields. */
-async function log(s: Setup, at: number | null, extra: Record<string, unknown> = {}) {
+/** POST a found log as the ingest plane (or as `cookie`'s session); `at` signs it, `extra` adds body fields. */
+async function log(s: Setup, at: number | null, extra: Record<string, unknown> = {}, cookie?: string) {
   const body: Record<string, unknown> = { loggerCall: LOGGER, logType: "found", ...extra };
   if (at != null) {
     const msg = authorshipMessage({ cache: s.code, instance: INSTANCE, logger: LOGGER, logType: "found", at });
@@ -57,7 +63,10 @@ async function log(s: Setup, at: number | null, extra: Record<string, unknown> =
   const res = await serve(s.env)(
     new Request(`https://${INSTANCE}/api/caches/${s.id}/logs`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-ingest-secret": "test-ingest-secret" },
+      headers: {
+        "content-type": "application/json",
+        ...(cookie ? { cookie } : { "x-ingest-secret": "test-ingest-secret" }),
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -91,9 +100,19 @@ describe("a signed field time", () => {
   it("judges the phone's GPS fix against the field time", async () => {
     const s = await setup();
     const at = now() - 8 * H;
-    const res = await log(s, at, { appGeo: { lat: LAT, lon: LON, accuracyM: 10, ts: at } });
+    // the phone's own reading arrives with the player's session
+    const player = await emailSignup(s.env, "log@example.test", LOGGER);
+    const res = await log(s, at, { appGeo: { lat: LAT, lon: LON, accuracyM: 10, ts: at } }, player.cookie);
     expect(res.body.tier).toBe("B");
     expect(res.body.method).toBe("app_geo");
+  });
+
+  it("ignores a geolocation the ingest plane sends: a machine has no in-app reading", async () => {
+    const s = await setup();
+    const at = now() - 8 * H;
+    const res = await log(s, at, { appGeo: { lat: LAT, lon: LON, accuracyM: 10, ts: at } });
+    expect(res.status).toBeLessThan(300);
+    expect(res.body.tier).toBe("C");
   });
 
   it("federates the find at its field time", async () => {

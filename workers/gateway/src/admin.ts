@@ -10,7 +10,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionIdentity, ingestSecretOk, operatorSecretOk } from "./auth.js";
+import { sessionIdentity, ingestOrServiceBoxOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
@@ -66,12 +66,13 @@ export async function requireSysop(
 }
 
 /**
- * Guard an ingest-plane endpoint the ingest box itself calls with its INGEST_SECRET — delivering what its
- * radios heard (the NET/ROM node mirror, heard federation beacons and sync pages) or reading the
- * forwarding partner list its FBB scheduler dials. The operator reaches the same endpoints too.
+ * Guard an ingest-plane endpoint the ingest box itself calls with its INGEST_SECRET, or with its own key once
+ * the sysop lets the box run this instance's services — delivering what its radios heard (the NET/ROM node mirror, heard federation
+ * beacons and sync pages) or reading the forwarding partner list its FBB scheduler dials. The operator
+ * reaches the same endpoints too.
  */
 export async function requireIngestOrOperator(req: Request, env: Env): Promise<Response | null> {
-  if (ingestSecretOk(req, env)) return null;
+  if (ingestOrServiceBoxOk(req, env)) return null;
   if (req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
   return requireSysop(req, env, { allowOperatorSecret: true });
 }

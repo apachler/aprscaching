@@ -85,6 +85,7 @@ import {
   handleListBoxes,
   handleRevokeBox,
   handleTrustBox,
+  handleBoxServices,
   handleBoxFinds,
 } from "./boxkeys.js";
 import { handleListSites, handleAddSite, handleRemoveSite, handleSiteFinds } from "./trustedsites.js";
@@ -547,6 +548,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (revoke && m === "POST") return handleRevokeBox(req, env, revoke[1]!);
   const boxTrust = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/trust$/.exec(p);
   if (boxTrust && m === "POST") return handleTrustBox(req, env, boxTrust[1]!);
+  const boxServices = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/services$/.exec(p);
+  if (boxServices && m === "POST") return handleBoxServices(req, env, boxServices[1]!);
   const boxFinds = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/finds$/.exec(p);
   if (boxFinds && m === "GET") return handleBoxFinds(req, env, boxFinds[1]!);
   if (p === "/api/admin/sites" && m === "GET") return handleListSites(req, env);

@@ -71,6 +71,23 @@ each, are the enrollment's audit trail.
 
 A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.
 
+A box's key is narrower than the shared `INGEST_SECRET`, because a box may be a receiver a ham lends you:
+
+| An enrolled box | Can | Cannot |
+|---|---|---|
+| Any | Deliver what its radios hear (`/ingest`), check its credential, and poll and acknowledge its own remote-control commands | Log a find for a callsign, act as a cache owner, create a cache, run an import, or act for another box |
+| Trusted (**Trust this station's hearings** on) | Verify finds and callsigns with what it hears at its own trusted sites | Everything else a box cannot do |
+| Running services (**Runs this instance's services** on) | Also pull and acknowledge the APRS-IS outbox, serve the packet BBS mailbox, run FBB forwarding, mirror the NET/ROM node table, set White Pages, deliver federation frames and queue transmit commands for itself | The same as any box |
+
+The two switches are separate and both start off. **Runs this instance's services** is for a box you run
+yourself; never switch it on for a receiver a ham lends you.
+
+A box's frames attest only the sites trusted under that box: `FIRST_PARTY_SITES` and the stations added by
+call count only for frames sent with the shared secret, and no other box can claim a box's site. Your own box
+on a key therefore needs **Trust this station's hearings** with its site call, and **Runs this instance's
+services** when it runs the packet BBS, FBB forwarding, the node mirror or the outbox. On the shared secret it
+needs neither.
+
 ## Enrolling the box
 
 The box's operator does this part, with the deploy helper. In the repository's top directory:

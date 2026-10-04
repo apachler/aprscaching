@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk } from "./auth.js";
+import { ingestSecretOk, ingestOrServiceBoxOk } from "./auth.js";
+import { boxPrincipal } from "./boxprincipal.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
  * into the pure ForwardRouter (@aprscaching/packet), resolves a destination to a partner, keeps the FBB
@@ -15,6 +16,8 @@ import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/pac
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
 import { bbsCall, bidFor, isOwnBid, BULLETIN_LIFETIME_SEC } from "./bbs.js";
+import { verificationsOf } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
 
 /** Build a router from the enabled forward rules. */
 async function loadRouter(env: Env): Promise<ForwardRouter> {
@@ -101,7 +104,8 @@ export async function handleWhitePages(req: Request, env: Env): Promise<Response
   if (typeof b.callsign !== "string" || typeof b.homeBbs !== "string" || !b.callsign || !b.homeBbs)
     return json({ error: "callsign + homeBbs required" }, { status: 400 });
   // the ingest box reports what it learned from the mail it carries; the operator's entry is the operator's word
-  await setWhitePages(env, b.callsign, b.homeBbs, ingestSecretOk(req, env) ? "learned" : "manual");
+  const learned = ingestSecretOk(req, env) || boxPrincipal(req) !== null;
+  await setWhitePages(env, b.callsign, b.homeBbs, learned ? "learned" : "manual");
   return json({ ok: true, callsign: b.callsign.toUpperCase(), homeBbs: b.homeBbs.toUpperCase() });
 }
 
@@ -325,7 +329,7 @@ export function inboundRow(
   };
 }
 
-const ingestOk = ingestSecretOk;
+const ingestOk = ingestOrServiceBoxOk;
 
 /** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
 export async function handleForwardPool(req: Request, env: Env): Promise<Response> {
@@ -351,8 +355,14 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
       .all<PoolRow>()
   ).results;
 
+  // Mail leaves this BBS in its sender's name only when the sender's base call is control-verified here:
+  // holding a call in an account, or keying it on the packet BBS, proves no licence. Unverified senders' mail
+  // stays local. A federation bulletin carries signed frames, not a person's words, and always forwards.
+  const sender = (r: PoolRow) => baseCall((r.from_call.split("@")[0] ?? "").trim().toUpperCase());
+  const verified = await verificationsOf(env, rows.map(sender));
   const out: FbbWireMsg[] = [];
   for (const r of rows) {
+    if (!isFedBbsCategory(r.to_call) && !verified.has(sender(r))) continue;
     // route the destination (White Pages expands a bare call to "CALL @ homeBBS", then the @AT hierarchy matches a rule)
     const { partner: rule } = await resolvePartner(env, r.to_call);
     if ((rule?.partner ?? "").toUpperCase() !== partner) continue;
