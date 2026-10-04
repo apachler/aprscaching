@@ -705,27 +705,8 @@ export function subscribePush(sub: {
 export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
   return call(`/api/push/unsubscribe`, { method: "POST", body: JSON.stringify({ endpoint }) });
 }
-// ---- weather user-origination: a personal weather station ----
-export interface WxKeyInfo {
-  callsign: string;
-  station: string;
-  key: string | null;
-  lastSeen: number | null;
-  ecowittPath: string | null;
-  wuUrl: string | null;
-  txIs?: boolean;
-  txCwop?: boolean;
-  verified?: boolean; // APRS-IS weather beacon / CWOP relay TX opt-in + control-verified gate
-}
-/** Read the caller's PWS push key + ready-to-paste station URLs (null key until issued). */
-export function getWxKey(): Promise<WxKeyInfo> {
-  return call(`/api/wx/key`);
-}
-/** (Re)issue the PWS push key — invalidates any previous one. */
-export function issueWxKey(): Promise<WxKeyInfo> {
-  return call(`/api/wx/key`, { method: "POST" });
-}
-/** Submit one in-browser-decoded PWS reading to the direct PWS ingest, using the caller's key.
+// ---- weather user-origination: a weather station in My stations ----
+/** Submit one in-browser-decoded PWS reading to the direct PWS ingest, using the station's key.
  *  Metric → the imperial query params parseWx already understands, so it reuses the whole ingest path. */
 export function submitWxReading(
   key: string,
@@ -756,8 +737,8 @@ export interface WxTxState {
   txCwop: boolean;
   verified: boolean;
 }
-/** Toggle APRS-IS weather beacon / CWOP relay for the home or a registry-station PWS. */
-export function setWxTx(body: { stationId?: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
+/** Toggle a weather station's APRS-IS weather beacon / CWOP relay. */
+export function setWxTx(body: { stationId: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
   return call(`/api/wx/tx`, { method: "POST", body: JSON.stringify(body) });
 }
 

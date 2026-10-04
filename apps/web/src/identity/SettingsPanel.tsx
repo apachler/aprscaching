@@ -32,7 +32,6 @@ import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../shack/Watchlist.js";
 import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
 import { ProfileEditor } from "../profile/ProfileEditor.js";
-import { WeatherStation } from "../profile/WeatherStation.js";
 import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
 import { AnnounceSettings } from "./AnnounceSettings.js";
@@ -216,22 +215,12 @@ export function SettingsPanel(props: {
       )}
 
       {session.signedIn &&
-        match("weather station PWS home Ecowitt Weather Underground WU temperature wind rain sensor") && (
-          <Group
-            title="Home weather station"
-            status="PWS"
-            help="Send your personal weather station's readings here; they never affect finds."
-            defaultOpen={false}
-          >
-            <WeatherStation callsign={callsign} />
-          </Group>
-        )}
-
-      {session.signedIn &&
-        match("my stations operated callsign SSID digipeater igate node relay mountain remote location registry") && (
+        match(
+          "my stations operated callsign SSID digipeater igate node relay mountain remote location registry weather station PWS Ecowitt Weather Underground WU CWOP temperature wind rain sensor",
+        ) && (
           <Group
             title="My stations"
-            help="The stations you run, each under its own callsign and SSID: weather, digipeater, IGate, node."
+            help="The stations you run, each under its own callsign and SSID: weather, digipeater, IGate, node. Weather never affects finds."
             defaultOpen={false}
           >
             <MyStations callsign={callsign} />

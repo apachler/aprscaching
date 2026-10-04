@@ -33,6 +33,7 @@ import {
 } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { WxTxToggles } from "./WxTxToggles.js";
+import { SerialWeather } from "./SerialWeather.js";
 
 const ROLE_LABEL: Record<StationRole, string> = {
   weather: "Weather",
@@ -45,7 +46,8 @@ const ROLE_LABEL: Record<StationRole, string> = {
 /**
  * Settings → My stations. Manage the operator's own stations — a home weather PWS, a
  * mountain-top digipeater / igate / node — each with its own callsign+SSID, explicit location,
- * description and roles. Weather-capable stations carry their own PWS push key. Paginated.
+ * description and roles. Each weather station carries its own PWS push key, issued when it is added; **Add a
+ * weather station** fills in the `-13` weather SSID and the Weather role. Paginated.
  */
 export function MyStations(props: { callsign: string }) {
   const toast = useToast();
@@ -57,12 +59,15 @@ export function MyStations(props: { callsign: string }) {
   );
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
   const [draft, setDraft] = useState<StationInput>({ callsign: base ? `${base}-` : "", roles: [] });
+  // the weather station just added, whose push URLs show under the form at once
+  const [addedWx, setAddedWx] = useState<{ id: number; callsign: string } | null>(null);
 
   async function add() {
     try {
-      await createStation({ ...draft, callsign: draft.callsign?.trim().toUpperCase() });
+      const r = await createStation({ ...draft, callsign: draft.callsign?.trim().toUpperCase() });
       setDraft({ callsign: base ? `${base}-` : "", roles: [] });
-      toast("Station added");
+      setAddedWx(r.station.wx ? { id: r.station.id, callsign: r.station.callsign } : null);
+      toast(r.station.wx ? "Weather station added: point it at its push URL" : "Station added");
       stations.reload();
     } catch (e) {
       toast((e as Error).message);
@@ -89,10 +94,11 @@ export function MyStations(props: { callsign: string }) {
     <>
       <p className="muted">
         Your operated stations — a home weather PWS, a remote digipeater/igate/node on a mountain. Each has its own
-        callsign, location and roles; weather-capable stations get a push key. A station's callsign is one of yours,
-        verified: OE8APR-9 needs OE8APR on your account. A club station whose call you do not hold is listed for you by
-        your sysop. Set a location, or leave it blank to adopt a station already heard on the map — and tap any station
-        pin to add it directly.
+        callsign, location and roles; each weather station gets its own push key. A station's callsign is one of yours,
+        verified: OE8APR-9 needs OE8APR on your account. A weather-only station needs no verification, since pushing
+        weather needs no licence. A club station whose call you do not hold is listed for you by your sysop. Set a
+        location, or leave it blank to adopt a station already heard on the map (a weather station then sits at your
+        home locator) — and tap any station pin to add it directly.
       </p>
       <p className="muted fine">
         Running infrastructure feeds the commons: a receiving station this instance attests makes other people&apos;s
@@ -117,12 +123,28 @@ export function MyStations(props: { callsign: string }) {
       />
 
       <h4>Add a station</h4>
+      <div className="row between">
+        <p className="muted fine">
+          A weather station: fills in <span className="mono">{base ? `${base}-13` : "-13"}</span> and the Weather role.
+        </p>
+        <Button onClick={() => setDraft({ ...draft, callsign: base ? `${base}-13` : "", roles: ["weather"] })}>
+          Add a weather station
+        </Button>
+      </div>
       <StationFields value={draft} onChange={setDraft} callsignEditable />
       <div className="row end mt-2">
         <Button variant="primary" onClick={add} disabled={!draft.callsign || draft.callsign.endsWith("-")}>
           Add station
         </Button>
       </div>
+      {addedWx && (
+        <div className="station-card">
+          <p>
+            <span className="mono">{addedWx.callsign}</span> is ready: point your weather station at one of these URLs.
+          </p>
+          <StationWxKeyPanel stationId={addedWx.id} />
+        </div>
+      )}
     </>
   );
 }
@@ -392,6 +414,10 @@ function StationWxKeyPanel(props: { stationId: number }) {
   return (
     <div className="wx-key">
       <h5>Weather push</h5>
+      <p className="muted fine">
+        Most consumer stations speak Ecowitt or Weather Underground: enter one of the URLs as the custom upload server.
+        Pushing weather needs no licence.
+      </p>
       {!info?.key ? (
         <div className="row end">
           <Button variant="primary" onClick={issue} disabled={busy}>
@@ -433,7 +459,12 @@ function StationWxKeyPanel(props: { stationId: number }) {
           </label>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
           <h5 className="mt-2">Transmit (optional)</h5>
+          <p className="muted fine">
+            Transmitting to APRS-IS or CWOP needs the station&apos;s callsign verified, and is off by default.
+          </p>
           <WxTxToggles stationId={props.stationId} txIs={info.txIs} txCwop={info.txCwop} verified={info.verified} />
+          <h5 className="mt-2">Browser-direct (Web Serial)</h5>
+          <SerialWeather wxKey={info.key} />
           <div className="row end">
             <Button onClick={issue} disabled={busy}>
               Re-issue key

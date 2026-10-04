@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * wx.ts — weather user-origination. A personal weather station pushes directly to the
- * platform; the reading is stored in sensor_readings under the user's <call>-13 weather SSID. We
+ * platform with the push key of one of the operator's weather-role stations (My stations); the reading is
+ * stored in sensor_readings under that station's callsign. We
  * speak the formats consumer stations already emit (Ecowitt "customized" HTTP push + Weather
  * Underground "Rapidfire" GET), so most stations work by just pointing them at the URL with a key.
  * Platform-only ingest carries NO RF-licence implication (the licence gate is only for TX/CWOP).
  *
  *   GET/POST /api/wx/submit              push a reading (?key=… ; or WU PASSWORD=key)
  *   GET/POST /api/wx/updateweatherstation  WU-Rapidfire alias
- *   GET/POST /api/wx/key                 (session) read / (re)issue your push key + URLs
+ *   POST     /api/wx/tx                  (session) a station's APRS-IS weather beacon / CWOP relay switches
+ *
+ * Keys are issued per station under /api/my/stations/:id/wx-key (stations_mine.ts).
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
@@ -116,35 +119,30 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
   const get = await readParams(req);
   const key = get("key") ?? get("password"); // our key, or WU's PASSWORD field
   if (!key) return new Response("missing key", { status: 401 });
-  const row = await env.DB.prepare("SELECT callsign, station_id AS stationId FROM wx_keys WHERE key = ?")
+  const row = await env.DB.prepare(
+    "SELECT callsign, station_id AS stationId FROM wx_keys WHERE key = ? AND station_id IS NOT NULL",
+  )
     .bind(key)
-    .first<{ callsign: string; stationId: number | null }>();
+    .first<{ callsign: string; stationId: number }>();
   if (!row) return new Response("unknown key", { status: 401 });
 
   const wx = parseWx(get);
   if (wx.temp_c == null && wx.humidity == null && wx.pressure_hpa == null && wx.wind_kn == null && wx.rain_mm == null)
     return new Response("no recognised weather fields", { status: 400 });
 
-  // Resolve where this reading lands + how to place it on the map. A key bound to a registry station
-  // uses that station's callsign + EXPLICIT coordinates (so a remote mountain PWS sits at
-  // its real location); a home key falls back to the operator's <call>-13 home PWS placed from
-  // their home grid.
-  let station = `${row.callsign.toUpperCase()}-13`;
-  let place: { lat: number; lon: number } | null = null;
-  if (row.stationId != null) {
-    const s = await env.DB.prepare("SELECT callsign, lat, lon FROM account_stations WHERE id = ?")
-      .bind(row.stationId)
-      .first<{ callsign: string; lat: number | null; lon: number | null }>();
-    if (s) {
-      station = s.callsign.toUpperCase();
-      place = s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : null;
-    }
-  } else {
-    const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?")
-      .bind(row.callsign.toUpperCase())
-      .first<{ homeGrid: string | null }>();
-    place = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
-  }
+  // The reading lands under the key's station and sits at the station's own coordinates (a remote summit
+  // PWS at its real location); a station without coordinates sits at its operator's home locator.
+  const s = await env.DB.prepare(
+    `SELECT s.callsign AS callsign, s.lat AS lat, s.lon AS lon,
+            (SELECT a.home_grid FROM accounts a WHERE a.account_id = s.account_id AND a.home_grid IS NOT NULL LIMIT 1) AS homeGrid
+       FROM account_stations s WHERE s.id = ?`,
+  )
+    .bind(row.stationId)
+    .first<{ callsign: string; lat: number | null; lon: number | null; homeGrid: string | null }>();
+  if (!s) return new Response("unknown key", { status: 401 });
+  const station = s.callsign.toUpperCase();
+  const place =
+    s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : s.homeGrid ? gridToLatLon(s.homeGrid) : null;
 
   const ts = readingTime(get("dateutc"), nowS());
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
@@ -234,7 +232,7 @@ async function maybeBeaconWx(
   await env.DB.prepare("UPDATE wx_keys SET last_beacon = ? WHERE key = ?").bind(ts, o.key).run();
 }
 
-/** Generate a PWS push key. Shared by the home-PWS endpoint and per-station keys. */
+/** Generate a station's PWS push key. */
 export function makeWxKey(): string {
   const b = new Uint8Array(12);
   crypto.getRandomValues(b);
@@ -249,71 +247,32 @@ export function wxUrls(origin: string, station: string, key: string): { ecowittP
   };
 }
 
-/** GET/POST /api/wx/key — read or (re)issue the caller's home (<call>-13) PWS push key + URLs. */
-export async function handleWxKey(req: Request, env: Env): Promise<Response> {
-  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
-  if (!cs) return json({ error: "sign in to set up a weather station" }, { status: 401 });
-  const base = baseCall(cs);
-  const station = `${base}-13`;
-  if (req.method === "POST") {
-    await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).run();
-    await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
-      .bind(makeWxKey(), base, (await sessionIdentity(req, env))?.accountId ?? null, nowS())
-      .run();
-  }
-  const row = await env.DB.prepare(
-    "SELECT key, last_seen AS lastSeen, tx_is AS txIs, tx_cwop AS txCwop FROM wx_keys WHERE callsign = ? AND station_id IS NULL",
-  )
-    .bind(base)
-    .first<{ key: string; lastSeen: number | null; txIs: number; txCwop: number }>();
-  const origin = new URL(req.url).origin;
-  const urls = row ? wxUrls(origin, station, row.key) : null;
-  return json({
-    callsign: base,
-    station,
-    key: row?.key ?? null,
-    lastSeen: row?.lastSeen ?? null,
-    ecowittPath: urls?.ecowittPath ?? null,
-    wuUrl: urls?.wuUrl ?? null,
-    txIs: !!row?.txIs,
-    txCwop: !!row?.txCwop,
-    verified: await isCallsignVerified(env, base),
-  });
-}
-
 /**
- * POST /api/wx/tx — toggle a PWS's APRS-IS weather beacon and/or CWOP relay. Gated: requires a
- * signed-in session AND a control-verified callsign to ENABLE either (TX is off by default).
- * `stationId` targets a registry station's key; omitted targets the home <call>-13 key.
+ * POST /api/wx/tx — toggle a weather station's APRS-IS weather beacon and/or CWOP relay. Gated: requires a
+ * signed-in session that owns the station AND the station's base call control-verified to ENABLE either
+ * (TX is off by default).
+ * `stationId` names the caller's weather station whose key the switches belong to.
  */
 export async function handleWxTx(req: Request, env: Env): Promise<Response> {
-  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
-  if (!cs) return json({ error: "sign in to manage weather TX" }, { status: 401 });
-  const base = baseCall(cs);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
+  if (!acct) return json({ error: "sign in to manage weather TX" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { stationId?: number; txIs?: boolean; txCwop?: boolean };
   const txIs = !!body.txIs,
     txCwop = !!body.txCwop;
+  if (body.stationId == null) return json({ error: "name the weather station (stationId)" }, { status: 400 });
+  const row = await env.DB.prepare(
+    `SELECT wk.key AS key, s.callsign AS callsign FROM wx_keys wk JOIN account_stations s ON s.id = wk.station_id
+      WHERE wk.station_id = ? AND s.account_id = ?`,
+  )
+    .bind(body.stationId, acct)
+    .first<{ key: string; callsign: string }>();
+  if (!row) return json({ error: "enable weather push on the station first" }, { status: 400 });
 
+  // the station transmits under its own callsign, so its base call is the one that must be control-verified
+  const base = baseCall(row.callsign);
   const verified = await isCallsignVerified(env, base);
   if ((txIs || txCwop) && !verified)
-    return json({ error: "verify your callsign to transmit weather", verified: false }, { status: 403 });
-
-  // locate the caller's key row (home, or an owned registry station)
-  let row: { key: string } | null;
-  if (body.stationId != null) {
-    const acct = (await sessionIdentity(req, env))?.accountId ?? null;
-    row = await env.DB.prepare(
-      `SELECT wk.key AS key FROM wx_keys wk JOIN account_stations s ON s.id = wk.station_id
-        WHERE wk.station_id = ? AND s.account_id = ?`,
-    )
-      .bind(body.stationId, acct)
-      .first<{ key: string }>();
-  } else {
-    row = await env.DB.prepare("SELECT key FROM wx_keys WHERE callsign = ? AND station_id IS NULL")
-      .bind(base)
-      .first<{ key: string }>();
-  }
-  if (!row) return json({ error: "enable the weather station first" }, { status: 400 });
+    return json({ error: `verify ${base} to transmit weather`, verified: false }, { status: 403 });
 
   await env.DB.prepare("UPDATE wx_keys SET tx_is = ?, tx_cwop = ? WHERE key = ?")
     .bind(txIs ? 1 : 0, txCwop ? 1 : 0, row.key)

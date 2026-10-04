@@ -39,33 +39,41 @@ The app confirms each change with **Tuned to … MHz**. While the rig is connect
 You can send your own personal weather station (PWS) to the instance. Its readings show on the map and on the
 station's page, with graphs. Pushing data in needs no amateur licence.
 
-### Push from your home weather station
+### Add your weather station
 
-1. Open **Settings → Home weather station** and select **Enable weather station**.
-2. Copy the **Ecowitt — custom server path** or the **Weather Underground — Rapidfire URL**.
-3. Enter it in your station's configuration: as a custom server with the Ecowitt protocol, or as the Weather
-   Underground upload URL.
+Each weather station is one of your stations, with its own callsign and its own push key.
 
-The readings appear under your callsign with the `-13` weather SSID, placed at your home locator. **Last
-reading** shows when the last one arrived. **Re-issue key** makes new URLs and stops the old ones.
+1. Open **Settings → My stations** and select **Add a weather station**. It fills in your callsign with the
+   `-13` weather SSID and the **Weather** role.
+2. Enter the station's coordinates, or leave them blank to place it at your home locator
+   ([Settings → Profile](../play/account.md)).
+3. Select **Add station**. The station's URLs show at once.
+4. Copy the **Ecowitt — custom server path** or the **Weather Underground — Rapidfire URL**, and enter it in
+   your station's configuration: as a custom server with the Ecowitt protocol, or as the Weather Underground
+   upload URL.
 
-### A weather station somewhere else
+The readings appear under the station's callsign at its coordinates. A weather-only station needs a callsign on
+your account, not a verified one. Open the station under **My stations** to see **Last reading**; **Re-issue key**
+makes new URLs and stops the old ones, and **Remove** revokes the key.
 
-For a station at another place, such as a summit, add it under **Settings → My stations** with the
-**Weather** role, its own callsign (an SSID of a verified callsign on your account, such as `OE8APR-13`) and its
-coordinates. Open the station and select **Enable weather push**.
-Its URLs work the same way, and the readings appear under that station's callsign at its coordinates.
+### More weather stations
+
+A second station, such as one on a summit, is another station under **My stations** with the **Weather**
+role, its own SSID (such as `OE8APR-14`) and its coordinates. Any station gains a push key when you give it the
+**Weather** role and select **Enable weather push**. Roles beyond weather need a
+[verified callsign](../play/join.md#verify-your-callsign).
 
 ### A station on USB
 
-A Peet Bros or Ultimeter station on USB can report straight from the browser. Under **Settings → Home
-weather station → Browser-direct (Web Serial)**, choose the **Baud** and select **Connect station**. The
-browser posts a reading once a minute while the page is open.
+A Peet Bros or Ultimeter station on USB can report straight from the browser. Open the station under
+**Settings → My stations**, and under **Browser-direct (Web Serial)** choose the **Baud** and select **Connect
+station**. The browser posts a reading once a minute while the page is open.
 
 ### Beacon or relay your weather
 
-Under **Transmit (optional)**, two switches send your readings further. Both need a
-[verified callsign](../play/join.md#verify-your-callsign) and are off by default:
+Under **Transmit (optional)** on each weather station, two switches send its readings further, under the
+station's callsign. Both need the station's callsign [verified](../play/join.md#verify-your-callsign) and are off
+by default:
 
 - **Beacon to APRS-IS** sends your weather as a standard APRS report, at most once every five minutes.
 - **Relay to CWOP** feeds your readings to NOAA's Citizen Weather Observer Program
