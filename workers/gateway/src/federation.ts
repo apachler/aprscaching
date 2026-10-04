@@ -169,6 +169,30 @@ function loadKey(env: Env): Promise<FedKey | null> {
   return p;
 }
 /**
+ * A federation key's fingerprint, for two sysops to compare out of band (by phone, on the air, in person): the
+ * first 64 bits of SHA-256 over the raw Ed25519 key, as four groups of four hex digits (`3f2a 9c01 bb7e 4d10`).
+ * Null for a missing or malformed key. `deploy/lib/doctor.sh` prints the same value.
+ */
+export async function keyFingerprint(rawB64url: string | null | undefined): Promise<string | null> {
+  if (!rawB64url) return null;
+  let raw: Uint8Array<ArrayBuffer>;
+  try {
+    raw = new Uint8Array(b64urlToBytes(rawB64url));
+  } catch {
+    return null;
+  }
+  if (raw.length !== 32) return null;
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", raw));
+  const hex = [...digest.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex.match(/.{4}/g)!.join(" ");
+}
+
+/** This instance's own federation key fingerprint, or null when it signs nothing (no FED_PRIVATE_KEY). */
+export async function ownKeyFingerprint(env: Env): Promise<string | null> {
+  return keyFingerprint((await loadKey(env))?.publicX);
+}
+
+/**
  * Sign arbitrary bytes with the instance key — the CBOR wire format (fedcbor.ts) builds its
  * domain-separated signing bytes itself and only needs the raw Ed25519 primitive + the public key.
  */

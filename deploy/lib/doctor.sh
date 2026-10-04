@@ -422,6 +422,23 @@ doc_network() {
 }
 
 # ---- federation ---------------------------------------------------------------------------------------------
+# fed_fingerprint KEY: a federation key's fingerprint, as Instance admin shows it (federation.ts keyFingerprint):
+# the first 64 bits of SHA-256 over the raw Ed25519 key (base64url), in four groups of four hex digits. Two sysops
+# read theirs to each other out of band to check the key each one pinned. Prints nothing for a malformed key.
+fed_fingerprint() {
+  local k="$1" raw
+  [[ "$k" =~ ^[A-Za-z0-9_-]{43}$ ]] || return 0
+  raw="$(printf '%s=' "$k" | tr '_-' '/+')"
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$raw" | base64 -d 2>/dev/null | sha256sum
+  else
+    printf '%s' "$raw" | base64 -d 2>/dev/null | shasum -a 256
+  fi | cut -c1-16 | sed 's/..../& /g; s/ $//'
+}
+
+# desc_key JSON: the current signing key a federation descriptor (/.well-known/aprscaching) publishes.
+desc_key() { printf '%s' "$1" | sed -n 's/.*"publicKey":"\([A-Za-z0-9_-]*\)".*/\1/p'; }
+
 doc_federation() {
   local peers p unsafe=()
   [ -n "$DOC_BASE" ] || return 0
@@ -461,9 +478,14 @@ doc_federation() {
   else
     pass federation.posture "the federation settings are the safe ones"
   fi
+  local desc fp
+  desc="$(gw_curl -fsS --max-time 8 "$DOC_BASE/.well-known/aprscaching" 2>/dev/null || true)"
+  fp="$(fed_fingerprint "$(desc_key "$desc")")"
+  [ -z "$fp" ] || pass federation.fingerprint "this instance's key fingerprint is $fp; read it to each peer's sysop"
   for p in ${peers//,/ }; do
-    if curl -fsS -o /dev/null --max-time 8 "${p%/}/.well-known/aprscaching" 2>/dev/null; then
-      pass "federation.peer.${p#*://}" "peer $p answers"
+    if desc="$(curl -fsS --max-time 8 "${p%/}/.well-known/aprscaching" 2>/dev/null)"; then
+      fp="$(fed_fingerprint "$(desc_key "$desc")")"
+      pass "federation.peer.${p#*://}" "peer $p answers; its key fingerprint is ${fp:-missing (it signs nothing)}"
     else
       warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator"
     fi

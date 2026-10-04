@@ -956,7 +956,11 @@ const ROUTES: Route[] = [
     /^\/api\/admin\/federation\/sync$/,
     () => ({ hub: null, spokes: [], staleHours: 24 }) satisfies FederationSync,
   ],
-  ["GET", /^\/federation\/peers$/, () => ({ peers: [] })],
+  [
+    "GET",
+    /^\/federation\/peers$/,
+    () => ({ self: { instance: "aprscaching.example", fingerprint: "3f2a 9c01 bb7e 4d10" }, peers: [] }),
+  ],
   ["GET", /^\/api\/ports$/, () => ({ window: 3600, ports: PORTS })],
   ["GET", /^\/api\/bbs\/(messages|sent)$/, () => ({ messages: BBS.filter((b) => b.type === "P") })],
   ["GET", /^\/api\/bbs\/bulletins$/, () => ({ bulletins: BBS.filter((b) => b.type === "B") })],
