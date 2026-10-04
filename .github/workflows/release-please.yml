@@ -60,3 +60,22 @@ jobs:
     uses: ./.github/workflows/release-verify.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+
+  # Each release opens a discussion in Announcements, linked to the release, so people watching the
+  # repository or its discussions hear about it. It runs last, once the release carries all its assets.
+  announce:
+    needs: [release-please, verify]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # update the release to link the discussion
+      discussions: write # create the discussion
+    steps:
+      - name: open the release discussion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          id=$(gh api "repos/$REPO/releases/tags/$TAG" --jq .id)
+          gh api -X PATCH "repos/$REPO/releases/$id" -f discussion_category_name=Announcements --jq .discussion_url
