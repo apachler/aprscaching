@@ -46,7 +46,7 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
       </div>
       {s.comment && <p className="spot-comment muted">{s.comment}</p>}
       {rigOn && s.freqHz != null && (
-        <Button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot">
+        <Button className="spot-tune" onClick={tune} hint="Tune your connected rig to this spot">
           <Icon name="radio" cp437="" className="lead-ic" />
           Tune rig to {freqMHz} MHz{s.mode ? ` ${s.mode}` : ""}
         </Button>

@@ -101,16 +101,6 @@ export const SURFACES: Surface[] = [
     indexable: false,
     summary: "Live APRS text messages — a first-class inbox, separate from BBS mail.",
   },
-  {
-    key: "docs",
-    view: "docs",
-    label: "Manual",
-    title: "Manual",
-    group: "Community",
-    access: "public",
-    indexable: true,
-    summary: "The full product manual — caching, the Shack, operating an instance, and the API.",
-  },
 
   {
     key: "shack",

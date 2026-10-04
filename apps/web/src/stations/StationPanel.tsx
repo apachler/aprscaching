@@ -6,11 +6,21 @@ import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
 import { Panel, Badge, ErrorState, useToast, Card, Button, Icon } from "../ui/index.js";
+import { TERMS } from "../terms.js";
+
 import { TrackReplay } from "../shack/TrackReplay.js";
 import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
 import { MeshcomSection } from "../meshcom/MeshcomSection.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+
+/** What each station role means, for its badge's hint. */
+const ROLE_HINT: Partial<Record<StationRole, string>> = {
+  weather: "Sends weather reports",
+  digipeater: TERMS.digipeater,
+  igate: TERMS.igate,
+  node: TERMS.netrom,
+};
 
 /**
  * StationPanel — the live-station inspector, opened when a station pin is tapped on the map. Shows the
@@ -73,7 +83,9 @@ export function StationPanel(props: {
           {station.roles?.length ? (
             <div className="badges mt-1">
               {station.roles.map((r) => (
-                <Badge key={r}>{ROLE_META[r as StationRole]?.label ?? r}</Badge>
+                <Badge key={r} title={ROLE_HINT[r as StationRole]}>
+                  {ROLE_META[r as StationRole]?.label ?? r}
+                </Badge>
               ))}
             </div>
           ) : null}

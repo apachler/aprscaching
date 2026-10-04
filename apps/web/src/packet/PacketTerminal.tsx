@@ -27,6 +27,7 @@ import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 import { Button, Disclosure, EmptyState, Segmented, Tabs, tabPanelId } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 
 /** The transport surface the terminal drives — a USB or Bluetooth KISS link, or an injected sim. */
 export interface TermTransport extends Transport {
@@ -337,7 +338,7 @@ export function PacketTerminal(props: {
         </span>
         <span className="spacer" />
         {portOpen && (
-          <Button className="pt-ans" onClick={exportAns} title="Export this pane as ANSI art (.ans)">
+          <Button className="pt-ans" onClick={exportAns} hint="Save this pane as ANSI art (.ans)">
             ↓ .ans
           </Button>
         )}
@@ -360,7 +361,7 @@ export function PacketTerminal(props: {
         {portOpen ? (
           <Button onClick={closePort}>Close TNC</Button>
         ) : (
-          <Button variant="primary" onClick={openPort}>
+          <Button variant="primary" onClick={openPort} hint={TERMS.kiss}>
             Open KISS TNC…
           </Button>
         )}
@@ -413,6 +414,7 @@ export function PacketTerminal(props: {
                 {
                   key: "mon",
                   closable: false,
+                  title: "Everything your TNC hears, on every channel",
                   className: "pt-cbtn pt-cbtn-mon",
                   label: (
                     <>
@@ -447,7 +449,9 @@ export function PacketTerminal(props: {
               <Button
                 onClick={connect}
                 disabled={!props.verified || remoteCall.trim().length < 3}
-                title={props.verified ? undefined : "Verify your callsign to connect"}
+                hint={
+                  props.verified ? "Open a connected-mode link to this callsign" : "Verify your callsign to connect"
+                }
               >
                 Connect
               </Button>

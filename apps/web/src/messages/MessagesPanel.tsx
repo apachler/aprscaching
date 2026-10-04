@@ -19,6 +19,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
 import { MailboxSection } from "./MailboxSection.js";
 import { MeshcomGroupsSection } from "./MeshcomGroupsSection.js";
 import { TransportBadge } from "./transport.js";
+import { TERMS } from "../terms.js";
 
 type Scope = "all" | "mine";
 type View = "air" | "mailbox" | "groups";
@@ -46,9 +47,17 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
   const groups = useLoad(() => getMeshcomGroups().then((r) => r.groups), []);
   const hasGroups = (groups.data?.length ?? 0) > 0;
   const views: SegmentOption<View>[] = [
-    { value: "air", label: "On the air" },
-    ...(canMine ? [{ value: "mailbox" as const, label: "Mailbox" }] : []),
-    ...(hasGroups ? [{ value: "groups" as const, label: "MeshCom groups" }] : []),
+    { value: "air", label: "On the air", title: "APRS messages this instance heard, on the air and on APRS-IS" },
+    ...(canMine ? [{ value: "mailbox" as const, label: "Mailbox", title: TERMS.mailbox }] : []),
+    ...(hasGroups
+      ? [
+          {
+            value: "groups" as const,
+            label: "MeshCom groups",
+            title: "Group chat heard by this instance's MeshCom nodes",
+          },
+        ]
+      : []),
   ];
   const shown: View = views.some((v) => v.value === view) ? view : "air";
   const messages = usePaged(

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * TopBar — the cacher/operator top chrome: logo, type filter, search, in-view count, identity chip,
- * desktop nav and the primary "Hide a cache" action. The header is identical in every app mode —
+ * the tablet's nav (with the manual, which the rail and the phone's More sheet carry elsewhere) and the primary
+ * "Hide a cache" action. The header is identical in every app mode —
  * switching into "hide" must not reshuffle the chrome. Reused by the app and the demo harness so the
  * teaser shows the same chrome everywhere (ui-ux §6: one component, no bespoke one-offs).
  */
-import { ASSET } from "./brand.js";
-import { Button, Icon } from "./ui/index.js";
+import { ASSET, MANUAL_URL } from "./brand.js";
+import { Button, Hint, Icon } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
 import type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
 
@@ -33,7 +34,6 @@ export function TopBar(props: {
   onNearby: () => void;
   onActivity: () => void;
   onProfile: () => void;
-  onDocs: () => void;
   sysop?: boolean;
   onAdmin?: () => void;
   /** Unseen watchlist alerts; the bell shows only when `onAlerts` is given (signed in). */
@@ -48,7 +48,7 @@ export function TopBar(props: {
         variant="icon"
         className={`filter-ic${props.filtered ? " on" : ""}`}
         onClick={props.onFilters}
-        title="Search and filter"
+        hint="Filter caches by type, difficulty and status"
         aria-label="Search and filter caches"
       >
         <Icon name="filter" size={16} />
@@ -64,8 +64,7 @@ export function TopBar(props: {
         variant="icon"
         className="search-ic"
         onClick={props.onSearchOpen}
-        title="Search"
-        aria-label="Search caches, stations or a grid locator"
+        hint="Search caches, stations or a grid locator"
         aria-haspopup="dialog"
       >
         <Icon name="search" size={16} />
@@ -78,7 +77,7 @@ export function TopBar(props: {
           variant="quiet"
           className={`queue-chip${props.attention > 0 ? " attn" : ""}`}
           onClick={props.onQueue}
-          title="Offline logs and packs"
+          hint="Logs waiting to send and the areas saved for offline use"
         >
           <Icon name="offline" cp437="" className="lead-ic" />
           {props.syncLine}
@@ -90,7 +89,7 @@ export function TopBar(props: {
           variant="icon"
           className="bell-ic"
           onClick={props.onAlerts}
-          title="Alerts"
+          hint="Alerts from your watchlist"
           aria-label={alerts > 0 ? `Alerts, ${alerts} new` : "Alerts"}
         >
           <Icon name="bell" size={16} />
@@ -101,11 +100,11 @@ export function TopBar(props: {
           )}
         </Button>
       )}
-      {/* Manual: a compact icon in the top chrome; a phone reaches it from the More sheet instead. */}
-      <Button variant="icon" className="help-ic" onClick={props.onDocs} title="Manual" aria-label="Open the manual">
-        <Icon name="info" size={16} />
-      </Button>
-      <Button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
+      <Button
+        className={`idchip${props.verified ? " ok" : ""}`}
+        onClick={props.onAccount}
+        hint="Your account and callsigns"
+      >
         {props.callsign ? (
           <>
             <span className="mono">{props.callsign}</span>
@@ -121,13 +120,24 @@ export function TopBar(props: {
         <Button onClick={props.onNearby}>Nearby</Button>
         <Button onClick={props.onActivity}>Activity</Button>
         {props.sysop && props.onAdmin && (
-          <Button onClick={props.onAdmin} title="Instance admin — operator only">
+          <Button onClick={props.onAdmin} hint="Instance admin, for this instance's operator only" aria-label="Admin">
             <Icon name="shield-check" cp437="ADM" className="lead-ic" />
           </Button>
         )}
-        <Button onClick={props.onProfile} title="Profile — identity & advanced tools">
+        <Button onClick={props.onProfile} hint="You: your profile, finds and callsigns" aria-label="You">
           <Icon name="profile" cp437="ME" className="lead-ic" />
         </Button>
+        <Hint text="The user manual, on its own site">
+          <a
+            className="help-ic"
+            href={MANUAL_URL}
+            target="_blank"
+            rel="noopener"
+            aria-label="Manual (opens in a new tab)"
+          >
+            <Icon name="book" size={16} cp437="?" />
+          </a>
+        </Hint>
       </span>
       <Button variant="primary" className="hide-cta" onClick={props.onHide}>
         + Hide a cache

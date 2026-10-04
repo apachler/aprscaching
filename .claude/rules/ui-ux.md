@@ -124,6 +124,10 @@ group does.
 - **Dialog (modal)** — a focused decision/confirm; MUST trap focus and be dismissible. Use
   sparingly.
 - **Popover** — lightweight contextual menu/tooltip anchored to a control.
+- **Hint** — the one-line "what does this do" for a control (`Hint`, or `hint=` on `Button`, `title=` on `Badge`),
+  shown on hover and keyboard focus and read through `aria-describedby`; **InfoTip** is the small "i" button that
+  explains a term or a group on hover, focus and tap. Never the bare `title` attribute alone (no touch, no
+  keyboard).
 - **Disclosure / accordion** — collapse secondary content (Advanced, group sections). MUST be a
   real `<button>`-driven disclosure, never a CSS-only `:target` hack (see css.md).
 
@@ -226,6 +230,11 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 
 Labels are short, concrete, action-oriented. Help text is one line. Errors say what happened and
 how to fix it. Uppercase only for small section labels/badges, not body. Callsigns/coords in mono.
+
+The UI explains itself; the manual is a separate site (MkDocs, `docs/`) the app only links to, through
+`manualUrl()` / `ManualLink` and the **Manual** nav link. A control whose job is not plain from its label carries a
+hint, an icon-only control takes its hint as its name, and a term of art (Tier A/B/C, SSID, attested site, IGate…)
+carries an InfoTip with its glossary line from `apps/web/src/terms.ts`.
 
 ---
 

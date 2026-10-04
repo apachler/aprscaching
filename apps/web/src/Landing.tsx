@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ASSET } from "./brand.js";
+import { ASSET, MANUAL_URL } from "./brand.js";
 import { API_BASE } from "./api.js";
-import { Button, Icon, TierBadge, type IconName } from "./ui/index.js";
+import { Button, Icon, ManualLink, TierBadge, type IconName } from "./ui/index.js";
 import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "./credits.js";
 
 /**
@@ -43,6 +43,9 @@ export function Landing(props: {
       <footer className="landing-footer">
         <a href={`${API_BASE}/sitemap`}>Site map</a>
         <a href={`${API_BASE}/support`}>Support</a>
+        <a href={MANUAL_URL} target="_blank" rel="noopener">
+          Manual
+        </a>
         <a href={`${API_BASE}/source`} rel="noopener">
           Source (AGPL-3.0)
         </a>
@@ -255,9 +258,9 @@ function Steps() {
             </span>
           </li>
         </ol>
-        <a className="landing-more" href="/?view=docs&doc=play/index">
+        <ManualLink className="landing-more" page="play/index">
           The caching guide
-        </a>
+        </ManualLink>
       </div>
       <div className="landing-phone">
         <Shot
@@ -291,9 +294,9 @@ function Trust() {
           <p>The instance's own receiver heard the finder on the air there. A copy from the internet never counts.</p>
         </li>
       </ol>
-      <a className="landing-more" href="/?view=docs&doc=reference/trust-model">
+      <ManualLink className="landing-more" page="reference/trust-model">
         How verification works
-      </a>
+      </ManualLink>
     </section>
   );
 }
@@ -375,9 +378,9 @@ function RunAnywhere() {
         <li>An Android phone in the field</li>
         <li>Cloudflare, with your own RF box</li>
       </ul>
-      <a className="landing-more" href="/?view=docs&doc=run/index">
+      <ManualLink className="landing-more" page="run/index">
         Choose how to run it
-      </a>
+      </ManualLink>
     </section>
   );
 }

@@ -98,7 +98,7 @@ export function Passkeys() {
                   <Button
                     variant="quiet"
                     disabled={busy || (count === 1 && !data.hasEmail)}
-                    title={
+                    hint={
                       count === 1 && !data.hasEmail
                         ? data.emailPending
                           ? "Your only way to sign in: confirm your email address (open the link we sent) or add another passkey first"

@@ -6,14 +6,13 @@
  */
 import type { ReactNode } from "react";
 import { Icon } from "./Icon.js";
+import { Hint } from "./Hint.js";
 
+/** `title` is the badge's one-line meaning, shown on hover by Hint and read as its description. */
 export function Badge(props: { kind?: string; title?: string; className?: string; children: ReactNode }) {
   const cls = ["badge", props.kind, props.className].filter(Boolean).join(" ");
-  return (
-    <span className={cls} title={props.title}>
-      {props.children}
-    </span>
-  );
+  const badge = <span className={cls}>{props.children}</span>;
+  return props.title ? <Hint text={props.title}>{badge}</Hint> : badge;
 }
 
 /**

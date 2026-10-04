@@ -1,0 +1,78 @@
+/* Hints: the one-line "what does this do" beside a control or a term (ui/Hint.tsx). */
+@layer components {
+  /* The hint lives inside its control, so it resets what it would otherwise inherit from a button or a badge. */
+  .hint {
+    display: none;
+    position: fixed;
+    inset: auto var(--space-sm) calc(var(--space-lg) + env(safe-area-inset-bottom)) var(--space-sm);
+    z-index: var(--z-popover);
+    margin: 0;
+    max-inline-size: min(36ch, calc(100vw - 2 * var(--space-sm)));
+    inline-size: max-content;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--surface-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    box-shadow: var(--elevation-overlay);
+    font-family: var(--font-ui);
+    font-style: normal;
+    font-size: var(--text-caption);
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: break-word;
+    pointer-events: auto;
+    cursor: auto;
+    user-select: text;
+  }
+  /* Without anchor positioning the hint is a bar above the bottom edge, centred; the Popover API is not needed
+     for it to show (data-open is the state). */
+  .hint[data-open] {
+    display: block;
+    margin-inline: auto;
+    opacity: 1;
+    transition: opacity var(--motion-fast) ease;
+  }
+  @starting-style {
+    .hint[data-open] {
+      opacity: 0;
+    }
+  }
+  @supports (anchor-name: --x) {
+    [data-hint] {
+      anchor-name: var(--hint-anchor);
+    }
+    .hint[data-open] {
+      position-anchor: var(--hint-anchor);
+      inset: auto;
+      margin: var(--space-2xs);
+      position-area: top;
+      position-try-fallbacks:
+        bottom,
+        top span-right,
+        bottom span-right,
+        top span-left,
+        bottom span-left,
+        right;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hint[data-open] {
+      transition: none;
+    }
+  }
+
+  /* The "i" beside a term or a group header: a quiet icon button, a 44px target on touch (hittarget.css). */
+  .infotip {
+    vertical-align: middle;
+    align-items: center;
+    justify-content: center;
+    /* WCAG 2.5.8: at least 24px even where the glyph is a single character (Phosphor) */
+    min-inline-size: calc(var(--hit) / 2 + 2px);
+    min-block-size: calc(var(--hit) / 2 + 2px);
+  }
+}

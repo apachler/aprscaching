@@ -89,7 +89,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
               key={w.callsign}
               className="chip-btn"
               onClick={() => remove(w.callsign)}
-              title="Remove from watchlist"
+              hint="Remove from watchlist"
               aria-label={`Stop watching ${w.callsign}`}
             >
               {w.callsign} ✕

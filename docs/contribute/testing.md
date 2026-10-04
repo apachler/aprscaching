@@ -93,11 +93,13 @@ the real browser ceremony before a release.
   `var()`, OKLCH and `color-mix()` itself. A pair listed as a known failure must keep failing: once it passes,
   the test asks for it to leave the list.
 - **Diagrams** — `apps/web/test/diagrams.test.ts` parses every ```` ```mermaid ```` block in the repository's
-  Markdown with the Mermaid the app ships (under jsdom, which Mermaid's label sanitiser needs), and
-  `tools/checks/docs.mjs` fails on a diagram drawn in box-drawing characters.
-- **The in-app manual** — `apps/web/vite-docs.ts` bundles the manual into the app with the order, sections and
-  titles of `mkdocs.yml`'s nav. The build fails, and `apps/web/test/docsNav.test.ts` fails, when a nav entry has
-  no file or a page is neither in the nav nor under `not_in_nav`; the dated reviews stay out of the app.
+  Markdown with the Mermaid the published manual ships (the web app's locked dev dependency, under jsdom, which
+  Mermaid's label sanitiser needs), and `tools/checks/docs.mjs` fails on a diagram drawn in box-drawing characters.
+- **Links to the manual** — the app links to the published manual through `manualUrl()` and `<ManualLink>`
+  (`apps/web/src/brand.ts`); `tools/checks/docs.mjs` fails when one names a page or heading that does not exist,
+  and when a nav entry has no file or a page is neither in the nav nor under `not_in_nav`.
+- **Hints** — `apps/web/test/hint.test.ts` covers when a hint opens and closes (hover, keyboard focus, tap,
+  Escape), and `apps/web/test/buttons.test.ts` that every icon-only button has a name or a hint.
 - **The manual's theme** — `node tools/dev/docs-theme.mjs` writes `docs/stylesheets/tokens.gen.css` from the
   app's tokens and fonts, and copies Mermaid's browser build into `docs/assets/vendor/` for the build;
   `--check` (in `pnpm run check` and the docs workflow) fails when the committed theme no longer matches.

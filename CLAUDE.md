@@ -26,7 +26,9 @@ tracks moving it out of `workers/`) run by `servers/node` (Node + SQLite) and `s
 `rpId` binds to one domain, so `.com` is a pure redirect, never a sign-in origin.
 apps/ingest = the operator-local RF/APRS-IS ingest (Pi/PC/mini-PC; a cloud box MAY run an IS-only
 feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs = pure parser (runs in
-Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts.
+Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts. The manual is the MkDocs site built from `docs/`
+(`mkdocs.yml`, published at https://apachler.github.io/aprscaching/); the app links to it (`manualUrl()` in
+`apps/web/src/brand.ts`) and never bundles it, and explains its own controls with hints (`apps/web/src/ui/Hint.tsx`).
 
 ## Deployment
 Shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker stack (gateway + ingest + Caddy)

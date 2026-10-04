@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { getMeshcomGroupMessages, type MeshcomGroup, type MeshcomGroupMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
+import { EmptyState, ErrorState, LoadMore, usePaged, InfoTip } from "../ui/index.js";
 
 /** How the receiving node heard a group message, in words. */
 const HEARD: Record<NonNullable<MeshcomGroupMessage["heard"]>, string> = {
@@ -48,8 +48,12 @@ export function MeshcomGroupsSection(props: { groups: MeshcomGroup[] }) {
       ) : (
         <>
           <label>
-            Group
-            <select value={group ?? ""} onChange={(e) => setPicked(e.target.value)}>
+            Group{" "}
+            <InfoTip
+              text="A MeshCom chat channel named by a number, such as 232; * reaches every node."
+              label="What is a MeshCom group?"
+            />
+            <select aria-label="Group" value={group ?? ""} onChange={(e) => setPicked(e.target.value)}>
               {props.groups.map((g) => (
                 <option key={g.group} value={g.group}>
                   {groupName(g.group)} · {g.messages} {g.messages === 1 ? "message" : "messages"}

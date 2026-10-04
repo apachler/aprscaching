@@ -10,6 +10,7 @@
  * `panels={false}`.
  */
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Hint } from "./Hint.js";
 
 export interface TabItem<K extends string> {
   key: K;
@@ -67,7 +68,7 @@ export function Tabs<K extends string>(props: {
       {props.items.map((item) => {
         const on = item.key === selected;
         const closable = !!props.onClose && item.closable !== false;
-        return (
+        const tab = (
           <button
             key={item.key}
             ref={(el) => {
@@ -79,7 +80,6 @@ export function Tabs<K extends string>(props: {
             aria-selected={on}
             aria-controls={on && props.panels !== false ? tabPanelId(props.idBase, item.key) : undefined}
             aria-keyshortcuts={closable ? "Delete" : undefined}
-            title={item.title}
             tabIndex={on ? 0 : -1}
             className={["tab", on ? "on" : "", item.className].filter(Boolean).join(" ")}
             onClick={() => props.onChange(item.key)}
@@ -100,6 +100,13 @@ export function Tabs<K extends string>(props: {
               </span>
             )}
           </button>
+        );
+        return item.title ? (
+          <Hint key={item.key} text={item.title}>
+            {tab}
+          </Hint>
+        ) : (
+          tab
         );
       })}
     </div>

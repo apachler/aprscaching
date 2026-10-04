@@ -8,11 +8,13 @@
  *
  * `NAV_ITEMS` is the single table of top-level destinations: the rail draws it, the mobile tab bar
  * draws its `tab` subset and its More sheet the rest (`MORE_ITEMS`), so the phone reaches every destination the
- * rail has; all of them derive their active item from the open view with `activeKey`.
+ * rail has; all of them derive their active item from the open view with `activeKey`. `NAV_LINKS` are the
+ * destinations outside the app (the manual), which the rail and the More sheet both end with.
  * `?view=` query strings (the shared SURFACES deep links, plus admin, the Shack apps and a station)
  * map to views through `viewQuery` / `viewFromQuery`; the map position stays in MapLibre's hash.
  */
 import type { IconName } from "./ui/Icon.js";
+import { MANUAL_URL } from "./brand.js";
 import { SHACK_APPS, type ShackAppId } from "./shack/apps.js";
 
 export type PanelKey =
@@ -26,7 +28,6 @@ export type PanelKey =
   | "profile"
   | "settings"
   | "admin"
-  | "docs"
   | "signin"
   | "outbox"
   | "offline"
@@ -52,7 +53,6 @@ const PANEL_KEYS: readonly PanelKey[] = [
   "profile",
   "settings",
   "admin",
-  "docs",
   "signin",
   "outbox",
   "offline",
@@ -66,6 +66,8 @@ export interface NavItem {
   key: "map" | PanelKey;
   label: string;
   icon: IconName;
+  /** One line on what the destination holds, for its hint. */
+  hint: string;
   /** Rail section: pinned Shack apps render between "top" and "bottom". */
   section: "top" | "bottom";
   /** Also a mobile tab, with the glyph the Phosphor theme shows in place of its icon. */
@@ -75,35 +77,104 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { key: "map", label: "Map", icon: "map", section: "top", tab: { cog: "▦" } },
-  { key: "nearby", label: "Nearby", icon: "locate", section: "top", tab: { cog: "@" } },
-  { key: "activity", label: "Activity", icon: "bench", section: "top", tab: { cog: "↯" } },
-  { key: "messages", label: "Messages", icon: "message", section: "top" },
-  { key: "ranks", label: "Ranks", icon: "ranks", section: "top" },
-  { key: "shack", label: "Shack", icon: "tools", section: "top" },
-  { key: "profile", label: "You", icon: "profile", section: "bottom" },
-  { key: "offline", label: "Offline", icon: "import", section: "bottom" },
-  { key: "settings", label: "Settings", icon: "settings", section: "bottom" },
-  { key: "admin", label: "Admin", icon: "shield-check", section: "bottom", sysop: true },
+  {
+    key: "map",
+    label: "Map",
+    icon: "map",
+    hint: "Caches, stations and spots on the live map",
+    section: "top",
+    tab: { cog: "▦" },
+  },
+  {
+    key: "nearby",
+    label: "Nearby",
+    icon: "locate",
+    hint: "The caches closest to you or to the map's centre",
+    section: "top",
+    tab: { cog: "@" },
+  },
+  {
+    key: "activity",
+    label: "Activity",
+    icon: "bench",
+    hint: "Recent finds, new caches and what stations heard",
+    section: "top",
+    tab: { cog: "↯" },
+  },
+  {
+    key: "messages",
+    label: "Messages",
+    icon: "message",
+    hint: "APRS messages to and from your callsign",
+    section: "top",
+  },
+  {
+    key: "ranks",
+    label: "Ranks",
+    icon: "ranks",
+    hint: "Leaderboards of finders and hiders by callsign",
+    section: "top",
+  },
+  {
+    key: "shack",
+    label: "Shack",
+    icon: "tools",
+    hint: "Radio apps: packet terminal, BBS, decoder, rig control and tools",
+    section: "top",
+  },
+  {
+    key: "profile",
+    label: "You",
+    icon: "profile",
+    hint: "Your profile, finds, hides and callsigns",
+    section: "bottom",
+  },
+  {
+    key: "offline",
+    label: "Offline",
+    icon: "import",
+    hint: "Save areas and logs for use without signal",
+    section: "bottom",
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    icon: "settings",
+    hint: "Account, appearance, your radio, notifications and your data",
+    section: "bottom",
+  },
+  {
+    key: "admin",
+    label: "Admin",
+    icon: "shield-check",
+    hint: "Settings for the whole instance, for its operator only",
+    section: "bottom",
+    sysop: true,
+  },
 ];
 export const TAB_ITEMS: readonly NavItem[] = NAV_ITEMS.filter((i) => i.tab);
 
-/** A destination in the phone's More sheet: a nav item, or the manual, which the rail reaches from the top bar. */
-export interface MoreItem {
-  key: NavItem["key"] | "docs";
-  label: string;
-  icon: IconName;
-  sysop?: boolean;
-}
 /**
- * The phone's More sheet: every rail destination that is not a tab, in the rail's order with You first, then the
- * manual, and Admin last for the operator.
+ * The phone's More sheet: every rail destination that is not a tab, in the rail's order with You first and Admin
+ * last for the operator.
  */
-export const MORE_ITEMS: readonly MoreItem[] = [
+export const MORE_ITEMS: readonly NavItem[] = [
   ...NAV_ITEMS.filter((i) => i.key === "profile"),
   ...NAV_ITEMS.filter((i) => !i.tab && i.key !== "profile" && !i.sysop),
-  { key: "docs", label: "Manual", icon: "info" },
   ...NAV_ITEMS.filter((i) => i.sysop),
+];
+
+/** A destination outside the app, opened in a new tab. */
+export interface NavLink {
+  key: string;
+  label: string;
+  icon: IconName;
+  href: string;
+  /** What is behind the link, for its hint. */
+  hint: string;
+}
+export const NAV_LINKS: readonly NavLink[] = [
+  { key: "manual", label: "Manual", icon: "book", href: MANUAL_URL, hint: "The user manual, on its own site" },
 ];
 /** Whether the open view is one the More sheet reaches, so the More tab lights for it. */
 export function inMore(view: View): boolean {
@@ -136,7 +207,7 @@ export function sameView(a: View, b: View): boolean {
 /** `search` with the view's `?view=` parameters in place of any it carried; other parameters stay. */
 export function viewQuery(view: View, search: string): string {
   const p = new URLSearchParams(search);
-  for (const k of ["view", "call", "doc"]) p.delete(k);
+  for (const k of ["view", "call"]) p.delete(k);
   if (view.kind === "panel") p.set("view", view.key);
   else if (view.kind === "app") p.set("view", view.id);
   else if (view.kind === "station") {

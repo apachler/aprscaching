@@ -147,7 +147,7 @@ export function FindView(props: {
           <h2 id="find-title" className="find-title">
             {props.title} <span className="mono muted">{props.code}</span>
           </h2>
-          <Button variant="icon" onClick={props.onClose} aria-label="Close" title="Close">
+          <Button variant="icon" onClick={props.onClose} aria-label="Close">
             <Icon name="close" size={18} />
           </Button>
         </div>

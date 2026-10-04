@@ -3,9 +3,8 @@
  * Draws the manual's diagrams. A ```mermaid block arrives as <pre class="diagram"> (mkdocs.yml); on a page
  * that has one, this loads the self-hosted Mermaid (assets/vendor/, copied from the web app's locked
  * dependency by tools/dev/docs-theme.mjs) and draws each block in the colours of the reader's scheme: the
- * app's diagram tokens, resolved to #rrggbb because Mermaid cannot read custom properties or OKLCH. The
- * in-app reader (apps/web/src/docs/diagrams.ts) draws the same blocks the same way. Switching the scheme
- * draws them again. A block that cannot be drawn keeps its source.
+ * app's diagram tokens, resolved to #rrggbb because Mermaid cannot read custom properties or OKLCH.
+ * Switching the scheme draws them again. A block that cannot be drawn keeps its source.
  */
 (function () {
   var blocks = Array.prototype.slice.call(document.querySelectorAll("pre.diagram"));
@@ -112,7 +111,7 @@
       securityLevel: "strict",
       suppressErrorRendering: true, // a diagram that fails keeps its source, not Mermaid's error picture
       theme: "base",
-      layout: "dagre", // as the in-app reader, whose bundle leaves ELK out
+      layout: "dagre", // the vendored build carries no ELK layout
       themeVariables: themeVariables(),
     });
     for (var pre of blocks) {

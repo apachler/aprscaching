@@ -15,11 +15,13 @@ at the end you stand at the cache with its sheet open, ready to log.
 | Everything else             | **More**                                | its own entry                           |
 
 **More** lists the rest, in the order of the left rail: **You** (your profile), **Messages**, **Ranks**, **Shack**,
-**Offline**, **Settings** and **Manual**, plus **Admin** for the sysop. A dot marks one that needs you: a new
-message, or a callsign still to verify. The same dot shows on **More** and on the left rail.
+**Offline** and **Settings**, plus **Admin** for the sysop, and last **Manual**, which opens this manual in a new
+tab. A dot marks one that needs you: a new message, or a callsign still to verify. The same dot shows on **More**
+and on the left rail.
 
-The centre button shows **Log** while a cache is open and **Hide** otherwise. On a computer, the **Manual** icon
-in the top bar also opens this manual. The bell in the top bar opens your alerts
+The centre button shows **Log** while a cache is open and **Hide** otherwise. On a computer, **Manual** sits at the
+foot of the left rail. Rest the pointer on a control, or move to it with the keyboard, to see a one-line hint of
+what it does; the small **i** beside a term explains it on a tap. The bell in the top bar opens your alerts
 ([Alerts and the watchlist](community.md#alerts-and-the-watchlist)).
 
 ![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }

@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Panel, Badge, EmptyState, ErrorState, Icon, Tabs, tabPanelId } from "../ui/index.js";
+import { Button, Panel, Badge, EmptyState, ErrorState, Icon, Tabs, tabPanelId, InfoTip } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
@@ -235,7 +236,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       title={
         <>
           <Icon name="message" cp437="" className="lead-ic" />
-          BBS
+          BBS <InfoTip text={TERMS.bbs} label="What is a BBS?" />
         </>
       }
       onClose={props.onClose}
@@ -251,10 +252,10 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
           setSelected(null);
         }}
         items={[
-          { key: "inbox", label: tabLabel("Inbox", unread) },
-          { key: "sent", label: "Sent" },
-          { key: "bulletins", label: "Bulletins" },
-          { key: "compose", label: "Compose" },
+          { key: "inbox", label: tabLabel("Inbox", unread), title: "Mail addressed to your callsign" },
+          { key: "sent", label: "Sent", title: "Mail you sent, and where it stands" },
+          { key: "bulletins", label: "Bulletins", title: "Messages to everyone, such as ALL or a BLN topic" },
+          { key: "compose", label: "Compose", title: "Write personal mail or a bulletin" },
         ]}
       />
       <div role="tabpanel" id={tabPanelId("bbs", tab)}>
@@ -315,8 +316,12 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
           <>
             {replyTo != null && <p className="muted">↳ reply to message #{replyTo} (threaded)</p>}
             <label>
-              Type
-              <select value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
+              Type{" "}
+              <InfoTip
+                text="Personal goes to one callsign, a bulletin to everyone, Traffic is an NTS radiogram."
+                label="What do the types mean?"
+              />
+              <select aria-label="Type" value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
                 <option value="P">Personal</option>
                 <option value="B">Bulletin</option>
                 <option value="T">Traffic (NTS)</option>

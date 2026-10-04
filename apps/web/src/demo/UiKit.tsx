@@ -37,6 +37,8 @@ import {
   Tabs,
   tabPanelId,
   ChipToggle,
+  ManualLink,
+  InfoTip,
 } from "../ui/index.js";
 import { FormatContext, loadSettings, makeFormatters } from "../format.js";
 
@@ -392,6 +394,16 @@ function Primitives() {
       <Disclosure label="Verification · Location-verified or better" variant="section">
         A find counts from Tier B: the app's location check, or a receiving station that heard you.
       </Disclosure>
+      <p className="row gap-2">
+        <Button variant="icon" hint="Copy the coordinates">
+          <Icon name="copy" size={16} />
+        </Button>
+        Attested site{" "}
+        <InfoTip text="A receiving station the sysop vouches for as their own." label="What is an attested site?" />
+        <ManualLink page="glossary" anchor="attested-site">
+          Glossary
+        </ManualLink>
+      </p>
 
       <h3>States</h3>
       <div className="uikit-grid2">
@@ -476,7 +488,7 @@ function Kit() {
               <h1>UI kit</h1>
               <p className="muted">
                 The design language of APRScaching, live: tokens, scales and every primitive. The text is in{" "}
-                <a href="/?view=docs&doc=contribute/design/design-language">Design language</a>.
+                <ManualLink page="contribute/design/design-language">Design language</ManualLink>.
               </p>
               <div className="uikit-row">
                 <Seg

@@ -164,7 +164,7 @@ export function NearbyPanel(props: {
         )}
         <Button
           className="fine"
-          title="Offline packs: caches, details and images for a trip without signal"
+          hint="Save caches, details and images for a trip without signal"
           onClick={props.onOffline}
         >
           Offline packs

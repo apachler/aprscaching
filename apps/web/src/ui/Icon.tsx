@@ -69,6 +69,8 @@ export type IconName =
   | "antenna"
   | "trophy"
   | "place"
+  | "book"
+  | "external"
   | "menu";
 
 const D: Record<IconName, string> = {
@@ -135,6 +137,8 @@ const D: Record<IconName, string> = {
   antenna: "M12 12v9 M8 21h8 M9.5 9a2.5 2.5 0 1 1 5 0 M6.5 6.5a7.5 7.5 0 0 1 11 0 M12 9.5h.01",
   trophy: "M8 21h8 M12 16v5 M7 4h10v5a5 5 0 0 1-10 0z M17 6h3v1a3 3 0 0 1-3 3 M7 6H4v1a3 3 0 0 0 3 3",
   place: "M12 21s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z M12 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+  book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5",
+  external: "M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
 };
 
 /** Every icon, in the order they are defined (the design harness shows them all). */

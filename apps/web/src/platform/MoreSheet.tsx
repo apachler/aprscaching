@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Button, Icon, Sheet } from "../ui/index.js";
-import { MORE_ITEMS, type MoreItem } from "../nav.js";
+import { MORE_ITEMS, NAV_LINKS, type NavItem } from "../nav.js";
 
 /**
  * The phone's More sheet: every destination the desktop rail offers that is not a tab (You, Messages, Ranks, the
- * Shack, Offline, Settings, the manual, and Admin for the operator), from the same nav table so the two never drift.
- * A dot marks a destination that needs attention, with words for a screen reader.
+ * Shack, Offline, Settings, and Admin for the operator), then the manual, from the same nav table so the two never
+ * drift. A dot marks a destination that needs attention, with words for a screen reader.
  */
 export function MoreSheet(props: {
   active: string;
   attention: ReadonlySet<string>;
   sysop: boolean;
-  onPick: (key: MoreItem["key"]) => void;
+  onPick: (key: NavItem["key"]) => void;
   onClose: () => void;
 }) {
   const items = MORE_ITEMS.filter((i) => !i.sysop || props.sysop);
@@ -27,9 +27,25 @@ export function MoreSheet(props: {
               onClick={() => props.onPick(i.key)}
             >
               <Icon name={i.icon} size={20} />
-              <span>{i.label}</span>
+              <span>
+                {i.label}
+                <span className="more-hint">{i.hint}</span>
+              </span>
               {props.attention.has(i.key) && <span className="nav-dot" aria-hidden="true" />}
             </Button>
+          </li>
+        ))}
+        {NAV_LINKS.map((l) => (
+          <li key={l.key}>
+            <a className="more-item" href={l.href} target="_blank" rel="noopener">
+              <Icon name={l.icon} size={20} />
+              <span>
+                {l.label}
+                <Icon name="external" size={12} cp437="" className="ext-ic" />
+                <span className="more-hint">{l.hint}</span>
+              </span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
           </li>
         ))}
       </ul>

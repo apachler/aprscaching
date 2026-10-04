@@ -29,7 +29,9 @@ import {
   useLoad,
   usePaged,
   useToast,
+  InfoTip,
 } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { WxTxToggles } from "./WxTxToggles.js";
 
 const ROLE_LABEL: Record<StationRole, string> = {
@@ -274,7 +276,8 @@ function StationFields(props: {
     <>
       {props.callsignEditable && (
         <label>
-          Callsign <span className="muted">(with SSID, e.g. OE8APR-1)</span>
+          Callsign <span className="muted">(with SSID, e.g. OE8APR-1)</span>{" "}
+          <InfoTip text={TERMS.ssid} label="What is an SSID?" />
           <input
             className="mono"
             value={v.callsign ?? ""}
@@ -316,7 +319,13 @@ function StationFields(props: {
         />
       </label>
       <fieldset className="roles">
-        <legend>Roles</legend>
+        <legend>
+          Roles{" "}
+          <InfoTip
+            text="A digipeater repeats packets on the air; an IGate copies what it hears to APRS-IS."
+            label="What do the roles mean?"
+          />
+        </legend>
         {STATION_ROLES.map((r) => (
           <label key={r} className="role-check">
             <input type="checkbox" checked={(v.roles ?? []).includes(r)} onChange={() => toggleRole(r)} />{" "}

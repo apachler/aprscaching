@@ -62,7 +62,6 @@ function AppShell({
         onNearby={noop}
         onActivity={noop}
         onProfile={noop}
-        onDocs={noop}
       />
       <div className="shell">
         <NavRail

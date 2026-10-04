@@ -6,16 +6,14 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Icon.js";
 import { TIER_NAME, TIER_DESC } from "./Badge.js";
+import { Hint } from "./Hint.js";
 
 export type Tier = "A" | "B" | "C";
 
 /** Square letter chip (A/B/C) — solid tier colour, near-black letter. `lg` for headers. */
 export function TierChip(props: { tier: Tier; lg?: boolean; title?: string }) {
-  return (
-    <span className={`tierchip ${props.tier}${props.lg ? " lg" : ""}`} title={props.title}>
-      {props.tier}
-    </span>
-  );
+  const chip = <span className={`tierchip ${props.tier}${props.lg ? " lg" : ""}`}>{props.tier}</span>;
+  return props.title ? <Hint text={props.title}>{chip}</Hint> : chip;
 }
 
 /** A cache's minimum verification: the tier a find there must reach to count, by name, with its meaning. */

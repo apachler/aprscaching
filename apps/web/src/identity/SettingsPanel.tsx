@@ -25,6 +25,7 @@ import {
   useLoad,
   Icon,
   Segmented,
+  ManualLink,
 } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
@@ -56,7 +57,6 @@ export function SettingsPanel(props: {
   /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it with the operator CLI. */
   operatorPending?: boolean;
   onSignIn: () => void;
-  onDocs?: () => void;
   /** start the first-run tour again */
   onTour?: () => void;
   onClose: () => void;
@@ -210,27 +210,41 @@ export function SettingsPanel(props: {
       )}
 
       {session.signedIn && match("profile display name locator grid bio links avatar contact public") && (
-        <Group title="Profile" defaultOpen={false}>
+        <Group title="Profile" help="What other players see on your public profile." defaultOpen={false}>
           <ProfileEditor callsign={callsign} />
         </Group>
       )}
 
       {session.signedIn &&
         match("weather station PWS home Ecowitt Weather Underground WU temperature wind rain sensor") && (
-          <Group title="Home weather station" status="PWS" defaultOpen={false}>
+          <Group
+            title="Home weather station"
+            status="PWS"
+            help="Send your personal weather station's readings here; they never affect finds."
+            defaultOpen={false}
+          >
             <WeatherStation callsign={callsign} />
           </Group>
         )}
 
       {session.signedIn &&
         match("my stations operated callsign SSID digipeater igate node relay mountain remote location registry") && (
-          <Group title="My stations" defaultOpen={false}>
+          <Group
+            title="My stations"
+            help="The stations you run, each under its own callsign and SSID: weather, digipeater, IGate, node."
+            defaultOpen={false}
+          >
             <MyStations callsign={callsign} />
           </Group>
         )}
 
       {session.signedIn && match("my radio browser RF Web Serial BLE KISS TNC bridge station") && (
-        <Group title="My radio (browser)" status="RF bridge" defaultOpen={false}>
+        <Group
+          title="My radio (browser)"
+          status="RF bridge"
+          help="Connect a radio or TNC to this browser over USB or Bluetooth, to hear and send APRS."
+          defaultOpen={false}
+        >
           <ConnectionsSettings callsign={callsign} verified={verified} />
         </Group>
       )}
@@ -244,7 +258,11 @@ export function SettingsPanel(props: {
       )}
 
       {session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (
-        <Group title="Notifications" defaultOpen={false}>
+        <Group
+          title="Notifications"
+          help="Alerts when the network hears a callsign on your watchlist."
+          defaultOpen={false}
+        >
           <Row
             label="Email digest"
             help={
@@ -318,7 +336,12 @@ export function SettingsPanel(props: {
       )}
 
       {match("Your data export erase delete GDPR DSGVO privacy account") && (
-        <Group title="Your data" status="GDPR" defaultOpen={false}>
+        <Group
+          title="Your data"
+          status="GDPR"
+          help="Download everything this instance holds about you, or erase it."
+          defaultOpen={false}
+        >
           {!session.signedIn || callsign.length < 3 ? (
             <>
               <p className="muted">Sign in first to export or erase your data.</p>
@@ -345,7 +368,12 @@ export function SettingsPanel(props: {
       )}
 
       {match("support donate donation supporter sponsor ledger transparency liberapay kofi patreon contribute") && (
-        <Group title="Support the project" status="♥" defaultOpen={false}>
+        <Group
+          title="Support the project"
+          status="♥"
+          help="Donations are thanks only: every feature stays free."
+          defaultOpen={false}
+        >
           <SupportSettings signedIn={session.signedIn} />
         </Group>
       )}
@@ -355,11 +383,7 @@ export function SettingsPanel(props: {
       ) && (
         <Group title="Help & credits" defaultOpen={false}>
           <p className="row gap-2">
-            {props.onDocs && (
-              <Button variant="quiet" onClick={props.onDocs}>
-                Read the manual
-              </Button>
-            )}
+            <ManualLink>Read the manual</ManualLink>
             {props.onTour && (
               <Button variant="quiet" onClick={props.onTour}>
                 Take the tour again
@@ -373,7 +397,7 @@ export function SettingsPanel(props: {
           </p>
           <p className="muted">
             {APRS_CREDIT} {APRS_MARK} This is an independent, unofficial implementation built from open specifications
-            (see the Specification registry in the manual). {APRS_NOT_AFFILIATED}
+            (see the <ManualLink page="contribute/specs">specification registry</ManualLink>). {APRS_NOT_AFFILIATED}
           </p>
           <p className="muted">
             {OTHER_MARKS} {OTHERS_NOT_AFFILIATED}
@@ -396,9 +420,9 @@ export function SettingsPanel(props: {
             Font Pack v2.2 by VileR (int10h.org), CC BY-SA 4.0.
           </p>
           <p className="muted">
-            Built on open source, among others React (MIT), MapLibre GL (BSD-3-Clause), uPlot (MIT), zod (MIT), Mermaid
-            (MIT), pmtiles (BSD-3-Clause), fflate (MIT) and node-forge (BSD-3-Clause). The bundle is minified, so the
-            copyright notices and license texts of every library in it are reproduced in{" "}
+            Built on open source, among others React (MIT), MapLibre GL (BSD-3-Clause), uPlot (MIT), zod (MIT), pmtiles
+            (BSD-3-Clause), fflate (MIT) and node-forge (BSD-3-Clause). The bundle is minified, so the copyright notices
+            and license texts of every library in it are reproduced in{" "}
             <a href="/third-party-notices.txt" target="_blank" rel="noreferrer">
               third-party notices
             </a>

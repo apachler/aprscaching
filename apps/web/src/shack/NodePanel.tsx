@@ -32,7 +32,12 @@ export function NodePanel() {
 
   return (
     <div className="node-panel">
-      <Button variant="quiet" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <Button
+        variant="quiet"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        hint="The NET/ROM nodes this node has learned, and the stations it heard recently"
+      >
         {open ? "▾" : "▸"} NODES + MHeard
       </Button>
       {open && loadErr && (

@@ -191,7 +191,7 @@ async function main() {
     });
     check(`the shell is stored (${stored} files)`, stored > 10);
 
-    await page.click('.rail button[title="Offline"]');
+    await page.click('.rail >> role=button[name="Offline"s]');
     await page.click('.newpack .seg button:has-text("Subsquare")');
     await page.click('button:has-text("Check size")');
     await page.waitForSelector(".pack-estimate", { timeout: 15_000 });

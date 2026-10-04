@@ -93,8 +93,8 @@ sentences are flagged.
 
 A diagram in the manual, a README or a rule (a topology, a data path, an exchange, a state machine, a schema)
 MUST be a ```` ```mermaid ```` block: `flowchart` for topologies and paths, `sequenceDiagram` for exchanges,
-`stateDiagram-v2` for states, `erDiagram` for tables. The published manual and the in-app reader draw the same
-block in the theme's colours, and a reader without it still sees readable source. Keep labels short; the prose
+`stateDiagram-v2` for states, `erDiagram` for tables. The published manual draws the block in the theme's
+colours, and a reader without it still sees readable source. Keep labels short; the prose
 around the diagram carries the explanation.
 
 - MUST NOT draw diagrams in box-drawing characters or ASCII arrows inside a fenced block.
@@ -111,8 +111,8 @@ around the diagram carries the explanation.
 manual, the root documents and the READMEs, on configuration keys missing from
 `docs/reference/configuration.md` (or documented but unread), on manual pages outside the nav, on broken
 links outside the manual, on box-drawing diagrams in fenced blocks, and on any reference to a manual page or
-heading that does not exist: a `docs/…` path in code, scripts or comments, a published-manual URL, an in-app
-`doc=` link or a doctor hint; and on a list item MkDocs would render as paragraph text, for want of a blank
+heading that does not exist: a `docs/…` path in code, scripts or comments, a published-manual URL, a web-app
+`manualUrl("…")` / `<ManualLink page="…">` link or a doctor hint; and on a list item MkDocs would render as paragraph text, for want of a blank
 line before it (a list right after a paragraph, or the item after one that holds a blank line). Pages move without redirects, so a move updates every reference in the same
 change. The web app's `test/diagrams.test.ts` parses every ```` ```mermaid ```` block. It cannot judge subtler story-telling or code comments; review still does.
 

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { decodePacket, type DecodedPacket } from "../api.js";
-import { Button, Badge, Card } from "../ui/index.js";
+import { Button, Badge, Card, Hint } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 
 /**
  * DecoderPanel — paste a raw TNC2 / APRS-IS line and see the decoded AX.25 frame + parsed fields.
@@ -28,6 +29,7 @@ export function DecoderPanel() {
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
         rows={3}
+        aria-label="Raw packet"
         placeholder="paste a raw TNC2 / APRS-IS line…"
       />
       <div className="row between mt-2">
@@ -43,10 +45,16 @@ export function DecoderPanel() {
         <Card className="decoded">
           <div className="row between">
             <strong className="mono">{decoded.frame.src}</strong>
-            <Badge>{decoded.frame.heardVia}</Badge>
+            <Badge title="How the line says the packet arrived: heard on the air or over APRS-IS">
+              {decoded.frame.heardVia}
+            </Badge>
           </div>
           <div className="muted">
-            → {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}
+            →{" "}
+            <Hint text={TERMS.tocall}>
+              <span>{decoded.frame.dst}</span>
+            </Hint>{" "}
+            · {decoded.frame.path.join(" · ") || "(no path)"}
           </div>
           <div className="kind">{String(decoded.data?.kind)}</div>
           <dl className="fields">

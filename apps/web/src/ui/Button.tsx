@@ -10,10 +10,16 @@
  *   quiet          a text-styled action in the heading colour ("Show the logbook", "Back")
  *   inline         a small underlined action beside a list row ("remove")
  *   inline-danger  the same, destructive
- *   icon           an icon alone; it needs an accessible name (aria-label or title)
+ *   icon           an icon alone; it needs an accessible name (aria-label, hint or title)
  *   icon-subtle    a small muted icon alone, in a row's corner; it needs a name too
+ *
+ * `hint` (or `title`, which means the same) is the one line that says what the button does, shown on hover and
+ * keyboard focus by Hint, never as the browser's own title tooltip. A button with no words of its own (an icon)
+ * and no aria-label takes it as its accessible name; any other button takes it as its description.
  */
-import type { ButtonHTMLAttributes } from "react";
+import { isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Hint } from "./Hint.js";
+import { hasWords } from "./hintController.js";
 
 export type ButtonVariant =
   "primary" | "secondary" | "danger" | "quiet" | "inline" | "inline-danger" | "icon" | "icon-subtle";
@@ -29,14 +35,28 @@ const CLASS: Record<ButtonVariant, string> = {
   "icon-subtle": "iconbtn",
 };
 
+const childrenOf = (n: ReactNode): ReactNode =>
+  isValidElement<{ children?: ReactNode }>(n) ? n.props.children : undefined;
+
 export function Button({
   variant = "secondary",
   className,
+  hint,
+  title,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-  if (import.meta.env?.DEV && (variant === "icon" || variant === "icon-subtle") && !rest["aria-label"] && !rest.title) {
-    console.warn("Button: an icon-only button needs aria-label or title");
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; hint?: string }) {
+  const text = hint ?? title;
+  const iconOnly = variant === "icon" || variant === "icon-subtle";
+  if (import.meta.env?.DEV && iconOnly && !rest["aria-label"] && !text) {
+    console.warn("Button: an icon-only button needs aria-label or hint");
   }
   const cls = [CLASS[variant], className].filter(Boolean).join(" ");
-  return <button className={cls || undefined} {...rest} />;
+  const label = rest["aria-label"] ?? (iconOnly || !hasWords(rest.children, childrenOf) ? text : undefined);
+  const button = <button className={cls || undefined} {...rest} aria-label={label} />;
+  if (!text) return button;
+  return (
+    <Hint text={text} describe={label !== text}>
+      {button}
+    </Hint>
+  );
 }

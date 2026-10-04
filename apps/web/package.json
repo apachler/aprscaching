@@ -19,7 +19,6 @@
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/tools": "workspace:*",
     "maplibre-gl": "^6.11.2",
-    "mermaid": "12.0.0",
     "node-forge": "^1.4.0",
     "pmtiles": "^4.5.0",
     "react": "^19.3.0",
@@ -34,6 +33,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.1.1",
+    "mermaid": "12.0.0",
     "typescript": "^6.0.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"

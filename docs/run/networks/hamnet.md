@@ -8,7 +8,7 @@ that calls a service on the internet stops; the table names each one and its wor
 
 | Feature | Works without the internet? | Workaround |
 |---------|--------------------|------------|
-| The app itself: scripts, styles, fonts, the MapLibre worker, the in-app manual | Yes | Bundled and served by the instance; nothing loads from a CDN |
+| The app itself: scripts, styles, fonts, the MapLibre worker | Yes | Bundled and served by the instance; nothing loads from a CDN |
 | Base map, *Dark*, *Light* and *Auto* themes (default OpenFreeMap vector style) | No | Build the web app with `VITE_BASEMAP=offline` (the self-contained grid), use the *Phosphor* theme (its grid is built in), or point `VITE_BASEMAP_STYLE` at a style served inside HAMNET. While the online style cannot load, the map fetches caches only after the first pan or zoom |
 | Map tiles for hunters in the field | Yes, with an offline map | Serve an [offline map](../install/offline-map.md): the instance hands out its own PMTiles archive, hunters make offline packs from it over HAMNET, and the app draws a pack's map when it is offline |
 | Topo and satellite layers (OpenTopoMap, EOX) | No | Stay on the vector or offline base map; both layers are opt-in |

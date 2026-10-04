@@ -4,12 +4,12 @@ import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
-import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon } from "../ui/index.js";
+import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon, InfoTip, ManualLink } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { TEXT_LIMITS, type LogType } from "@aprscaching/shared";
 import { refusalMessage } from "../caches/formLimits.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { TermHelp } from "../platform/TermHelp.js";
 
 /**
  * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
@@ -179,7 +179,8 @@ export function LogForm(props: {
                   : findWhy(result, fmt, geoAway, hadGeo)}
               </p>
               <p className="muted fine">
-                <TermHelp term="tier">How finds are verified</TermHelp>
+                <InfoTip text={TERMS.tier} label="What do the tiers mean?" />{" "}
+                <ManualLink page="play/verification">How finds are verified</ManualLink>
               </p>
               {!result.verified && !hadGeo && (
                 <LocateStatus waiting={null} problem={loc.problem} onCancel={loc.cancel} />
@@ -284,7 +285,7 @@ export function LogForm(props: {
               <Button
                 disabled={busy === "maintenance" || !note.trim()}
                 onClick={() => doLog("maintenance", note.trim())}
-                title="As the owner: what you checked or fixed"
+                hint="As the owner: post what you checked or fixed"
               >
                 Post as maintenance
               </Button>

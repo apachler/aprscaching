@@ -114,7 +114,6 @@ describe("the surface table", () => {
       "shack",
       "offline",
       "settings",
-      "docs",
       "admin",
     ]);
     expect(inMore({ kind: "panel", key: "messages" })).toBe(true);

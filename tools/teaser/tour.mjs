@@ -357,7 +357,7 @@ for (const v of VIEWS) {
 
   await step("filter", async () => {
     await closeAll(page);
-    await clickAny(page, ["button[title='Filter by type']"]);
+    await clickAny(page, ["button.filter-ic"]);
     await page.waitForSelector(".panel", { timeout: 6000 });
     await shot(page, v.id, "filter", "Search & filter");
   });
@@ -405,7 +405,7 @@ for (const v of VIEWS) {
   // filter → Live layers, then click a station marker → StationPanel.
   await step("station", async () => {
     await closeAll(page);
-    await clickAny(page, ["button[title='Filter by type']"]);
+    await clickAny(page, ["button.filter-ic"]);
     await page.waitForSelector(".panel", { timeout: 6000 });
     await clickAny(page, [
       ".panel label:has-text('Live stations') ~ * input",
@@ -455,7 +455,9 @@ for (const v of VIEWS) {
     .catch(() => false);
   const rail = railVisible
     ? await page
-        .$$eval(".rail button[title]", (els) => els.map((e) => e.getAttribute("title")).filter(Boolean))
+        .$$eval(".rail button > span:not(.hint, .nav-dot)", (els) =>
+          els.map((e) => e.textContent?.trim()).filter(Boolean),
+        )
         .catch(() => [])
     : [];
 
@@ -463,7 +465,7 @@ for (const v of VIEWS) {
     for (const title of rail.filter((t) => !/^map$/i.test(t))) {
       await step(title, async () => {
         await closeAll(page);
-        if (!(await clickAny(page, [`.rail button[title='${title}']`]))) throw new Error("rail item not found");
+        if (!(await clickAny(page, [`.rail >> role=button[name='${title}'s]`]))) throw new Error("rail item not found");
         await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
         await page.waitForTimeout(450);
         await shot(page, v.id, slug(title), LABELS[title] || title);
@@ -515,16 +517,6 @@ for (const v of VIEWS) {
       });
     }
   }
-
-  // The in-app manual: its single entry point is the compact help icon in the top chrome (present on
-  // every breakpoint) — outside both discovery contracts, so it gets its own scripted step.
-  await step("manual", async () => {
-    await closeAll(page);
-    if (!(await clickAny(page, ["header .help-ic"]))) throw new Error("manual icon not found");
-    await page.waitForSelector(".docs", { timeout: 8000 }).catch(() => {});
-    await page.waitForTimeout(450);
-    await shot(page, v.id, "manual", "Manual — the in-app docs");
-  });
 
   // --- Shack deep-dive: the launcher, the NET/ROM node + Tools plugins (real seeded app), then the
   // hardware/gated surfaces in demo mode (populated sims): GP packet terminal, BBS, CAT rig, remote box.

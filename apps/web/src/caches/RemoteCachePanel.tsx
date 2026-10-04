@@ -23,7 +23,7 @@ export function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }
       <p className="federated">
         ⇄ mirrored from <strong>{c.origin}</strong>
         {c.originTrust === "unvetted" && (
-          <Badge kind="warn" title="From a peer you haven't vetted">
+          <Badge kind="warn" title="This instance's sysop has not vetted the instance this cache comes from">
             unvetted
           </Badge>
         )}

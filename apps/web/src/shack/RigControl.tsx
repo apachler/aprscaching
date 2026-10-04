@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { APRS_FREQ, type CatRig } from "@aprscaching/aprs";
 import { cat, catSupported, useCatConnected, type RigProfile } from "../rf/cat.js";
-import { Button, useToast } from "../ui/index.js";
+import { Button, useToast, InfoTip } from "../ui/index.js";
 
 /**
  * Rig control: connect a transceiver over Web Serial CAT and one-click tune it — the
@@ -91,7 +91,11 @@ export function RigControl() {
           <div className="row">
             <label>
               Baud{" "}
-              <select value={baud} onChange={(e) => setBaud(+e.target.value)}>
+              <InfoTip
+                text="The serial speed set in the radio's CAT menu; both ends must match."
+                label="Which baud rate?"
+              />{" "}
+              <select aria-label="Baud" value={baud} onChange={(e) => setBaud(+e.target.value)}>
                 {BAUDS.map((b) => (
                   <option key={b} value={b}>
                     {b}
@@ -102,8 +106,13 @@ export function RigControl() {
             {rig === "icom" && (
               <label>
                 CI-V addr{" "}
+                <InfoTip
+                  text="The radio's CI-V address in hex, from its CI-V menu."
+                  label="What is the CI-V address?"
+                />{" "}
                 <input
                   className="mono field-xs"
+                  aria-label="CI-V address"
                   value={addr}
                   onChange={(e) => setAddr(e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 2))}
                 />
@@ -111,7 +120,7 @@ export function RigControl() {
             )}
           </div>
           <div className="row end">
-            <Button variant="primary" onClick={connect} disabled={busy}>
+            <Button variant="primary" onClick={connect} disabled={busy} hint="Pick the radio's USB serial port">
               Connect rig
             </Button>
           </div>
@@ -131,6 +140,7 @@ export function RigControl() {
               className="mono"
               inputMode="decimal"
               placeholder="MHz, e.g. 14.074"
+              aria-label="Frequency in MHz"
               value={mhz}
               onChange={(e) => setMhz(e.target.value)}
             />

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile, type RankPeriod } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, Button, Icon, Segmented } from "../ui/index.js";
+import { Panel, Badge, EmptyState, Button, Icon, Segmented, Hint } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { badgeInfo } from "../profile/badges.js";
 
@@ -62,10 +62,17 @@ export function CommunityPanel(props: { onClose: () => void }) {
           <div className="badges">
             {profile.badges.map((b) => {
               const info = badgeInfo(b.badge);
-              return (
-                <span key={b.badge} className="award" title={info.how || undefined}>
+              const award = (
+                <span key={b.badge} className="award">
                   {info.name}
                 </span>
+              );
+              return info.how ? (
+                <Hint key={b.badge} text={info.how}>
+                  {award}
+                </Hint>
+              ) : (
+                award
               );
             })}
           </div>

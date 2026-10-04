@@ -15,6 +15,15 @@ const STATUS: Record<MailboxMessage["status"], string> = {
   expired: "expired",
 };
 
+/** What each state means for the sender. */
+const STATUS_HINT: Record<MailboxMessage["status"], string> = {
+  held: "Waiting until the instance hears the station on the air",
+  sent: "Sent on the air; the station has not acknowledged it yet",
+  delivered: "The station acknowledged it",
+  undelivered: "Sent, but the station never acknowledged it",
+  expired: "Not heard within 7 days, so it was dropped",
+};
+
 /**
  * The Mailbox: leave a short message for a callsign; the instance holds it until that station is heard on the
  * air, then sends it as an APRS message from its service call. Separate from the BBS, which moves its mail
@@ -68,7 +77,7 @@ export function MailboxSection(props: { callsign: string }) {
           <span className="sr-only">to</span>
           <span className="mono msg-to">{m.deliveredTo ?? m.to}</span>
         </span>
-        <Badge>{STATUS[m.status]}</Badge>
+        <Badge title={STATUS_HINT[m.status]}>{STATUS[m.status]}</Badge>
         <span className="muted msg-when">{fmt.ago(m.createdAt)}</span>
       </div>
       <div className="comment msg-body">{m.text}</div>

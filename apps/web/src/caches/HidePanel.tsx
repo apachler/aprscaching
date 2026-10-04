@@ -5,7 +5,8 @@ import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad } from "../ui/index.js";
+import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad, InfoTip } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { TEXT_LIMITS, dxccOfCall, type CacheType, type FedScope } from "@aprscaching/shared";
 import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
 import { CountrySelect } from "./CountrySelect.js";
@@ -233,12 +234,19 @@ export function HidePanel(props: {
               own beacon.
             </p>
           )}
-          <Row label="Log rendezvous when I meet other living caches">
+          <Row
+            label="Log rendezvous when I meet other living caches"
+            help="A rendezvous is recorded when two living caches come within 150 m of each other inside 15 minutes."
+          >
             <Switch label="Log rendezvous" checked={rendezvous} onChange={setRendezvous} />
           </Row>
         </>
       )}
       <h4 className="set-subh">Difficulty &amp; terrain</h4>
+      <p className="muted fine">
+        Difficulty: how hard the cache is to find. Terrain: how hard the place is to reach. Both add to a find&apos;s
+        points.
+      </p>
       <div className="row">
         <label>
           Difficulty {difficulty.toFixed(1)}
@@ -310,7 +318,9 @@ export function HidePanel(props: {
             ))}
           </div>
         )}
-        <h4 className="set-subh">Verification, rating &amp; federation</h4>
+        <h4 className="set-subh">
+          Verification, rating &amp; federation <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
+        </h4>
         <Row
           label="Radio-verified finds only"
           help="A find counts as verified only when a receiving station heard the finder there. Off: this instance's minimum applies."

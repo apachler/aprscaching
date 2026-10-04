@@ -27,6 +27,7 @@ import {
   useConfirm,
   useToast,
 } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { mobileDataAllowed, setMobileDataAllowed } from "./sync.js";
 import {
   estimatePack,
@@ -85,7 +86,7 @@ export function OfflinePanel(props: { onClose: () => void }) {
       {!online && (
         <p className="inline-note">No connection: the packs below work, new ones download once you are back online.</p>
       )}
-      <Group title="Your packs" status={packs ? `${packs.length}` : "…"}>
+      <Group title="Your packs" help={TERMS["offline-pack"]} status={packs ? `${packs.length}` : "…"}>
         {packs && packs.length === 0 ? (
           <EmptyState>No packs yet. Make one below before a trip without signal.</EmptyState>
         ) : (
@@ -96,7 +97,11 @@ export function OfflinePanel(props: { onClose: () => void }) {
           </ul>
         )}
       </Group>
-      <Group title="New pack" status={online ? undefined : "needs a connection"}>
+      <Group
+        title="New pack"
+        help="Pick a locator square; the pack saves its caches, hints, latest logs and, where offered, the map."
+        status={online ? undefined : "needs a connection"}
+      >
         <NewPack onSaved={reload} disabled={!online} />
       </Group>
       <OwnerPack packs={packs ?? []} onSaved={reload} disabled={!online} />
@@ -397,7 +402,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
           <Button
             key={sz.chars}
             onClick={() => fromMap(sz.chars)}
-            title={`The ${sz.label.toLowerCase()} at the map centre, e.g. ${sz.example}`}
+            hint={`Save the ${sz.label.toLowerCase()} at the map centre, such as ${sz.example}`}
           >
             {sz.label}
           </Button>

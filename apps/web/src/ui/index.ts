@@ -25,6 +25,8 @@ export { useModalDialog } from "./useModalDialog.js";
 export { Sheet } from "./Sheet.js";
 export { ConfirmProvider, useConfirm, useChoice } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";
+export { Hint, InfoTip } from "./Hint.js";
+export { ManualLink } from "./ManualLink.js";
 export { CommandBlock } from "./CommandBlock.js";
 export { copyText } from "./clipboard.js";
 export { TierChip, MinTier, DtBars, Stat, type Tier } from "./operator.js";
