@@ -3,6 +3,10 @@
  * exports.ts — public read-API exports: caches as GPX (GPS devices) / KML (Earth),
  * and a person's finds (their base call and every SSID of it) as ADIF (standard logbooks — Log4OM/N1MM/DXLab).
  * Pure builders + read-only queries; served under /api/v1 behind the same rate-limit gate. Runtime-neutral.
+ *
+ * Only native caches export. An imported place stays under its source's licence and attribution terms
+ * (OpenCaching's no-derivatives licence, OpenStreetMap's share-alike, the programmes' own terms), which a
+ * GPX or KML file cannot carry, so imported places are shown on this instance and never re-exported.
  */
 import { baseCall } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
@@ -106,7 +110,8 @@ async function bboxCaches(
   const rows = (
     await env.DB.prepare(
       `SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall
-       FROM caches WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND fed_scope != 'unlisted'
+       FROM caches WHERE source = 'native' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived'
+         AND fed_scope != 'unlisted'
          AND lat IS NOT NULL AND lon IS NOT NULL
        LIMIT 2000`,
     )
@@ -134,7 +139,7 @@ export async function handleCachesKml(req: Request, env: Env): Promise<Response>
 }
 export async function handleCacheGpx(req: Request, env: Env, code: string): Promise<Response> {
   const c = await env.DB.prepare(
-    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND lat IS NOT NULL",
+    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND source = 'native' AND lat IS NOT NULL",
   )
     .bind(code)
     .first<ExpCache>();

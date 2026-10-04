@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "../util/time.js";
 import { ingestSecretOk } from "../auth.js";
-/** Import engine (M3): upsert normalized records (dedup + update on re-import) + the HTTP entry. */
+/** Import engine: upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
 import { json } from "../app.js";
 import { haversineMeters } from "@aprscaching/aprs";
@@ -14,6 +14,29 @@ function rank(source: string): number {
   return HAM.has(source) ? 1 : GEOCACHE.has(source) ? 2 : 3;
 }
 const DEDUP_RADIUS_M = 100;
+
+/** An import the source's terms do not allow this instance yet; the message names what it needs. */
+export class ImportNotPermitted extends Error {}
+
+/** The sources the operator holds permission for (IMPORT_ALLOW, comma-separated ids). */
+function allowedSources(env: Env): Set<string> {
+  return new Set(
+    (env.IMPORT_ALLOW ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+/** Why `sourceId` may not import on this instance, or null when it may. */
+export function importBlocked(env: Env, sourceId: string): string | null {
+  const need = SOURCES[sourceId]?.needsPermission;
+  if (!need || allowedSources(env).has(sourceId)) return null;
+  return `${sourceId}: needs ${need}. Once granted, add ${sourceId} to IMPORT_ALLOW.`;
+}
+
+const attributionJson = (r: ImportedCache): string | null =>
+  r.sourceAttribution?.length ? JSON.stringify(r.sourceAttribution) : null;
 
 /**
  * Insert new imported caches, update existing ones (matched on source + external_id), and
@@ -44,10 +67,24 @@ export async function upsertImported(
         // re-import: refresh content but keep a superseded (archived) row suppressed
         await env.DB.prepare(
           `UPDATE caches SET title=?, type=?, lat=?, lon=?, source_url=?, source_name=?, description=?,
+             source_owner=?, source_attribution=?,
              status = CASE WHEN status='archived' THEN 'archived' ELSE 'active' END,
              updated_at=?, imported_at=? WHERE id=?`,
         )
-          .bind(r.title, r.type, r.lat, r.lon, r.sourceUrl, r.sourceName, r.description ?? null, now, now, existing.id)
+          .bind(
+            r.title,
+            r.type,
+            r.lat,
+            r.lon,
+            r.sourceUrl,
+            r.sourceName,
+            r.description ?? null,
+            r.sourceOwner ?? null,
+            attributionJson(r),
+            now,
+            now,
+            existing.id,
+          )
           .run();
         updated++;
         continue;
@@ -85,8 +122,8 @@ export async function upsertImported(
 
       await env.DB.prepare(
         `INSERT INTO caches (code, owner_call, title, type, status, lat, lon, source, external_id,
-           source_url, source_name, description, created_at, updated_at, imported_at)
-         VALUES (?,?,?,?, 'active', ?,?,?,?, ?,?,?, ?,?,?)`,
+           source_url, source_name, description, source_owner, source_attribution, created_at, updated_at, imported_at)
+         VALUES (?,?,?,?, 'active', ?,?,?,?, ?,?,?,?,?, ?,?,?)`,
       )
         .bind(
           r.code,
@@ -100,6 +137,8 @@ export async function upsertImported(
           r.sourceUrl,
           r.sourceName,
           r.description ?? null,
+          r.sourceOwner ?? null,
+          attributionJson(r),
           now,
           now,
           now,
@@ -124,6 +163,8 @@ export async function upsertImported(
 export async function runImport(env: Env, sourceId: string, scope: ImportScope): Promise<unknown> {
   const adapter = SOURCES[sourceId];
   if (!adapter) throw new Error(`unknown import source '${sourceId}'`);
+  const blocked = importBlocked(env, sourceId);
+  if (blocked) throw new ImportNotPermitted(blocked);
   const records = await adapter.load(env, scope);
   const res = await upsertImported(env, records);
   return { source: sourceId, fetched: records.length, ...res };
@@ -138,6 +179,20 @@ export async function handleImport(req: Request, env: Env, sourceId: string): Pr
   try {
     return json(await runImport(env, sourceId, scope));
   } catch (e) {
+    if (e instanceof ImportNotPermitted) return json({ error: e.message }, { status: 403 });
     return json({ error: (e as Error).message }, { status: 502 });
   }
+}
+
+/** GET /api/import — admin-only (x-ingest-secret): each source and whether this instance may import it. */
+export function handleImportSources(req: Request, env: Env): Response {
+  if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+  return json({
+    sources: Object.values(SOURCES).map((s) => {
+      const blocked = importBlocked(env, s.id);
+      return blocked
+        ? { id: s.id, sourceName: s.sourceName, state: "needs-permission", needs: s.needsPermission }
+        : { id: s.id, sourceName: s.sourceName, state: "ready" };
+    }),
+  });
 }

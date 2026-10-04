@@ -12,12 +12,14 @@
  *   GET /privacy    what this instance processes, why, for how long, and the user's GDPR tools
  *
  * The privacy text states what the software ACTUALLY does (session cookie only, callsign accounts,
- * public-broadcast APRS positions, federation per fed_scope, export/erase self-service). Until the
+ * public-broadcast APRS positions, federation per fed_scope, export/erase self-service), and names
+ * who receives data, listing the email provider and the push services only when they are configured. Until the
  * OPERATOR_* variables are set, both pages render a visible not-yet-configured warning so an
  * operator cannot ship the placeholders unnoticed.
  */
 import type { Env } from "./env.js";
 import { escapeHtml } from "./util/html.js";
+import { EMAIL_API_URL } from "./email.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -66,6 +68,29 @@ the software.</p>`,
   );
 }
 
+/** Who receives personal data from this instance or from the visitor's browser, as list items. */
+function recipients(env: Env): string {
+  const items: string[] = [];
+  if (env.EMAIL_API_KEY && env.EMAIL_FROM)
+    items.push(`<li><strong>Email provider</strong> (${escapeHtml(new URL(EMAIL_API_URL).host)}) — your e-mail
+  address and the text of each sign-in or digest mail, so that it can deliver them.</li>`);
+  if (env.VAPID_PUBLIC && env.VAPID_PRIVATE)
+    items.push(`<li><strong>Browser push services</strong> — when you turn on notifications, the push service of
+  your browser's vendor receives each notification, encrypted, and delivers it to your device.</li>`);
+  items.push(`<li><strong>Map tile hosts</strong> — your browser loads the map directly from the basemap host
+  (OpenFreeMap, tiles.openfreemap.org, unless the operator set another), and from OpenTopoMap
+  (tile.opentopomap.org) or EOX (tiles.maps.eox.at) only when you choose the Topo or Satellite layer. Each host
+  sees your IP address and the map area you view.</li>`);
+  items.push(`<li><strong>APRS-IS and radio</strong> — positions, messages and find announcements this instance
+  sends for you go out on the public APRS network, where any station or website can receive and keep
+  them.</li>`);
+  items.push(`<li><strong>Federation peers</strong> — if this instance federates, it shares signed records of
+  its own caches (except local-only ones) and of their finds with peer instances, under each record's
+  federation scope. Owner contact fields are redacted, and deletions propagate as signed tombstones.
+  Imported places are never shared.</li>`);
+  return `<div class=box><ul>\n${items.join("\n")}\n</ul></div>`;
+}
+
 /** GET /privacy — what this instance processes; states the software's actual behavior. */
 export function handlePrivacyPage(env: Env): Response {
   const op = operator(env);
@@ -91,12 +116,10 @@ ${contact}
   short-lived per-IP counters for rate limiting. No analytics, no advertising, no third-party
   trackers.</li>
 </ul></div>
-<h2>Federation</h2>
-<p>If this instance federates, signed cache/find records are shared with peer instances under the
-record's federation scope; deletions propagate as signed tombstones. Owner contact fields are
-redacted from federated records.</p>
+<h2>Who receives data</h2>
+${recipients(env)}
 <h2>Your rights (GDPR)</h2>
-<p>Export or erase everything tied to your account yourself under <em>Settings → Data</em> — erasure
+<p>Export or erase everything tied to your account yourself under <em>Settings → Your data</em> — erasure
 propagates to federation peers via signed tombstones. For anything else, contact the operator above.
 You also have the right to complain to your supervisory authority.</p>
 <h2>Hosting</h2>

@@ -166,6 +166,12 @@ export type RegisterKeyRequest = z.infer<typeof RegisterKeyRequest>;
 
 // ---- response shapes (worker maps D1 rows -> these camelCase DTOs) ----
 
+/** One run of an imported place's attribution note: plain text, linked when the source linked it. */
+export interface AttributionPart {
+  text: string;
+  href?: string; // http(s) only
+}
+
 export interface CacheSummary {
   id: number;
   code: string;
@@ -181,6 +187,10 @@ export interface CacheSummary {
   source: string;
   sourceName: string | null; // attribution label when imported
   sourceUrl: string | null; // deep link to the source page
+  /** The author's name at the import source (an OpenCaching user name); null for native caches. */
+  sourceOwner: string | null;
+  /** The source's own attribution note, as text parts with optional links; null when it gives none. */
+  sourceAttribution: AttributionPart[] | null;
   minTrust: "A" | "B" | null;
   fedScope: FedScope; // owner's federation scope
   driveIn: boolean; // car-accessible (original APRSCaching "Drive-In")

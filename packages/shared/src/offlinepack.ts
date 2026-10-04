@@ -41,7 +41,12 @@ export interface PackImage {
 
 /** A cache as a pack holds it: the map fields, the page details, its stages' shape and latest logs. */
 export interface PackCache
-  extends MapCache, Pick<CacheSummary, "stationCall" | "minTrust" | "fedScope" | "driveIn" | "country" | "tags"> {
+  extends
+    MapCache,
+    Pick<
+      CacheSummary,
+      "stationCall" | "minTrust" | "fedScope" | "driveIn" | "country" | "tags" | "sourceOwner" | "sourceAttribution"
+    > {
   externalId: string | null;
   hint: string | null;
   description: string | null;

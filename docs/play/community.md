@@ -117,6 +117,8 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 - On a cache page, **GPX** saves the cache as a waypoint for a GPS unit.
 - On the map, **Search & filter → GPX** or **KML** saves every cache in view, for a GPS unit or a map
   program. Zoom in if the view is too wide to export.
+- Both hold this instance's own caches. Places imported from other programmes stay under their source's terms,
+  so they have no GPX button and stay out of the map's GPX and KML; their page links to the source.
 - On your profile, **Download ADIF** saves your finds, under any SSID of your call, for your logbook program.
 - On a station's page, **Track KML** saves its last 24 hours of positions for a map program.
 - Logbook and GPS tools can fetch the same files from the instance's

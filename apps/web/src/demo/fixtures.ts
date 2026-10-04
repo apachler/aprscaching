@@ -275,6 +275,8 @@ const detail = (c: MapCache, extra: Partial<CacheDetail> = {}): CacheDetail => (
   source: c.source,
   sourceName: c.sourceName,
   sourceUrl: c.sourceUrl,
+  sourceOwner: null,
+  sourceAttribution: null,
   minTrust: null,
   fedScope: "public",
   driveIn: false,

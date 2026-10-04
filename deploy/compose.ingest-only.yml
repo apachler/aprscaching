@@ -35,6 +35,7 @@ services:
       FED_SUBMIT_SECRET: ""
       FED_RELAY_SECRET: ""
       OKAPI_KEY: ""
+      GMA_API_KEY: ""
       EMAIL_API_KEY: ""
       VAPID_PRIVATE: ""
       TUNNEL_TOKEN: ""

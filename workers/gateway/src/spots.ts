@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * spots.ts — live activity-spots aggregation. Polls read-only spot
- * sources (POTA now; SOTA/WWBOTA/GMA next), normalizes to the shared `Spot` shape, dedupes across
- * sources, and serves `GET /api/spots?bbox=&bands=&modes=&sources=`.
+ * spots.ts — live activity-spots aggregation. Polls read-only spot sources (POTA, SOTA, GMA when
+ * the instance holds a GMA API key, and the PSKReporter, DX-cluster and RBN reception networks at
+ * endpoints the operator names), normalizes to the shared `Spot` shape, dedupes across sources, and
+ * serves `GET /api/spots?bbox=&bands=&modes=&sources=`.
  *
  * Cost and courtesy: aggregation is lazy + cached in-process per source, so an upstream sees one
  * request per instance rather than one per client, and nothing is persisted. Each source carries its
@@ -30,6 +31,8 @@ import {
 interface SourceDef {
   source: SpotSource;
   url: (env: Env) => string;
+  /** Extra request headers, such as a source's API key. */
+  headers?: (env: Env) => Record<string, string>;
   normalize: (raw: unknown, env: Env) => Spot[] | Promise<Spot[]>;
   /** Minimum seconds between calls to this upstream. A floor: SPOTS_TTL_SEC may lengthen it, never shorten it. */
   minIntervalSec: number;
@@ -349,6 +352,9 @@ const receptionUrl = (env: Env, source: SpotSource): string => {
   return typeof v === "string" ? v : "";
 };
 
+/** GMA's spot feed; it answers only with the instance's GMA_API_KEY. */
+const GMA_SPOTS_URL = "https://www.gma.rocks/api/spots/25/";
+
 const SOTA_SOURCE: SourceDef = {
   source: "sota",
   url: () => "https://api2.sota.org.uk/api/spots/50/all",
@@ -364,9 +370,11 @@ const SOURCES: SourceDef[] = [
     minIntervalSec: 120,
   },
   SOTA_SOURCE,
+  // GMA's spot API answers only with a key, sent as a header so it never lands in a URL or a log
   {
     source: "gma",
-    url: () => "https://www.cqgma.org/api/spots/25/",
+    url: (env) => (env.GMA_API_KEY?.trim() ? GMA_SPOTS_URL : ""),
+    headers: (env) => ({ "x-api-key": env.GMA_API_KEY?.trim() ?? "" }),
     normalize: normalizeGma,
     minIntervalSec: 120,
   },
@@ -404,7 +412,7 @@ const inflight = new Map<SpotSource, Promise<Spot[]>>();
 async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
   try {
     const res = await fetch(def.url(env), {
-      headers: { accept: "application/json", "user-agent": spotsUserAgent(env) },
+      headers: { accept: "application/json", "user-agent": spotsUserAgent(env), ...def.headers?.(env) },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];

@@ -366,9 +366,9 @@ export function SettingsPanel(props: {
           <p className="muted">
             Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre; vector tiles © OpenFreeMap, ©
             OpenMapTiles. Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Map style: ©
-            OpenTopoMap (CC-BY-SA)) · Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus
-            Sentinel data). Imported places name and link their source; that source's own terms apply to its data. DXCC
-            entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
+            OpenTopoMap (CC-BY-SA)) · EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified
+            Copernicus Sentinel data 2016). Imported places name and link their source; that source's own terms apply to
+            its data. DXCC entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
           </p>
           <p className="muted">
             Register badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur

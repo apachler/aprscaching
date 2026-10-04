@@ -288,6 +288,48 @@ describe("spots — polite upstream use", () => {
   });
 });
 
+describe("spots — GMA needs an API key", () => {
+  const gmaSpot = { ACTIVATOR: "OE8APR", LAT: "46.6", LON: "14.3", QRG: "14285", REF: "OE/KT-001" };
+
+  it("sends GMA no request without GMA_API_KEY", async () => {
+    _resetSpotsCache();
+    const orig = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (u: string) => {
+      urls.push(String(u));
+      return Response.json([]);
+    }) as typeof fetch;
+    try {
+      const spots = await getSpots({ SPOTS_ENABLED: "1", SPOTS_SOURCES: "gma" } as unknown as Env);
+      expect(spots).toEqual([]);
+      expect(urls).toEqual([]);
+    } finally {
+      globalThis.fetch = orig;
+      _resetSpotsCache();
+    }
+  });
+
+  it("polls gma.rocks with the key in a header, never in the URL", async () => {
+    _resetSpotsCache();
+    const orig = globalThis.fetch;
+    const calls: { url: string; key: string | null }[] = [];
+    globalThis.fetch = (async (u: string, init?: RequestInit) => {
+      calls.push({ url: String(u), key: new Headers(init?.headers).get("x-api-key") });
+      return Response.json({ RCD: [gmaSpot] });
+    }) as typeof fetch;
+    try {
+      const env = { SPOTS_ENABLED: "1", SPOTS_SOURCES: "gma", GMA_API_KEY: "secret-key" } as unknown as Env;
+      const spots = await getSpots(env);
+      expect(calls).toEqual([{ url: "https://www.gma.rocks/api/spots/25/", key: "secret-key" }]);
+      expect(spots).toHaveLength(1);
+      expect(spots[0]).toMatchObject({ source: "gma", callsign: "OE8APR" });
+    } finally {
+      globalThis.fetch = orig;
+      _resetSpotsCache();
+    }
+  });
+});
+
 describe("spots — reception networks (S3): grid + PSK/DX/RBN", () => {
   it("gridToLatLon returns the square centre and rejects junk", () => {
     expect(gridToLatLon("JN88")).toEqual({ lat: 48.5, lon: 17 });

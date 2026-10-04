@@ -13,8 +13,9 @@ export const APRS_NOT_AFFILIATED =
   "APRScaching is not affiliated with, sponsored by, or endorsed by APRS Foundation, Inc.";
 
 export const OTHER_MARKS =
-  "Meshtastic® is a registered trademark of Meshtastic LLC. Parks on the Air® is a registered service mark of Parks on " +
-  "the Air, Inc. Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook " +
+  "Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software components are released under " +
+  "various licenses, see GitHub for details. Parks on the Air® is a registered service mark of Parks on the Air, Inc. " +
+  "Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook " +
   "of The World® are registered trademarks of the American Radio Relay League, Inc. (ARRL). Geocaching® is a " +
   "registered trademark of Groundspeak, Inc. (Geocaching HQ); “geocaching” here names the outdoor activity.";
 

@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Import source adapters (M3). Each loads a third-party dataset and normalizes it to ImportedCache.
- * Bulk/keyless ham programs (SOTA/POTA/WWFF/WWBOTA), the keyed OpenCaching OKAPI, Geocaching
- * Australia GPX, and a generic GeoJSON adapter (covers WCA via CQGMA, and future OSM/Wikidata).
+ * Import source adapters. Each loads a third-party dataset and normalizes it to ImportedCache.
+ * Bulk/keyless ham programs (SOTA/POTA/WWFF/WWBOTA/IOTA), the keyed OpenCaching OKAPI, Geocaching
+ * Australia GPX, OpenStreetMap (Overpass), Wikidata, and a generic GeoJSON adapter (covers WCA via CQGMA).
  *
  * Live fetch only works where outbound egress is open (deploy / ingest box). Parsers (parse.ts)
  * are unit-tested with fixtures; this module is the thin fetch+map layer.
  */
 import type { Env } from "../env.js";
-import type { CacheType } from "@aprscaching/shared";
-import { parseCsv, parseGeoJsonFeatures, parseGpxWaypoints } from "./parse.js";
+import type { AttributionPart, CacheType } from "@aprscaching/shared";
+import { htmlToAttribution, parseCsv, parseGeoJsonFeatures, parseGpxWaypoints } from "./parse.js";
+import { APP_VERSION } from "../version.js";
 
 export interface ImportedCache {
   source: string;
@@ -23,6 +24,10 @@ export interface ImportedCache {
   sourceUrl: string;
   ownerCall?: string;
   description?: string;
+  /** The author's name at the source, shown with the place (OpenCaching). */
+  sourceOwner?: string;
+  /** The source's own attribution note, which the place must show (OpenCaching's `attribution_note`). */
+  sourceAttribution?: AttributionPart[];
 }
 
 export interface ImportScope {
@@ -41,11 +46,28 @@ export interface ImportScope {
 interface SourceAdapter {
   id: string;
   sourceName: string;
+  /**
+   * Set when the source's terms let a public instance use its data only with the provider's permission, or
+   * its feed no longer opens to an anonymous client: what the operator needs first. Such a source imports
+   * only when the operator names it in IMPORT_ALLOW.
+   */
+  needsPermission?: string;
   load(env: Env, scope: ImportScope): Promise<ImportedCache[]>;
 }
 
-async function fetchText(url: string): Promise<string> {
-  const r = await fetch(url, { headers: { "user-agent": "aprscaching-importer/0.1 (+https://aprscaching.net)" } });
+/**
+ * Names this instance to the source: the release, the instance's address and, when set, the operator's
+ * email, so a provider can see who is calling and reach the person running it (Wikimedia asks for this).
+ */
+export function importerUserAgent(env: Env): string {
+  const host = env.INSTANCE?.trim();
+  const site = host ? `https://${host}` : "https://github.com/apachler/aprscaching";
+  const email = env.OPERATOR_EMAIL?.trim();
+  return `aprscaching/${APP_VERSION} (+${site}${email ? `; ${email}` : ""})`;
+}
+
+async function fetchText(env: Env, url: string): Promise<string> {
+  const r = await fetch(url, { headers: { "user-agent": importerUserAgent(env) } });
   if (!r.ok) throw new Error(`fetch ${r.status} ${url}`);
   return r.text();
 }
@@ -73,12 +95,13 @@ export const SOURCES: Record<string, SourceAdapter> = {
   sota: {
     id: "sota",
     sourceName: "SOTA",
-    async load(_env, scope) {
+    async load(env, scope) {
       const region = (scope.region ?? "").trim();
       if (!region.includes("/")) throw new Error("sota: scope.region required like 'GM/SI'");
       const [assoc, reg] = region.split("/");
       const data = JSON.parse(
         await fetchText(
+          env,
           `https://api-db2.sota.org.uk/api/regions/${encodeURIComponent(assoc!)}/${encodeURIComponent(reg!)}`,
         ),
       );
@@ -105,9 +128,9 @@ export const SOURCES: Record<string, SourceAdapter> = {
   pota: {
     id: "pota",
     sourceName: "POTA",
-    async load(_env, scope) {
+    async load(env, scope) {
       const region = (scope.region ?? "").toUpperCase().trim();
-      const { rows } = parseCsv(await fetchText("https://pota.app/all_parks_ext.csv"));
+      const { rows } = parseCsv(await fetchText(env, "https://pota.app/all_parks_ext.csv"));
       return rows
         .filter(
           (r) =>
@@ -133,9 +156,10 @@ export const SOURCES: Record<string, SourceAdapter> = {
   wwff: {
     id: "wwff",
     sourceName: "WWFF",
-    async load(_env, scope) {
+    needsPermission: "WWFF's prior permission: its directory may not be reproduced without it (directory@wwff.co)",
+    async load(env, scope) {
       const program = (scope.region ?? "").toUpperCase().trim();
-      const { rows } = parseCsv(await fetchText("https://wwff.co/wwff-data/wwff_directory.csv"));
+      const { rows } = parseCsv(await fetchText(env, "https://wwff.co/wwff-data/wwff_directory.csv"));
       return rows
         .filter(
           (r) =>
@@ -163,11 +187,11 @@ export const SOURCES: Record<string, SourceAdapter> = {
   bunker: {
     id: "bunker",
     sourceName: "WWBOTA",
-    async load(_env, scope) {
+    async load(env, scope) {
       if (!scope.bbox) throw new Error("bunker: scope.bbox required [minLon,minLat,maxLon,maxLat]");
       const [w, s, e, n] = scope.bbox;
       const feats = parseGeoJsonFeatures(
-        await fetchText(`https://api.wwbota.org/bunkers/?format=GEOJSON&bbox=${w},${s},${e},${n}`),
+        await fetchText(env, `https://api.wwbota.org/bunkers/?format=GEOJSON&bbox=${w},${s},${e},${n}`),
       );
       return feats
         .map((f) => {
@@ -202,6 +226,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
       const [w, s, e, n] = scope.bbox;
       const search = JSON.parse(
         await fetchText(
+          env,
           `${base}/okapi/services/caches/search/bbox?bbox=${s}|${w}|${n}|${e}&status=Available&limit=500&consumer_key=${key}`,
         ),
       );
@@ -209,7 +234,8 @@ export const SOURCES: Record<string, SourceAdapter> = {
       if (!codes.length) return [];
       const detail = JSON.parse(
         await fetchText(
-          `${base}/okapi/services/caches/geocaches?cache_codes=${codes.slice(0, 500).join("|")}&fields=code|name|location|type|status|url&consumer_key=${key}`,
+          env,
+          `${base}/okapi/services/caches/geocaches?cache_codes=${codes.slice(0, 500).join("|")}&fields=code|name|location|type|status|url|owner|attribution_note&consumer_key=${key}`,
         ),
       );
       const out: ImportedCache[] = [];
@@ -229,6 +255,8 @@ export const SOURCES: Record<string, SourceAdapter> = {
           sourceName: "OpenCaching",
           sourceUrl: c.url ?? `${base}/viewcache.php?wp=${c.code ?? k}`,
           ownerCall: "OC",
+          sourceOwner: typeof c.owner?.username === "string" ? c.owner.username.trim() || undefined : undefined,
+          sourceAttribution: htmlToAttribution(c.attribution_note),
         });
       }
       return out;
@@ -239,10 +267,12 @@ export const SOURCES: Record<string, SourceAdapter> = {
   gcau: {
     id: "gcau",
     sourceName: "Geocaching Australia",
-    async load(_env, scope) {
+    needsPermission:
+      "Geocaching Australia's agreement: its GPX feed needs a signed-in account, and its CC BY-NC-SA 2.5 licence asks for each owner's credit, which this importer does not carry",
+    async load(env, scope) {
       const state = (scope.region ?? "").toLowerCase().trim();
       if (!state) throw new Error("gcau: scope.region required (state, e.g. 'vic')");
-      const wpts = parseGpxWaypoints(await fetchText(`https://geocaching.com.au/caches/au/${state}.gpx`));
+      const wpts = parseGpxWaypoints(await fetchText(env, `https://geocaching.com.au/caches/au/${state}.gpx`));
       const out: ImportedCache[] = [];
       for (const w of wpts) {
         const name = w.name;
@@ -264,13 +294,16 @@ export const SOURCES: Record<string, SourceAdapter> = {
     },
   },
 
-  // ---- IOTA islands: keyless JSON (non-commercial use). Coords used where present. ----
+  // ---- IOTA islands: keyless JSON. Coords used where present. ----
   iota: {
     id: "iota",
     sourceName: "IOTA",
-    async load(_env, scope) {
+    needsPermission:
+      "IOTA's permission: its island list is for personal, non-commercial home use, which a public instance is not (info@iota-world.org)",
+    async load(env, scope) {
       const data = JSON.parse(
         await fetchText(
+          env,
           "https://www.iota-world.org/islands-on-the-air/downloads/download-file.html?path=fulllist.json",
         ),
       );
@@ -304,13 +337,13 @@ export const SOURCES: Record<string, SourceAdapter> = {
   osm: {
     id: "osm",
     sourceName: "OpenStreetMap",
-    async load(_env, scope) {
+    async load(env, scope) {
       if (!scope.bbox) throw new Error("osm: scope.bbox required");
       const [k, v] = (scope.region ?? "natural=peak").trim().split("="); // e.g. natural=peak, historic=castle, man_made=lighthouse
       const [w, s, e, n] = scope.bbox;
       const ql = `[out:json][timeout:25];node["${k}"${v ? `="${v}"` : ""}](${s},${w},${n},${e});out;`;
       const data = JSON.parse(
-        await fetchText(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(ql)}`),
+        await fetchText(env, `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(ql)}`),
       );
       const type = (scope.type ?? "traditional") as CacheType;
       return (data?.elements ?? [])
@@ -335,7 +368,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
   wikidata: {
     id: "wikidata",
     sourceName: "Wikidata",
-    async load(_env, scope) {
+    async load(env, scope) {
       const qid = (scope.region ?? "Q8502").trim(); // instance-of: Q8502 mountain · Q23413 castle · Q39715 lighthouse
       const limit = Math.min(scope.limit ?? 1000, 5000);
       let box = "";
@@ -345,7 +378,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
       }
       const sparql = `SELECT ?item ?itemLabel ?lat ?lon WHERE { ?item wdt:P31 wd:${qid} . ${box} ?item p:P625/psv:P625 [ wikibase:geoLatitude ?lat ; wikibase:geoLongitude ?lon ] . SERVICE wikibase:label { bd:serviceParam wikibase:language "en" } } LIMIT ${limit}`;
       const data = JSON.parse(
-        await fetchText(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`),
+        await fetchText(env, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`),
       );
       const type = (scope.type ?? "traditional") as CacheType;
       return (data?.results?.bindings ?? [])
@@ -373,12 +406,12 @@ export const SOURCES: Record<string, SourceAdapter> = {
   geojson: {
     id: "geojson",
     sourceName: "GeoJSON",
-    async load(_env, scope) {
+    async load(env, scope) {
       if (!scope.url) throw new Error("geojson: scope.url required");
       const sourceName = scope.sourceName ?? "GeoJSON";
       const source = scope.source ?? "geojson";
       const type = (scope.type ?? "traditional") as CacheType;
-      return parseGeoJsonFeatures(await fetchText(scope.url)).map((f, i) => {
+      return parseGeoJsonFeatures(await fetchText(env, scope.url)).map((f, i) => {
         // A non-scalar reference/ref/id must not become the externalId (every such feature would
         // collide on "[object Object]"); fall through to the per-feature index, which is always unique.
         const ref = str(f.props.reference) || str(f.props.ref) || str(f.props.id) || String(i);

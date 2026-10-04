@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/** Format parsers for the importers (M3). Pure + unit-tested with fixtures (live fetch is in sources.ts). */
+/** Format parsers for the importers. Pure + unit-tested with fixtures (live fetch is in sources.ts). */
+import type { AttributionPart } from "@aprscaching/shared";
 
 // ---------- CSV (RFC-4180-ish: quoted fields, embedded commas/newlines, "" escapes) ----------
 function splitCsvRows(text: string): string[][] {
@@ -115,4 +116,86 @@ export function parseGpxWaypoints(xml: string): GpxWpt[] {
     });
   }
   return out;
+}
+
+// ---------- attribution notes (a source's HTML → text runs with optional links) ----------
+const ATTRIBUTION_MAX_CHARS = 1000;
+const ATTRIBUTION_MAX_PARTS = 24;
+
+const codePoint = (n: number): string => (Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "");
+/**
+ * Drop every tag in one pass: from a `<` to the next `>`, or to the end when no `>` follows, so no part
+ * of a tag survives. A tag becomes a space, which keeps words on either side of `<br>` or `</p>` apart.
+ */
+function stripTags(html: string): string {
+  let out = "";
+  let i = 0;
+  while (i < html.length) {
+    const open = html.indexOf("<", i);
+    if (open < 0) return out + html.slice(i);
+    out += html.slice(i, open) + " ";
+    const close = html.indexOf(">", open + 1);
+    if (close < 0) return out;
+    i = close + 1;
+  }
+  return out;
+}
+function htmlText(html: string): string {
+  return stripTags(html)
+    .replace(/&#(\d+);/g, (_, d: string) => codePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => codePoint(parseInt(h, 16)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&copy;/g, "©")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ");
+}
+function httpUrl(raw: string): string | undefined {
+  try {
+    const u = new URL(htmlText(raw).trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Reduce a source's HTML attribution note (OKAPI's `attribution_note`) to plain text runs, keeping each
+ * http(s) link it carries. The cache detail renders the runs as text and anchors, so no markup from the
+ * source reaches the page. A note with no text yields an empty list; a long one is cut to a bounded size.
+ */
+export function htmlToAttribution(html: unknown): AttributionPart[] {
+  if (typeof html !== "string" || !html.trim()) return [];
+  const runs: AttributionPart[] = [];
+  const push = (text: string, href?: string) => {
+    if (!text) return;
+    const last = runs[runs.length - 1];
+    if (last && !last.href && !href) last.text += text;
+    else runs.push(href ? { text, href } : { text });
+  };
+  const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+  let at = 0;
+  let m: RegExpExecArray | null;
+  while ((m = anchor.exec(html))) {
+    push(htmlText(html.slice(at, m.index)));
+    const attr = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[1]!);
+    push(htmlText(m[2]!), attr ? httpUrl(attr[1] ?? attr[2] ?? attr[3] ?? "") : undefined);
+    at = m.index + m[0].length;
+  }
+  push(htmlText(html.slice(at)));
+  if (!runs.length) return [];
+  runs[0]!.text = runs[0]!.text.trimStart();
+  runs[runs.length - 1]!.text = runs[runs.length - 1]!.text.trimEnd();
+  const out: AttributionPart[] = [];
+  let budget = ATTRIBUTION_MAX_CHARS;
+  for (const r of runs) {
+    if (!r.text || budget <= 0 || out.length >= ATTRIBUTION_MAX_PARTS) continue;
+    const text = r.text.slice(0, budget);
+    budget -= text.length;
+    out.push(r.href ? { text, href: r.href } : { text });
+  }
+  return out.some((r) => r.text.trim()) ? out : [];
 }

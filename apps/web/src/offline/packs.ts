@@ -27,6 +27,8 @@ const bare = (c: MapCache): PackCache => ({
   driveIn: false,
   country: null,
   tags: [],
+  sourceOwner: null,
+  sourceAttribution: null,
   externalId: null,
   hint: null,
   description: null,

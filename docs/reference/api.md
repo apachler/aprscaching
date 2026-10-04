@@ -44,7 +44,7 @@ most 20° a side.
 | Method     | Path                                                                                     | Purpose                                                                         |
 | ---------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | GET        | `/api/v1`                                                                                | Self-describing index of the read API.                                          |
-| GET        | `/api/v1/caches` · `/caches/:code` · `/caches.gpx` · `/caches.kml` · `/caches/:code.gpx` | Caches in a box (`bbox`), one cache, and GPX/KML exports.                       |
+| GET        | `/api/v1/caches` · `/caches/:code` · `/caches.gpx` · `/caches.kml` · `/caches/:code.gpx` | Caches in a box (`bbox`), one cache, and GPX/KML exports. Exports hold native caches only; imported places stay on the instance. |
 | GET        | `/api/v1/stations` · `/station/:call` · `/station/:call/track` · `/station/:call.kml`    | Live stations, one station, its track (JSON/KML).                               |
 | GET        | `/api/v1/profile/:call` · `/profile/:call.adif`                                          | A callsign's public profile · the person's finds, any SSID, as ADIF 3.1 (`SIG=APRSCACHING`). |
 | GET        | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots`                        | Activity feed, rankings, top corroborating IGates, live spots.                  |
@@ -180,6 +180,7 @@ secret; the others need a signed-in sysop.
 | GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box                                                                                                                               | x-ingest-secret                                  |
 | GET · POST        | `/api/bbs/session` · `/api/bbs/kill`                                           | Connected-mode BBS session state · end a session                                                                                                                        | x-ingest-secret                                  |
 | POST              | `/api/import/:source`                                                          | Import an external catalog — see [Import heritage places](../run/day-to-day/import-places.md)                                                                  | x-ingest-secret                                  |
+| GET               | `/api/import`                                                                  | The import sources: `{ sources: [{ id, sourceName, state, needs? }] }`, `state` one of `ready`, `needs-permission`                                            | x-ingest-secret                                  |
 
 ## Accounts, identity & GDPR
 

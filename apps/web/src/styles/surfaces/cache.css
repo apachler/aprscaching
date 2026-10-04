@@ -18,6 +18,13 @@
   .imported a {
     color: var(--heading);
   }
+  .imported p {
+    margin: 0;
+  }
+  .imported .imported-note {
+    margin-top: var(--space-xs);
+    color: var(--muted);
+  }
   /* favorite heart */
   button.heart {
     border: none;

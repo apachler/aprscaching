@@ -378,11 +378,14 @@ async function createAccount(env: Env, cs: string, email: string | null, now: nu
   return { account_id: id, callsign: cs };
 }
 
+/** The email provider's send endpoint (a Resend-compatible JSON API); the privacy page names its host. */
+export const EMAIL_API_URL = "https://api.resend.com/emails";
+
 /** Pluggable sender. Resend-compatible JSON API; returns false (dev mode) when unconfigured. */
 export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return false;
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch(EMAIL_API_URL, {
       method: "POST",
       headers: { authorization: `Bearer ${env.EMAIL_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),
