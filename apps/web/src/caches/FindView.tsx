@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Button, Icon } from "../ui/index.js";
 import { useModalDialog } from "../ui/useModalDialog.js";
+import { RadioLogHint } from "../log/RadioLogHint.js";
 import { useFmt } from "../format.js";
 import { bearingDeg, bearing8, haversine } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, PROBLEM_TEXT, isFresh, lastFix, watchFixes, type DeviceFix } from "../geo/location.js";
@@ -220,6 +221,7 @@ export function FindView(props: {
           ) : (
             <Button onClick={props.onClose}>Back to the cache</Button>
           )}
+          {props.onLog && <RadioLogHint code={props.code} />}
         </div>
       </div>
     </div>,

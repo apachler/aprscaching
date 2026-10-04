@@ -10,6 +10,7 @@ import { TEXT_LIMITS, type LogType } from "@aprscaching/shared";
 import { refusalMessage } from "../caches/formLimits.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
+import { RadioLogHint } from "./RadioLogHint.js";
 
 /**
  * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
@@ -259,6 +260,7 @@ export function LogForm(props: {
             onSkip={loc.skipWait}
             skipLabel="Log without location"
           />
+          <RadioLogHint code={props.cacheCode} />
         </>
       )}
       <div className="row between mt-3">

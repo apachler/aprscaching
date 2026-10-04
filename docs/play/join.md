@@ -12,6 +12,12 @@ password either.
 - A phone or computer with a browser.
 - An email address, if you cannot use a passkey.
 
+### No licence yet
+
+The map, the caches and the leaderboard are open to everyone: select **Browse the map** on the sign-in panel.
+An account needs a callsign, and a callsign comes with an amateur radio licence. Your national amateur radio
+society runs courses and tells you where to take the exam; the licence gives you the call you sign in with.
+
 ## Sign in
 
 The same steps create an account for a callsign that has none.

@@ -19,7 +19,7 @@ import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/aud
 import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost } from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
-import { Button, Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
+import { Button, Badge, Switch, ErrorState, useToast, useModalDialog } from "../ui/index.js";
 
 // ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
 const TOFU_KEY = "acs.tool.keys";
@@ -126,24 +126,36 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const promptRef = useRef<HTMLDivElement>(null);
   useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
 
-  // Load + verify the signed tool registry once. We trust ONLY the pinned authority key — a forged or
+  // the registry load: an instance without one (404) shows no Registry section; a failed or forged one says so
+  const [registryState, setRegistryState] = useState<"loading" | "ok" | "none" | "failed" | "forged">("loading");
+  const [registryTry, setRegistryTry] = useState(0);
+
+  // Load + verify the signed tool registry. We trust ONLY the pinned authority key — a forged or
   // re-hosted registry (wrong authority / edited entries) fails verifyRegistry and is dropped.
   useEffect(() => {
     let live = true;
+    setRegistryState("loading");
     (async () => {
       try {
         const res = await fetch(TOOL_REGISTRY_URL, { credentials: "omit" });
-        if (!res.ok) return;
+        if (res.status === 404) {
+          if (live) setRegistryState("none");
+          return;
+        }
+        if (!res.ok) throw new Error(`registry ${res.status}`);
         const doc = (await res.json()) as SignedRegistry;
-        if (live && (await verifyRegistry(doc, TOOL_REGISTRY_AUTHORITY))) setRegistry(doc.entries);
+        const ok = await verifyRegistry(doc, TOOL_REGISTRY_AUTHORITY);
+        if (!live) return;
+        if (ok) setRegistry(doc.entries);
+        setRegistryState(ok ? "ok" : "forged");
       } catch {
-        /* no/invalid registry → browse just shows empty */
+        if (live) setRegistryState("failed");
       }
     })();
     return () => {
       live = false;
     };
-  }, []);
+  }, [registryTry]);
 
   function toggle(name: string, on: boolean) {
     const r = setToolEnabled(name, on);
@@ -383,6 +395,24 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         </div>
       )}
 
+      {registryState === "loading" && (
+        <p className="muted fine" aria-busy="true">
+          Loading the tool registry…
+        </p>
+      )}
+      {registryState === "failed" && (
+        <ErrorState onRetry={() => setRegistryTry((n) => n + 1)}>
+          Couldn&apos;t load the tool registry. You can still import a tool by its URL below.
+        </ErrorState>
+      )}
+      {registryState === "forged" && (
+        <ErrorState>
+          The tool registry failed its signature check, so its tools are not listed. Tell the instance&apos;s sysop.
+        </ErrorState>
+      )}
+      {registryState === "ok" && registry.length === 0 && (
+        <p className="muted fine">The tool registry lists no tools yet.</p>
+      )}
       {registry.length > 0 && (
         <div className="tool-sub">
           <div className="ulabel">

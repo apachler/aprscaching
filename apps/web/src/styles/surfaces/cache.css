@@ -546,6 +546,9 @@
   .find-actions {
     display: grid;
   }
+  .find-actions p {
+    text-align: center;
+  }
   @media (prefers-reduced-motion: no-preference) {
     .find-dial.at-pin .find-needle,
     .find-dial.no-fix .find-needle {

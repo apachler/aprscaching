@@ -3,6 +3,7 @@ import { useState } from "react";
 import { getMailbox, leaveMailboxMessage, withdrawMailboxMessage, type MailboxMessage } from "../api.js";
 import { useFmt } from "../format.js";
 import { Badge, Button, EmptyState, ErrorState, useLoad, useToast } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** The longest APRS message text. */
 const APRS_TEXT_MAX = 67;
@@ -30,6 +31,8 @@ const STATUS_HINT: Record<MailboxMessage["status"], string> = {
  * the F6FBB way only. Lists what you left, with its state, and what waits for your calls.
  */
 export function MailboxSection(props: { callsign: string }) {
+  // the message goes out on the air under the sender's call, so only a control-verified callsign leaves one
+  const { verified } = usePlatform();
   const fmt = useFmt();
   const toast = useToast();
   const from = props.callsign.toUpperCase();
@@ -96,10 +99,18 @@ export function MailboxSection(props: { callsign: string }) {
         Leave a message for a station. The instance sends it as an APRS message the next time it hears that station, and
         keeps it for 7 days. This is not the BBS.
       </p>
+      {!verified && (
+        <p className="inline-note" id="mailbox-locked">
+          Verify your callsign to send over the air: the Mailbox sends your message under{" "}
+          <span className="mono">{from}</span>. Verify it under Settings → Account.
+        </p>
+      )}
       <label>
         To
         <input
           value={to}
+          disabled={!verified}
+          aria-describedby={verified ? undefined : "mailbox-locked"}
           maxLength={9}
           autoComplete="off"
           spellCheck={false}
@@ -112,7 +123,13 @@ export function MailboxSection(props: { callsign: string }) {
         <span className="muted">
           ({text.length}/{max}, sent as <span className="mono">de {from}: …</span>)
         </span>
-        <input value={text} maxLength={max} onChange={(e) => setText(e.target.value)} />
+        <input
+          value={text}
+          maxLength={max}
+          disabled={!verified}
+          aria-describedby={verified ? undefined : "mailbox-locked"}
+          onChange={(e) => setText(e.target.value)}
+        />
       </label>
       {err && (
         <p className="error" role="alert">
@@ -120,7 +137,11 @@ export function MailboxSection(props: { callsign: string }) {
         </p>
       )}
       <div className="row end">
-        <Button variant="primary" disabled={busy || !to.trim() || !text.trim()} onClick={() => void leave()}>
+        <Button
+          variant="primary"
+          disabled={!verified || busy || !to.trim() || !text.trim()}
+          onClick={() => void leave()}
+        >
           {busy ? "Leaving…" : "Leave message"}
         </Button>
       </div>

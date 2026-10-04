@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { claim, registerPasskey, loginPasskey, emailStart, errorText, ApiError, type Licence } from "../api.js";
-import { Button, Panel, Icon, LicenceBadge } from "../ui/index.js";
+import { Button, Panel, Icon, LicenceBadge, ManualLink } from "../ui/index.js";
 import { PASSKEY_PROBLEM_TEXT, passkeyErrorText, passkeyProblem } from "./passkeySupport.js";
 
 type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
 
 /** Sign in / create account: passkey first, email magic-link fallback. Callsign-led. */
-export function SignIn(props: { onDone: () => void; onClose: () => void }) {
+export function SignIn(props: {
+  onDone: () => void;
+  onClose: () => void;
+  /** Leave sign-in for the map, for someone without a licence; closing returns to the map where no other way is given. */
+  onBrowse?: () => void;
+}) {
   const [cs, setCs] = useState("");
   const [email, setEmail] = useState("");
   const [probe, setProbe] = useState<Probe>(null);
@@ -94,6 +99,7 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
             <input
               autoFocus
               value={cs}
+              aria-describedby="signin-call-help"
               placeholder="OE8APR"
               onChange={(e) => setCs(e.target.value)}
               onKeyDown={(e) => {
@@ -101,11 +107,25 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
               }}
             />
           </label>
+          <p className="muted fine" id="signin-call-help">
+            Your amateur radio callsign: an account needs the call a licence gave you.
+          </p>
           <div className="row end">
             <Button variant="primary" disabled={busy} onClick={check}>
               Continue
             </Button>
           </div>
+          <p className="muted fine mt-3">
+            No licence yet?{" "}
+            <Button variant="inline" onClick={props.onBrowse ?? props.onClose}>
+              Browse the map
+            </Button>{" "}
+            without an account, or{" "}
+            <ManualLink page="play/join" anchor="no-licence-yet">
+              read how to get one
+            </ManualLink>
+            .
+          </p>
         </>
       ) : (
         <>

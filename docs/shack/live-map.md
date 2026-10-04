@@ -9,7 +9,8 @@ layers**, and the browser remembers them.
 Switch on **Live stations** to see APRS stations on the map as they are heard. Moving stations show a heading
 arrow. Tap a station for its page: symbol, speed and course, altitude, recent track, weather and its raw
 packets. Signed in, **+ Add to my stations** puts it in your stations; a station already there shows **In
-your stations**, and the page says when another operator registered it.
+your stations**, and the page says when another operator registered it. The button shows only for a station
+under a verified callsign on your account; for any other station the page says why it can't be added.
 
 **Activity spots** (off by default) shows live POTA and SOTA activations, and DX-cluster, RBN and PSKReporter
 spots, when the instance's sysop enables spots. Filter them by **Band**, **Mode** and **Source**. With a rig

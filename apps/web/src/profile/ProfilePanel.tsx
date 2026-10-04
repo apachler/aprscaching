@@ -12,6 +12,7 @@ import {
   CommandBlock,
   LicenceBadge,
   ErrorState,
+  EmptyState,
   Icon,
   InfoTip,
   Hint,
@@ -101,7 +102,9 @@ export function ProfilePanel(props: {
               <CallVerifiedBadge />
             ) : (
               <>
-                <Badge title="Verify control of your callsign to enable transmit">unverified</Badge>{" "}
+                <Badge title="Your finds count on the leaderboard, and transmit opens, once your callsign is verified">
+                  unverified
+                </Badge>{" "}
                 <Button variant="quiet" hint="Open Settings to prove you hold this callsign" onClick={props.onSettings}>
                   Verify callsign
                 </Button>
@@ -120,6 +123,11 @@ export function ProfilePanel(props: {
               </>
             )}
           </p>
+          {!verified && (
+            <p className="muted fine">
+              Your finds don&apos;t count on the leaderboard until your callsign is verified.
+            </p>
+          )}
           {profile && (
             <p>
               <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts ·{" "}
@@ -168,6 +176,9 @@ export function ProfilePanel(props: {
                 );
               })}
             </div>
+          )}
+          {profile && profile.badges.length === 0 && (
+            <EmptyState>No badges yet: your first verified find and your first hide each earn one.</EmptyState>
           )}
         </>
       )}

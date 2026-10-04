@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile, type RankPeriod } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, Button, Icon, Segmented, Hint } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState, Button, Icon, Segmented, Hint, useToast } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { badgeInfo } from "../profile/badges.js";
 
@@ -21,18 +21,23 @@ export function CommunityPanel(props: { onClose: () => void }) {
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
+  // a failed load is its own state: an outage must never read as "no finds here"
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const m = map;
     if (!m) return;
     const b = m.getBounds();
     setLoading(true);
+    setFailed(false);
     try {
       setRows(
         (await getLeaderboard([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], metric, period)).leaderboard,
       );
-    } catch (e) {
-      console.error(e);
+    } catch {
+      setRows([]);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -120,12 +125,24 @@ export function CommunityPanel(props: { onClose: () => void }) {
         <Button onClick={load}>↻ this area</Button>
       </div>
       {loading && <p className="muted">Loading…</p>}
-      {!loading && !rows.length && <EmptyState>{PERIODS.find((p) => p.value === period)?.empty}</EmptyState>}
+      {!loading && failed && (
+        <ErrorState onRetry={() => void load()}>
+          Couldn&apos;t load the leaderboard — check your connection and retry.
+        </ErrorState>
+      )}
+      {!loading && !failed && !rows.length && <EmptyState>{PERIODS.find((p) => p.value === period)?.empty}</EmptyState>}
       <ol className="board">
         {rows.map((r) => (
           <li key={r.loggerCall}>
             <span className="rank">{r.rank}</span>
-            <Button variant="quiet" onClick={() => getProfile(r.loggerCall).then(setProfile).catch(console.error)}>
+            <Button
+              variant="quiet"
+              onClick={() =>
+                getProfile(r.loggerCall)
+                  .then(setProfile)
+                  .catch(() => toast(`Couldn't load ${r.loggerCall}'s profile — try again`))
+              }
+            >
               {r.loggerCall}
             </Button>
             <span className="spacer" />
