@@ -113,8 +113,8 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
 - The squash commit takes the **PR title** and **description**, so PR titles are Conventional Commits too.
   Neither commits nor PR descriptions carry tool attribution (co-author trailers, "Generated with"
   footers); the DCO workflow rejects them. `main` is the
-  release branch: release-please runs on pushes to `main`, and `v*` tags drive the desktop and
-  OCI-stack release workflows.
+  release branch: release-please runs on pushes to `main`, and a merged release PR tags `vX.Y.Z` and calls the desktop,
+  OCI-stack and release-verify workflows (a hand-pushed tag starts none of them).
 - Commits are Conventional Commits (they feed release-please and `CHANGELOG.md`) and DCO signed-off
   (`git commit -s`); the DCO check runs on every PR.
 - `pnpm-workspace.yaml` sets `minimumReleaseAge: 720`: a package version younger than 12 h fails

@@ -47,9 +47,18 @@ jobs:
           sed -e "s/^POCKET_RELEASE=\"\"/POCKET_RELEASE=\"$TAG\"/" -e "s/^POCKET_BUNDLE_SHA256=\"\"/POCKET_BUNDLE_SHA256=\"$sum\"/" \
             deploy/pocket/pocket.sh >"$out/pocket.sh"
           grep -qx "POCKET_BUNDLE_SHA256=\"$sum\"" "$out/pocket.sh" || { echo "pocket.sh was not stamped" >&2; exit 1; }
-          # the OCI stack and the desktop binaries, attached by the jobs before this one
-          gh release download "$TAG" --dir "$out" --pattern 'aprscaching-oci-stack.zip' --pattern 'aprscaching-*-x64*' \
-            --pattern 'aprscaching-*-arm64' || true
+          # the OCI stack, the desktop binaries and the Bun runtime's licence notices, attached by the jobs
+          # before this one; SHA256SUMS covers every one of them, so a missing asset fails the release
+          assets=(aprscaching-oci-stack.zip aprscaching-windows-x64.exe aprscaching-macos-arm64 aprscaching-macos-x64
+            aprscaching-linux-x64 aprscaching-linux-arm64 THIRD-PARTY-NOTICES.txt BUN-LICENSE.txt)
+          patterns=()
+          for a in "${assets[@]}"; do patterns+=(--pattern "$a"); done
+          gh release download "$TAG" --dir "$out" "${patterns[@]}"
+          missing=0
+          for a in "${assets[@]}"; do
+            [ -s "$out/$a" ] || { echo "release $TAG lacks $a" >&2; missing=1; }
+          done
+          [ "$missing" = 0 ]
           rm -f "$out/SHA256SUMS"
           (cd "$out" && sha256sum -- * >SHA256SUMS)
           cat "$out/SHA256SUMS"

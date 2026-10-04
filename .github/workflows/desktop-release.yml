@@ -1,10 +1,14 @@
 name: desktop-release
-# Runs on a `v*` tag push, when release-please.yml calls it with the release tag, or by hand. A run
-# without a tag (a dispatch on a branch) only builds and uploads the workflow artifact; each binary
-# goes to a GitHub release only for a tag.
+# Runs when release-please.yml calls it with the new release's tag, or by hand: a dispatch with a
+# tag (or on a tag ref) rebuilds that release's assets; a dispatch on a branch only builds and uploads
+# the workflow artifact, and the binaries go to a GitHub release only for a tag. A pushed tag starts
+# nothing, so each release is built once and release-verify always follows it.
 on:
-  push: { tags: ["v*"] }
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to rebuild and attach to (e.g. v1.0.0); empty builds the artifact only
+        required: false
   workflow_call:
     inputs:
       tag:
@@ -22,7 +26,8 @@ jobs:
     permissions:
       contents: write # upload the desktop binaries to the GitHub release
     env:
-      # The release tag: the caller's input, or the pushed tag; empty on a branch dispatch.
+      # The release tag: the caller's or the dispatch's input, or the dispatched tag ref; empty on a
+      # branch dispatch without one.
       TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,15 +36,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with: { bun-version: latest }
+        with: { bun-version-file: .bun-version }
       - run: pnpm install --frozen-lockfile
       - run: bash deploy/desktop/build-exe.sh "${TAG:-$GITHUB_REF_NAME}"
       # dist/desktop holds the binaries and the Bun runtime's licence notices (THIRD-PARTY-NOTICES.txt,
       # BUN-LICENSE.txt), so both uploads below carry the notices with the binaries.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: aprscaching-desktop, path: dist/desktop/* }
-      # Attaches to the tag's existing release (release-please creates it), keeping its notes; a
-      # hand-pushed tag without a release gets a new one.
+      # Attaches to the tag's existing release (release-please creates it), keeping its notes.
       - if: env.TAG != ''
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with: { tag_name: "${{ env.TAG }}", files: dist/desktop/* }
