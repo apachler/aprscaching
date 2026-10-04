@@ -34,6 +34,13 @@ The email link works once and expires after 15 minutes. On a new account the ema
 sign in again if you lose your passkey. A returning player must use the email on their account. Any other
 address gets *That email doesn't match …'s account*.
 
+An email you type when you create the account with a passkey waits for confirmation. The instance sends a
+link to it; open it within 24 hours and tap **Sign in**. Until then **Settings → Account** shows the address
+as **waiting for confirmation**, and it does not sign you in.
+
+Your passkey belongs to your account, not to one callsign. It signs you in from any callsign your account
+holds, with or without an SSID, also after you switch your active callsign.
+
 ## Check that you are signed in
 
 Your callsign shows in the top bar, and **You** shows your profile. The profile says **unverified** until you
@@ -65,7 +72,7 @@ To add a passkey on a new device:
 1. On the new device, tap **Sign in** and type your **Callsign**. Then sign in one of these ways:
     - Tap **Sign in with passkey** and, in the browser's window, pick the option to use a phone or tablet. It
       shows a QR code: scan it with the phone that holds your passkey, and confirm on the phone.
-    - Tap **Email me a link**, if your account has an email.
+    - Tap **Email me a link**, if your account has a confirmed email.
 2. Open **Settings → Account** and tap **Add a passkey on this device**.
 3. Confirm with your fingerprint, your face or the device PIN.
 
@@ -73,8 +80,8 @@ To add a passkey on a new device:
 it. Next time, this device signs in with **Sign in with passkey** directly.
 
 **Lost a device?** On another device, open **Settings → Account → Your passkeys** and tap **Remove** next to its
-passkey, then **Sign out everywhere**. The last passkey of an account without an email cannot be removed: it is
-your only way in. Add an email or another passkey first.
+passkey, then **Sign out everywhere**. The last passkey of an account without a confirmed email cannot be
+removed: it is your only way in. Confirm your email or add another passkey first.
 
 ## Verify your callsign
 

@@ -73,7 +73,7 @@ describe("callsign control-verification entry points", () => {
     const own = req("/verify/operator", { callsign: "oe8apr-9" }, { "x-operator-secret": "operator-secret" });
     const res = await handleOperatorVerify(own, makeEnv());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ verified: true, callsign: "OE8APR", method: "operator" });
+    expect(await res.json()).toEqual({ verified: true, callsign: "OE8APR", method: "operator", holder: null });
   });
 });
 

@@ -28,6 +28,8 @@ type Session = {
   callsign: string;
   verified: boolean;
   email: string | null;
+  /** An address waiting for its owner to open the confirmation link: shown, never a way in. */
+  pendingEmail?: string | null;
   signedIn: boolean;
   signOut: () => void;
   signOutEverywhere: () => Promise<void>;
@@ -44,7 +46,7 @@ export function AccountSettings(props: {
   /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it yet. */
   operatorPending?: boolean;
 }) {
-  const { callsign, email, signedIn, signOut, signOutEverywhere, refresh } = props.session;
+  const { callsign, email, pendingEmail, signedIn, signOut, signOutEverywhere, refresh } = props.session;
   const confirmDialog = useConfirm();
   const toast = useToast();
   const active = baseCall(callsign);
@@ -143,7 +145,7 @@ export function AccountSettings(props: {
                   active
                 </Badge>
               )}
-              {c.isPrimary && <Badge title="the callsign your passkey is bound to">primary</Badge>}
+              {c.isPrimary && <Badge title="the first callsign of your account">primary</Badge>}
               <LicenceBadge licence={c.licence} />
             </div>
             <div className="setrow-c">
@@ -197,6 +199,17 @@ export function AccountSettings(props: {
             <div>Email</div>
           </div>
           <div className="setrow-c muted">{email}</div>
+        </div>
+      )}
+      {!email && pendingEmail && (
+        <div className="setrow">
+          <div className="setrow-l">
+            <div>Email</div>
+            <div className="muted fine">Open the link we sent to confirm it. Until then it does not sign you in.</div>
+          </div>
+          <div className="setrow-c muted">
+            {pendingEmail} <Badge kind="warn">waiting for confirmation</Badge>
+          </div>
         </div>
       )}
       <Passkeys />

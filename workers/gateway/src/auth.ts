@@ -11,6 +11,7 @@ import { licenceFor } from "./licence.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { FALLBACK_SERVICE_CALL } from "./servicecall.js";
+import { normalEmail, sendEmailConfirmation } from "./email.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -77,13 +78,14 @@ function webauthnUnconfigured(): Response {
     { status: 503 },
   );
 }
-async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
+/** Stash a ceremony under its own random challenge, which is the row's id: the finish names it. */
+async function storeChallenge(env: Env, cs: string, kind: string, challenge: string, value: string): Promise<void> {
   const now = nowS();
   await env.DB.batch([
     // reap expired ceremonies while we're here — abandoned begins must not accumulate
     env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now),
     env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)").bind(
-      crypto.randomUUID(),
+      challenge,
       cs,
       kind,
       value,
@@ -91,15 +93,31 @@ async function storeChallenge(env: Env, cs: string, kind: string, value: string)
     ),
   ]);
 }
-async function takeChallenge(env: Env, cs: string, kind: string): Promise<string | null> {
+
+/** The challenge a ceremony's clientDataJSON (base64url) answers, or null when it carries none. */
+function answeredChallenge(clientDataJSON: unknown): string | null {
+  try {
+    const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(String(clientDataJSON)))) as { challenge?: unknown };
+    return typeof cd.challenge === "string" && cd.challenge !== "" ? cd.challenge : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Consume the ceremony a finish answers: the unexpired challenge named in its clientDataJSON, begun for
+ * this call and kind. One atomic delete spends it, so it completes at most one finish, and ceremonies
+ * that others begin for the same call never displace it.
+ */
+async function takeChallenge(env: Env, cs: string, kind: string, clientDataJSON: unknown): Promise<string | null> {
+  const challenge = answeredChallenge(clientDataJSON);
+  if (!challenge) return null;
   const row = await env.DB.prepare(
-    "SELECT id, value FROM auth_challenges WHERE callsign=? AND kind=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1",
+    "DELETE FROM auth_challenges WHERE id=? AND callsign=? AND kind=? AND expires_at>? RETURNING value",
   )
-    .bind(cs, kind, nowS())
-    .first<{ id: string; value: string }>();
-  if (!row) return null;
-  await env.DB.prepare("DELETE FROM auth_challenges WHERE id=?").bind(row.id).run();
-  return row.value;
+    .bind(challenge, cs, kind, nowS())
+    .first<{ value: string }>();
+  return row?.value ?? null;
 }
 
 /** A registrable call: a 3–9 character base of letters and digits with an optional 1–2 character SSID.
@@ -189,7 +207,27 @@ export async function authThrottled(
     (await rateLimitedDurable(env, `${step}:id:${identity}`, t, limits.perIdentity, limits.windowMs));
   return ipHit || idHit ? json({ error: "rate limited — try again later" }, { status: 429 }) : null;
 }
-const PASSKEY_LOGIN_LIMITS = { perIp: 30, perIdentity: 10, windowMs: 60_000 };
+/**
+ * The passkey sign-in steps and the claim probe are throttled per client address only. A per-call budget
+ * would let requests from a pool of addresses naming someone's call spend it and keep that person out,
+ * while it adds nothing against guessing: a passkey assertion is a signature, and each ceremony answers
+ * only its own challenge.
+ */
+const PASSKEY_LOGIN_LIMITS = { perIp: 30, perIdentity: 0, windowMs: 60_000 };
+
+/** The account a sign-in names: the holder of the call's base call, whichever held call (or SSID of one) is
+ *  typed. The session carries the typed call when it is the active call or an SSID of it, and the account's
+ *  active call otherwise, so signing in never changes which call the account operates. */
+async function signInAccount(env: Env, cs: string): Promise<{ accountId: string; callsign: string } | null> {
+  if (!REGISTRABLE_CALL.test(cs)) return null;
+  const holder = await baseHolder(env, baseCall(cs));
+  if (!holder) return null;
+  const row = await env.DB.prepare("SELECT callsign FROM accounts WHERE account_id=?")
+    .bind(holder)
+    .first<{ callsign: string }>();
+  if (!row) return null;
+  return { accountId: holder, callsign: baseCall(row.callsign) === baseCall(cs) ? cs : row.callsign };
+}
 
 /** POST /auth/claim {callsign} — probe whether a callsign exists / has a passkey (no side effects). */
 export async function handleClaim(req: Request, env: Env): Promise<Response> {
@@ -198,13 +236,13 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
     .toUpperCase()
     .trim();
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const limited = await authThrottled(env, req, "claim", cs, { perIp: 30, perIdentity: 20, windowMs: 60_000 });
+  const limited = await authThrottled(env, req, "claim", "", { perIp: 30, perIdentity: 0, windowMs: 60_000 });
   if (limited) return limited;
-  const existing = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
-  const hasPasskey = existing
-    ? await env.DB.prepare("SELECT 1 FROM credentials WHERE callsign=? LIMIT 1").bind(cs).first()
+  const acct = await signInAccount(env, cs);
+  const hasPasskey = acct
+    ? await env.DB.prepare("SELECT 1 FROM credentials WHERE account_id=? LIMIT 1").bind(acct.accountId).first()
     : null;
-  return json({ callsign: cs, exists: !!existing, hasPasskey: !!hasPasskey, licence: await licenceFor(env, cs) });
+  return json({ callsign: cs, exists: !!acct, hasPasskey: !!hasPasskey, licence: await licenceFor(env, cs) });
 }
 
 type Cred = {
@@ -230,13 +268,10 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     .toUpperCase()
     .trim();
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const existing = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
-    .bind(cs)
-    .first<{ account_id: string }>();
   let accountId: string;
   let pendingNew = false;
   // the account that holds this call, whether it is the account's active call or another it holds
-  const holder = existing?.account_id ?? (await baseHolder(env, baseCall(cs)));
+  const holder = REGISTRABLE_CALL.test(cs) ? await baseHolder(env, baseCall(cs)) : null;
   if (holder) {
     // Another passkey for a held call is added only from a session of the account that holds it: a new
     // device of the same ham, whichever of the account's calls the session is using.
@@ -259,12 +294,12 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     env,
     cs,
     "webauthn_reg",
-    JSON.stringify({
-      c: challenge,
-      ...(pendingNew ? { a: accountId, e: email ? String(email).trim().toLowerCase() : null } : {}),
-    }),
+    challenge,
+    JSON.stringify({ c: challenge, ...(pendingNew ? { a: accountId, e: normalEmail(email) } : {}) }),
   );
-  const excl = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
+  const excl = await env.DB.prepare("SELECT id FROM credentials WHERE account_id=?")
+    .bind(accountId)
+    .all<{ id: string }>();
   return json({
     challenge,
     rp: { id: rp, name: "APRScaching" },
@@ -290,9 +325,9 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
-  const stashed = await takeChallenge(env, cs, "webauthn_reg");
-  if (!stashed || !credential?.response?.attestationObject)
-    return json({ error: "no pending registration" }, { status: 400 });
+  if (!credential?.response?.attestationObject) return json({ error: "no pending registration" }, { status: 400 });
+  const stashed = await takeChallenge(env, cs, "webauthn_reg", credential.response.clientDataJSON);
+  if (!stashed) return json({ error: "no pending registration" }, { status: 400 });
   // The stash is {c: challenge, a?: provisional accountId, e?: email} — `a` present means the
   // account does not exist yet and is created below only once the ceremony verifies.
   let challenge: string;
@@ -313,42 +348,59 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       origins,
       rpId: rp,
     });
+    // A credential id names one passkey of one account: a registration that repeats a registered id is
+    // refused, never rebound (WebAuthn §7.1: the credentialId must not yet be registered for any user).
+    const taken = async () =>
+      !!(await env.DB.prepare("SELECT 1 FROM credentials WHERE id=?").bind(r.credentialId).first());
+    if (await taken()) return json({ error: "this passkey is already registered" }, { status: 409 });
+    const now = nowS();
+    const transports = JSON.stringify(credential.response.transports ?? []);
+    const insertCred = (account: string) =>
+      env.DB.prepare(
+        "INSERT INTO credentials (id, callsign, account_id, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).bind(r.credentialId, cs, account, r.coseKey, r.signCount, transports, now);
+    let confirmation: Awaited<ReturnType<typeof sendEmailConfirmation>> | null = null;
     if (pending.a) {
       // Passkey proven — NOW create the account. If the callsign was claimed through another path
       // during the ceremony window, refuse rather than bind this passkey to someone else's account.
-      const now = nowS();
       const raced = await unclaimableReason(env, cs);
       if (raced) return json({ error: raced }, { status: 409 });
       try {
-        // seed the held-callsign set with this call as the account's primary (the passkey binds here);
-        // the unique base-call index makes a concurrent claim fail the whole batch
+        // seed the held-callsign set with this call as the account's primary; the unique base-call index
+        // makes a concurrent claim (and the credential's primary key a concurrent registration of the
+        // same passkey) fail the whole batch. A given address waits for confirmation.
         await env.DB.batch([
           ...holdCall(env, pending.a, baseCall(cs), true, now),
-          env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, created_at) VALUES (?, ?, ?, ?)").bind(
-            cs,
-            pending.a,
-            pending.e ?? null,
-            now,
-          ),
+          env.DB.prepare(
+            "INSERT INTO accounts (callsign, account_id, pending_email, created_at) VALUES (?, ?, ?, ?)",
+          ).bind(cs, pending.a, pending.e ?? null, now),
+          insertCred(pending.a),
         ]);
       } catch {
+        if (await taken()) return json({ error: "this passkey is already registered" }, { status: 409 });
         return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
       }
       accountId = pending.a;
+      if (pending.e) confirmation = await sendEmailConfirmation(req, env, pending.e, cs);
     } else {
-      accountId = (await accountIdOf(env, cs)) ?? (await baseHolder(env, baseCall(cs)));
+      accountId = await baseHolder(env, baseCall(cs));
       if (!accountId) return json({ error: "no pending registration" }, { status: 400 });
+      try {
+        await insertCred(accountId).run();
+      } catch {
+        return json({ error: "this passkey is already registered" }, { status: 409 });
+      }
     }
     // a passkey added to an existing account keeps the session on the call it was using
     const me = pending.a ? null : await sessionIdentity(req, env);
     const sessionCall = me && me.accountId === accountId ? me.callsign : cs;
-    await env.DB.prepare(
-      "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-      .bind(r.credentialId, cs, r.coseKey, r.signCount, JSON.stringify(credential.response.transports ?? []), nowS())
-      .run();
     return json(
-      { ok: true, callsign: sessionCall, licence: await licenceFor(env, sessionCall) },
+      {
+        ok: true,
+        callsign: sessionCall,
+        licence: await licenceFor(env, sessionCall),
+        ...(confirmation ? { emailPending: true, ...confirmation } : {}),
+      },
       { headers: { "set-cookie": await issueSessionCookie(env, accountId, sessionCall) } },
     );
   } catch (e) {
@@ -366,12 +418,15 @@ export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<R
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
-  const limited = await authThrottled(env, req, "pklogin-begin", cs, PASSKEY_LOGIN_LIMITS);
+  const limited = await authThrottled(env, req, "pklogin-begin", "", PASSKEY_LOGIN_LIMITS);
   if (limited) return limited;
-  const creds = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
-  if (!creds.results?.length) return json({ error: "no passkey for this callsign" }, { status: 404 });
+  const acct = await signInAccount(env, cs);
+  const creds = acct
+    ? await env.DB.prepare("SELECT id FROM credentials WHERE account_id=?").bind(acct.accountId).all<{ id: string }>()
+    : null;
+  if (!creds?.results?.length) return json({ error: "no passkey for this callsign" }, { status: 404 });
   const challenge = randomChallenge();
-  await storeChallenge(env, cs, "webauthn_login", challenge);
+  await storeChallenge(env, cs, "webauthn_login", challenge, challenge);
   return json({
     challenge,
     rpId: rp,
@@ -391,13 +446,15 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
-  const limited = await authThrottled(env, req, "pklogin-finish", cs, PASSKEY_LOGIN_LIMITS);
+  const limited = await authThrottled(env, req, "pklogin-finish", "", PASSKEY_LOGIN_LIMITS);
   if (limited) return limited;
-  const challenge = await takeChallenge(env, cs, "webauthn_login");
-  if (!challenge || !credential?.id || !credential?.response?.signature)
-    return json({ error: "no pending login" }, { status: 400 });
-  const cred = await env.DB.prepare("SELECT public_key, counter FROM credentials WHERE id=? AND callsign=?")
-    .bind(credential.id, cs)
+  if (!credential?.id || !credential?.response?.signature) return json({ error: "no pending login" }, { status: 400 });
+  const challenge = await takeChallenge(env, cs, "webauthn_login", credential.response.clientDataJSON);
+  if (!challenge) return json({ error: "no pending login" }, { status: 400 });
+  const acct = await signInAccount(env, cs);
+  if (!acct) return json({ error: "login failed: no account holds this callsign" }, { status: 400 });
+  const cred = await env.DB.prepare("SELECT public_key, counter FROM credentials WHERE id=? AND account_id=?")
+    .bind(credential.id, acct.accountId)
     .first<{ public_key: string; counter: number }>();
   if (!cred) return json({ error: "unknown credential" }, { status: 400 });
   try {
@@ -412,11 +469,9 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
       rpId: rp,
     });
     await env.DB.prepare("UPDATE credentials SET counter=? WHERE id=?").bind(r.newCounter, credential.id).run();
-    const accountId = await accountIdOf(env, cs);
-    if (!accountId) return json({ error: "login failed: no account holds this callsign" }, { status: 400 });
     return json(
-      { ok: true, callsign: cs },
-      { headers: { "set-cookie": await issueSessionCookie(env, accountId, cs) } },
+      { ok: true, callsign: acct.callsign },
+      { headers: { "set-cookie": await issueSessionCookie(env, acct.accountId, acct.callsign) } },
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
@@ -470,14 +525,6 @@ export async function mayActAsOwner(
   const me = await sessionIdentity(req, env);
   if (me) return accountHoldsCall(env, me.accountId, ownerCall);
   return ingestSecretOk(req, env) && !!claimed && claimed.trim().toUpperCase() === ownerCall.toUpperCase();
-}
-
-/** The durable account id anchored at a call (its `accounts` row). */
-async function accountIdOf(env: Env, cs: string): Promise<string | null> {
-  const row = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
-    .bind(cs)
-    .first<{ account_id: string | null }>();
-  return row?.account_id ?? null;
 }
 
 /**
@@ -548,8 +595,8 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
  * POST /auth/callsign {callsign} — switch the active operating callsign of the signed-in account.
  * Switching to a base call the account ALREADY HOLDS is non-destructive: its prior verification is
  * preserved (no re-challenge). Switching to a NEW base call adds it (unverified) and switches. The
- * passkey stays on the primary call (login is unaffected); the session cookie re-binds to the new
- * active call and the change is recorded in callsign_history.
+ * account's passkeys belong to the account, so they sign in from any call it holds; the session cookie
+ * re-binds to the new active call and the change is recorded in callsign_history.
  */
 export async function handleChangeCallsign(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
@@ -613,14 +660,20 @@ export async function issueSessionCookie(env: Env, accountId: string, callsign: 
   return `${SESSION_COOKIE}=${token}; ${cookieFlags(env)}; Max-Age=${ttlDays * 86_400}`;
 }
 
-/** GET /auth/session — "who am I": the signed-in callsign + verification + email, or null. */
+/** GET /auth/session — "who am I": the signed-in callsign + verification + confirmed email (and an address
+ *  still waiting for confirmation), or null. */
 export async function handleSession(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
   if (!me) return json({ callsign: null });
-  const acct = await env.DB.prepare("SELECT email FROM accounts WHERE account_id = ?")
+  const acct = await env.DB.prepare("SELECT email, pending_email FROM accounts WHERE account_id = ?")
     .bind(me.accountId)
-    .first<{ email: string | null }>();
-  return json({ callsign: me.callsign, verified: await isCallsignVerified(env, me.base), email: acct?.email ?? null });
+    .first<{ email: string | null; pending_email: string | null }>();
+  return json({
+    callsign: me.callsign,
+    verified: await isCallsignVerified(env, me.base),
+    email: acct?.email ?? null,
+    pendingEmail: acct?.pending_email ?? null,
+  });
 }
 
 const clearCookie = (env: Env) => `${SESSION_COOKIE}=; ${cookieFlags(env)}; Max-Age=0`;
@@ -751,16 +804,24 @@ async function verifySession(token: string, env: Env): Promise<SessionClaims | n
 }
 
 // ---------------------------------------------------------------- the account's passkeys (one per device)
-/** The account's primary call (its passkeys are stored and looked up under it) and its recovery email. */
-async function passkeyOwner(req: Request, env: Env): Promise<{ callsign: string; email: string | null } | null> {
+interface PasskeyOwner {
+  accountId: string;
+  callsign: string;
+  email: string | null;
+  pendingEmail: string | null;
+}
+/** The signed-in account, its primary call and its email: a confirmed address, and one still waiting for
+ *  confirmation (which is no way in yet). */
+async function passkeyOwner(req: Request, env: Env): Promise<PasskeyOwner | null> {
   const me = await sessionIdentity(req, env);
   if (!me) return null;
   return env.DB.prepare(
-    `SELECT ac.callsign AS callsign, a.email AS email FROM account_callsigns ac JOIN accounts a ON a.account_id = ac.account_id
-     WHERE ac.account_id=? AND ac.is_primary=1`,
+    `SELECT a.account_id AS accountId, ac.callsign AS callsign, a.email AS email, a.pending_email AS pendingEmail
+       FROM account_callsigns ac JOIN accounts a ON a.account_id = ac.account_id
+      WHERE ac.account_id=? AND ac.is_primary=1`,
   )
     .bind(me.accountId)
-    .first<{ callsign: string; email: string | null }>();
+    .first<PasskeyOwner>();
 }
 
 /** GET /auth/passkeys — the signed-in account's passkeys: when each was added and how its device connects. */
@@ -768,13 +829,14 @@ export async function handleListPasskeys(req: Request, env: Env): Promise<Respon
   const owner = await passkeyOwner(req, env);
   if (!owner) return json({ error: "sign in to see your passkeys" }, { status: 401 });
   const rows = (
-    await env.DB.prepare("SELECT id, transports, created_at FROM credentials WHERE callsign=? ORDER BY created_at")
-      .bind(owner.callsign)
+    await env.DB.prepare("SELECT id, transports, created_at FROM credentials WHERE account_id=? ORDER BY created_at")
+      .bind(owner.accountId)
       .all<{ id: string; transports: string | null; created_at: number }>()
   ).results;
   return json({
     callsign: owner.callsign,
     hasEmail: !!owner.email,
+    emailPending: !owner.email && !!owner.pendingEmail,
     passkeys: rows.map((r) => {
       let transports: string[] = [];
       try {
@@ -789,20 +851,24 @@ export async function handleListPasskeys(req: Request, env: Env): Promise<Respon
 
 /**
  * DELETE /auth/passkeys/:id — remove one of the account's passkeys, such as a lost phone's. The last passkey of an
- * account without a recovery email stays: removing it would leave no way to sign in.
+ * account without a confirmed email stays: removing it would leave no way to sign in.
  */
 export async function handleRemovePasskey(req: Request, env: Env, id: string): Promise<Response> {
   const owner = await passkeyOwner(req, env);
   if (!owner) return json({ error: "sign in to remove a passkey" }, { status: 401 });
   const all = (
-    await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(owner.callsign).all<{ id: string }>()
+    await env.DB.prepare("SELECT id FROM credentials WHERE account_id=?").bind(owner.accountId).all<{ id: string }>()
   ).results;
   if (!all.some((c) => c.id === id)) return json({ error: "no such passkey" }, { status: 404 });
   if (all.length === 1 && !owner.email)
     return json(
-      { error: "this is your only way to sign in: add an email address or another passkey first" },
+      {
+        error: owner.pendingEmail
+          ? "this is your only way to sign in: confirm your email address or add another passkey first"
+          : "this is your only way to sign in: add an email address or another passkey first",
+      },
       { status: 409 },
     );
-  await env.DB.prepare("DELETE FROM credentials WHERE id=? AND callsign=?").bind(id, owner.callsign).run();
+  await env.DB.prepare("DELETE FROM credentials WHERE id=? AND account_id=?").bind(id, owner.accountId).run();
   return json({ ok: true, remaining: all.length - 1 });
 }

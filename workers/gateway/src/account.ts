@@ -17,6 +17,7 @@ import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
 import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN } from "./auth.js";
 import { verificationOf, verificationsOf } from "./callsign.js";
+import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
@@ -63,16 +64,17 @@ const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
       .all()
   ).results;
 
-/** The account behind a callsign — its active-call anchor, else the holder of its base call — and
- *  every base call that account holds (the callsign's own base first). */
+/** The account behind a callsign — its active-call anchor, else the holder of its base call — its
+ *  addresses (the confirmed one, and one still waiting for confirmation) and every base call that account
+ *  holds (the callsign's own base first). */
 async function accountScope(
   env: Env,
   cs: string,
-): Promise<{ accountId: string | null; email: string | null; calls: string[] }> {
+): Promise<{ accountId: string | null; email: string | null; emails: string[]; calls: string[] }> {
   const base = baseCall(cs);
-  const anchor = await env.DB.prepare("SELECT account_id, email FROM accounts WHERE callsign=?")
+  const anchor = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
     .bind(cs)
-    .first<{ account_id: string | null; email: string | null }>();
+    .first<{ account_id: string | null }>();
   const accountId =
     anchor?.account_id ??
     (
@@ -81,15 +83,13 @@ async function accountScope(
         .first<{ account_id: string }>()
     )?.account_id ??
     null;
-  const email =
-    anchor?.email ??
-    (accountId
-      ? ((
-          await env.DB.prepare("SELECT email FROM accounts WHERE account_id=?")
-            .bind(accountId)
-            .first<{ email: string | null }>()
-        )?.email ?? null)
-      : null);
+  const addr = accountId
+    ? await env.DB.prepare("SELECT email, pending_email FROM accounts WHERE account_id=?")
+        .bind(accountId)
+        .first<{ email: string | null; pending_email: string | null }>()
+    : null;
+  const email = addr?.email ?? null;
+  const emails = [...new Set([email, addr?.pending_email ?? null].filter((e): e is string => !!e))];
   const held = accountId
     ? (
         await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id=?")
@@ -97,7 +97,7 @@ async function accountScope(
           .all<{ callsign: string }>()
       ).results.map((r) => r.callsign.toUpperCase())
     : [];
-  return { accountId, email, calls: [...new Set([base, ...held])] };
+  return { accountId, email, emails, calls: [...new Set([base, ...held])] };
 }
 
 /** `col` names one of `calls` or an SSID of it — a SQL fragment plus its binds. */
@@ -215,23 +215,30 @@ async function heldCallsExport(env: Env, accountId: string): Promise<Record<stri
 /** The account-scoped part of the export: every row keyed by the account or any call it holds.
  *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
 async function accountExport(env: Env, cs: string): Promise<Record<string, unknown>> {
-  const { accountId, email, calls } = await accountScope(env, cs);
+  const { accountId, emails, calls } = await accountScope(env, cs);
   const acct = accountId ?? "";
   const by = (col: string) => anyCall(col, calls);
-  const q = (sql: string, m: { sql: string; binds: string[] }) => rows(env, sql.replace("$CALLS", m.sql), ...m.binds);
+  const q = (sql: string, m: { sql: string; binds: string[] }, ...extra: string[]) =>
+    rows(env, sql.replace("$CALLS", m.sql), ...m.binds, ...extra);
   return {
-    passkeys: await q("SELECT id, callsign, transports, created_at FROM credentials WHERE $CALLS", by("callsign")),
+    passkeys: await q(
+      "SELECT id, callsign, transports, created_at FROM credentials WHERE $CALLS OR account_id=?",
+      by("callsign"),
+      acct,
+    ),
     callsigns: await heldCallsExport(env, acct),
     callsignHistory: await rows(
       env,
       "SELECT callsign, set_at, verified FROM callsign_history WHERE account_id=? ORDER BY set_at",
       acct,
     ),
-    emailTokens: await rows(
-      env,
-      "SELECT callsign, purpose, created_at, used FROM email_tokens WHERE email=?",
-      email ?? "",
-    ),
+    emailTokens: emails.length
+      ? await rows(
+          env,
+          `SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE email IN (${emails.map(() => "?").join(",")})`,
+          ...emails,
+        )
+      : [],
     watchCalls: await rows(env, "SELECT callsign, added_at FROM watch_calls WHERE account_id=?", acct),
     verificationChallenges: await rows(
       env,
@@ -338,7 +345,7 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     tombstoned.push(...erased.tombstones);
     mediaKeys.push(...erased.mediaKeys);
   }
-  await eraseAccount(env, scope.accountId, scope.email, calls);
+  await eraseAccount(env, scope.accountId, scope.emails, calls);
   // uploaded cache media leaves the object store too; best-effort, the index rows are already gone
   for (const k of mediaKeys) {
     try {
@@ -458,7 +465,7 @@ async function eraseCall(
 /** Erase every account-scoped row: sign-in material (passkeys, pending ceremonies, email links), the
  *  held calls (freeing each base call), and the person's subscriptions, watches, views, boxes, keys,
  *  ratings, directory entries and personal mail. Public bulletins stay, attributed to the marker. */
-async function eraseAccount(env: Env, accountId: string | null, email: string | null, calls: string[]): Promise<void> {
+async function eraseAccount(env: Env, accountId: string | null, emails: string[], calls: string[]): Promise<void> {
   const by = (col: string) => anyCall(col, calls);
   const del = (sql: string, ...cols: string[]) =>
     env.DB.prepare(cols.reduce((q, col) => q.replace("$CALLS", by(col).sql), sql)).bind(
@@ -484,9 +491,10 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
       ...by("from_call").binds,
     ),
   ];
-  if (email) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(email));
+  for (const e of emails) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(e));
   if (accountId)
     for (const table of [
+      "credentials",
       "cache_adoption_requests",
       "account_callsigns",
       "callsign_history",
@@ -551,6 +559,9 @@ export async function handleAccountMove(req: Request, env: Env, callsign: string
 
 // ----------------------------------------------------- portability: import a bundle (target)
 export async function handleAccountImport(req: Request, env: Env): Promise<Response> {
+  // an import needs no session and opens an account: a handful per client address per hour
+  if (await rateLimitedDurable(env, `acct-import:${clientIp(req, env)}`, Date.now(), 5, 3_600_000))
+    return json({ error: "rate limited — try again later" }, { status: 429 });
   const body = (await req.json().catch(() => ({}))) as {
     bundle?: any;
     assertion?: { key?: string; sig?: string; at?: number };
