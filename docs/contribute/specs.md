@@ -54,8 +54,8 @@ the best surviving authoritative source and says so.
 | **ISO/IEC 18004** | The dependency-free QR encoder (cache share codes) | [ISO/IEC 18004](https://www.iso.org/standard/62021.html) |
 | **Web Serial / Web Bluetooth** | The browser RF bridge (USB KISS TNC, BLE-KISS, Meshtastic over serial) | [Web Serial (WICG)](https://wicg.github.io/serial/) · [Web Bluetooth (CG)](https://webbluetoothcg.github.io/web-bluetooth/) |
 
-*APRS® is a registered trademark of APRS Foundation, Inc. APRScaching is not affiliated with, sponsored by, or
-endorsed by APRS Foundation, Inc. Meshtastic® is a registered trademark of Meshtastic LLC, which does not sponsor or
+*APRS® is a registered trademark (U.S. Reg. No. 2058846). APRScaching is not affiliated with or endorsed by the
+holder of the APRS® mark. Meshtastic® is a registered trademark of Meshtastic LLC, which does not sponsor or
 endorse APRScaching either. The names identify the protocols it interoperates with; the full list is in
 [About](../about.md#credits-trademarks).*
 

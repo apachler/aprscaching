@@ -7,10 +7,9 @@
 export const APRS_CREDIT =
   "APRS — the Automatic Packet Reporting System — was created by the late Bob Bruninga, WB4APR (1948–2022).";
 
-export const APRS_MARK = "APRS® is a registered trademark of APRS Foundation, Inc.";
+export const APRS_MARK = "APRS® is a registered trademark (U.S. Reg. No. 2058846).";
 
-export const APRS_NOT_AFFILIATED =
-  "APRScaching is not affiliated with, sponsored by, or endorsed by APRS Foundation, Inc.";
+export const APRS_NOT_AFFILIATED = "APRScaching is not affiliated with or endorsed by the holder of the APRS® mark.";
 
 export const OTHER_MARKS =
   "Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software components are released under " +

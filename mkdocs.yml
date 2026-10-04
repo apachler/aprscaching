@@ -10,8 +10,8 @@ repo_url: https://github.com/apachler/aprscaching
 edit_uri: edit/dev/docs/
 copyright: >-
   Documentation is CC-BY-SA-4.0. APRScaching is built by OE8APR from open specifications. APRS® is a
-  registered trademark of APRS Foundation, Inc. APRScaching is not affiliated with, sponsored by, or endorsed
-  by APRS Foundation, Inc.
+  registered trademark (U.S. Reg. No. 2058846). APRScaching is not affiliated with or endorsed by the holder of
+  the APRS® mark.
 
 docs_dir: docs
 

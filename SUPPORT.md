@@ -26,8 +26,7 @@ community-driven, and that's on purpose.
 ## Supporting the project
 
 aprscaching is **free in full** — every feature, forever, for everyone. Donations (when available) are
-**recognition-only** and never unlock functionality or gate features. Being open-source under AGPL
-also satisfies the open-access requirement behind the project's grant funding. If you want to help
-without money: run an instance, file good bug reports, improve the docs, or test on hardware we can't.
+**recognition-only** and never unlock functionality or gate features. If you want to help without money: run an
+instance, file good bug reports, improve the docs, or test on hardware we can't.
 
 73.
