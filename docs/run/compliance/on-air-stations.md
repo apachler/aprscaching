@@ -49,7 +49,7 @@ retries.
 ## What the station puts on the air
 
 - **Identification.** Every APRS and AX.25 frame the station sends carries its source callsign. The NET/ROM
-  node identifies through its NODES broadcast, every `NETROM_BROADCAST_MS` (default 5 minutes). The
+  node identifies through its NODES broadcast, every `NETROM_BROADCAST_MS` (default one hour, at least 5 minutes). The
   digipeater and the IGate have no separate identification timer: they transmit only when relaying, under the
   station's callsign. Check that this meets your national identification rule.
 - **Third-party traffic.** A message the instance sends for a user puts the licensed user's callsign as the
@@ -83,7 +83,7 @@ boundary sits at that RF or gateway edge. You are responsible for what crosses i
 | Signs, never encrypts; confidentiality degrades to field-drop | Confirming that satisfies *your* regulator |
 | Transmit off by default, gated on control-verification | Being the reachable, responsible control operator |
 | Per-port opt-in for automatic TX; token-bucket pacing on unattended TX, with a ceiling | Choosing enabled bands, ports, power and segments; tightening the pacing to any duty-cycle limit your rules set |
-| Callsign in every frame; NODES broadcast interval (`NETROM_BROADCAST_MS`, default 300000 ms) | Meeting your national ID rule |
+| Callsign in every frame; NODES broadcast interval (`NETROM_BROADCAST_MS`, default 3600000 ms) | Meeting your national ID rule |
 | Third-party encapsulation preserving the originating callsign | Meeting third-party and international-traffic rules |
 | Recognition-only donations; no commercial payloads | Keeping your on-air content non-commercial |
 

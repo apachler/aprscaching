@@ -32,7 +32,7 @@ from the peer on an incoming one, and SREJ is opt-in per link. How the stack wor
 Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over a
 two-way AXUDP port. The node:
 
-- broadcasts its **NODES** table every `NETROM_BROADCAST_MS` (default 300000, five minutes) and learns
+- broadcasts its **NODES** table every `NETROM_BROADCAST_MS` (default 3600000, one hour; at least five minutes) and learns
   routes from the NODES broadcasts it hears, letting stale routes age out; `NETROM_PATH_QUALITY` (0–255) is
   the quality it assumes for a neighbour heard directly;
 - switches directed NET/ROM frames: delivers them locally, forwards them on, or drops them;

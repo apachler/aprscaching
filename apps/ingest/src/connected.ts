@@ -21,13 +21,22 @@ export interface ConnectedStackOpts {
 /** Shortest NODES broadcast interval: every broadcast keys the transmitter, and routes need minutes to settle. */
 export const NETROM_BROADCAST_MIN_MS = 5 * 60_000;
 
+/** Default NODES broadcast interval: one hour, the usual NET/ROM rate, so an idle node rarely keys the channel. */
+export const NETROM_BROADCAST_DEFAULT_MS = 60 * 60_000;
+
 /**
  * The NET/ROM node's broadcast interval and assumed neighbour path quality from env: a non-numeric value
- * falls back to the default, the interval has a floor of five minutes, and the quality is clamped to 0–255.
+ * falls back to the default, the interval defaults to one hour with a floor of five minutes, and the quality is
+ * clamped to 0–255.
  */
 export function netromSettings(env: NodeJS.ProcessEnv): { broadcastMs: number; pathQuality: number } {
   return {
-    broadcastMs: numEnv("NETROM_BROADCAST_MS", 300_000, { min: NETROM_BROADCAST_MIN_MS, max: 86_400_000 }, env),
+    broadcastMs: numEnv(
+      "NETROM_BROADCAST_MS",
+      NETROM_BROADCAST_DEFAULT_MS,
+      { min: NETROM_BROADCAST_MIN_MS, max: 86_400_000 },
+      env,
+    ),
     pathQuality: numEnv("NETROM_PATH_QUALITY", 192, { min: 0, max: 255 }, env),
   };
 }

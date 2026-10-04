@@ -124,7 +124,7 @@ DIGI_CONNECTED	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1
 DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds (0-10000) the connected-mode digipeater waits, so a better-placed digi repeats first
 NETROM_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it
 NETROM_ALIAS	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Alias of the NET/ROM node
-NETROM_BROADCAST_MS	int	ingest	300000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)
+NETROM_BROADCAST_MS	int	ingest	3600000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)
 NETROM_PATH_QUALITY	int	ingest	192		0	0	selfhost,baremetal,ingest-box,pocket	Link quality (0-255) assumed for a directly heard neighbour
 NETROM_INP3	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also speaks INP3 alongside NODES
 NODE_PERSONALITY	string	ingest	netrom		0	0	selfhost,baremetal,ingest-box,pocket	Command surface of the node: netrom, flexnet, tnn or baycom

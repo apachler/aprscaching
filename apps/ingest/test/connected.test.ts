@@ -8,16 +8,16 @@ describe("netromSettings", () => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
 
   it("uses the defaults when unset or not a number", () => {
-    expect(netromSettings({})).toEqual({ broadcastMs: 300_000, pathQuality: 192 });
+    expect(netromSettings({})).toEqual({ broadcastMs: 3_600_000, pathQuality: 192 });
     expect(netromSettings({ NETROM_BROADCAST_MS: "soon", NETROM_PATH_QUALITY: "good" })).toEqual({
-      broadcastMs: 300_000,
+      broadcastMs: 3_600_000,
       pathQuality: 192,
     });
   });
 
   it("floors the broadcast interval", () => {
     expect(netromSettings({ NETROM_BROADCAST_MS: "1000" }).broadcastMs).toBe(NETROM_BROADCAST_MIN_MS);
-    expect(netromSettings({ NETROM_BROADCAST_MS: "3600000" }).broadcastMs).toBe(3_600_000);
+    expect(netromSettings({ NETROM_BROADCAST_MS: "900000" }).broadcastMs).toBe(900_000);
   });
 
   it("clamps the path quality to 0–255", () => {
