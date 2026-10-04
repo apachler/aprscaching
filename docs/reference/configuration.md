@@ -15,7 +15,7 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
     `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
     security-critical and must never be settable at runtime or exposed to the client — supply them only
     through the environment. Other secrets: `APRSIS_PASSCODE`, `IGATE_PASS`,
-    `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
+    `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `SMTP_PASS`, `VAPID_PRIVATE`, `OKAPI_KEY`,
     `MESHCOM_KISS_PASS`, `MESHTASTIC_MQTT_URL` (when it carries credentials), `BOX_KEY`, `TUNNEL_TOKEN`,
     `CF_API_TOKEN`.
 
@@ -138,7 +138,10 @@ app do not read these.
 | `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT` | Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream | all / `120` / names aprscaching |
 | `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs | — |
 | `GMA_API_KEY` | API key from GMA (gma.rocks), sent with each GMA spot poll. GMA's spot API answers only with a key, so without one GMA spots are off and the instance sends GMA no request | — |
-| `EMAIL_FROM` / `EMAIL_API_KEY` | Sender address and API key of a Resend-compatible email provider, for sign-in links and the watch-alert digest. Absent ⇒ no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
+| `EMAIL_FROM` | Sender address of sign-in links, address confirmations and the watch-alert digest, e.g. `aprscaching <noreply@aprs.example.net>`. Mail goes out over SMTP when `SMTP_HOST` is set, else over the Resend API when `EMAIL_API_KEY` is set. Without `EMAIL_FROM` and one of the two, no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | The SMTP server that sends the mail, its port, and how the connection is secured: `starttls` (upgrade a plain connection, refused when the server cannot), `tls` (TLS from the first byte) or `none` (in the clear, only for a relay on the same box or a trusted LAN). Set, SMTP is used even when `EMAIL_API_KEY` is set too | — / `587` / `tls` on port 465, else `starttls` |
+| `SMTP_USER` / `SMTP_PASS` | The SMTP login, often the full sender address, and its password. Without `SMTP_USER` the instance sends without logging in | — |
+| `EMAIL_API_KEY` | API key of the Resend email API, used when `SMTP_HOST` is unset | — |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | Web-push keys (absent ⇒ push off) | — |
 | `VAPID_SUBJECT` | The contact a push service sees in each push request (RFC 8292): a `mailto:` or `https:` URI | `mailto:` + `OPERATOR_EMAIL`; else `https://` + the instance's host |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |

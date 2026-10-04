@@ -16,7 +16,7 @@ import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { nowS } from "./util/time.js";
 import { instanceHost, type Env } from "./env.js";
 import { json } from "./app.js";
-import { sendEmail } from "./email.js";
+import { sendEmail } from "./mail.js";
 import { sessionIdentity } from "./auth.js";
 
 // ---- digest (pure, testable) ----

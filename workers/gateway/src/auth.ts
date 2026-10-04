@@ -12,6 +12,7 @@ import { isCallsignVerified, verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { normalEmail, sendEmailConfirmation } from "./email.js";
+import { mailTransport } from "./mail.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -50,7 +51,7 @@ function appUrl(env: Env): URL | null {
 
 /**
  * The sign-in paths this instance offers. Passkeys need a secure-context origin (https, or http on the
- * loopback host) named by APP_URL; email needs a configured provider; the operator-issued link needs
+ * loopback host) named by APP_URL; email needs a mail transport (mail.ts); the operator-issued link needs
  * OPERATOR_SECRET. An instance with neither passkeys nor email is off-grid: the operator's link is then
  * the only way in, and it serves every account (see handleOperatorLink).
  */
@@ -59,7 +60,7 @@ export function signInPaths(env: Env): { passkeys: boolean; email: boolean; oper
   const passkeys = !!u && (u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname)));
   return {
     passkeys,
-    email: !!env.EMAIL_FROM && !!env.EMAIL_API_KEY,
+    email: mailTransport(env) !== null,
     operatorLink: !weakSecret(env.OPERATOR_SECRET),
   };
 }

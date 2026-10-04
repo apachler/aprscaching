@@ -128,6 +128,7 @@ import {
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
+import { handleMailTest } from "./mail.js";
 import { handleStationStatus } from "./station_status.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
 import { handleFederationTombstones } from "./tombstones.js";
@@ -472,6 +473,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
+  if (p === "/api/admin/mail-test" && m === "POST") return handleMailTest(req, env);
   if (p === "/api/admin/station-status" && m === "GET") return handleStationStatus(req, env);
   if (p === "/api/admin/setup/44net" && m === "GET") return handleFed44netCheck(req, env); // read-only DNS self-check
   if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);

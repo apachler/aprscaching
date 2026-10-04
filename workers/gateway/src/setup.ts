@@ -16,6 +16,7 @@ import { json } from "./app.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
+import { describeTransport, mailTransport } from "./mail.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { amprCallOf } from "./fed44net.js";
@@ -38,6 +39,9 @@ export interface SetupItem {
 }
 
 const set = (v: string | undefined): boolean => typeof v === "string" && v.trim().length > 0;
+
+/** The settings that turn mail on, for the checklist's hints (mail.ts picks the transport). */
+const MAIL_KEYS = "EMAIL_FROM with SMTP_HOST or EMAIL_API_KEY";
 
 /** APP_URL's hostname, the default of INSTANCE and RP_ID (env.ts applyDerivedDefaults). */
 function appHost(env: Env): string | null {
@@ -282,7 +286,7 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
   {
     // Email is how members sign in when passkeys are unavailable and how they recover an account. It is
     // blocking only when nothing else lets anyone in: no passkey origin and no operator sign-in link.
-    const mail = signIn.email;
+    const mail = mailTransport(env);
     const noWayIn = !signIn.passkeys && !signIn.email && !signIn.operatorLink;
     push({
       key: "EMAIL",
@@ -292,12 +296,12 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
       status: mail ? "ok" : noWayIn ? "missing" : "warn",
       source: "env",
       detail: mail
-        ? `sign-in links + digest mail from ${env.EMAIL_FROM}`
+        ? `sign-in links + digest mail from ${env.EMAIL_FROM} over ${describeTransport(mail)}; tools/admin/mail-test.mjs <address> sends a test`
         : noWayIn
-          ? "nobody can sign in: no https APP_URL (passkeys), no EMAIL_FROM / EMAIL_API_KEY, no OPERATOR_SECRET (operator sign-in link) — set one"
+          ? `nobody can sign in: no https APP_URL (passkeys), no mail (${MAIL_KEYS}), no OPERATOR_SECRET (operator sign-in link) — set one`
           : signIn.passkeys
-            ? "EMAIL_FROM / EMAIL_API_KEY unset — passkeys work; members without one, or who lose theirs, cannot recover by email"
-            : "EMAIL_FROM / EMAIL_API_KEY unset — members sign in with the operator's link (node tools/admin/signin-link.mjs <CALL>)",
+            ? `no mail (${MAIL_KEYS}) — passkeys work; members without one, or who lose theirs, cannot recover by email`
+            : `no mail (${MAIL_KEYS}) — members sign in with the operator's link (node tools/admin/signin-link.mjs <CALL>)`,
     });
   }
   {

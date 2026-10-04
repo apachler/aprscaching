@@ -58,7 +58,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 5. **Make it public-ready**, the *Recommended* items:
     - `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL` for `/imprint` and `/privacy`; `OPERATOR_EMAIL` is
       also the contact in `/.well-known/security.txt` unless `SECURITY_CONTACT` names another;
-    - `EMAIL_FROM` and `EMAIL_API_KEY`, so members without a passkey can sign in and recover;
+    - mail, so members without a passkey can sign in and recover: `EMAIL_FROM` and an SMTP server or a
+      Resend key ([Send mail](day-to-day/mail.md));
     - a scheduled backup ([Backups](day-to-day/backups.md#what-to-back-up));
     - `SOURCE_REPO` pointing at your published fork if you changed the code (AGPL §13).
 

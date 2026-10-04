@@ -15,7 +15,7 @@ that calls a service on the internet stops; the table names each one and its wor
 | "Navigate" links (Google Maps, Apple Maps, OpenStreetMap) | No | They are plain links; the cache's coordinates stay on the sheet |
 | Embeddable map widget (`/embed`) | Works with `BASEMAP_STYLE=offline` or a HAMNET style | MapLibre comes from the instance's own web build. The base map is the gateway's `BASEMAP_STYLE`: `offline` draws the self-contained grid, or point it at a style served inside HAMNET ([configuration](../../reference/configuration.md#gateway-read-api-spots-emailpush)) |
 | Passkeys, device location (Tier B finds), Web Serial / Web Bluetooth radio, web push | Only over https | [TLS on the 44Net name](44net-identity.md#tls-on-the-44net-name). Over plain http, members sign in with the sysop's [one-time link](../day-to-day/sign-in-links.md#off-grid-sign-in) and log finds unsigned |
-| Email sign-in links and the watch digest (Resend API) | No | Passkeys, or the sysop's one-time link |
+| Email sign-in links and the watch digest | Only with an SMTP server reachable on HAMNET; the Resend API needs the internet | Set `SMTP_HOST` to a mail server inside HAMNET ([Send mail](../day-to-day/mail.md)), or use passkeys or the sysop's one-time link |
 | Web push delivery (the browser vendor's push service) | No | The in-app watchlist |
 | APRS-IS feed and uplink (`rotate.aprs2.net` by default) | No | Set `APRSIS_HOST` to an APRS-IS server reachable on HAMNET, if your region runs one (**Unverified** per region). RF from your own TNC is unaffected |
 | RF ingest from your own radio | Yes | The [off-grid](off-grid.md) shape: the ingest box and a local gateway on one machine, `INGEST_URL=http://localhost:8787/ingest` |

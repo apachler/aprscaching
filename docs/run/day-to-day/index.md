@@ -50,6 +50,7 @@ that account lists the club's stations directly.
 | Back up, restore, move to another shape | [Backups and moving](backups.md) |
 | Bring the instance to a new release | [Updates](updates.md) |
 | Sign someone in without a passkey | [One-time sign-in links](sign-in-links.md) |
+| Send sign-in links and the digest by mail, or test that mail | [Send mail](mail.md) |
 | Verify a member's callsign by hand | [Callsign verification](callsign-verification.md) |
 | Give an abandoned cache a new owner | [Cache adoption](cache-adoption.md) |
 | Keep the register badge current | [Licence registers](licence-registers.md) |

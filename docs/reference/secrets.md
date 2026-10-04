@@ -22,8 +22,8 @@ The three plane secrets must differ: the Node and Bun servers refuse to boot on 
 
 Other credentials an instance may hold: `APRSIS_PASSCODE`, `IGATE_PASS` and `APRSIS_SERVICE_PASS` (APRS-IS
 logins, public by design and never a proof of identity), `MESHCOM_KISS_PASS` (a MeshCom node's KISS
-password), `MESHTASTIC_MQTT_URL` (a broker URL with credentials in it), `EMAIL_API_KEY`, `VAPID_PRIVATE`,
-`OKAPI_KEY`, `TUNNEL_TOKEN` and `CF_API_TOKEN`. Each is described in [Configuration](configuration.md).
+password), `MESHTASTIC_MQTT_URL` (a broker URL with credentials in it), `EMAIL_API_KEY`, `SMTP_PASS` (the
+mail server's password), `VAPID_PRIVATE`, `OKAPI_KEY`, `TUNNEL_TOKEN` and `CF_API_TOKEN`. Each is described in [Configuration](configuration.md).
 
 `ADMIN_CALLSIGNS` is not a secret, but it is security-critical: it decides who is a sysop
 ([Who is a sysop](#who-is-a-sysop)). It is read from the environment only and never settable at runtime.
@@ -48,7 +48,7 @@ Two shared secrets and the enrolled boxes' own keys reach the gateway from machi
 |---|---|---|---|
 | `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the instance's own ingest box |
 | An enrolled box's key | a signed request ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)) | Delivery only: `/ingest`, `/ingest/check` and its own remote-box polling and pairing. Once the sysop marks it **Runs this instance's services**, also the outbox, BBS delivery, FBB forwarding, the partner list, the NET/ROM node mirror, White Pages, federation pages and its own transmit commands; trusting its hearings grants none of these. Never finds logged over APRS, owner actions, cache creation or the catalog importer | one box, which may be a ham's lent receiver |
-| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: reading the Setup checklist (`GET /api/admin/setup`, which `deploy/aprscaching doctor` relays), `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44Net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
+| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: reading the Setup checklist (`GET /api/admin/setup`, which `deploy/aprscaching doctor` relays), `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), the test mail (`POST /api/admin/mail-test`), `POST /federation/sync`, the peer list and trust, 44Net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
 
 The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a
 stolen ingest box cannot take over an account or the instance. A device key binds to a callsign only through
