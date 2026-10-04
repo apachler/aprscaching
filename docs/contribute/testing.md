@@ -37,8 +37,8 @@ MapLibre).
 ## Conformance suites (runtime-agnostic)
 
 `tools/smoke/*.mjs` are standalone scripts that hit a **running gateway** at `BASE` and assert the
-full product behavior — the same suites run against all three runtimes, which is what makes the
-tri-runtime promise real:
+full product behavior. The same suites run against both runtimes, which is what keeps Node and Bun in
+step:
 
 | Suite | Asserts |
 |---|---|
@@ -58,17 +58,6 @@ DB_PATH=/tmp/acs.db PORT=8787 ALLOW_DEV_TOKENS=1 \
   pnpm --filter @aprscaching/node-gateway start &
 BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs      # sends x-ingest-secret and x-operator-secret
 BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
-```
-
-**Cloudflare Worker + D1** — migrate the local D1, write `.dev.vars`, start `wrangler dev`:
-
-```bash
-cd workers/gateway
-CI=1 npx wrangler d1 migrations apply aprscaching --local
-printf 'INGEST_SECRET=devsecret\nOPERATOR_SECRET=devoperator\nSESSION_SECRET=devsession\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\nFED_PRIVATE_KEY=%s\n' \
-  "$(node ../../tools/fedkey/genkey.mjs --raw)" > .dev.vars
-CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &
-cd ../.. && BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret OPERATOR_SECRET=devoperator node tools/smoke/smoke.mjs
 ```
 
 **Bun + bun:sqlite** — same env recipe as Node, started with `bun run servers/bun/server.ts`.
@@ -188,8 +177,7 @@ Pocket's USB TNC bridge is written from the USB CDC-ACM class specification. Pri
 
 ## CI guards
 
-CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent,
-`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code, `dead-exports.mjs`
+CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent, `dead-exports.mjs`
 fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
 present-tense, every configuration key the code reads documented (and every documented key read), the
 manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
@@ -199,7 +187,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |

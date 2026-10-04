@@ -10,25 +10,16 @@ import { catchUp } from "@aprscaching/gateway/fedcatchup";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import type { Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
-import { serveRoom } from "@aprscaching/gateway/budget";
 import type { RoomNamespace } from "@aprscaching/gateway/runtime";
-import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
+import { serveRoom, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { makeFetchGuard } from "./fetchguard.js";
 
-/**
- * The `ROOMS` binding: /ingest's live dispatch and the write budget land in the in-memory rooms, with the
- * Durable Object's endpoints (budget.ts serveRoom); the WS upgrade is the server's.
- */
+/** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
   return {
     idFromName: (n) => n,
     get: (id) => ({
-      fetch: (req: Request) =>
-        serveRoom(
-          req,
-          (envelopes) => rooms.dispatch(String(id), envelopes as LiveEnvelope[]),
-          () => rooms.budgetCounter,
-        ),
+      fetch: (req: Request) => serveRoom(req, (envelopes) => rooms.dispatch(String(id), envelopes as LiveEnvelope[])),
     }),
   };
 }
@@ -60,8 +51,8 @@ export function gitHead(): string | undefined {
 /**
  * The scheduled jobs. The nightly job (TTL pruning, digests) runs once at start too — a box that
  * reboots or closes more often than daily would otherwise never prune, so its database only grows; it
- * is idempotent. The frequent federation tasks (pull from peers, push to a hub, answer relay queries —
- * the set the Worker's 15-minute cron runs) run every `fedSyncMs` (0 disables them) when peers or a hub
+ * is idempotent. The frequent federation tasks (pull from peers, push to a hub, answer relay queries;
+ * runFrequentSync) run every `fedSyncMs` (0 disables them) when peers or a hub
  * are configured; each no-ops unless its config is present.
  */
 export function startSchedules(env: Env, fedSyncMs: number): void {

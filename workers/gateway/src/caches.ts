@@ -41,7 +41,7 @@ import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
 import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
 
-// ---- D1 row shapes (snake_case) ----
+// ---- database row shapes (snake_case) ----
 export interface CacheDbRow {
   id: number;
   code: string;

@@ -69,8 +69,8 @@ import { mediaUploadProblem } from "./media/limits.js";
  * Gateway base URL. A dev server talks to the local gateway on :8787. A production build without
  * `VITE_API_BASE` talks to its own origin (`""`), which is right wherever one host serves both the SPA and
  * the API (the desktop binary, a Pi, an all-in-one VM) and fails visibly anywhere else — never a silent
- * localhost that only answers on the builder's machine. A split deployment (Pages + a Worker on
- * `api.aprscaching.net`) sets `VITE_API_BASE` at build time.
+ * localhost that only answers on the builder's machine. A web app served from another host than its
+ * gateway sets `VITE_API_BASE` at build time.
  */
 /** Drop trailing `/` from a URL without a regex (the URL can be typed by the user). */
 export function trimTrailingSlashes(url: string): string {
@@ -1243,20 +1243,7 @@ export interface SetupItem {
   source: "env" | "db";
   detail: string;
 }
-/** One threshold (80 % or 100 %) of the daily D1 write budget crossed on one UTC day. */
-export interface WriteBudgetAlert {
-  day: string;
-  threshold: 80 | 100;
-  /** unix ms */
-  at: number;
-  used: number;
-  mailed: boolean;
-}
-/** The daily D1 write budget: today's count and level (`off` when the instance sets none). */
-export type WriteBudget =
-  | { level: "off"; budget: 0; used: null }
-  | { level: "ok" | "warn" | "over"; day: string; used: number; budget: number; alerts: WriteBudgetAlert[] };
-export function getAdminSetup(): Promise<{ items: SetupItem[]; budget: WriteBudget }> {
+export function getAdminSetup(): Promise<{ items: SetupItem[] }> {
   return call(`/api/admin/setup`);
 }
 /** One line of the 44Net self-check; `fix` is set on every warn and fail. */

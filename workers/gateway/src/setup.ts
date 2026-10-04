@@ -18,12 +18,9 @@ import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
-import { budgetStatus } from "./budget.js";
 import { amprCallOf } from "./fed44net.js";
 import { configured44net } from "./fed44netcheck.js";
 import { attestedSites } from "./attestedsites.js";
-
-type WriteBudgetStatus = Awaited<ReturnType<typeof budgetStatus>>;
 
 export interface SetupItem {
   /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
@@ -79,7 +76,7 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
   const items: SetupItem[] = [];
   const push = (i: SetupItem) => items.push(i);
 
-  // ---- malformed settings — the Node/Bun servers refuse to start on one; the Worker reports it here.
+  // ---- malformed settings — the Node/Bun servers refuse to start on one; the checklist shows the same check.
   // Each detail names the key and what it expects, never the value.
   const problems = configProblems(env);
   push({
@@ -321,13 +318,11 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
 }
 
 /** Runtime-state probes — each names the existing surface that manages it. */
-async function dbItems(env: Env, callsign: string | null, budget: WriteBudgetStatus): Promise<SetupItem[]> {
+async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> {
   const now = nowS();
   const items: SetupItem[] = [];
 
   const rx = await count(env, "SELECT COUNT(*) AS n FROM packets_recent WHERE ts > ?", now - 3600);
-  // from 80 % of the write budget the raw packet log is paused, so an empty log says nothing about the ingest
-  const paused = budget.level === "warn" || budget.level === "over";
   items.push({
     key: "db:ingest",
     level: "blocking",
@@ -337,27 +332,7 @@ async function dbItems(env: Env, callsign: string | null, budget: WriteBudgetSta
     source: "db",
     detail: rx
       ? `${rx} packet${rx === 1 ? "" : "s"} heard in the last hour`
-      : paused
-        ? "the D1 write budget has paused the raw packet log, so ingest activity cannot be checked here"
-        : "no packets in the last hour — check the ingest box (INGEST_URL + INGEST_SECRET) or the browser RF bridge",
-  });
-
-  items.push({
-    key: "D1_DAILY_WRITE_BUDGET",
-    level: "optional",
-    label: "D1 write budget",
-    group: "data",
-    status: paused ? "warn" : "ok",
-    source: "env",
-    detail:
-      budget.used === null
-        ? "off — every write is stored as configured"
-        : `${budget.used.toLocaleString("en")} of ${budget.budget.toLocaleString("en")} rows written today (UTC)` +
-          (budget.level === "over"
-            ? " — over budget: only protected data is stored"
-            : budget.level === "warn"
-              ? " — past 80 %: the raw packet log is paused and unprotected stations store fewer fixes"
-              : ""),
+      : "no packets in the last hour — check the ingest box (INGEST_URL + INGEST_SECRET) or the browser RF bridge",
   });
 
   const peers = await count(env, "SELECT COUNT(*) AS n FROM fed_peers WHERE enabled = 1");
@@ -413,10 +388,7 @@ async function dbItems(env: Env, callsign: string | null, budget: WriteBudgetSta
   return items;
 }
 
-/**
- * GET /api/admin/setup — the operator's configuration checklist (a sysop, or the operator secret; statuses only), plus the
- * D1 write budget's `{ used, budget, level, alerts }` for the admin banner.
- */
+/** GET /api/admin/setup — the operator's configuration checklist (a sysop, or the operator secret; statuses only). */
 export async function handleAdminSetup(req: Request, env: Env): Promise<Response> {
   // The checklist reports statuses, never a secret value, so the operator's scripts may read it too
   // (`deploy/aprscaching doctor` sends x-operator-secret).
@@ -424,8 +396,6 @@ export async function handleAdminSetup(req: Request, env: Env): Promise<Response
   if (guard) return guard;
   const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
   applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values
-  // the write budget's counter: today's count, level and alerts, which the admin banner shows
-  const budget = await budgetStatus(env);
   const sites = await attestedOrPreset(env);
-  return json({ items: [...envItems(env, sites), ...(await dbItems(env, callsign, budget))], budget });
+  return json({ items: [...envItems(env, sites), ...(await dbItems(env, callsign))] });
 }

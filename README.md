@@ -24,7 +24,7 @@ Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
   phone's location otherwise. A packet that only travelled over the internet proves nothing on its own.
 - **The Shack.** A packet-radio bench in the browser: an APRS decoder, a live station map, a BBS and NET/ROM
   node, an IGate and digipeater over a KISS TNC, rig control, CW and PSK31 decoding, and signed tool plugins.
-- **Yours to run.** A Raspberry Pi, a mini-PC, a phone, a desktop app or Cloudflare — and the instances
+- **Yours to run.** A Raspberry Pi, a mini-PC, a free Oracle Cloud VM, a phone or a desktop app — and the instances
   federate into one open network. Positions are pruned, nothing tracks you, and every instance links the
   exact source it runs.
 
@@ -57,12 +57,13 @@ pnpm dev:web                                      # the map UI (talks to http://
 pnpm dev:ingest                                   # the operator-local RF ingest (copy .env.example to .env)
 ```
 
-[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the Cloudflare Worker
-gateway, the Bun desktop build and the ingest box, and
+[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the Bun desktop build
+and the ingest box, and
 [Testing](https://apachler.github.io/aprscaching/contribute/testing/) covers the smoke and conformance suites.
 
-For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key. It
-deploys the stack archive attached to the latest release, so it works once the first release is published:
+For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key
+([Self-host on Oracle Cloud](https://apachler.github.io/aprscaching/run/install/oracle-cloud/)). It deploys the
+stack archive attached to the latest release, so it works once the first release is published:
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The database half of a portable backup (tools/backup/db.mjs): rows dumped as SQL restore into a new
 // SQLite database identical to the original, a backup from an older schema migrates forward on restore, one
-// from a schema this checkout does not know is refused, and the same rows replace a D1-shaped database.
+// from a schema this checkout does not know is refused.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { spawnSync } from "node:child_process";
@@ -134,39 +134,6 @@ describe("portable backup rows", () => {
       const exists = tool(["restore", path.join(dir, "src.db"), MIGRATIONS, newest()], rows);
       expect(exists.status).not.toBe(0);
       expect(tool(["restore", path.join(dir, "y.db"), MIGRATIONS, newest()], "not a backup").status).not.toBe(0);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("the same rows replace a D1-shaped database, and a D1 export reads back as rows", () => {
-    const dir = tmp();
-    try {
-      const src = seeded(dir);
-      const rows = tool(["dump", src]).out;
-      const d1sql = tool(["to-d1"], rows).out;
-      expect(d1sql.startsWith("PRAGMA defer_foreign_keys = true;")).toBe(true);
-      // a D1 database: migrated, with rows of its own that the restore replaces
-      const d1file = path.join(dir, "d1.db");
-      const d1 = new Database(d1file);
-      migrate(d1, MIGRATIONS);
-      d1.prepare(
-        "INSERT INTO caches (code, owner_call, title, type, created_at, updated_at) VALUES ('ZZ-9','X','old','multi',1,1)",
-      ).run();
-      // a table empty in the backup but full on the target is emptied too
-      d1.prepare("INSERT INTO watches (callsign, cache_id) VALUES ('OE1X', 1)").run();
-      d1.exec(d1sql);
-      d1.close();
-      expect(snapshot(d1file).caches).toEqual(snapshot(src).caches);
-      expect(snapshot(d1file).watches).toEqual([]);
-      // `wrangler d1 export --no-schema` output: its bookkeeping and transaction lines are dropped
-      const exported = `PRAGMA defer_foreign_keys=TRUE;\nINSERT INTO "d1_migrations" ("id","name") VALUES(1,'0001_baseline.sql');\n${rows
-        .split("\n")
-        .slice(1)
-        .join("\n")}`;
-      const back = tool(["from-d1", newest()], exported).out;
-      expect(back).not.toMatch(/d1_migrations|PRAGMA/);
-      expect(JSON.parse(tool(["count"], back).out)).toEqual(JSON.parse(tool(["count"], rows).out));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -14,7 +14,7 @@
  *
  * The trusted rows are read once and kept for a short while per database binding: a batch of radio messages,
  * a find and a peer's corroboration question each cost at most one small read. A change made here drops the
- * kept copy at once; another isolate sees it within {@link TTL_MS}.
+ * kept copy at once; another process on the same database sees it within {@link TTL_MS}.
  */
 import type { Env } from "./env.js";
 import { parseAttestedSites } from "./provenance.js";
@@ -49,7 +49,7 @@ async function trustedRows(env: Env): Promise<Trusted> {
   return trusted;
 }
 
-/** Drop the kept copy after a trust change, so this isolate answers with the new set at once. */
+/** Drop the kept copy after a trust change, so this process answers with the new set at once. */
 export function forgetAttestedSites(env: Env): void {
   kept.delete(env.DB as unknown as object);
 }

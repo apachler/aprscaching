@@ -3,14 +3,14 @@
 # file is missing — an installation set up before the helpers existed. Sourced, never run.
 # shellcheck shell=bash
 
-SHAPES="selfhost cloudflare ingest-box baremetal pocket desktop"
+SHAPES="selfhost ingest-box baremetal pocket desktop"
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SHAPE_FILE="${APRSCACHING_SHAPE_FILE:-$DEPLOY_DIR/.shape}"
 
 shape_valid() { case " $SHAPES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # shape_record SHAPE ENV_FILE [KEY=VALUE…]: remember what init set up, and anything else the shape needs
-# later (the Cloudflare split records its Worker's and app's URLs).
+# later.
 shape_record() {
   local line
   {
@@ -35,8 +35,6 @@ shape_probe() {
     echo baremetal
   elif [ -f "$env" ]; then
     if grep -qE '^(OPERATOR_SECRET|ADMIN_CALLSIGNS|APP_URL)=.' "$env"; then echo selfhost; else echo ingest-box; fi
-  elif grep -qE '^database_id = "[0-9a-f-]{36}"' "$DEPLOY_DIR/../workers/gateway/wrangler.toml" 2>/dev/null; then
-    echo cloudflare
   fi
 }
 

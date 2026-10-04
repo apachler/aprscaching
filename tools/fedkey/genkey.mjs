@@ -7,11 +7,11 @@
 //   node tools/fedkey/genkey.mjs --raw     # just the base64 value (for FED_PRIVATE_KEY)
 //
 // Set it as a secret, never commit it:
-//   wrangler secret put FED_PRIVATE_KEY        (Cloudflare)
-//   export FED_PRIVATE_KEY=...                 (Node self-host)
+//   FED_PRIVATE_KEY=... in deploy/.env        (Self-host)
+//   export FED_PRIVATE_KEY=...                 (bare metal, Desktop)
 
 const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-// PKCS8 private import is portable across workerd + Node; carry the raw public key alongside.
+// PKCS8 private import is portable across Node and Bun; carry the raw public key alongside.
 const pkcs8 = Buffer.from(await crypto.subtle.exportKey("pkcs8", kp.privateKey)).toString("base64");
 const pub = Buffer.from(await crypto.subtle.exportKey("raw", kp.publicKey)).toString("base64url");
 const b64 = Buffer.from(JSON.stringify({ pkcs8, pub })).toString("base64");

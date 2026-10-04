@@ -77,7 +77,7 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [ ] **Protect `main`** _(S)_ — branch protection on `main` (no direct pushes, the PR checks required), so only
       the release PR and `dev` → `main` merges reach it.
 - [ ] **aprscaching.net live** _(M)_ — DNS points at the public instance; `INSTANCE`, `APP_URL` and `RP_ID` are
-      `aprscaching.net` and the API answers on `api.aprscaching.net`; `aprscaching.com` (and `www.`) answer `301`
+      `aprscaching.net` and the gateway answers on the same origin; `aprscaching.com` (and `www.`) answer `301`
       to `.net` at the edge, before any sign-in; TLS and HSTS checked; a passkey registered and used on `.net`;
       `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
 - [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
@@ -163,7 +163,7 @@ radios) stay documented validate-at-deploy entries — visible, never silently a
 Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom, and every one runs: KISS TCP
 against the kernel AX.25 stack, the full FBB mail exchange against F6FBB, APRS-IS against aprsc (all in
 `interop.yml`), KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (the weekly
-`transports.yml`), and MeshCom's golden-fixture conformance on Node, Bun and workerd (`pnpm
+`transports.yml`), and MeshCom's golden-fixture conformance on Node and Bun (`pnpm
 conformance:meshcom`; a live node stays validate-at-deploy). The local AXUDP loop, LinBPQ and TNN/JNOS legs
 stay too: they guard the shipped NET/ROM node and FBB/BBS code.
 
@@ -442,7 +442,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 - [ ] **Feed proxy v1 + feed-backed widgets** _(P2 · M)_ — widgets must not each hit upstreams from
       every browser. A scheduled server-side fetch and cache exposes versioned `/api/feeds/*` under the
-      free read API (Workers cron, Node/Bun interval, D1/SQLite cache table), and a first-party feed tool
+      free read API (the Node/Bun interval, a SQLite cache table), and a first-party feed tool
       re-exposes it over the host IPC bus, so a third-party widget needs no `network` grant for curated
       data — which is what keeps that grant meaningful. Every response carries source and fetched-at so a
       widget labels stale data by age; every feed gets a circuit breaker and stale-while-revalidate,
@@ -464,7 +464,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   public domain and shareable; the contest calendar is published for reuse; POTA and SOTA spots are
   direct-poll-only unless those programmes say otherwise in writing — the courtesy contacts ask them
   exactly that, and SOTA's data additionally sits under the UK database right. Held out of the first
-  dashboard release on purpose: it is the only tri-runtime piece in the program and the only one with
+  dashboard release on purpose: it is the only server-side piece in the program and the only one with
   a standing upstream-maintenance cost, and the dashboard is worth running with no first-party server
   at all — that property is the answer to how HamClock died, so it ships proven first.
 
@@ -559,8 +559,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       - TLS: both nodes need the certificate, so DNS-01 on both.
       - The ingest (APRS-IS login, RF) runs on the active node only.
       - A passive standby meets idle reclamation, so it needs Pay As You Go; both nodes need A1 capacity.
-      - Alternatives: the Cloudflare split for availability, or containers on Pay As You Go, which still need
-        persistent storage.
+      - Alternative: containers on Pay As You Go, which still need persistent storage.
 
 - [ ] **FCC ULS email verification** _(S/M · blocked on a data source)_ — verify a US call by mailing a code
       to the address the licensee gave the FCC, storing only `sha256(lowercased email)` per call. Blocked: the
@@ -745,9 +744,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       `e2e-offline` job does.
 - [ ] **Tighten the type-aware warnings** _(P3 · M)_ — promote `lint:types` warnings to errors rule-by-rule
       as the code is cleaned. **Errors:** `require-await`, `unbound-method`, `no-base-to-string`, and
-      `restrict-template-expressions` are **errors** (the legitimate exceptions — the Durable Object
-      hibernation handlers must be async; a data property named `apply` — are per-file overrides in
-      `eslint.config.types.mjs`).
+      `restrict-template-expressions` are **errors** (the legitimate exception — a data property named
+      `apply` — is a per-file override in `eslint.config.types.mjs`).
       Untrusted request-body fields are coerced through `asStr()` (gateway `app.ts`) / a local equivalent
       (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
       **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
@@ -756,11 +754,11 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       and the deploy helpers, so a Pi needs no setup beyond `deploy/aprscaching init selfhost`. It is a large
       build and maintenance effort (image builds per release, updates of the base system), so it waits until the
       helpers have settled on real installations.
-- [ ] **Retire the Worker runtime** _(P3 · L)_ — once no instance the project runs depends on the Cloudflare
-      split, drop `workers/gateway`'s Worker entry, the D1/R2/Durable Object bindings, the D1 write budget,
-      `deploy/cloudflare/deploy-cf.sh` and the Worker conformance job, keeping the gateway app itself as the shared
-      core of the Node and Bun servers. Self-host behind a Cloudflare Tunnel and CDN covers the Cloudflare use case
-      without per-write billing.
+- [ ] **Move the gateway app out of `workers/`** _(P3 · M)_ — `workers/gateway` (`@aprscaching/gateway`) holds the
+      runtime-neutral gateway app the Node and Bun servers share, not a Worker. Rename it to `packages/gateway` or
+      `core/gateway` — the directory, the package name, every import, the CI paths, the Dockerfiles and the manual —
+      in one change after 1.0, when the churn costs no release. Its database shim names (`d1.ts`, `makeD1`) go with
+      it.
 
 ## Federation hardening
 
@@ -873,8 +871,8 @@ the reason given:
   /24, a BGP-capable provider and a letter of authority, and 44Net space has no RPKI to lean on.
 - **An own ASN** — identity is keys; an ASN says nothing about which ham runs a box, and brings fees,
   multihoming and BGP operations.
-- **Anycast for federated instances** — anycast needs identical state behind every address; the Cloudflare
-  split already serves from a global anycast edge.
+- **Anycast for federated instances** — anycast needs identical state behind every address; a Self-host
+  instance behind Cloudflare's proxy is already reached through a global anycast edge.
 - **IPIP mesh / amprgw / ampr-ripd** — legacy, complex and low-bandwidth; 44Net Connect gives the same
   reachability with a standard WireGuard client.
 - **In-app WireGuard or 44Net Connect management** — tunnels and routing are the operating system's or the
@@ -897,5 +895,5 @@ the reason given:
 
 - [ ] **CI depth & deployment shapes** (next release) — boot the `deploy/` compose stacks in CI
       (full stack + ingest-only: `docker compose up`, wait for the gateway healthcheck, smoke `/health`
-      and the SPA) beyond the tri-runtime conformance (Node / Worker / Bun), and exercise the federation
+      and the SPA) beyond the runtime conformance (Node / Bun), and exercise the federation
       push-to-hub **rendezvous relay's** corroboration path.

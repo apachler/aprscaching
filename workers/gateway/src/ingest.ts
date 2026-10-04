@@ -36,7 +36,6 @@ import {
   type StoredFix,
 } from "./downsample.js";
 import type { Transport } from "@aprscaching/shared";
-import { budgetLevel } from "./budget.js";
 
 /**
  * Position-bearing decoded data (position/object/item/weather with a fix). A fix outside ±90° / ±180°
@@ -135,20 +134,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const signerBase = signer ? baseCall(signer.callsign) : null;
   const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
 
-  // The daily D1 write budget (budget.ts) sheds the writes that matter least first. From 80 % (`warn`) the
-  // raw packet ring pauses and a stationary station nothing protects refreshes its stored fix six times
-  // less often; from 100 % (`over`) only what verification, finds and accounts read is stored — protected
-  // stations' fixes, RF hearings, radio commands and messages to or from a protected call — and the rest
-  // reaches the live map, watch alerts and rendezvous without being persisted. Asked before any statement
-  // is prepared, so every write of this batch is counted.
-  const level = await budgetLevel(env);
-  const shedding = level === "warn" || level === "over";
-  const essential = level === "over";
-
   const stmts: SqlStatement[] = [];
-  // over budget, a message is stored only when a protected call sends or receives it (decided below)
-  const heldMessages: { stmt: SqlStatement; parties: string[] }[] = [];
-  const direct: typeof packets = []; // packets the operator's own receiver heard (heardDirectly)
   // every fix heard, for the live fan-out and the per-station hooks; `fixes` decides what is persisted
   const positions: {
     src: string;
@@ -188,7 +174,6 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     if (p.ts > maxTs) maxTs = p.ts;
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
 
-    if (heardDirectly(p.heardVia, transportForPort(p.port, signer != null))) direct.push(p);
     // the route a Mailbox message takes back: the box only when the trusted ingest box heard it itself
     const route: Heard = {
       src: p.src,
@@ -206,8 +191,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       if (g) groupMessages.push({ from: p.src, group: g.group, text: g.text, ts: p.ts, meta });
     }
 
-    // weather -> sensor_readings (latest reading per station+ts); observational, so shed over budget
-    if (data.kind === "weather" && !essential) {
+    // weather -> sensor_readings (latest reading per station+ts)
+    if (data.kind === "weather") {
       stmts.push(
         env.DB.prepare(
           `INSERT OR REPLACE INTO sensor_readings (station, ts, temp_c, humidity, pressure_hpa, wind_dir, wind_kn, rain_mm)
@@ -240,10 +225,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         data.msgNo ?? null,
         transportForPort(p.port, signer != null),
       );
-      // a radio command's message is always kept, beside the command it carries
-      if (essential && !toService)
-        heldMessages.push({ stmt: row, parties: [p.src, String(data.addressee ?? "")].filter(Boolean) });
-      else stmts.push(row);
+      stmts.push(row);
       if (toService) {
         const { text, msgNo } = splitMessageNumber(String(data.text ?? ""), data.msgNo);
         commands.push({
@@ -266,13 +248,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
     // shack raw packet view: a short, TTL-pruned ring of raw frames per
     // station — every heard packet, not only position fixes (status, telemetry, messages too).
-    // The first thing the write budget pauses.
-    if (!shedding)
-      stmts.push(
-        env.DB.prepare(
-          "INSERT INTO packets_recent (callsign, ts, dst, path, payload, heard_via, port) VALUES (?,?,?,?,?,?,?)",
-        ).bind(p.src, p.ts, p.dst ?? null, p.path.join(","), p.payload, p.heardVia, p.port),
-      );
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO packets_recent (callsign, ts, dst, path, payload, heard_via, port) VALUES (?,?,?,?,?,?,?)",
+      ).bind(p.src, p.ts, p.dst ?? null, p.path.join(","), p.payload, p.heardVia, p.port),
+    );
 
     const fix = fixOf(p);
     if (!fix) continue;
@@ -292,39 +272,26 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // Which fixes to persist: a directly heard RF fix and every fix of a protected station always; any
   // other fix once its station has moved or the interval has passed (downsample.ts). A fix that is not
   // stored still reaches the live map, watch alerts, rendezvous and BBS delivery below.
-  // Past 80 % of the write budget the interval is six times longer; over it, an unprotected fix is not
-  // stored at all. If the protection or last-fix read fails, every fix (and message) is stored: a lookup
-  // error never costs a fix.
+  // If the protection or last-fix read fails, every fix is stored: a lookup error never costs a fix.
   const policy = downsamplePolicy(env);
-  if (shedding) policy.intervalS *= 6;
   let thinned = new Set<(typeof fixes)[number]>();
-  let dropped = new Set<(typeof fixes)[number]>();
   let lastStored = new Map<string, StoredFix>();
-  let keptMessages = heldMessages;
-  if (policy.enabled || essential) {
+  if (policy.enabled) {
     try {
       const thinnable = fixes.filter((f) => !heardDirectly(f.p.heardVia, f.transport));
-      const calls = [...thinnable.map((f) => f.p.src), ...heldMessages.flatMap((m) => m.parties)];
-      const shielded = await protectedStations(env, [...new Set(calls.map((c) => baseCall(c)))], now);
+      const calls = [...new Set(thinnable.map((f) => baseCall(f.p.src)))];
+      const shielded = await protectedStations(env, calls, now);
       const open = thinnable.filter((f) => !shielded.has(baseCall(f.p.src)));
-      keptMessages = heldMessages.filter((m) => m.parties.some((c) => shielded.has(baseCall(c))));
-      if (essential) dropped = new Set(open);
-      else {
-        lastStored = await lastStoredFixes(env, [...new Set(open.map((f) => f.p.src))]);
-        thinned = new Set(open);
-      }
+      lastStored = await lastStoredFixes(env, [...new Set(open.map((f) => f.p.src))]);
+      thinned = new Set(open);
     } catch (e) {
       console.error("position storage lookup:", (e as Error).message);
       thinned = new Set();
-      dropped = new Set();
-      keptMessages = heldMessages;
     }
   }
-  for (const m of keptMessages) stmts.push(m.stmt);
   let persisted = 0;
   for (const f of fixes) {
     const { p, fix } = f;
-    if (dropped.has(f)) continue;
     if (thinned.has(f) && !worthStoring(lastStored.get(p.src), { ...fix, ts: p.ts }, policy)) continue;
     lastStored.set(p.src, { lat: fix.lat, lon: fix.lon, ts: p.ts }); // later fixes in this batch compare with it
     persisted++;
@@ -402,9 +369,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(fix.lat, fix.lon, p.ts, p.src, fix.lat, fix.lon),
     );
   }
-  // per-transport RX counters, bucketed by hour (port_stats); diagnostics, so paused over budget
+  // per-transport RX counters, bucketed by hour (port_stats)
   const bucket = Math.floor((maxTs || nowS()) / 3600) * 3600;
-  for (const [port, rx] of essential ? [] : portRx) {
+  for (const [port, rx] of portRx) {
     stmts.push(
       env.DB.prepare(
         `INSERT INTO port_stats (port, ts, rx, tx) VALUES (?,?,?,0)
@@ -412,11 +379,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(port, bucket, rx),
     );
   }
-  // the MeshCom map layer's node state and links are display only, so they pause with the other
-  // diagnostics once the write budget passes 80 %
-  if (!shedding) stmts.push(...meshcomStatements(env, meshcom));
-  // group chat is kept like the message log: through 80 %, and paused only once the budget is spent
-  if (!essential) for (const g of groupMessages) stmts.push(meshcomGroupStatement(env, g));
+  // the MeshCom map layer's node state and links (display only), and its group chat
+  stmts.push(...meshcomStatements(env, meshcom));
+  for (const g of groupMessages) stmts.push(meshcomGroupStatement(env, g));
   if (stmts.length) await env.DB.batch(stmts);
 
   // radio commands (FOUND / DNF / NOTE / HELP) — best-effort per message; never fails the batch
@@ -459,19 +424,17 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     console.error("rendezvous:", (e as Error).message);
   }
 
-  // per-port MHeard for the NET/ROM node (best-effort); over budget, only what the operator's own
-  // receiver heard, the stations the node could actually reach
+  // per-port MHeard for the NET/ROM node (best-effort)
   try {
     await recordMheard(
       env,
-      (essential ? direct : packets).map((p) => ({ src: p.src, port: p.port })),
+      packets.map((p) => ({ src: p.src, port: p.port })),
     );
   } catch (e) {
     console.error("mheard:", (e as Error).message);
   }
 
-  // live fan-out — station deltas + "you're near a cache" geofence prompts. The same request hands this
-  // batch's written rows to the write budget's counter and brings back the level for the next batch.
+  // live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];
   const nearFixes: NearFix[] = [];
   for (const p of positions) {
@@ -481,8 +444,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   }
   await dispatchLive(env, envelopes);
 
-  // the "you're near" radio message for opted-in players on foot near a cache (best-effort); not over budget
-  if (!essential && nearFixes.length)
+  // the "you're near" radio message for opted-in players on foot near a cache (best-effort)
+  if (nearFixes.length)
     try {
       await sendNearCacheMessages(env, nearFixes);
     } catch (e) {

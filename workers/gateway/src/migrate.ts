@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The self-host migration runner (the Node, Bun and desktop analogue of `wrangler d1 migrations
- * apply`). Each migration not yet recorded in `_migrations` runs in its own transaction, in name order,
+ * The migration runner of the Node, Bun and desktop servers. Each migration not yet recorded in `_migrations` runs in its own transaction, in name order,
  * and is recorded in the same transaction, so a failed migration leaves nothing half-applied.
  * Runtime-neutral: the caller supplies the migrations (read from `db/migrations`, or embedded in the
  * desktop binary) and a two-method view of its SQLite driver.

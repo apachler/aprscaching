@@ -18,7 +18,7 @@ pnpm run check    # build every unit, run every unit suite, typecheck and build 
 
 ## Run the gateway
 
-The gateway is the API and data plane. Pick one runtime: all three serve the same API and pass the same
+The gateway is the API and data plane. Pick one runtime: both serve the same API and pass the same
 conformance suites ([Architecture and runtimes](architecture.md)).
 
 Every runtime needs an **ingest secret**: the gateway refuses to start without one, and the ingest sends the
@@ -37,20 +37,6 @@ openssl rand -hex 24
 
     The server applies the schema from `db/migrations/` into a local SQLite file (`DB_PATH`, by default under
     `servers/node/data/`).
-
-=== "Cloudflare Worker + D1"
-
-    Put `INGEST_SECRET=<your secret>` in `workers/gateway/.dev.vars` (git-ignored) first; `wrangler dev` reads
-    its secrets from there.
-
-    ```bash
-    cd workers/gateway
-    npx wrangler d1 create aprscaching                    # paste the database_id into wrangler.toml
-    npx wrangler d1 migrations apply aprscaching --local  # schema from ../../db/migrations
-    npx wrangler dev                                      # http://127.0.0.1:8787
-    ```
-
-    `pnpm --filter @aprscaching/gateway migrate && pnpm dev:gateway` does the same on a local D1.
 
 === "Bun"
 

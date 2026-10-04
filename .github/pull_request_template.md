@@ -19,7 +19,7 @@ Title should be a Conventional Commit, e.g. "fix(ingest): reconnect only on clos
 
 - [ ] Trust model intact — transport ≠ trust; no bare IS packet reaches Tier B (`verify.ts`)
 - [ ] RF ingest stays operator-runnable (not cloud-only)
-- [ ] Tri-runtime parity preserved (Node / Worker / Bun)
+- [ ] Runtime parity preserved (Node / Bun)
 - [ ] AGPL §13 source link (`/.well-known/source`) still works
 - [ ] No emoji in `apps/web`; styling follows `.claude/rules/css.md`
 - [ ] SPDX header on new files; `packages/*` stayed MIT-clean

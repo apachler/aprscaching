@@ -6,7 +6,7 @@
 #
 # A shape module supplies shape_git (git in the instance's checkout, as the right user) and
 # shape_update_apply (build and restart on what the checkout holds); optionally shape_rollback_db <epoch>
-# (a database rollback other than restoring the backup, e.g. D1 Time Travel). Sourced by deploy/aprscaching.
+# (a database rollback other than restoring the backup). Sourced by deploy/aprscaching.
 # shellcheck shell=bash
 
 # The ids of the checks doctor fails, one per line (it runs in a subshell, so nothing it sets leaks).

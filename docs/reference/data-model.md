@@ -1,12 +1,11 @@
 # Data model
 
 The gateway's schema lives in **`db/migrations/`**: the baseline `0001_baseline.sql` plus the numbered
-files applied on top of it, in order, identically on every runtime: `wrangler d1 migrations apply` on D1 (`migrations_dir` in `workers/gateway/wrangler.toml`), and the
-Node, Bun and desktop servers' migration runner at boot, which tracks applied files by name in
-`_migrations`. A schema change is a new, next-numbered `NNNN_name.sql` file applied on top; an applied file
+files applied on top of it, in order. The Node, Bun and desktop servers' migration runner applies them at boot
+and tracks applied files by name in `_migrations`. A schema change is a new, next-numbered `NNNN_name.sql` file applied on top; an applied file
 is never edited.
 
-D1 forbids virtual tables (rtree, FTS), so spatial lookups use plain `(lat, lon)` indexes and search is
+The schema uses no virtual tables (rtree, FTS): spatial lookups use plain `(lat, lon)` indexes and search is
 LIKE-based. Firehose positions and the diagnostic tables are TTL'd; the durable record is caches, finds,
 accounts and keys — back those up.
 

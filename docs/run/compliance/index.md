@@ -20,7 +20,7 @@ This is required, not optional.
 ## Back up the database
 
 Positions age out on their own, but caches, finds, accounts and keys are the record of your instance. Back up
-the SQLite or D1 database, the settings and the media, and keep a copy off the instance's own disk
+the SQLite database, the settings and the media, and keep a copy off the instance's own disk
 ([What to back up](../day-to-day/backups.md#what-to-back-up)).
 
 ## Name the operator

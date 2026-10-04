@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * WebAuthn (passkey) verification — runtime-agnostic (workerd + Node), Web Crypto only, no deps.
+ * WebAuthn (passkey) verification — runtime-agnostic (Node + Bun), Web Crypto only, no deps.
  * Implements just what we need: registration (attestation "none") and authentication (assertion)
  * for ES256 (-7) and RS256 (-257) credentials, with challenge/origin/rpId checks and a signCount
  * replay guard. Attestation statements are NOT trusted/parsed (we use "none" — we only bind the

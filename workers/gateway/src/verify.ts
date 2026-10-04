@@ -91,7 +91,7 @@ export interface VerifyResult {
   reason?: string;
 }
 
-/** Data the engine needs, supplied by the caller (Worker reads these from D1). */
+/** Data the engine needs, supplied by the caller (read from the database). */
 interface VerifyDeps {
   /** logger's stored positions within [now-window, now], newest first */
   loggerPositions: PositionRow[];

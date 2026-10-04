@@ -73,7 +73,6 @@ export const CONFIG_KEYS = {
   MESHCOM_LINK_TTL_HOURS: { type: "int", units: ["gateway"], default: "48" },
   POS_MIN_MOVE_M: { type: "number", units: ["gateway"], default: "25" },
   POS_MIN_INTERVAL_S: { type: "number", units: ["gateway"], default: "600" },
-  D1_DAILY_WRITE_BUDGET: { type: "int", units: ["gateway"] },
   DOH_URL: { type: "string", units: ["gateway", "pocket"], default: "https://cloudflare-dns.com/dns-query" },
   AMPR_DNS_RESOLVERS: {
     type: "list",
@@ -206,7 +205,6 @@ export const CONFIG_KEYS = {
   OFFLINE_TILES_URL: { type: "string", units: ["gateway"] },
   OFFLINE_TILES_ATTRIBUTION: { type: "string", units: ["gateway"] },
   OFFLINE_TILES_MAXZOOM: { type: "int", units: ["gateway"], default: "14" },
-  OFFLINE_TILES_KEY: { type: "string", units: ["gateway"], default: "offline.pmtiles", shapes: ["cloudflare"] },
   OFFLINE_TILES_PATH: { type: "string", units: ["server"], shapes: ["selfhost", "baremetal", "pocket", "desktop"] },
   MEDIA_DIR: { type: "string", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },
   MEDIA_QUOTA_MB: { type: "int", units: ["gateway"], default: "1024" },

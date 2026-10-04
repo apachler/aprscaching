@@ -48,7 +48,6 @@ import {
   decideAdoptionRequest,
   type AdminAdoptions,
   type SetupItem,
-  type WriteBudget,
   type FedPeer,
   type ForwardPartner,
   type ForwardRuleRow,
@@ -82,7 +81,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
  */
 export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () => void }) {
   const { callsign, map } = usePlatform();
-  // one status request feeds both the write-budget banner and the Setup checklist
+  // the Setup checklist
   const setup = useLoad(() => getAdminSetup(), []);
   // group filter (ui-ux.md §2: settings pages with >3 groups are searchable)
   const [q, setQ] = useState("");
@@ -104,7 +103,6 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}
         <span className="mono">{callsign}</span> is configured as an operator.
       </p>
-      {setup.data && <WriteBudgetBanner budget={setup.data.budget} onDocs={props.onDocs} />}
       <label className="srch">
         <span className="srch-ic" aria-hidden="true">
           ⌕
@@ -1369,44 +1367,12 @@ function SetupRow(props: { item: SetupItem }) {
 
 /**
  * The web-driven first-install wizard, within its hard boundary: security-critical settings are
- * env-only (deploy/.env, systemd EnvironmentFile, wrangler secrets), so the checklist shows their
+ * env-only (deploy/.env, systemd EnvironmentFile), so the checklist shows their
  * presence READ-ONLY — the server never echoes a secret value, and nothing here writes env config.
  * Items come in three levels so a working box reads as working: Blocking (sign-in or ingest broken),
  * Recommended for a public instance, and Optional (collapsed). Runtime-writable state (peers,
  * partners, trust) lives in the sibling admin groups; each DB row says where it is managed.
  */
-/**
- * The daily D1 write budget's banner: shown once today's writes crossed 80 % of the budget, and saying what
- * the instance stops storing at each level. Nothing is shown below 80 % or when the instance sets no budget.
- */
-function WriteBudgetBanner(props: { budget: WriteBudget; onDocs: (slug: string) => void }) {
-  const b = props.budget;
-  if (b.level !== "warn" && b.level !== "over") return null;
-  const over = b.level === "over";
-  const pct = Math.floor((b.used / b.budget) * 100);
-  const since = b.alerts.find((a) => a.day === b.day && a.threshold === (over ? 100 : 80));
-  return (
-    <div className={over ? "inline-note budget-note bad" : "inline-note budget-note"} role="status">
-      <strong>
-        D1 writes at {pct} % of today's budget
-        {since && ` since ${new Date(since.at).toISOString().slice(11, 16)} UTC`}
-      </strong>
-      <span className="mono">
-        {b.used.toLocaleString()} of {b.budget.toLocaleString()} rows
-      </span>
-      <p className="m-0">
-        {over
-          ? "Only protected stations, RF hearings, finds, accounts and federation data are stored; other stations reach the live map without being saved."
-          : "The raw packet log is paused and stations nothing protects store fewer fixes."}{" "}
-        The count starts again at 00:00 UTC.{" "}
-        <Button variant="inline" onClick={() => props.onDocs("reference/cloudflare-costs")}>
-          About the write budget
-        </Button>
-      </p>
-    </div>
-  );
-}
-
 function SetupAdmin(props: {
   setup: { data?: { items: SetupItem[] }; error: string | null; loading: boolean; reload: () => void };
   onDocs: (slug: string) => void;
@@ -1460,8 +1426,7 @@ function SetupAdmin(props: {
       )}
       <p className="muted fine">
         Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
-        <span className="mono">deploy/.env</span>, the systemd unit, or{" "}
-        <span className="mono">wrangler secret put</span>) and restart.{" "}
+        <span className="mono">deploy/.env</span> or the systemd unit) and restart.{" "}
         <Button variant="inline" onClick={() => props.onDocs("run/first-hour")}>
           Your first hour as sysop
         </Button>

@@ -23,7 +23,7 @@ deploy/aprscaching net44 setup <conf>        # bring a 44Net tunnel up; also sta
 deploy/aprscaching help
 ```
 
-The shapes are `selfhost`, `cloudflare`, `ingest-box`, `baremetal`, `pocket` and `desktop`. A command means
+The shapes are `selfhost`, `ingest-box`, `baremetal`, `pocket` and `desktop`. A command means
 the same thing on every shape; what it runs underneath depends on the shape.
 
 ## How it knows the shape
@@ -37,7 +37,6 @@ on that shape. On an installation set up without `init`, they work out the shape
 | the `aprscaching-gateway` systemd unit | bare metal |
 | `deploy/.env` with operator settings (`ADMIN_CALLSIGNS`, `APP_URL` or `OPERATOR_SECRET`) | Self-host |
 | `deploy/.env` with only the ingest's settings | ingest box |
-| a D1 database id in `workers/gateway/wrangler.toml` | Cloudflare split |
 
 `--shape <shape>` overrides both.
 
@@ -56,19 +55,19 @@ The output is plain text with no colour codes, so it reads the same in a termina
 
 ## Commands by shape
 
-| Command | Self-host | Cloudflare split | Ingest box | Bare metal | Pocket | Desktop |
-|---|---|---|---|---|---|---|
-| `init` | `setup.sh` | `cloudflare/deploy-cf.sh`, after a cost warning | enrollment, feeds, radios, start | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
-| `status` | health and containers | Worker health | containers | health and units | `pocket/status.sh` | health |
-| `doctor` | yes | yes | yes | yes | yes | yes |
-| `backup` | portable archive | portable archive (D1 export) | — | portable archive | portable archive | portable archive (needs Node.js) |
-| `restore <file>` | yes | yes (D1 at the backup's schema) | — | yes | yes, and Pocket's own archives | yes, with the app closed |
-| `update` | with rollback | with rollback (D1 Time Travel) | code only | with rollback | `pocket/update.sh` | how to replace the binary |
-| `rotate-secret <name>` | `deploy/.env` | `wrangler secret put` | `deploy/.env` | `<dir>/deploy/.env` | `~/.aprscaching/.env` | — |
-| `net44 …` | tunnel, routing, firewall (with `DOCKER-USER`) | — | — | tunnel, routing, firewall | the app's settings; `status`, `check` | the app's settings; `status`, `check` |
+| Command | Self-host | Ingest box | Bare metal | Pocket | Desktop |
+|---|---|---|---|---|---|
+| `init` | `setup.sh` | enrollment, feeds, radios, start | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
+| `status` | health and containers | containers | health and units | `pocket/status.sh` | health |
+| `doctor` | yes | yes | yes | yes | yes |
+| `backup` | portable archive | — | portable archive | portable archive | portable archive (needs Node.js) |
+| `restore <file>` | yes | — | yes | yes, and Pocket's own archives | yes, with the app closed |
+| `update` | with rollback | code only | with rollback | `pocket/update.sh` | how to replace the binary |
+| `rotate-secret <name>` | `deploy/.env` | `deploy/.env` | `<dir>/deploy/.env` | `~/.aprscaching/.env` | — |
+| `net44 …` | tunnel, routing, firewall (with `DOCKER-USER`) | — | tunnel, routing, firewall | the app's settings; `status`, `check` | the app's settings; `status`, `check` |
 
 A command a shape does not support says so and exits without changing anything. The scripts underneath
-(`setup.sh`, `cloudflare/deploy-cf.sh`, the Pocket scripts) also work on their own, with the same options.
+(`setup.sh`, the Pocket scripts) also work on their own, with the same options.
 
 Each task has its own page: [Backups and moving](backups.md), [Updates](updates.md),
 [44Net address](../networks/44net.md), and [Rotating a secret](../../reference/secrets.md#rotating-a-secret)
@@ -84,7 +83,7 @@ deploy/aprscaching --json doctor
 ```
 
 Each check prints `pass`, `warn` or `fail`, grouped by its id: `config`, `gateway`, `setup`, `ingest`,
-`network`, `federation`, `net44`, `service`, `pages`, `resources` and `source`. A check that does not pass also
+`network`, `federation`, `net44`, `service`, `resources` and `source`. A check that does not pass also
 prints a `fix:` line and, where one helps, a `see:` line naming a page of this manual. The last line counts
 the passes, warnings and failures. [Troubleshooting](../troubleshooting.md) explains every check, what its
 message means and how to fix it.
@@ -100,20 +99,14 @@ How it reaches each shape:
 
 - **Self-host** checks the gateway through this host's Caddy, with the public name pinned to this host. A DNS
   problem then shows as a `network` failure, not as a dead gateway.
-- **Cloudflare split.** The Worker's settings are not readable from your machine, so `doctor` checks the
-  Worker over the internet. It reads the Setup checklist when `OPERATOR_SECRET` is in the environment.
-  `APRSCACHING_API_BASE` and `APRSCACHING_APP_URL` name the Worker's and the app's URLs when `init` did not
-  record them.
 - **Desktop.** The app's secrets are read from its data directory.
 
 ## Settings are checked at start
 
 Every setting has a type in the [configuration schema](../../reference/configuration.md): a whole number, a
 number, one of a fixed set of values, a list, JSON, a URL or free text. A value that does not fit stops the
-start, so the instance never falls back to a default you did not choose:
-
-- the Node and Bun servers and the ingest box refuse to start;
-- the Worker, which has no start to refuse, reports the problem in **Instance admin → Setup**.
+start, so the instance never falls back to a default you did not choose: the Node and Bun servers and the ingest
+box refuse to start.
 
 The message names the setting and what it expects, never the value. A blank value counts as unset.
 

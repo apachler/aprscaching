@@ -68,7 +68,7 @@ check "the ingest unit unsets every gateway-only secret" bash -c "u=\$(sed -n 's
 check "the ingest's settings come from .env, not as empty \${KEY} strings" \
   bash -c "! grep -v '^ *#' <<<\"\$1\$2\" | grep -E '\\\$\\{[A-Z_]+(:-)?\\}'" _"$INGEST_SVC" "$(cat "$DEPLOY/compose.ingest-only.yml")"
 check "the tunnel overlay resets Caddy's ports" grep -qE '^    ports: !reset \[\]' "$DEPLOY/compose.home.yml"
-for p in '**/.env' '**/.env.*' '!**/*.example' '**/*.secret' '**/.dev.vars' 'deploy/.shape' 'deploy/backups' '**/data' '**/*.db'; do
+for p in '**/.env' '**/.env.*' '!**/*.example' '**/*.secret' 'deploy/.shape' 'deploy/backups' '**/data' '**/*.db'; do
   check "the image leaves out $p" grep -qxF -- "$p" "$DEPLOY/../.dockerignore"
 done
 check "Compose 2.24 is new enough" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; selfhost_compose_supported 2.24.0 && selfhost_compose_supported v2.29.1 && selfhost_compose_supported 5.4.0"
@@ -175,7 +175,6 @@ check "  … with auto-promotion off" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)"
 check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORROBORATION_QUORUM)" "2"
 check "  … with discovery off" eq "$(env_file_get "$P" FED_DISCOVER)" "0"
 check "  … with the peers it was given" eq "$(env_file_get "$P" FED_PEERS)" "https://peer.example.org"
-check "  … with the D1 write budget off" eq "$(env_file_get "$P" D1_DAILY_WRITE_BUDGET)" "0"
 check "  … with its 44Net endpoint beside https" bash -c "grep -q '\"44net\",\"address\":\"aprscaching.oe8apr.ampr.org\"' '$P'"
 if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://gw.oe1xyz.ampr.org; then
   bad "a 44Net peer is refused for FED_PEERS"
@@ -299,7 +298,6 @@ if have python3; then
     check "  … the ingest credential is accepted" eq "$(status_of ingest.credentials)" pass
     check "  … the Setup checklist is relayed, labelled" grep -q '"Imprint: incomplete"' "$TMP/out"
     check "  … a blocking checklist item fails" eq "$(status_of setup.db:ingest)" fail
-    check "  … the write budget is relayed" eq "$(status_of setup.budget)" pass
     check "  … a LAN instance has federation off" eq "$(status_of federation.off)" pass
     check "  … a recent backup passes" eq "$(status_of resources.backup)" pass
     check "  … the source link passes" eq "$(status_of source.link)" pass
@@ -337,7 +335,7 @@ if have python3; then
 else
   echo "skip doctor (needs python3 for the stub gateway)"
 fi
-# ---- init ingest-box and init cloudflare ------------------------------------------------------------------
+# ---- init ingest-box ---------------------------------------------------------------------------------------
 if have python3 && have docker; then
   PORT_IB="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
   STUB_INGEST="gw-shared-0123456789abcdef0123" STUB_OPERATOR="x" python3 "$HERE/fixtures/stub-gateway.py" "$PORT_IB" &
@@ -373,12 +371,11 @@ if have python3 && have docker; then
 else
   echo "skip init ingest-box (needs python3 and docker)"
 fi
-if "$H" --non-interactive init cloudflare --api-base https://w.example --app-url https://a.example </dev/null >"$TMP/out" 2>"$TMP/err"; then
-  bad "init cloudflare asks before deploying the advanced shape"
+if "$H" --non-interactive init cloudflare </dev/null >"$TMP/out" 2>"$TMP/err"; then
+  bad "init refuses a shape it does not know"
 else
-  ok "init cloudflare asks before deploying the advanced shape"
+  ok "init refuses a shape it does not know"
 fi
-check "  … and says what it costs" grep -q "D1 bills every row written" "$TMP/out"
 check "  … and recorded nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
 check "init ingest-box --help lists its options" bash -c "'$H' init ingest-box --help | grep -q -- '--code CODE'"
 
@@ -506,7 +503,7 @@ fi
 
 # ---- the CLI reference names every option the help prints ---------------------------------------------------
 CLI="$DEPLOY/../docs/reference/cli.md"
-for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box --help" "init cloudflare --help" \
+for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box --help" \
   "--shape selfhost backup --help" "--shape selfhost restore x --help" "--shape selfhost update --help" \
   "--shape selfhost net44 setup --help"; do
   missing=""

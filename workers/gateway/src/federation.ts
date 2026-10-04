@@ -4,7 +4,7 @@
  *
  * An instance publishes its caches and find logs so peers can mirror them and build a global
  * catalog. Records are Ed25519-signed by the instance (WebCrypto — same code on
- * Cloudflare Workers and Node) so a mirror can verify provenance + integrity. The envelope is
+ * Node and Bun) so a mirror can verify provenance + integrity. The envelope is
  * shaped so per-callsign signing slots in without a format change (signer becomes a callsign, not the instance).
  *
  *   GET /.well-known/aprscaching        instance descriptor + public key + peers
@@ -31,7 +31,7 @@ const PROTOCOL = "aprscaching-federation/0.1";
 export const FED_PROTOCOL_VERSION = "0.2";
 const PROTOCOL_VERSIONS = ["0.1", "0.2"];
 
-// ---- D1 row shapes (subset) ----
+// ---- database row shapes (subset) ----
 interface CacheRow {
   id: number;
   code: string;
@@ -145,7 +145,7 @@ interface FedKey {
 const keyCache = new Map<string, Promise<FedKey | null>>();
 /**
  * FED_PRIVATE_KEY is base64(JSON({ pkcs8, pub })) — see tools/fedkey/genkey.mjs. We import the
- * private key as PKCS8 (supported on both workerd and Node; the Ed25519 *private JWK* import is
+ * private key as PKCS8 (supported on both Node and Bun; the Ed25519 *private JWK* import is
  * not portable) and publish the raw public key (base64url) for consumers to verify.
  */
 function loadKey(env: Env): Promise<FedKey | null> {
@@ -420,7 +420,7 @@ class RegistryConfigError extends Error {}
  * Registry settings that would make the registry unverifiable, or null when they are sound. A
  * registry is only as strong as its authority key, so the key is always pinned in config: DNS
  * (FED_REGISTRY_DNS) locates the document, it never supplies the key. Node and Bun refuse to start
- * with such a setting; on Workers every registry lookup fails closed.
+ * with such a setting; a gateway embedded without that check fails every registry lookup closed.
  */
 export function federationConfigError(env: Env): string | null {
   if (env.FED_REGISTRY_DNS && !env.FED_REGISTRY_KEY)

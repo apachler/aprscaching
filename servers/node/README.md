@@ -1,15 +1,16 @@
 # @aprscaching/node-gateway — portable self-host runtime
 
-The aprscaching gateway running on **Node + SQLite**, with **no Cloudflare dependency**. It serves
-the *exact same* API and business logic as the Cloudflare Worker (`workers/gateway`) — the handlers
-are shared (`@aprscaching/gateway/app`); only the bindings differ:
+The aprscaching gateway running on **Node + SQLite**. It serves the runtime-neutral gateway app
+(`workers/gateway`, imported as `@aprscaching/gateway/app`) and supplies the interfaces the app is written
+against (`workers/gateway/src/runtime.ts`); the Bun server (`servers/bun`) reuses these host modules:
 
-| Binding | Cloudflare | Node (here) |
-|---|---|---|
-| DB | D1 | SQLite (better-sqlite3) via a D1-compatible shim (`d1.ts`) |
-| Real-time | Durable Object `RegionRoom` | in-memory region rooms over `ws` (`rooms.ts`) |
-| HTTP | Workers runtime | `node:http` (and optionally `node:https`) ↔ Web `Request`/`Response` bridge (`listen.ts`) |
-| Cron | `scheduled()` | `setInterval`: the nightly jobs (`runScheduled`), and the frequent federation sync (`runFrequentSync`, every `FED_SYNC_INTERVAL_MS`, default 5 min) |
+| Interface | Node (here) |
+|---|---|
+| DB | SQLite (better-sqlite3) behind the app's `SqlDatabase` interface (`d1.ts`) |
+| Real-time | in-memory region rooms over `ws` (`rooms.ts`, on the shared `rooms-core.ts`) |
+| HTTP | `node:http` (and optionally `node:https`) ↔ Web `Request`/`Response` bridge (`listen.ts`) |
+| Media | the filesystem (`media.ts`, `MEDIA_DIR`) |
+| Scheduled jobs | `setInterval`: the nightly jobs (`runScheduled`), and the frequent federation sync (`runFrequentSync`, every `FED_SYNC_INTERVAL_MS`, default 5 min) |
 
 This is the **self-host story** for hams and clubs who want to run their own node and join the
 federated network (see [Federation](../../docs/run/federation/index.md)) instead of standing up an island.
@@ -38,7 +39,7 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 |-----|---------|---------|
 | `PORT` | `8787` | HTTP + WS port |
 | `DB_PATH` | `./data/aprscaching.db` | SQLite file (WAL mode) |
-| `MIGRATIONS_DIR` | `../../db/migrations` | the shared schema (same files D1 uses) |
+| `MIGRATIONS_DIR` | `../../db/migrations` | the shared schema |
 | `INGEST_SECRET` | *(required)* | bearer for `/ingest`, `/outbox` — the server refuses to boot when unset or `change-me` |
 | `MEDIA_DIR` | `./data/media` | uploaded cache media |
 | `WEB_DIST` | *(unset)* | the built SPA (`apps/web/dist`): set, the server serves it on the same origin as the API, so no reverse proxy is needed; unset, it serves only the API (Caddy serves the SPA in the Docker stack) |
@@ -56,11 +57,11 @@ Migrations are applied automatically on boot and tracked in a `_migrations` tabl
 ## Conformance
 
 `tools/smoke/smoke.mjs` runs an assertive end-to-end flow (hide → list → Tier A/B/C → DNF →
-owner-gating → auth guards). CI runs it against this server, `wrangler dev` and the Bun server, so the
-three runtimes can never silently diverge.
+owner-gating → auth guards). CI runs it against this server and the Bun server, so the
+two runtimes can never silently diverge.
 
 ## Scope / notes
 - Single-process SQLite ⇒ single node. Horizontal scale (libSQL/Turso or Postgres) can slot into the
   same `SqlDatabase` shim later.
-- No WS hibernation (a self-host process is always up); the subscribe/broadcast semantics match the DO.
-- R2 (`TILES`) is a stubbed reserved seam (instance-served offline tile packs).
+- No WS hibernation (a self-host process is always up).
+- The offline map archive is a file (`OFFLINE_TILES_PATH`), served by byte range at `/tiles/offline.pmtiles`.

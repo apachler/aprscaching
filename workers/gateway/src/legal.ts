@@ -124,6 +124,6 @@ propagates to federation peers via signed tombstones. For anything else, contact
 You also have the right to complain to your supervisory authority.</p>
 <h2>Hosting</h2>
 <p>Where this instance's data physically lives depends on how the operator deploys it (own hardware,
-a VM, or Cloudflare Workers/D1/R2). The operator can state specifics here via the imprint contact.</p>`,
+a rented VM, a cloud instance or a phone). The operator can state specifics here via the imprint contact.</p>`,
   );
 }

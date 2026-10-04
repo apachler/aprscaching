@@ -32,7 +32,7 @@ const PER_HOUR = 20;
 const HELD_PER_ADDRESSEE = 10;
 /** Delivered and expired messages stay listed this long, then are deleted. */
 const KEEP_SEC = 30 * 86400;
-/** Addressees one read names, within D1's 100 bound parameters a statement (three more bind the filters). */
+/** Addressees one read names, so a statement binds at most 100 parameters (three more bind the filters). */
 const ADDRESSEES_PER_READ = 90;
 /** The APRS message text limit. */
 const APRS_TEXT_MAX = 67;

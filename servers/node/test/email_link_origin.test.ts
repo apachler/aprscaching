@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The email sign-in link points at the gateway that issued it. Where the app and the gateway share a host
 // (Caddy, the tunnel, the desktop binary) that is APP_URL; where the app is a static site on another host
-// (Cloudflare Pages in front of an API Worker) the app host cannot answer /auth/*, so the link names the
-// gateway's own public origin. The confirm step stays the gateway's page: a GET never consumes the token,
+// (CORS_ORIGINS names it) the app host cannot answer /auth/*, so the link names the gateway's own public
+// origin. The confirm step stays the gateway's page: a GET never consumes the token,
 // and only a same-origin (or configured app origin) POST does.
 import { describe, it, expect } from "vitest";
 import { authEnv } from "./helpers/authflow.js";

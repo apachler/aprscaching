@@ -53,7 +53,7 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
 - DNS only says where the document lives. A `key=` in the record is ignored, because whoever can change a DNS
   record must not choose the key that signs the registry.
 - A registry setting without `FED_REGISTRY_KEY` is a configuration error: the Node and Bun servers refuse to
-  start, and on Workers every registry lookup fails closed.
+  start.
 - An instance refuses to mirror a peer whose **current** key is not the key its registry entry binds.
 - A document older than the newest one already accepted is refused as a replay. When the registry cannot be
   fetched, the last good document keeps binding the instances it registered, so an outage never reopens them
@@ -76,11 +76,11 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
   through the same coalescer as the scheduled sync.
 - **Discovery is cautious.** With `FED_DISCOVER`, an instance learns peers only from trusted peers, takes only
   `https` URLs, adds each learned peer `unvetted` and disabled, and stops at 200 discovered peers.
-- **Private networks stay closed.** On Node and Bun every federation fetch resolves its host first and refuses
+- **Private networks stay closed.** Every federation fetch resolves its host first and refuses
   loopback, private, link-local and CGNAT addresses (IPv4 inside IPv6 included), and checks every redirect hop
   the same way. A URL from another party can never reach the host's LAN. The peers configured by hand
   (`FED_PEERS`, `FED_HUB_URL`) are exempt, and `FED_ALLOW_PRIVATE=1` opens it for a federation that lives on a
-  LAN. Cloudflare Workers never reach a private network.
+  LAN.
 
 ## Cross-instance corroboration
 

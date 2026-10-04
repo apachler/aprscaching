@@ -5,14 +5,13 @@
  * region room. The room delivers to each subscriber by their subscription: station deltas to anyone
  * whose bbox contains the point, geofence prompts to the subscriber whose callsign matches.
  *
- * `deliveriesFor` is pure and runtime-neutral so the Durable Object (Worker) and the in-memory
- * rooms (Node) share identical delivery semantics.
+ * `deliveriesFor` is pure and runtime-neutral, so the in-memory rooms (rooms-core.ts) deliver the same
+ * way on Node and on Bun.
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
-import { dispatchBudget, settleDispatch } from "./budget.js";
 
 const GEOFENCE_RADIUS_M = 150;
 export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
@@ -144,20 +143,17 @@ async function ownedAmong(env: Env, callsign: string, caches: NearCache[]): Prom
   return new Set(rows.map((r) => r.id));
 }
 
-/** Send envelopes to the region room (DO on Workers, in-memory rooms on Node) via its fetch entry. */
+/** Send envelopes to the region room (the in-memory rooms of rooms-core.ts) via its fetch entry. */
 export async function dispatchLive(env: Env, envelopes: LiveEnvelope[], region = LIVE_REGION): Promise<void> {
-  // the global room also keeps the write budget: the pending written rows ride along (budget.ts)
-  const budget = region === LIVE_REGION ? dispatchBudget(env) : null;
-  if (!envelopes.length && !budget) return;
+  if (!envelopes.length) return;
   const room = env.ROOMS.get(env.ROOMS.idFromName(region));
-  const res = await room
+  await room
     .fetch(
       new Request("https://room/dispatch", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ envelopes, ...(budget ? { budget } : {}) }),
+        body: JSON.stringify({ envelopes }),
       }),
     )
     .catch(() => null); // room unavailable; live is best-effort
-  await settleDispatch(env, budget, res);
 }

@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- The aprscaching schema. Every runtime applies it to a fresh database: wrangler on D1, and the Node
--- (better-sqlite3), Bun (bun:sqlite) and desktop servers at boot. D1 forbids virtual tables (rtree,
--- FTS), so spatial lookups use plain (lat, lon) indexes and search is LIKE-based.
+-- The aprscaching schema. The Node (better-sqlite3), Bun (bun:sqlite) and desktop servers apply it to
+-- a fresh database at boot. It holds no virtual tables (rtree, FTS), so it stays portable across SQLite
+-- builds: spatial lookups use plain (lat, lon) indexes and search is LIKE-based.
 --
 -- Times are unix seconds unless a column says otherwise. Callsigns are stored uppercase; a "base call"
 -- is the licence without an SSID.
@@ -326,8 +326,8 @@ CREATE TABLE cache_ratings (
 );
 CREATE INDEX idx_cache_ratings_cache ON cache_ratings (cache_id);
 
--- The per-cache index of owner-attached media (photos, audio, data files) held in the media store (R2
--- on Workers, the filesystem on Node/Bun). Size and type are limited at the handler.
+-- The per-cache index of owner-attached media (photos, audio, data files) held in the media store (the
+-- server's filesystem). Size and type are limited at the handler.
 CREATE TABLE cache_media (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   cache_id     INTEGER NOT NULL,
@@ -1001,8 +1001,8 @@ CREATE TABLE ledger (
 );
 CREATE INDEX idx_ledger_ts ON ledger (ts);
 
--- Durable fixed-window rate-limit counters. An in-memory limiter resets per Worker isolate (a fan-out
--- multiplies every budget) and forgets on restart, so counters live here: one row per key, rolled over
+-- Durable fixed-window rate-limit counters. An in-memory limiter forgets on restart, so counters live
+-- here: one row per key, rolled over
 -- in place, expired windows pruned nightly. reset_at is unix milliseconds.
 CREATE TABLE rate_limits (
   key      TEXT PRIMARY KEY,

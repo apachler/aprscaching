@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The durable rate limiter — one upsert-rolled D1/SQLite row per key, so the budget
-// survives Worker isolate fan-out and Node/Bun restarts. Runs against real SQLite via the shim.
+// The durable rate limiter — one upsert-rolled SQLite row per key, so the budget
+// survives restarts and is shared by every process on the database. Runs against real SQLite via the shim.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { makeD1 } from "../src/d1.js";
@@ -40,13 +40,13 @@ describe("durable fixed-window rate limiting", () => {
     expect(await rateLimitedDurable(env, "cold", t, 5, 60_000)).toBe(false);
   });
 
-  it("the budget is shared across 'isolates' (two limiter callers, one DB)", async () => {
-    // two Workers isolates share the D1 row, so the budget cannot be
-    // multiplied by fan-out. Simulated by interleaving calls against the same env.
+  it("the budget is shared across callers (two limiter callers, one DB)", async () => {
+    // two callers share the row, so the budget cannot be multiplied by running
+    // more of them. Simulated by interleaving calls against the same env.
     const env = freshEnv();
     const t = 1_000_000;
-    for (let i = 0; i < 3; i++) await rateLimitedDurable(env, "shared", t, 5, 60_000); // "isolate A"
-    for (let i = 0; i < 2; i++) await rateLimitedDurable(env, "shared", t, 5, 60_000); // "isolate B"
+    for (let i = 0; i < 3; i++) await rateLimitedDurable(env, "shared", t, 5, 60_000); // "caller A"
+    for (let i = 0; i < 2; i++) await rateLimitedDurable(env, "shared", t, 5, 60_000); // "caller B"
     expect(await rateLimitedDurable(env, "shared", t, 5, 60_000)).toBe(true); // 6th total
   });
 });

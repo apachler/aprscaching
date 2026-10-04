@@ -4,7 +4,7 @@
  * through WebCrypto. It reads exactly what callsign-certificate verification needs — the signed TBS
  * bytes, the signature and its algorithm, the issuer and subject names, the subject's attributes, the
  * validity period, the subject public key, and the basicConstraints and keyUsage extensions — and runs
- * unchanged on Workers, Node and Bun (no Node crypto, no dependency).
+ * unchanged on Node and Bun (no Node crypto, no dependency).
  *
  * DER is parsed strictly: definite lengths in their shortest form, no trailing bytes, every element
  * inside its parent. Signatures are RSASSA-PKCS1-v1_5 with SHA-1/256/384/512 (the algorithms LoTW's

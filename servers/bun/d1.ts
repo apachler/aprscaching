@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The D1-compatible database over Bun's built-in `bun:sqlite`: the shared adapter
+ * The gateway's database over Bun's built-in `bun:sqlite`: the shared adapter
  * (servers/node/src/d1.ts, d1Over) on a bun:sqlite driver, so the same business logic runs unchanged
- * on Cloudflare D1, Node+SQLite and Bun+bun:sqlite.
+ * on Node+SQLite and Bun+bun:sqlite.
  */
 import { Database } from "bun:sqlite";
 import type { SqlDatabase, SqlStatement, SqlResult } from "@aprscaching/gateway/runtime";

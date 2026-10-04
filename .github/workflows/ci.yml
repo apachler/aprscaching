@@ -151,8 +151,6 @@ jobs:
       # Repo-level guards over files no package owns: the OCI stack ships as a release zip that a
       # one-click button feeds to Resource Manager, so its internal consistency is checked here.
       - run: node tools/checks/oci-stack.mjs
-      # The Worker bundle must carry no RF socket code (ingest listeners/senders are operator-local).
-      - run: node tools/checks/worker-bundle.mjs
 
   conformance-node:
     name: conformance (Node + SQLite)
@@ -181,34 +179,6 @@ jobs:
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
             pnpm --filter @aprscaching/node-gateway start &
-          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
-          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
-
-  conformance-worker:
-    name: conformance (Cloudflare Worker)
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: migrate local D1
-        working-directory: workers/gateway
-        run: CI=1 npx wrangler d1 migrations apply aprscaching --local
-      - name: start wrangler dev + smoke
-        # The Worker reads its secrets from .dev.vars; the smoke client reads INGEST_SECRET and
-        # OPERATOR_SECRET from its own environment — both must carry the same values or writes 401.
-        env:
-          INGEST_SECRET: ci-conformance-ingest-secret
-          OPERATOR_SECRET: ci-conformance-operator-secret
-        run: |
-          KEY=$(node tools/fedkey/genkey.mjs --raw)
-          # FIRST_PARTY_SITES=OE8XXX names the smoke suite's receiving site as attested (Tier A is default-deny).
-          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nOPERATOR_SECRET=ci-conformance-operator-secret\nSESSION_SECRET=ci-conformance-session-secret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\n' "$KEY" > workers/gateway/.dev.vars
-          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
 
@@ -264,7 +234,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with: { bun-version-file: .bun-version }
       - run: pnpm install --frozen-lockfile
-      # The MeshCom core is bundled once and run on Node, Bun and workerd; all three must agree.
+      # The MeshCom core is bundled once and run on Node and Bun; both must agree.
       - run: pnpm run conformance:meshcom
         env: { CONFORMANCE_REQUIRE_BUN: "1" }
       - name: start bun-gateway + smoke

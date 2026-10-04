@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # verify.sh — the full pre-commit / final gate: check.sh (build + all unit tests + web build) then
 # smoke.sh (runtime conformance on a fresh Node/SQLite gateway). One command to prove a change is green
-# across the tri-runtime bar. Exits non-zero on the first failure.
+# on both runtimes' shared bar. Exits non-zero on the first failure.
 #
 #   tools/dev/verify.sh
 set -euo pipefail

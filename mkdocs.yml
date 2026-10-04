@@ -127,9 +127,9 @@ nav:
       - Choose a shape: run/choose-a-shape.md
       - Install:
           - Self-host with Docker (recommended): run/install/self-host-docker.md
+          - Self-host on Oracle Cloud: run/install/oracle-cloud.md
           - Self-host without Docker: run/install/self-host-bare-metal.md
           - Desktop: run/install/desktop.md
-          - Cloudflare split: run/install/cloudflare-split.md
           - "Pocket: an Android phone": run/install/pocket.md
           - Check a download: run/install/verified-downloads.md
           - The offline map: run/install/offline-map.md
@@ -183,7 +183,6 @@ nav:
       - Rig control library: reference/rig-library.md
       - Data model: reference/data-model.md
       - Licence registers: reference/licence-sources.md
-      - Cloudflare D1 costs: reference/cloudflare-costs.md
   - Contribute:
       - Contribute: contribute/index.md
       - Run from source: contribute/run-from-source.md

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // CoT (Cursor-on-Target) bridge for TAK clients: the pure <event> builder + symbol mapping, plus the
 // SSE push feed which streams the current snapshot then pushes deltas. The stream is a ReadableStream
-// (Workers/Bun stream it natively; the Node shell pipes text/event-stream) so we can read it here.
+// (Bun streams it natively; the Node shell pipes text/event-stream) so we can read it here.
 import { describe, it, expect } from "vitest";
 import { stationToCotEvent, cotType, handleCot, handleCotStream } from "../src/cot.js";
 import type { Env } from "../src/env.js";

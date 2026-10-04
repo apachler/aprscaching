@@ -10,7 +10,7 @@ Federation lets independent instances share caches, finds and keys as signed rec
 own signature, so no instance has to trust the network in between. The same records travel over HTTPS, over
 plain HTTP on a 44Net or HAMNET name, and over packet radio. On amateur RF a signature authenticates but never
 conceals ([Automatic stations on the air](../compliance/on-air-stations.md)). Any shape can join: Self-host,
-Desktop, Cloudflare split or Pocket.
+Desktop or Pocket.
 
 ## Before you start
 
@@ -52,8 +52,8 @@ from the repository root:
 node tools/fedkey/genkey.mjs --raw     # prints the value for FED_PRIVATE_KEY
 ```
 
-Without `--raw` it also prints the public key the instance publishes. Set the value as a secret:
-`npx wrangler secret put FED_PRIVATE_KEY` on Cloudflare, or the `.env` on Self-host, Desktop and Pocket. Never
+Without `--raw` it also prints the public key the instance publishes. Set the value as a secret in
+the `.env` on Self-host, Desktop and Pocket. Never
 commit it, and never copy one instance's key to another.
 
 ### Rotate your key
@@ -127,8 +127,8 @@ Change a peer's trust under **Instance admin → Federation**. Blocking a peer h
 
 ## Keeping mirrors fresh
 
-Your instance pulls from its peers on a schedule. Self-host, Desktop and Pocket pull every 5 minutes
-(`FED_SYNC_INTERVAL_MS`, `0` turns it off); Cloudflare pulls every 15 minutes, on the Worker's cron. Peers also
+Your instance pulls from its peers on a schedule, every 5 minutes (`FED_SYNC_INTERVAL_MS`, `0` turns it off).
+Peers also
 ask for a pull after they write, so new records arrive sooner.
 
 - **Sync now.** **Instance admin → Federation → Sync now** pulls from every peer and pushes to the hub at
@@ -149,10 +149,10 @@ ask for a pull after they write, so new records arrive sooner.
 - **Discovery.** `FED_DISCOVER=1` learns peers from your trusted peers' lists. It takes only `https` URLs, adds
   each learned peer `unvetted` and disabled, and stops at 200. Choosing a trust level for a discovered peer
   enables it.
-- **Private networks.** On Self-host, Desktop and Pocket, federation refuses to fetch loopback, private,
+- **Private networks.** Federation refuses to fetch loopback, private,
   link-local and CGNAT addresses, so a URL from another party never reaches your LAN. The peers you configured
   (`FED_PEERS`, `FED_HUB_URL`) are exempt. Set `FED_ALLOW_PRIVATE=1` for a federation that lives entirely on a
-  LAN. Cloudflare Workers never reach a private network.
+  LAN.
 
 ## Check that it worked
 

@@ -1,12 +1,11 @@
 # Configuration reference
 
 Every setting is an environment variable. The **gateway** reads its configuration from the runtime
-environment (Cloudflare `wrangler.toml` vars / secrets, or the process environment for the Node and Bun
-servers). The **ingest box** and the **web build** have their own separate variable namespaces.
+environment: the process environment of the Node and Bun servers. The **ingest box** and the **web build** have their own separate variable namespaces.
 
 Every setting has a type: a whole number, a number, one of a fixed set of values, a list, JSON, a URL or
 free text. A set value that does not fit its type stops the Node and Bun servers and the ingest box from
-starting. The Worker reports it in **Instance admin → Setup**.
+starting; **Instance admin → Setup** reports the same check.
 
 <!-- The key tables below are generated from the configuration schema (packages/shared/src/config.ts,
 configkeys.ts, configdocs.ts): edit them there and run `node tools/config/generate.mjs`. -->
@@ -15,18 +14,16 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
     `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY`, `ADMIN_CALLSIGNS`,
     `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
     security-critical and must never be settable at runtime or exposed to the client — supply them only
-    through the environment (or `wrangler secret`). Other secrets: `APRSIS_PASSCODE`, `IGATE_PASS`,
+    through the environment. Other secrets: `APRSIS_PASSCODE`, `IGATE_PASS`,
     `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
     `MESHCOM_KISS_PASS`, `MESHTASTIC_MQTT_URL` (when it carries credentials), `BOX_KEY`, `TUNNEL_TOKEN`,
     `CF_API_TOKEN`.
 
 !!! note "Runtime coverage"
-    **Every gateway variable below works on every runtime** — the Node and Bun servers forward the
+    **Every gateway variable below works on both runtimes** — the Node and Bun servers forward the
     complete config-key set from the process environment (the key list in the gateway's `env.ts`, from
-    which its `Env` type is derived, is the single source of truth), so sysop admin, rate limits, spots, email/push, and first-party
-    attestation are all live on self-host too. The only real runtime differences are infrastructural:
-    the Worker runs scheduled work on cron triggers (self-host uses in-process intervals), stores in
-    D1/R2 (self-host: SQLite/filesystem), and takes secrets via `wrangler secret`.
+    which its `Env` type is derived, is the single source of truth). Both run scheduled work on
+    in-process intervals and store in SQLite and on the filesystem.
 
 ## Gateway — core & instance
 
@@ -35,7 +32,7 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
 |---|---|---|
 | `INGEST_SECRET` | The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror, heard federation frames, the catalog importer, finds logged over APRS, and remote-box polling and pairing. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me` | *(required)* |
 | `OPERATOR_SECRET` | The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), `POST /auth/operator-link` (`tools/admin/signin-link.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, the FBB federation enqueue, relay dispatch, and donation confirms. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box | — |
-| `SESSION_SECRET` | The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Worker takes it as a secret (`wrangler secret put SESSION_SECRET`); the Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out | *(generated on self-host)* |
+| `SESSION_SECRET` | The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out | *(generated on self-host)* |
 | `APP_URL` | The public origin people open (`https://aprs.example.net`, or `http://<LAN address>` off-grid): where sign-in links return to, the passkey origin, and the credentialed-CORS allowlist. An emailed link opens the gateway's confirm page — on `APP_URL` when the app and the gateway share a host, otherwise on the gateway's own origin. Passkeys need an `https` origin (or `http://localhost`); an `http` origin gets a session cookie without the `Secure` flag, which a browser would otherwise drop | — |
 | `INSTANCE` | Canonical federation instance id / domain. Set it only to differ from `APP_URL`'s host | `APP_URL`'s host, else the request host |
 | `RP_ID` | WebAuthn relying-party id (registrable domain). Set it only to differ from `APP_URL`'s host — for example the parent domain, so passkeys work on several subdomains. Choose it before users register passkeys | `APP_URL`'s host |
@@ -43,7 +40,7 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
 | `MEDIA_QUOTA_MB` | Megabytes of cache media (photos, sound, audio clues) the instance stores in all; past it, uploads are refused. Set it to what the disk or bucket can spare | `1024` |
 | `SESSION_EPOCH` | Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all` | — |
 | `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in) | off |
-| `TRUST_CF` | Node/Bun only: keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel. The Worker always trusts it — there Cloudflare's edge sets it | off |
+| `TRUST_CF` | Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel | off |
 | `CORS_ORIGINS` | Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (e.g. `pnpm dev:web` on `http://localhost:5173`) needs its origin listed here | — |
 | `ALLOW_DEV_TOKENS` | Return magic-link tokens in-band instead of emailing (dev/CI only — never production: it hands a sign-in token to whoever asks). An off-grid instance signs members in with the operator's one-time link instead ([`signin-link.mjs`](cli.md#signin-link)) | off |
 | `OPERATOR_LINKS_FOR_ANY_CALL` | `1`: the operator's one-time sign-in link ([`signin-link.mjs`](cli.md#signin-link)) serves every call, not only `ADMIN_CALLSIGNS` calls, on an instance that also offers passkeys or email. For an off-grid station whose visitors have no other way in ([Visitors on the hotspot](../run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)). A leaked `OPERATOR_SECRET` then reaches every account, so it stays off on a shared or public instance | off |
@@ -65,7 +62,6 @@ The Node and Bun servers also read plain runtime knobs that are not part of the 
 | `MIGRATIONS_DIR` | Where the schema migrations are read from | `db/migrations` of the checkout |
 | `MEDIA_DIR` | Where cache media is stored | `data/media` beside the server |
 | `OFFLINE_TILES_PATH` | The offline map: a regional PMTiles archive of vector tiles, served at `/tiles/offline.pmtiles` for offline packs | none |
-| `OFFLINE_TILES_KEY` | Cloudflare: the offline map archive's key in the `TILES` R2 bucket, served the same way | `offline.pmtiles` |
 | `OFFLINE_TILES_URL` | The offline map archive hosted elsewhere (it must allow offline use and answer byte ranges with CORS); overrides the two above | none |
 | `OFFLINE_TILES_ATTRIBUTION` | Shown on the offline map | `© OpenStreetMap contributors` |
 | `OFFLINE_TILES_MAXZOOM` | The most detailed zoom a pack takes; a pack too large for it takes less | `14` |
@@ -105,9 +101,8 @@ app do not read these.
 | `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays` (the message log and MeshCom group messages), `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default | `24` h / `7` / `30` / `7` / `30` / `7` d |
 | `MESHCOM_META_MIN_S` | Seconds between rewrites of a MeshCom node's or link's row for the map when nothing shown changed (a new device, firmware, battery step, way of hearing, receiver or signal quality is written at once) | `300` |
 | `MESHCOM_NODE_TTL_DAYS` / `MESHCOM_LINK_TTL_HOURS` | MeshCom nodes and links not heard for this long are pruned nightly | `7` d / `48` h |
-| `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](cloudflare-costs.md#cost-on-d1). `0` stores every fix | `25` |
+| `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. `0` stores every fix | `25` |
 | `POS_MIN_INTERVAL_S` | Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix | `600` |
-| `D1_DAILY_WRITE_BUDGET` | Rows a day the gateway may write before it sheds low-value writes, counted from 00:00 UTC. From 80 % the raw packet log pauses and a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6; from 100 % only protected stations' fixes, RF hearings, finds, radio commands, messages to or from a protected call, account and federation data are stored, and everything else reaches the live map without being saved. The sysop gets one banner and one digest line per threshold per day. Workers Free: `90000`. `0` turns it off. See [Write budget](cloudflare-costs.md#write-budget) | Worker: `1500000`; Node/Bun: off |
 <!-- /config-table -->
 
 ## Gateway — federation
@@ -231,7 +226,7 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 <!-- config-table:web -->
 | Variable | Purpose | Default |
 |---|---|---|
-| `VITE_API_BASE` | Gateway base URL. Set it whenever the API lives on another host (Pages + a Worker). A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost | dev server: `http://127.0.0.1:8787` · production build: same origin |
+| `VITE_API_BASE` | Gateway base URL. Set it whenever the API lives on another host than the web app. A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost | dev server: `http://127.0.0.1:8787` · production build: same origin |
 | `VITE_APP_URL` | The instance's public URL. Its origin makes the landing page's canonical link and Open Graph URLs absolute; without it the build leaves the canonical link and `og:url` out and serves `og:image` from its own path | (unset) |
 | `VITE_BASEMAP` | `offline` uses the self-contained graticule; else the online vector basemap | online |
 | `VITE_BASEMAP_STYLE` | MapLibre style URL for the vector basemap (self-hosted tiles, commercial provider) | OpenFreeMap `liberty` |

@@ -51,7 +51,6 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MESHCOM_LINK_TTL_HOURS: "Hours without a sighting before a MeshCom link is pruned",
   POS_MIN_MOVE_M: "Metres a station must move before its next fix is stored (0 stores every fix)",
   POS_MIN_INTERVAL_S: "Seconds after which a fix is stored even without movement (0 stores every fix)",
-  D1_DAILY_WRITE_BUDGET: "Rows a day the gateway writes before shedding low-value writes (0 = off)",
   DOH_URL: "Validating DNS-over-HTTPS resolver; it must return the DNSSEC AD flag",
   AMPR_DNS_RESOLVERS: "Comma-separated DoH resolvers that must agree on an unsigned ampr.org answer",
   AMPR_REQUIRE_DNSSEC: "1 accepts ampr.org callsign verification only with a DNSSEC-validated answer",
@@ -178,7 +177,6 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   OFFLINE_TILES_URL: "Where phones fetch the offline map archive, when it is hosted elsewhere",
   OFFLINE_TILES_ATTRIBUTION: "Attribution of the offline map's data",
   OFFLINE_TILES_MAXZOOM: "The most detailed zoom level a pack takes from the offline map",
-  OFFLINE_TILES_KEY: "Cloudflare: the offline map archive's object key in the TILES bucket",
   OFFLINE_TILES_PATH: "The offline map archive (a PMTiles file) this server serves",
   FED_SYNC_INTERVAL_MS: "Federation peer-sync interval in milliseconds; 0 turns it off",
   WEB_DIST: "Built web app directory, served on the same origin as the API",
@@ -240,7 +238,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`SESSION_SECRET`",
-        "The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Worker takes it as a secret (`wrangler secret put SESSION_SECRET`); the Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out",
+        "The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out",
         "*(generated on self-host)*",
       ],
       [
@@ -276,7 +274,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TRUST_CF`",
-        "Node/Bun only: keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel. The Worker always trusts it — there Cloudflare's edge sets it",
+        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
         "off",
       ],
       [
@@ -330,11 +328,6 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`OFFLINE_TILES_PATH`",
         "The offline map: a regional PMTiles archive of vector tiles, served at `/tiles/offline.pmtiles` for offline packs",
         "none",
-      ],
-      [
-        "`OFFLINE_TILES_KEY`",
-        "Cloudflare: the offline map archive's key in the `TILES` R2 bucket, served the same way",
-        "`offline.pmtiles`",
       ],
       [
         "`OFFLINE_TILES_URL`",
@@ -449,18 +442,13 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`POS_MIN_MOVE_M`",
-        "Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](cloudflare-costs.md#cost-on-d1). `0` stores every fix",
+        "Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. `0` stores every fix",
         "`25`",
       ],
       [
         "`POS_MIN_INTERVAL_S`",
         "Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix",
         "`600`",
-      ],
-      [
-        "`D1_DAILY_WRITE_BUDGET`",
-        "Rows a day the gateway may write before it sheds low-value writes, counted from 00:00 UTC. From 80 % the raw packet log pauses and a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6; from 100 % only protected stations' fixes, RF hearings, finds, radio commands, messages to or from a protected call, account and federation data are stored, and everything else reaches the live map without being saved. The sysop gets one banner and one digest line per threshold per day. Workers Free: `90000`. `0` turns it off. See [Write budget](cloudflare-costs.md#write-budget)",
-        "Worker: `1500000`; Node/Bun: off",
       ],
     ],
   },
@@ -696,7 +684,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`VITE_API_BASE`",
-        "Gateway base URL. Set it whenever the API lives on another host (Pages + a Worker). A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost",
+        "Gateway base URL. Set it whenever the API lives on another host than the web app. A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost",
         "dev server: `http://127.0.0.1:8787` · production build: same origin",
       ],
       [

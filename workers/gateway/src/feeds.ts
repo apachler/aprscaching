@@ -2,7 +2,7 @@
 /**
  * feeds.ts — RSS 2.0 feeds over the public data. Platform feeds (activity, new caches, bulletins,
  * leaderboard) and user-centric feeds (a callsign's finds, badge awards and scoring). Runtime-neutral
- * (Worker / Node / Bun); reads via the D1-style `env.DB`.
+ * (Node / Bun); reads via `env.DB`.
  *
  *   GET /feeds/activity.xml      recent finds / hides / DNFs across the network
  *   GET /feeds/caches.xml        recently published public caches

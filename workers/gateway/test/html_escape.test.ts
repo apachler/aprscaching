@@ -14,7 +14,7 @@ import type { Env } from "../src/env.js";
 
 const PAYLOADS = [`"><script>alert(1)</script>`, `' onmouseover='alert(1)`, `" onmouseover="alert(1)`];
 
-/** A D1 stand-in that answers every query with no rows. */
+/** A database stand-in that answers every query with no rows. */
 const emptyDb = {
   prepare: () => ({
     bind() {

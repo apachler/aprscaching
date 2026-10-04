@@ -239,10 +239,8 @@ fi
 
 # ---- 6. dependencies ---------------------------------------------------------------------------------
 # Only the gateway, the ingest and the web build, with their workspace dependencies. --ignore-scripts
-# skips every install script: workerd (Wrangler's local runtime, a dev dependency of workers/gateway) has
-# no Android build and its postinstall fails there, and nothing the phone runs needs one — esbuild,
-# Rolldown and Lightning CSS load their Android binaries from optional packages, and better-sqlite3 is
-# compiled in the next step.
+# skips every install script, since nothing the phone runs needs one — esbuild, Rolldown and Lightning CSS
+# load their Android binaries from optional packages, and better-sqlite3 is compiled in the next step.
 step "Installing dependencies (gateway, ingest, web)"
 FILTERS=(--filter "@aprscaching/node-gateway..." --filter "@aprscaching/ingest..." --filter "@aprscaching/web...")
 if [ "$DRY" -eq 1 ]; then

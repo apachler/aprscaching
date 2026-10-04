@@ -36,7 +36,6 @@ password), `MESHTASTIC_MQTT_URL` (a broker URL with credentials in it), `EMAIL_A
 | Self-host without Docker | `deploy/.env` | Add them by hand, or with `deploy/aprscaching init baremetal`. Leave `SESSION_SECRET` empty and the gateway generates `data/session.secret`. |
 | Pocket | `~/.aprscaching/.env` | The installer writes `INGEST_SECRET` and `OPERATOR_SECRET`; the gateway generates `session.secret` beside the database. |
 | Desktop | the data directory | Generated on first start. |
-| Cloudflare split | Worker secrets | `npx wrangler secret put <NAME>`; `deploy/cloudflare/deploy-cf.sh` asks for all three plane secrets. The Worker generates no `SESSION_SECRET` and mints no session without one. |
 | Ingest box | the box's `.env` | `INGEST_SECRET` only, or the `BOX_ID` and `BOX_KEY` that [enrollment](../run/radios/ingest-box.md#enrolling-the-box) writes. Never `OPERATOR_SECRET` or `SESSION_SECRET`. |
 
 A settings file holding secrets must be readable by its owner only; the doctor fails on any other mode.
@@ -108,8 +107,8 @@ A cross-origin request carries a session only from `APP_URL` or an origin in `CO
 deploy/aprscaching rotate-secret INGEST_SECRET
 ```
 
-This replaces one secret with a fresh random value in the shape's settings (on Cloudflare, in the Worker's
-secrets) after you confirm; `--yes` skips the question. Restart the instance to apply it. Desktop keeps its
+This replaces one secret with a fresh random value in the shape's settings after you
+confirm; `--yes` skips the question. Restart the instance to apply it. Desktop keeps its
 secrets in its data directory and has no settings file for the command.
 
 | Secret | What changes |

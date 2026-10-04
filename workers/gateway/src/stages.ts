@@ -3,7 +3,7 @@
  * stages.ts — staged multi-caches. A cache can have ordered stages; stage 0 is the
  * published start, and each later stage's coordinates stay hidden until the finder unlocks the
  * previous stage — by being physically at it (geofence) or after its audio clue. Audio lives in the
- * MEDIA store (R2 on CF, filesystem on Node).
+ * MEDIA store (the server's filesystem).
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";

@@ -17,7 +17,7 @@ describe("the tool frame's CSP", () => {
 });
 
 describe("connectSources", () => {
-  const app = ["https://aprscaching.net", "https://api.aprscaching.net"];
+  const app = ["https://aprscaching.net", "https://gw.example.net"];
   it("is empty without the network grant", () => {
     expect(connectSources(["command"], ["https://a.example"], app)).toEqual([]);
   });
@@ -25,7 +25,7 @@ describe("connectSources", () => {
     expect(
       connectSources(
         ["network"],
-        ["https://a.example", "https://api.aprscaching.net", "wss://api.aprscaching.net", "wss://aprscaching.net"],
+        ["https://a.example", "https://gw.example.net", "wss://gw.example.net", "wss://aprscaching.net"],
         app,
       ),
     ).toEqual(["https://a.example"]);

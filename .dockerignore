@@ -4,7 +4,6 @@
 .git
 .claude
 **/dist
-**/.wrangler
 **/out
 *.log
 
@@ -12,7 +11,6 @@
 **/.env
 **/.env.*
 !**/*.example
-**/.dev.vars
 **/*.secret
 deploy/.shape
 

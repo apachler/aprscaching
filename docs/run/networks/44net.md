@@ -115,7 +115,7 @@ and firewall, the records and the certificate.
 | Bare metal | the same |
 | Pocket | the WireGuard app carries it; `net44 setup wg44.conf` prints the app's settings ([Pocket on 44Net](../pocket/44net.md#pocket-on-44net)) |
 | Desktop | the WireGuard app carries it; `net44 setup wg44.conf` prints the app's settings (the MTU from the same probe, keepalive 25) |
-| Cloudflare split, ingest box | not applicable: the gateway runs at Cloudflare, or elsewhere |
+| Ingest box | not applicable: the gateway runs elsewhere |
 
 **By hand**, install a standard WireGuard client and load the configuration (`wg-quick up <name>` on Linux;
 the interface takes the configuration file's name). Make the same changes: an explicit `MTU`, a keepalive,

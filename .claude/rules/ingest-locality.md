@@ -2,7 +2,7 @@
 
 **Scope.** `apps/ingest`, the browser RF bridge in `apps/web` (Web Serial / Web Bluetooth), the
 gateway ingest endpoints (`workers/gateway`, and the Node and Bun servers under `servers/`), and all
-deployment tooling under `deploy/` — Self-host, Desktop, Cloudflare split and Pocket. Claude Code MUST honor this invariant whenever touching the ingest or the
+deployment tooling under `deploy/` — Self-host (Docker, bare metal, Oracle Cloud), Desktop and Pocket. Claude Code MUST honor this invariant whenever touching the ingest or the
 ingest↔gateway boundary.
 
 ## Invariant (MUST)

@@ -41,9 +41,9 @@ describe("the configuration schema", () => {
     expect(keysOf("gateway")).not.toContain("KISS_TNC_HOST");
     expect(keysOf("ingest")).toContain("KISS_TNC_HOST");
     expect(shapesOf("KISS_TNC_HOST")).toContain("ingest-box");
-    expect(shapesOf("KISS_TNC_HOST")).not.toContain("cloudflare");
-    expect(shapesOf("APP_URL")).toContain("cloudflare");
-    expect(shapesOf("TRUST_CF")).not.toContain("cloudflare");
+    expect(shapesOf("KISS_TNC_HOST")).not.toContain("desktop");
+    expect(shapesOf("APP_URL")).toContain("desktop");
+    expect(shapesOf("TRUST_CF")).not.toContain("ingest-box");
   });
 });
 

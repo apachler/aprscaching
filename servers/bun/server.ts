@@ -4,8 +4,8 @@
  * aprscaching bun-gateway — the Bun-runtime self-host core, and the server the desktop single binary
  * wraps (deploy/desktop/launcher.ts).
  *
- * Same handlers as the Cloudflare Worker and the Node server (imported from @aprscaching/gateway/app),
- * wired to: bun:sqlite via the D1-compatible shim (./d1.ts) · the shared in-memory region rooms over
+ * Same handlers as the Node server (imported from @aprscaching/gateway/app),
+ * wired to: bun:sqlite via the database shim (./d1.ts) · the shared in-memory region rooms over
  * Bun.serve WebSockets (./rooms.ts) · the Node server's filesystem MediaStore, secrets, fetch guard,
  * migration reader and schedules (node:fs and friends work under Bun). Bun.serve speaks Web
  * Request/Response natively, so handle() is called directly with no http bridge.

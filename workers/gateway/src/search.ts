@@ -8,8 +8,8 @@ import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from 
 /**
  * search.ts — enriched as-you-type suggestions. A single portable endpoint that
  * matches caches (by code / title / owner) and stations (by callsign) with prefix-first ranking.
- * Deliberately LIKE-based, NOT FTS5: Cloudflare D1 forbids virtual tables (see 0001_baseline.sql), so a
- * plain indexed LIKE keeps the query identical across all three runtimes (Worker/D1, Node, Bun) and
+ * Deliberately LIKE-based, NOT FTS5: the schema holds no virtual tables (see 0001_baseline.sql), so a
+ * plain indexed LIKE keeps the query identical on every SQLite driver (better-sqlite3, bun:sqlite) and
  * is plenty for suggest-sized result sets. The map already handles grid / lat-lon itself client-side.
  */
 
@@ -47,7 +47,7 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
 
   const listed = await listedOrOwn(req, env);
   // Caches: contains-match across code/title/owner; rank prefix-of-code first, then code, then title.
-  // Plain positional ? (bound repeatedly) for portability — D1 doesn't reliably support ?N reuse.
+  // Plain positional ? (bound repeatedly) for portability across SQLite drivers.
   const cacheRows = (
     await env.DB.prepare(
       `SELECT id, code, owner_call, title, type, lat, lon FROM caches

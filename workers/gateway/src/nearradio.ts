@@ -20,7 +20,7 @@
  * (mailbox.ts {@link sendToHeard}): the box that heard it on its own radio, the MeshCom node that heard it,
  * or the APRS-IS outbox. It is numbered so the station's radio shows and acks it, and is sent once: a
  * position minutes later is a new occasion. It is advice only — it changes no trust tier, and a FOUND sent in
- * reply is a radio command verified like any other. Over the daily write budget nothing is sent.
+ * reply is a radio command verified like any other.
  */
 import { baseCall } from "@aprscaching/aprs";
 import type { Env } from "./env.js";

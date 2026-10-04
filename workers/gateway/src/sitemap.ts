@@ -9,7 +9,7 @@
  *   GET /api/sitemap     JSON: the full surface manifest + feed catalogue (for tooling)
  *   GET /robots.txt      allow-all + a Sitemap: pointer
  *
- * Runtime-neutral (Worker / Node / Bun): no host-only globals.
+ * Runtime-neutral (Node / Bun): no host-only globals.
  */
 import type { Env } from "./env.js";
 import { json, xml } from "./app.js";

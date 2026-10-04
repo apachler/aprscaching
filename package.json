@@ -20,7 +20,7 @@
     "e2e:tools": "node tools/e2e/tool-sandbox.mjs",
     "verify": "tools/dev/verify.sh",
     "dev:web": "pnpm --filter @aprscaching/web dev",
-    "dev:gateway": "pnpm --filter @aprscaching/gateway dev",
+    "dev:gateway": "pnpm --filter @aprscaching/node-gateway dev",
     "dev:ingest": "pnpm --filter @aprscaching/ingest dev"
   },
   "packageManager": "pnpm@11.9.0",

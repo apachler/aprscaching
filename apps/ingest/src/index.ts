@@ -486,7 +486,7 @@ if (env.BOX_ID) {
   );
 }
 
-// ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
+// ---- APRS-IS announce uplink: poll the gateway outbox and publish (opt-in finds) ----
 import { AprsUplink, isPublishable, uplinkLogin } from "./uplink.js";
 /**
  * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, announced finds and
