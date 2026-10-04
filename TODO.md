@@ -22,9 +22,6 @@ start order: the first ones wait on replies from outside, so they start first, a
   - [ ] POTA: a courtesy note to help@parksontheair.com about the spots and the park import.
   - [ ] SOTA: a post in the SOTA Reflector's **Third Party Software** category about the spots, the summit
         lookups and the region import, asking whether the request rates and the credit line suit the SOTA MT.
-  - [ ] The APRS® mark: ask who holds it today and how to credit it. APRS Foundation, Inc. has no email
-        address, only the form at https://www.aprsfoundation.org/contact-us/; TAPR answers at contact@tapr.org.
-        See _APRS mark re-check_ below.
   - [ ] WWFF: ask directory@wwff.co for permission to show directory references; `wwff` stays refused until the
         operator names it in `IMPORT_ALLOW`.
   - [ ] IOTA: ask info@iota-world.org for permission beyond personal home use; `iota` stays refused the same
@@ -53,10 +50,6 @@ start order: the first ones wait on replies from outside, so they start first, a
       development. Request `APACG?` (free in `tocalls.yaml`) through a GitHub issue at
       https://github.com/aprsorg/aprs-deviceid/issues, then switch the default tocall in the code to the
       allocated one.
-- [ ] **Support channel and funding wording** _(S — owner decision)_ — GitHub Discussions are off, yet
-      `SUPPORT.md`, `.github/ISSUE_TEMPLATE/config.yml` and [`docs/play/help-faq.md`](docs/play/help-faq.md)
-      link them: enable Discussions, or point those three at issues. `SUPPORT.md`, the README and
-      [`docs/about.md`](docs/about.md) state ARDC grant funding as a fact: keep it only once a grant is awarded.
 - [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, the `VAPID_SUBJECT` default
       (`mailto:admin@aprscaching.net`, `workers/gateway/src/notify.ts`), an abuse address and a security
       contact exist and are read; `SECURITY.md` names the security address the owner wants public; optionally a
@@ -683,12 +676,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       node-forge, …; `@mapbox/jsonlint-lines-primitives` takes the upstream jsonlint notice), linked
       from Help & credits; `apps/web/vite-notices.ts` fails the build when a bundled package has no entry.
       Minified bundles strip headers, so the notices file is the durable surface.
-- [ ] **APRS mark re-check** _(S)_ — the USPTO record for reg. 2058846 (APRS) lists Tucson Amateur Packet
-      Radio Corporation (TAPR) as the owner, and its renewal is due on 6 May 2027. The credits name APRS
-      Foundation, Inc. as the holder; that credit is pending the owner's confirmation (the APRS® item of
-      _Third-party contacts_ above asks both). Re-check the record after the renewal date. The landing, about and Help & credits
-      non-affiliation lines covering it are live (APRS Foundation, Inc., Groundspeak/Geocaching HQ,
-      Geocaching Australia, Meshtastic LLC, ARRL, POTA, SOTA, WWFF, WWBOTA, IOTA, TAK Product Center).
+- [ ] **APRS mark re-check** _(S)_ — the credits name the APRS® mark by its USPTO registration (U.S. Reg.
+      No. 2058846) and no holder, and say APRScaching is not affiliated with or endorsed by whoever holds it. The
+      registration's renewal is due on 6 May 2027: re-check the record after that date, and drop the ® from the
+      credit lines if it lapses.
 - [ ] **Vendor the third-party test partners (interop peer registry)** _(M)_ — every partner the
       conformance suite runs is bundled where its licence allows, so the suite is reproducible and
       offline-capable instead of depending on upstream mirrors at build time. **Vehicle:** prebuilt

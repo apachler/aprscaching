@@ -70,10 +70,10 @@ stack archive attached to the latest release, so it works once the first release
 ## Credits & trademarks
 
 APRS — the Automatic Packet Reporting System — was created by the late **Bob Bruninga, WB4APR** (1948–2022),
-whose decades of work made everything this project builds on possible. APRS® is a registered trademark of APRS
-Foundation, Inc. APRScaching is an **independent, unofficial** implementation built from open specifications
-(APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). APRScaching is not affiliated with, sponsored by, or endorsed
-by APRS Foundation, Inc. The APRScaching game and this application are the author's (OE8APR) own work.
+whose decades of work made everything this project builds on possible. APRS® is a registered trademark (U.S. Reg.
+No. 2058846). APRScaching is an **independent, unofficial** implementation built from open specifications
+(APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). APRScaching is not affiliated with or endorsed by the holder
+of the APRS® mark. The APRScaching game and this application are the author's (OE8APR) own work.
 
 Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software components are released under various
 licenses, see GitHub for details. Parks on the Air® is a registered service mark of Parks on the Air, Inc. Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme. LoTW® and Logbook of
@@ -115,8 +115,6 @@ open:
 Each file's licence is the one of the unit it lives in; the per-package `LICENSE` files and the `license`
 field in every `package.json` are the machine-readable source of truth. **Contributions are inbound =
 outbound** — opening a pull request licenses your change under the same licence as the files it touches.
-
-Being open under these licences also satisfies **ARDC's** open-access requirement for grant funding.
 
 **Running a public instance?** Every instance exposes its source (AGPL §13): a visible *Source* link and a
 machine-readable **`GET /.well-known/source`** pointing at the exact running commit. If you host a
