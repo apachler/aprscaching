@@ -9,7 +9,8 @@ checkout, then read where your change belongs.
 4. Design notes: the [design language](design/design-language.md), [MeshCom integration (design)](design/meshcom.md),
    [logging finds over radio](design/radio-find-logging.md) and [caches on the MeshCom map](design/meshcom-tdeck-map.md).
 5. [The AX.25 stack](ax25-stack.md): the connected-mode data-link layer.
-6. [Writing a Shack plugin](plugins.md): the manifest, permissions and signing.
+6. [Writing a Shack plugin](plugins.md): the manifest, permissions and signing; then
+   [Write your first tool](first-tool.md) and the [Tool reference](tool-reference.md).
 7. [Style guide for the manual](style-guide.md).
 8. [Specification registry](specs.md): what is built from which open specification.
 

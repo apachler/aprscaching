@@ -144,8 +144,9 @@ TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs manifest tool.json   # sign a t
 TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs registry registry.json  # sign a registry's entries
 ```
 
-The signer canonicalises exactly as the app's verifier does, so the app verifies byte-for-byte what you
-signed.
+The signer writes your public key into the manifest and signs it with its keys sorted.
+[Signing and trust](../contribute/tool-reference.md#signing-and-trust) says what the app checks, and the case in
+which it refuses a signed manifest.
 
 ## Development & conformance
 
