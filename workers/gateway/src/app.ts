@@ -111,7 +111,14 @@ import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, 
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handleAnnouncePrefs } from "./announce.js";
-import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
+import {
+  handlePushKey,
+  handlePushSubscribe,
+  handlePushUnsubscribe,
+  handleNotifyPrefs,
+  handleNotifyUnsubscribe,
+  runDigests,
+} from "./notify.js";
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleOfflinePack } from "./offlinepack.js";
@@ -427,6 +434,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/push/subscribe" && m === "POST") return handlePushSubscribe(req, env);
   if (p === "/api/push/unsubscribe" && m === "POST") return handlePushUnsubscribe(req, env);
   if (p === "/api/notify/prefs" && (m === "GET" || m === "POST")) return handleNotifyPrefs(req, env);
+  if (p === "/api/notify/unsubscribe" && (m === "GET" || m === "POST")) return handleNotifyUnsubscribe(req, env);
 
   // watchlist + alerts — session-scoped, per account
   if (p === "/api/watch" && m === "GET") return handleWatchList(req, env);

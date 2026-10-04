@@ -50,9 +50,18 @@ export function describeTransport(t: MailTransport): string {
 
 type MailResult = { ok: true } | { ok: false; error: string };
 
-/** Send one plain-text mail. Returns true once the transport accepted it; false when mail is off or it failed. */
-export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
-  return (await deliverMail(env, to, subject, text)).ok;
+/**
+ * Send one plain-text mail. Returns true once the transport accepted it; false when mail is off or it failed.
+ * `headers` are extra message headers (the digest's `List-Unsubscribe`), which both transports carry.
+ */
+export async function sendEmail(
+  env: Env,
+  to: string,
+  subject: string,
+  text: string,
+  headers?: Record<string, string>,
+): Promise<boolean> {
+  return (await deliverMail(env, to, subject, text, SMTP_TIMEOUT_MS, headers)).ok;
 }
 
 /**
@@ -65,24 +74,32 @@ export async function deliverMail(
   subject: string,
   text: string,
   timeoutMs = SMTP_TIMEOUT_MS,
+  headers?: Record<string, string>,
 ): Promise<MailResult> {
   const t = mailTransport(env);
   if (!t) return { ok: false, error: "no mail transport is configured (EMAIL_FROM with SMTP_HOST or EMAIL_API_KEY)" };
   const from = env.EMAIL_FROM!.trim();
   const result =
     t.kind === "smtp"
-      ? await viaSmtp(env, t, from, to, subject, text, timeoutMs)
-      : await viaResend(env, from, to, subject, text);
+      ? await viaSmtp(env, t, from, to, subject, text, timeoutMs, headers)
+      : await viaResend(env, from, to, subject, text, headers);
   if (!result.ok) console.warn(`mail: ${describeTransport(t)} did not take the message: ${result.error}`);
   return result;
 }
 
-async function viaResend(env: Env, from: string, to: string, subject: string, text: string): Promise<MailResult> {
+async function viaResend(
+  env: Env,
+  from: string,
+  to: string,
+  subject: string,
+  text: string,
+  headers?: Record<string, string>,
+): Promise<MailResult> {
   try {
     const res = await fetch(EMAIL_API_URL, {
       method: "POST",
       headers: { authorization: `Bearer ${env.EMAIL_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to, subject, text }),
+      body: JSON.stringify({ from, to, subject, text, ...(headers ? { headers } : {}) }),
       signal: AbortSignal.timeout(SMTP_TIMEOUT_MS),
     });
     return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
@@ -149,6 +166,7 @@ async function viaSmtp(
   subject: string,
   text: string,
   timeoutMs: number,
+  headers?: Record<string, string>,
 ): Promise<MailResult> {
   try {
     await smtpMailer(env, t, timeoutMs).sendMail({
@@ -157,6 +175,7 @@ async function viaSmtp(
       subject,
       text,
       date: new Date(),
+      ...(headers ? { headers } : {}),
       messageId: `<${crypto.randomUUID()}@${senderDomain(from)}>`,
     });
     return { ok: true };

@@ -166,6 +166,19 @@ describe("sendEmail over SMTP", () => {
     expect(m.data).toContain("Hello\r\nline two");
   });
 
+  it("carries extra headers (the digest's List-Unsubscribe)", async () => {
+    const s = await server();
+    const headers = {
+      "List-Unsubscribe": "<https://aprs.example.net/api/notify/unsubscribe?token=t>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    };
+    expect(await sendEmail(smtpEnv(s.port), "ham@example.org", "s", "t", headers)).toBe(true);
+    expect(s.got[0]!.data).toMatch(
+      /^List-Unsubscribe: <https:\/\/aprs\.example\.net\/api\/notify\/unsubscribe\?token=t>$/m,
+    );
+    expect(s.got[0]!.data).toMatch(/^List-Unsubscribe-Post: List-Unsubscribe=One-Click$/m);
+  });
+
   it("sends without a login when SMTP_USER is unset", async () => {
     const s = await server();
     expect(await sendEmail(smtpEnv(s.port, { SMTP_USER: undefined }), "ham@example.org", "s", "t")).toBe(true);
@@ -233,6 +246,9 @@ describe("sendEmail over Resend, and with no transport", () => {
     expect(url).toBe("https://api.resend.com/emails");
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer re_key");
     expect(JSON.parse(String(init.body))).toMatchObject({ from: "noreply@aprs.example.net", to: "ham@example.org" });
+    await sendEmail(env, "ham@example.org", "s", "t", { "List-Unsubscribe": "<https://x.example/u>" });
+    const [, withHeaders] = fetchSpy.mock.calls[1] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(withHeaders.body)).headers).toEqual({ "List-Unsubscribe": "<https://x.example/u>" });
   });
   it("a refusal from Resend is false", async () => {
     vi.stubGlobal(
