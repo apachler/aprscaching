@@ -53,7 +53,8 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, an abuse address and
       `security@aprscaching.net` exist and are read. `SECURITY.md` names `security@aprscaching.net`; the public
       instance sets `SECURITY_CONTACT=mailto:security@aprscaching.net` for its `/.well-known/security.txt`, and
-      web push names `OPERATOR_EMAIL` as its `VAPID_SUBJECT` by default.
+      web push's VAPID contact is `VAPID_SUBJECT`, else `mailto:` `OPERATOR_EMAIL`, else the instance's https
+      origin.
 - [ ] **Imprint and privacy notice for aprscaching.net** _(S — owner and legal review)_ — `OPERATOR_NAME`,
       `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` set, so `/imprint` meets ECG §5 (name, geographic address, email)
       and the MedienG §25 disclosure (owner: a small website, or a statement of the editorial line). Review
@@ -207,24 +208,31 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 **Northbound hardware drivers (core hardware):**
 
-- [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS incl. SMACK CRC variant.
-- [ ] **KISS-TCP + AGW client** _(P1 · S)_ — attach Direwolf/QtSoundModem/other hubs as modems.
+- [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS on the box (KISS over TCP is
+      `apps/ingest/src/kiss.ts`, SMACK framing is in `packages/aprs/src/ax25.ts`; the browser reaches a USB TNC
+      over Web Serial).
+- [x] **KISS-TCP + AGW client** _(P1 · S)_ — attach Direwolf/QtSoundModem/other hubs as modems: the ingest box's
+      `kiss.ts` and `agwpe.ts` (`KISS_TNC_HOST`, `AGWPE_HOST`).
 - [ ] **Supervised Direwolf** _(P1 · M)_ — the hub launches and manages a Direwolf instance
       (config generation, ALSA/pulse device pick, restart-on-crash) for soundcard AFSK/IL2P.
-- [ ] **WA8DED hostmode TNC driver** _(P2 · M)_ — TNC3/SCS-class firmware TNCs in hostmode.
+- [ ] **WA8DED hostmode TNC driver on serial** _(P2 · S)_ — TNC3/SCS-class firmware TNCs in hostmode on a
+      serial port; the host-mode driver over TCP is `apps/ingest/src/hostmode.ts` (`HOSTMODE_HOST`).
 - [ ] **SCS PACTOR hostmode** _(P2 · L)_ — PTC-II/P4dragon hostmode incl. PACTOR level
       negotiation; unlocks Winlink-grade HF forwarding through the same BBS/forward stack.
 
 **Rig control, keying, position:**
 
 - [ ] **rigctld client** _(P1 · S)_ — talk to an existing hamlib rigctld (net) for
-      frequency/mode/PTT; band-tag everything the hub ingests.
+      frequency/mode/PTT; band-tag everything the hub ingests. The client is `packages/aprs/src/rigctld.ts`;
+      the hub driver is what's left.
 - [ ] **Direct CAT serial drivers** _(P2 · M)_ — Icom CI-V, Kenwood, Yaesu protocol families for
       zero-dependency setups — the codec is `packages/aprs/src/cat.ts`; the hub driver is what's left.
 - [ ] **rigctld-compatible re-export server** _(P2 · M)_ — the hub serves the rigctld wire
       protocol so logging/digimode apps share the rig through us — same bridge idea as packet.
-- [ ] **PTT/keying paths** _(P2 · M)_ — CAT PTT, serial RTS/DTR, CM108 GPIO, Raspberry Pi GPIO;
-      one PTT abstraction with per-port assignment and TX-watchdog.
+- [ ] **PTT/keying paths** _(P2 · M)_ — CAT PTT, CM108 GPIO, Raspberry Pi GPIO beside the serial RTS/DTR
+      keying the box has (`apps/ingest/src/ptt.ts`); one PTT abstraction with per-port assignment and
+      TX-watchdog. This keys the hub's own transmit ports, gated on callsign control-verification; the Shack's
+      rig control through the box below never keys.
 - [ ] **GPS/position sources** _(P2 · S)_ — gpsd client + raw NMEA serial feeding station
       position, beaconing, and the shack map.
 
@@ -413,7 +421,7 @@ build, and neither gates the release):
       maintainer-approved rotation, and an automatic review label for the gated capabilities (`network`,
       `tx`, `beacon`, `geo`). Listed tools ship a readable, non-minified entry script so review audits the
       exact bytes the hash then freezes — human review is the enforcement, CI only flags obvious
-      minification. Merge builds and signs `registry.json` from the bucket and deploys it to Pages from a
+      minification. Merge builds and signs `registry.json` from the bucket and deploys it to GitHub Pages from a
       reviewer-protected environment; an offline root key designates the online CI signing key, and its
       custody and rotation ship documented with the repo. Listings state a license. Decide the custom
       domain before shipping: `VITE_TOOL_REGISTRY` points at that URL permanently.
@@ -519,8 +527,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 - [ ] **Log a mirrored cache here, delivered to its home** _(P2 · L)_ — a cache mirrored from a peer is read-only:
       finds point at a local `caches` row, and only the home instance holds the rules that score a find (its
-      minimum tier, its receiving stations, stage coordinates, NFC unlocks and virtual answers) and keeps the one
-      logbook (one find per callsign, the owner's deletions, the finds feed peers mirror). A find logged on a
+      minimum tier, its receiving stations, stage coordinates and NFC unlocks) and keeps the one
+      logbook (one find per callsign, the finds feed peers mirror). A find logged on a
       mirror would travel home as a signed federation frame: the authorship signature the app already makes per
       find, the device reading as evidence, and the logger's callsign key. The home scores it under its own rules
       and publishes it like any find, and the mirror shows it from the finds feed. Needs: a frame kind and its
@@ -542,7 +550,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       - **Shack:** **Rig control** gets a third connection, **Through my box (Hamlib)**, shown when the signed-in
         account has a box reporting `rig`; it works on iOS and non-Chromium browsers, since no Web Serial is involved.
       - **Never PTT:** frequency and mode only. `T` (keying) stays unwired, as transmit is gated on callsign
-        control-verification and the box is not a transmit path for the Shack.
+        control-verification and the box is not a transmit path for the Shack. (The Station hub's PTT item keys
+        the hub's own transmit ports, a separate path.)
       - Docs: `docs/shack/rig-weather.md` (the option), `docs/run/radios/ingest-box.md` (the settings, running
         `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client's user).
       The Station hub's parked **rigctld client** item above is the same client from the hub side.
@@ -577,7 +586,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       `https://lotw.arrl.org/lotw/crl?serial=`) before accepting a callsign certificate, so a replaced or
       revoked certificate stops verifying.
 
-- [ ] **Retro read-only access** _(P3 · M)_ — small Node daemons (raw TCP/TLS, not Workers) exposing
+- [ ] **Retro read-only access** _(P3 · M)_ — small Node daemons (raw TCP/TLS, beside the gateway's HTTP) exposing
       caches-near / station info / leaderboard over **Finger**, **Gopher**, and **Gemini**. Fits the
       "it's a network" ham-retro aesthetic.
 - [ ] **Ham-radio QSO logbook** _(P3 · M)_ — a worked-stations log (band/mode/freq/RST/grid) with **ADIF**
@@ -669,7 +678,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   on the locator packs (`GET /api/offline/pack`) and the station read APIs.
 - [ ] **Offline cache drafts** _(P3 · M)_ — hide a cache on site with no connection: a draft with measured
   coordinates, photos (scaled and thumbnailed in the browser, as uploads are) and text, kept in IndexedDB and
-  submitted for publishing when back online, with its media uploaded then and a review step before it goes live.
+  submitted for publishing when back online, with its media uploaded then. The submit is a hide like any other:
+  a verified callsign and the account's daily hide limit apply at that moment.
 
 ## Legal & attribution
 

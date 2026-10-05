@@ -28,7 +28,7 @@ services:
     # that GID with group_add.
     # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
     # group_add: ["18"]
-    # The settings come from .env alone (INGEST_URL, e.g. https://gateway.<you>.workers.dev/ingest; the APRS-IS
+    # The settings come from .env alone (INGEST_URL, e.g. https://gateway.example.net/ingest; the APRS-IS
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:
