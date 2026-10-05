@@ -4,7 +4,7 @@ import { MEDIA_LIMITS, mediaMB } from "@aprscaching/shared";
 import { getStages, setStages, uploadStageClip, type CacheStage } from "../api.js";
 import { clipsDropped, type StageDraft } from "./stageEdits.js";
 import { parseCoordinates } from "../map/geo.js";
-import { Button, useToast, useConfirm } from "../ui/index.js";
+import { Button, FilePick, useToast, useConfirm } from "../ui/index.js";
 import { checkMove, moveLine, type Point } from "./moveLimit.js";
 
 type Unlock = CacheStage["unlock"];
@@ -260,20 +260,22 @@ export function StagesEditor(props: {
                   </>
                 )}
                 {r.unlock === "audio" && n > 0 && (
-                  <label>
-                    Audio clip <span className="muted">(up to {mediaMB(MEDIA_LIMITS.audio)})</span>
-                    <input
-                      type="file"
+                  <div className="stage-audio">
+                    <span>
+                      Audio clip <span className="muted">(up to {mediaMB(MEDIA_LIMITS.audio)})</span>
+                    </span>
+                    <FilePick
+                      label={`Choose stage ${n}'s audio clip`}
                       accept="audio/*"
                       disabled={dirty || r.prev !== n}
-                      onChange={(e) => void upload(n, e.target.files?.[0])}
+                      onPick={(f) => void upload(n, f ?? undefined)}
                     />
                     {(dirty || r.prev !== n) && <span className="muted fine">Save the stages first.</span>}
                     {r.clip && !(dirty || r.prev !== n) && <span className="muted fine">Clip uploaded.</span>}
                     {r.clip && (dirty || r.prev !== n) && (
                       <span className="muted fine">Its clip stays with it when you save.</span>
                     )}
-                  </label>
+                  </div>
                 )}
                 {r.unlock === "nfc" && offline.find((o) => o.stageNo === n && !o.offline && o.reason) && (
                   <p className="muted fine">Online only: {offline.find((o) => o.stageNo === n)?.reason}</p>

@@ -15,7 +15,7 @@ import {
   type AmprChallenge,
   type VerifyMethods,
 } from "../api.js";
-import { Button, Icon, copyText, useToast, usePoll, Segmented } from "../ui/index.js";
+import { Button, FilePick, Icon, copyText, useToast, usePoll, Segmented } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { signWithP12 } from "./lotw.js";
 
@@ -408,10 +408,7 @@ function LotwCert(props: { callsign: string; claim?: string; onVerified: () => v
         Save your callsign certificate from TQSL as a .p12 file. It is opened in this browser: the file and its password
         never leave it — only the certificate and a signature are sent.
       </p>
-      <label>
-        Certificate file (.p12)
-        <input type="file" accept=".p12,application/x-pkcs12" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </label>
+      <FilePick label="Choose the certificate file (.p12)" accept=".p12,application/x-pkcs12" onPick={setFile} />
       <label>
         File password
         <input

@@ -25,6 +25,7 @@ export { useModalDialog } from "./useModalDialog.js";
 export { Sheet } from "./Sheet.js";
 export { ConfirmProvider, useConfirm, useChoice, usePrompt, type PromptOpts } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";
+export { FilePick } from "./FilePick.js";
 export { Hint, InfoTip } from "./Hint.js";
 export { ManualLink } from "./ManualLink.js";
 export { CommandBlock } from "./CommandBlock.js";

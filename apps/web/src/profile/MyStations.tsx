@@ -30,6 +30,7 @@ import {
   usePaged,
   useToast,
   InfoTip,
+  Disclosure,
 } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { WxTxToggles } from "./WxTxToggles.js";
@@ -42,6 +43,9 @@ const ROLE_LABEL: Record<StationRole, string> = {
   node: "Node",
   repeater: "Repeater",
 };
+
+/** A station callsign to show as an example: the operator's own base call with an SSID. */
+const example = (base: string, ssid: number) => `${base || "N0CALL"}-${ssid}`;
 
 /**
  * Settings → My stations. Manage the operator's own stations — a home weather PWS, a
@@ -93,17 +97,22 @@ export function MyStations(props: { callsign: string }) {
   return (
     <>
       <p className="muted">
-        Your operated stations — a home weather PWS, a remote digipeater/igate/node on a mountain. Each has its own
-        callsign, location and roles; each weather station gets its own push key. A station's callsign is one of yours,
-        verified: OE8APR-9 needs OE8APR on your account. A weather-only station needs no verification, since pushing
-        weather needs no licence. A club station whose call you do not hold is listed for you by your sysop. Set a
-        location, or leave it blank to adopt a station already heard on the map (a weather station then sits at your
-        home locator) — and tap any station pin to add it directly.
+        The stations you run: a weather station at home, a digipeater, IGate or node on a hill. Each has its own
+        callsign, place and roles.
       </p>
-      <p className="muted fine">
-        Running infrastructure feeds the commons: a receiving station this instance attests makes other people&apos;s
-        finds Radio-verified when it hears them. It&apos;s recognised, never gated.
-      </p>
+      <Disclosure label="Which callsigns, and where a station sits">
+        <p className="muted fine">
+          A station&apos;s callsign is one of your own, verified: <span className="mono">{example(base, 9)}</span> needs{" "}
+          <span className="mono">{base || "your call"}</span> on your account. A weather-only station needs no
+          verification, since pushing weather needs no licence, and gets its own push key. A club station whose call you
+          do not hold is listed for you by your sysop.
+        </p>
+        <p className="muted fine">
+          Leave the place blank to adopt a station already heard on the map (a weather station then sits at your home
+          locator), or tap any station pin to add it. A receiving station this instance attests makes other
+          people&apos;s finds Radio-verified when it hears them: recognised, never gated.
+        </p>
+      </Disclosure>
       <div className="row end">
         <Button onClick={becomeCache}>★ Become a cache</Button>
       </div>
@@ -131,7 +140,7 @@ export function MyStations(props: { callsign: string }) {
           Add a weather station
         </Button>
       </div>
-      <StationFields value={draft} onChange={setDraft} callsignEditable />
+      <StationFields value={draft} onChange={setDraft} callsignEditable base={base} />
       <div className="row end mt-2">
         <Button variant="primary" onClick={add} disabled={!draft.callsign || draft.callsign.endsWith("-")}>
           Add station
@@ -286,6 +295,8 @@ function StationFields(props: {
   value: StationInput;
   onChange: (v: StationInput) => void;
   callsignEditable?: boolean;
+  /** The operator's base call, for the examples. */
+  base?: string;
 }) {
   const v = props.value;
   const set = (patch: Partial<StationInput>) => props.onChange({ ...v, ...patch });
@@ -298,13 +309,13 @@ function StationFields(props: {
     <>
       {props.callsignEditable && (
         <label>
-          Callsign <span className="muted">(with SSID, e.g. OE8APR-1)</span>{" "}
+          Callsign <span className="muted">(with SSID, e.g. {example(props.base ?? "", 1)})</span>{" "}
           <InfoTip text={TERMS.ssid} label="What is an SSID?" />
           <input
             className="mono"
             value={v.callsign ?? ""}
             maxLength={11}
-            placeholder="OE8APR-1"
+            placeholder={example(props.base ?? "", 1)}
             onChange={(e) => set({ callsign: e.target.value.toUpperCase() })}
           />
         </label>
