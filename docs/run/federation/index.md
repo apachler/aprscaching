@@ -15,32 +15,64 @@ Desktop or Pocket.
 ## Before you start
 
 - An instance that answers on its public `APP_URL` ([Your first hour](../first-hour.md)).
-- The URLs of instances you know, and a way to reach their sysops.
+- The URLs of instances you know, and a way to reach their sysops that you already trust: a phone call, a
+  meeting, or a contact on the air.
 - Sysop access to **Instance admin**.
 
 ## Joining the network
 
+Two sysops join their instances in five steps. Each adds the other, and each compares the other's
+[key fingerprint](../../glossary.md#key-fingerprint) before trusting it.
+
+```mermaid
+sequenceDiagram
+  participant A as Sysop A
+  participant B as Sysop B
+  A->>B: my URL and my key fingerprint
+  B->>A: my URL and my key fingerprint
+  Note over A,B: each adds the other by URL (unvetted)
+  Note over A,B: each compares the fingerprint the look-up shows
+  Note over A,B: each raises the other to trusted
+```
+
 1. **Check your signing key.** `FED_PRIVATE_KEY` must be set ([Sign your feeds](#sign-your-feeds)). Your
    instance id follows `APP_URL`'s host.
-2. **Add the peers you know** to `FED_PEERS`, comma-separated https URLs, and restart the gateway:
+2. **Exchange addresses and fingerprints.** Give the other sysop your `APP_URL` and your key fingerprint,
+   from **Instance admin → Federation → Your key fingerprint**. Take theirs. Use a channel you already
+   trust, not the federation itself.
+3. **Add the peer.** Under **Instance admin → Federation**, choose **Add peer**, enter the other instance's
+   URL and choose **Look up**. Your instance fetches its descriptor and shows its instance id, its URL and the
+   fingerprint of its signing key. When that fingerprint is the one its sysop gave you, choose **Add as
+   unvetted**. Your instance now mirrors it, hidden on the map.
+4. **The other sysop adds you** the same way, comparing your fingerprint.
+5. **Trust the peer.** Choose **Trust** on its row. The dialog repeats the fingerprint and asks whether you
+   compared it with the other sysop; confirm only when you did. A trusted peer shows on the map and counts
+   toward Tier A.
 
-    ```bash
-    FED_PEERS=https://a.example,https://b.example
-    ```
+**Optional:** publish who runs the instance with `FED_OPERATOR` (the instance publishes its service call beside
+it), and ask a registry authority for an entry
+([The instance registry](hubs-and-relays.md#the-instance-registry)). A 44Net peer joins by callsign instead
+([Peers by callsign](../networks/44net-identity.md#peers-by-callsign)).
 
-    They start `trusted`: your instance mirrors them and counts their corroboration. Their keys are not
-    checked yet: your instance pins whatever key a peer signs its first sync with. Compare fingerprints with
-    each peer's sysop next ([Compare key fingerprints](#compare-key-fingerprints)).
+### Peers in `FED_PEERS`
 
-3. **Ask each peer's sysop to add your `APP_URL`** to their `FED_PEERS`. Until they do, their instance holds you
-   `unvetted` if it learns of you at all: your records are mirrored there but hidden on the map, and your
-   answers do not count toward their Tier A. They can also promote you under **Instance admin → Federation**.
-4. **Optional:** publish who runs the instance with `FED_OPERATOR` (the instance publishes its service call
-   beside it), and ask a registry
-   authority for an entry ([The instance registry](hubs-and-relays.md#the-instance-registry)).
+A peer can also be listed in `FED_PEERS`, comma-separated base URLs, which the gateway reads at start. Each
+entry may pin the peer's key fingerprint after a `#`:
 
-**Instance admin → Federation** lists your peers and changes their trust. It admits a 44Net peer by callsign
-([Peers by callsign](../networks/44net-identity.md#peers-by-callsign)); it does not add a peer by URL.
+```bash
+FED_PEERS=https://a.example#630dcd2966c43366,https://b.example
+```
+
+- **With a fingerprint** the peer starts `trusted` once its key matches it. A peer whose key does not match is
+  refused, and its row shows the error.
+- **Without one** the peer starts `unvetted`, like a peer added by URL, until you compare its fingerprint and
+  trust it.
+
+The fingerprint is 16 hex digits, shown as four groups of four (`630d cd29 66c4 3366`); written without
+the spaces, or with colons between the groups, it means the same. A peer's sysop reads it from
+their Instance admin, or prints it with `node tools/fedkey/fingerprint.mjs --url https://a.example`, which
+fetches it over the network and so belongs on the peer's own side. A level you set in Instance admin stays
+when the gateway restarts.
 
 ## Sign your feeds
 
@@ -74,21 +106,22 @@ a leaked key at once, publish it as revoked:
 
 ### Compare key fingerprints
 
-A peer in `FED_PEERS` starts `trusted` with a key nobody has checked: your instance pins the key the peer
-signs its first sync with. Someone between you and the peer at that moment could put their own key there.
-Comparing fingerprints with the peer's sysop closes that gap.
+A URL says where a peer answers, not who holds its key: someone between you and the peer could answer with a
+key of their own. Comparing fingerprints with the peer's sysop closes that gap, which is why trusting a peer
+always repeats its fingerprint.
 
-1. Open **Instance admin → Federation**. The line above the peer list shows your instance's key fingerprint,
-   four groups of four hex digits, for example `630d cd29 66c4 3366`. Each peer shows the fingerprint of the
-   key your instance pinned for it, under **key**.
+1. Open **Instance admin → Federation**. **Your key fingerprint** shows your instance's, four groups of four
+   hex digits, for example `630d cd29 66c4 3366`. Each peer's row shows the fingerprint of the key your
+   instance pinned for it.
 2. Reach the peer's sysop by a channel the network does not carry: a phone call, a QSO, or in person.
 3. Read your fingerprint to them, and have them read theirs to you. Each compares what they hear with the
-   peer's line on their own list.
+   peer's row on their own list.
 4. They match: the keys are the right ones. They differ: [block the peer](#peers-and-trust) and find out why
-   before you trust it again.
+   before you trust it.
 
-`deploy/aprscaching doctor` prints the same fingerprints, yours and each `FED_PEERS` peer's. Compare again
-after either of you [rotates a key](#rotate-your-key).
+`deploy/aprscaching doctor` prints the same fingerprints, yours and each `FED_PEERS` peer's, and warns when a
+peer's key does not match the fingerprint its entry pins. Compare again after either of you
+[rotates a key](#rotate-your-key).
 
 ## What the installer sets
 
@@ -98,13 +131,13 @@ when it is unsafe. A LAN instance starts with federation off.
 
 | Flag | Asks for | Writes |
 |---|---|---|
-| `--fed-peers URL,…` | the https peers you know; a 44Net peer is refused here | `FED_PEERS` |
+| `--fed-peers URL[#FINGERPRINT],…` | the https peers you know, each with its key fingerprint; a 44Net peer is refused here | `FED_PEERS` |
 | `--fed-submit-instances ID,…` | on a hub (`FED_SUBMIT_SECRET` set), the spokes allowed to push; required | `FED_SUBMIT_INSTANCES` |
 | `--fed-registry-key KEY` | with `FED_REGISTRY` or `FED_REGISTRY_DNS`, the registry authority's key; required | `FED_REGISTRY_KEY` |
 | `--net44-name NAME` | this instance's 44Net name, such as `aprscaching.oe8apr.ampr.org` | `FED_ENDPOINTS` (https and 44net) |
 
-A 44Net peer (a name under `ampr.org` or an address in `44/8`) never goes into `FED_PEERS`, since that list
-starts `trusted`. Admit it from **Instance admin → Federation**, which holds it `unvetted`.
+A 44Net peer (a name under `ampr.org` or an address in `44/8`) never goes into `FED_PEERS`. Admit it from
+**Instance admin → Federation**, which binds it to its callsign and holds it `unvetted`.
 
 ## Running federation safely
 
@@ -112,7 +145,7 @@ The defaults are safe. These settings decide how much a stranger can do.
 
 | Setting | Safe choice | Secure by default |
 |---|---|---|
-| `FED_PEERS` | List the peers you know. They start `trusted` with an unchecked key, so [compare fingerprints](#compare-key-fingerprints); everything else starts `unvetted`. | yes |
+| `FED_PEERS` | List the peers you know, each with its key fingerprint. Only a matching key starts `trusted`. | yes |
 | `FED_DISCOVER` | Leave at `0`, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
 | `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |
@@ -132,16 +165,30 @@ Each peer is a row with a trust level:
 
 | Trust | What your instance does |
 |-------|-----------|
-| `trusted` | Mirrors it, and counts it toward Tier A corroboration. Peers in `FED_PEERS` start here. |
-| `unvetted` | Mirrors it, hidden on the map by default. Peers from the registry, discovery, 44Net and hub pushes start here. |
+| `trusted` | Mirrors it, and counts it toward Tier A corroboration. A `FED_PEERS` entry whose pinned fingerprint matches starts here. |
+| `unvetted` | Mirrors it, hidden on the map by default. Peers added by URL, unpinned `FED_PEERS` entries, and peers from the registry, discovery, 44Net and hub pushes start here. |
 | `blocked` | Never mirrors it, never shows it. A blocked peer stays blocked even when `FED_PEERS` lists it. |
 
-Change a peer's trust under **Instance admin → Federation**. Blocking a peer hides everything it sent.
+Change a peer's trust under **Instance admin → Federation**. Each row shows the peer's trust level, its key
+fingerprint with a copy button, and its last pull and push. **Trust** needs a pinned key: a peer found by
+discovery pins one on its first sync, as `unvetted`, and you compare its fingerprint before you trust it.
+Blocking a peer hides everything it sent.
+
+### Remove a peer
+
+**Remove** on a peer's row deletes the peer and its pinned key. What it published stays mirrored, treated like
+anything from an instance you do not know: hidden on the map and in offline packs unless the viewer includes
+unvetted peers, and never a voice in corroboration. Nothing new from it applies. To hide everything it published,
+block it instead.
+
+Added again, a removed peer starts `unvetted`: your instance fetches its key afresh, and you compare the
+fingerprint again. A peer listed in `FED_PEERS` comes back at every start, so take it out of `FED_PEERS` and
+restart the gateway before you remove it.
 
 - **Auto-promotion.** `FED_AUTO_PROMOTE=<n>` promotes an `unvetted` peer to `trusted` after `n` confirmed
   corroborations. A peer that denies a find the quorum confirmed is penalised.
 - **A peer moves to a new URL.** One instance id belongs to one live row, so the new URL is refused while the
-  old row holds the id. Block or remove the old row first.
+  old row holds the id. Remove the old row, then add the new URL.
 
 [How federation stays honest](../../reference/federation-trust.md) explains the row binding and the quorum.
 
@@ -176,8 +223,8 @@ ask for a pull after they write, so new records arrive sooner.
 
 ## Check that it worked
 
-- **Instance admin → Federation** shows each peer with its trust, its last sync, any error and its key
-  fingerprint.
+- **Instance admin → Federation** shows each peer with its trust, its key fingerprint, its last pull and push,
+  and any error.
 - `deploy/aprscaching doctor` checks the key, the posture and that each peer in `FED_PEERS` answers, and prints
   each key fingerprint
   ([federation checks](../troubleshooting.md#federation-federation)).

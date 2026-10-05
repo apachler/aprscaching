@@ -120,7 +120,7 @@ import {
   runDigests,
 } from "./notify.js";
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
-import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
+import { handleFederationPeers, handlePeerAdd, handlePeerRemove, handlePeerTrust } from "./fedpeers.js";
 import { handleOfflinePack } from "./offlinepack.js";
 import { TILES_PATH, handleOfflineTiles, handleTileArchive } from "./tiles.js";
 import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
@@ -503,6 +503,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
       decision: adminAdoptReq[2] as "approve" | "decline",
     });
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
+  if (p === "/federation/peers" && m === "POST") return handlePeerAdd(req, env); // look up, then add unvetted
+  if (p === "/federation/peers" && m === "DELETE") return handlePeerRemove(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
   // CBOR sync surface — fedwire frames (the canonical signed form); consumers prefer it over the JSON feeds

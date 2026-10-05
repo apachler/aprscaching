@@ -17,6 +17,7 @@ import {
   FED_PROTOCOL_VERSION,
   type FedPublicKey,
   isInstanceId,
+  keyFingerprint,
   loadRegistry,
   parseAcceptKeys,
   registryKeyAllowed,
@@ -232,7 +233,7 @@ async function syncPeer(
   if (wk.instance === ours(env))
     return { bytes: 0, caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
   // one live row per instance id: a second URL claiming a bound instance is an impostor or a stale
-  // address, and the operator decides which (block or delete the other row)
+  // address, and the operator decides which (block or remove the other peer in Instance admin)
   const holder = await env.DB.prepare(
     "SELECT url FROM fed_peers WHERE instance = ? AND url != ? AND trust != 'blocked'",
   )
@@ -258,6 +259,17 @@ async function syncPeer(
     graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
   });
   if (!keys.ok) throw new Error(`peer ${wk.instance}: ${keys.reason} — refusing (possible hijack)`);
+  // A FED_PEERS entry that pins a fingerprint names the key its sysop compared: the peer's keys must
+  // include it (its rotation chain may have moved the pin on since), or this is not that peer.
+  const pinnedFp = p.pinned_fingerprint ?? null;
+  let pinMatches = false;
+  if (pinnedFp) {
+    const held = [keys.pin, p.public_key, ...usableKeys(keys.accept, nowS())].filter((k): k is string => !!k);
+    const fps = await Promise.all([...new Set(held)].map(keyFingerprint));
+    if (!fps.includes(pinnedFp))
+      throw new Error(`peer ${wk.instance}: its key does not match the fingerprint pinned in FED_PEERS — refusing`);
+    pinMatches = !!keys.pin && (await keyFingerprint(keys.pin)) === pinnedFp;
+  }
   const acceptJson = JSON.stringify(keys.accept);
   try {
     await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=?, accept_keys=? WHERE url=?")
@@ -267,6 +279,16 @@ async function syncPeer(
     if (/UNIQUE/i.test((e as Error).message))
       throw new Error(`instance ${wk.instance} is already bound to another peer — refusing`, { cause: e });
     throw e;
+  }
+  // the key matches the fingerprint the sysop pinned: the peer starts trusted, once — a level the
+  // operator set since (approved_at stamped, or blocked) is never overridden
+  if (pinMatches && p.trust === "unvetted" && p.approved_at == null) {
+    const r = await env.DB.prepare(
+      "UPDATE fed_peers SET trust = 'trusted', approved_at = ? WHERE url = ? AND trust = 'unvetted' AND approved_at IS NULL",
+    )
+      .bind(nowS(), p.url)
+      .run();
+    if (r.meta.changes) p.trust = "trusted";
   }
   const newActive = usableKeys(keys.accept, nowS());
 

@@ -104,9 +104,10 @@ export function createFetchGuard(opts: {
   };
 }
 
-/** The origins an operator configured by hand: FED_PEERS entries and FED_HUB_URL. */
+/** The origins an operator configured by hand: FED_PEERS entries (less a `#<fingerprint>` pin) and FED_HUB_URL. */
 export function operatorOrigins(env: { FED_PEERS?: string; FED_HUB_URL?: string }): string[] {
-  return [...(env.FED_PEERS ?? "").split(","), env.FED_HUB_URL ?? ""].map((s) => s.trim()).filter(Boolean);
+  const peers = (env.FED_PEERS ?? "").split(",").map((s) => s.split("#")[0] ?? "");
+  return [...peers, env.FED_HUB_URL ?? ""].map((s) => s.trim()).filter(Boolean);
 }
 
 /**

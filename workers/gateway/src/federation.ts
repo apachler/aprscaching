@@ -16,7 +16,7 @@
  */
 import { b64urlToBytes } from "./util/b64.js";
 import { nowS } from "./util/time.js";
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { displayCall } from "./auth.js";
@@ -627,6 +627,40 @@ export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", b64urlToBytes(rawB64url), { name: "Ed25519" }, false, ["verify"]);
 }
 
+/**
+ * A fingerprint as an operator typed it (any case, with or without the spaces or colons between groups), in
+ * keyFingerprint's form (`3f2a 9c01 bb7e 4d10`); null when it is not one.
+ */
+export function normalizeFingerprint(s: string): string | null {
+  const hex = s.replace(/[\s:]/g, "").toLowerCase();
+  return /^[0-9a-f]{16}$/.test(hex) ? hex.match(/.{4}/g)!.join(" ") : null;
+}
+
+/** One `FED_PEERS` entry: the peer's base URL, and the key fingerprint pinned after a `#`, if any. */
+interface ConfiguredPeer {
+  url: string;
+  fingerprint: string | null;
+}
+
+/**
+ * Parse `FED_PEERS`: comma-separated base URLs, each optionally followed by `#<fingerprint>`, the peer's
+ * key fingerprint as its sysop gave it. A suffix that is not a fingerprint pins nothing and the entry is
+ * seeded unpinned, so a typo can only ever leave a peer unvetted.
+ */
+export function parseFedPeers(raw: string | undefined): ConfiguredPeer[] {
+  const out: ConfiguredPeer[] = [];
+  for (const entry of (raw ?? "").split(",")) {
+    const hash = entry.indexOf("#");
+    const url = trimTrailingSlashes((hash < 0 ? entry : entry.slice(0, hash)).trim());
+    if (!url) continue;
+    const fingerprint = hash < 0 ? null : normalizeFingerprint(entry.slice(hash + 1));
+    if (hash >= 0 && !fingerprint)
+      console.warn(`federation: the FED_PEERS entry for ${url} carries a suffix that is not a key fingerprint`);
+    out.push({ url, fingerprint });
+  }
+  return out;
+}
+
 export function instanceOf(req: Request, env: Env): string {
   return env.INSTANCE ?? new URL(req.url).host;
 }
@@ -634,10 +668,7 @@ export function instanceOf(req: Request, env: Env): string {
 // ---- endpoints ----
 export async function handleWellKnown(req: Request, env: Env): Promise<Response> {
   const fk = await loadKey(env);
-  const peers = (env.FED_PEERS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const peers = parseFedPeers(env.FED_PEERS).map((p) => p.url);
   return json({
     protocol: PROTOCOL,
     protocolVersions: PROTOCOL_VERSIONS,

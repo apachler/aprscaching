@@ -914,6 +914,13 @@ export interface FedPeer {
   rep_confirmed: number;
   rep_failed: number;
   lastCounts: Record<string, number> | null;
+  /** the fingerprint a FED_PEERS entry pins (`<url>#<fingerprint>`) */
+  pinned_fingerprint: string | null;
+  /** listed in FED_PEERS, so it is removed there rather than here */
+  configured: boolean;
+  /** when this peer last pushed to us (a spoke), and when we last pushed to it (our hub) */
+  last_push_in: number | null;
+  last_push_out: number | null;
 }
 export function listFederationPeers(): Promise<{
   /** This instance and its own key fingerprint (null when it signs nothing) */
@@ -921,6 +928,29 @@ export function listFederationPeers(): Promise<{
   peers: FedPeer[];
 }> {
   return call(`/federation/peers`);
+}
+
+/** What looking a would-be peer up by its address shows, before anything is stored. */
+export interface FedPeerPreview {
+  url: string;
+  instance: string;
+  fingerprint: string;
+  operator: string | null;
+}
+/** Operator: fetch a would-be peer's descriptor and show its instance and key fingerprint (sysop-gated). */
+export function lookUpPeer(url: string): Promise<{ preview: FedPeerPreview }> {
+  return call(`/federation/peers`, { method: "POST", body: JSON.stringify({ url }) });
+}
+/** Operator: add the peer just looked up, unvetted, pinning the key whose fingerprint was compared. */
+export function addPeer(
+  url: string,
+  fingerprint: string,
+): Promise<{ ok: boolean; peer: FedPeerPreview & { trust: string } }> {
+  return call(`/federation/peers`, { method: "POST", body: JSON.stringify({ url, fingerprint }) });
+}
+/** Operator: remove a peer and its pinned key. */
+export function removePeer(url: string): Promise<{ ok: boolean }> {
+  return call(`/federation/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
 }
 
 /** How pushing to the hub stands (a spoke) and when each spoke last submitted (a hub). */
@@ -951,9 +981,16 @@ export function getFederationSync(): Promise<FederationSync> {
 export function syncFederationNow(): Promise<{ ok: boolean; started: boolean }> {
   return call(`/api/admin/federation/sync`, { method: "POST" });
 }
-/** Operator: promote/demote/quarantine a federation peer (sysop-gated). */
-export function setPeerTrust(url: string, trust: "trusted" | "unvetted" | "blocked"): Promise<{ ok: boolean }> {
-  return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust }) });
+/**
+ * Operator: promote/demote/quarantine a federation peer (sysop-gated). Trusting takes the fingerprint the sysop
+ * compared, and the server refuses it when the pinned key is another.
+ */
+export function setPeerTrust(
+  url: string,
+  trust: "trusted" | "unvetted" | "blocked",
+  fingerprint?: string,
+): Promise<{ ok: boolean }> {
+  return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust, fingerprint }) });
 }
 
 export interface Fed44netResolved {

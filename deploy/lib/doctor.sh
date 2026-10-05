@@ -462,7 +462,7 @@ doc_federation() {
       https://*) ;;
       *) unsafe+=("peer $p is not https") ;;
     esac
-    case "${p#*://}" in *.ampr.org* | 44.*) unsafe+=("peer $p is on 44Net and starts trusted") ;; esac
+    case "${p#*://}" in *.ampr.org* | 44.*) unsafe+=("peer ${p%%#*} is on 44Net: admit it from Instance admin") ;; esac
   done
   if [ -n "$(doc_get FED_SUBMIT_SECRET)" ] && [ -z "$(doc_get FED_SUBMIT_INSTANCES)" ]; then
     unsafe+=("a hub without FED_SUBMIT_INSTANCES")
@@ -482,10 +482,20 @@ doc_federation() {
   desc="$(gw_curl -fsS --max-time 8 "$DOC_BASE/.well-known/aprscaching" 2>/dev/null || true)"
   fp="$(fed_fingerprint "$(desc_key "$desc")")"
   [ -z "$fp" ] || pass federation.fingerprint "this instance's key fingerprint is $fp; read it to each peer's sysop"
+  local pin
   for p in ${peers//,/ }; do
+    # a FED_PEERS entry may pin the peer's key fingerprint after #
+    pin=""
+    case "$p" in *"#"*) pin="$(printf '%s' "${p#*#}" | tr -d ' :' | tr 'A-F' 'a-f')" ;; esac
+    p="${p%%#*}"
     if desc="$(curl -fsS --max-time 8 "${p%/}/.well-known/aprscaching" 2>/dev/null)"; then
       fp="$(fed_fingerprint "$(desc_key "$desc")")"
-      pass "federation.peer.${p#*://}" "peer $p answers; its key fingerprint is ${fp:-missing (it signs nothing)}"
+      if [ -n "$pin" ] && [ "$pin" != "$(printf '%s' "$fp" | tr -d ' ')" ]; then
+        warnc "federation.peer.${p#*://}" "peer $p signs with key ${fp:-none}, not the fingerprint FED_PEERS pins" \
+          "compare fingerprints with its sysop again, then correct FED_PEERS"
+      else
+        pass "federation.peer.${p#*://}" "peer $p answers; its key fingerprint is ${fp:-missing (it signs nothing)}"
+      fi
     else
       warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator"
     fi

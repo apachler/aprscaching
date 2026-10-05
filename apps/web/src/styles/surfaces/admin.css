@@ -21,6 +21,48 @@
     justify-self: start;
     min-height: var(--hit);
   }
+  /* federation peers: this instance's own fingerprint, Add peer and its look-up card, and each peer row */
+  .fed-self,
+  .fed-addpeer,
+  .fed-peer {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .fed-self,
+  .fed-addpeer {
+    margin-bottom: var(--space-sm);
+  }
+  .fed-self .comment,
+  .fed-addpeer .comment {
+    font-size: var(--text-label);
+    color: var(--muted);
+  }
+  .fed-addpeer input {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  .fed-addpeer .confirmbox {
+    display: grid;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+  }
+  .fed-add {
+    justify-self: start;
+    margin-bottom: var(--space-sm);
+  }
+  /* a fingerprint wraps between its groups of four, never inside one */
+  .fed-fp {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+  .fed-fp .mono {
+    word-spacing: 0.1em;
+    overflow-wrap: normal;
+  }
   /* 44net onboarding wizard (Instance admin → Federation): add-a-peer row, the no-DNSSEC confirm
    card (warn-tinted via color-mix — no hand-maintained hex), and the be-reachable disclosure. */
   .fed44net {

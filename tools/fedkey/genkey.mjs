@@ -21,5 +21,9 @@ if (process.argv.includes("--raw")) {
 } else {
   console.log("FED_PRIVATE_KEY (set as a secret, never commit):\n" + b64);
   console.log("\npublic key (Ed25519, base64url): " + pub);
+  const fp = Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from(pub, "base64url")))
+    .toString("hex")
+    .slice(0, 16);
+  console.log("fingerprint (compare it with a peer's sysop): " + fp.match(/.{4}/g).join(" "));
   console.log("The gateway publishes the public key at /.well-known/aprscaching for peers to verify.");
 }

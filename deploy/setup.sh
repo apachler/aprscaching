@@ -22,7 +22,8 @@
 #          gateway answers on its own port rather than through Caddy) · --no-tunnel (offer no Cloudflare
 #          Tunnel: the installer has no compose stack to run one) · --no-next-steps (the caller prints its
 #          own) · --help
-# Federation (public instances): --fed-peers URL,… (https peers you know; they start trusted) ·
+# Federation (public instances): --fed-peers URL[#FINGERPRINT],… (https peers you know; trusted once a pinned
+#          fingerprint matches, unvetted otherwise) ·
 #          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
 #          --fed-registry-key KEY (required with FED_REGISTRY/FED_REGISTRY_DNS) ·
 #          --net44-name NAME (this instance's 44Net name, e.g. aprscaching.oe8apr.ampr.org)
@@ -256,7 +257,7 @@ case "$MODE" in
 esac
 
 # ---- federation (public instances only) -------------------------------------------------------------------
-# A peer listed in FED_PEERS starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
+# A peer listed in FED_PEERS with its key fingerprint starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
 # admin (admitted unvetted) instead. A name under ampr.org or an address in 44/8 is a 44Net peer.
 is_44net_peer() {
   local host="${1#*://}"
@@ -409,7 +410,7 @@ else
   case "$(current FED_AUTO_PROMOTE)" in 0 | "") ;; *) echo "  WARN: FED_AUTO_PROMOTE is not 0: peers can become trusted without you." ;; esac
   case "$(current FED_CORROBORATION_QUORUM)" in 0 | 1) echo "  WARN: FED_CORROBORATION_QUORUM below 2 lets one peer lift a find to Tier A." ;; esac
   if [ -n "$(current FED_PEERS)" ] && ! check_peers "$(current FED_PEERS)" 2>/dev/null; then
-    echo "  WARN: FED_PEERS holds a 44Net or non-https peer, which starts trusted. Onboard 44Net peers from Instance admin."
+    echo "  WARN: FED_PEERS holds a 44Net or non-https peer. Onboard 44Net peers from Instance admin."
   fi
 fi
 case "$MAIL" in

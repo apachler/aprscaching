@@ -171,6 +171,16 @@ explains it in full.
 :   **Federation** is how instances share caches, finds and keys as signed records; a **peer** is another
     instance yours exchanges them with ([Join the network](run/federation/index.md)).
 
+<span id="peer-trust"></span>Peer trust level
+:   How far your instance trusts a peer: **trusted** shows what it publishes and counts its corroboration,
+    **unvetted** mirrors it but hides it by default, **blocked** ignores it
+    ([Peers and trust](run/federation/index.md#peers-and-trust)).
+
+<span id="key-fingerprint"></span>Key fingerprint
+:   A short checksum of an instance's signing key. Two sysops compare their instances' fingerprints over a
+    channel they already trust before either one trusts the other
+    ([Joining the network](run/federation/index.md#joining-the-network)).
+
 <span id="tombstone"></span>Tombstone
 :   A signed deletion record. It travels through federation so erased data is removed everywhere and never
     mirrored again.

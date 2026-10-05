@@ -80,7 +80,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     **Check:** your site call shows under **Instance admin → Trusted receiving stations**, and the *Trusted
     receiving stations* item under **Instance admin → Setup** counts it.
 
-7. **Join the network.** Add the peers you know to `FED_PEERS` and ask their operators to add yours: see
+7. **Join the network.** Exchange URLs and key fingerprints with the sysops you know, and add each other under
+   **Instance admin → Federation → Add peer**: see
    [Join the network](federation/index.md#joining-the-network).
 
     **Check:** the *Federation peers* item under **Instance admin → Setup** counts your enabled peers.
