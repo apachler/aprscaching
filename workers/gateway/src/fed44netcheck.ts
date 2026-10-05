@@ -22,6 +22,8 @@
  *   verification and belongs at `_aprscaching-verify.<call>.ampr.org`); for an instance under its own
  *   name, whether the callsign's record sends peers to it with another binding;
  * - the record sends peers where this instance is: its 44net endpoint and its https origin;
+ * - with `web=`, the descriptor names the callsign (its service call or `FED_OPERATOR`), as a peer adding it
+ *   requires: a `web=` origin lies outside the callsign's zone;
  * - whether the TXT answer was DNSSEC-validated, and any AAAA record, as information.
  * An instance without 44Net that has published nothing gets one information line: publishing is optional.
  *
@@ -38,7 +40,7 @@ import { nowS } from "./util/time.js";
 import { net44Host } from "@aprscaching/shared";
 
 export interface CheckLine {
-  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "dnssec" | "aaaa";
+  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "operator" | "dnssec" | "aaaa";
   status: "pass" | "warn" | "fail" | "info";
   label: string;
   detail: string;
@@ -83,6 +85,9 @@ interface OwnDescriptor {
   publicKey: string | null;
   publicKeys?: FedPublicKey[];
   addresses?: { transport: string; address: string }[];
+  /** The service call (`aprsCall`) and `FED_OPERATOR`: a peer adding by a `web=` record wants one of them. */
+  aprsCall?: string | null;
+  operator?: string | null;
 }
 
 /** What the plan and the check start from. */
@@ -389,6 +394,30 @@ export async function check44net(
       : { id: "target", status: "pass", label: "Where peers connect", detail: describeTarget(binding) };
   }
 
+  // ---- a web= origin lies outside the callsign's zone: a peer adding it wants the descriptor to name the call
+  let operator: CheckLine | null = null;
+  const webInUse = binding ? binding.web : /; web=/.test(txtRecord.value) ? ctx.web : null;
+  if (webInUse) {
+    const named = [desc.aprsCall, desc.operator]
+      .filter((c): c is string => typeof c === "string" && !!c.trim())
+      .map((c) => c.trim().split("-")[0]!.toUpperCase());
+    operator = named.includes(callsign)
+      ? {
+          id: "operator",
+          status: "pass",
+          label: "Callsign in the descriptor",
+          detail: `the descriptor at ${webInUse} names ${callsign}`,
+        }
+      : {
+          id: "operator",
+          // before the record is published nobody is refused yet: a warning
+          status: binding ? "fail" : "warn",
+          label: "Callsign in the descriptor",
+          detail: `the descriptor names ${named.length ? named.join(" and ") : "no call"}, not ${callsign}: peers adding ${callsign} refuse the https address ${webInUse}`,
+          fix: `Set FED_OPERATOR=${callsign} and restart the gateway, then run the check again.`,
+        };
+  }
+
   // ---- the A record of the 44Net host peers contact
   const host = binding?.host ?? plan.host;
   let a: CheckLine | null = null;
@@ -427,6 +456,7 @@ export async function check44net(
   lines.push(txt);
   if (byCallsign) lines.push(byCallsign);
   if (target) lines.push(target);
+  if (operator) lines.push(operator);
 
   // ---- information
   if (binding && !(txtAns instanceof Error) && txtAns.status === 0)

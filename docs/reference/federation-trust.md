@@ -39,11 +39,15 @@ A URL says where a peer answers, not who holds its key, so no peer is `trusted` 
 - **Added by address** in Instance admin, a peer's descriptor is fetched and its key fingerprint shown: SHA-256
   of the raw Ed25519 key, its first 16 hex digits. The peer is added `unvetted` with that key pinned, and only when the
   fingerprint sent back is still the key's, so the key stored is the key compared.
-- **Raising a peer to `trusted`** needs a pinned key. A peer with none, such as one found by discovery, syncs as
-  `unvetted` first. A fingerprint sent with the request must be the pinned key's.
+- **Raising a peer to `trusted`** needs a pinned key and the fingerprint the sysop compared, from Instance admin
+  and over the operator secret alike. A peer with no key, such as one found by discovery, syncs as `unvetted`
+  first. The fingerprint must be the pinned key's.
+- **Auto-promotion** (`FED_AUTO_PROMOTE`) records that it raised a peer, beside how the peer arrived. Such a peer
+  never reaches the quorum alone, and any trust decision of the sysop's replaces the automatic one.
 - **A `FED_PEERS` entry** starts `unvetted`, unless it pins a fingerprint (`<url>#<fingerprint>`). Then the
   first sync refuses a key that does not match it, and a key that matches raises the peer to `trusted` once.
-  Later the pin follows the rotation chain like any other.
+  Later the pin follows the rotation chain like any other, and the fingerprint holds for every key that chain
+  reaches from the matched key, also once the matched key's grace has passed.
 - **Removing a peer** deletes its row and pinned key. What it published stays, with no row to vouch for it: it
   counts as from an unknown origin, hidden by default and never a corroborating voice. Added again, the peer
   starts `unvetted` and its key is fetched and compared afresh.
@@ -51,14 +55,18 @@ A URL says where a peer answers, not who holds its key, so no peer is `trusted` 
 ## One row per instance
 
 A peer's instance id (its hostname, such as `oe.example.net`) is bound to the peer row that first proved it,
-and only one live (not blocked) row may hold that id.
+and only one live (not blocked) row may hold that id. A block covers the instance, whatever address it answers on.
 
 - A second URL claiming a bound instance is refused.
 - A descriptor that renames its instance is refused.
 - Instance ids are lowercase hostnames; an id with a `:` or other characters outside a hostname is refused.
 
+- A blocked instance stays blocked on every path: a pull from another address, a 44Net add, a registry entry, a
+  discovered address and a hub push are all refused, and its frames apply over no carrier. Blocking one row
+  blocks every row naming the instance; lifting the block on one is refused while another still blocks it.
+
 An impostor therefore never inherits another instance's namespace or trust. Moving a peer to a new URL means
-blocking or removing its old row first.
+removing its old row first.
 
 ## The registry binds names to keys
 
@@ -84,7 +92,9 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
 - **Pages are bounded.** A frame signed in the future, or a timestamp version in the future, is refused. A
   pulled page is capped at 4 MiB and at the number of frames asked for, and must carry only its own record
   type.
-- **Deletes come first.** A pull applies tombstones before records, so a delete suppresses a re-mirror.
+- **Deletes come first.** A pull applies tombstones before records, so a delete suppresses a re-mirror. A
+  tombstone suppresses every version of its record, except a sysop's removal of a cache: it carries `upTo`, the
+  cache's version at removal, so the cache comes back only at a higher version, through a restore.
 - **A gossip ping only asks for a pull.** After a federated write an instance sends its peers
   `POST /federation/notify` ("come pull from me"), which triggers an incremental sync. The endpoint is
   unauthenticated, so it only ever asks for a pull the instance would make anyway: a notify naming an

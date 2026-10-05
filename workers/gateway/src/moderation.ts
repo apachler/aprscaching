@@ -45,6 +45,7 @@ import {
 import { dropQueuedFor } from "./outbox.js";
 import { serviceCall } from "./servicecall.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
+import { cacheFedVersion } from "./federation.js";
 import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
 import { appBase } from "./sitemap.js";
@@ -360,7 +361,11 @@ async function removeItem(
           "UPDATE cache_adoption_requests SET status='cancelled', decided_at=? WHERE cache_id=? AND status='pending'",
         ).bind(now, id),
       ]);
-      return { tombstones: [{ kind: "cache", targetId: `${instance}:cache:${id}` }], mediaKeys: [] };
+      // the tombstone covers the versions up to this removal, so a restore (a later version) federates again
+      return {
+        tombstones: [{ kind: "cache", targetId: `${instance}:cache:${id}`, upTo: await cacheFedVersion(env, id) }],
+        mediaKeys: [],
+      };
     case "log":
       await env.DB.batch([
         env.DB.prepare("DELETE FROM corroboration_retries WHERE log_id=?").bind(id),

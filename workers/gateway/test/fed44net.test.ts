@@ -255,7 +255,8 @@ describe("handleFed44netAdd — admission policy", () => {
     expect(rows).toHaveLength(1);
     const insert = sqls.find((s) => s.includes("INSERT INTO fed_peers"))!;
     expect(insert).toContain("'unvetted'");
-    expect(insert).toContain("trust        = fed_peers.trust");
+    expect(insert).toMatch(/trust\s+= fed_peers\.trust/);
+    expect(insert).not.toContain("approved_at"); // unvetted, so not approved
     expect(insert).not.toMatch(/'trusted'|'blocked'/);
     expect(sqls.filter((s) => /^\s*(UPDATE|DELETE)/i.test(s))).toEqual([]);
   });
@@ -315,7 +316,8 @@ function boundDb(bound: { url: string; instance: string } | null = null) {
             return {};
           },
           async first() {
-            return sql.includes("FROM fed_peers") ? bound : null;
+            // the binding lookup answers; no row blocks the instance
+            return sql.includes("FROM fed_peers") && !sql.includes("trust = 'blocked'") ? bound : null;
           },
         }),
       }),
@@ -402,7 +404,7 @@ describe("handleFed44netAdd — by host", () => {
       callsign: "OE8APR",
       trust: "unvetted",
     });
-    expect(rows.map((r) => [r[0], r[1], r[2], r[5]])).toEqual([
+    expect(rows.map((r) => [r[0], r[1], r[2], r[4]])).toEqual([
       ["http://aprscaching.oe8apr.ampr.org", "oe.pub", KEY, "OE8APR"],
       [`http://${HOST}`, "oe.pocket", KEY2, "OE8APR"],
     ]);
@@ -433,6 +435,29 @@ describe("handleFed44netAdd — by host", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("an instance blocked under another address is refused, not added at this one", async () => {
+    const rows: unknown[][] = [];
+    const db = {
+      prepare: (sql: string) => ({
+        bind: (...args: unknown[]) => ({
+          async run() {
+            if (sql.includes("INSERT INTO fed_peers")) rows.push(args);
+            return {};
+          },
+          async first() {
+            // only the blocked row names the instance; the live-row conflict lookup skips it
+            return sql.includes("trust = 'blocked'") ? { url: "https://old.example" } : null;
+          },
+        }),
+      }),
+    };
+    stubNames({ [`_aprscaching.${HOST}`]: [TXT] });
+    const res = await handleFed44netAdd(post({ host: HOST }), envWith(db));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/oe\.pub is blocked here \(at https:\/\/old\.example\)/);
+    expect(rows).toHaveLength(0);
+  });
+
   it("without DNSSEC a host binding waits for the operator's confirm, like a callsign's", async () => {
     const { db, rows } = boundDb();
     stubNames({ [`_aprscaching.${HOST}`]: [TXT] }, {}, false);
@@ -458,7 +483,8 @@ describe("handleFed44netAdd — by host", () => {
     expect((await res.json()).peer.trust).toBe("unvetted");
     expect(rows).toHaveLength(1);
     const insert = sqls.find((s) => s.includes("INSERT INTO fed_peers"))!;
-    expect(insert).toContain("trust        = fed_peers.trust");
+    expect(insert).toMatch(/trust\s+= fed_peers\.trust/);
+    expect(insert).not.toContain("approved_at"); // unvetted, so not approved
     expect(insert).not.toMatch(/'trusted'|'blocked'/);
   });
 });
@@ -516,7 +542,7 @@ describe("handleFed44netAdd — by callsign over the internet (web=)", () => {
     expect((await res.json()).peer).toEqual({ url: WEB, instance: "oe.pub", callsign: "OE8APR", trust: "unvetted" });
     expect(rows[0]![0]).toBe(WEB);
     expect(rows[0]![2]).toBe(KEY);
-    expect(rows[0]![5]).toBe("OE8APR");
+    expect(rows[0]![4]).toBe("OE8APR");
     expect(JSON.parse(String(rows[0]![3]))).toEqual([
       { transport: "https", address: WEB, priority: 10, verifiedVia: "ardc-lot" },
     ]);

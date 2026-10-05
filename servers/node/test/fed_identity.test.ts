@@ -3,7 +3,7 @@
 // row that first proved it, a pinned key moves only along a verified rotation chain, and every
 // carrier verifies frames against the same stored key set.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
+import { syncAllPeers, applyFedFrames, keysForOrigin } from "@aprscaching/gateway/federation_sync";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import {
   newFedKey,
@@ -101,7 +101,7 @@ describe("instance ids are bound to one peer", () => {
   });
 
   for (const order of ["blocked row first", "live row first"] as const) {
-    it(`picks the live row's keys over a blocked row for the same instance (${order})`, async () => {
+    it(`a blocked row blocks the instance under every address, a live row beside it too (${order})`, async () => {
       const good = await newFedKey();
       const evil = await newFedKey();
       const live = instanceEnv("b.example", good);
@@ -120,8 +120,9 @@ describe("instance ids are bound to one peer", () => {
         )
           .bind(url, pub, trust)
           .run();
-      expect((await applyFedFrames(hub, await servedFrames(live))).applied).toBe(1);
+      expect(await applyFedFrames(hub, await servedFrames(live))).toMatchObject({ applied: 0, quarantined: 1 });
       expect((await applyFedFrames(hub, await servedFrames(blockedSigner))).applied).toBe(0);
+      expect(await keysForOrigin(hub, "b.example")).toBe("blocked");
     });
   }
 });

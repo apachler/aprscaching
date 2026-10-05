@@ -287,9 +287,17 @@ n44_name_from_env() {
     sed 's/.*"address":"//; s/"$//; s#^https://##' | head -n 1
 }
 
-# n44_add_origin ORIGIN: add ORIGIN to EXTRA_ORIGINS (comma-separated), once.
+# n44_add_origin ORIGIN: add ORIGIN to EXTRA_ORIGINS (comma-separated), once. The instance's own address (APP_URL's
+# origin, or DOMAIN) is never added: Caddy already serves it, and doctor warns about an address listed twice.
 n44_add_origin() {
-  local cur
+  local cur app domain
+  app="$(env_file_get "$SHAPE_ENV" APP_URL | tr '[:upper:]' '[:lower:]' | sed -nE 's#^(https?://[^/?\#]+).*#\1#p')"
+  app="${app%:443}"
+  domain="$(env_file_get "$SHAPE_ENV" DOMAIN | tr '[:upper:]' '[:lower:]')"
+  if [ "$1" = "$app" ] || { [ -n "$domain" ] && [ "$1" = "https://${domain#https://}" ]; }; then
+    info "EXTRA_ORIGINS: $1 is APP_URL's own address, which Caddy already serves"
+    return 0
+  fi
   cur="$(env_file_get "$SHAPE_ENV" EXTRA_ORIGINS)"
   case ",${cur// /}," in *",$1,"*) return 0 ;; esac
   env_file_set "$SHAPE_ENV" EXTRA_ORIGINS "${cur:+$cur,}$1"

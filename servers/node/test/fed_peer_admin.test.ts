@@ -171,7 +171,7 @@ describe("removing a peer", () => {
   it("drops the peer and its key; what it published stays, from an unknown origin", async () => {
     const { key, hub } = await setup();
     await req(hub, "POST", "/federation/peers", { url: A, fingerprint: fp(key) });
-    await req(hub, "POST", "/federation/peers/trust", { url: A, trust: "trusted" });
+    await req(hub, "POST", "/federation/peers/trust", { url: A, trust: "trusted", fingerprint: fp(key) });
     await syncAllPeers(hub);
     expect(await remoteCacheCount(hub, "a.example")).toBe(1);
     const before = await req(hub, "GET", "/api/caches?bbox=15,47,16,48");
@@ -191,7 +191,7 @@ describe("removing a peer", () => {
   it("re-adding a removed peer starts unvetted and checks its key afresh", async () => {
     const { key, routes, hub } = await setup();
     await req(hub, "POST", "/federation/peers", { url: A, fingerprint: fp(key) });
-    await req(hub, "POST", "/federation/peers/trust", { url: A, trust: "trusted" });
+    await req(hub, "POST", "/federation/peers/trust", { url: A, trust: "trusted", fingerprint: fp(key) });
     await syncAllPeers(hub);
     await req(hub, "DELETE", `/federation/peers?url=${encodeURIComponent(A)}`);
     // the peer comes back with a new key and no rotation proof: a look-up shows the new fingerprint

@@ -446,7 +446,7 @@ function AccountDetail(props: { callsign: string; onBack: () => void }) {
   const restore = async (c: ModContent) => {
     const ans = await prompt({
       title: `Restore ${c.code ?? c.label}?`,
-      message: "It comes back disabled; its owner enables it again. Peers that dropped it keep it dropped.",
+      message: "It comes back disabled; its owner enables it again. Peers mirror it again.",
       label: "Reason (the owner is told)",
       minLength: 3,
       maxLength: 500,

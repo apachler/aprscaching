@@ -2132,6 +2132,7 @@ function PeerRow(props: {
       <div className="comment">
         {p.instance && <span className="mono">{p.url}</span>}
         {p.added_via ? `${p.instance ? " · " : ""}added via ${p.added_via}` : ""}
+        {p.auto_promoted_at != null ? " · trusted by auto-promotion" : ""}
         {p.configured ? " · listed in FED_PEERS" : ""}
       </div>
       {p.fingerprint ? (

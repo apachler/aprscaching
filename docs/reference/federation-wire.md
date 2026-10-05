@@ -147,9 +147,10 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 
 Sync transports (request/response) try the peer's addresses in priority order and keep the first that
 answers for the rest of the sync: an address that fails to connect, refuses its certificate or times out
-gives way to the next. A `44net` endpoint with `https://` counts as two addresses, its https one first. A peer
-that stores no endpoint set is reached at its `url`, the address it was added under. Records are signed
-either way, so the fall back to plain http changes no trust. Forward transports are fire-and-forget carriers whose
+gives way to the next. A `44net` endpoint with `https://` counts as two addresses, its https one first. The
+peer's `url`, the address it was added under, is always tried last unless the set lists it, and a peer that
+stores no endpoint set is reached there alone. Corroboration questions go to the same addresses in the same
+order. Records are signed either way, so the fall back to plain http changes no trust. Forward transports are fire-and-forget carriers whose
 limits are operator configuration — frames apply idempotently on arrival, whatever path they took.
 
 An instance publishes its own endpoint set from `FED_ENDPOINTS` in two places: its
@@ -157,6 +158,18 @@ An instance publishes its own endpoint set from `FED_ENDPOINTS` in two places: i
 registry entry (`addresses`). The registry copy is authority-signed, so it is a tamper-proof
 directory of who-is-reachable-where — still addressing only, never a trust uplift. Every address is
 re-validated through the typed endpoint validator on load, so a malformed entry never rides in.
+
+A peer's stored endpoint set comes from one of three places (`fed_peers.endpoints_source`):
+
+- `dns`: the callsign binding of a peer added over 44Net, every endpoint marked `verifiedVia: "ardc-lot"`. A
+  descriptor never replaces it.
+- `descriptor`: the `addresses` of the peer's own descriptor, read on every sync once its identity and keys
+  check out. It replaces what the descriptor said before.
+- `announce`: a verified presence beacon (a `peer` record). A beacon trimmed to fit one datagram carries
+  `partial: true` and only adds; a whole list replaces what the peer said before.
+
+Whatever the peer says, an endpoint DNS attested and the row's own `url` stay, an incoming endpoint never carries
+an attestation, and a row keeps at most 16 endpoints.
 
 ## Link capabilities
 

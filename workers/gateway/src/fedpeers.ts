@@ -51,6 +51,22 @@ export interface PeerRow {
   operator_call?: string | null; // the ARDC-verified base call of a 44net peer; the quorum's operator
   approved_at?: number | null; // when an operator (or a matching pinned fingerprint) first trusted it
   pinned_fingerprint?: string | null; // the key fingerprint a FED_PEERS entry pins (`<url>#<fingerprint>`)
+  pin_matched_key?: string | null; // the key that pin matched; its verified successors keep matching it
+  endpoints_source?: string | null; // where `endpoints` came from: dns | descriptor | announce
+  auto_promoted_at?: number | null; // when corroboration raised it to trusted on its own
+}
+
+/**
+ * The address of a peer row that blocks `instance`, or null. A block covers the instance, whatever address it
+ * answers on, so every path that would bring a row for it to life asks here first.
+ */
+export async function blockedAt(env: Env, instance: string, exceptUrl?: string): Promise<string | null> {
+  const row = await env.DB.prepare(
+    "SELECT url FROM fed_peers WHERE instance = ? AND trust = 'blocked' AND url != ? ORDER BY url LIMIT 1",
+  )
+    .bind(instance, exceptUrl ?? "")
+    .first<{ url: string }>();
+  return row?.url ?? null;
 }
 
 /** This instance's id — the namespace no peer may write into. */
@@ -62,22 +78,21 @@ export function ours(env: Env): string | null {
  * Seed fed_peers from the FED_PEERS env (idempotent). A new entry starts `unvetted`, like a peer added in
  * Instance admin: a URL says where a peer is, not who holds its key. An entry that pins a key fingerprint
  * (`<url>#<fingerprint>`) records it, and the first sync whose key matches it raises the peer to `trusted`
- * (fedpull.ts). Re-seeding never changes a trust level the operator set.
+ * (fedpull.ts). Re-seeding never changes a trust level the operator set, nor how the peer first arrived.
  */
 export async function seedPeers(env: Env): Promise<void> {
   for (const { url, fingerprint } of parseFedPeers(env.FED_PEERS)) {
     await env.DB.prepare(
       `INSERT INTO fed_peers (url, trust, added_via, pinned_fingerprint) VALUES (?, 'unvetted', 'manual', ?)
-       ON CONFLICT(url) DO UPDATE SET
-         added_via          = 'manual',
-         pinned_fingerprint = excluded.pinned_fingerprint`,
+       ON CONFLICT(url) DO UPDATE SET pinned_fingerprint = excluded.pinned_fingerprint`,
     )
       .bind(url, fingerprint)
       .run();
   }
   // registry discovery: seed peers from the verified signed registry as `unvetted` (operator
   // promotes). Carries the registry-bound key + instance so the anti-spoof check has them. No-op
-  // unless FED_REGISTRY is configured + valid. INSERT OR IGNORE never downgrades a known peer.
+  // unless FED_REGISTRY is configured + valid. INSERT OR IGNORE never downgrades a known peer, and an
+  // instance blocked here under any address gets no new row.
   let registry: Map<string, RegistryEntry>;
   try {
     registry = await loadRegistry(env);
@@ -88,9 +103,11 @@ export async function seedPeers(env: Env): Promise<void> {
     const u = e.url ? trimTrailingSlashes(e.url.trim()) : undefined;
     if (u && isInstanceId(e.instance) && e.instance !== ours(env))
       await env.DB.prepare(
-        "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')",
+        `INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via)
+         SELECT ?, ?, ?, 'unvetted', 'registry'
+          WHERE NOT EXISTS (SELECT 1 FROM fed_peers WHERE instance = ? AND trust = 'blocked')`,
       )
-        .bind(u, e.instance, e.key ?? null)
+        .bind(u, e.instance, e.key ?? null, e.instance)
         .run();
   }
 }
@@ -110,7 +127,8 @@ export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
  * The keys a claimed origin's frames may be signed under: the key set last verified for its live
  * peer row (the pin plus predecessors inside their rotation grace, see resolvePeerKeys) plus the key
  * the signed registry binds to its instance id. An instance has at most one live (non-blocked) row;
- * `"blocked"` when only blocked rows name it, an empty set when the origin is unknown — either way
+ * `"blocked"` when any row blocks it (a block covers every address), an empty set when the origin is
+ * unknown — either way
  * its frames never apply. A disabled row (never pulled, such as a push-to-hub spoke) still names its
  * keys: `enabled` decides whether we fetch from a peer, not who it is.
  */
@@ -124,7 +142,7 @@ export async function originKeys(
   if (hit !== undefined) return hit;
   const row = await env.DB.prepare(
     `SELECT public_key, accept_keys, trust FROM fed_peers WHERE instance = ?
-      ORDER BY trust = 'blocked', url LIMIT 1`,
+      ORDER BY trust = 'blocked' DESC, url LIMIT 1`,
   )
     .bind(origin)
     .first<{ public_key: string | null; accept_keys: string | null; trust: TrustLevel }>();
@@ -165,7 +183,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   await seedPeers(env);
   const rows = (
     await env.DB.prepare(
-      `SELECT url, instance, public_key, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
+      `SELECT url, instance, public_key, public_key IS NOT NULL AS signed, trust, added_via, approved_at, auto_promoted_at,
             pinned_fingerprint, rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor,
             tombstones_cursor, moves_cursor, enabled, last_sync, last_ok, last_error, sync_ok, sync_err,
             mirrored_total, last_counts,
@@ -381,11 +399,15 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
 /**
  * Operator control: set a peer's trust level. Sysop-only (signed-in instance operator) or the
  * operator secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
- * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
+ * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once; any decision here
+ * replaces an automatic promotion.
  *
- * `trusted` needs a pinned key: until a peer's key is known there is no fingerprint to compare, and trusting
- * it would trust whichever key answers first. A `fingerprint` in the body (the one the sysop compared) must
- * be the pinned key's, so a key that moved since the comparison is refused.
+ * `trusted` needs a pinned key and the `fingerprint` the sysop compared, on every path: until a peer's key is
+ * known there is no fingerprint to compare, trusting it would trust whichever key answers first, and a key that
+ * moved since the comparison is refused.
+ *
+ * A block covers the instance: every row naming it is blocked with it. Lifting it on one row is refused while
+ * another row still blocks the instance, so the sysop removes the stale address first.
  */
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true });
@@ -395,9 +417,9 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   if (typeof b?.url !== "string" || !trust || !TRUST_LEVELS.includes(trust))
     return json({ ok: false, error: "url + trust (trusted|unvetted|blocked) required" }, { status: 400 });
   const url = trimTrailingSlashes(b.url.trim());
-  const exists = await env.DB.prepare("SELECT url, public_key FROM fed_peers WHERE url = ?")
+  const exists = await env.DB.prepare("SELECT url, instance, public_key FROM fed_peers WHERE url = ?")
     .bind(url)
-    .first<{ url: string; public_key: string | null }>();
+    .first<{ url: string; instance: string | null; public_key: string | null }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
   if (trust === "trusted") {
     if (!exists.public_key)
@@ -409,26 +431,46 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
         },
         { status: 409 },
       );
+    if (b.fingerprint === undefined)
+      return json(
+        { ok: false, error: "fingerprint required: compare the peer's key fingerprint with its sysop, then send it" },
+        { status: 400 },
+      );
     if (
-      b.fingerprint !== undefined &&
       (typeof b.fingerprint === "string" ? normalizeFingerprint(b.fingerprint) : null) !==
-        (await keyFingerprint(exists.public_key))
+      (await keyFingerprint(exists.public_key))
     )
       return json(
         { ok: false, error: "the peer's pinned key is not the one you compared: reload and compare again" },
         { status: 409 },
       );
   }
+  if (trust !== "blocked" && exists.instance) {
+    const other = await blockedAt(env, exists.instance, url);
+    if (other)
+      return json(
+        { ok: false, error: `${exists.instance} is blocked here at ${other} as well: remove that peer first` },
+        { status: 409 },
+      );
+  }
   try {
-    await env.DB.prepare(
-      // choosing a level for a discovered peer (which starts disabled) is the operator enabling it
-      `UPDATE fed_peers SET trust = ?,
-         approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END,
-         enabled = CASE WHEN added_via = 'discovered' AND ? != 'blocked' THEN 1 ELSE enabled END
-       WHERE url = ?`,
-    )
-      .bind(trust, trust, nowS(), trust, url)
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        // choosing a level for a discovered peer (which starts disabled) is the operator enabling it
+        `UPDATE fed_peers SET trust = ?, auto_promoted_at = NULL,
+           approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END,
+           enabled = CASE WHEN added_via = 'discovered' AND ? != 'blocked' THEN 1 ELSE enabled END
+         WHERE url = ?`,
+      ).bind(trust, trust, nowS(), trust, url),
+      // a block covers the instance under every address it is known by
+      ...(trust === "blocked" && exists.instance
+        ? [
+            env.DB.prepare(
+              "UPDATE fed_peers SET trust = 'blocked', auto_promoted_at = NULL WHERE instance = ? AND url != ?",
+            ).bind(exists.instance, url),
+          ]
+        : []),
+    ]);
   } catch (e) {
     // unblocking a row whose instance id another live row already holds
     if (/UNIQUE/i.test((e as Error).message))

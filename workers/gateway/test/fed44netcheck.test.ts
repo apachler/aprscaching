@@ -33,6 +33,8 @@ const ctx = (
     publicKey: KEY,
     publicKeys: [{ x: KEY }, { x: OLD_KEY }],
     addresses: [{ transport: "https", address: WEB }, ...(address ? [{ transport: "44net", address }] : [])],
+    aprsCall: "OE8APR-15",
+    operator: null,
     ...over,
   },
   operatorCall: "OE8APR",
@@ -275,6 +277,28 @@ describe("check44net — without 44Net", () => {
       status: "fail",
       detail: expect.stringMatching(/no 44net endpoint/),
     });
+  });
+
+  it("with web=, checks that the descriptor names the callsign, as a peer adding it requires", async () => {
+    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([`${GOOD_TXT}; web=${WEB}`]) });
+    let r = (await check44net(ctx(null), dns))!;
+    expect(line(r.lines, "operator")).toMatchObject({ status: "pass", detail: expect.stringContaining("OE8APR") });
+    // FED_OPERATOR alone names it too
+    r = (await check44net(ctx(null, { aprsCall: "OE8XYZ-15", operator: "oe8apr" }), dns))!;
+    expect(line(r.lines, "operator")?.status).toBe("pass");
+    // neither names it: peers refuse the https address, and the fix is FED_OPERATOR
+    r = (await check44net(ctx(null, { aprsCall: "OE8XYZ-15", operator: null }), dns))!;
+    expect(line(r.lines, "operator")).toMatchObject({
+      status: "fail",
+      detail: expect.stringContaining("OE8XYZ, not OE8APR"),
+      fix: "Set FED_OPERATOR=OE8APR and restart the gateway, then run the check again.",
+    });
+    // not published yet: a warning about the record to publish
+    r = (await check44net(ctx(null, { aprsCall: "OE8XYZ-15" }), fakeDns({})))!;
+    expect(line(r.lines, "operator")?.status).toBe("warn");
+    // a record without web= sends peers over 44Net only: nothing to check
+    r = (await check44net(ctx(HOST, { aprsCall: "OE8XYZ-15" }), fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]) })))!;
+    expect(line(r.lines, "operator")).toBeUndefined();
   });
 
   it("is not applicable without a callsign, or with nowhere to connect", async () => {

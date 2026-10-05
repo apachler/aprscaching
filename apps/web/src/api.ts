@@ -920,7 +920,9 @@ export interface FedPeer {
   /** The pinned key's fingerprint (four groups of four hex digits); null until a signed sync pins a key */
   fingerprint: string | null;
   trust: "trusted" | "unvetted" | "blocked";
-  added_via?: string | null; // manual | registry | discovered | auto-promoted
+  added_via?: string | null; // manual | admin | registry | discovered | submitted | 44net
+  /** When corroboration raised it to trusted on its own (FED_AUTO_PROMOTE); null once the sysop decides */
+  auto_promoted_at?: number | null;
   /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
   enabled: number;
   health: "ok" | "error" | "new" | "blocked";
@@ -1402,7 +1404,7 @@ export function getAdminSetup(): Promise<AdminSetup> {
 }
 /** One line of the callsign-identity self-check; `fix` is set on every warn and fail. */
 export interface Net44CheckLine {
-  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "dnssec" | "aaaa";
+  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "operator" | "dnssec" | "aaaa";
   status: "pass" | "warn" | "fail" | "info";
   label: string;
   detail: string;

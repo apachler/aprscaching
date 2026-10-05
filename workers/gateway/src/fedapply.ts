@@ -16,6 +16,7 @@ import { bodyFromWire } from "./fedsync.js";
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { ours, originKeys } from "./fedpeers.js";
+import { mergeEndpoints, storedEndpoints } from "./fedtransport.js";
 import {
   accountActionMessage,
   decodeFedFrame,
@@ -132,11 +133,15 @@ export function idInNamespace(globalId: string | undefined | null, instance: str
   return typeof globalId === "string" && globalId.startsWith(instance + ":");
 }
 
-/** The record's own origin already tombstoned this global id — don't re-mirror it. Only the origin
- *  that owns a namespace can delete in it, so a tombstone row from any other origin is ignored. */
-async function isTombstoned(env: Env, globalId: string, origin: string): Promise<boolean> {
-  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ? AND origin = ?")
-    .bind(globalId, origin)
+/** The record's own origin already tombstoned this global id at this version — don't re-mirror it. Only
+ *  the origin that owns a namespace can delete in it, so a tombstone row from any other origin is ignored.
+ *  A tombstone with `up_to` (a sysop's removal of a cache) suppresses only the versions up to it, so the
+ *  restored cache, at a higher version, mirrors again; without it every version stays suppressed. */
+async function isTombstoned(env: Env, globalId: string, origin: string, version: number): Promise<boolean> {
+  return !!(await env.DB.prepare(
+    "SELECT 1 AS x FROM remote_tombstones WHERE target_id = ? AND origin = ? AND (up_to IS NULL OR ? <= up_to)",
+  )
+    .bind(globalId, origin, version)
     .first<{ x: number }>());
 }
 
@@ -149,23 +154,43 @@ async function passesNamespaceChecks(env: Env, rec: FeedRecord, instance: string
   if (!idInNamespace(rec.id, instance)) return false; // id must be in the serving peer's namespace
   if (rec.signer !== instance) return false; // and self-attested as that peer (an empty signer attests nothing)
   if (instance === ours(env)) return false; // never mirror our own
-  if (await isTombstoned(env, rec.id, instance)) return false; // purged by its origin's tombstone
+  if (await isTombstoned(env, rec.id, instance, rec.cursor)) return false; // purged by its origin's tombstone
   return true;
 }
 
 /**
  * Apply a peer's tombstone: verify-then-purge. Deletes any mirrored cache/find whose global id
  * matches `targetId` (the global-id namespace makes kind unambiguous), and records it so the record
- * is never re-mirrored. PII-free — the tombstone carries only signed ids + a timestamp.
+ * is never re-mirrored. PII-free — the tombstone carries only signed ids + a timestamp, and for a
+ * sysop's removal of a cache the version it covers (`upTo`, tombstones.ts).
+ *
+ * Tombstones for one target combine to the widest: one without `upTo` suppresses every version for
+ * good, and of two bounded ones the higher bound holds. A copy already mirrored at a version above
+ * `upTo` (a restore that arrived first) stays.
  */
 async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promise<void> {
-  const d = rec.data as { kind?: string; targetId?: string; ts?: number };
+  const d = rec.data as { kind?: string; targetId?: string; ts?: number; upTo?: unknown };
   const target = d.targetId;
   if (!target) return;
   // a peer may only tombstone records in ITS OWN namespace. Without this a hostile peer
   // deletes ("censors") any instance's mirrored records network-wide and forges GDPR deletes.
   // `origin` is the verified serving peer (wk.instance), passed by syncFeed.
   if (!idInNamespace(target, origin)) return;
+  const upTo = Number.isSafeInteger(d.upTo) && (d.upTo as number) > 0 ? (d.upTo as number) : null;
+  const record = env.DB.prepare(
+    `INSERT INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at, up_to) VALUES (?,?,?,?,?,?)
+     ON CONFLICT(target_id) DO UPDATE SET
+       origin = excluded.origin, kind = excluded.kind, ts = excluded.ts, mirrored_at = excluded.mirrored_at,
+       up_to = CASE WHEN remote_tombstones.up_to IS NULL OR excluded.up_to IS NULL THEN NULL
+                    ELSE MAX(remote_tombstones.up_to, excluded.up_to) END`,
+  ).bind(target, origin, d.kind ?? "unknown", d.ts ?? nowS(), nowS(), upTo);
+  if (upTo != null) {
+    const held = await env.DB.prepare("SELECT v FROM fed_versions WHERE gid = ?").bind(target).first<{ v: number }>();
+    if (held && held.v > upTo) {
+      await record.run();
+      return;
+    }
+  }
   await env.DB.batch([
     env.DB.prepare("DELETE FROM remote_caches WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
@@ -173,9 +198,7 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
     env.DB.prepare("DELETE FROM remote_account_moves WHERE global_id = ?").bind(target),
     // a mirrored bulletin is stored under its record id, with the peer that served it as its origin
     env.DB.prepare("DELETE FROM bbs_messages WHERE bid = ? AND origin = ?").bind(target, origin),
-    env.DB.prepare(
-      "INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)",
-    ).bind(target, origin, d.kind ?? "unknown", d.ts ?? nowS(), nowS()),
+    record,
   ]);
 }
 
@@ -401,15 +424,33 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
  * A verified peer-announce (an HF presence beacon) refreshes a KNOWN peer's self-attested endpoint
  * set — addressing only, never a trust input, and strictly an UPDATE: hearing an announce never
  * inserts a peer, so a beacon can't introduce anyone (RX ≠ trust). Endpoints are re-validated
- * through the typed validator so a malformed address never rides an announce in.
+ * through the typed validator so a malformed address never rides an announce in. The announced
+ * addresses merge into the stored set (mergeEndpoints): a beacon trimmed to fit one datagram
+ * (`partial`) drops nothing, a whole list replaces what the peer said before, and what DNS attested
+ * and the row's own address always stay.
  */
 async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Promise<boolean> {
   const addresses = parseEndpoints(rec.body.addresses);
   if (!addresses.length) return false;
-  const res = await env.DB.prepare("UPDATE fed_peers SET endpoints=? WHERE instance=? AND trust != 'blocked'")
-    .bind(JSON.stringify(addresses), origin)
-    .run();
-  return !!res.meta.changes;
+  const rows = (
+    await env.DB.prepare("SELECT url, endpoints FROM fed_peers WHERE instance = ? AND trust != 'blocked'")
+      .bind(origin)
+      .all<{ url: string; endpoints: string | null }>()
+  ).results;
+  let changed = false;
+  for (const row of rows) {
+    const merged = mergeEndpoints(storedEndpoints(row.endpoints), addresses, {
+      url: row.url,
+      replace: rec.body.partial !== true,
+    });
+    const res = await env.DB.prepare(
+      "UPDATE fed_peers SET endpoints = ?, endpoints_source = COALESCE(endpoints_source, 'announce') WHERE url = ?",
+    )
+      .bind(JSON.stringify(merged), row.url)
+      .run();
+    changed ||= !!res.meta.changes;
+  }
+  return changed;
 }
 
 /**

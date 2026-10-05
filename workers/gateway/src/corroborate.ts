@@ -12,7 +12,8 @@
  * the trust-bearing exchange.
  */
 import { nowS } from "./util/time.js";
-import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody } from "./fetchguard.js";
+import { syncAddresses } from "./fedtransport.js";
 import { flagOn, type Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
@@ -40,6 +41,8 @@ import {
 
 /** Cap the peers probed per find — a bounded fan-out budget. */
 const CORROBORATION_FANOUT = 16;
+/** Addresses of one peer a corroboration question tries before the peer counts as not reached. */
+const MAX_ASK_ADDRESSES = 3;
 
 export interface Evidence {
   instance: string;
@@ -345,9 +348,10 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
     await env.DB.prepare("UPDATE fed_peers SET rep_confirmed = rep_confirmed + 1 WHERE url = ?").bind(url).run();
     if (threshold > 0)
       await env.DB.prepare(
-        "UPDATE fed_peers SET trust='trusted', added_via='auto-promoted', approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
+        // added_via keeps how the peer arrived; auto_promoted_at marks the promotion as corroboration's own
+        "UPDATE fed_peers SET trust='trusted', auto_promoted_at=?, approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
       )
-        .bind(at, url, threshold)
+        .bind(at, at, url, threshold)
         .run();
   }
 }
@@ -513,21 +517,25 @@ export async function askPeers(
         body: bodyToWire({ ...cq, nonce, target: instance }),
       });
       if (!question) return none; // an instance without a signing key cannot ask
-      const base = trimTrailingSlashes(peer.url);
-      const headers: Record<string, string> = { "content-type": "application/cbor", accept: "application/cbor" };
-      if (env.FED_CORROBORATION_SECRET && peer.trust === "trusted" && base.startsWith("https://"))
-        headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
-      let r: Response;
-      try {
-        r = await fedFetch(env, `${base}/federation/corroborate`, {
-          method: "POST",
-          headers,
-          body: question as BodyInit,
-          signal: AbortSignal.timeout(3000),
-        });
-      } catch {
-        return { ...none, unreachable: true };
+      // the peer is asked at the addresses a sync uses, in the same order: the first that answers at all
+      let r: Response | null = null;
+      for (const a of syncAddresses(peer).slice(0, MAX_ASK_ADDRESSES)) {
+        const headers: Record<string, string> = { "content-type": "application/cbor", accept: "application/cbor" };
+        if (env.FED_CORROBORATION_SECRET && peer.trust === "trusted" && a.baseUrl.startsWith("https://"))
+          headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
+        try {
+          r = await fedFetch(env, `${a.baseUrl}/federation/corroborate`, {
+            method: "POST",
+            headers,
+            body: question as BodyInit,
+            signal: AbortSignal.timeout(Math.min(a.timeoutMs, 3000)),
+          });
+          break;
+        } catch {
+          /* no connection: the next address */
+        }
       }
+      if (!r) return { ...none, unreachable: true };
       // a refusal (4xx) is an answer; a rate limit or a server error is a peer not reached
       if (!r.ok) return { ...none, unreachable: r.status === 429 || r.status >= 500 };
       try {
@@ -562,7 +570,7 @@ export async function askPeers(
     ...(opts.priorHits ?? []).filter((h) => trustedNow.has(h.url) && !pool.some((p) => p.url === h.url)),
     ...probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => ({ url: x.peer.url, ev: x.ev as Evidence })),
   ];
-  const autoPromotedContributed = hits.some((h) => trustedNow.get(h.url)?.added_via === "auto-promoted");
+  const autoPromotedContributed = hits.some((h) => trustedNow.get(h.url)?.auto_promoted_at != null);
   const winner = selectCorroboration(
     hits.map((h) => h.ev),
     effectiveQuorum(quorum, autoPromotedContributed),

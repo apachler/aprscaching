@@ -41,6 +41,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
+import { blockedAt } from "./fedpeers.js";
 import { resolveTxt, acsFields, amprNames } from "./doh.js";
 import { net44Host, parseEndpoints } from "@aprscaching/shared";
 
@@ -274,7 +275,7 @@ async function descriptorMatches(
  * the host's federation TXT (409 with `candidates` when it is ambiguous) and cross-checks the descriptor: at a
  * `web=` origin it must answer and match, over 44Net a reachable one must match. Admits the peer as
  * `unvetted` when the binding is DNSSEC-validated OR the operator confirms; otherwise returns the resolved
- * binding for a one-click confirm. A `blocked` peer is never resurrected by re-adding.
+ * binding for a one-click confirm. A blocked instance is refused under any address.
  */
 export async function handleFed44netAdd(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true }); // same gate as the peer-trust surface
@@ -320,6 +321,16 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
   if (!isInstanceId(resolved.instance))
     return json({ error: "the DNS binding names an invalid instance id", resolved }, { status: 409 });
   const url = resolved.web ?? `http://${resolved.host}`;
+  // a block covers the instance under any address, this one included
+  const blocked = await blockedAt(env, resolved.instance);
+  if (blocked)
+    return json(
+      {
+        error: `${resolved.instance} is blocked here (at ${blocked}): remove that peer first to add it again`,
+        resolved,
+      },
+      { status: 409 },
+    );
   const bound = await env.DB.prepare(
     "SELECT url, instance FROM fed_peers WHERE (url = ? AND instance IS NOT NULL AND instance != ?) OR (url != ? AND instance = ? AND trust != 'blocked')",
   )
@@ -356,17 +367,19 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
       : []),
   ]);
   await env.DB.prepare(
-    `INSERT INTO fed_peers (url, instance, public_key, trust, added_via, verified_via, endpoints, approved_at, operator_call)
-     VALUES (?,?,?, 'unvetted', '44net', 'ardc-lot', ?, ?, ?)
+    // unvetted, so not approved: approved_at waits for the operator's trust decision
+    `INSERT INTO fed_peers (url, instance, public_key, trust, added_via, verified_via, endpoints, endpoints_source, operator_call)
+     VALUES (?,?,?, 'unvetted', '44net', 'ardc-lot', ?, 'dns', ?)
      ON CONFLICT(url) DO UPDATE SET
-       instance      = COALESCE(fed_peers.instance, excluded.instance),
-       public_key    = COALESCE(fed_peers.public_key, excluded.public_key),
-       verified_via  = 'ardc-lot',
-       endpoints     = excluded.endpoints,
-       operator_call = excluded.operator_call,
-       trust        = fed_peers.trust`, // an existing tier (incl. 'blocked') is never changed by re-adding
+       instance         = COALESCE(fed_peers.instance, excluded.instance),
+       public_key       = COALESCE(fed_peers.public_key, excluded.public_key),
+       verified_via     = 'ardc-lot',
+       endpoints        = excluded.endpoints,
+       endpoints_source = 'dns',
+       operator_call    = excluded.operator_call,
+       trust            = fed_peers.trust`, // an existing tier is never changed by re-adding
   )
-    .bind(url, resolved.instance, resolved.publicKey, endpoints, nowS(), resolved.callsign)
+    .bind(url, resolved.instance, resolved.publicKey, endpoints, resolved.callsign)
     .run();
   return json(
     {
