@@ -34,7 +34,9 @@ if (demo === "app") {
       new MutationObserver(hold).observe(html, { attributes: true, attributeFilter: ["data-theme"] });
     }
     const as = params.get("as");
-    installAppFixtures(as === "sysop" || as === "out" ? as : "user", params.get("net") === "1");
+    const personas = ["sysop", "out", "fresh", "ended"] as const;
+    const persona = personas.find((p) => p === as) ?? "user";
+    installAppFixtures(persona, params.get("net") === "1");
     root.render(
       <React.StrictMode>
         <ErrorBoundary>

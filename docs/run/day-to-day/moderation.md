@@ -74,8 +74,8 @@ copy. Ask their sysops to remove it.
 
 ## Suspend an account
 
-1. Open **Instance admin → Accounts** and search by callsign or email. **Suspended** lists the accounts
-   suspended now, and the callsigns of suspended accounts that were erased.
+1. Open **Instance admin → Accounts**, pick **Look up** and search by callsign or email. **Suspended** lists
+   the accounts suspended now, and the callsigns of suspended accounts that were erased.
 2. Open the account. It shows its callsigns, its email, open reports about it, its latest content of every kind
    with **Remove…** on each, and the actions taken so far.
 3. Select **Suspend…**, give a reason, pick how long (a number of days, or until you lift it) and pick a
@@ -122,7 +122,13 @@ Each removal, suspension, lifted suspension and restore reaches the person conce
 - as an alert in their alert list, and by push where configured;
 - by email when their account has a confirmed address. That alert then stays out of the digest.
 
-A suspended person cannot sign in to see the alert, so the email is their notice.
+The alert names the item in the owner's words and gives your reason, for example *Your find log on AC-0005 was
+removed: not at the cache*. The alert list labels it **Removed by the sysop**, **Restored by the sysop**,
+**Account suspended** or **Suspension lifted**.
+
+A suspended person cannot sign in to read the alert. The app they were signed in to says *Your account is
+suspended*, with the end date and your reason, and a sign-in link they open shows the same. The email carries
+it too.
 
 ## The audit log
 

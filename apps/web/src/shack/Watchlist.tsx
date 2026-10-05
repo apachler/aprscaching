@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, type WatchEntry } from "../api.js";
 import { useFmt } from "../format.js";
+import { alertKindView } from "./alertKinds.js";
 import {
   Row,
   Badge,
@@ -114,23 +115,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
         <ul className="logs">
           {alerts.items.map((a) => (
             <li key={a.id} className={a.seen ? "" : "unseen"}>
-              <Badge
-                kind={
-                  a.kind === "corroborated" || a.kind === "near_cache"
-                    ? "tierA"
-                    : a.kind === "cache_found"
-                      ? "tierB"
-                      : "tierC"
-                }
-              >
-                {a.kind === "corroborated"
-                  ? "you corroborated"
-                  : a.kind === "cache_found"
-                    ? "found your cache"
-                    : a.kind === "near_cache"
-                      ? "near cache"
-                      : "heard"}
-              </Badge>
+              <Badge kind={alertKindView(a.kind).badge}>{alertKindView(a.kind).label}</Badge>
               <strong className="mono"> {a.callsign}</strong>
               <span className="muted"> · {fmt.ago(a.ts)}</span>
               {a.detail && <div className="comment">{a.detail}</div>}{" "}

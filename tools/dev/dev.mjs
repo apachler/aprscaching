@@ -72,15 +72,22 @@ async function operator(p, body) {
  * Make `call` this instance's operator. A call no account holds yet gets the operator's one-time sign-in link
  * (an ADMIN_CALLSIGNS call opens no account by email or passkey without it); once the account exists, the
  * call is verified with the operator secret (POST /verify/operator), which opens Instance admin. With `wait`
- * it waits for the link to be used while `waiting()` holds. `say` reports each step; true once verified.
+ * it waits for the link to be used while `waiting()` holds. With `relink` an account that holds the call already
+ * gets a fresh sign-in link too (an account the seed opened has no passkey or email yet). `say` reports each step;
+ * true once verified.
  */
-async function makeOperator(call, { wait, say, waiting = () => true }) {
+async function makeOperator(call, { wait, say, waiting = () => true, relink = false }) {
   const refused = (what, r) => {
     say(`${what} refused (${r.status}): ${r.data.error ?? "unexpected answer"}`);
     return false;
   };
   const preview = await operator("/verify/operator", { callsign: call, preview: true });
   if (!preview.ok) return refused("operator verify", preview);
+  if (relink && preview.data.holder) {
+    const link = await operator("/auth/operator-link", { callsign: call });
+    if (!link.ok) return refused("sign-in link", link);
+    say(`sign in as ${call} (single use, ${Math.round(link.data.expiresIn / 60)} minutes): ${link.data.link}`);
+  }
   if (preview.data.verified && preview.data.holder) {
     say(`${call} is the operator: Instance admin is in the menu`);
     return true;
@@ -111,9 +118,15 @@ if (command === "admin" || command === "seed") {
   }
   if (command === "admin") {
     const call = (args[1] && !args[1].startsWith("-") ? args[1] : adminCall).toUpperCase();
-    process.exit((await makeOperator(call, { wait: true, say: console.log })) ? 0 : 1);
+    process.exit((await makeOperator(call, { wait: true, say: console.log, relink: true })) ? 0 : 1);
   }
-  const env = { ...process.env, API_BASE: gatewayUrl, INGEST_SECRET: vars.INGEST_SECRET };
+  // the operator secret lets the seed open and verify the operator call the way dev:admin does
+  const env = {
+    ...process.env,
+    API_BASE: gatewayUrl,
+    INGEST_SECRET: vars.INGEST_SECRET,
+    OPERATOR_SECRET: vars.OPERATOR_SECRET,
+  };
   const child = spawn(process.execPath, ["tools/teaser/seed.mjs"], { cwd: ROOT, env, stdio: "inherit" });
   child.on("exit", (code) => process.exit(code ?? 1));
 } else if (command !== "run") {

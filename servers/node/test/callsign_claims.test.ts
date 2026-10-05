@@ -292,15 +292,23 @@ describe("the previous holder's content", () => {
     expect(
       (await call(env, "POST", "/keys/register", { callsign: "OE8APR-7", publicKey: key }, { cookie })).status,
     ).toBe(200);
-    return { squatAcct: await accountOf(env, cookie), cacheId: mine.data.cache.id as number };
+    return { squatAcct: await accountOf(env, cookie), cacheId: mine.data.cache.id as number, cookie };
   }
 
   it("stays on their account under FORMER when they hold no other call, and follows them to a new call", async () => {
     const env = claimEnv({ INSTANCE: "gw.test" });
-    const { squatAcct, cacheId } = await squatted(env);
+    const { squatAcct, cacheId, cookie: squatCookie } = await squatted(env);
     const opened = await openClaim(env, "OE8APR");
     await proveLotw(env, opened.data.claim);
     const lic = await status(env, opened.data.claim);
+    // the previous holder's browser learns why its session ended, and that the account holds no call now
+    expect((await session(env, squatCookie)).ended).toEqual({
+      reason: "released",
+      callsign: "OE8APR",
+      by: "licensee",
+      note: null,
+      callless: true,
+    });
 
     const owner = await env.DB.prepare("SELECT owner_call FROM caches WHERE id = ?")
       .bind(cacheId)
@@ -537,7 +545,16 @@ describe("the sysop", () => {
     );
     expect(done.status).toBe(200);
     expect(await holderOf(env, "DL1USR")).toBeNull();
-    expect((await session(env, user.cookie)).callsign).toBeNull();
+    expect(await session(env, user.cookie)).toEqual({
+      callsign: null,
+      ended: {
+        reason: "released",
+        callsign: "DL1USR",
+        by: "sysop",
+        note: "licence belongs to someone else",
+        callless: true,
+      },
+    });
     const after = await call(env, "GET", path, undefined, { cookie: sysop.cookie });
     expect(after.data.holder).toBeNull();
     expect(after.data.events[0]).toMatchObject({

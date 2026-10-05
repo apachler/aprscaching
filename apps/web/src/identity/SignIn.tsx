@@ -24,6 +24,8 @@ type Probe = {
 
 /** Sign in / create account: passkey first, email magic-link fallback. Callsign-led. */
 export function SignIn(props: {
+  /** `data` opens on "Get or erase my data", for an account left with no callsign. */
+  start?: "signin" | "data";
   onDone: () => void;
   onClose: () => void;
   /** Leave sign-in for the map, for someone without a licence; closing returns to the map where no other way is given. */
@@ -39,7 +41,7 @@ export function SignIn(props: {
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   // asking for the link to the data of an account that holds no callsign
-  const [dataLink, setDataLink] = useState(false);
+  const [dataLink, setDataLink] = useState(props.start === "data");
   const callsign = cs.toUpperCase().trim();
   const noPasskey = passkeyProblem();
   const canPasskey = noPasskey === null;
@@ -283,8 +285,8 @@ export function SignIn(props: {
                   : "Create your account with an email link:"}
             </p>
             <label className="m-0">
+              Email
               <input
-                aria-label="Email"
                 type="email"
                 autoComplete="email"
                 value={email}

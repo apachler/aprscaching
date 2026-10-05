@@ -71,6 +71,8 @@ interface Located {
   kind: ContentKind;
   id: string;
   label: string;
+  /** The item as its owner is told about it: "find log on AC-0005", "cache AC-0005 “Oak”". */
+  yours: string;
   preview: string | null;
   /** The call the content is attributed to; null for an erased owner or content nobody owns. */
   ownerCall: string | null;
@@ -80,6 +82,14 @@ interface Located {
   at: number | null;
   removed: boolean;
 }
+
+/** A log type as its owner names the log: "find log", "did-not-find log". */
+const LOG_WORDS: Record<string, string> = {
+  found: "find",
+  dnf: "did-not-find",
+  note: "note",
+  maintenance: "maintenance",
+};
 
 const short = (s: string | null | undefined, n = 160): string | null =>
   s ? (s.length > n ? `${s.slice(0, n - 1)}…` : s) : null;
@@ -104,6 +114,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       kind,
       id: call,
       label: `profile of ${call}`,
+      yours: "profile",
       preview: short([p.display_name, p.bio].filter(Boolean).join(" — ")),
       ownerCall: call,
       accountId: acct,
@@ -135,6 +146,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `${c.code} ${c.title}`,
+        yours: `cache ${c.code} “${c.title}”`,
         preview: short(c.description),
         ownerCall: isWithdrawnCall(c.owner_call) ? null : c.owner_call,
         accountId: await accountOfCall(env, c.owner_call),
@@ -163,6 +175,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `${l.log_type} by ${displayCall(l.logger_call)} on ${l.code ?? `cache ${l.cache_id}`}`,
+        yours: `${LOG_WORDS[l.log_type] ?? l.log_type} log on ${l.code ?? `cache ${l.cache_id}`}`,
         preview: short(l.comment),
         ownerCall: isWithdrawnCall(l.logger_call) ? null : l.logger_call,
         accountId: await accountOfCall(env, l.logger_call),
@@ -190,6 +203,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `${m.kind}${m.title ? ` “${m.title}”` : ""} on ${m.code ?? `cache ${m.cache_id}`}`,
+        yours: `${m.kind}${m.title ? ` “${m.title}”` : ""} on ${m.code ?? `cache ${m.cache_id}`}`,
         preview: null,
         ownerCall: m.owner_call && !isWithdrawnCall(m.owner_call) ? m.owner_call : null,
         accountId: await accountOfCall(env, m.owner_call),
@@ -212,6 +226,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `APRS message ${displayCall(r.from_call ?? "?")} → ${displayCall(r.to_call ?? "?")}`,
+        yours: `APRS message to ${displayCall(r.to_call ?? "?")}`,
         preview: short(r.body),
         ownerCall: r.from_call && !isWithdrawnCall(r.from_call) ? r.from_call : null,
         accountId: await accountOfCall(env, r.from_call),
@@ -236,6 +251,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `${r.type === "B" ? "bulletin" : "BBS message"} ${displayCall(r.from_call)} → ${r.to_call}${r.subject ? `: ${r.subject}` : ""}`,
+        yours: `${r.type === "B" ? "bulletin" : "BBS message"} to ${r.to_call}${r.subject ? ` “${r.subject}”` : ""}`,
         preview: short(r.body),
         ownerCall: isWithdrawnCall(r.from_call) ? null : r.from_call,
         accountId: await accountOfCall(env, r.from_call),
@@ -259,6 +275,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `Mailbox message ${r.from_call} → ${r.to_call}`,
+        yours: `Mailbox message to ${r.to_call}`,
         preview: short(r.body),
         ownerCall: r.from_call,
         accountId: r.from_account,
@@ -273,6 +290,7 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
       return {
         ...base,
         label: `MeshCom message ${r.from_call} → group ${r.grp}`,
+        yours: `MeshCom message to group ${r.grp}`,
         preview: short(r.body),
         ownerCall: r.from_call,
         accountId: await accountOfCall(env, r.from_call),
@@ -283,8 +301,18 @@ async function locate(env: Env, kind: ContentKind, rawId: string): Promise<Locat
   return null;
 }
 
+/** What a sysop's action is, as the alert list labels it (apps/web/src/shack/alertKinds.ts). */
+type NoticeKind = "removed" | "restored" | "suspended" | "unsuspended";
+
 /** Tell an account about an action on its content: in its alert list, by push, and by email when it has one. */
-async function notifyAccount(env: Env, accountId: string, subject: string, detail: string, loc?: Located) {
+async function notifyAccount(
+  env: Env,
+  accountId: string,
+  kind: NoticeKind,
+  subject: string,
+  detail: string,
+  loc?: Located,
+) {
   const acct = await env.DB.prepare("SELECT email FROM accounts WHERE account_id=?")
     .bind(accountId)
     .first<{ email: string | null }>();
@@ -294,15 +322,7 @@ async function notifyAccount(env: Env, accountId: string, subject: string, detai
   await env.DB.prepare(
     "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, ts, notified) VALUES (?,?,?,?,?,?,?)",
   )
-    .bind(
-      accountId,
-      loc?.code ?? loc?.ownerCall ?? "",
-      "moderation",
-      detail,
-      loc?.cacheId ?? null,
-      nowS(),
-      mailed ? 1 : 0,
-    )
+    .bind(accountId, loc?.code ?? loc?.ownerCall ?? "", kind, detail, loc?.cacheId ?? null, nowS(), mailed ? 1 : 0)
     .run();
   await pushAlert(env, accountId);
 }
@@ -499,8 +519,9 @@ async function handleRemove(req: Request, env: Env): Promise<Response> {
     await notifyAccount(
       env,
       loc.accountId,
+      "removed",
       "Your content was removed",
-      `The sysop removed your ${loc.label}: ${r.reason}`,
+      `Your ${loc.yours} was removed: ${r.reason}`,
       loc,
     );
   return json({ ok: true, kind: loc.kind, id: loc.id, tombstones });
@@ -534,8 +555,9 @@ async function handleRestore(req: Request, env: Env): Promise<Response> {
     await notifyAccount(
       env,
       loc.accountId,
+      "restored",
       "Your cache was restored",
-      `The sysop restored ${loc.label} (${r.reason}). It is disabled until you enable it again.`,
+      `Your ${loc.yours} was restored: ${r.reason}. It is disabled until you enable it again.`,
       loc,
     );
   return json({ ok: true });
@@ -615,7 +637,13 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
       account: acct,
       reason: r.reason,
     }).run();
-    await notifyAccount(env, acct, "Your account is active again", `The sysop lifted the suspension: ${r.reason}`);
+    await notifyAccount(
+      env,
+      acct,
+      "unsuspended",
+      "Your account is active again",
+      `The sysop lifted the suspension: ${r.reason}`,
+    );
     return json({ ok: true, suspended: null });
   }
   if (await accountIsSysop(env, acct))
@@ -653,6 +681,7 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
   await notifyAccount(
     env,
     acct,
+    "suspended",
     "Your account is suspended",
     `The sysop suspended your account${untilText}: ${r.reason}`,
   );

@@ -42,6 +42,8 @@ import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
+import { RecoveryPrompt } from "./identity/RecoveryPrompt.js";
+import { needsRecovery, rememberReturn, takeReturn, type ReturnStore } from "./identity/accountNotices.js";
 import { maidenhead, gridCenter, haversine, parseCoordinates } from "./map/geo.js";
 import { toMgrs } from "@aprscaching/aprs";
 import { MapTools } from "./map/MapTools.js";
@@ -170,6 +172,15 @@ function placeDraftPin(
     const ll = marker.current!.getLngLat();
     setDraft({ lat: +ll.lat.toFixed(6), lon: +ll.wrap().lng.toFixed(6) });
   });
+}
+
+/** Where a sign-in started from a cache keeps its way back; null where storage is refused. */
+function returnStore(): ReturnStore | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -366,6 +377,21 @@ export default function Platform({ session, startTour }: { session: SessionState
     setRemote(null);
     setSelectedId(id);
   }, []);
+  // A sign-in started from a cache returns to it: in this page after a passkey, or in the page an email link opens.
+  useEffect(() => {
+    if (!session.signedIn) return;
+    const store = returnStore();
+    const id = store ? takeReturn(store) : null;
+    if (id != null) openCache(id);
+  }, [session.signedIn, openCache]);
+  /** Sign in from the open cache, and come back to it afterwards. */
+  const signInFromCache = useCallback(() => {
+    const store = returnStore();
+    if (store && selectedId != null) rememberReturn(store, selectedId);
+    openView(panel("signin"));
+  }, [selectedId, openView]);
+  // an account with no passkey and no confirmed email is asked for one; Later hides it until the next start
+  const [recoveryLater, setRecoveryLater] = useState(false);
 
   // Leaving "hide a cache" (for any destination) drops its draft marker, so it never stays stuck on
   // top of the next panel.
@@ -1111,7 +1137,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 offlineFrom={detailFrom}
                 onClose={() => setSelectedId(null)}
                 onLogged={reloadDetail}
-                onSignIn={() => openView(panel("signin"))}
+                onSignIn={signInFromCache}
               />
             )}
             {remote && !hiding && !isPanel("ranks") && (
@@ -1119,6 +1145,15 @@ export default function Platform({ session, startTour }: { session: SessionState
             )}
           </div>
 
+          {needsRecovery(session) && !recoveryLater && !isPanel("settings") && (
+            <RecoveryPrompt
+              variant="bar"
+              callsign={session.callsign}
+              pendingEmail={session.pendingEmail}
+              onChanged={session.refresh}
+              onLater={() => setRecoveryLater(true)}
+            />
+          )}
           {!hiding && (
             <TabBar
               active={activeKey(view, tabKeys)}

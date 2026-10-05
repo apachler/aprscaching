@@ -288,10 +288,38 @@ console.log("seeded", logged, "extra cache logs");
 // returned), start a verification challenge in its session, and ingest the `VERIFY <code>` message as
 // heard on the TNC of the attested site OE8XXX (the teaser gateway sets FIRST_PARTY_SITES=OE8XXX) —
 // no real RF/TX. The tour signs in to this same account → verified=1.
+//
+// Where OE8APR is the instance's ADMIN_CALLSIGNS call (the dev stack), email opens no account for it: with
+// OPERATOR_SECRET the seed opens it with the operator's sign-in link and verifies it with the operator secret,
+// the way `pnpm dev:admin` does.
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
+const asOperator = (path, body) => j("POST", path, body, { "x-operator-secret": OPERATOR_SECRET });
+/** Open the operator call's account with the operator's link and verify it with the secret; true once verified. */
+async function seedOperator(call) {
+  const link = await asOperator("/auth/operator-link", { callsign: call });
+  const token = link.ok ? new URL(link.data.link).searchParams.get("token") : null;
+  if (!token) return { ok: false, why: `the operator link was refused (${link.status}): ${link.data.error ?? ""}` };
+  const signedIn = await j("POST", "/auth/email/verify", { token });
+  if (!signedIn.ok) return { ok: false, why: `the operator link did not sign in: ${signedIn.data.error ?? ""}` };
+  const verified = await asOperator("/verify/operator", { callsign: call });
+  return verified.ok
+    ? { ok: true }
+    : { ok: false, why: `operator verification was refused: ${verified.data.error ?? verified.status}` };
+}
 {
   const CALL = "OE8APR",
     EMAIL = "oe8apr@teaser.local";
   const start = await j("POST", "/auth/email/start", { email: EMAIL, callsign: CALL });
+  // the operator call opens by the operator's link, whether or not an account holds it already
+  if (start.status === 409 && ["operator_call", "held"].includes(start.data?.reason)) {
+    if (!OPERATOR_SECRET) console.log(`${CALL} is held or is the operator call: set OPERATOR_SECRET to verify it`);
+    else {
+      const r = await seedOperator(CALL);
+      console.log(r.ok ? `verified operator ${CALL}` : `${CALL} stays unverified: ${r.why}`);
+    }
+    console.log("seed complete");
+    process.exit(0);
+  }
   const vr = await fetch(API + "/auth/email/verify", {
     method: "POST",
     headers: { "content-type": "application/json" },

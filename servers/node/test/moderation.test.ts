@@ -251,7 +251,10 @@ describe("removing a cache", () => {
 
     // the owner is told, the report is settled, the action is audited
     const alerts = await call(w.env, "GET", "/api/watch/alerts", undefined, as(owner));
-    expect(JSON.stringify(alerts.data)).toMatch(/advertising listing/);
+    expect(alerts.data.alerts[0]).toMatchObject({
+      kind: "removed",
+      detail: expect.stringMatching(/^Your cache AC-\w+ “under the oak” was removed: advertising listing$/),
+    });
     const reports = await sysopCall(w, "GET", "/reports?status=resolved");
     expect(reports.data.reports.map((x: { id: number }) => x.id)).toContain(rep.data.id);
     expect(await auditRows(w.env)).toContainEqual(
@@ -279,6 +282,22 @@ describe("removing a single item", () => {
     expect((await call(w.env, "GET", `/api/caches/${id}/logs`)).data.logs).toHaveLength(0);
     expect(await tombstones(w.env)).toContainEqual({ kind: "find", target_id: `gw.test:find:${logId}` });
     expect((await sysopCall(w, "POST", "/remove", { kind: "log", id: logId, reason: "again" })).status).toBe(404);
+  });
+
+  it("tells the logger which of their logs went, in words of its own kind", async () => {
+    const w = await world();
+    const owner = await user(w, "DL1OWN");
+    const finder = await user(w, "DL1FND");
+    const { id, code } = await hide(w, owner);
+    const logId = await addLog(w.env, id, "DL1FND", "found", "TFTC");
+    expect((await sysopCall(w, "POST", "/remove", { kind: "log", id: logId, reason: "not at the cache" })).status).toBe(
+      200,
+    );
+    const alerts = await call(w.env, "GET", "/api/watch/alerts", undefined, as(finder));
+    expect(alerts.data.alerts[0]).toMatchObject({
+      kind: "removed",
+      detail: `Your find log on ${code} was removed: not at the cache`,
+    });
   });
 
   it("deletes a media item with its stored objects", async () => {
@@ -407,8 +426,11 @@ describe("suspension", () => {
     const s = await sysopCall(w, "POST", "/accounts/DL1BAD/suspend", { reason: "repeated spam", category: "spam" });
     expect(s.status).toBe(200);
 
-    // the old session is gone, writes are refused, and a new sign-in is refused with the reason
-    expect((await call(w.env, "GET", "/auth/session", undefined, as(u))).data.callsign).toBeNull();
+    // the old session is gone and tells why, writes are refused, and a new sign-in is refused with the reason
+    expect((await call(w.env, "GET", "/auth/session", undefined, as(u))).data).toEqual({
+      callsign: null,
+      ended: { reason: "suspended", until: null, why: "repeated spam" },
+    });
     expect(
       (await call(w.env, "POST", "/api/caches", { title: "t", type: "traditional", lat: 47, lon: 15 }, as(u))).status,
     ).toBe(401);

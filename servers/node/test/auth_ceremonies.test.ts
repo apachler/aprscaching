@@ -124,7 +124,7 @@ describe("an email given at passkey registration binds once confirmed", () => {
     expect(reg.data.devToken).toMatch(/^[0-9a-f]{64}$/);
 
     const who = await call(env, "GET", "/auth/session", undefined, { cookie: reg.cookie });
-    expect(who.data).toMatchObject({ email: null, pendingEmail: "pen@example.test" });
+    expect(who.data).toMatchObject({ email: null, pendingEmail: "pen@example.test", passkeys: 1 });
     const list = await call(env, "GET", "/auth/passkeys", undefined, { cookie: reg.cookie });
     expect(list.data).toMatchObject({ hasEmail: false, emailPending: true });
     // the only passkey stays: a waiting address is no way back in

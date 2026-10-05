@@ -270,7 +270,7 @@ export function AccountsAdmin() {
         value={mode}
         onChange={setMode}
         options={[
-          { value: "search", label: "Search" },
+          { value: "search", label: "Look up" },
           { value: "suspended", label: "Suspended" },
         ]}
       />

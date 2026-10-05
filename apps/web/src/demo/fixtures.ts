@@ -6,8 +6,9 @@
  * the visual and accessibility harness (apps/web/test/visual/) loads the same page. Typed against the shared
  * DTOs, so a changed response shape fails the typecheck here rather than rendering a stale screen.
  *
- * Personas (`&as=`): `user` (default, OE8APR signed in), `sysop` (the same call, operator of the instance) and
- * `out` (signed out, the landing page). Third-party requests (map tiles, styles) are refused, so the map draws
+ * Personas (`&as=`): `user` (default, OE8APR signed in), `sysop` (the same call, operator of the instance),
+ * `out` (signed out, the landing page), `fresh` (signed in to an account with no passkey and no email, as a
+ * takeover leaves it) and `ended` (signed out because the callsign moved to its licensee). Third-party requests (map tiles, styles) are refused, so the map draws
  * its offline graticule and nothing leaves the page; `&net=1` lets them through, to check the overlays on the
  * real basemaps.
  */
@@ -47,7 +48,7 @@ import type {
   VerifyMethods,
 } from "../api.js";
 
-export type Persona = "user" | "sysop" | "out";
+export type Persona = "user" | "sysop" | "out" | "fresh" | "ended";
 
 const NOW = Math.floor(Date.UTC(2026, 9, 1, 14, 30) / 1000); // fixed, so screenshots are stable
 const MIN = 60;
@@ -812,7 +813,17 @@ const ROUTES: Route[] = [
   [
     "GET",
     /^\/auth\/session$/,
-    (_, p) => (p === "out" ? { callsign: null } : { callsign: ME, verified: true, email: "oe8apr@example.org" }),
+    (_, p) =>
+      p === "out"
+        ? { callsign: null }
+        : p === "ended"
+          ? {
+              callsign: null,
+              ended: { reason: "released", callsign: "OE6BOB", by: "licensee", note: null, callless: true },
+            }
+          : p === "fresh"
+            ? { callsign: ME, verified: true, email: null, pendingEmail: null, passkeys: 0 }
+            : { callsign: ME, verified: true, email: "oe8apr@example.org", passkeys: 1 },
   ],
   ["GET", /^\/api\/admin\/whoami$/, (_, p) => ({ sysop: p === "sysop", callsign: ME, configured: true })],
   ["GET", /^\/api\/prefs$/, () => ({ prefs: { seeded: true } })],

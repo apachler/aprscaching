@@ -3,6 +3,7 @@ import { useState } from "react";
 import { startClaim, claimStatus, errorText } from "../api.js";
 import { Button, Icon } from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
+import { RecoveryPrompt } from "./RecoveryPrompt.js";
 
 type Step = { kind: "intro" } | { kind: "proving"; claim: string } | { kind: "done"; signedIn: boolean };
 
@@ -25,6 +26,8 @@ export function ClaimCall(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const cs = props.callsign;
+  // the way back in the new account was given: a passkey, or an address waiting for confirmation
+  const [secured, setSecured] = useState<"passkey" | "email" | null>(null);
 
   async function open() {
     setBusy(true);
@@ -92,9 +95,15 @@ export function ClaimCall(props: {
           <p className="m-0" role="status">
             <Icon name="check" size={12} /> <span className="mono">{cs}</span> is yours now, verified.
           </p>
-          {step.signedIn && (
-            <p className="muted fine m-0">
-              You are signed in. Add a passkey or an email under Settings → Account so you can sign in again.
+          {/* a new account opened by the claim has no way back in yet: ask for one before Done */}
+          {step.signedIn && !secured && (
+            <RecoveryPrompt variant="inline" callsign={cs} pendingEmail={null} onChanged={setSecured} />
+          )}
+          {secured && (
+            <p className="muted fine m-0" role="status">
+              {secured === "passkey"
+                ? "Passkey added: this device signs you in with it."
+                : "Open the link we sent to confirm your email; it then signs you in."}
             </p>
           )}
           <div className="row end">
