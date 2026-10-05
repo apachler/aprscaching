@@ -67,15 +67,17 @@ therefore comes back on this instance only.
 A bulletin mirrored from a peer is removed here and blocked against that peer's id, so the next sync does not
 bring it back. The peer keeps its own copy; ask its operator, or block the peer under **Federation**.
 
-A bulletin already forwarded to FBB partners stays with them.
+A bulletin already forwarded to FBB partners cannot be recalled: FBB has no delete, so the partners keep their
+copy. Ask their sysops to remove it.
 
 ## Suspend an account
 
 1. Open **Instance admin → Accounts** and search by callsign or email. **Suspended** lists the accounts
-   suspended now.
+   suspended now, and the callsigns of suspended accounts that were erased.
 2. Open the account. It shows its callsigns, its email, open reports about it, its latest content of every kind
    with **Remove…** on each, and the actions taken so far.
-3. Select **Suspend…**, give a reason, and pick how long: a number of days, or until you lift it.
+3. Select **Suspend…**, give a reason, pick how long (a number of days, or until you lift it) and pick a
+   category: **Spam**, **Offensive**, **Wrong location or unsafe**, **Copyright** or **Other**.
 
 While a suspension holds:
 
@@ -92,8 +94,20 @@ The account's public content stays. Remove items one by one where needed.
 An account that holds a callsign in `ADMIN_CALLSIGNS` cannot be suspended here.
 
 A suspended person can still export or erase their data with a request signed by their device key
-([Data protection](../compliance/data-protection.md)). Erasure deletes the suspension with the account, so a
-later registration of the same callsign starts without one.
+([Data protection](../compliance/data-protection.md)).
+
+### A suspension outlives an erasure
+
+Erasure removes the account and everything tied to it. A suspension in force leaves one record on each base
+callsign the account held: the callsign, the category and the end date. It holds no account, no reason text
+and no other data. While it holds:
+
+- nobody registers the callsign, by passkey or email link;
+- no account adds it, switches to it or claims it;
+- each attempt is refused with *this callsign is suspended on this instance*, the end date and the category.
+
+The record goes when the suspension ends: at its end date (the nightly job deletes it), or when you lift it.
+The callsign shows under **Accounts → Suspended** as *account erased*, with **Lift suspension**.
 
 ## What the person is told
 

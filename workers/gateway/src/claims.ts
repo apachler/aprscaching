@@ -46,6 +46,8 @@ import {
   sessionUnavailable,
   formerMarker,
   isFormerMarker,
+  callsignSuspension,
+  suspendedCallText,
 } from "./auth.js";
 import { verificationOf, verifiedStmt, holderIdentity, type VerifyMethod } from "./callsign.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
@@ -145,6 +147,9 @@ interface Refusal {
  */
 async function claimRefusal(env: Env, cs: string, claimant: string | null): Promise<Refusal | null> {
   if (!CALL_RE.test(cs) || !isRegistrableCall(cs)) return { status: 400, error: "invalid callsign", reason: "invalid" };
+  // a call under a suspension that outlived its account's erasure is claimed by nobody until it ends
+  const suspended = await callsignSuspension(env, cs);
+  if (suspended) return { status: 403, error: suspendedCallText(suspended), reason: "suspended" };
   const holder = await baseHolder(env, cs);
   const admin = isAdminCall(env, cs);
   if (holder && holder === claimant) return { status: 409, error: "you already hold this callsign", reason: "yours" };

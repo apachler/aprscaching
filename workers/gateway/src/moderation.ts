@@ -528,13 +528,22 @@ async function accountIsSysop(env: Env, accountId: string): Promise<boolean> {
 }
 
 async function handleSuspend(req: Request, env: Env, call: string, lift: boolean): Promise<Response> {
-  const acct = await baseHolder(env, baseCall(call.toUpperCase()));
-  if (!acct) return json({ error: "no account holds this callsign" }, { status: 404 });
+  const label = baseCall(call.toUpperCase());
+  const acct = await baseHolder(env, label);
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const r = reasonOf(b.reason);
   if ("error" in r) return json({ error: r.error }, { status: 400 });
   const actor = await actorOf(req, env);
-  const label = baseCall(call.toUpperCase());
+  // the suspension of an erased account lives on its calls: lifting it frees the call for a new account
+  if (!acct && lift) {
+    const had = await env.DB.prepare("DELETE FROM callsign_suspensions WHERE callsign=? RETURNING callsign")
+      .bind(label)
+      .first();
+    if (!had) return json({ error: "this callsign is not suspended" }, { status: 409 });
+    await audit(env, { actor, action: "unsuspend", kind: "callsign", id: label, label, reason: r.reason }).run();
+    return json({ ok: true, suspended: null });
+  }
+  if (!acct) return json({ error: "no account holds this callsign" }, { status: 404 });
   if (lift) {
     const had = await env.DB.prepare("DELETE FROM account_suspensions WHERE account_id=? RETURNING account_id")
       .bind(acct)
@@ -557,11 +566,14 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
   const until = b.until == null || b.until === "" ? null : Number(b.until);
   if (until !== null && (!Number.isInteger(until) || until <= nowS()))
     return json({ error: "until must be a future time in unix seconds, or empty" }, { status: 400 });
+  // the category is all of the suspension that outlives an erasure of the account, so it is required
+  const category = REPORT_CATEGORIES.find((c) => c === b.category);
+  if (!category) return json({ error: `category must be one of ${REPORT_CATEGORIES.join(", ")}` }, { status: 400 });
   const now = nowS();
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT OR REPLACE INTO account_suspensions (account_id, reason, until, by_call, at) VALUES (?,?,?,?,?)",
-    ).bind(acct, r.reason, until, actor, now),
+      "INSERT OR REPLACE INTO account_suspensions (account_id, reason, category, until, by_call, at) VALUES (?,?,?,?,?,?)",
+    ).bind(acct, r.reason, category, until, actor, now),
     // every session the account holds ends now
     env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(acct),
     audit(env, {
@@ -571,7 +583,7 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
       id: label,
       label,
       account: acct,
-      reason: until ? `${r.reason} (until ${new Date(until * 1000).toISOString().slice(0, 10)})` : r.reason,
+      reason: `${category}: ${r.reason}${until ? ` (until ${new Date(until * 1000).toISOString().slice(0, 10)})` : ""}`,
     }),
   ]);
   const untilText = until ? ` until ${new Date(until * 1000).toISOString().slice(0, 10)}` : "";
@@ -581,7 +593,7 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
     "Your account is suspended",
     `The sysop suspended your account${untilText}: ${r.reason}`,
   );
-  return json({ ok: true, suspended: { reason: r.reason, until, at: now } });
+  return json({ ok: true, suspended: { reason: r.reason, category, until, at: now } });
 }
 
 // ---------------------------------------------------------------- accounts
@@ -600,7 +612,7 @@ async function accountSummary(env: Env, a: AccountRow) {
     calls: await heldCalls(env, a.account_id),
     email: a.email,
     createdAt: a.created_at,
-    suspended: s ? { reason: s.reason, until: s.until, at: s.at } : null,
+    suspended: s ? { reason: s.reason, category: s.category, until: s.until, at: s.at } : null,
     operator: await accountIsSysop(env, a.account_id),
   };
 }
@@ -637,7 +649,20 @@ async function handleAccountSearch(req: Request, env: Env): Promise<Response> {
         .all<AccountRow>()
     ).results;
   }
-  return json({ accounts: await Promise.all(rows.map((r) => accountSummary(env, r))) });
+  const accounts = await Promise.all(rows.map((r) => accountSummary(env, r)));
+  // the suspended list also names the calls whose account was erased while suspended: no account, only the
+  // call, the category and the end
+  const erased = suspendedOnly
+    ? (
+        await env.DB.prepare(
+          `SELECT callsign, category, until, at FROM callsign_suspensions
+            WHERE until IS NULL OR until > ? ORDER BY at DESC LIMIT 50`,
+        )
+          .bind(nowS())
+          .all<{ callsign: string; category: string; until: number | null; at: number }>()
+      ).results
+    : [];
+  return json({ accounts, erasedCalls: erased });
 }
 
 /** `col` names one of `calls` or an SSID of it. */

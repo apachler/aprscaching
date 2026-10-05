@@ -28,6 +28,7 @@ import {
   type ModAccount,
   type ModAction,
   type ModContent,
+  type ErasedCallSuspension,
 } from "../moderation/api.js";
 import {
   REPORT_CATEGORIES,
@@ -36,6 +37,7 @@ import {
   kindName,
   suspensionUntil,
   type ContentKind,
+  type ReportCategory,
 } from "../moderation/logic.js";
 
 /**
@@ -243,7 +245,7 @@ export function AccountsAdmin() {
         ? suspendedAccounts()
         : query
           ? searchAccounts(query)
-          : Promise.resolve({ accounts: [] as ModAccount[] }),
+          : Promise.resolve({ accounts: [] as ModAccount[], erasedCalls: [] }),
     [mode, query],
   );
   const search = () => {
@@ -305,7 +307,7 @@ export function AccountsAdmin() {
             Loading…
           </p>
         )
-      ) : list.data.accounts.length === 0 ? (
+      ) : list.data.accounts.length === 0 && !(list.data.erasedCalls?.length ?? 0) ? (
         <EmptyState>
           {mode === "suspended"
             ? "No account is suspended."
@@ -330,9 +332,57 @@ export function AccountsAdmin() {
               </div>
             </li>
           ))}
+          {(list.data.erasedCalls ?? []).map((s) => (
+            <ErasedCallRow key={s.callsign} s={s} onLifted={list.reload} />
+          ))}
         </ul>
       )}
     </>
+  );
+}
+
+/** A call whose account was erased while suspended: no account to open, only the record and Lift suspension. */
+function ErasedCallRow(props: { s: ErasedCallSuspension; onLifted: () => void }) {
+  const fmt = useFmt();
+  const toast = useToast();
+  const prompt = usePrompt();
+  const [busy, setBusy] = useState(false);
+  const { s } = props;
+  const lift = async () => {
+    const ans = await prompt({
+      title: `Lift the suspension of ${s.callsign}?`,
+      message: "Its account was erased. Lifting frees the callsign for a new registration or claim.",
+      label: "Reason",
+      minLength: 3,
+      maxLength: 500,
+      confirmLabel: "Lift suspension",
+    });
+    if (!ans) return;
+    setBusy(true);
+    try {
+      await unsuspendAccount(s.callsign, ans.text);
+      toast(`${s.callsign} is free again`);
+      props.onLifted();
+    } catch (e) {
+      toast(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <li>
+      <div className="row between">
+        <span>
+          <span className="mono">{s.callsign}</span> <Badge kind="warn">suspended</Badge> <Badge>account erased</Badge>
+        </span>
+        <Button disabled={busy} aria-busy={busy} onClick={() => void lift()}>
+          Lift suspension
+        </Button>
+      </div>
+      <div className="muted fine">
+        {categoryLabel(s.category)} · since {fmt.date(s.at)} · {s.until ? `until ${fmt.date(s.until)}` : "until lifted"}
+      </div>
+    </li>
   );
 }
 
@@ -351,6 +401,7 @@ function AccountDetail(props: { callsign: string; onBack: () => void }) {
       message:
         "Every session ends now. Sign-in, writes and transmissions are refused until the end you pick. Their public content stays.",
       select: { label: "How long", options: SUSPENSION_SPANS },
+      select2: { label: "Category (kept on the callsign if the account is erased)", options: REPORT_CATEGORIES },
       label: "Reason (the person is told)",
       minLength: 3,
       maxLength: 500,
@@ -358,7 +409,16 @@ function AccountDetail(props: { callsign: string; onBack: () => void }) {
       danger: true,
     });
     if (!ans) return;
-    await run(() => suspendAccount(a.callsign, ans.text, suspensionUntil(ans.choice, Date.now())), "suspended");
+    await run(
+      () =>
+        suspendAccount(
+          a.callsign,
+          ans.text,
+          (ans.choice2 ?? "other") as ReportCategory,
+          suspensionUntil(ans.choice, Date.now()),
+        ),
+      "suspended",
+    );
   };
   const lift = async (a: ModAccount) => {
     const ans = await prompt({
@@ -421,7 +481,7 @@ function AccountDetail(props: { callsign: string; onBack: () => void }) {
             <p className="inline-note" role="status">
               Suspended {fmt.ago(d.account.suspended.at)}
               {d.account.suspended.until ? ` until ${fmt.date(d.account.suspended.until)}` : " until lifted"}:{" "}
-              {d.account.suspended.reason}
+              {categoryLabel(d.account.suspended.category)} — {d.account.suspended.reason}
             </p>
           )}
           <div className="row">

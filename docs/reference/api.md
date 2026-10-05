@@ -198,9 +198,9 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | POST | `/api/admin/moderation/reports/:id` | Resolve or reopen a report: `{ status: "resolved" \| "open", note? }` | sysop or x-operator-secret |
 | POST | `/api/admin/moderation/remove` | Take one item down: `{ kind, id, reason, reportId? }`, `kind` as in `/api/reports`, `reason` 3–500 characters. A cache is archived and hidden, a profile loses its self-written fields, everything else is deleted; open reports on the item are resolved. → `{ ok, kind, id, tombstones }`; `404` for an item already gone, `409` for a cache already removed | sysop or x-operator-secret |
 | POST | `/api/admin/moderation/restore` | Bring a removed cache back, disabled: `{ kind: "cache", id, reason }` | sysop or x-operator-secret |
-| GET | `/api/admin/moderation/accounts?q=` · `?suspended=1` | Find accounts by callsign prefix or email (at least two characters), or list the suspended ones: `{ accounts: [{ callsign, calls, email, createdAt, suspended, operator }] }` | sysop or x-operator-secret |
+| GET | `/api/admin/moderation/accounts?q=` · `?suspended=1` | Find accounts by callsign prefix or email (at least two characters), or list the suspended ones: `{ accounts: [{ callsign, calls, email, createdAt, suspended, operator }] }`; the suspended list adds `erasedCalls: [{ callsign, category, until, at }]`, the calls of suspended accounts that were erased | sysop or x-operator-secret |
 | GET | `/api/admin/moderation/accounts/:call` | One account: `{ account, openReports, content: [{ kind, id, label, preview, at, … }], actions }`, its latest 50 items of each kind and the moderation actions about it | sysop or x-operator-secret |
-| POST | `/api/admin/moderation/accounts/:call/suspend` · `/unsuspend` | Suspend `{ reason, until? }` (`until` a future unix time; empty holds until lifted) · lift `{ reason }`. An operator's account answers `409` | sysop or x-operator-secret |
+| POST | `/api/admin/moderation/accounts/:call/suspend` · `/unsuspend` | Suspend `{ reason, category, until? }` (`category` one of the report categories; `until` a future unix time, empty holds until lifted) · lift `{ reason }`, which also frees the call of an erased account. An operator's account answers `409` | sysop or x-operator-secret |
 | GET | `/api/admin/moderation/log?before=&limit=` | The audit log, newest first: `{ entries: [{ id, at, actor, action, kind, targetId, label, reason }], nextBefore }` | sysop or x-operator-secret |
 | POST                | `/api/admin/boxes/codes`                                         | A one-time box enrollment code `{label?, callsign?, ttlMin?}` → `{code, expiresAt}`, shown once                                                                                                                                                                                                                                                                                                                               | sysop or x-operator-secret                                                                              |
 | GET                 | `/api/admin/boxes`                                               | Enrolled boxes (who, when, last seen, revoked, trust) and the codes still open                                                                                                                                                                                                                                                                                                                                                | sysop or x-operator-secret                                                                              |
@@ -277,7 +277,9 @@ secret; the others need a signed-in sysop.
 A suspended account signs in nowhere: the passkey finishes, the email link and the operator link answer `403`
 `{ error, suspended: { reason, until } }` and issue no session. Its existing sessions end when the sysop
 suspends it, and a request carrying one acts as signed out. Export and erasure stay open to it through a
-signed-body request.
+signed-body request. Once a suspended account is erased, registering, adding, switching to or claiming any of
+its base calls answers `403` with `reason: "suspended"` and
+`this callsign is suspended on this instance[ until <date>]: <category>` until the suspension ends.
 
 ## BBS
 

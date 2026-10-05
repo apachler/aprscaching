@@ -189,7 +189,7 @@ export const isRegistrableCall = (cs: string): boolean => REGISTRABLE_CALL.test(
 
 /** Why a call cannot be taken on without proof of control: its code (`reason` in a 409 answer) and the words. */
 interface CallRefusal {
-  reason: "invalid" | "reserved" | "held" | "held_unverified" | "operator_call";
+  reason: "invalid" | "reserved" | "suspended" | "held" | "held_unverified" | "operator_call";
   error: string;
 }
 
@@ -218,6 +218,8 @@ export async function callRefusal(
   if (!REGISTRABLE_CALL.test(cs)) return { reason: "invalid", error: "invalid callsign" };
   const base = baseCall(cs);
   if (isReservedCall(base)) return { reason: "reserved", error: "that callsign is reserved" };
+  const suspended = await callsignSuspension(env, base);
+  if (suspended) return { reason: "suspended", error: suspendedCallText(suspended) };
   if (await baseHolder(env, base)) return heldRefusal(env, base);
   if (isAdminCall(env, base) && !o.operatorLink)
     return {
@@ -238,7 +240,30 @@ export async function unclaimableReason(
 
 /** The 4xx answer for a refusal: 400 for a malformed call, 409 otherwise, with its code as `reason`. */
 export const refusalResponse = (r: CallRefusal): Response =>
-  json({ error: r.error, reason: r.reason }, { status: r.reason === "invalid" ? 400 : 409 });
+  json(
+    { error: r.error, reason: r.reason },
+    { status: r.reason === "invalid" ? 400 : r.reason === "suspended" ? 403 : 409 },
+  );
+
+/**
+ * The suspension a base call is under after its account was erased, or null: the minimal record erasure keeps
+ * (category and end, nothing else) so the call cannot come back under a new account until it ends.
+ */
+export async function callsignSuspension(
+  env: Env,
+  base: string,
+): Promise<{ category: string; until: number | null; at: number } | null> {
+  const s = await env.DB.prepare("SELECT category, until, at FROM callsign_suspensions WHERE callsign=?")
+    .bind(base)
+    .first<{ category: string; until: number | null; at: number }>();
+  return s && suspensionHolds(s.at, s.until) ? s : null;
+}
+
+/** The refusal a suspended call answers with: the suspension, its end and its category. */
+export const suspendedCallText = (s: { category: string; until: number | null }): string =>
+  `this callsign is suspended on this instance${
+    s.until ? ` until ${new Date(s.until * 1000).toISOString().slice(0, 10)}` : ""
+  }: ${s.category}`;
 
 /** Does this account hold the base call of `cs`? Keys and calls bind only to a licence the account holds. */
 export async function accountHoldsCall(env: Env, accountId: string, cs: string): Promise<boolean> {
@@ -733,10 +758,10 @@ const suspensionHolds = (at: number | null, until: number | null): boolean =>
 export async function suspensionOf(
   env: Env,
   accountId: string,
-): Promise<{ reason: string; until: number | null; at: number } | null> {
-  const s = await env.DB.prepare("SELECT reason, until, at FROM account_suspensions WHERE account_id=?")
+): Promise<{ reason: string; category: string; until: number | null; at: number } | null> {
+  const s = await env.DB.prepare("SELECT reason, category, until, at FROM account_suspensions WHERE account_id=?")
     .bind(accountId)
-    .first<{ reason: string; until: number | null; at: number }>();
+    .first<{ reason: string; category: string; until: number | null; at: number }>();
   return s && suspensionHolds(s.at, s.until) ? s : null;
 }
 
