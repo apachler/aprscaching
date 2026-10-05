@@ -1,16 +1,17 @@
 /* Quick-tour coach marks. */
 @layer components {
   /* Quick-tour coach marks. Two presentations of one accessible dialog: a step naming an on-screen
-   element rings it and anchors the card beside it; a step without one keeps the bottom-anchored
-   dialog, which is also the fallback wherever CSS anchor positioning is missing. */
+   element rings it and anchors the card beside it; a step without one sits at the top
+   of the map, clear of its bottom corners (the coordinate readout, the map tools) and of the caches in the middle,
+   which is also the fallback wherever CSS anchor positioning is missing. */
   .tour-scrim {
     position: fixed;
     inset: 0;
     z-index: var(--z-dialog);
     display: grid;
-    align-items: end;
+    align-items: start;
     justify-items: center;
-    padding: 0 var(--space-lg) calc(var(--space-xl) + env(safe-area-inset-bottom));
+    padding: calc(var(--topbar-h) + var(--space-lg) + env(safe-area-inset-top)) var(--space-lg) 0;
     background: color-mix(in oklch, var(--shade) 50%, transparent);
     animation: tour-in 0.18s ease;
   }
