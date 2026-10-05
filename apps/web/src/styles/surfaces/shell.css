@@ -565,6 +565,36 @@
       background: var(--line);
       margin: -4px auto var(--space-sm);
     }
+    /* a sheet that peeks (the cache page) opens at half height over the map; its grip lifts it to full */
+    .panel:is(.left, .right)[data-peek="half"] {
+      max-height: 46dvh;
+    }
+    .panel[data-peek]::before {
+      content: none;
+    }
+    .panel .sheet-grip {
+      display: block;
+      width: 100%;
+      min-height: var(--hit);
+      margin: calc(-1 * var(--space-md)) 0 calc(-1 * var(--space-sm));
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+    .panel .sheet-grip::before {
+      content: "";
+      display: block;
+      width: 38px;
+      height: 4px;
+      margin: 0 auto;
+      border-radius: var(--radius-tick);
+      background: var(--line);
+    }
+    .panel .sheet-grip:focus-visible {
+      outline: 2px solid var(--heading);
+      outline-offset: -4px;
+    }
     .geo-banner {
       top: auto;
       bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));

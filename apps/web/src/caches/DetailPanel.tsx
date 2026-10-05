@@ -175,6 +175,7 @@ export function DetailPanel(props: {
     );
   return (
     <Panel
+      peek
       onClose={props.onClose}
       title={c.title}
       actions={

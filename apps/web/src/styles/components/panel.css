@@ -48,6 +48,10 @@
   .wide-hint {
     display: none;
   }
+  /* the grip of a peeking sheet (Panel `peek`) only exists where the panel is a phone's bottom sheet (shell.css) */
+  .sheet-grip {
+    display: none;
+  }
   @container panel (max-width: 40rem) {
     .wide-hint {
       display: block;
