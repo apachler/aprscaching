@@ -550,6 +550,10 @@
       top: auto;
       bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
     }
+    /* a sheet rises from the same edge: the prompt waits until it closes, so it never covers the sheet's action */
+    .app:has(.panel) .geo-banner {
+      display: none;
+    }
   }
   @supports (height: 1dvh) {
     @media (max-width: 680px) {

@@ -293,6 +293,10 @@ export function getMyProfile(): Promise<{
 }> {
   return call(`/api/my/profile`);
 }
+/** The caches the signed-in person found, logged as a did-not-find, or hid (cache ids). */
+export function getMyLogged(): Promise<{ found: number[]; dnf: number[]; owned: number[] }> {
+  return call(`/api/my/logged`);
+}
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }

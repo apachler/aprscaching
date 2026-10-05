@@ -441,6 +441,10 @@
   .geo-banner button.icon {
     color: var(--accent-ink);
   }
+  /* the prompt waits while search is open, so it never covers a result */
+  .app:has(.search-pop, .topsearch-wrap:focus-within) .geo-banner {
+    display: none;
+  }
 
   /* ---- the locate button (in MapLibre's top-left control stack) and the viewer's dot ---- */
   .maplibregl-ctrl-group button.locate-btn {

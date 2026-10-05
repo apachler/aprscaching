@@ -37,3 +37,34 @@ export function nearestLoggable(
   }
   return best;
 }
+
+/**
+ * May a prompt from the radio's beacon show? Not for a cache the player settled (found, did-not-find, hid) or
+ * dismissed, nor for one the map knows is no longer active (archived, disabled or removed). Pure.
+ */
+export function promptAllowed(p: GeofencePrompt, caches: MapCache[], quiet: ReadonlySet<number>): boolean {
+  if (quiet.has(p.cacheId)) return false;
+  const known = caches.find((c) => c.id === p.cacheId);
+  return !known || known.status === "active";
+}
+
+const DISMISSED_KEY = "acs.near.dismissed";
+
+/** The caches whose prompt the player dismissed in this browser session; empty where storage is unavailable. */
+export function loadDismissed(): Set<number> {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    return new Set(Array.isArray(raw) ? raw.filter((n): n is number => typeof n === "number") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Remember a dismissed prompt for the rest of the session, across reloads. */
+export function saveDismissed(ids: ReadonlySet<number>): void {
+  try {
+    sessionStorage.setItem(DISMISSED_KEY, JSON.stringify([...ids]));
+  } catch {
+    /* private mode or blocked storage: the dismissal holds until the page reloads */
+  }
+}
