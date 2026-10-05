@@ -22,10 +22,10 @@
       })();
     </script>
     <script>
-      /* The landing is in this page as HTML (#landing-pre, vite-prerender.ts), and its hero is the largest paint:
-         when the landing is what opens (no remembered session, no visit to the platform this session, no deep
-         link), fetch the hero now; otherwise hide the prerendered landing before it paints. The widths match
-         Landing.tsx's hero srcset. */
+      /* The landing is in this page as HTML (#landing-pre, vite-prerender.ts). When it is not what opens (a
+         remembered session, a visit to the platform this session, a deep link), hide it before it paints. Its hero,
+         the largest paint, is an eager high-priority image in that HTML, so the browser fetches it as soon as it
+         reads the page; a separate preload would only go unused wherever the landing does not open. */
       (function () {
         try {
           var q = new URLSearchParams(location.search);
@@ -35,23 +35,9 @@
             q.has("view") ||
             q.has("v") ||
             q.has("demo");
-          if (off) {
-            document.documentElement.dataset.prerender = "off";
-            return;
-          }
-          var l = document.createElement("link");
-          l.rel = "preload";
-          l.as = "image";
-          l.type = "image/avif";
-          l.setAttribute(
-            "imagesrcset",
-            "/landing/hero-960.avif 960w, /landing/hero-1600.avif 1600w, /landing/hero-2560.avif 2560w",
-          );
-          l.setAttribute("imagesizes", "100vw");
-          l.setAttribute("fetchpriority", "high");
-          document.head.appendChild(l);
+          if (off) document.documentElement.dataset.prerender = "off";
         } catch (e) {
-          /* storage refused: the hero loads with the page */
+          /* storage refused: the prerendered landing shows until the app decides */
         }
       })();
     </script>
