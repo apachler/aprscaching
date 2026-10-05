@@ -32,7 +32,7 @@ const PER_HOUR = 20;
 const HELD_PER_ADDRESSEE = 10;
 /** Delivered and expired messages stay listed this long, then are deleted. */
 const KEEP_SEC = 30 * 86400;
-/** Addressees one read names, so a statement binds at most 100 parameters (three more bind the filters). */
+/** Addressees one read names, so a statement binds at most 100 parameters (four more bind the filters). */
 const ADDRESSEES_PER_READ = 90;
 /** The APRS message text limit. */
 const APRS_TEXT_MAX = 67;
@@ -173,17 +173,22 @@ export async function handleMailboxList(req: Request, env: Env): Promise<Respons
   return json({ sent: sent.map(view), received: received.map(view) });
 }
 
-/** DELETE /api/mailbox/:id — the sender withdraws a message still waiting. */
+/**
+ * DELETE /api/mailbox/:id — the sender withdraws a message still held. One already sent on the air cannot be
+ * taken back, so it stays listed with its delivery state.
+ */
 export async function handleMailboxWithdraw(req: Request, env: Env, id: number): Promise<Response> {
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in" }, { status: 401 });
-  const r = await env.DB.prepare(
-    "DELETE FROM mailbox_messages WHERE id = ? AND from_account = ? AND status IN ('held','sent')",
-  )
+  const r = await env.DB.prepare("DELETE FROM mailbox_messages WHERE id = ? AND from_account = ? AND status = 'held'")
     .bind(id, me.accountId)
     .run();
-  return (r.meta?.changes ?? 0) === 1
-    ? json({ ok: true })
+  if ((r.meta?.changes ?? 0) === 1) return json({ ok: true });
+  const m = await env.DB.prepare("SELECT status FROM mailbox_messages WHERE id = ? AND from_account = ?")
+    .bind(id, me.accountId)
+    .first<{ status: string }>();
+  return m
+    ? json({ error: "this message is already on the air and cannot be withdrawn" }, { status: 409 })
     : json({ error: "no such message waiting" }, { status: 404 });
 }
 
@@ -251,9 +256,12 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
     const rows = await env.DB.prepare(
       `SELECT * FROM mailbox_messages WHERE to_call IN (${chunk.map(() => "?").join(",")})
          AND status IN ('held','sent') AND expires_at > ?
-         AND attempts < ? AND (last_attempt IS NULL OR last_attempt <= ?) ORDER BY id`,
+         AND attempts < ? AND (last_attempt IS NULL OR last_attempt <= ?)
+         AND NOT EXISTS (SELECT 1 FROM account_suspensions s WHERE s.account_id = mailbox_messages.from_account
+                           AND (s.until IS NULL OR s.until > ?))
+       ORDER BY id`,
     )
-      .bind(...chunk, now, MAX_ATTEMPTS, now - RETRY_SEC)
+      .bind(...chunk, now, MAX_ATTEMPTS, now - RETRY_SEC, now)
       .all<MailRow>();
     waiting.push(...rows.results);
   }

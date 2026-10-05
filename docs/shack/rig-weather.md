@@ -45,8 +45,8 @@ Each weather station is one of your stations, with its own callsign and its own 
 
 1. Open **Settings → My stations** and select **Add a weather station**. It fills in your callsign with the
    `-13` weather SSID and the **Weather** role.
-2. Enter the station's coordinates, or leave them blank to place it at your home locator
-   ([Settings → Profile](../play/account.md)).
+2. Enter the station's coordinates, or leave them blank to place it at the centre of your home locator's
+   6-character square, about 5 by 2.5 km, however precise the locator ([Settings → Profile](../play/account.md)).
 3. Select **Add station**. The station's URLs show at once.
 4. Copy the **Ecowitt — custom server path** or the **Weather Underground — Rapidfire URL**, and enter it in
    your station's configuration: as a custom server with the Ecowitt protocol, or as the Weather Underground

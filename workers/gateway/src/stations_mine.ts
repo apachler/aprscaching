@@ -20,17 +20,11 @@ import { json, asStr } from "./app.js";
 import { sessionIdentity, baseHolder } from "./auth.js";
 import { requireSysop } from "./admin.js";
 import { sanitizeBio } from "./profile.js";
-import { makeWxKey, wxUrls } from "./wx.js";
+import { makeWxKey, wxUrls, homeLocatorPosition } from "./wx.js";
 import { isCallsignVerified } from "./callsign.js";
 import { handleCreateCache } from "./caches.js";
 import { parsePage, keyset, paginate } from "./paging.js";
-import {
-  gridToLatLon,
-  STATION_ROLES,
-  type StationRole,
-  type OperatedStation,
-  type StationWxKey,
-} from "@aprscaching/shared";
+import { STATION_ROLES, type StationRole, type OperatedStation, type StationWxKey } from "@aprscaching/shared";
 
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}(-[0-9]{1,2})?$/; // base call + optional SSID
 
@@ -132,14 +126,14 @@ async function stationRefusal(env: Env, acct: string, callsign: string, roles: S
   return null;
 }
 
-/** The account's home locator as a position, or null when it has none. */
+/** The account's home locator as a position, rounded to its 6-character square, or null when it has none. */
 async function homePosition(env: Env, acct: string): Promise<{ lat: number; lon: number } | null> {
   const row = await env.DB.prepare(
     "SELECT home_grid AS homeGrid FROM accounts WHERE account_id = ? AND home_grid IS NOT NULL LIMIT 1",
   )
     .bind(acct)
     .first<{ homeGrid: string }>();
-  return row ? gridToLatLon(row.homeGrid) : null;
+  return row ? homeLocatorPosition(row.homeGrid) : null;
 }
 
 /** Issue (or re-issue) a weather station's push key, replacing any earlier one. */
@@ -425,7 +419,7 @@ export async function handleStationToCache(req: Request, env: Env, id: number): 
 
 /**
  * POST /api/me/cache — "become a cache": an aprs_living cache that follows the operator's
- * own beacon. Placed at their latest beacon fix, else their home grid. stationCall is the most recent
+ * own beacon. Placed at their latest beacon fix, else their home locator's 6-character square. stationCall is the most recent
  * SSID heard (so the living-cache match works), else the base call.
  */
 export async function handleMeCache(req: Request, env: Env): Promise<Response> {
@@ -444,7 +438,7 @@ export async function handleMeCache(req: Request, env: Env): Promise<Response> {
     const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?")
       .bind(base)
       .first<{ homeGrid: string | null }>();
-    const ll = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
+    const ll = acct?.homeGrid ? homeLocatorPosition(acct.homeGrid) : null;
     if (ll) {
       lat = ll.lat;
       lon = ll.lon;

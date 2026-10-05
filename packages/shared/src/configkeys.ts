@@ -69,6 +69,7 @@ export const CONFIG_KEYS = {
   FED_HUB_URL: { type: "string", units: ["gateway", "pocket"] },
   FED_RELAY_SECRET: { type: "string", units: ["gateway"], secret: true },
   RETENTION: { type: "json", units: ["gateway", "pocket"] },
+  MODERATION_RETENTION_DAYS: { type: "int", units: ["gateway"], default: "730" },
   MESHCOM_META_MIN_S: { type: "int", units: ["gateway"], default: "300" },
   MESHCOM_NODE_TTL_DAYS: { type: "int", units: ["gateway"], default: "7" },
   MESHCOM_LINK_TTL_HOURS: { type: "int", units: ["gateway"], default: "48" },

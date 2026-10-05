@@ -64,6 +64,7 @@ describe("conversations", () => {
         sent: [
           box(1, "OE8APR-7", "OE6XRR", "held", 50),
           { ...box(2, "OE8APR-7", "OE5XYZ", "delivered", 40), deliveredTo: "OE5XYZ-9" },
+          { ...box(5, "OE8APR-7", "DL2SNT", "sent", 45), deliveredTo: "DL2SNT-7" },
         ],
         received: [box(3, "OE6XRR-9", "OE8APR", "held", 60), box(4, "DL1ABC", "OE8APR", "sent", 70)],
       },
@@ -74,6 +75,9 @@ describe("conversations", () => {
     expect(by["OE6XRR"]).toEqual([expect.objectContaining({ dir: "out", state: "waiting", withdrawId: 1 })]);
     expect(by["OE5XYZ-9"]).toEqual([expect.objectContaining({ dir: "out", state: "delivered" })]);
     expect(by["OE5XYZ-9"]![0]!.withdrawId).toBeUndefined();
+    // one already sent on the air can no longer be taken back
+    expect(by["DL2SNT-7"]).toEqual([expect.objectContaining({ dir: "out", state: "sent-no-ack" })]);
+    expect(by["DL2SNT-7"]![0]!.withdrawId).toBeUndefined();
     expect(by["OE6XRR-9"]).toEqual([expect.objectContaining({ dir: "in", state: "waiting" })]);
     // one already sent on the air arrives as the service call delivered it
     expect(by["DL1ABC"]).toBeUndefined();

@@ -5,6 +5,7 @@ import { useFmt } from "../format.js";
 import { Badge, Button, EmptyState, ErrorState, useLoad, useToast } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { ContentMenu } from "../moderation/ContentMenu.js";
+import { MAILBOX_SENT_NOTE } from "./threads.js";
 
 /** The longest APRS message text. */
 const APRS_TEXT_MAX = 67;
@@ -90,9 +91,8 @@ export function MailboxSection(props: { callsign: string }) {
         />
       </div>
       <div className="comment msg-body">{m.text}</div>
-      {mine && (m.status === "held" || m.status === "sent") && (
-        <Button onClick={() => void withdraw(m)}>Withdraw</Button>
-      )}
+      {mine && m.status === "held" && <Button onClick={() => void withdraw(m)}>Withdraw</Button>}
+      {mine && m.status === "sent" && <p className="muted">{MAILBOX_SENT_NOTE}</p>}
     </li>
   );
 

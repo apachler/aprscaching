@@ -63,6 +63,20 @@ const UNSEEN_ALERT_KEEP_S = 30 * DAY_S;
 /** Stations silent this long leave the map, unless a living cache, a registered station or a node names them. */
 const STATION_KEEP_S = 365 * DAY_S;
 
+/** Resolved reports and moderation log rows: long enough to show what was done about a repeat offender. */
+const MODERATION_KEEP_DAYS = 730;
+/** Finished and expired callsign claims and the holder-change trail: a year answers a dispute over a call. */
+const CLAIM_KEEP_S = 365 * DAY_S;
+/** Email sign-in and confirmation links, past use or expiry (the longest lives 24 hours). */
+const EMAIL_TOKEN_USED_KEEP_S = DAY_S;
+const EMAIL_TOKEN_KEEP_S = 2 * DAY_S;
+
+/** Days resolved reports and moderation log rows are kept: `MODERATION_RETENTION_DAYS`, else the default. */
+export function moderationKeepDays(env: Env): number {
+  const n = Number(env.MODERATION_RETENTION_DAYS);
+  return Number.isInteger(n) && n > 0 ? n : MODERATION_KEEP_DAYS;
+}
+
 /** Rows one bounded delete removes, and the most batches one nightly run takes per table. */
 const PRUNE_BATCH = 5000;
 const PRUNE_BATCHES = 40;
@@ -83,8 +97,53 @@ export async function pruneBounded(env: Env, table: string, select: string, ...b
 }
 
 /**
+ * The nightly prune of the records kept about people: resolved reports and the moderation log, callsign claims
+ * and the holder-change trail, and spent or expired email links. Open reports stay until the sysop settles them,
+ * and the log rows of a suspension in force stay while it holds, since they say why.
+ */
+async function pruneRecords(env: Env, now: number): Promise<void> {
+  const moderationBefore = now - moderationKeepDays(env) * DAY_S;
+  await pruneBounded(
+    env,
+    "moderation_reports",
+    "SELECT rowid FROM moderation_reports WHERE status = 'resolved' AND COALESCE(resolved_at, created_at) < ?",
+    moderationBefore,
+  );
+  await pruneBounded(
+    env,
+    "moderation_log",
+    `SELECT rowid FROM moderation_log l WHERE l.at < ?
+       AND NOT (l.action = 'suspend' AND EXISTS (SELECT 1 FROM account_suspensions s WHERE s.account_id = l.target_account))`,
+    moderationBefore,
+  );
+  // a claim's on-air challenge is keyed `claim:<id>` and goes with it
+  await pruneBounded(
+    env,
+    "callsign_challenges",
+    `SELECT rowid FROM callsign_challenges WHERE account_id IN (
+       SELECT 'claim:' || id FROM callsign_claims WHERE COALESCE(completed_at, created_at) < ?)`,
+    now - CLAIM_KEEP_S,
+  );
+  await pruneBounded(
+    env,
+    "callsign_claims",
+    "SELECT rowid FROM callsign_claims WHERE COALESCE(completed_at, created_at) < ?",
+    now - CLAIM_KEEP_S,
+  );
+  await pruneBounded(env, "callsign_events", "SELECT rowid FROM callsign_events WHERE at < ?", now - CLAIM_KEEP_S);
+  await pruneBounded(
+    env,
+    "email_tokens",
+    "SELECT rowid FROM email_tokens WHERE (used = 1 AND created_at < ?) OR created_at < ?",
+    now - EMAIL_TOKEN_USED_KEEP_S,
+    now - EMAIL_TOKEN_KEEP_S,
+  );
+}
+
+/**
  * The nightly prune of the operational queues and logs that only ever grow: the APRS-IS outbox, box commands,
- * BBS bulletins and the forward log, unseen watch alerts, and stations long silent.
+ * BBS bulletins and the forward log, unseen watch alerts, stations long silent, and the records of
+ * {@link pruneRecords}.
  */
 export async function pruneOperational(env: Env, now: number, bulletinLifetimeS: number): Promise<void> {
   await pruneBounded(
@@ -132,6 +191,7 @@ export async function pruneOperational(env: Env, now: number, bulletinLifetimeS:
     "SELECT rowid FROM callsign_suspensions WHERE until IS NOT NULL AND until <= ?",
     now,
   );
+  await pruneRecords(env, now);
   // A living cache sits at its station's last heard position, and a registered station or a MeshCom node is
   // drawn from its station row, so those rows stay however long they are silent.
   await pruneBounded(

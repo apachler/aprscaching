@@ -14,6 +14,9 @@ import type { LinkKind } from "../rf/radioLink.js";
 /** The longest APRS message text. */
 export const APRS_TEXT_MAX = 67;
 
+/** Why a Mailbox message already sent offers no Withdraw. */
+export const MAILBOX_SENT_NOTE = "Already sent on the air, so it can no longer be withdrawn.";
+
 /** Where a message stands, in one word the thread shows beside it. */
 export type ItemState =
   "queued" | "sent" | "acked" | "failed" | "waiting" | "sent-no-ack" | "delivered" | "undelivered" | "expired";
@@ -29,7 +32,7 @@ export interface ThreadItem {
   /** Delivered by the Mailbox: left in the app or by a MAIL command, sent when the station was heard. */
   viaMailbox?: boolean;
   state?: ItemState;
-  /** A Mailbox message the operator left and can still take back. */
+  /** A Mailbox message the operator left and can still take back: one not yet sent on the air. */
   withdrawId?: number;
 }
 
@@ -117,7 +120,7 @@ export function threadsOf(
       text: b.text,
       viaMailbox: true,
       state: MAILBOX_STATE[b.status],
-      ...(b.status === "held" || b.status === "sent" ? { withdrawId: b.id } : {}),
+      ...(b.status === "held" ? { withdrawId: b.id } : {}),
     });
   // a message left for the operator shows here until it goes out on the air, then as the service call delivered it
   for (const b of mailbox?.received ?? [])

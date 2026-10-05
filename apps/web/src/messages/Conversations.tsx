@@ -39,6 +39,7 @@ import { TERMS } from "../terms.js";
 import { TransportBadge } from "./transport.js";
 import {
   correspondents,
+  MAILBOX_SENT_NOTE,
   nowRoute,
   sendBlocked,
   textMax,
@@ -245,6 +246,7 @@ function ThreadRow(props: { it: ThreadItem; fmt: ReturnType<typeof useFmt>; onWi
           Withdraw
         </Button>
       )}
+      {it.viaMailbox && it.dir === "out" && it.state === "sent-no-ack" && <p className="muted">{MAILBOX_SENT_NOTE}</p>}
     </li>
   );
 }
