@@ -15,6 +15,7 @@ import { FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { callSuspended, SUSPENDED_TEXT } from "./moderation.js";
 
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
@@ -94,6 +95,8 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   // a message is sent in its sender's name, so only the sender's mailbox may post it
   const denied = await requireMailbox(req, env, fromCall);
   if (denied) return denied;
+  // the ingest box posts for the stations it hears: a suspended account's call posts nothing
+  if (await callSuspended(env, fromCall)) return json({ error: SUSPENDED_TEXT }, { status: 403 });
   if (new TextEncoder().encode(body).length > BBS_BODY_MAX_BYTES)
     return json({ error: `the message is longer than ${BBS_BODY_MAX_BYTES / 1024} KB` }, { status: 413 });
   if (subject && subject.length > BBS_SUBJECT_MAX)

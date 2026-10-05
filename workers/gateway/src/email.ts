@@ -20,6 +20,8 @@ import {
   operatorSecretOk,
   signInPaths,
   sessionIdentity,
+  AccountSuspended,
+  suspendedResponse,
 } from "./auth.js";
 import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
@@ -279,7 +281,13 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
         : await emailAccount(env, row.email, row.callsign, now);
   if (acct instanceof Response) return acct;
 
-  const cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
+  let cookie: string;
+  try {
+    cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
+  } catch (e) {
+    if (e instanceof AccountSuspended) return suspendedResponse(e);
+    throw e;
+  }
   // the confirm form → back into the app with the session set; an API client → JSON. A visitor who
   // confirmed on the station's hotspot origin returns there: APP_URL is the owner's localhost.
   if (isForm) {

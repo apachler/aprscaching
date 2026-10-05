@@ -140,6 +140,7 @@ import { handleAdminSetup } from "./setup.js";
 import { handleMailTest } from "./mail.js";
 import { handleStationStatus } from "./station_status.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
+import { handleAdminModeration, handleReport } from "./moderation.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleFed44netAdd } from "./fed44net.js";
@@ -494,6 +495,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/keys") return handleMyApiKeys(req, env);
   const myKey = /^\/api\/keys\/(\d+)$/.exec(p);
   if (myKey && m === "DELETE") return handleRevokeMyApiKey(req, env, Number(myKey[1]));
+  // moderation: reports, takedowns, suspensions and the audit log (sysop-only), and filing a report
+  if (p.startsWith("/api/admin/moderation/"))
+    return handleAdminModeration(req, env, p.slice("/api/admin/moderation".length));
+  if (p === "/api/reports" && m === "POST") return handleReport(req, env);
   const adminAdopt = /^\/api\/admin\/adoptions\/(\d+)(\/assign)?$/.exec(p);
   if (adminAdopt) return handleAdminAdoptions(req, env, { cacheId: Number(adminAdopt[1]), assign: !!adminAdopt[2] });
   const adminPlace = /^\/api\/admin\/caches\/(\d+)\/place$/.exec(p);

@@ -51,10 +51,11 @@ start order: the first ones wait on replies from outside, so they start first, a
       https://github.com/aprsorg/aprs-deviceid/issues, then switch the default tocall in the code to the
       allocated one.
 - [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, an abuse address and
-      `security@aprscaching.net` exist and are read. `SECURITY.md` names `security@aprscaching.net`; the public
-      instance sets `SECURITY_CONTACT=mailto:security@aprscaching.net` for its `/.well-known/security.txt`, and
-      web push's VAPID contact is `VAPID_SUBJECT`, else `mailto:` `OPERATOR_EMAIL`, else the instance's https
-      origin.
+      `security@aprscaching.net` exist and are read. Player reports land under Instance admin → Reports and are
+      mailed to `OPERATOR_EMAIL` when mail is configured; the owner still names an abuse address on the imprint.
+      `SECURITY.md` names `security@aprscaching.net`; the public instance sets
+      `SECURITY_CONTACT=mailto:security@aprscaching.net` for its `/.well-known/security.txt`, and web push's VAPID
+      contact is `VAPID_SUBJECT`, else `mailto:` `OPERATOR_EMAIL`, else the instance's https origin.
 - [ ] **Imprint and privacy notice for aprscaching.net** _(S — owner and legal review)_ — `OPERATOR_NAME`,
       `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` set, so `/imprint` meets ECG §5 (name, geographic address, email)
       and the MedienG §25 disclosure (owner: a small website, or a statement of the editorial line). Review

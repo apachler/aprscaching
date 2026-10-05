@@ -16,6 +16,7 @@
 import type { Env } from "./env.js";
 import { baseHolder } from "./auth.js";
 import { baseCall } from "@aprscaching/aprs";
+import { callSuspended, SUSPENDED_TEXT } from "./moderation.js";
 
 /** SQL for the base call of a callsign column: the part before the SSID's dash, as `baseCall` does. */
 export const baseSql = (col: string): string =>
@@ -108,6 +109,8 @@ export async function logRefusal(
   logType: string,
   accountId: string | null,
 ): Promise<string | null> {
+  // a suspended account writes nothing here, from the app or over the radio
+  if (await callSuspended(env, loggerCall)) return SUSPENDED_TEXT;
   if (OWNER_LOGS.has(logType) && !(await isOwner(env, cache.owner_call, loggerCall, accountId)))
     return `only the owner of ${cache.code} posts ${logType} logs`;
   if ((logType === "found" || logType === "dnf") && cache.status !== "active")

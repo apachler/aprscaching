@@ -2,7 +2,8 @@
 /**
  * tombstones.ts — signed, PII-free delete propagation.
  *
- * When an instance erases data (a GDPR account delete, or an explicit cache/find delete) it emits
+ * When an instance erases data (a GDPR account delete, an explicit cache/find delete, or the sysop's removal
+ * of a cache, a log or a bulletin — moderation.ts) it emits
  * a **tombstone**: a tiny signed record naming the *global id* of the removed record — never a
  * callsign or any other personal datum. Peers fetch the tombstone feed, verify the origin's
  * signature, and purge the matching mirrored record (`fedapply.ts:applyTombstone`). This is
@@ -18,7 +19,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { serveFeed, type FeedServeDef } from "./federation.js";
 
-type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
+type TombstoneKind = "account" | "find" | "cache" | "key" | "move" | "bulletin";
 export interface TombstoneItem {
   kind: TombstoneKind;
   targetId: string;

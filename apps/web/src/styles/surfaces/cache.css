@@ -138,6 +138,14 @@
     font-size: var(--text-label);
     line-height: 1;
   }
+  /* the More menu (Report, and Remove for the sysop) sits on the item's lower corner */
+  .media-item .content-menu {
+    position: absolute;
+    bottom: var(--space-xs);
+    right: var(--space-xs);
+    background: color-mix(in oklab, var(--surface) 85%, transparent);
+    border-radius: var(--radius-control);
+  }
   ol.stagelist {
     list-style: none;
     padding: 0;

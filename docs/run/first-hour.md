@@ -95,6 +95,10 @@ Other members verify their calls themselves (**You → Verify callsign**): over 
 them, by `ampr.org` DNS, or with a LoTW certificate. A sysop can verify an out-of-range member by hand under
 **Instance admin → Callsigns** ([Callsign verification](day-to-day/callsign-verification.md)).
 
+Once members join, reports about caches, logs, photos, messages and profiles reach you under **Instance admin →
+Reports**, and by email to `OPERATOR_EMAIL` when mail is configured
+([Moderation](day-to-day/moderation.md)).
+
 Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_LINKS`).
 The [Configuration reference](../reference/configuration.md) lists every key.
 

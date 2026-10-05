@@ -8,6 +8,9 @@ export interface PlatformValue {
   session: SessionState;
   /** The MapLibre map, or null until its container mounts. */
   map: maplibregl.Map | null;
+  /** The signed-in account is this instance's operator: its sysop-only menus show. The server gates every
+   *  sysop action on its own. */
+  sysop?: boolean;
 }
 
 export const PlatformContext = createContext<PlatformValue | null>(null);

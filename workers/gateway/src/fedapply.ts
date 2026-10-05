@@ -171,6 +171,8 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
     env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_keys WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_account_moves WHERE global_id = ?").bind(target),
+    // a mirrored bulletin is stored under its record id, with the peer that served it as its origin
+    env.DB.prepare("DELETE FROM bbs_messages WHERE bid = ? AND origin = ?").bind(target, origin),
     env.DB.prepare(
       "INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)",
     ).bind(target, origin, d.kind ?? "unknown", d.ts ?? nowS(), nowS()),

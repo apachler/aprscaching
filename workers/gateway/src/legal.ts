@@ -75,7 +75,8 @@ function recipients(env: Env): string {
   const mail = mailTransport(env);
   if (mail)
     items.push(`<li><strong>Email provider</strong> (${escapeHtml(mail.host)}) — your e-mail
-  address and the text of each sign-in or digest mail, so that it can deliver them.</li>`);
+  address and the text of each sign-in, digest or moderation mail, so that it can deliver them; the operator's
+  address and the text of each report a player files.</li>`);
   if (env.VAPID_PUBLIC && env.VAPID_PRIVATE)
     items.push(`<li><strong>Browser push services</strong> — when you turn on notifications, the push service of
   your browser's vendor receives each notification, encrypted, and delivers it to your device.</li>`);
@@ -117,6 +118,10 @@ ${contact}
   transmits publicly by design; short-lived firehose positions are pruned on a retention schedule,
   while positions that verify a cache find are kept longer as the find's evidence.</li>
 <li><strong>Game data</strong> — caches you hide, finds you log, ratings, and media you upload.</li>
+<li><strong>Moderation</strong> — reports players file (the item, a category, the reporter's words and, when signed
+  in, the reporter's call) and the operator's record of each moderation action and suspension, kept to answer
+  abuse (legitimate interest). Your export includes the actions about your account; who reported you is not
+  shown to you.</li>
 <li><strong>Technical minimum</strong> — one session cookie (sign-in only, no tracking), and
   short-lived per-IP counters for rate limiting. No analytics, no advertising, no third-party
   trackers.</li>

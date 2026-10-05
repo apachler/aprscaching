@@ -86,6 +86,10 @@ A ham, a club or a group: its [sysop](../glossary.md#sysop). **Settings → Help
 instance** names the sysop's callsign when the instance publishes it; otherwise ask the person or club that gave
 you the address. See [Getting to your instance](your-instance.md#find-out-which-ways-your-instance-offers).
 
+**Something on a cache page is wrong or offensive.**
+Tap **More** (**⋯**) beside it, then **Report**. The sysop gets your report; the person you report never
+learns who sent it. See [Report a problem](community.md#report-a-problem).
+
 **Where do I report a bug?**
 First search the manual and the project's existing issues. Then ask in
 [GitHub Discussions](https://github.com/apachler/aprscaching/discussions), or open an issue with the bug

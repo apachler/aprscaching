@@ -931,6 +931,9 @@ const ROUTES: Route[] = [
     /^\/api\/admin\/adoptions$/,
     () => ({ noticeSec: 30 * DAY, withdrawn: [], offered: [], log: [] }) satisfies AdminAdoptions,
   ],
+  ["GET", /^\/api\/admin\/moderation\/reports$/, () => ({ reports: [], counts: { open: 0, resolved: 0 } })],
+  ["GET", /^\/api\/admin\/moderation\/log$/, () => ({ entries: [], nextBefore: null })],
+  ["GET", /^\/api\/admin\/moderation\/accounts$/, () => ({ accounts: [] })],
   ["GET", /^\/api\/admin\/boxes$/, () => ({ boxes: BOXES, openCodes: [] })],
   ["GET", /^\/api\/admin\/sites$/, () => ({ sites: trustedStations() })],
   [

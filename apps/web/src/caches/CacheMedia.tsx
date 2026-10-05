@@ -4,6 +4,7 @@ import { MEDIA_LIMITS } from "@aprscaching/shared";
 import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMediaItem } from "../api.js";
 import { mediaUploadProblem } from "../media/limits.js";
 import { Button, Icon, useConfirm } from "../ui/index.js";
+import { ContentMenu } from "../moderation/ContentMenu.js";
 
 /**
  * Cache media gallery — photos, audio and files an owner attaches to a cache (hints,
@@ -11,7 +12,13 @@ import { Button, Icon, useConfirm } from "../ui/index.js";
  * as thumbnails, audio as players, anything else as a download link. Lazy: only fetched when mounted
  * on the cache sheet.
  */
-export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: (m: string) => void }) {
+export function CacheMedia(props: {
+  cacheId: number;
+  isOwner: boolean;
+  /** Read from an offline pack: nothing to report or remove. */
+  offline?: boolean;
+  onToast: (m: string) => void;
+}) {
   const [items, setItems] = useState<CacheMediaItem[] | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -113,6 +120,13 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
                 >
                   ✕
                 </Button>
+              )}
+              {!props.offline && (
+                <ContentMenu
+                  target={{ kind: "media", id: it.id, label: it.title ?? (it.kind === "image" ? "photo" : "file") }}
+                  own={props.isOwner}
+                  onRemoved={() => setItems((m) => (m ?? []).filter((x) => x.id !== it.id))}
+                />
               )}
             </figure>
           ))}

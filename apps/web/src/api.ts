@@ -111,7 +111,7 @@ async function reach(url: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+export async function call<T>(path: string, init?: RequestInit): Promise<T> {
   // A JSON content-type makes a cross-origin request non-simple, so it is sent only with a JSON body: a GET
   // without it needs no CORS preflight.
   const json = typeof init?.body === "string" ? { "content-type": "application/json" } : undefined;

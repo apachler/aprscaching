@@ -475,6 +475,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
+    if (e instanceof AccountSuspended) return suspendedResponse(e);
     return json({ error: "registration failed: " + (e as Error).message }, { status: 400 });
   }
 }
@@ -545,6 +546,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
+    if (e instanceof AccountSuspended) return suspendedResponse(e);
     return json({ error: "login failed: " + (e as Error).message }, { status: 400 });
   }
 }
@@ -573,6 +575,8 @@ export async function sessionIdentity(req: Request, env: Env): Promise<SessionId
     .bind(claims.accountId)
     .first<{ session_gen: number }>();
   if (!row || Number(row.session_gen) !== claims.gen) return null;
+  // a suspended account acts as nobody: no write and no transmission through this instance while it holds
+  if (await suspensionOf(env, claims.accountId)) return null;
   const base = baseCall(claims.callsign);
   if ((await baseHolder(env, base)) !== claims.accountId) return null;
   return { accountId: claims.accountId, callsign: claims.callsign, base };
@@ -726,12 +730,43 @@ export function sessionUnavailable(): Response {
   return json({ error: new SessionUnavailable().message }, { status: 503 });
 }
 
-/** Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`. */
+/** Is a suspension recorded at `at` (null: none) still in force? `until` null holds until it is lifted. */
+const suspensionHolds = (at: number | null, until: number | null): boolean =>
+  at != null && (until == null || until > nowS());
+
+/** The suspension in force on an account, or null. */
+export async function suspensionOf(
+  env: Env,
+  accountId: string,
+): Promise<{ reason: string; until: number | null; at: number } | null> {
+  const s = await env.DB.prepare("SELECT reason, until, at FROM account_suspensions WHERE account_id=?")
+    .bind(accountId)
+    .first<{ reason: string; until: number | null; at: number }>();
+  return s && suspensionHolds(s.at, s.until) ? s : null;
+}
+
+/** Thrown when a sign-in reaches an account the sysop has suspended: no session is issued. */
+export class AccountSuspended extends Error {
+  constructor(readonly suspension: { reason: string; until: number | null }) {
+    const until = suspension.until ? ` until ${new Date(suspension.until * 1000).toISOString().slice(0, 10)}` : "";
+    super(`this account is suspended on this instance${until}: ${suspension.reason}`);
+  }
+}
+
+/** The answer to a sign-in that reached a suspended account: what holds, and until when. */
+export function suspendedResponse(e: AccountSuspended): Response {
+  return json({ error: e.message, suspended: e.suspension }, { status: 403 });
+}
+
+/** Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`.
+ *  Every sign-in path mints its session here, so a suspended account is refused in one place. */
 export async function issueSessionCookie(env: Env, accountId: string, callsign: string): Promise<string> {
   const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
     .bind(accountId)
     .first<{ session_gen: number }>();
   if (!row) throw new Error("no such account");
+  const suspended = await suspensionOf(env, accountId);
+  if (suspended) throw new AccountSuspended(suspended);
   const token = await signSession(env, { accountId, gen: Number(row.session_gen), callsign: callsign.toUpperCase() });
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
   return `${SESSION_COOKIE}=${token}; ${cookieFlags(env)}; Max-Age=${ttlDays * 86_400}`;

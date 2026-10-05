@@ -301,6 +301,8 @@ export interface CacheDetail extends CacheSummary {
       stagePins: Array<{ stageNo: number; lat: number; lon: number }>;
     };
   };
+  /** A cache the sysop removed, as its owner and the sysop see it: when, and the reason given. */
+  removed?: { at: number; reason: string | null };
 }
 
 // ---- audio-cache: staged multi-cache ----

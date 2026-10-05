@@ -198,4 +198,12 @@
       grid-column: auto;
     }
   }
+  /* Moderation → Accounts: the search field takes the row, its button sits beside it */
+  .mod-search {
+    align-items: center;
+  }
+  .mod-search .srch {
+    flex: 1;
+    margin: 0;
+  }
 }

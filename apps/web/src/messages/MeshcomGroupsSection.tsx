@@ -3,6 +3,7 @@ import { useState } from "react";
 import { getMeshcomGroupMessages, type MeshcomGroup, type MeshcomGroupMessage } from "../api.js";
 import { useFmt } from "../format.js";
 import { EmptyState, ErrorState, LoadMore, usePaged, InfoTip } from "../ui/index.js";
+import { ContentMenu } from "../moderation/ContentMenu.js";
 
 /** How the receiving node heard a group message, in words. */
 const HEARD: Record<NonNullable<MeshcomGroupMessage["heard"]>, string> = {
@@ -85,6 +86,10 @@ export function MeshcomGroupsSection(props: { groups: MeshcomGroup[] }) {
                       </span>
                     )}
                     <span className="muted msg-when">{fmt.ago(m.ts)}</span>
+                    <ContentMenu
+                      target={{ kind: "meshcom", id: m.id, label: `message from ${m.fromCall}` }}
+                      onRemoved={messages.reload}
+                    />
                   </div>
                   <div className="comment msg-body">{m.body}</div>
                 </li>

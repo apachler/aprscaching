@@ -826,7 +826,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedApps.map((a) => a.id)]);
   const tabKeys = new Set(TAB_ITEMS.map((i) => i.key));
   const moreKeys = new Set<string>(MORE_ITEMS.map((i) => i.key));
-  const ctx = useMemo(() => ({ session, map }), [session, map]);
+  const ctx = useMemo(() => ({ session, map, sysop }), [session, map, sysop]);
 
   // the bell's count: unseen watchlist alerts, polled while signed in and on every panel change
   const [unseenAlerts, setUnseenAlerts] = useState(0);

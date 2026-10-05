@@ -12,6 +12,7 @@ import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { CACHE_POINT, moveRefusal, placePins } from "./cacheplace.js";
+import { removedCacheResponse } from "./moderation.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import {
   MEDIA_LIMITS,
@@ -329,6 +330,8 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
 
 // ---- list stages (coords hidden unless stage 0 or unlocked by the caller) ----
 export async function handleGetStages(req: Request, env: Env, cacheId: number): Promise<Response> {
+  const hidden = await removedCacheResponse(req, env, cacheId);
+  if (hidden) return hidden;
   // the caller's own unlocks only: `?callsign=` names someone else only with the ingest secret
   const callsign = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
   const rows = (
@@ -517,6 +520,8 @@ function mediaKind(ct: string): "image" | "audio" | null {
 
 /** List a cache's media (public — attachments are meant to be seen/heard). */
 export async function handleListCacheMedia(req: Request, env: Env, cacheId: number): Promise<Response> {
+  const hidden = await removedCacheResponse(req, env, cacheId);
+  if (hidden) return hidden;
   const rows = (
     await env.DB.prepare(
       "SELECT id, media_key, kind, content_type, title, bytes, created_at, thumb_key, thumb_bytes FROM cache_media WHERE cache_id=? ORDER BY created_at",

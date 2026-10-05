@@ -22,6 +22,7 @@ preferences, media, tools, their own data) stay under **Settings** and are not p
 | **Setup** | the first-install checklist: *Blocking*, *Recommended* and *Optional* items, and the 44Net self-check | [Your first hour](../first-hour.md) |
 | **Callsigns** | look a call up, verify it by hand, release it from an account, list and revoke manual verifications | [Callsign verification](callsign-verification.md) |
 | **Stations for members** | list a club station for the member who runs it, when that member does not hold the club call: give the member's callsign, the station's callsign and its position (blank takes a heard station's) | [Stations for members](#stations-for-members) |
+| **Reports**, **Accounts**, **Audit log** | the moderation queue: settle reports, remove content, find and suspend an account, and the record of every action | [Moderation](moderation.md) |
 | **Cache adoption** | offer caches for adoption, decide requests, assign an owner | [Cache adoption](cache-adoption.md) |
 | **API keys** | every member's read-API key with its owner, name, prefix and last use; **Revoke** one that is misused | [API reference](../../reference/api.md#public-read-api) |
 | **Federation** | the peer list with health and reputation, each peer's trust (`trusted`, `unvetted`, `blocked`), a manual sync | [Join the network](../federation/index.md) |
@@ -69,6 +70,7 @@ from. Finders who unlocked a corrected stage, or one after it, unlock those stag
 | Sign someone in without a passkey | [One-time sign-in links](sign-in-links.md) |
 | Send sign-in links and the digest by mail, or test that mail | [Send mail](mail.md) |
 | Verify a member's callsign by hand | [Callsign verification](callsign-verification.md) |
+| Answer a report, remove content, suspend an account | [Moderation](moderation.md) |
 | Give an abandoned cache a new owner | [Cache adoption](cache-adoption.md) |
 | Correct a found cache's coordinates | [Correct a cache's place](#correct-a-caches-place) |
 | Keep the register badge current | [Licence registers](licence-registers.md) |

@@ -74,7 +74,7 @@ export async function handleActivityFeed(req: Request, env: Env): Promise<Respon
       `SELECT l.id, l.logger_call AS loggerCall, l.ts, l.log_type AS logType, l.verified, l.tier,
             c.code AS cacheCode, c.title AS cacheTitle
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE c.fed_scope != 'unlisted'
+       WHERE c.fed_scope != 'unlisted' AND c.removed_at IS NULL
        ORDER BY l.ts DESC LIMIT 50`,
     ).all<any>()
   ).results;
@@ -189,7 +189,8 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
     await env.DB.prepare(
       `SELECT l.id, l.ts, l.tier, l.verified, c.code AS cacheCode, c.title AS cacheTitle
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.logger_call = ? AND l.log_type = 'found' AND c.fed_scope != 'unlisted' ORDER BY l.ts DESC LIMIT 50`,
+       WHERE l.logger_call = ? AND l.log_type = 'found' AND c.fed_scope != 'unlisted' AND c.removed_at IS NULL
+       ORDER BY l.ts DESC LIMIT 50`,
     )
       .bind(cs)
       .all<any>()
