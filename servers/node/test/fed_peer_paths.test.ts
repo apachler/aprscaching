@@ -3,7 +3,7 @@
 // could bring it back (a pull, the registry, discovery, a push, a trust change); a FED_PEERS fingerprint pin
 // holds across a key rotation; a peer's own descriptor and beacons tell where else it answers, and
 // corroboration asks it there too; trust needs the compared fingerprint, and an automatic promotion keeps how
-// the peer arrived.
+// the peer arrived. Sync now pulls one peer at once, for the sysop only.
 import { createHash } from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
@@ -394,5 +394,55 @@ describe("trust decisions", () => {
       fingerprint: fp(peers[1]!.key),
     });
     expect((await peerRow(hub, peers[1]!.url))?.auto_promoted_at).toBeNull();
+  });
+});
+
+describe("Sync now, one peer", () => {
+  it("pulls a peer added in Instance admin at once, and reports what arrived and when", async () => {
+    const key = await newFedKey();
+    const a = instanceEnv("a.example", key);
+    await addCache(a);
+    const routes = stubFetch({ [A]: serve(a) });
+    const hub = instanceEnv("hub.example", await newFedKey());
+    await insertPeer(hub, A, {
+      instance: "a.example",
+      public_key: key.pub,
+      accept_keys: JSON.stringify([{ x: key.pub }]),
+      trust: "unvetted",
+      added_via: "admin",
+    });
+    const r = await req(hub, "POST", "/federation/peers/sync", { url: A });
+    expect(r.status).toBe(200);
+    expect(r.data).toMatchObject({ ok: true, url: A, pulled: { caches: 1 }, lastError: null });
+    expect(r.data.lastOk).toBeGreaterThan(0);
+    expect(await remoteCacheCount(hub, "a.example")).toBe(1);
+
+    // a failed pull answers with its error and keeps it on the row
+    delete routes[A];
+    const failed = await req(hub, "POST", "/federation/peers/sync", { url: A });
+    expect(failed.data).toMatchObject({ ok: false, error: expect.stringMatching(/fetch failed/) });
+    expect(failed.data.lastError).toBe(failed.data.error);
+
+    // three a minute per peer
+    expect((await req(hub, "POST", "/federation/peers/sync", { url: A })).status).toBe(200);
+    expect((await req(hub, "POST", "/federation/peers/sync", { url: A })).status).toBe(429);
+  });
+
+  it("never contacts a blocked or a not yet enabled peer, and needs the sysop", async () => {
+    const hub = instanceEnv("hub.example", await newFedKey());
+    await insertPeer(hub, A, { trust: "blocked", added_via: "admin" });
+    await insertPeer(hub, A2, { trust: "unvetted", added_via: "discovered", enabled: 0 });
+    stubFetch({});
+    expect((await req(hub, "POST", "/federation/peers/sync", { url: A })).status).toBe(409);
+    expect((await req(hub, "POST", "/federation/peers/sync", { url: A2 })).status).toBe(409);
+    expect((await req(hub, "POST", "/federation/peers/sync", { url: "https://nobody.example" })).status).toBe(404);
+    const anon = await serve(hub)(
+      new Request("https://hub.example/federation/peers/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: A }),
+      }),
+    );
+    expect(anon.status).toBe(403);
   });
 });

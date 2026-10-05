@@ -40,6 +40,7 @@ describe("the ingest secret is not an operator credential", () => {
     const writes: Array<[string, string, unknown]> = [
       ["POST", "/federation/peers/trust", { url: "https://p.example", trust: "blocked" }],
       ["GET", "/federation/peers", undefined],
+      ["POST", "/federation/peers/sync", { url: "https://p.example" }],
       ["POST", "/federation/peers/44net", { callsign: "OE1XYZ" }],
       ["POST", "/api/bbs/forward", { partner: "oe1bbb", route: "OE" }],
       ["POST", "/api/bbs/partners", { call: "OE1BBB-1", ha: "OE1BBB.AUT.EU", proto: "rf-fbb" }],

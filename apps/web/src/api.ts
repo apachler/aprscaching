@@ -975,6 +975,22 @@ export function removePeer(url: string): Promise<{ ok: boolean }> {
   return call(`/federation/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
 }
 
+/** What one peer's Sync now brought: the records per feed, or the pull's error, and its last pull times. */
+export interface PeerSyncResult {
+  ok: boolean;
+  url: string;
+  pulled?: { caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number };
+  error?: string;
+  lastSync: number | null;
+  lastOk: number | null;
+  lastError: string | null;
+}
+
+/** Sync now, one peer: pull from it at once (sysop, rate limited per peer). */
+export function syncPeerNow(url: string): Promise<PeerSyncResult> {
+  return call(`/federation/peers/sync`, { method: "POST", body: JSON.stringify({ url }) });
+}
+
 /** How pushing to the hub stands (a spoke) and when each spoke last submitted (a hub). */
 export interface FederationSync {
   hub: {
