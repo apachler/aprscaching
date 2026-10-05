@@ -57,9 +57,9 @@ Min accepted tier is a config policy (site default `B`; per-cache `min_trust` ov
 See workers/gateway/src/verify.ts.
 
 ## Cost rules
-Filter APRS-IS server-side; persist selectively; batch ingest POSTs; DO Hibernation API only
-(`acceptWebSocket` + `serializeAttachment`); TTL firehose positions nightly (keep logger
-positions longer for verification); TX off by default + gated.
+Filter APRS-IS server-side; persist selectively; batch ingest POSTs; live fan-out stays in memory
+(`rooms-core.ts`: region rooms, a ping sweep reaps half-open sockets, a backed-up client is dropped);
+TTL firehose positions nightly (keep logger positions longer for verification); TX off by default + gated.
 
 ## Commands
 Node ≥ 22 (CI uses 24); pnpm is pinned via `packageManager` (use `corepack pnpm` if it isn't on PATH).
