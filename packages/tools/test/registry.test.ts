@@ -104,4 +104,11 @@ describe("registryEntryFor", () => {
     expect(registryEntryFor([listed], "cw-tool", "not a url")).toBeUndefined();
     expect(registryEntryFor([listed], "cw-tool", "https://TOOLS.example.org/cw-tool/tool.json")).toBe(listed);
   });
+  it("resolves a relative entry against the registry's own URL", () => {
+    const rel: RegistryEntry = { ...listed, entry: "/tools/cw-tool/tool.json" };
+    const reg = "https://app.example.org/tools/registry.json";
+    expect(registryEntryFor([rel], "cw-tool", "https://app.example.org/tools/cw-tool/tool.json", reg)).toBe(rel);
+    expect(registryEntryFor([rel], "cw-tool", "https://copy.example.net/tools/cw-tool/tool.json", reg)).toBeUndefined();
+    expect(registryEntryFor([rel], "cw-tool", "https://app.example.org/tools/cw-tool/tool.json")).toBeUndefined();
+  });
 });

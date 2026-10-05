@@ -157,7 +157,8 @@ A tool (a plugin for the Shack's **Tools** app) needs no change to this reposito
 script on any web server. [Write your first tool](docs/contribute/first-tool.md) builds one from the example in
 `packages/tools/examples/station-log/`, and the [Tool reference](docs/contribute/tool-reference.md) lists every
 field, message and limit. To list a tool in the project's registry, open a pull request that adds its entry to
-`apps/web/public/tools/registry.json`.
+`apps/web/public/tools/registry.json`; [The tool registry](docs/contribute/tool-registry.md) says what the entry
+holds, who signs the file and how a sysop runs a registry of their own.
 
 ## Licensing: inbound = outbound
 

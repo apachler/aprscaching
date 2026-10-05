@@ -118,6 +118,7 @@ nav:
       - Your radio in the browser: shack/my-radio.md
       - The live map: shack/live-map.md
       - Packet terminal & BBS: shack/packet-and-bbs.md
+      - Tools and plugins: shack/tools.md
       - Messages over APRS and MeshCom: shack/messages.md
       - Rig control & weather: shack/rig-weather.md
       - On-air etiquette and rules: shack/on-air.md
@@ -201,6 +202,7 @@ nav:
       - Writing a Shack plugin: contribute/plugins.md
       - Write your first tool: contribute/first-tool.md
       - Tool reference: contribute/tool-reference.md
+      - The tool registry: contribute/tool-registry.md
       - Style guide for the manual: contribute/style-guide.md
       - Specification registry: contribute/specs.md
   - Glossary: glossary.md

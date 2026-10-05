@@ -3,7 +3,8 @@
  * builtins/index.ts — the curated built-in Tools. Each is a plain module implementing the
  * Tool interface (no sandbox needed — they're first-party + trusted), demonstrating every extension
  * point: a monitor colouriser (off the NAMES.GP registry), a CTEXT macro pack (/commands), an
- * auto-responder (on_connect greeting), a beacon scheduler (TX-gated), and the PSK31 + CW decoders.
+ * auto-responder (on_connect greeting), a beacon scheduler (TX-gated), the packet decoder and the PSK31 + CW
+ * decoders.
  * The event payloads may carry a `reply` callback so a tool can answer a connected session generically.
  */
 import { StationRegistry } from "@aprscaching/packet";
@@ -12,6 +13,7 @@ import { parseBlocks, sanitizePanel, type PanelSpec } from "../panel.js";
 import { decodeMorse, encodeMorse } from "../decoders/morse.js";
 import { decodeVaricode } from "../decoders/psk31.js";
 import { decode7plus } from "../decoders/sevenplus.js";
+import { decodeAprsText } from "../decoders/aprs.js";
 import { parseScript, type ScriptState } from "../session-script.js";
 
 /** Coerce an untrusted event-payload value to a string; an object becomes "" (never "[object Object]"). */
@@ -863,6 +865,26 @@ export function decoderTools(): Tool {
   };
 }
 
+/** Packet decoder — a raw TNC2 / APRS-IS line in, the AX.25 header and every APRS field out. Pure and local:
+ *  the same parser the gateway ingests with, so it decodes offline. */
+export const PACKET_DECODER = { tool: "packet-decoder", decoder: "aprs" } as const;
+export function packetDecoderTool(): Tool {
+  return {
+    manifest: {
+      name: PACKET_DECODER.tool,
+      title: "Packet decoder",
+      author: AUTHOR,
+      version: v,
+      permissions: ["decoder"],
+      surfaces: ["web"],
+      description: "Paste a raw TNC2 or APRS-IS line and see every field it carries.",
+    },
+    activate(ctx) {
+      ctx.addDecoder({ id: PACKET_DECODER.decoder, label: "APRS packet", kind: "aprs", decode: decodeAprsText });
+    },
+  };
+}
+
 /** APRS SSID reference — a `panel`-capability tool that renders a declarative table in the Tools app.
  *  Demonstrates the panel extension point: a tool presents a real UI region without touching the DOM. */
 export function ssidReferenceTool(): Tool {
@@ -908,6 +930,7 @@ export function builtinTools(): Tool[] {
     macroPackTool(),
     autoResponderTool(),
     beaconSchedulerTool(),
+    packetDecoderTool(),
     decoderTools(),
     ssidReferenceTool(),
     watchAlertTool(),

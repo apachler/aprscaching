@@ -64,14 +64,7 @@ function AppShell({
         onProfile={noop}
       />
       <div className="shell">
-        <NavRail
-          active={active}
-          onNav={noop}
-          pinnedApps={[]}
-          onLaunchApp={noop}
-          sysop={false}
-          attention={NO_ATTENTION}
-        />
+        <NavRail active={active} onNav={noop} pinned={[]} onOpen={noop} sysop={false} attention={NO_ATTENTION} />
         <div className="mapwrap">
           <div className="map demo-map" />
         </div>

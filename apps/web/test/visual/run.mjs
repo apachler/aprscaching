@@ -220,8 +220,19 @@ const SURFACES = [
   { name: "shack", as: "user", query: "?view=shack" },
   { name: "terminal", as: "user", query: "?view=terminal" },
   { name: "bbs", as: "user", query: "?view=bbs" },
-  { name: "decoder", as: "user", query: "?view=decoder" },
   { name: "tools", as: "user", query: "?view=tools" },
+  // the packet decoder, a built-in tool, opened the way its rail pin opens it, with a sample decoded
+  {
+    name: "tools-decoder",
+    as: "user",
+    query: "?view=tools&tool=packet-decoder",
+    wait: ".tools-panel textarea",
+    steps: [
+      ["click", "button:has-text('Use a sample')"],
+      ["click", ".tool-sub button:has-text('Decode')"],
+    ],
+    after: ".decoded",
+  },
   { name: "rig", as: "user", query: "?view=rig" },
   { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
   { name: "admin", as: "sysop", query: "?view=admin" },
@@ -250,13 +261,13 @@ const SURFACES = [
     ],
     after: ".iset-fields",
   },
-  // the nav rail with every Shack app pinned: the pinned section scrolls, the bottom group stays in view
+  // the nav rail with every Shack app and two tools pinned: the pinned section scrolls, the bottom group stays in view
   {
     name: "rail-pinned",
     as: "sysop",
     query: "?view=messages",
     views: ["desktop"],
-    pins: ["terminal", "bbs", "decoder", "tools", "rig", "node", "remote"],
+    pins: ["terminal", "bbs", "tools", "rig", "node", "remote", "tool:packet-decoder", "tool:mheard"],
     wait: ".rail",
   },
   { name: "node", as: "sysop", query: "?view=node" },

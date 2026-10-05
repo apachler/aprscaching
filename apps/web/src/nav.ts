@@ -11,7 +11,8 @@
  * rail has; all of them derive their active item from the open view with `activeKey`. `NAV_LINKS` are the
  * destinations outside the app (the manual), which the rail and the More sheet both end with.
  * `?view=` query strings (the shared SURFACES deep links, plus admin, the Shack apps and a station)
- * map to views through `viewQuery` / `viewFromQuery`; the map position stays in MapLibre's hash.
+ * map to views through `viewQuery` / `viewFromQuery`; the map position stays in MapLibre's hash. An app's
+ * `&tool=` names the tool it opens with (a pinned tool opens Tools this way).
  */
 import type { IconName } from "./ui/Icon.js";
 import { MANUAL_URL } from "./brand.js";
@@ -36,7 +37,7 @@ export type PanelKey =
 export type View =
   | { kind: "map" }
   | { kind: "panel"; key: PanelKey }
-  | { kind: "app"; id: ShackAppId }
+  | { kind: "app"; id: ShackAppId; tool?: string }
   | { kind: "station"; call: string };
 
 export const MAP: View = { kind: "map" };
@@ -119,7 +120,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "shack",
     label: "Shack",
     icon: "tools",
-    hint: "Radio apps: packet terminal, BBS, decoder, rig control and tools",
+    hint: "Radio apps: packet terminal, BBS, rig control and tools such as the packet decoder",
     section: "top",
   },
   {
@@ -164,6 +165,15 @@ export const MORE_ITEMS: readonly NavItem[] = [
   ...NAV_ITEMS.filter((i) => i.sysop),
 ];
 
+/** A pinned Shack app or tool as the rail and the phone's More sheet draw it: its pin id is its key. */
+export interface PinnedItem {
+  key: string;
+  icon: IconName;
+  label: string;
+  hint: string;
+  view: View;
+}
+
 /** A destination outside the app, opened in a new tab. */
 export interface NavLink {
   key: string;
@@ -186,10 +196,12 @@ export function inMore(view: View): boolean {
 export const viewOf = (key: NavItem["key"]): View => (key === "map" ? MAP : panel(key));
 
 /**
- * Which of `keys` (the items a nav bar shows) the open view lights. A launched Shack app lights its
- * pinned rail item, else the Shack launcher; anything without an item of its own lights the map.
+ * Which of `keys` (the items a nav bar shows) the open view lights. A tool opened in Tools lights its pin
+ * (`tool:<name>`); a launched Shack app lights its pinned rail item, else the Shack launcher; anything without an
+ * item of its own lights the map.
  */
 export function activeKey(view: View, keys: ReadonlySet<string>): string {
+  if (view.kind === "app" && view.tool && keys.has(`tool:${view.tool}`)) return `tool:${view.tool}`;
   const k = view.kind === "panel" ? view.key : view.kind === "app" ? view.id : "map";
   if (keys.has(k)) return k;
   if (view.kind === "app" && keys.has("shack")) return "shack";
@@ -199,7 +211,7 @@ export function activeKey(view: View, keys: ReadonlySet<string>): string {
 export function sameView(a: View, b: View): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "panel") return a.key === (b as typeof a).key;
-  if (a.kind === "app") return a.id === (b as typeof a).id;
+  if (a.kind === "app") return a.id === (b as typeof a).id && a.tool === (b as typeof a).tool;
   if (a.kind === "station") return a.call === (b as typeof a).call;
   return true;
 }
@@ -207,10 +219,12 @@ export function sameView(a: View, b: View): boolean {
 /** `search` with the view's `?view=` parameters in place of any it carried; other parameters stay. */
 export function viewQuery(view: View, search: string): string {
   const p = new URLSearchParams(search);
-  for (const k of ["view", "call"]) p.delete(k);
+  for (const k of ["view", "call", "tool"]) p.delete(k);
   if (view.kind === "panel") p.set("view", view.key);
-  else if (view.kind === "app") p.set("view", view.id);
-  else if (view.kind === "station") {
+  else if (view.kind === "app") {
+    p.set("view", view.id);
+    if (view.tool) p.set("tool", view.tool);
+  } else if (view.kind === "station") {
     p.set("view", "station");
     p.set("call", view.call);
   }
@@ -224,7 +238,8 @@ export function viewFromQuery(search: string): View | null {
   const v = p.get("view");
   if (!v) return null;
   if (isPanelKey(v)) return panel(v);
-  if (isAppId(v)) return { kind: "app", id: v };
+  const tool = p.get("tool");
+  if (isAppId(v)) return tool ? { kind: "app", id: v, tool } : { kind: "app", id: v };
   const call = p.get("call");
   if (v === "station" && call) return { kind: "station", call };
   return null;

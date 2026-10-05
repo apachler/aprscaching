@@ -1,21 +1,9 @@
 # Packet terminal & BBS
 
-This page shows you how to use the Shack's packet apps: decode a frame, connect to a BBS or a node over your
-own TNC, and send mail through the instance's BBS. It is for operators who know packet radio; no server setup
+This page shows you how to use the Shack's packet apps: connect to a BBS or a node over your own TNC, and send
+mail through the instance's BBS. To decode a raw frame, use the packet decoder in
+[Tools and plugins](tools.md#decode-a-packet). It is for operators who know packet radio; no server setup
 is involved.
-
-## Decode a packet
-
-1. Open **Shack → Packet decoder**.
-2. Paste a line in the usual TNC2 format, for example:
-
-    ```
-    OE8APR-9>APRS,WIDE1-1,qAR,OE8XBM-10:!4703.00N/01526.00E>mobile
-    ```
-
-The decoder shows what the line contains: position (plain, compressed or Mic-E), course, speed, altitude,
-objects and items, messages with acknowledgements, bulletins, status, weather and telemetry. In the example,
-`qAR,OE8XBM-10` is the [q-construct](../glossary.md#q-construct): where the packet entered APRS-IS.
 
 ## Connect to a BBS or node
 

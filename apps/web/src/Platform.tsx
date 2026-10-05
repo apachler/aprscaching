@@ -77,7 +77,8 @@ import { ShackPanel } from "./shack/ShackPanel.js";
 import { ShackAppSurface } from "./shack/ShackAppSurface.js";
 import { MessagesPanel } from "./messages/MessagesPanel.js";
 import { StationPanel } from "./stations/StationPanel.js";
-import { SHACK_APPS, usePinnedApps, appById, type ShackApp } from "./shack/apps.js";
+import { SHACK_APPS, usePins, appById, type ShackApp } from "./shack/apps.js";
+import { usePinnedItems } from "./shack/pinnedItems.js";
 import {
   MAP,
   NAV_ITEMS,
@@ -230,7 +231,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
-  const { pins, toggle: togglePin } = usePinnedApps();
+  const { pins, toggle: togglePin } = usePins();
   const [filters, setFilters] = useState<CacheFilters>(NO_FILTERS);
   // include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
   const [includeUnvetted, setIncludeUnvetted] = useState(false);
@@ -375,6 +376,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const closeView = useCallback(() => setView(MAP), []);
   const launchApp = useCallback((id: ShackApp["id"]) => openView({ kind: "app", id }), [openView]);
   const visibleApps = useMemo(() => SHACK_APPS.filter((a) => sysop || !a.sysop), [sysop]);
+  const pinnedItems = usePinnedItems(pins, sysop);
   const openCache = useCallback((id: number) => {
     setRemote(null);
     setSelectedId(id);
@@ -877,10 +879,9 @@ export default function Platform({ session, startTour }: { session: SessionState
   }
 
   const onNav = (key: (typeof NAV_ITEMS)[number]["key"]) => openView(viewOf(key));
-  const pinnedApps = pins.map(appById).filter((a): a is ShackApp => !!a && (sysop || !a.sysop));
-  const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedApps.map((a) => a.id)]);
+  const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedItems.map((p) => p.key)]);
   const tabKeys = new Set(TAB_ITEMS.map((i) => i.key));
-  const moreKeys = new Set<string>(MORE_ITEMS.map((i) => i.key));
+  const moreKeys = new Set<string>([...MORE_ITEMS.map((i) => i.key), ...pinnedItems.map((p) => p.key)]);
   const ctx = useMemo(() => ({ session, map, sysop }), [session, map, sysop]);
 
   // the bell's count: unseen watchlist alerts, polled while signed in and on every panel change
@@ -935,8 +936,8 @@ export default function Platform({ session, startTour }: { session: SessionState
             <NavRail
               active={activeKey(view, railKeys)}
               onNav={onNav}
-              pinnedApps={pinnedApps}
-              onLaunchApp={launchApp}
+              pinned={pinnedItems}
+              onOpen={openView}
               sysop={sysop}
               attention={attention}
             />
@@ -1021,7 +1022,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onTogglePin={togglePin}
               />
             )}
-            {view.kind === "app" && <ShackAppSurface app={view.id} onClose={closeView} />}
+            {view.kind === "app" && <ShackAppSurface app={view.id} tool={view.tool} onClose={closeView} />}
             {view.kind === "station" && (
               <StationPanel picked={view.call} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
             )}
@@ -1207,10 +1208,15 @@ export default function Platform({ session, startTour }: { session: SessionState
               active={activeKey(view, moreKeys)}
               attention={attention}
               sysop={sysop}
+              pinned={pinnedItems}
               onClose={() => setMoreOpen(false)}
               onPick={(key) => {
                 setMoreOpen(false);
                 onNav(key);
+              }}
+              onOpen={(v) => {
+                setMoreOpen(false);
+                openView(v);
               }}
             />
           )}

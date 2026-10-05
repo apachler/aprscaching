@@ -11,7 +11,7 @@ export const TERMS = {
   corroboration:
     "Other instances confirming they heard the finder on the air near the cache, which can lift a find to Tier A.",
   "verified-callsign": "Proof that you control the licence you signed in with, apart from any find's tier.",
-  shack: "The launcher for the ham-radio apps: packet terminal, BBS, decoder, rig control and tools.",
+  shack: "The launcher for the ham-radio apps: packet terminal, BBS, rig control and tools such as the packet decoder.",
   ssid: "The suffix after a dash (OE8APR-7) that tells one operator's stations apart; all share the base call.",
   passcode: "The number an APRS-IS client logs in with. Anyone can work it out, so it proves nothing.",
   "aprs-is": "The internet network that carries APRS packets. A packet on it may never have been on the air.",

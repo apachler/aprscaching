@@ -80,12 +80,24 @@ describe("the surface table", () => {
       { kind: "panel", key: "admin" },
       { kind: "app", id: "terminal" },
       { kind: "app", id: "bbs" },
+      { kind: "app", id: "tools", tool: "packet-decoder" },
       { kind: "station", call: "OE8APR-9" },
     ];
     for (const v of views) expect(viewFromQuery(viewQuery(v, ""))).toEqual(v);
     expect(viewQuery(MAP, "?v=abc&view=nearby")).toBe("?v=abc");
     expect(viewFromQuery("?view=bogus")).toBeNull();
     expect(viewFromQuery("?view=station")).toBeNull();
+    expect(viewQuery({ kind: "app", id: "tools", tool: "mheard" }, "?view=nearby")).toBe("?view=tools&tool=mheard");
+    expect(viewQuery(nearby, "?view=tools&tool=mheard")).toBe("?view=nearby");
+  });
+
+  it("lights a pinned tool when Tools opens on it, else Tools' own pin or the Shack", () => {
+    const decoder: View = { kind: "app", id: "tools", tool: "packet-decoder" };
+    const keys = (...k: string[]) => new Set([...NAV_ITEMS.map((i) => i.key), ...k]);
+    expect(activeKey(decoder, keys("tool:packet-decoder", "tools"))).toBe("tool:packet-decoder");
+    expect(activeKey(decoder, keys("tools"))).toBe("tools");
+    expect(activeKey(decoder, keys())).toBe("shack");
+    expect(sameView(decoder, { kind: "app", id: "tools" })).toBe(false);
   });
 
   it("lights one rail item and one tab per view", () => {

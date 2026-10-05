@@ -247,14 +247,15 @@ connect-src <the connect origins, or 'none'>; base-uri 'none'; form-action 'none
 4. The app fetches the entry, starts the frame and the worker, and runs the script.
 5. The tool's panel and colour rules appear on its surfaces; its commands and decoders appear in the Tools app.
 
-An imported tool lasts for the page's session. Reloading the page ends it, and the user imports it again. There
-is no switch to turn an imported tool off; a reload removes it.
+An imported tool lasts for the page's session, also while the Tools app is closed. Its row has a switch, which
+turns its contributions off and on, a pin for the rail, and **Remove**, which closes its frame and frees its
+`name`. Switching it off or removing it also takes its pin off the rail. Reloading the page ends every imported
+tool, and the user imports it again.
 
 ## Versioning
 
-`version` is free text that the app shows and never compares. A tool's identity is its `name`. A second tool
-with the name of one already loaded, a built-in included, keeps its commands and decoders. It shows no panel or
-colour rules. A changed `version` is part of the signed manifest, so a new version is signed again. A registry
+`version` is free text that the app shows and never compares. A tool's identity is its `name`. The app refuses
+to import a tool whose name a loaded tool already has, a built-in included; remove the loaded one first. A changed `version` is part of the signed manifest, so a new version is signed again. A registry
 entry carries its own `version`, which is what the **Registry** list shows.
 
 ## Signing and trust
@@ -276,25 +277,25 @@ The app decides one of six trust labels before it shows the import prompt:
 
 Approving a signed tool stores its key for its author in this browser, under `acs.tool.keys`.
 
-### What "verified" covers
+### What "registry-listed" covers
 
 The registry is a JSON document of entries (`name`, `title`, `author`, `version`, `pubkey`, `entry`,
 `description`), signed by an authority key the app pins at build time (`VITE_TOOL_REGISTRY_AUTHORITY`); the app
 reads it from `VITE_TOOL_REGISTRY`, `/tools/registry.json` by default. A registry with another authority key or
-a broken signature is ignored, and the **Registry** list stays empty.
+a broken signature is ignored, and the **Registry** list stays empty. [The tool registry](tool-registry.md) explains
+the file, who signs it and how a sysop runs their own.
 
-- The **verified** badge in the **Registry** list means the entry is in that signed registry.
 - The **registry-listed** label in the import prompt means the manifest was fetched from the URL the registry
   lists for its name and signed by the key the registry lists for it. A relative script `entry` resolves against
   that URL, so the script comes from the listed site.
 - A copy of a listed manifest served from any other URL is not registry-listed, even with a valid signature by
   the listed key: its relative `entry` resolves against the copy's site and runs that site's script. It gets
   the trust-on-first-use labels above and the normal import prompt.
-- Neither covers the script. The signature covers the `entry` URL, not the bytes served there, so whoever
+- It does not cover the script. The signature covers the `entry` URL, not the bytes served there, so whoever
   controls that server can change the script without breaking the signature. Pinning the script's hash in the
   manifest is planned (`entryHash` in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md)).
 
 ## Next
 
 - [Write your first tool](first-tool.md): build, run and publish the example tool.
-- [Writing a Shack plugin](plugins.md): how the plugin system fits together.
+- [The tool registry](tool-registry.md): the signed list of tools, end to end.

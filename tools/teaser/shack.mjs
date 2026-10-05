@@ -27,9 +27,11 @@ await page.waitForSelector(".panel.right h2", { timeout: 8000 });
 await page.click(".panel.right input[type=checkbox]");
 await page.waitForSelector(".station-pin", { timeout: 8000 });
 await page.waitForTimeout(800);
-// decode a sample packet
-await page.click(".panel.right button.link"); // "use a sample"
-await page.click(".panel.right button.primary"); // Decode
+// decode a sample packet in the packet decoder, a built-in tool that Tools opens on
+await page.goto(`${BASE}/?view=tools&tool=packet-decoder#12/47.07/15.44`, { waitUntil: "load" });
+await page.waitForSelector(".tools-panel textarea", { timeout: 15000 });
+await page.click(".tool-sub button:has-text('Use a sample')");
+await page.click(".tool-sub button:has-text('Decode')");
 await page.waitForSelector(".decoded", { timeout: 8000 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: OUT + "07-shack.png" });

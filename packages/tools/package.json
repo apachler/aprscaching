@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aprscaching/aprs": "workspace:*",
     "@aprscaching/packet": "workspace:*"
   },
   "devDependencies": {

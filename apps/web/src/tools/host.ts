@@ -5,8 +5,9 @@
  * the NET/ROM node, and the Tools console — filtered by each tool's declared `surfaces`. A
  * module singleton (not per-panel) is what makes a plugin work beyond the packet terminal.
  */
-import { useEffect, useReducer } from "react";
-import { ToolHost, builtinTools } from "@aprscaching/tools";
+import { useEffect, useMemo, useReducer, useState } from "react";
+import { ToolHost, builtinTools, type ToolManifest } from "@aprscaching/tools";
+import type { Sandbox } from "./sandbox.js";
 import { TOAST_EVENT } from "../ui/Toast.js";
 
 // TX gate: a module flag the app keeps in sync with the signed-in session's verified state, so a
@@ -93,4 +94,65 @@ export function useToolHost(): ToolHost {
   const [, force] = useReducer((n) => n + 1, 0);
   useEffect(() => onToolsChanged(force), []);
   return toolHost;
+}
+
+// ---- imported tools: kept here, beside the host, so they outlive the Tools app's screen ----
+
+/** An imported (sandboxed) tool: its manifest and the sandbox its commands and decoders run in. */
+export interface ImportedTool {
+  manifest: ToolManifest;
+  sandbox: Sandbox;
+}
+const imported = new Map<string, ImportedTool>();
+
+/** Record an imported tool (already registered in the host through its adapter). */
+export function addImported(t: ImportedTool): void {
+  imported.set(t.manifest.name, t);
+  notifyToolsChanged();
+}
+
+/** The imported tools of this page session, oldest first. */
+export function importedTools(): ImportedTool[] {
+  return [...imported.values()];
+}
+
+/** Remove an imported tool: its sandbox frame closes, the host forgets it, and its name is free again. */
+export function removeImported(name: string): void {
+  const t = imported.get(name);
+  if (!t) return;
+  t.sandbox.destroy();
+  imported.delete(name);
+  toolHost.unregister(name);
+  notifyToolsChanged();
+}
+
+/** What the rail needs to draw a pinned tool: its name, title and whether it was imported. */
+export interface ToolEntry {
+  name: string;
+  title: string;
+  imported: boolean;
+}
+const catalogKey = () =>
+  toolHost
+    .list()
+    .map((t) => `${t.manifest.name}\u0001${t.manifest.title}\u0001${t.manifest.entry ? 1 : 0}`)
+    .join("\u0002");
+
+/**
+ * The registered tools (built-in and imported) by name and title. The component re-renders only when that list
+ * changes, not on every panel update a tool pushes, so the rail and the platform stay cheap while tools run.
+ */
+export function useToolCatalog(): ToolEntry[] {
+  const [key, setKey] = useState(catalogKey);
+  useEffect(() => onToolsChanged(() => setKey(catalogKey())), []);
+  return useMemo(
+    () =>
+      key
+        ? key.split("\u0002").map((row) => {
+            const [name = "", title = "", imp] = row.split("\u0001");
+            return { name, title, imported: imp === "1" };
+          })
+        : [],
+    [key],
+  );
 }

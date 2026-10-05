@@ -193,7 +193,7 @@ URL you never reuse for different code, such as one with the version in its path
 The **Registry** list in the Tools app shows one signed file per build of the app: `VITE_TOOL_REGISTRY`
 (`/tools/registry.json` by default), verified against the authority key `VITE_TOOL_REGISTRY_AUTHORITY`. The
 project's builds ship `apps/web/public/tools/registry.json`; a sysop who builds the app can point both settings at
-a registry of their own ([Configuration](../reference/configuration.md)).
+a registry of their own. [The tool registry](tool-registry.md) covers the file, the keys and running your own.
 
 To be listed, give the registry's keeper the entry for your tool:
 
@@ -204,9 +204,11 @@ To be listed, give the registry's keeper the entry for your tool:
 | `entry` | The URL of your `tool.json` |
 
 The keeper adds the entry and signs the registry again with
-`TOOL_PRIVATE_KEY=<authority key> node tools/toolkey/sign.mjs registry registry.json`. Once the new registry is
-deployed, your tool shows with the **verified** badge, and importing it from the entry's URL shows **Signed ·
-registry-listed author key**. A copy imported from any other URL gets the trust-on-first-use label. For the project's registry, open a pull request that adds your entry; the maintainers sign it.
+`TOOL_PRIVATE_KEY=<authority key> node tools/toolkey/sign.mjs registry registry.json`. Once an app built with the
+new registry is deployed, your tool shows under **Registry**, and importing it from the entry's URL shows **Signed ·
+registry-listed author key**. A copy imported from any other URL gets the trust-on-first-use label. For the
+project's registry, open a pull request that adds your entry; the maintainers sign it
+([Get your tool listed](tool-registry.md#get-your-tool-listed)).
 
 ### What a reviewer checks
 
@@ -220,4 +222,4 @@ registry-listed author key**. A copy imported from any other URL gets the trust-
 ## Next
 
 - [Tool reference](tool-reference.md): every field, message and limit.
-- [Writing a Shack plugin](plugins.md): how the plugin system fits together.
+- [The tool registry](tool-registry.md): how a listing works and how to run a registry.

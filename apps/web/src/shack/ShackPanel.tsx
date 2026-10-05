@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Panel, Icon, Button, InfoTip, Hint } from "../ui/index.js";
-import type { ShackApp, ShackAppId } from "./apps.js";
+import type { PinId, ShackApp, ShackAppId } from "./apps.js";
 import { TERMS } from "../terms.js";
 
 /**
- * Shack — a pure app launcher. Every shack app (terminal, BBS, decoder, NET/ROM node, tools,
+ * Shack — a pure app launcher. Every shack app (terminal, BBS, NET/ROM node, tools,
  * rig, remote) launches into its own surface (ShackAppSurface) and can be pinned to the nav rail.
  * APRS/APRScaching functionality lives OUTSIDE the shack: platform config in Settings (Connections
  * & sources / Network / Notifications), live stations on the map (layer toggle + station detail sheet).
@@ -12,7 +12,7 @@ import { TERMS } from "../terms.js";
 export function ShackPanel(props: {
   onClose: () => void;
   apps: ShackApp[];
-  pinned: ShackAppId[];
+  pinned: readonly PinId[];
   onLaunchApp: (id: ShackAppId) => void;
   onTogglePin: (id: ShackAppId) => void;
 }) {

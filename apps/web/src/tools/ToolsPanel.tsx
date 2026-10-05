@@ -3,9 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   sanitizePanel,
   checkManifestSignature,
+  decodeAprsLine,
   registryEntryFor,
   resolveTrust,
   verifyRegistry,
+  PACKET_DECODER,
+  type AprsDecodeResult,
   type Capability,
   type Colouriser,
   type RegistryEntry,
@@ -17,10 +20,21 @@ import {
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
 import { API_BASE } from "../api.js";
 import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/audioDecode.js";
-import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost } from "./host.js";
+import {
+  useToolHost,
+  setToolEnabled,
+  notifyToolsChanged,
+  toolHost,
+  addImported,
+  importedTools,
+  removeImported,
+} from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
-import { Button, Badge, Switch, ErrorState, useToast, useModalDialog } from "../ui/index.js";
+import { PacketDecode, PACKET_SAMPLE } from "./PacketDecode.js";
+import { toolIcon } from "./toolIcons.js";
+import { toolPin, unpin, usePins } from "../shack/apps.js";
+import { Button, Badge, Icon, Switch, ErrorState, useToast, useModalDialog } from "../ui/index.js";
 
 // ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
 const TOFU_KEY = "acs.tool.keys";
@@ -78,7 +92,7 @@ function compileRules(rules: ColourRule[]): Colouriser {
 
 /** Wrap an imported (Worker) tool as a host adapter Tool so its DECLARATIVE contributions (colour rules,
  *  panel) reach every surface exactly like a built-in. Commands + decoders stay on the async worker path.
- *  `entry` is forced so ToolsPanel's built-in list can filter imported adapters out (no duplicate row). */
+ *  `entry` is forced so the host's list tells imported tools from built-ins. */
 function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
   return {
     manifest: { ...manifest, entry: manifest.entry ?? "tool.js" },
@@ -99,32 +113,41 @@ function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
   };
 }
 
+/** The decoder a built-in tool contributes, so opening that tool selects it. */
+const BUILTIN_DECODER: Readonly<Record<string, string>> = {
+  [PACKET_DECODER.tool]: PACKET_DECODER.decoder,
+  "digimode-decoders": "cw",
+  sevenplus: "7plus",
+};
+
+/** The registry's own address, for resolving an entry's relative `entry` URL against it. */
+const registryBase = (): string => new URL(TOOL_REGISTRY_URL, location.href).href;
+
 /**
  * ToolsPanel — manage the sandboxed, capability-gated Tools. It drives the ONE
  * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
  * (packet terminal, BBS, node, or this web console) — not just here. Built-ins run in-process under the
  * capability model (off by default); imported tools are fetched by URL, permission-prompted, and run in
  * a Worker inside a sandboxed, opaque-origin frame. TX-capable tools additionally require a verified callsign. Nothing here
- * can bypass the trust engine.
+ * can bypass the trust engine. Any tool can be pinned to the rail; `tool` names the one to open with (a pin or a
+ * `?view=tools&tool=` link): it is switched on, scrolled to, and its decoder is selected.
  */
-interface Imported {
-  manifest: ToolManifest;
-  sandbox: Sandbox;
-  enabled: boolean;
-}
-
-export function ToolsPanel(props: { callsign: string; verified: boolean }) {
+export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: string }) {
   const host = useToolHost();
   const toast = useToast();
+  const { pins, toggle: togglePin } = usePins();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const decodeRef = useRef<HTMLTextAreaElement>(null);
 
   const [decodeIn, setDecodeIn] = useState("");
   const [decodeKind, setDecodeKind] = useState("cw");
+  const [decodeOut, setDecodeOut] = useState<string | null>(null);
+  const [packet, setPacket] = useState<AprsDecodeResult | null>(null);
   const [cmd, setCmd] = useState("");
   const [cmdOut, setCmdOut] = useState<string[]>([]);
   const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer
   const [importUrl, setImportUrl] = useState("");
   const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string; trust: ToolTrust } | null>(null);
-  const [imported, setImported] = useState<Imported[]>([]);
   const [registry, setRegistry] = useState<RegistryEntry[]>([]); // verified marketplace entries (empty until loaded)
   const promptRef = useRef<HTMLDivElement>(null);
   useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
@@ -160,27 +183,73 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     };
   }, [registryTry]);
 
+  // imported tools live beside the host (they outlive this screen); their on/off state is the host's
+  const imported = importedTools();
+  const isOn = (name: string) => host.list().some((t) => t.manifest.name === name && t.enabled);
+  const importedOn = imported.filter((i) => isOn(i.manifest.name));
+
   function toggle(name: string, on: boolean) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
   }
+  function toggleImported(name: string, on: boolean) {
+    toggle(name, on);
+    if (!on) unpin(toolPin(name)); // a switched-off imported tool leaves the rail
+  }
+  function remove(im: { manifest: ToolManifest }) {
+    removeImported(im.manifest.name);
+    unpin(toolPin(im.manifest.name));
+    toast(`Removed ${im.manifest.title}.`);
+  }
+
+  // Open the named tool: switch it on, bring its row into view, and select the decoder it contributes.
+  useEffect(() => {
+    const name = props.tool;
+    if (!name) return;
+    const t = host.list().find((x) => x.manifest.name === name);
+    if (!t) return;
+    if (!t.enabled) {
+      const r = setToolEnabled(name, true);
+      if (!r.ok) toast(`${t.manifest.title}: ${r.error ?? "couldn't switch it on"}`);
+    }
+    const dec = BUILTIN_DECODER[name] ?? importedTools().find((i) => i.manifest.name === name)?.sandbox.decoders[0]?.id;
+    if (dec) setDecodeKind(dec);
+    const raf = requestAnimationFrame(() => {
+      const row = rootRef.current?.querySelector<HTMLElement>(`[data-tool="${CSS.escape(name)}"]`);
+      row?.scrollIntoView({ block: "nearest" });
+      if (dec && decodeRef.current) decodeRef.current.focus();
+      else row?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the requested tool changes, not on every host update
+  }, [props.tool]);
+
   // Web Audio mic capture → the CW/PSK31 front-ends. Live text arrives via
   // onText as the signal decodes; the pure pipeline is unit- and Chromium-e2e-tested.
   const [listening, setListening] = useState(false);
   const [liveText, setLiveText] = useState("");
   const capRef = useRef<AudioCapture | null>(null);
+
+  // decoders merge built-in (host) + imported (worker) contributions; the selected one falls back to the first
+  const allDecoders = [
+    ...host.decoders().map((d) => ({ id: d.id, label: d.label })),
+    ...importedOn.flatMap((i) => i.sandbox.decoders.map((d) => ({ id: d.id, label: `${d.label} (imported)` }))),
+  ];
+  const kind = allDecoders.some((d) => d.id === decodeKind) ? decodeKind : (allDecoders[0]?.id ?? "");
+  const isPacket = kind === PACKET_DECODER.decoder;
+
   async function listenToggle() {
     if (listening && capRef.current) {
       const text = await capRef.current.stop().catch(() => "");
       capRef.current = null;
       setListening(false);
       setLiveText("");
-      setDecodeIn((v) => `${v}\n→ ${text || "(nothing decoded)"}`);
+      setDecodeOut(text || "(nothing decoded)");
       return;
     }
     setLiveText("");
     try {
-      capRef.current = await listenDecode(decodeKind as "cw" | "psk31", {
+      capRef.current = await listenDecode(kind as "cw" | "psk31", {
         pitchHz: 700,
         carrierHz: 1000,
         onText: setLiveText,
@@ -192,19 +261,22 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   }
 
   async function runDecode() {
-    const dec = host.decoders().find((d) => d.id === decodeKind);
+    if (isPacket) {
+      setPacket(decodeAprsLine(decodeIn));
+      return;
+    }
+    const dec = host.decoders().find((d) => d.id === kind);
     if (dec) {
-      setDecodeIn((v) => `${v}\n→ ${dec.decode(v.trim())}`);
+      setDecodeOut(dec.decode(decodeIn.trim()));
       return;
     }
     // an imported (Worker) decoder — decode runs in the sandbox, so await the round-trip
-    for (const im of imported)
-      if (im.enabled && im.sandbox.decoders.some((d) => d.id === decodeKind)) {
-        const out = await im.sandbox.decode(decodeKind, decodeIn.trim());
-        setDecodeIn((v) => `${v}\n→ ${out}`);
+    for (const im of importedOn)
+      if (im.sandbox.decoders.some((d) => d.id === kind)) {
+        setDecodeOut(await im.sandbox.decode(kind, decodeIn.trim()));
         return;
       }
-    toast("Enable a decoder tool first.");
+    toast("Switch on a decoder tool first.");
   }
   async function runCmd() {
     const word = cmd.replace(/^\//, "").split(/\s+/)[0] ?? "";
@@ -215,8 +287,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       setCmd("");
       return;
     }
-    for (const im of imported)
-      if (im.enabled && im.sandbox.commands.includes(word)) {
+    for (const im of importedOn)
+      if (im.sandbox.commands.includes(word)) {
         setCmdOut(await im.sandbox.runCommand(word, args));
         setCmd("");
         return;
@@ -230,15 +302,20 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       toast(r.error);
       return;
     }
-    // The bus names an imported tool by its manifest name, so it may not take a built-in tool's name.
-    if (host.list().some((t) => t.manifest.name === r.manifest.name && !t.manifest.entry)) {
-      toast(`Refused: a built-in tool is already named "${r.manifest.name}".`);
+    // The bus names an imported tool by its manifest name, so it may not take a loaded tool's name.
+    const same = host.list().find((t) => t.manifest.name === r.manifest.name);
+    if (same) {
+      toast(
+        same.manifest.entry
+          ? `"${r.manifest.name}" is already imported. Remove it first to import it again.`
+          : `Refused: a built-in tool is already named "${r.manifest.name}".`,
+      );
       return;
     }
     // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
     const sig = await checkManifestSignature(r.raw);
     // Registry-listed only when fetched from the entry's own URL: the script resolves against that URL.
-    const regEntry = registryEntryFor(registry, r.manifest.name, r.base);
+    const regEntry = registryEntryFor(registry, r.manifest.name, r.base, registryBase());
     const trust = resolveTrust(sig, {
       registryPubkey: regEntry?.pubkey,
       pinnedPubkey: tofuMap()[r.manifest.author.toUpperCase()],
@@ -271,15 +348,17 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         appOrigins: [location.origin, new URL(API_BASE || location.origin, location.href).origin],
       });
       // Register the imported tool into the shared host so its colour rules + panel reach every surface
-      // (terminal/BBS/node), just like a built-in. Commands + decoders stay on the async worker path below.
+      // (terminal/BBS/node), just like a built-in. Commands + decoders stay on the async worker path.
       try {
         toolHost.register(importedAdapter(manifest, sandbox));
-        const en = setToolEnabled(manifest.name, true);
-        if (!en.ok) toast(`${manifest.title}: ${en.error ?? "some contributions disabled"}`);
       } catch {
-        /* name already registered (dup import / HMR) — commands still work via the worker path */
+        sandbox.destroy(); // the name was taken meanwhile (a second import in flight)
+        toast(`"${manifest.name}" is already imported.`);
+        return;
       }
-      setImported((xs) => [...xs, { manifest, sandbox, enabled: true }]);
+      addImported({ manifest, sandbox });
+      const en = setToolEnabled(manifest.name, true);
+      if (!en.ok) toast(`${manifest.title}: ${en.error ?? "some contributions disabled"}`);
       const extras = [
         sandbox.colourRules.length && "colours",
         sandbox.panel && "panel",
@@ -294,50 +373,71 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   }
 
   const perms = (p: Capability[]) => p.join(", ") || "none";
-  // decoders + commands merge built-in (host) + imported (worker) contributions; imported adapters are
-  // filtered out of the built-in LIST (they carry `entry`) so they don't render as a duplicate row.
   const builtinList = host.list().filter((t) => !t.manifest.entry);
-  const allDecoders = [
-    ...host.decoders().map((d) => ({ id: d.id, label: d.label })),
-    ...imported
-      .filter((i) => i.enabled)
-      .flatMap((i) => i.sandbox.decoders.map((d) => ({ id: d.id, label: `${d.label} (imported)` }))),
-  ];
   const decodersOn = allDecoders.length > 0;
-  const cmds = [...host.commandNames(), ...imported.filter((i) => i.enabled).flatMap((i) => i.sandbox.commands)];
+  const cmds = [...host.commandNames(), ...importedOn.flatMap((i) => i.sandbox.commands)];
+
+  /** One tool's row: what it is, where it runs, what it may do, and its pin and on/off switch. */
+  const row = (
+    m: ToolManifest,
+    on: boolean,
+    opts: { imported?: boolean; error?: string; onToggle: (on: boolean) => void; extra?: React.ReactNode },
+  ) => {
+    const pin = toolPin(m.name);
+    const pinned = pins.includes(pin);
+    const open = props.tool === m.name;
+    return (
+      <div key={m.name} className={`tool-row${open ? " open" : ""}`} data-tool={m.name} tabIndex={-1}>
+        <Icon name={toolIcon(m.name, !!opts.imported)} size={20} className="tool-ic" />
+        <div className="tool-meta">
+          <strong>{m.title}</strong>{" "}
+          <span className="muted fine">
+            v{m.version} · {m.author}
+            {opts.imported ? " · imported" : ""}
+          </span>
+          <div className="muted fine">{m.description}</div>
+          <div className="tool-surfaces">
+            {m.surfaces.map((s) => (
+              <Badge key={s} title="Where this tool shows up">
+                {s}
+              </Badge>
+            ))}
+          </div>
+          <div className="tool-perms">perms: {perms(m.permissions)}</div>
+          {opts.error && <div className="error fine">{opts.error}</div>}
+          {opts.extra}
+        </div>
+        <div className="tool-ctl">
+          <Button
+            variant="icon"
+            className={`shack-pin${pinned ? " on" : ""}`}
+            aria-pressed={pinned}
+            hint={pinned ? `Unpin ${m.title} from the rail` : `Pin ${m.title} to the rail`}
+            onClick={() => togglePin(pin)}
+          >
+            <Icon name={pinned ? "pin-off" : "pin"} size={16} />
+          </Button>
+          <Switch checked={on} onChange={opts.onToggle} label={m.title} />
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="tools-panel">
+    <div className="tools-panel" ref={rootRef}>
       <p className="muted">
         Sandboxed, capability-gated plugins. A tool's <strong>surfaces</strong> say where it runs — this console, the
-        packet terminal, BBS, or the node. Everything is off by default; TX-capable tools need a verified callsign.
+        packet terminal, BBS, or the node. Everything is off by default; TX-capable tools need a verified callsign. Pin
+        a tool to put it on the rail.
       </p>
       {!props.verified && (
         <p className="muted fine">Your callsign isn't verified yet — TX/beacon tools stay gated until it is.</p>
       )}
 
       <div className="tools-list">
-        {builtinList.map((t) => (
-          <div key={t.manifest.name} className="tool-row">
-            <div className="tool-meta">
-              <strong>{t.manifest.title}</strong>{" "}
-              <span className="muted fine">
-                v{t.manifest.version} · {t.manifest.author}
-              </span>
-              <div className="muted fine">{t.manifest.description}</div>
-              <div className="tool-surfaces">
-                {t.manifest.surfaces.map((s) => (
-                  <Badge key={s} title="Where this tool shows up">
-                    {s}
-                  </Badge>
-                ))}
-              </div>
-              <div className="tool-perms">perms: {perms(t.manifest.permissions)}</div>
-              {t.error && <div className="error fine">{t.error}</div>}
-            </div>
-            <Switch checked={t.enabled} onChange={(on) => toggle(t.manifest.name, on)} label={t.manifest.title} />
-          </div>
-        ))}
+        {builtinList.map((t) =>
+          row(t.manifest, t.enabled, { error: t.error, onToggle: (on) => toggle(t.manifest.name, on) }),
+        )}
       </div>
 
       {/* panels contributed by enabled `panel`-tools that target this (web) console */}
@@ -347,15 +447,30 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         <div className="tool-sub">
           <div className="ulabel">Decode</div>
           <div className="row gap-2">
-            <select value={decodeKind} onChange={(e) => setDecodeKind(e.target.value)}>
+            <select
+              value={kind}
+              aria-label="Decoder"
+              onChange={(e) => {
+                setDecodeKind(e.target.value);
+                setDecodeOut(null);
+                setPacket(null);
+              }}
+            >
               {allDecoders.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.label}
                 </option>
               ))}
             </select>
-            <Button onClick={runDecode}>Decode</Button>
-            {audioDecodeSupported() && (decodeKind === "cw" || decodeKind === "psk31") && (
+            <Button variant="primary" onClick={runDecode} disabled={!decodeIn.trim()}>
+              Decode
+            </Button>
+            {isPacket && (
+              <Button variant="quiet" onClick={() => setDecodeIn(PACKET_SAMPLE)}>
+                Use a sample
+              </Button>
+            )}
+            {audioDecodeSupported() && (kind === "cw" || kind === "psk31") && (
               <Button onClick={listenToggle} className={listening ? "primary" : ""}>
                 {listening ? "Stop" : "Listen (mic)"}
               </Button>
@@ -367,12 +482,26 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
             </div>
           )}
           <textarea
+            ref={decodeRef}
             value={decodeIn}
             onChange={(e) => setDecodeIn(e.target.value)}
             rows={3}
-            placeholder={decodeKind === "cw" ? "…. . .-.. .-.. ---" : "00…11…00 varicode bits"}
+            aria-label={isPacket ? "Raw packet" : "Text to decode"}
+            placeholder={
+              isPacket
+                ? "paste a raw TNC2 / APRS-IS line…"
+                : kind === "cw"
+                  ? "…. . .-.. .-.. ---"
+                  : "00…11…00 varicode bits"
+            }
             className="mono"
           />
+          {isPacket && packet && <PacketDecode result={packet} />}
+          {!isPacket && decodeOut != null && (
+            <pre className="tool-out mono" aria-live="polite">
+              {decodeOut}
+            </pre>
+          )}
         </div>
       )}
 
@@ -435,8 +564,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
               </div>
               <Button
                 onClick={() => {
-                  setImportUrl(e.entry);
-                  startImport(e.entry);
+                  const url = new URL(e.entry, registryBase()).href;
+                  setImportUrl(url);
+                  startImport(url);
                 }}
               >
                 Import…
@@ -461,13 +591,28 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         </div>
         <p className="muted fine">
           Signed tools are verified against their author key; unsigned tools import with a warning. An invalid signature
-          or a changed author key is refused.
+          or a changed author key is refused. An imported tool stays until you remove it or reload the page.
         </p>
-        {imported.map((im) => (
-          <div key={im.manifest.name} className="muted fine">
-            ✓ {im.manifest.title} — /{im.sandbox.commands.join(" /")}
+        {imported.length > 0 && (
+          <div className="tools-list">
+            {imported.map((im) =>
+              row(im.manifest, isOn(im.manifest.name), {
+                imported: true,
+                onToggle: (on) => toggleImported(im.manifest.name, on),
+                extra: (
+                  <div className="row gap-2 mt-1">
+                    {im.sandbox.commands.length > 0 && (
+                      <span className="muted fine mono">/{im.sandbox.commands.join(" /")}</span>
+                    )}
+                    <Button variant="quiet" onClick={() => remove(im)}>
+                      Remove
+                    </Button>
+                  </div>
+                ),
+              }),
+            )}
           </div>
-        ))}
+        )}
       </div>
 
       {prompt &&

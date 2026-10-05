@@ -189,8 +189,9 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
   `vite-prerender.ts`), so it paints before the JS has loaded; the app's own landing replaces it, which is why
   `Landing` renders the same with no session and no data.
 - **The Shack:** an **app launcher**, not a config page. It lists the operator *apps* (packet
-  terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
-  into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching
+  terminal, BBS, NET/ROM node, tools/plugins, rig control, remote box); each launches
+  into **its own surface** and can be **pinned to the nav rail**. A single tool inside Tools (the packet
+  decoder is a built-in one) is pinnable too, and its pin opens Tools with that tool open. Anything that is APRS/APRScaching
   *functionality* lives OUTSIDE the Shack — on the map (caches, live stations, spots), as its own
   surface (Messages), or in Settings (the config above). Each launched app surface is itself denser,
   grouped by subsystem, with status at headers per §2.
