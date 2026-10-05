@@ -434,6 +434,7 @@ export function DetailPanel(props: {
         callsign={callsign}
         isOwner={!!callsign && baseOf(callsign) === baseOf(c.ownerCall)}
         cacheStatus={c.status}
+        yourLog={c.yourLog}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
         logRequest={logRequest}

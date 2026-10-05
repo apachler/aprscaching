@@ -4,7 +4,7 @@ import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
-import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon, InfoTip, ManualLink } from "../ui/index.js";
+import { Button, TierBadge, TIER_NAME, useConfirm, usePrompt, Card, Icon, InfoTip, ManualLink } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { TEXT_LIMITS, type LogType } from "@aprscaching/shared";
 import { refusalMessage } from "../caches/formLimits.js";
@@ -59,6 +59,8 @@ export function LogForm(props: {
   isOwner?: boolean;
   /** An archived or disabled cache takes no find and no did-not-find; a note stays possible. */
   cacheStatus?: string;
+  /** The viewer's own attempt at the cache, which lets them flag it for maintenance afterwards. */
+  yourLog?: "found" | "dnf";
   onLogged: () => void;
   onSignIn: () => void;
   /** Counts the requests to log a find from elsewhere on the sheet (the Find view): each new one runs it. */
@@ -66,6 +68,7 @@ export function LogForm(props: {
 }) {
   const fmt = useFmt();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const [busy, setBusy] = useState<LogType | null>(null);
   const [result, setResult] = useState<LogResult | null>(null);
   // the device reading sent with the find: how far from the cache it was, and whether there was one
@@ -75,9 +78,10 @@ export function LogForm(props: {
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
   const [flagMaintenance, setFlagMaintenance] = useState(false);
+  const [flaggedNote, setFlaggedNote] = useState(false);
   const loc = useLocate();
 
-  async function doLog(logType: LogType, comment?: string) {
+  async function doLog(logType: LogType, comment?: string, flagged = false) {
     if (props.callsign.length < 3) {
       // signed out: route straight into sign-in — the find is one sign-in away, not a dead end
       setErr("Sign in to log your find.");
@@ -131,14 +135,16 @@ export function LogForm(props: {
           comment,
           appGeo,
           author,
-          ...(flagMaintenance && (logType === "found" || logType === "dnf") && { needsMaintenance: true }),
+          ...((flagged || (flagMaintenance && (logType === "found" || logType === "dnf"))) && {
+            needsMaintenance: true,
+          }),
         },
         props.cacheCode,
       );
       setResult(r);
+      setFlaggedNote(flagged);
       setNote("");
       setNoteOpen(false);
-      setFlagMaintenance(false);
       setFlagMaintenance(false);
       props.onLogged();
     } catch (e) {
@@ -147,6 +153,27 @@ export function LogForm(props: {
       setBusy(null);
     }
   }
+
+  // a finder who already logged the cache flags it afterwards: a note that carries the maintenance flag
+  async function flagAfterwards() {
+    const a = await prompt({
+      title: "Report a problem with the cache",
+      message: "The owner hears of it, and the cache shows needs maintenance until they fix it.",
+      label: "What is wrong?",
+      placeholder: "Wet logbook, broken lid, cache missing…",
+      minLength: 0,
+      maxLength: TEXT_LIMITS.logComment,
+      confirmLabel: "Flag for maintenance",
+    });
+    if (a) await doLog("note", a.text.trim() || "Needs maintenance.", true);
+  }
+  const attempted = props.yourLog ?? (result?.logType === "found" || result?.logType === "dnf" ? result.logType : null);
+  const flagAction = attempted && !props.isOwner && (
+    <Button variant="quiet" className="mt-2" disabled={!!busy} onClick={() => void flagAfterwards()}>
+      <Icon name="flag" className="lead-ic" />
+      Report a problem: needs maintenance
+    </Button>
+  );
 
   // a request from the Find view: bring the form into sight and log the find, once per request
   const formRef = useRef<HTMLDivElement>(null);
@@ -167,7 +194,9 @@ export function LogForm(props: {
         : "Logged"
       : result.logType === "dnf"
         ? "Marked DNF"
-        : "Note posted";
+        : flaggedNote
+          ? "Flagged for maintenance"
+          : "Note posted";
     return (
       <Card ref={formRef} className="logresult" role="status">
         <div className="big">
@@ -226,6 +255,7 @@ export function LogForm(props: {
               Add a note
             </Button>
           ))}
+        {!result.queued && !flaggedNote && flagAction}
         {!found && (
           <Button variant="quiet" className="mt-3" onClick={() => setResult(null)}>
             Back
@@ -250,6 +280,26 @@ export function LogForm(props: {
         </p>
       ) : (
         <>
+          {attempted && (
+            <p className="muted fine" role="status">
+              {attempted === "found" ? "You found this cache." : "You logged a did-not-find here."}
+            </p>
+          )}
+          <label className="row log-maint">
+            <input
+              type="checkbox"
+              checked={flagMaintenance}
+              aria-describedby={flagMaintenance ? "log-maint-help" : undefined}
+              onChange={(e) => setFlagMaintenance(e.target.checked)}
+            />
+            The cache needs maintenance
+          </label>
+          {flagMaintenance && (
+            <p id="log-maint-help" className="muted fine">
+              Sent with your find or your did-not-find. The owner hears of it, and the cache shows it until they fix
+              it.
+            </p>
+          )}
           <Button
             variant="primary"
             className="log-primary"
@@ -271,23 +321,8 @@ export function LogForm(props: {
             skipLabel="Log without location"
           />
           <RadioLogHint code={props.cacheCode} />
+          {flagAction}
         </>
-      )}
-      {!noFind && (
-        <label className="row mt-2">
-          <input
-            type="checkbox"
-            checked={flagMaintenance}
-            aria-describedby={flagMaintenance ? "log-maint-help" : undefined}
-            onChange={(e) => setFlagMaintenance(e.target.checked)}
-          />{" "}
-          The cache needs maintenance
-        </label>
-      )}
-      {!noFind && flagMaintenance && (
-        <p id="log-maint-help" className="muted fine">
-          Sent with your find or your did-not-find. The owner hears of it, and the cache shows it until they fix it.
-        </p>
       )}
       <div className="row between mt-3">
         {!noFind && (

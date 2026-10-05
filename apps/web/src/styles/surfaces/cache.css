@@ -253,6 +253,11 @@
   .logform textarea {
     margin: var(--space-sm) 0;
   }
+  /* the maintenance flag sits above the one-tap find, so it is set before the find goes out */
+  .logform .log-maint {
+    min-height: 44px;
+    margin-bottom: var(--space-xs);
+  }
   .logs {
     list-style: none;
     padding: 0;
