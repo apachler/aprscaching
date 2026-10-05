@@ -36,7 +36,7 @@ import { sessionIdentity, baseHolder } from "./auth.js";
 import { provenanceOf, transportForPort } from "./provenance.js";
 import { attestation, sitesFor } from "./attestedsites.js";
 import { parseVerifyMessage, completeRfChallenge, isCallsignVerified } from "./callsign.js";
-import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
+import { scoreFind, commitFind, commitPlainLog, applyLogEffects, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
@@ -369,7 +369,9 @@ async function commitCommand(
     return c.duplicate ? { duplicate: true } : { logId: c.logId };
   }
   const logType = row.command === "dnf" ? "dnf" : "note";
-  return { logId: await commitPlainLog(env, cache.id, row.from_call, row.sent_at, logType, row.body) };
+  const logId = await commitPlainLog(env, cache.id, row.from_call, row.sent_at, logType, row.body);
+  await applyLogEffects(env, cache, row.from_call, logType, logId);
+  return { logId };
 }
 
 async function loadCache(env: Env, id: number): Promise<CacheForLog | null> {

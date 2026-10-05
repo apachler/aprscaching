@@ -113,12 +113,18 @@ owns the cache.
 
 ## Maintain your cache
 
-- **Needs maintenance.** When the last three find or **Couldn't find it** logs are all **Couldn't find it**, the
-  cache page shows **needs maintenance**. The next find clears it. Notes do not count.
-- **Owner alerts.** You get an alert each time someone logs a find on your cache. It shows under **Settings →
-  Notifications**, and by push or email if you switched those on.
+- **Needs maintenance.** The cache page shows **needs maintenance** when a finder ticked **The cache needs
+  maintenance** on a find or a **Couldn't find it**, or when the last three find or **Couldn't find it** logs are
+  all **Couldn't find it**. The flagged log shows **flagged: needs maintenance** in the logbook. Your next
+  maintenance log clears a finder's flag; the next find clears a run of did-not-finds. Notes do not count.
+- **Owner alerts.** You get an alert each time someone logs a find, a **Couldn't find it** or a maintenance flag
+  on your cache. It shows under **Settings → Notifications**, and by push or in the email digest if you switched
+  those on.
 - **Maintenance log.** After a visit, open the cache, tap **Add a note**, write what you checked or fixed and
   tap **Post as maintenance**.
+- **Disable or enable.** **Edit → Status** disables a cache or makes it active again, and the logbook records
+  the change as a **disabled** or **enabled** log. Archiving it records a note. An owner's **disabled** or
+  **enabled** log sets the status the same way.
 - **Your caches offline.** **Offline → Your caches → Pack my caches** stores all your caches for a field trip.
   It flags the ones that need a visit: three or more did-not-finds in a row, no find for months, or disabled.
 

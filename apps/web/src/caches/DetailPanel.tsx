@@ -355,7 +355,13 @@ export function DetailPanel(props: {
           </>
         )}
         {c.needsMaintenance && (
-          <Hint text="The last three find attempts were all DNFs, so the owner should check the cache">
+          <Hint
+            text={`${
+              c.maintenanceReason === "flagged"
+                ? "A finder flagged it for its owner"
+                : "The last three find attempts were all DNFs, so the owner should check the cache"
+            }. A maintenance log by the owner clears it.`}
+          >
             <span className="warn"> · ⚠ needs maintenance</span>
           </Hint>
         )}
@@ -724,6 +730,7 @@ function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; s
           <span className="logrow-when">{props.ago}</span>
         </div>
         {method && <div className="logrow-method">{method}</div>}
+        {l.needsMaintenance && <div className="logrow-method warn">⚠ flagged: needs maintenance</div>}
         {props.sync && <div className="logrow-method">{props.sync}</div>}
         {l.comment && <div className="logrow-note">{l.comment}</div>}
       </div>

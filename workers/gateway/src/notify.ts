@@ -36,6 +36,7 @@ function topicOf(kind: string): [string, string] {
   if (kind === "heard" || kind === "near_cache") return ["watched station heard", "watched stations heard"];
   if (kind === "cache_found") return ["find of your cache", "finds of your caches"];
   if (kind === "corroborated") return ["find your station corroborated", "finds your station corroborated"];
+  if (kind === "cache_dnf" || kind === "cache_maintenance") return ["report on your cache", "reports on your caches"];
   if (kind.startsWith("adoption_")) return ["cache adoption update", "cache adoption updates"];
   return ["other alert", "other alerts"];
 }

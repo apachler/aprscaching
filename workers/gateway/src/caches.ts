@@ -89,6 +89,7 @@ export interface LogDbRow {
   signer_key: string | null;
   received_at?: number | null;
   field_time_rejected?: string | null;
+  needs_maintenance?: number;
 }
 
 export function toSummary(r: CacheDbRow): CacheSummary {
@@ -170,6 +171,7 @@ export function toLogEntry(r: LogDbRow): CacheLogEntry {
     signerKey: r.signer_key,
     receivedAt: r.received_at ?? null,
     fieldTimeRejected: r.field_time_rejected ?? null,
+    ...(r.needs_maintenance ? { needsMaintenance: true } : {}),
   };
 }
 
@@ -405,6 +407,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     favorites: fav.favorites,
     favorited: fav.favorited,
     needsMaintenance: health.needsMaintenance,
+    maintenanceReason: health.maintenanceReason,
     dnfStreak: health.dnfStreak,
     lastFound: health.lastFound,
     rating,
@@ -626,6 +629,23 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
       id,
     )
     .run();
+  // a status change is in the logbook, as the owner's enabled or disabled log is; archiving has no log type of
+  // its own and goes in as a note
+  if (m.status !== existing.status) {
+    const by = (await actor(req, env, b.ownerCall)) ?? existing.owner_call;
+    const [logType, comment] =
+      m.status === "active"
+        ? ["enabled", null]
+        : m.status === "disabled"
+          ? ["disabled", null]
+          : ["note", "Archived by the owner."];
+    await env.DB.prepare(
+      `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment, received_at)
+       VALUES (?,?,?,?, 0, NULL, 'manual', ?, ?)`,
+    )
+      .bind(id, by, now, logType, comment, now)
+      .run();
+  }
   // turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
   // tombstone so they purge it (a public→unlisted change re-propagates the redacted version via the
   // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.
@@ -642,6 +662,7 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   const parsed = LogRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error?.issues }, { status: 400 });
   const { comment, logType } = parsed.data;
+  const needsMaintenance = parsed.data.needsMaintenance === true;
 
   // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
   // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
@@ -745,12 +766,20 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
 
   // Only `found` logs are presence-verified; DNF/note/maintenance are plain records.
   if (logType !== "found") {
-    await env.DB.prepare(
+    const ins = await env.DB.prepare(
       `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment, signer_key, author_sig, signed_at, received_at, field_time_rejected)
        VALUES (?,?,?,?, 0, NULL, 'manual', ?,?,?,?,?,?)`,
     )
       .bind(cacheId, loggerCall, foundAt, logType, comment ?? null, signerKey, authorSig, signedAt, now, ft.rejected)
       .run();
+    await applyLogEffects(
+      env,
+      cache,
+      loggerCall,
+      logType,
+      Number(ins.meta?.last_row_id) || undefined,
+      needsMaintenance,
+    );
     return json({
       logged: true,
       logType,
@@ -770,6 +799,7 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     fieldTimeRejected: ft.rejected,
   });
   const { result, corroboratedBy } = score;
+  if (!committed.duplicate) await applyLogEffects(env, cache, loggerCall, "found", committed.logId, needsMaintenance);
   if (committed.duplicate)
     return json({
       logged: true,
@@ -1035,6 +1065,48 @@ export async function commitFind(
 /** " · found <UTC time>" for a find that reaches the gateway well after it was made (a find queued offline). */
 function foundEarlier(at: number, now: number): string {
   return now - at > 300 ? ` · found ${new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
+}
+
+const STATUS_OF_LOG: Record<string, { from: string; to: string }> = {
+  enabled: { from: "disabled", to: "active" },
+  disabled: { from: "active", to: "disabled" },
+};
+
+/**
+ * What a log does beyond the logbook, for every path that writes one (web, radio):
+ * - an owner's `enabled` / `disabled` log sets the cache's status, the way Edit does;
+ * - a finder's "needs maintenance" flag marks the log (a found or did-not-find only), and the cache shows it until
+ *   its owner's next maintenance or enabled log (cacheHealth);
+ * - a did-not-find or a flag tells the owner, in the app and through the digest, unless the owner logged it.
+ */
+export async function applyLogEffects(
+  env: Env,
+  cache: { id: number; code: string; owner_call: string; lat?: number | null; lon?: number | null },
+  loggerCall: string,
+  logType: string,
+  logId: number | undefined,
+  needsMaintenance = false,
+): Promise<void> {
+  const now = nowS();
+  const status = STATUS_OF_LOG[logType];
+  if (status)
+    await env.DB.prepare("UPDATE caches SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
+      .bind(status.to, now, cache.id, status.from)
+      .run();
+  const flagged = needsMaintenance && (logType === "found" || logType === "dnf") && logId != null;
+  if (flagged) await env.DB.prepare("UPDATE cache_logs SET needs_maintenance = 1 WHERE id = ?").bind(logId).run();
+  if (!flagged && logType !== "dnf") return;
+  const owner = !isWithdrawnCall(cache.owner_call) ? await baseHolder(env, baseCall(cache.owner_call)) : null;
+  if (!owner || owner === (await baseHolder(env, baseCall(loggerCall)))) return;
+  const [kind, detail] = flagged
+    ? ["cache_maintenance", `${loggerCall} says ${cache.code} needs maintenance`]
+    : ["cache_dnf", `${loggerCall} did not find ${cache.code}`];
+  await env.DB.prepare(
+    "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
+  )
+    .bind(owner, loggerCall, kind, detail, cache.id, cache.lat ?? null, cache.lon ?? null, now)
+    .run();
+  await pushAlert(env, owner);
 }
 
 /** A DNF, note or maintenance log: a plain record, never presence-verified. Returns its id. */
