@@ -17,6 +17,7 @@ import { nowS } from "./util/time.js";
 import { flagOn, type Env } from "./env.js";
 import { jsonObjectSetting } from "./util/config.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import {
   type Spot,
   type SpotSource,
@@ -396,8 +397,8 @@ const SOURCES: SourceDef[] = [
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */
 function enabledSources(env: Env): SourceDef[] {
-  if (!flagOn(env.SPOTS_ENABLED)) return [];
-  const only = (env.SPOTS_SOURCES || "")
+  if (!flagOn(setting(env, "SPOTS_ENABLED"))) return [];
+  const only = (setting(env, "SPOTS_SOURCES") || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
@@ -424,7 +425,7 @@ async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
 
 /** Seconds between calls to one upstream: its own floor, or the instance setting when that is longer. */
 function intervalSec(def: SourceDef, env: Env): number {
-  return Math.max(Number(env.SPOTS_TTL_SEC) || 120, def.minIntervalSec);
+  return Math.max(Number(setting(env, "SPOTS_TTL_SEC")) || 120, def.minIntervalSec);
 }
 
 /** Aggregate (lazy, per-source cached, deduped). Returns [] when spots are disabled. */
@@ -477,7 +478,7 @@ const csv = (v: string | null) =>
 /** GET /api/spots?bbox=minLon,minLat,maxLon,maxLat&bands=20m,2m&modes=SSB&sources=pota */
 export async function handleSpots(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
-  const enabled = flagOn(env.SPOTS_ENABLED);
+  const enabled = flagOn(setting(env, "SPOTS_ENABLED"));
   const bboxRaw = csv(u.searchParams.get("bbox"))?.map(Number);
   const bbox =
     bboxRaw && bboxRaw.length === 4 && bboxRaw.every(Number.isFinite)

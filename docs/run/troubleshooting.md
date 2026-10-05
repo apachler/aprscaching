@@ -105,7 +105,8 @@ ingest box `deploy/.env`. Desktop keeps no `.env` the doctor reads.
 
 - **Tests:** a public instance (an `https://` `APP_URL`) sets every key the configuration reference marks
   as required for a public instance of its shape. `SESSION_SECRET` does not count: the gateway generates
-  it.
+  it. An [instance setting](../reference/configuration.md#instance-settings) does not count either: it may be
+  set in the app, and the `setup.OPERATOR` item reports it.
 - **Message:** `a public instance should set: <keys>` (warn).
 - **Fix:** set them in the `.env` and restart.
 - **See:** [Your first hour](first-hour.md#the-checklist) and [A public instance's duties](compliance/index.md).
@@ -230,7 +231,7 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `FED_PRIVATE_KEY` | recommended | unset: feeds go out unsigned | see [`federation.key`](#federationkey) |
 | `44net` | optional | the 44net endpoint is not a name under `<call>.ampr.org`, or is the base name itself | [44Net name and identity](networks/44net-identity.md#3-name-and-identity) |
 | `FED_REGISTRY_KEY` | blocking | a registry is configured without its authority key | [Hubs, relays and the registry](federation/hubs-and-relays.md) |
-| `OPERATOR` | recommended | `OPERATOR_NAME`, `OPERATOR_ADDRESS` or `OPERATOR_EMAIL` missing: `/imprint` and `/privacy` warn | set all three ([duties](compliance/index.md)) |
+| `OPERATOR` | recommended | the operator name, postal address or contact email missing: `/imprint` and `/privacy` warn | set all three under **Instance admin → Instance settings → Imprint & contact**, or `OPERATOR_NAME`, `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` in the `.env` ([duties](compliance/index.md)) |
 | `SOURCE_REPO` | optional | unset: the source link names the upstream repository | set your fork if you changed the code ([`source.fork`](#sourcefork)) |
 | `EMAIL` | blocking, recommended or optional | no mail delivery; blocking when nobody has a way to sign in | set `EMAIL_FROM` and an SMTP server or a Resend key ([Send mail](day-to-day/mail.md)), or use [sign-in links](day-to-day/sign-in-links.md) |
 | `VAPID` | optional | no web push; notifications go by email digest | set `VAPID_PUBLIC` and `VAPID_PRIVATE` |
@@ -239,6 +240,19 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `db:partners` | optional | always met: a count of forwarding partners | — |
 | `db:caches` | optional | no active cache yet | hide the first cache |
 | `db:verify` | recommended | your callsign is not control-verified | **You → Verify callsign** ([Callsign verification](day-to-day/callsign-verification.md)) |
+
+### `site.settings`
+
+- **Tests:** the gateway lists its [instance settings](day-to-day/instance-settings.md), read with
+  `OPERATOR_SECRET`.
+- **Message:** `changed in Instance admin -> Instance settings: <KEY>=<value>, …` (pass). These values apply
+  without being in the `.env`. `overridden by the environment: <KEY>` names a value saved in the app that the
+  `.env` overrides; it applies again once the `.env` no longer sets the key.
+- **Message:** `the gateway did not return its instance settings` (warn). The secret does not match the
+  gateway's.
+- **Fix:** change a value under **Instance admin → Instance settings**, or remove the key from the `.env` so the
+  value saved in the app applies.
+- **See:** [Instance settings](day-to-day/instance-settings.md).
 
 ## Ingest and radios (`ingest`)
 

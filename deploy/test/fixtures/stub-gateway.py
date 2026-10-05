@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""A stand-in gateway for the doctor checks: /health, /ingest/check, /api/admin/setup and
-/.well-known/source, with the secrets and the schema it reports taken from the environment. With STUB_SPA
+"""A stand-in gateway for the doctor checks: /health, /ingest/check, /api/admin/setup,
+/api/admin/settings and /.well-known/source, with the secrets and the schema it reports taken from the environment. With STUB_SPA
 set it answers every path with the web app's HTML instead, like a misrouted reverse proxy.
 
     STUB_INGEST=… STUB_OPERATOR=… STUB_SCHEMA=0006_x.sql python3 stub-gateway.py PORT
@@ -53,6 +53,18 @@ class Handler(BaseHTTPRequestHandler):
                     "current": "1.0.0", "latest": "v1.1.0", "url": "https://example.org/acs/releases/tag/v1.1.0",
                     "checkedAt": 1, "available": True, "desktop": False,
                 },
+            })
+        elif path == "/api/admin/settings":
+            if self.headers.get("x-operator-secret") != os.environ["STUB_OPERATOR"]:
+                self.send(403, {"error": "forbidden"})
+                return
+            self.send(200, {
+                "groups": [{"id": "game", "title": "Game rules"}],
+                "settings": [
+                    {"key": "HIDE_DAILY_LIMIT", "source": "site", "value": "3", "stored": {"value": "3", "at": 1, "by": "OE8APR"}},
+                    {"key": "MIN_TRUST", "source": "default", "value": "B", "stored": None},
+                    {"key": "UPDATE_CHECK", "source": "env", "value": "0", "stored": {"value": "1", "at": 1, "by": "OE8APR"}},
+                ],
             })
         elif path == "/.well-known/source":
             self.send(200, {"protocol": "aprscaching-source/1", "repo": "https://example.org/acs", "commit": "abc123"})

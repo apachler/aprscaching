@@ -3,6 +3,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import {
   CreateCacheRequest,
   UpdateCacheRequest,
@@ -401,7 +402,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const detail: CacheDetail = {
     ...toSummary(row),
     // the minimum a find meets: the cache's own, else the instance's
-    minTrust: (row.min_trust as "A" | "B" | null) ?? instanceMinTier(env),
+    minTrust: (row.min_trust as "A" | "B" | null) ?? instanceMinTier(setting(env, "MIN_TRUST")),
     hint: row.hint,
     description: row.description,
     externalId: row.external_id,
@@ -493,7 +494,7 @@ const DAY_S = 86_400;
 
 /** The new caches one account may hide in 24 hours; 0 lifts the limit. */
 function hideDailyLimit(env: Env): number {
-  const n = Number(env.HIDE_DAILY_LIMIT ?? HIDE_DAILY_LIMIT_DEFAULT);
+  const n = Number(setting(env, "HIDE_DAILY_LIMIT") ?? HIDE_DAILY_LIMIT_DEFAULT);
   return Number.isInteger(n) && n >= 0 ? n : HIDE_DAILY_LIMIT_DEFAULT;
 }
 
@@ -1000,7 +1001,7 @@ export async function scoreFind(
       loggerOwnIgates,
       now: at, // app-reading freshness is judged against log time
     },
-    { ...DEFAULT_POLICY, minTier: instanceMinTier(env) },
+    { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) },
   );
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the

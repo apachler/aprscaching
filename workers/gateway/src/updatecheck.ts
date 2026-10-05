@@ -11,6 +11,7 @@
  * never shows an update. `UPDATE_CHECK=0` turns the request off.
  */
 import type { Env } from "./env.js";
+import { setting } from "./siteconfig.js";
 import { nowS } from "./util/time.js";
 import { APP_VERSION } from "./version.js";
 
@@ -33,7 +34,8 @@ export interface UpdateStatus {
 }
 
 /** UPDATE_CHECK is on unless set to 0, false or no. */
-export const updateCheckOn = (env: Env): boolean => !/^(0|false|no)$/i.test((env.UPDATE_CHECK ?? "").trim());
+export const updateCheckOn = (env: Env): boolean =>
+  !/^(0|false|no)$/i.test((setting(env, "UPDATE_CHECK") ?? "").trim());
 
 /** A release version as [major, minor, patch]; null for anything else, a prerelease (`1.2.0-rc.1`) included. */
 export function parseVersion(v: string | null | undefined): [number, number, number] | null {

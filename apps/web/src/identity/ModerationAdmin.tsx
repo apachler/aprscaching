@@ -608,7 +608,10 @@ export function AuditAdmin() {
   return (
     <>
       {rows.length === 0 ? (
-        <EmptyState>No moderation action yet. Removals, suspensions and settled reports show here.</EmptyState>
+        <EmptyState>
+          No moderation action yet. Removals, suspensions, settled reports and changes to the instance settings show
+          here.
+        </EmptyState>
       ) : (
         <AuditRows rows={rows} />
       )}

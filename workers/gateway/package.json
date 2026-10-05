@@ -43,7 +43,10 @@
     "./forward": "./src/forward.ts",
     "./bbs": "./src/bbs.ts",
     "./outbox": "./src/outbox.ts",
-    "./updatecheck": "./src/updatecheck.ts"
+    "./updatecheck": "./src/updatecheck.ts",
+    "./siteconfig": "./src/siteconfig.ts",
+    "./retention": "./src/retention.ts",
+    "./support": "./src/support.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

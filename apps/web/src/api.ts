@@ -1432,6 +1432,53 @@ export interface AdminSetup {
 export function getAdminSetup(): Promise<AdminSetup> {
   return call(`/api/admin/setup`);
 }
+
+/**
+ * One instance setting as Instance admin → Instance settings shows it (the gateway's sitesettings.ts). `source`
+ * says where `value` comes from: the environment (read-only here), a value saved here, or the default.
+ */
+export interface SiteSettingView {
+  key: string;
+  group: string;
+  label: string;
+  hint: string;
+  type: string;
+  /** "switch" for an on/off enum */
+  control: "switch" | null;
+  values: string[] | null;
+  min: number | null;
+  max: number | null;
+  unit: string | null;
+  options: string[] | null;
+  format: "email" | "contacts" | "links" | "retention" | null;
+  maxLength: number | null;
+  fields: { id: string; label: string; default: number; min: number; max: number; unit: string }[] | null;
+  default: string | null;
+  value: string | null;
+  source: "env" | "site" | "default";
+  /** The value saved here, kept while the environment overrides it. */
+  stored: { value: string; at: number; by: string } | null;
+}
+export interface SiteSettings {
+  groups: { id: string; title: string }[];
+  settings: SiteSettingView[];
+}
+export function getSiteSettings(): Promise<SiteSettings> {
+  return call(`/api/admin/settings`);
+}
+export async function saveSiteSetting(key: string, value: string): Promise<SiteSettingView> {
+  return (
+    await call<{ setting: SiteSettingView }>(`/api/admin/settings/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    })
+  ).setting;
+}
+export async function resetSiteSetting(key: string): Promise<SiteSettingView> {
+  return (
+    await call<{ setting: SiteSettingView }>(`/api/admin/settings/${encodeURIComponent(key)}`, { method: "DELETE" })
+  ).setting;
+}
 /** One line of the callsign-identity self-check; `fix` is set on every warn and fail. */
 export interface Net44CheckLine {
   id: "endpoint" | "a" | "txt" | "callsign" | "target" | "operator" | "dnssec" | "aaaa";

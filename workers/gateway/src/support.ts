@@ -18,6 +18,7 @@ import { operatorSecretOk, sessionIdentity } from "./auth.js";
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
@@ -81,7 +82,7 @@ const MAX_SUPPORT_LINKS = 12;
  * an http(s) URL are surfaced; unset or malformed ⇒ none.
  */
 export function supportLinks(env: Env): { label: string; url: string }[] {
-  const v = jsonSetting(env.SUPPORT_LINKS);
+  const v = jsonSetting(setting(env, "SUPPORT_LINKS"));
   if (!Array.isArray(v)) return [];
   const links: { label: string; url: string }[] = [];
   for (const e of v as unknown[]) {

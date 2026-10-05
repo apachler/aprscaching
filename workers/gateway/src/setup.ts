@@ -13,6 +13,7 @@ import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, configProblems, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
+import { setting, settingSource } from "./siteconfig.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
@@ -25,7 +26,7 @@ import { attestedSites } from "./attestedsites.js";
 import { updateStatus } from "./updatecheck.js";
 
 export interface SetupItem {
-  /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
+  /** Stable id: the env key for env-sourced items (OPERATOR: the three imprint site settings), `db:<probe>` for runtime state. */
   key: string;
   label: string;
   group: "security" | "identity" | "trust" | "legal" | "delivery" | "data";
@@ -261,17 +262,19 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
 
   // ---- legal — the public instance's obligations
   {
-    const all = set(env.OPERATOR_NAME) && set(env.OPERATOR_ADDRESS) && set(env.OPERATOR_EMAIL);
+    const keys = ["OPERATOR_NAME", "OPERATOR_ADDRESS", "OPERATOR_EMAIL"] as const;
+    const all = keys.every((k) => set(setting(env, k)));
     push({
       key: "OPERATOR",
       level: "recommended",
       label: "Operator imprint",
       group: "legal",
       status: all ? "ok" : "missing",
-      source: "env",
+      // site settings: editable in Instance settings unless the environment sets all three
+      source: keys.every((k) => settingSource(env, k) === "env") ? "env" : "db",
       detail: all
-        ? `${env.OPERATOR_NAME} <${env.OPERATOR_EMAIL}>`
-        : "OPERATOR_NAME / OPERATOR_ADDRESS / OPERATOR_EMAIL incomplete — /imprint and /privacy show a not-configured warning",
+        ? `${setting(env, "OPERATOR_NAME")} <${setting(env, "OPERATOR_EMAIL")}>`
+        : "operator name, postal address or contact email missing — set them under Instance settings → Imprint & contact; until then /imprint and /privacy show a not-configured warning",
     });
   }
   push({

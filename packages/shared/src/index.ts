@@ -20,3 +20,4 @@ export * from "./media.js";
 export * from "./dxcc.js";
 export * from "./weblink.js";
 export * from "./origins.js";
+export * from "./sitesettings.js";

@@ -15,6 +15,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { sessionIdentity } from "./auth.js";
 import { requireSysop } from "./admin.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -30,7 +31,7 @@ const LAST_USED_RESOLUTION_S = 3600;
 
 /** The keys an account may hold; `0` lets nobody create one. */
 const apiKeyCap = (env: Env): number => {
-  const n = Number(env.API_KEYS_PER_ACCOUNT || DEFAULT_CAP);
+  const n = Number(setting(env, "API_KEYS_PER_ACCOUNT") || DEFAULT_CAP);
   return Number.isInteger(n) && n >= 0 ? n : DEFAULT_CAP;
 };
 

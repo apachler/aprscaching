@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import type * as maplibregl from "maplibre-gl";
-import { SITE_CALL_RE } from "@aprscaching/shared";
+import { SITE_CALL_RE, SITE_SETTING_KEYS } from "@aprscaching/shared";
 import {
   getFederationSync,
   syncFederationNow,
@@ -90,6 +90,32 @@ import { ImportsAdmin } from "./ImportsAdmin.js";
 import { ApiKeysAdmin } from "./ApiKeysAdmin.js";
 import { listReports } from "../moderation/api.js";
 import { ReportsAdmin, AccountsAdmin, AuditAdmin } from "./ModerationAdmin.js";
+import { InstanceSettingsAdmin } from "./InstanceSettingsAdmin.js";
+
+/** What the admin search finds Instance settings by: its own words, its groups, and every setting's key. */
+const INSTANCE_SETTINGS_WORDS = [
+  "instance settings",
+  "policy",
+  "game rules",
+  "limits",
+  "hides",
+  "minimum tier",
+  "api",
+  "rate limit",
+  "retention",
+  "privacy",
+  "imports",
+  "spots",
+  "imprint",
+  "contact",
+  "operator",
+  "security",
+  "support",
+  "donation",
+  "updates",
+  "release",
+  ...SITE_SETTING_KEYS.flatMap((k) => [k, k.replace(/_/g, " ")]),
+];
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -147,6 +173,21 @@ export function AdminPanel(props: { onClose: () => void }) {
           <SetupAdmin setup={setup} />
         </Group>
       )}
+      {show(...INSTANCE_SETTINGS_WORDS) && (
+        <Group
+          title="Instance settings"
+          status="rules · limits · imprint"
+          help={
+            <>
+              The policy values of this instance: game rules, API limits, retention, imports, the imprint and the update
+              check. <ManualLink page="run/day-to-day/instance-settings">Instance settings</ManualLink>
+            </>
+          }
+          defaultOpen={false}
+        >
+          <InstanceSettingsAdmin q={q} />
+        </Group>
+      )}
       {show("moderation", "reports", "report", "abuse", "remove", "takedown", "spam") && (
         <Group
           title="Reports"
@@ -172,11 +213,11 @@ export function AdminPanel(props: { onClose: () => void }) {
           <AccountsAdmin />
         </Group>
       )}
-      {show("moderation", "audit", "log", "history") && (
+      {show("moderation", "audit", "log", "history", "settings") && (
         <Group
           title="Audit log"
           status="moderation"
-          help="Every moderation action: who, when, what and why. It stays on this instance."
+          help="Every moderation action and instance-setting change: who, when, what and why. It stays on this instance."
           defaultOpen={false}
         >
           <AuditAdmin />

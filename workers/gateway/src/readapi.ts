@@ -23,6 +23,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { lookupApiKey, describeApiKey } from "./apikeys.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
@@ -39,9 +40,9 @@ import {
   handleStationKml,
 } from "./exports.js";
 
-const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
-const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
-const keyedMax = (env: Env) => Number(env.API_RATE_KEYED) || 600;
+const windowSec = (env: Env) => Number(setting(env, "API_RATE_WINDOW_SEC")) || 60;
+const anonMax = (env: Env) => Number(setting(env, "API_RATE_ANON")) || 60;
+const keyedMax = (env: Env) => Number(setting(env, "API_RATE_KEYED")) || 600;
 /** Largest bounding-box side, in degrees, a read may ask for. */
 const MAX_BBOX_DEG = 20;
 

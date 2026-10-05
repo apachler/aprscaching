@@ -2,6 +2,8 @@
 
 Every setting is an environment variable. The **gateway** reads its configuration from the runtime
 environment: the process environment of the Node and Bun servers. The **ingest box** and the **web build** have their own separate variable namespaces.
+Some of the gateway's policy values are also [instance settings](#instance-settings), which the sysop can
+change in Instance admin while the instance runs.
 
 Every setting has a type: a whole number, a number, one of a fixed set of values, a list, JSON, a URL or
 free text. A set value that does not fit its type stops the Node and Bun servers and the ingest box from
@@ -25,6 +27,47 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
     which its `Env` type is derived, is the single source of truth). Both run scheduled work on
     in-process intervals and store in SQLite and on the filesystem.
 
+## Instance settings
+
+Infrastructure and secrets live only in the environment. The policy values a sysop tunes while the instance
+runs are **instance settings** (site settings): the sysop can also set them in **Instance admin → Instance
+settings**, which stores them in the database ([Instance settings](../run/day-to-day/instance-settings.md)).
+Each one has exactly one source, by this rule:
+
+1. **The environment wins.** When the environment sets the key (a blank value counts as unset), that value
+   applies, and the page shows it read-only as *Set by the environment*.
+2. Otherwise the value saved on the page applies.
+3. Otherwise the default below applies.
+
+A value saved on the page applies at once, without a restart, and the moderation audit log records each
+change. It travels with the database, so a backup carries it. The tables below mark each instance setting.
+
+<!-- site-settings-table -->
+| Setting | Variable | Group | Accepts |
+|---|---|---|---|
+| Lowest verified tier | `MIN_TRUST` | Game rules | one of `A`, `B` |
+| Move a found cache | `CACHE_MOVE_LIMIT_M` | Game rules | a number, 0–100000 m |
+| Hides per day | `HIDE_DAILY_LIMIT` | Game rules | a whole number, 0–1000 caches |
+| Rate-limit window | `API_RATE_WINDOW_SEC` | Accounts & API | a whole number, 1–3600 s |
+| Requests without a key | `API_RATE_ANON` | Accounts & API | a whole number, 1–100000 requests |
+| Requests with a key | `API_RATE_KEYED` | Accounts & API | a whole number, 1–1000000 requests |
+| API keys per account | `API_KEYS_PER_ACCOUNT` | Accounts & API | a whole number, 0–100 keys |
+| Diagnostic data | `RETENTION` | Privacy & retention | a period per table, each a whole number |
+| Reports and moderation log | `MODERATION_RETENTION_DAYS` | Privacy & retention | a whole number, 1–3650 days |
+| MeshCom nodes | `MESHCOM_NODE_TTL_DAYS` | Privacy & retention | a whole number, 1–365 days |
+| MeshCom links | `MESHCOM_LINK_TTL_HOURS` | Privacy & retention | a whole number, 1–8760 hours |
+| Permitted import sources | `IMPORT_ALLOW` | Imports & data sources | any of `wwff`, `gcau`, `iota` |
+| Activity spots | `SPOTS_ENABLED` | Imports & data sources | on or off |
+| Spot sources | `SPOTS_SOURCES` | Imports & data sources | any of `pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn` |
+| Poll interval | `SPOTS_TTL_SEC` | Imports & data sources | a whole number, 60–86400 s |
+| Operator name | `OPERATOR_NAME` | Imprint & contact | one line of text, up to 120 characters |
+| Postal address | `OPERATOR_ADDRESS` | Imprint & contact | one line of text, up to 300 characters |
+| Contact email | `OPERATOR_EMAIL` | Imprint & contact | an email address |
+| Security contacts | `SECURITY_CONTACT` | Imprint & contact | email or `https:` addresses, up to 5 |
+| Donation links | `SUPPORT_LINKS` | Support links | donation links (a label and an http(s) address), up to 12 |
+| Look for new releases | `UPDATE_CHECK` | Updates | on or off |
+<!-- /site-settings-table -->
+
 ## Gateway — core & instance
 
 <!-- config-table:gateway-core -->
@@ -39,7 +82,7 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
 | `RP_ID` | WebAuthn relying-party id (registrable domain). Set it only to differ from `APP_URL`'s host — for example the parent domain, so passkeys work on several subdomains. Choose it before users register passkeys | `APP_URL`'s host; with a plain-http `APP_URL`, the host of the first https `EXTRA_ORIGINS` entry |
 | `SESSION_TTL_DAYS` | Session cookie lifetime | `30` |
 | `MEDIA_QUOTA_MB` | Megabytes of cache media (photos, sound, audio clues) the instance stores in all; past it, uploads are refused. Set it to what the disk or bucket can spare | `1024` |
-| `HIDE_DAILY_LIMIT` | New caches one account may hide in 24 hours (its sysop excepted); `0` lifts the limit. Imports by the instance itself never count | `5` |
+| `HIDE_DAILY_LIMIT` | New caches one account may hide in 24 hours (its sysop excepted); `0` lifts the limit. Imports by the instance itself never count · *[Instance setting](#instance-settings)* | `5` |
 | `SESSION_EPOCH` | Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all` | — |
 | `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in) | off |
 | `TRUST_CF` | Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel | off |
@@ -48,10 +91,10 @@ configkeys.ts, configdocs.ts): edit them there and run `node tools/config/genera
 | `OPERATOR_LINKS_FOR_ANY_CALL` | `1`: the operator's one-time sign-in link ([`signin-link.mjs`](cli.md#signin-link)) serves every call, not only `ADMIN_CALLSIGNS` calls, on an instance that also offers passkeys or email. For an off-grid station whose visitors have no other way in ([Visitors on the hotspot](../run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)). A leaked `OPERATOR_SECRET` then reaches every account, so it stays off on a shared or public instance | off |
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
-| `UPDATE_CHECK` | Once a day the gateway asks GitHub (`api.github.com`) for the newest APRScaching release, so **Instance admin** and `deploy/aprscaching doctor` can say when one is out ([Updates](../run/day-to-day/updates.md#how-you-hear-about-a-new-release)). The request names the instance in its User-Agent and carries nothing about a member. `0` stops it, for an off-grid instance or one that should not contact GitHub | on |
+| `UPDATE_CHECK` | Once a day the gateway asks GitHub (`api.github.com`) for the newest APRScaching release, so **Instance admin** and `deploy/aprscaching doctor` can say when one is out ([Updates](../run/day-to-day/updates.md#how-you-hear-about-a-new-release)). The request names the instance in its User-Agent and carries nothing about a member. `0` stops it, for an off-grid instance or one that should not contact GitHub · *[Instance setting](#instance-settings)* | on |
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign)) | — |
-| `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning. `OPERATOR_EMAIL` also receives each player report when mail is configured ([Moderation](../run/day-to-day/moderation.md)) | — |
-| `SECURITY_CONTACT` | Where a security report goes: the `Contact:` lines of `/.well-known/security.txt` (RFC 9116), comma-separated `mailto:` or `https:` URIs (a bare address becomes `mailto:`). With neither this nor `OPERATOR_EMAIL` set, the file answers 404 | `mailto:` + `OPERATOR_EMAIL` |
+| `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning. `OPERATOR_EMAIL` also receives each player report when mail is configured ([Moderation](../run/day-to-day/moderation.md)) · *[Instance setting](#instance-settings)* | — |
+| `SECURITY_CONTACT` | Where a security report goes: the `Contact:` lines of `/.well-known/security.txt` (RFC 9116), comma-separated `mailto:` or `https:` URIs (a bare address becomes `mailto:`). With neither this nor `OPERATOR_EMAIL` set, the file answers 404 · *[Instance setting](#instance-settings)* | `mailto:` + `OPERATOR_EMAIL` |
 | `SERVICE_CALL` | The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks and replies are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit | the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
 <!-- /config-table -->
@@ -91,8 +134,8 @@ app do not read these.
 | Variable | Purpose | Default |
 |---|---|---|
 | `FIRST_PARTY_SITES` | Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Trusted sites are also the only ones whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way | — |
-| `MIN_TRUST` | The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, takes precedence | `B` |
-| `CACHE_MOVE_LIMIT_M` | Metres an owner may move a cache once it has a find, measured from where each coordinate stood at its first find: the cache's own coordinates and each stage's. Before the first find a cache moves freely; a living cache follows its station and is exempt. A larger move is refused, and the owner archives the cache and hides a new one; the sysop corrects any coordinate with `POST /api/admin/caches/<id>/place`. `0` keeps a found cache where it was found | `100` |
+| `MIN_TRUST` | The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, takes precedence · *[Instance setting](#instance-settings)* | `B` |
+| `CACHE_MOVE_LIMIT_M` | Metres an owner may move a cache once it has a find, measured from where each coordinate stood at its first find: the cache's own coordinates and each stage's. Before the first find a cache moves freely; a living cache follows its station and is exempt. A larger move is refused, and the owner archives the cache and hides a new one; the sysop corrects any coordinate with `POST /api/admin/caches/<id>/place`. `0` keeps a found cache where it was found · *[Instance setting](#instance-settings)* | `100` |
 | `FED_CORROBORATION_QUORUM` | Distinct corroborating identities (registry operator, else signing key) required to promote a find to Tier A | `2` |
 | `DOH_URL` | Validating DNS-over-HTTPS resolver (JSON API) for 44net peer onboarding and the DNSSEC proof of `ampr.org` callsign verification. It must validate DNSSEC and return the AD flag | Cloudflare |
 | `AMPR_DNS_RESOLVERS` | Comma-separated DNS-over-HTTPS resolvers (JSON API, `?name=&type=` with `accept: application/dns-json` — the `/resolve` and `/dns-query` dialects both work) that must agree on an `ampr.org` verification record DNSSEC does not validate: at least 2 must answer, and every one that answers must return the same TXT set. Name resolvers run by different operators — see [Callsign verification](../run/day-to-day/callsign-verification.md) | `https://cloudflare-dns.com/dns-query`, `https://dns.google/resolve`, `https://dns.quad9.net:5053/dns-query` |
@@ -103,10 +146,10 @@ app do not read these.
 | `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` also requires `x-fed-secret`; an asker sends it only to trusted `https` peers. Questions are signed either way; the secret narrows who is answered to the peers you gave it, which `FED_CORROBORATION_REQUIRE_KNOWN` (any known key, `unvetted` peers included) does not | — |
 | `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
-| `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays` (the message log and MeshCom group messages), `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default | `24` h / `7` / `30` / `7` / `30` / `7` d |
-| `MODERATION_RETENTION_DAYS` | Days the nightly job keeps a resolved report (counted from its resolution) and a moderation log row. Open reports stay until resolved, and the log rows of a suspension in force stay while it holds | `730` |
+| `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays` (the message log and MeshCom group messages), `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default · *[Instance setting](#instance-settings)* | `24` h / `7` / `30` / `7` / `30` / `7` d |
+| `MODERATION_RETENTION_DAYS` | Days the nightly job keeps a resolved report (counted from its resolution) and a moderation log row. Open reports stay until resolved, and the log rows of a suspension in force stay while it holds · *[Instance setting](#instance-settings)* | `730` |
 | `MESHCOM_META_MIN_S` | Seconds between rewrites of a MeshCom node's or link's row for the map when nothing shown changed (a new device, firmware, battery step, way of hearing, receiver or signal quality is written at once) | `300` |
-| `MESHCOM_NODE_TTL_DAYS` / `MESHCOM_LINK_TTL_HOURS` | MeshCom nodes and links not heard for this long are pruned nightly | `7` d / `48` h |
+| `MESHCOM_NODE_TTL_DAYS` / `MESHCOM_LINK_TTL_HOURS` | MeshCom nodes and links not heard for this long are pruned nightly · *[Instance setting](#instance-settings)* | `7` d / `48` h |
 | `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. `0` stores every fix | `25` |
 | `POS_MIN_INTERVAL_S` | Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix | `600` |
 <!-- /config-table -->
@@ -138,10 +181,11 @@ app do not read these.
 <!-- config-table:gateway-api -->
 | Variable | Purpose | Default |
 |---|---|---|
-| `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits | `60` / `60` / `600` |
-| `API_KEYS_PER_ACCOUNT` | Read-API keys one account may hold at once; `0` lets nobody create one | `5` |
-| `SPOTS_ENABLED` | Enable outbound activity-spot polling | off |
-| `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT` | Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream | all / `120` / names aprscaching |
+| `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits · *[Instance setting](#instance-settings)* | `60` / `60` / `600` |
+| `API_KEYS_PER_ACCOUNT` | Read-API keys one account may hold at once; `0` lets nobody create one · *[Instance setting](#instance-settings)* | `5` |
+| `SPOTS_ENABLED` | Enable outbound activity-spot polling · *[Instance setting](#instance-settings)* | off |
+| `SPOTS_SOURCES` / `SPOTS_TTL_SEC` | Spot source allowlist (`pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn`), and seconds between upstream polls (never below a source's own floor) · *[Instance setting](#instance-settings)* | all / `120` |
+| `SPOTS_USER_AGENT` | The User-Agent sent to spot upstreams | names aprscaching |
 | `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs | — |
 | `GMA_API_KEY` | API key from GMA (gma.rocks), sent with each GMA spot poll. GMA's spot API answers only with a key, so without one GMA spots are off and the instance sends GMA no request | — |
 | `EMAIL_FROM` | Sender address of sign-in links, address confirmations and the watch-alert digest, e.g. `aprscaching <noreply@aprs.example.net>`. Mail goes out over SMTP when `SMTP_HOST` is set, else over the Resend API when `EMAIL_API_KEY` is set. Without `EMAIL_FROM` and one of the two, no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
@@ -151,10 +195,10 @@ app do not read these.
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | Web-push keys (absent ⇒ push off) | — |
 | `VAPID_SUBJECT` | The contact a push service sees in each push request (RFC 8292): a `mailto:` or `https:` URI | `mailto:` + `OPERATOR_EMAIL`; else `https://` + the instance's host |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |
-| `IMPORT_ALLOW` | Import sources whose terms need the provider's permission, comma-separated: `wwff`, `iota`, `gcau`. Name one only once that provider has granted this instance its use; an import of an unnamed one is refused with the permission it needs | none |
+| `IMPORT_ALLOW` | Import sources whose terms need the provider's permission, comma-separated: `wwff`, `iota`, `gcau`. Name one only once that provider has granted this instance its use; an import of an unnamed one is refused with the permission it needs · *[Instance setting](#instance-settings)* | none |
 | `BASEMAP_STYLE` | Basemap of the embeddable map widget (`/embed`): a MapLibre style URL, or `offline` for the self-contained grid, which loads nothing from outside the instance. The widget's content-security policy lets it fetch only from this gateway and the style's origin. A value that is neither `offline` nor an http(s) URL counts as `offline`. The web app's own basemap is the build-time `VITE_BASEMAP` / `VITE_BASEMAP_STYLE` | OpenFreeMap `liberty` |
 | `BASEMAP_HOSTS` | Extra origins the `BASEMAP_STYLE` style loads tiles, glyphs or sprites from, comma-separated (`https://tiles.example.net,https://fonts.example.net`), for a style that spreads them over several hosts | — |
-| `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL | — |
+| `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL · *[Instance setting](#instance-settings)* | — |
 <!-- /config-table -->
 
 ## Licence-register import

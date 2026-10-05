@@ -6,7 +6,8 @@
  * page's `<!-- config-table:<id> -->` markers. Every key must appear in a table; the generator refuses a
  * table naming a key the schema does not list.
  */
-import type { ConfigKeyName } from "./config.js";
+import type { ConfigKeyName, SiteGroup } from "./config.js";
+import type { RetentionField, SiteSettingKey } from "./sitesettings.js";
 
 export * from "./config.js";
 
@@ -575,10 +576,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ["`API_KEYS_PER_ACCOUNT`", "Read-API keys one account may hold at once; `0` lets nobody create one", "`5`"],
       ["`SPOTS_ENABLED`", "Enable outbound activity-spot polling", "off"],
       [
-        "`SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT`",
-        "Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream",
-        "all / `120` / names aprscaching",
+        "`SPOTS_SOURCES` / `SPOTS_TTL_SEC`",
+        "Spot source allowlist (`pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn`), and seconds between upstream polls (never below a source's own floor)",
+        "all / `120`",
       ],
+      ["`SPOTS_USER_AGENT`", "The User-Agent sent to spot upstreams", "names aprscaching"],
       [
         "`SPOTS_RECEPTION_URLS`",
         'Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs',
@@ -850,3 +852,67 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     ],
   },
 ];
+
+/** The titles of the Instance settings groups. */
+export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
+  game: "Game rules",
+  accounts: "Accounts & API",
+  retention: "Privacy & retention",
+  imports: "Imports & data sources",
+  imprint: "Imprint & contact",
+  support: "Support links",
+  updates: "Updates",
+};
+
+/**
+ * The label of each site setting on the Instance settings page, and its hint there when the key's own hint
+ * (CONFIG_HINTS) speaks of environment values rather than of the control.
+ */
+export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }> = {
+  MIN_TRUST: {
+    label: "Lowest verified tier",
+    hint: "The tier a find needs to count as verified, unless a cache sets its own",
+  },
+  CACHE_MOVE_LIMIT_M: { label: "Move a found cache", hint: "How far an owner may move a cache once it has a find" },
+  RETENTION: { label: "Diagnostic data", hint: "How long the nightly job keeps the Shack's logs and readings" },
+  MODERATION_RETENTION_DAYS: { label: "Reports and moderation log" },
+  MESHCOM_NODE_TTL_DAYS: { label: "MeshCom nodes" },
+  MESHCOM_LINK_TTL_HOURS: { label: "MeshCom links" },
+  IMPORT_ALLOW: {
+    label: "Permitted import sources",
+    hint: "Sources whose provider granted this instance its use; others stay refused",
+  },
+  API_RATE_WINDOW_SEC: { label: "Rate-limit window", hint: "The window the read-API limits count requests in" },
+  API_RATE_ANON: { label: "Requests without a key", hint: "Read-API requests one address may make per window" },
+  API_RATE_KEYED: { label: "Requests with a key", hint: "Read-API requests one key may make per window" },
+  API_KEYS_PER_ACCOUNT: {
+    label: "API keys per account",
+    hint: "Read-API keys one account may hold; 0 lets nobody create one",
+  },
+  SPOTS_ENABLED: { label: "Activity spots", hint: "Poll POTA, SOTA and the other spot sources for the map" },
+  SPOTS_SOURCES: { label: "Spot sources", hint: "The sources polled; none ticked polls every source" },
+  SPOTS_TTL_SEC: {
+    label: "Poll interval",
+    hint: "Seconds between polls of one source; never below the source's own floor",
+  },
+  SUPPORT_LINKS: { label: "Donation links", hint: "Shown on the Support page in this order; recognition only" },
+  OPERATOR_NAME: { label: "Operator name", hint: "The person or entity running this instance, on Imprint and Privacy" },
+  OPERATOR_ADDRESS: { label: "Postal address", hint: "Shown on the Imprint; commas separate the lines" },
+  OPERATOR_EMAIL: { label: "Contact email", hint: "The privacy contact, and where player reports are mailed" },
+  SECURITY_CONTACT: {
+    label: "Security contacts",
+    hint: "Email or https addresses in security.txt; none uses the contact email",
+  },
+  UPDATE_CHECK: { label: "Look for new releases", hint: "Ask GitHub once a day whether a newer release is out" },
+  HIDE_DAILY_LIMIT: { label: "Hides per day", hint: "New caches one account may hide in 24 hours; 0 lifts the limit" },
+};
+
+/** The labels of the RETENTION fields. */
+export const RETENTION_FIELD_LABELS: Record<RetentionField, string> = {
+  packetsHours: "Raw packets",
+  messagesDays: "Message log",
+  sensorDays: "Weather and telemetry",
+  portStatsDays: "Port counters",
+  alertsDays: "Seen watch alerts",
+  mheardDays: "Node MHeard",
+};

@@ -154,6 +154,8 @@ doc_config_required() {
       SESSION_SECRET) continue ;; # the servers generate it
       INGEST_SECRET) continue ;;  # checked above
     esac
+    # a site setting may be set in Instance admin instead; the gateway's checklist reports it (setup.OPERATOR)
+    cfg_site "$k" && continue
     [ -n "$(doc_get "$k")" ] || missing+=("$k")
   done < <(cfg_keys_for "$SHAPE" 1)
   if [ "${#missing[@]}" -gt 0 ]; then
@@ -270,6 +272,51 @@ doc_setup_checklist() {
     esac
   done < <(doc_setup_items "$body")
   doc_setup_update "$body"
+}
+
+# The instance settings changed in Instance admin (stored in the database), read with the operator secret, so a
+# value that applies without being in the env file is visible here. A stored value the environment overrides is
+# named too: it applies again once the environment stops setting the key.
+doc_site_settings() {
+  local body line
+  [ -n "$DOC_BASE" ] && [ -n "$DOC_HEALTH" ] && [ -n "$DOC_OPERATOR_SECRET" ] || return 0
+  body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 10 "$DOC_BASE/api/admin/settings" 2>/dev/null || true)"
+  case "$body" in *'"settings"'*) ;; *)
+    warnc site.settings "the gateway did not return its instance settings" "check OPERATOR_SECRET matches the gateway's"
+    return 0
+    ;;
+  esac
+  line="$(doc_site_fields "$body")"
+  if [ -n "$line" ]; then
+    pass site.settings "changed in Instance admin -> Instance settings: $line"
+  else
+    pass site.settings "no instance setting is changed in Instance admin; the environment and the defaults apply"
+  fi
+}
+
+# The changed settings as one line: KEY=value (values cut at 40 characters), then the stored values the
+# environment overrides.
+doc_site_fields() {
+  if have node; then
+    B="$1" node -e '
+      const s = JSON.parse(process.env.B).settings;
+      const cut = (v) => (v.length > 40 ? `${v.slice(0, 39)}…` : v);
+      const site = s.filter((x) => x.source === "site").map((x) => `${x.key}=${cut(x.value)}`);
+      const over = s.filter((x) => x.source === "env" && x.stored).map((x) => x.key);
+      const out = [site.join(", "), over.length ? `overridden by the environment: ${over.join(", ")}` : ""];
+      console.log(out.filter(Boolean).join("; ").replace(/[\t\n]/g, " "));
+    ' 2>/dev/null
+  elif have python3; then
+    B="$1" python3 -c '
+import json, os
+s = json.loads(os.environ["B"])["settings"]
+cut = lambda v: v if len(v) <= 40 else v[:39] + "…"
+site = ["%s=%s" % (x["key"], cut(x["value"])) for x in s if x["source"] == "site"]
+over = [x["key"] for x in s if x["source"] == "env" and x.get("stored")]
+out = [", ".join(site), ("overridden by the environment: " + ", ".join(over)) if over else ""]
+print(" ".join("; ".join(o for o in out if o).split()))
+' 2>/dev/null
+  fi
 }
 
 # A newer release, as the gateway's daily update check found it: a warning, never a failure, so update's
@@ -906,6 +953,7 @@ run_doctor() {
   doc_mail
   doc_gateway
   doc_setup_checklist
+  doc_site_settings
   doc_ingest
   doc_network
   doc_origins

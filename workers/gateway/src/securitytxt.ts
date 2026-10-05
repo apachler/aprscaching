@@ -6,6 +6,7 @@
  * file is a 404, because a security.txt without a Contact field is invalid.
  */
 import type { Env } from "./env.js";
+import { setting } from "./siteconfig.js";
 import { trimEndChars } from "./util/text.js";
 
 const UPSTREAM_REPO = "https://github.com/apachler/aprscaching";
@@ -21,10 +22,10 @@ function contactUri(raw: string): string | null {
 
 /** The instance's security contacts, in the order the operator listed them. */
 function securityContacts(env: Env): string[] {
-  const configured = (env.SECURITY_CONTACT ?? "").split(",").map(contactUri);
+  const configured = (setting(env, "SECURITY_CONTACT") ?? "").split(",").map(contactUri);
   const list = configured.filter((c): c is string => c !== null);
   if (list.length) return list;
-  const op = contactUri(env.OPERATOR_EMAIL ?? "");
+  const op = contactUri(setting(env, "OPERATOR_EMAIL") ?? "");
   return op ? [op] : [];
 }
 

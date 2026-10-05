@@ -46,7 +46,19 @@ import type {
   SourceInfo,
   SupportInfo,
   VerifyMethods,
+  SiteSettings,
+  SiteSettingView,
 } from "../api.js";
+import {
+  CONFIG_KEYS,
+  RETENTION_FIELDS,
+  SITE_GROUPS,
+  SITE_SETTING_KEYS,
+  isFlagKey,
+  type ConfigKey,
+  type SiteSettingKey,
+} from "@aprscaching/shared";
+import { CONFIG_HINTS, RETENTION_FIELD_LABELS, SITE_GROUP_TITLES, SITE_TEXT } from "@aprscaching/shared/configdocs";
 
 export type Persona = "user" | "sysop" | "out" | "fresh" | "ended";
 
@@ -806,6 +818,55 @@ const boxFinds = (box: string): BoxFinds => {
     ],
   };
 };
+// Instance admin → Instance settings: the imprint and a lower hide limit saved here, spots switched on in the
+// environment (read-only on the page), everything else at its default
+const SITE_VALUES: Partial<Record<SiteSettingKey, { value: string; source: "site" | "env" }>> = {
+  HIDE_DAILY_LIMIT: { value: "3", source: "site" },
+  OPERATOR_NAME: { value: "Andreas Example, OE8APR", source: "site" },
+  OPERATOR_ADDRESS: { value: "Hauptplatz 1, 9020 Klagenfurt, Austria", source: "site" },
+  OPERATOR_EMAIL: { value: "oe8apr@example.org", source: "site" },
+  SUPPORT_LINKS: { value: '[{"label":"Liberapay","url":"https://liberapay.com/example"}]', source: "site" },
+  RETENTION: { value: '{"packetsHours":12}', source: "site" },
+  SPOTS_ENABLED: { value: "1", source: "env" },
+};
+const siteSettings = (): SiteSettings => ({
+  groups: SITE_GROUPS.map((id) => ({ id, title: SITE_GROUP_TITLES[id] })),
+  settings: SITE_SETTING_KEYS.map((key): SiteSettingView => {
+    const k: ConfigKey = CONFIG_KEYS[key];
+    const set = SITE_VALUES[key];
+    return {
+      key,
+      group: k.site!.group,
+      label: SITE_TEXT[key].label,
+      hint: SITE_TEXT[key].hint ?? CONFIG_HINTS[key],
+      type: k.type,
+      control: isFlagKey(key) ? "switch" : null,
+      values: k.values ? [...k.values] : null,
+      min: k.site!.min ?? null,
+      max: k.site!.max ?? null,
+      unit: k.site!.unit ?? null,
+      options: k.site!.options ? [...k.site!.options] : null,
+      format: k.site!.format ?? null,
+      maxLength: k.site!.maxLength ?? null,
+      fields:
+        k.site!.format === "retention"
+          ? Object.entries(RETENTION_FIELDS).map(([id, f]) => ({
+              id,
+              label: RETENTION_FIELD_LABELS[id as keyof typeof RETENTION_FIELDS],
+              default: f.default,
+              min: f.min,
+              max: f.max,
+              unit: f.unit,
+            }))
+          : null,
+      default: k.default ?? null,
+      value: set?.value ?? k.default ?? null,
+      source: set?.source ?? "default",
+      stored: set?.source === "site" ? { value: set.value, at: NOW - 3 * DAY, by: ME } : null,
+    };
+  }),
+});
+
 type Route = [method: string, pattern: RegExp, answer: (m: RegExpMatchArray, persona: Persona) => unknown];
 const page = <T extends object>(o: T) => ({ ...o, nextCursor: null, hasMore: false });
 
@@ -1001,6 +1062,18 @@ const ROUTES: Route[] = [
   ],
   ["GET", /^\/api\/offline\/tiles$/, () => ({ url: null })],
   ["GET", /^\/api\/admin\/setup$/, () => SETUP],
+  ["GET", /^\/api\/admin\/settings$/, () => siteSettings()],
+  // the fixtures see no body: a save or a reset answers with the setting as it stands
+  [
+    "PUT",
+    /^\/api\/admin\/settings\/([A-Z_]+)$/,
+    (m) => ({ setting: siteSettings().settings.find((x) => x.key === m[1]) }),
+  ],
+  [
+    "DELETE",
+    /^\/api\/admin\/settings\/([A-Z_]+)$/,
+    (m) => ({ setting: siteSettings().settings.find((x) => x.key === m[1]) }),
+  ],
   ["GET", /^\/api\/admin\/federation\/identity$/, () => IDENTITY],
   ["GET", /^\/api\/admin\/verifications$/, () => ({ verifications: [] })],
   [

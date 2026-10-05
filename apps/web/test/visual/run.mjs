@@ -225,6 +225,31 @@ const SURFACES = [
   { name: "rig", as: "user", query: "?view=rig" },
   { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
   { name: "admin", as: "sysop", query: "?view=admin" },
+  // Instance settings, opened by the admin search: the imprint saved here, then retention's fields
+  {
+    name: "admin-settings",
+    as: "sysop",
+    query: "?view=admin",
+    wait: ".panel .srch input",
+    steps: [
+      ["fill", ".panel .srch input", "imprint"],
+      ["click", "button.group-toggle:has-text('Instance settings')"],
+      ["scroll", ".iset"],
+    ],
+    after: ".iset",
+  },
+  {
+    name: "admin-retention",
+    as: "sysop",
+    query: "?view=admin",
+    wait: ".panel .srch input",
+    steps: [
+      ["fill", ".panel .srch input", "retention"],
+      ["click", "button.group-toggle:has-text('Instance settings')"],
+      ["scroll", ".iset-fields"],
+    ],
+    after: ".iset-fields",
+  },
   // the nav rail with every Shack app pinned: the pinned section scrolls, the bottom group stays in view
   {
     name: "rail-pinned",

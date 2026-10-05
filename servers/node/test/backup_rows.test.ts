@@ -78,8 +78,18 @@ describe("portable backup rows", () => {
     const dir = tmp();
     try {
       const src = seeded(dir);
+      // an instance setting the sysop changed travels with the backup
+      const s = new Database(src);
+      s.prepare("INSERT INTO site_settings (key, value, updated_at, updated_by) VALUES (?,?,?,?)").run(
+        "SUPPORT_LINKS",
+        `[{"label":"It's","url":"https://example.net"}]`,
+        1,
+        "OE8APR",
+      );
+      s.close();
       const rows = tool(["dump", src]);
       expect(rows.status).toBe(0);
+      expect(rows.out).toMatch(/INSERT INTO "site_settings"/);
       expect(rows.out.startsWith(`-- aprscaching rows/1 schema=${newest()}`)).toBe(true);
       expect(rows.out).not.toMatch(/INSERT INTO "_migrations"/);
       const dst = path.join(dir, "dst.db");
