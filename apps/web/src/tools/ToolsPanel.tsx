@@ -44,7 +44,9 @@ function tofuPin(author: string, pubkey: string): void {
 function trustInfo(t: ToolTrust): { label: string; kind: "found" | "warn" | "dnf"; blocked: boolean } {
   switch (t) {
     case "verified":
-      return { label: "Verified · registry-listed author key", kind: "found", blocked: false };
+      // a registry-listed key signed the manifest; the signature covers the manifest, not the script bytes its
+      // entry URL serves (TODO.md tracks `entryHash`), so the label names the signer and claims no verified tool
+      return { label: "Signed · registry-listed author key", kind: "found", blocked: false };
     case "known":
       return { label: "Signed · matches the key you trusted before", kind: "found", blocked: false };
     case "self-signed":
@@ -424,10 +426,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 <strong>{e.title}</strong>{" "}
                 <span className="muted fine">
                   v{e.version} · {e.author}
-                </span>{" "}
-                <Badge kind="found" title="Listed in the signed tool registry this instance trusts">
-                  verified
-                </Badge>
+                </span>
                 {e.description && <div className="muted fine">{e.description}</div>}
               </div>
               <Button
