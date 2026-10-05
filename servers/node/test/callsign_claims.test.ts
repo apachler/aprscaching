@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Env } from "@aprscaching/gateway/env";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
+import { serviceCall } from "@aprscaching/gateway/servicecall";
 import { newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import {
   authEnv,
@@ -791,6 +792,30 @@ describe("what beacons under the call", () => {
       await env.DB.prepare("SELECT 1 AS x FROM account_stations WHERE callsign LIKE 'OE8APR%'").first(),
     ).toBeNull();
     expect(await env.DB.prepare("SELECT 1 AS x FROM wx_keys WHERE callsign = 'OE8APR'").first()).toBeNull();
+  });
+
+  it("leaves nothing the previous holder queued for APRS-IS to go on the air", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const service = serviceCall(env);
+    const t = now();
+    const queue = (src: string, payload: string, status = "queued") =>
+      env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, kind, payload, status) VALUES (?, ?, 'message', ?, ?)")
+        .bind(t, src, payload, status)
+        .run();
+    await queue("OE8APR-9", ":DL1ABC   :hello{1");
+    await queue(service, ":DL1ABC   :de OE8APR: mailbox note");
+    await queue("OE8APR", ":DL1ABC   :already out", "sent");
+    await queue("DL1CLB", ":OE8APR   :someone else's");
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    expect((await status(env, opened.data.claim)).data.status).toBe("done");
+    // the service call's answer to the licensee's VERIFY joins the queue after these four
+    const left = await env.DB.prepare("SELECT src_call, status FROM aprs_outbox WHERE id <= 4 ORDER BY id").all();
+    expect(left.results).toEqual([
+      { src_call: "OE8APR", status: "sent" },
+      { src_call: "DL1CLB", status: "queued" },
+    ]);
   });
 });
 

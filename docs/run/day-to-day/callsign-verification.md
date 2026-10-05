@@ -120,7 +120,8 @@ its claims. Two claimants on one call never use up each other's codes.
 The account that loses a call keeps its other calls. What it wrote in the app under the call (caches, logs,
 ratings, favourites, watches, badges, saved views) stays on that account and shows under its remaining call,
 or as `FORMER` when it holds no other. Every device key, station and weather key on the call is removed, on
-whichever account it is listed, including a station you listed on the call for another member. The federation
+whichever account it is listed, including a station you listed on the call for another member. Messages still
+queued for APRS-IS under the call, or carried for it by the service call's Mailbox, are dropped. The federation
 learns of it from signed tombstones for those keys and the moved finds, and from the caches served again.
 Positions, stations and messages the radio sent stay with the call.
 

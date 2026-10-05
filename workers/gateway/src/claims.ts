@@ -61,6 +61,7 @@ import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
 import { licenceFor } from "./licence.js";
 import { appBase } from "./sitemap.js";
+import { dropQueuedFor } from "./outbox.js";
 
 /** A claim stays open as long as the slowest method needs: an ampr.org record can take two days to publish. */
 const CLAIM_TTL_SEC = 48 * 3600;
@@ -503,8 +504,10 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
   return { stmts, tombstones, holderId, callsign: cs, shownAs, callless, email: acct?.email ?? null };
 }
 
-/** Once a release is written: publish its tombstones and tell the previous holder. */
+/** Once a release is written: drop the call's queued traffic, publish its tombstones and tell the previous holder. */
 async function afterRelease(env: Env, r: Release, why: string): Promise<void> {
+  // what the previous holder left queued for APRS-IS under the call never goes on the air after the release
+  await dropQueuedFor(env, [r.callsign]);
   const instance = instanceName(env);
   if (instance && r.tombstones.length) await emitTombstones(env, instance, r.tombstones);
   const shown = isFormerMarker(r.shownAs) ? null : r.shownAs;
