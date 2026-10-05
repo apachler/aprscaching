@@ -23,6 +23,8 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: bash tools/interop/run-local-loop.sh
+      - name: the same loop with federation over FBB on for the partner
+        run: FED_BBS=1 bash tools/interop/run-local-loop.sh
 
   linbpq:
     name: LinBPQ peer (NODES + FBB forwarding)

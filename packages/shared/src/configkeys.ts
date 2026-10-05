@@ -74,6 +74,7 @@ export const CONFIG_KEYS = {
   FED_SUBMIT_INSTANCES: { type: "list", units: ["gateway"] },
   FED_HUB_URL: { type: "string", units: ["gateway", "pocket"] },
   FED_RELAY_SECRET: { type: "string", units: ["gateway"], secret: true },
+  FED_BBS: { type: "enum", units: ["gateway"], default: "0", values: ["0", "1", "false", "true", "no", "yes"] },
   RETENTION: { type: "json", units: ["gateway", "pocket"], site: { group: "retention", format: "retention" } },
   MODERATION_RETENTION_DAYS: {
     type: "int",

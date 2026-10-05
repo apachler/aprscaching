@@ -67,6 +67,9 @@ the hub under `/federation/relay/*`, turned on by `FED_RELAY_SECRET`.
 The gateway serves the hub's relay endpoints. A spoke's gateway does not poll them by itself: the spoke side
 needs a client that leases and answers.
 
+A spoke with no internet path at all can take its queries as packet mail instead:
+[Federation over FBB](fbb.md), experimental and off by default.
+
 ## The instance registry
 
 A registry is a signed document that binds instance names to keys and operators. An instance refuses to mirror

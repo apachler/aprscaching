@@ -32,6 +32,8 @@ export const TERMS = {
   federation: "How instances share caches, finds and keys as signed records; a peer is one instance yours trusts.",
   "peer-trust":
     "Trusted peers show on the map and count toward Tier A; unvetted ones are mirrored but hidden; blocked are ignored.",
+  "fbb-federation":
+    "Federation records sent as packet mail to a partner BBS marked for it. Experimental; ask its sysop first.",
   "key-fingerprint":
     "A checksum of an instance's signing key. Sysops compare theirs over a channel they trust before trusting a peer.",
   provenance: "How a packet reached the instance, and whether one of its own receiving stations heard it directly.",

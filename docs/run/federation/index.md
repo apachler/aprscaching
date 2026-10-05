@@ -240,4 +240,5 @@ ask for a pull after they write, so new records arrive sooner.
 ## Next
 
 - [Hubs, relays and the registry](hubs-and-relays.md): reach peers behind a firewall.
+- [Federation over FBB](fbb.md): carry records as packet mail where no direct path exists (experimental).
 - [Instance admin at a glance](../day-to-day/index.md): running it day to day.

@@ -294,6 +294,8 @@ export const ENV_FILES = [
       { key: "FED_PEERS", value: "https://peer.example.org", off: true },
       "# Discovery off: learned peers would arrive disabled, still for you to vet.",
       { key: "FED_DISCOVER", value: "0" },
+      "# Federation over FBB is experimental and off; on, only the forwarding partners you mark for it carry it.",
+      { key: "FED_BBS", value: "0" },
       "# A hub (FED_SUBMIT_SECRET set) lists the spoke instance ids allowed to submit to it.",
       { key: "FED_SUBMIT_INSTANCES", value: "spoke.example.org", off: true },
       "# A registry (FED_REGISTRY or FED_REGISTRY_DNS) is refused without its pinned authority key.",

@@ -2608,11 +2608,13 @@ function ForwardingAdmin() {
     () =>
       Promise.all([listForwardPartners(), listForwardRules()]).then(([p, r]) => ({
         partners: p.partners,
+        fedOn: !!p.federationOverFbb,
         rules: r.rules,
       })),
     [],
   );
   const partners: ForwardPartner[] | undefined = lists.data?.partners;
+  const fedOn = lists.data?.fedOn ?? false;
   const rules: ForwardRuleRow[] | undefined = lists.data?.rules;
   const refresh = lists.reload;
   const [adding, setAdding] = useState(false);
@@ -2625,6 +2627,25 @@ function ForwardingAdmin() {
     try {
       await saveForwardPartner({ ...p, enabled });
       toast(`Forwarding to ${p.call} ${enabled ? "on" : "off"}`);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  // Federation over FBB spends the partner's link on machine data: turning it on asks first.
+  const toggleFederation = async (p: ForwardPartner, federation: boolean) => {
+    if (
+      federation &&
+      !(await confirmDialog({
+        title: `Send federation records to ${p.call}?`,
+        message: `Ask ${p.call}'s sysop first: the batches use that BBS's link. Mail already forwarded cannot be recalled.`,
+        confirmLabel: "Turn on",
+      }))
+    )
+      return;
+    try {
+      await saveForwardPartner({ ...p, federation });
+      toast(`Federation over FBB with ${p.call} ${federation ? "on" : "off"}`);
       refresh();
     } catch (e) {
       toast((e as Error).message);
@@ -2704,6 +2725,12 @@ function ForwardingAdmin() {
   return (
     <>
       <h4 className="set-subh">Partners</h4>
+      {lists.data && !fedOn && (
+        <p className="muted fine">
+          Federation over FBB is off on this instance (<span className="mono">FED_BBS</span>).{" "}
+          <ManualLink page="run/federation/fbb">Federation over FBB</ManualLink>
+        </p>
+      )}
       {lists.error ? (
         <ErrorState onRetry={refresh}>Couldn&apos;t load partners and rules.</ErrorState>
       ) : partners === undefined ? (
@@ -2734,6 +2761,17 @@ function ForwardingAdmin() {
                 every {p.intervalMin} min{p.timebands ? ` @ ${p.timebands} UTC` : ""} · types {p.msgtypes}
                 {p.requestReverse ? " · reverse" : ""}
               </div>
+              {fedOn && (
+                <div className="row partner-fed">
+                  <Switch
+                    label={`Federation over FBB with ${p.call}`}
+                    checked={p.federation}
+                    onChange={(v) => void toggleFederation(p, v)}
+                  />
+                  <span>Federation (experimental)</span>
+                  <InfoTip text={TERMS["fbb-federation"]} label="What is federation over FBB?" />
+                </div>
+              )}
             </li>
           ))}
         </ul>

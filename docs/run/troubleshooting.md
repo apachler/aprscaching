@@ -425,7 +425,13 @@ Each address in `EXTRA_ORIGINS`: the instance's 44Net name, a HAMNET address and
 
 ## Federation (`federation`)
 
-Every shape with a gateway. A LAN instance gets one check, `federation.off` or `federation.lan`.
+Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federation.off` or `federation.lan`.
+
+### `federation.fbb`
+
+- **Tests:** whether `FED_BBS` turns on federation over FBB. It passes either way and says which: off is the
+  default, and on, only the forwarding partners marked for federation carry it.
+- **See:** [Federation over FBB](federation/fbb.md).
 
 ### `federation.off`
 

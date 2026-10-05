@@ -27,7 +27,14 @@ describe("FBB forwarding partner normalizer", () => {
       msgtypes: "PB",
       maxBlock: 3,
       enabled: true,
+      federation: null,
     });
+  });
+
+  it("keeps federation unset unless the save names it", () => {
+    expect(normalizePartner({ call: "DB0ABC" })!.federation).toBeNull();
+    expect(normalizePartner({ call: "DB0ABC", federation: true })!.federation).toBe(true);
+    expect(normalizePartner({ call: "DB0ABC", federation: false })!.federation).toBe(false);
   });
 
   it("applies safe defaults for a bare partner", () => {
@@ -42,6 +49,7 @@ describe("FBB forwarding partner normalizer", () => {
       msgtypes: "PBT",
       maxBlock: 5,
       enabled: true,
+      federation: null,
     });
   });
 

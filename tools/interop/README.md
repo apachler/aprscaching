@@ -49,6 +49,10 @@ Asserts NODES broadcasts learned in both directions and an FBB forwarding sessio
 our SID-gated responder) carrying a message A→B over real AX.25 connected mode, BID-deduped. Runs
 anywhere Node runs; CI runs it in the `interop` workflow before the containerized peers.
 
+By default it also checks that federation over FBB stays off: no batch is queued or offered. With
+`FED_BBS=1 bash tools/interop/run-local-loop.sh` both stacks turn it on, each marks the other's partner for
+federation, and a signed batch travels A→B as personal mail to `ACSFED`. CI runs both.
+
 Debug tools: `probe-bbs.mjs` (dial any AXUDP BBS and run a no-traffic F-protocol exchange),
 `probe-responder.mjs` (a log-everything responder to point our forwarder at).
 

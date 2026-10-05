@@ -118,6 +118,10 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
 - [ ] **MeshCom KISS on a real node** — the KISS link to a MeshCom node (`MESHCOM_KISS_PORT`, the node's KISS
       password in `MESHCOM_KISS_PASS`, answers sent through the node under the service call) is built and covered by unit tests, and is
       untested against node hardware ([`docs/run/radios/meshcom.md`](docs/run/radios/meshcom.md)).
+- [ ] **Federation over FBB on a real BBS network** — `FED_BBS` (experimental, off by default) carries signed
+      batches as personal mail to `ACSFED` at a partner marked for federation; the local AXUDP loop proves it
+      between two aprscaching stacks, and nothing yet proves how F6FBB, LinBPQ or JNOS store, route or refuse
+      that mail, or what a batch costs in airtime ([`docs/run/federation/fbb.md`](docs/run/federation/fbb.md)).
 - [ ] **The packet terminal over a Bluetooth KISS TNC** — the terminal's BLE KISS connection, Mobilinkd's BLE
       KISS service included, is untested on hardware
       ([`docs/shack/packet-and-bbs.md`](docs/shack/packet-and-bbs.md)).
@@ -885,12 +889,14 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
       side delivers pages to `POST /federation/frames` into the shared trust-gated pipeline, and the
       session driver runs async commands in order, so I/O-backed apps work. Dialing the RF
       circuit is validate-at-deploy, like FBB forwarding.
-- [x] **Store-and-forward carrier over FBB forwarding** — complete, including the relay's packet
-      leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED` bulletin
-      with a content-addressed BID for mesh dedup (`packages/shared`); `POST /federation/bbs/enqueue`
+- [x] **Store-and-forward carrier over FBB forwarding** — experimental and off unless `FED_BBS` is on, including
+      the relay's packet leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED`
+      batch with a content-addressed BID for dedup (`packages/shared`); `POST /federation/bbs/enqueue`
       signs local feed records (tombstones first, same producer as the HTTP sync surface) into one such
-      bulletin that the existing forwarding rules/pool/scheduler carry like any other; the
-      forward-inbound hook routes an arriving `ACSFED` bulletin through `applyFedBbsBulletin`, which
+      batch, which the forwarding pool offers only to partners marked for federation, as personal mail to
+      `ACSFED` at the partner's BBS (never routed by the forward rules, never a bulletin); the
+      forward-inbound hook takes an arriving `ACSFED` batch only from a marked partner and routes it through
+      `applyFedBbsBulletin`, which
       verifies each frame against its claimed origin's keys (last-pinned peer key + signed-registry
       binding), applies idempotently by gid, and quarantines unknown or blocked origins — receiving a
       frame lifts no trust and introduces no peer. The rendezvous relay rides the same carrier: `POST

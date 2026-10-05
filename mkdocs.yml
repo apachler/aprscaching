@@ -151,6 +151,7 @@ nav:
       - Federation:
           - Join the network: run/federation/index.md
           - Hubs, relays and the registry: run/federation/hubs-and-relays.md
+          - Federation over FBB: run/federation/fbb.md
       - Pocket in the field:
           - Run Pocket in the field: run/pocket/field-station.md
           - Pocket extras: run/pocket/extras.md

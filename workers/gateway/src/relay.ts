@@ -27,6 +27,7 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
+import { fedBbsOn, FED_BBS_OFF } from "./fedbbsgate.js";
 import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
 import { importVerifyKey, signRaw } from "./federation.js";
 import { keysForOrigin } from "./fedpeers.js";
@@ -314,15 +315,16 @@ export async function handleRelayResult(req: Request, env: Env, id: string): Pro
 // ------------------------------------------------------------------ packet-carried leg
 /**
  * POST /federation/relay/:instance/dispatch — the hub packs a packet-only spoke's queued relay
- * queries into an `ACSFED` bulletin of signed `relayQuery` frames and marks them leased; the FBB
- * mesh carries the bulletin out, and the spoke's answers come back the same way as signed
- * `relayAnswer` frames (the store-and-forward receive lands them in this queue). The frame
- * signatures bind both directions to their instances — the per-spoke HMAC token exists only on the
- * HTTP legs, so no secret material ever rides the air.
+ * queries into an `ACSFED` batch of signed `relayQuery` frames and marks them dispatched; FBB
+ * forwarding carries the batch to the partners marked for federation, and the spoke's answers come back
+ * the same way as signed `relayAnswer` frames (the store-and-forward receive lands them in this queue).
+ * The frame signatures bind both directions to their instances — the per-spoke HMAC token exists only on
+ * the HTTP legs, so no secret material ever rides the air. Refused while `FED_BBS` is off.
  */
 export async function handleRelayDispatch(req: Request, env: Env, instance: string): Promise<Response> {
   const denied = await requireSysop(req, env, { allowOperatorSecret: true });
   if (denied) return denied;
+  if (!fedBbsOn(env)) return json({ error: FED_BBS_OFF }, { status: 409 });
   const spoke = instance.toLowerCase();
   const hub = (env.INSTANCE ?? "").toLowerCase();
   if (!hub) return json({ error: "INSTANCE required" }, { status: 500 });

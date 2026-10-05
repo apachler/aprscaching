@@ -7,7 +7,7 @@
  * or non-positive value keeps the default.
  */
 import type { Env } from "./env.js";
-import { RETENTION_FIELDS, type RetentionField } from "@aprscaching/shared";
+import { FED_BBS_CATEGORY, RETENTION_FIELDS, type RetentionField } from "@aprscaching/shared";
 import { jsonObjectSetting } from "./util/config.js";
 import { setting } from "./siteconfig.js";
 
@@ -152,11 +152,12 @@ export async function pruneOperational(env: Env, now: number, bulletinLifetimeS:
     now - BOX_COMMAND_KEEP_S,
   );
   // Bulletins expire; one stored without an expiry lives the default lifetime from when it was posted.
-  // Personal mail and NTS traffic wait for their recipient and are deleted by them, not by age.
+  // Personal mail and NTS traffic wait for their recipient and are deleted by them, not by age; a federation
+  // batch (personal mail to ACSFED, read by no one) expires like a bulletin.
   await pruneBounded(
     env,
     "bbs_messages",
-    "SELECT rowid FROM bbs_messages WHERE type = 'B' AND COALESCE(expires_at, posted_at + ?) <= ?",
+    `SELECT rowid FROM bbs_messages WHERE (type = 'B' OR to_call = '${FED_BBS_CATEGORY}') AND COALESCE(expires_at, posted_at + ?) <= ?`,
     bulletinLifetimeS,
     now,
   );
