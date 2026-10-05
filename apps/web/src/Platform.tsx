@@ -6,6 +6,7 @@ import "./styles/index.css";
 import {
   listCaches,
   getCache,
+  getMyLogged,
   getStations,
   getMeshcomNodes,
   getMeshcomLinks,
@@ -59,7 +60,7 @@ import { HidePanel } from "./caches/HidePanel.js";
 import { DetailPanel } from "./caches/DetailPanel.js";
 import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
-import { nearestLoggable } from "./caches/near.js";
+import { loadDismissed, nearestLoggable, promptAllowed, saveDismissed } from "./caches/near.js";
 import { onFix } from "./geo/location.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { OutboxPanel } from "./log/OutboxPanel.js";
@@ -103,6 +104,7 @@ import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
 import { MeshcomLinks } from "./meshcom/MeshcomLinks.js";
 import { GRATICULE_PAINT, paintFromTokens, useAppliedTheme } from "./map/mapPaint.js";
+import { useFineGrid } from "./map/fineGrid.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // Keyless online basemap by default: OpenFreeMap's OSM vector tiles (free, no key, no usage caps —
@@ -423,6 +425,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       },
     },
   );
+  useFineGrid(map);
   const flyTo = useCallback(
     (lat: number, lon: number, minZoom: number) =>
       mapRef.current?.flyTo({ center: [lon, lat], zoom: Math.max(mapRef.current.getZoom(), minZoom) }),
@@ -576,19 +579,45 @@ export default function Platform({ session, startTour }: { session: SessionState
   const facets = useMemo(() => facetsOf(caches), [caches]);
 
   // ---- "you're near": from the radio's beacon (the live socket) or the phone's own reading (checked here) ----
-  // A cache prompts once a session, whichever source sees it first; a dismissed one stays quiet.
-  const prompted = useRef(new Set<number>());
+  // A cache prompts once a page load, whichever source sees it first. A dismissed one stays quiet for the browser
+  // session, and so does every cache the player found, logged as a did-not-find or hid.
+  const prompted = useRef(loadDismissed());
+  const dismissed = useRef(loadDismissed());
+  const settled = useRef(new Set<number>());
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
   const showNear = useCallback((p: GeofencePrompt) => {
-    if (prompted.current.has(p.cacheId)) return;
+    if (prompted.current.has(p.cacheId) || !promptAllowed(p, shownRef.current, settled.current)) return;
     prompted.current.add(p.cacheId);
     setNearPrompt(p);
   }, []);
-  const shownRef = useRef(shown);
-  shownRef.current = shown;
+  const dismissNear = useCallback((id: number) => {
+    dismissed.current.add(id);
+    saveDismissed(dismissed.current);
+    setNearPrompt(null);
+  }, []);
+  const refreshSettled = useCallback(async () => {
+    if (!session.signedIn) return;
+    try {
+      const r = await getMyLogged();
+      settled.current = new Set([...r.found, ...r.dnf, ...r.owned]);
+      setNearPrompt((p) => (p && settled.current.has(p.cacheId) ? null : p));
+    } catch {
+      /* offline: the prompt keeps the caches it knows; the gateway's own prompt skips them too */
+    }
+  }, [session.signedIn]);
+  useEffect(() => {
+    void refreshSettled();
+  }, [refreshSettled]);
+  // the prompt leaves once the map shows its cache archived or disabled
+  useEffect(() => {
+    setNearPrompt((p) => (p && !promptAllowed(p, shown, settled.current) ? null : p));
+  }, [shown]);
   useEffect(
     () =>
       onFix((fix) => {
-        const p = nearestLoggable(shownRef.current, fix, callsignRef.current, prompted.current);
+        const skip = new Set([...prompted.current, ...settled.current]);
+        const p = nearestLoggable(shownRef.current, fix, callsignRef.current, skip);
         if (p) showNear(p);
       }),
     [showNear],
@@ -1096,7 +1125,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                   >
                     Log it
                   </Button>
-                  <Button variant="icon" aria-label="Dismiss" onClick={() => setNearPrompt(null)}>
+                  <Button variant="icon" aria-label="Dismiss" onClick={() => dismissNear(nearPrompt.cacheId)}>
                     ✕
                   </Button>
                 </div>
@@ -1136,7 +1165,10 @@ export default function Platform({ session, startTour }: { session: SessionState
                 }
                 offlineFrom={detailFrom}
                 onClose={() => setSelectedId(null)}
-                onLogged={reloadDetail}
+                onLogged={() => {
+                  void reloadDetail();
+                  void refreshSettled();
+                }}
                 onSignIn={signInFromCache}
               />
             )}

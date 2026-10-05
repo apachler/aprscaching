@@ -82,6 +82,7 @@ const COLOURS: { group: string; tokens: [name: string, role: string][] }[] = [
       ["--ok", "success"],
       ["--warn", "warning"],
       ["--bad", "error, danger"],
+      ["--danger-fill", "destructive primary"],
       ["--fav", "favourite"],
       ["--meshcom", "MeshCom"],
     ],

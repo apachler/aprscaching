@@ -106,7 +106,7 @@ export async function envelopeForPosition(
     lastSeen: nowS(),
   };
   const around = near ?? (await cachesNear(env, lat, lon));
-  const own = around.length ? await ownedAmong(env, cs, around) : new Set<number>();
+  const own = around.length ? await settledAmong(env, cs, around) : new Set<number>();
   const prompts = around
     .filter((c) => !own.has(c.id))
     .map((c) => ({
@@ -123,21 +123,26 @@ export async function envelopeForPosition(
 }
 
 /**
- * The caches among `caches` that the station's operator hid: under the station's base call or an SSID of it, or
- * under any call of the account that holds it. A hider is never prompted to log their own cache.
+ * The caches among `caches` that the station's operator has settled: hid, found or logged as a did-not-find, under
+ * the station's base call or an SSID of it, or under any call of the account that holds it. Nobody is prompted to
+ * log a cache they hid or already logged.
  */
-async function ownedAmong(env: Env, callsign: string, caches: NearCache[]): Promise<Set<number>> {
+async function settledAmong(env: Env, callsign: string, caches: NearCache[]): Promise<Set<number>> {
   const base = baseCall(callsign);
   const ids = caches.map((c) => c.id);
   const rows = (
     await env.DB.prepare(
-      `SELECT c.id FROM caches c WHERE c.id IN (${ids.map(() => "?").join(",")})
-         AND (UPPER(c.owner_call) = ? OR UPPER(c.owner_call) LIKE ? || '-%' OR EXISTS (
-           SELECT 1 FROM account_callsigns ac
-            WHERE ac.account_id = (SELECT account_id FROM account_callsigns WHERE callsign = ?)
-              AND (UPPER(c.owner_call) = ac.callsign OR UPPER(c.owner_call) LIKE ac.callsign || '-%')))`,
+      `WITH calls AS (SELECT ac.callsign FROM account_callsigns ac
+                       WHERE ac.account_id = (SELECT account_id FROM account_callsigns WHERE callsign = ?)
+                      UNION SELECT ?)
+       SELECT c.id FROM caches c WHERE c.id IN (${ids.map(() => "?").join(",")})
+         AND (EXISTS (SELECT 1 FROM calls k
+                       WHERE UPPER(c.owner_call) = k.callsign OR UPPER(c.owner_call) LIKE k.callsign || '-%')
+           OR EXISTS (SELECT 1 FROM cache_logs l JOIN calls k
+                              ON l.logger_call = k.callsign OR l.logger_call LIKE k.callsign || '-%'
+                       WHERE l.cache_id = c.id AND l.log_type IN ('found','dnf')))`,
     )
-      .bind(...ids, base, base, base)
+      .bind(base, base, ...ids)
       .all<{ id: number }>()
   ).results;
   return new Set(rows.map((r) => r.id));

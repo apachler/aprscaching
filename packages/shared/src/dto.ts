@@ -287,6 +287,8 @@ export interface CacheDetail extends CacheSummary {
   }[];
   // audio-cache
   stageCount: number;
+  /** The viewer's own attempt at this cache, any SSID or call of theirs: found, or a did-not-find. */
+  yourLog?: "found" | "dnf";
   /** A living cache: the time of its station's position, which is the cache's; null while the station has none. */
   stationHeardAt?: number | null;
   /** For the cache's owner only: the settings the edit form starts from that the fields above do not carry. */

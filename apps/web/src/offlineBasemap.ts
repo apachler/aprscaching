@@ -5,6 +5,52 @@ import type { StyleSpecification } from "maplibre-gl";
 import type { GridPalette } from "@aprscaching/shared";
 import { graticulePalette } from "./map/mapPaint.js";
 
+/** The graticule's close-up grid source, filled for the view by {@link fineGridLines}. */
+export const FINE_GRID_SOURCE = "grid_fine";
+/** From this zoom the 0.1° grid leaves the view between its lines, so the close-up grid takes over. */
+export const FINE_GRID_MINZOOM = 11;
+
+/**
+ * The close-up grid for a view: lines every 0.01° from zoom 11 and every 0.001° from zoom 15, only across the view
+ * (one step beyond each edge), so a street-level map still shows its grid. Below zoom 11 it is empty: the 0.1° and
+ * whole-degree lines carry the view. Pure.
+ */
+export function fineGridLines(
+  view: { west: number; south: number; east: number; north: number },
+  zoom: number,
+): GeoJSON.FeatureCollection {
+  const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+  if (zoom < FINE_GRID_MINZOOM) return empty;
+  const step = zoom >= 15 ? 0.001 : 0.01;
+  const lo = (v: number) => Math.floor(v / step) - 1;
+  const hi = (v: number) => Math.ceil(v / step) + 1;
+  const [x0, x1, y0, y1] = [lo(view.west), hi(view.east), lo(Math.max(view.south, -85)), hi(Math.min(view.north, 85))];
+  // a view far wider than the zoom suggests (a tilted map) would ask for thousands: draw none rather than stall
+  if (x1 - x0 > 400 || y1 - y0 > 400) return empty;
+  const fix = (n: number) => Math.round(n * step * 1e6) / 1e6;
+  const features: GeoJSON.Feature[] = [];
+  const line = (coords: [number, number][]): GeoJSON.Feature => ({
+    type: "Feature",
+    properties: {},
+    geometry: { type: "LineString", coordinates: coords },
+  });
+  for (let i = x0; i <= x1; i++)
+    features.push(
+      line([
+        [fix(i), fix(y0)],
+        [fix(i), fix(y1)],
+      ]),
+    );
+  for (let j = y0; j <= y1; j++)
+    features.push(
+      line([
+        [fix(x0), fix(j)],
+        [fix(x1), fix(j)],
+      ]),
+    );
+  return { type: "FeatureCollection", features };
+}
+
 /** The shared lat/lon graticule geometry + layers, recoloured per palette. Fully self-contained
  *  (no network/tiles) — for air-gapped/field use and deterministic rendering. */
 function graticule(pal: GridPalette, stepDeg: number): StyleSpecification {
@@ -38,9 +84,18 @@ function graticule(pal: GridPalette, stepDeg: number): StyleSpecification {
     sources: {
       grid_minor: { type: "geojson", data: fc(minor) },
       grid_major: { type: "geojson", data: fc(major) },
+      // the close-up grid, drawn for the view alone as it moves (map/fineGrid.ts): a world of it would not fit
+      [FINE_GRID_SOURCE]: { type: "geojson", data: fc([]) },
     },
     layers: [
       { id: "ocean", type: "background", paint: { "background-color": pal.bg } },
+      {
+        id: "grid-fine",
+        type: "line",
+        source: FINE_GRID_SOURCE,
+        minzoom: FINE_GRID_MINZOOM,
+        paint: { "line-color": pal.line, "line-opacity": pal.minorOp, "line-width": pal.minorW },
+      },
       {
         id: "grid-minor",
         type: "line",

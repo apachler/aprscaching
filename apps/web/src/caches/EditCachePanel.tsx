@@ -197,18 +197,28 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
               spellCheck={false}
               placeholder="47.07355, 15.43785 or JN77rb"
               aria-invalid={moveErr || moveCheck?.over || undefined}
-              aria-describedby={move ? "edit-move-help edit-move-limit" : "edit-move-help"}
+              aria-describedby={[
+                "edit-move-help",
+                moveErr && !moveCheck?.over && "edit-move-err",
+                move && "edit-move-limit",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onChange={(e) => {
                 setMoveTo(e.target.value);
                 setMoveErr(false);
               }}
             />
           </label>
-          <p id="edit-move-help" className={moveErr ? "error fine" : "muted fine"}>
-            {moveErr && !moveCheck?.over
-              ? "Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator."
-              : "Decimal degrees (lat, lon) or a Maidenhead locator. Leave it empty to keep the cache where it is."}
+          {/* the help stays as it is; only the error's own line takes the error colour */}
+          <p id="edit-move-help" className="muted fine">
+            Decimal degrees (lat, lon) or a Maidenhead locator. Leave it empty to keep the cache where it is.
           </p>
+          {moveErr && !moveCheck?.over && (
+            <p id="edit-move-err" className="error fine" role="alert">
+              Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator.
+            </p>
+          )}
           {move && (
             <p id="edit-move-limit" className={moveCheck?.over ? "error fine" : "muted fine"} aria-live="polite">
               {moveLine(move.limitM, move.pinned, moveCheck)}

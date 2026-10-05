@@ -32,8 +32,8 @@ describe("a schema refusal", () => {
       "Comment: Expected string.",
     );
   });
-  it("leaves any other refusal as the server said it", () => {
-    expect(refusalMessage(new ApiError("only the owner may edit", 403, {}))).toBe("only the owner may edit");
+  it("shows any other refusal as the server said it, as a sentence", () => {
+    expect(refusalMessage(new ApiError("only the owner may edit", 403, {}))).toBe("Only the owner may edit");
   });
 });
 

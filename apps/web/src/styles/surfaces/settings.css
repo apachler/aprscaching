@@ -77,7 +77,8 @@
     padding: var(--space-sm) var(--space-sm);
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-sm);
+    /* a wide column gap, so each box reads as its own label's, never the one before it */
+    gap: 0 var(--space-xl);
   }
   .station-body fieldset.roles legend {
     padding: 0 var(--space-xs);

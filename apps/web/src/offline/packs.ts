@@ -7,7 +7,7 @@
  * taken from the most recently refreshed one; the automatic area only where no pack of the user's has it),
  * and says where they came from. The cache page reads the cache's stored details, logs and images.
  */
-import type { MapCache, PackCache } from "@aprscaching/shared";
+import type { MapCache, PackCache, SearchHitCache } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
 
 export const AUTO_PACK_ID = "auto";
@@ -130,6 +130,51 @@ export async function packCache(store: OfflineStore, id: number): Promise<{ cach
     if (c) return { cache: c, pack: p };
   }
   return null;
+}
+
+/**
+ * Search without a connection: the native caches of every pack whose code, title or owner contains `q`, each once,
+ * a code that starts with it first. The answer of the instance's own search, from what the packs hold.
+ */
+export async function packSearch(store: OfflineStore, q: string, limit: number): Promise<SearchHitCache[]> {
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const packs = (await store.packs()).sort(
+    (a, b) => Number(!!a.auto) - Number(!!b.auto) || b.refreshedAt - a.refreshedAt,
+  );
+  const hits = new Map<number, { hit: SearchHitCache; rank: number }>();
+  for (const p of packs)
+    for (const c of await store.packCaches(p.id)) {
+      if (c.id == null || hits.has(c.id) || c.status === "archived") continue;
+      const code = c.code.toLowerCase();
+      const rank = code.startsWith(needle)
+        ? 0
+        : code.includes(needle)
+          ? 1
+          : c.title.toLowerCase().includes(needle)
+            ? 2
+            : c.ownerCall.toLowerCase().includes(needle)
+              ? 3
+              : -1;
+      if (rank < 0) continue;
+      hits.set(c.id, {
+        rank,
+        hit: {
+          kind: "cache",
+          id: c.id,
+          code: c.code,
+          title: c.title,
+          ownerCall: c.ownerCall,
+          type: c.type,
+          lat: c.lat,
+          lon: c.lon,
+        },
+      });
+    }
+  return [...hits.values()]
+    .sort((a, b) => a.rank - b.rank || a.hit.code.length - b.hit.code.length)
+    .slice(0, limit)
+    .map((h) => h.hit);
 }
 
 /** The user's own packs, newest first (the automatic area is not one of them). */

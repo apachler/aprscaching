@@ -56,8 +56,28 @@
   .beacon-pin {
     width: 30px;
     height: 30px;
+    padding: 0;
+    border: none;
+    background: none;
     cursor: pointer;
     filter: drop-shadow(0 1px 3px var(--shadow));
+  }
+  .beacon-pin img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .beacon-pin:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+    border-radius: 50%;
+  }
+  /* a living cache's beacon is larger than a pin: where they overlap, the cache pins stay on top and clickable */
+  .maplibregl-marker.beacon-pin {
+    z-index: 0;
+  }
+  .maplibregl-marker.cache-pin {
+    z-index: 1;
   }
   .cache-pin.mirrored {
     border-style: dashed;
@@ -440,6 +460,10 @@
   }
   .geo-banner button.icon {
     color: var(--accent-ink);
+  }
+  /* the prompt waits while search is open, so it never covers a result */
+  .app:has(.search-pop, .topsearch-wrap:focus-within) .geo-banner {
+    display: none;
   }
 
   /* ---- the locate button (in MapLibre's top-left control stack) and the viewer's dot ---- */

@@ -5,7 +5,7 @@
  * close button right. `.panel` is a query container (styles/components/panel.css), so its contents
  * adapt to the slot; the docked↔sheet swap is a viewport media query (styles/surfaces/shell.css).
  */
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import { Icon } from "./Icon.js";
 
@@ -21,10 +21,13 @@ export function Panel(props: {
   /** Density (ui-ux.md §6): compact tightens type and control spacing through the density tokens.
    *  Wide Shack surfaces are always compact; the instance admin surface asks for it too. */
   density?: "compact";
+  /** As a phone's bottom sheet, open at half height so the map stays in view; the grip expands it. */
+  peek?: boolean;
 }) {
   const ref = useRef<HTMLElement>(null);
   const titleId = useId();
   const { onClose } = props;
+  const [expanded, setExpanded] = useState(false);
   // Move focus into the drawer on open so keyboard/AT users land inside it, and return focus to the
   // control that opened it on close (ui-ux.md §7). Not a modal focus-trap — the panel coexists with
   // the map — so Escape-to-close is scoped to the panel (bubbles from its children), not the document.
@@ -53,7 +56,18 @@ export function Panel(props: {
       data-shell={props.wide ? "terminal" : undefined}
       data-density={props.wide ? "compact" : props.density}
       className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}
+      data-peek={props.peek ? (expanded ? "open" : "half") : undefined}
     >
+      {props.peek && (
+        // the sheet's grip, a real button: on a phone it lifts the half-height sheet to full height and back
+        <button
+          type="button"
+          className="sheet-grip"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Show less, with the map" : "Show the whole page"}
+          onClick={() => setExpanded((e) => !e)}
+        />
+      )}
       <div className="row between">
         <h2 id={titleId}>{props.title}</h2>
         <span className="spacer" />

@@ -51,6 +51,7 @@ const PAIRS: Pair[] = [
     min: 4.5,
   },
   { name: "text on the accent (primary button)", fg: "var(--accent-ink)", bg: "var(--accent)", min: 4.5 },
+  { name: "text on a destructive primary button", fg: "var(--danger-ink)", bg: "var(--danger-fill)", min: 4.5 },
   {
     name: "text on the top bar",
     fg: "var(--chrome-ink)",

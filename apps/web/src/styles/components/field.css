@@ -50,4 +50,39 @@
   .coord-entry > label {
     flex: 1;
   }
+  /* the file chooser (ui/FilePick.tsx): a button in the app's look and the chosen file's name beside it */
+  .filepick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+    cursor: pointer;
+  }
+  .filepick-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit);
+    padding: var(--ctl-pad-y) var(--ctl-pad-x);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: var(--ctl-fs);
+  }
+  .filepick:hover .filepick-btn {
+    border-color: var(--heading);
+  }
+  .filepick:has(input:focus-visible) .filepick-btn {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+  }
+  .filepick-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: var(--text-caption);
+  }
+  .filepick.disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
 }

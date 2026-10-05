@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { searchSuggest, type SearchHitCache, type SearchHitStation } from "../api.js";
 import { Icon } from "../ui/index.js";
+import { uniqueHits } from "./hits.js";
 
 /**
  * Enriched as-you-type search. A real ARIA combobox over the existing top-bar search:
@@ -49,7 +50,7 @@ export function SearchSuggest(props: {
       acRef.current = ac;
       searchSuggest(q, ac.signal)
         .then((r) => {
-          setHits([...r.caches, ...r.stations]);
+          setHits(uniqueHits([...r.caches, ...r.stations]));
           setActive(-1);
           setOpen(true);
         })

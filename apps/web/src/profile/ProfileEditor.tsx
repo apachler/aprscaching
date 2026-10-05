@@ -76,78 +76,87 @@ export function ProfileEditor(props: { callsign: string }) {
           onChange={(v) => edit((s) => ({ ...s, profilePublic: v }))}
         />
       </Row>
-      <label>
-        Display name{" "}
-        <input
-          value={p.displayName ?? ""}
-          maxLength={60}
-          placeholder={props.callsign}
-          onChange={(e) => edit((s) => ({ ...s, displayName: e.target.value }))}
-        />
-      </label>
-      <label>
-        Locator (Maidenhead){" "}
-        <input
-          className="mono"
-          value={p.homeGrid ?? ""}
-          maxLength={10}
-          placeholder="JN77bc12de"
-          onChange={(e) => edit((s) => ({ ...s, homeGrid: e.target.value }))}
-        />
-      </label>
-      <label>
-        Avatar URL{" "}
-        <input
-          value={p.avatarUrl ?? ""}
-          placeholder="https://…/me.png"
-          onChange={(e) => edit((s) => ({ ...s, avatarUrl: e.target.value }))}
-        />
-      </label>
-      <label>
-        Bio{" "}
-        <textarea
-          value={p.bio ?? ""}
-          rows={3}
-          maxLength={500}
-          placeholder="A line or two about your station / operating."
-          onChange={(e) => edit((s) => ({ ...s, bio: e.target.value }))}
-        />
-      </label>
-      <label>
-        Public contact email <span className="muted">(optional; your sign-in email stays private)</span>
-        <input
-          value={p.publicContact ?? ""}
-          placeholder="you@example.com"
-          onChange={(e) => edit((s) => ({ ...s, publicContact: e.target.value }))}
-        />
-      </label>
+      {p.profilePublic !== true ? (
+        // the switch gates the card: while it is off the fields are folded away, and what they hold stays saved
+        <p className="muted" role="status">
+          Your profile card is hidden. Turn it on to fill in what other players see.
+        </p>
+      ) : (
+        <>
+          <label>
+            Display name{" "}
+            <input
+              value={p.displayName ?? ""}
+              maxLength={60}
+              placeholder={props.callsign}
+              onChange={(e) => edit((s) => ({ ...s, displayName: e.target.value }))}
+            />
+          </label>
+          <label>
+            Locator (Maidenhead){" "}
+            <input
+              className="mono"
+              value={p.homeGrid ?? ""}
+              maxLength={10}
+              placeholder="JN77bc12de"
+              onChange={(e) => edit((s) => ({ ...s, homeGrid: e.target.value }))}
+            />
+          </label>
+          <label>
+            Avatar URL{" "}
+            <input
+              value={p.avatarUrl ?? ""}
+              placeholder="https://…/me.png"
+              onChange={(e) => edit((s) => ({ ...s, avatarUrl: e.target.value }))}
+            />
+          </label>
+          <label>
+            Bio{" "}
+            <textarea
+              value={p.bio ?? ""}
+              rows={3}
+              maxLength={500}
+              placeholder="A line or two about your station / operating."
+              onChange={(e) => edit((s) => ({ ...s, bio: e.target.value }))}
+            />
+          </label>
+          <label>
+            Public contact email <span className="muted">(optional; your sign-in email stays private)</span>
+            <input
+              value={p.publicContact ?? ""}
+              placeholder="you@example.com"
+              onChange={(e) => edit((s) => ({ ...s, publicContact: e.target.value }))}
+            />
+          </label>
 
-      <h4>Links</h4>
-      {(p.links ?? []).map((l, i) => (
-        <div className="row gap-2" key={i}>
-          <input
-            className="field-sm"
-            value={l.label}
-            placeholder="label"
-            aria-label={`Link ${i + 1} label`}
-            maxLength={40}
-            onChange={(e) => setLink(i, "label", e.target.value)}
-          />
-          <input
-            value={l.url}
-            placeholder="https://…"
-            aria-label={`Link ${i + 1} URL`}
-            onChange={(e) => setLink(i, "url", e.target.value)}
-          />
-          <Button variant="icon" aria-label={`Remove link ${i + 1}`} onClick={() => removeLink(i)}>
-            ✕
-          </Button>
-        </div>
-      ))}
-      {(p.links ?? []).length < 5 && (
-        <Button variant="quiet" onClick={addLink}>
-          + add link
-        </Button>
+          <h4>Links</h4>
+          {(p.links ?? []).map((l, i) => (
+            <div className="row gap-2" key={i}>
+              <input
+                className="field-sm"
+                value={l.label}
+                placeholder="label"
+                aria-label={`Link ${i + 1} label`}
+                maxLength={40}
+                onChange={(e) => setLink(i, "label", e.target.value)}
+              />
+              <input
+                value={l.url}
+                placeholder="https://…"
+                aria-label={`Link ${i + 1} URL`}
+                onChange={(e) => setLink(i, "url", e.target.value)}
+              />
+              <Button variant="icon" aria-label={`Remove link ${i + 1}`} onClick={() => removeLink(i)}>
+                ✕
+              </Button>
+            </div>
+          ))}
+          {(p.links ?? []).length < 5 && (
+            <Button variant="quiet" onClick={addLink}>
+              + add link
+            </Button>
+          )}
+        </>
       )}
 
       <div className="row end mt-6">

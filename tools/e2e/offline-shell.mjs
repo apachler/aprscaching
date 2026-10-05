@@ -13,6 +13,9 @@
  *      takes along.
  *   4. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
  *      call, with the map (MapLibre comes from the shell too) drawing the pack's tiles and showing its caches.
+ *   5. A visitor, signed out, makes a pack too. Then the instance goes away while the device still reports a
+ *      connection, and the basemap's style answers from the cache while its tiles' description never does: a
+ *      new visit opens the landing, Explore reaches the map with the pack's caches, and search finds them.
  *
  * If no Chromium is found it prints SKIP and exits 0, like audio-mic.mjs, and fails in CI (`CI` set), where
  * the e2e-offline job installs one.
@@ -107,8 +110,11 @@ function pack(url) {
   return { instance: "e2e.test", generation: "e2e1", builtAt: 1, caches: [cache] };
 }
 
-/** The built app, plus a stand-in gateway: a signed-in session, an empty map, one offline pack, nothing else. */
-function serve() {
+/**
+ * The built app, plus a stand-in gateway: a session (signed in, or none for a visitor), an empty map, one offline
+ * pack, nothing else.
+ */
+function serve({ signedIn = true } = {}) {
   return createServer((req, res) => {
     const url = new URL(req.url, "http://x");
     const send = (status, type, body) => {
@@ -116,7 +122,11 @@ function serve() {
       res.end(body);
     };
     if (url.pathname === "/auth/session")
-      return send(200, TYPES[".json"], JSON.stringify({ callsign: CALL, verified: true }));
+      return send(
+        200,
+        TYPES[".json"],
+        JSON.stringify(signedIn ? { callsign: CALL, verified: true } : { callsign: null }),
+      );
     if (url.pathname === "/.well-known/aprscaching")
       return send(200, TYPES[".json"], JSON.stringify({ instance: "e2e.test" }));
     if (url.pathname === "/api/caches") return send(200, TYPES[".json"], JSON.stringify({ caches: [] }));
@@ -164,15 +174,113 @@ async function main() {
   )
     throw new Error("apps/web/dist has no built service worker: run pnpm --filter @aprscaching/web build first");
 
-  const server = serve();
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch({ executablePath: exe });
   const failures = [];
   const check = (name, ok) => {
     console.log(`${ok ? "ok  " : "FAIL"} ${name}`);
     if (!ok) failures.push(name);
   };
+  try {
+    await signedInOffline(browser, check);
+    await visitorOffline(browser, check);
+  } finally {
+    await browser.close();
+  }
+  if (failures.length) {
+    console.error(`offline-shell: ${failures.length} check(s) failed`);
+    process.exit(1);
+  }
+  console.log("OFFLINE SHELL E2E PASSED");
+}
+
+/** Start a stand-in gateway; resolves to its base URL and a stop that also drops open connections. */
+async function start(opts) {
+  const server = serve(opts);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return {
+    base: `http://127.0.0.1:${server.address().port}`,
+    stop: () => {
+      server.closeAllConnections();
+      return new Promise((r) => server.close(r));
+    },
+  };
+}
+
+/** Make a pack of the subsquare at the map centre in the Offline panel; resolves once it is saved. */
+async function makePack(page) {
+  await page.click('.rail >> role=button[name="Offline"s]');
+  await page.click('.newpack .seg button:has-text("Subsquare")');
+  await page.click('button:has-text("Check size")');
+  await page.waitForSelector(".pack-estimate", { timeout: 15_000 });
+  await page.click('.pack-estimate button:has-text("Download")');
+  return page
+    .waitForSelector('.pack:has-text("1 caches")', { timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+}
+
+const seen = (page, selector, timeout = 15_000, state = "visible") =>
+  page
+    .waitForSelector(selector, { timeout, state })
+    .then(() => true)
+    .catch(() => false);
+
+/**
+ * A visitor, signed out, makes a pack, and later opens the app where the instance cannot be reached while the
+ * device still reports a connection: the landing, then Explore, reaches the map with the pack's caches, and
+ * search finds them. The basemap's style comes from the browser's cache but its tiles' description does not
+ * load, so the map has to fall back to the self-contained style on its own.
+ */
+async function visitorOffline(browser, check) {
+  const gw = await start({ signedIn: false });
+  const context = await browser.newContext();
+  try {
+    await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (r) => r.abort());
+    const page = await context.newPage();
+    await page.goto(gw.base);
+    await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 60_000 });
+    await page.click('button:has-text("Explore the live map")');
+    check("visitor online: Explore opens the map", await seen(page, ".maplibregl-map", 30_000));
+    await page.click('.tour-card button:has-text("Skip")', { timeout: 5_000 }).catch(() => {});
+    check("visitor online: a pack of the subsquare at the map centre is saved", await makePack(page));
+
+    // the instance is gone, the device still says it is online, and the basemap's style is read from the cache
+    await gw.stop();
+    await context.unroute(/^https:\/\/tiles\.openfreemap\.org\//);
+    await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (r) =>
+      r.request().url().includes("/styles/")
+        ? r.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              version: 8,
+              sources: { openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" } },
+              layers: [{ id: "background", type: "background", paint: { "background-color": "#ddd" } }],
+            }),
+          })
+        : // the tiles' description never answers, as on a link that is up but carries nothing
+          new Promise(() => {}),
+    );
+    // a new visit: the app's own address, a fresh browser session
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto(gw.base);
+    check("visitor offline: the landing opens", await seen(page, 'button:has-text("Explore the live map")', 30_000));
+    await page.click('button:has-text("Explore the live map")');
+    check(
+      "visitor offline: Explore reaches the map with the pack's caches",
+      await seen(page, '.offline-banner:has-text("caches from pack")', 30_000),
+    );
+    check("visitor offline: the splash is gone", await seen(page, ".splash", 15_000, "detached"));
+    await page.fill(".topsearch input", "AC-E2E");
+    check("visitor offline: search finds the pack's cache", await seen(page, '.search-opt:has-text("AC-E2E")'));
+  } finally {
+    await context.close();
+    await gw.stop().catch(() => {});
+  }
+}
+
+/** A signed-in player makes a pack, then opens the app with no connection at all. */
+async function signedInOffline(browser, check) {
+  const { base, stop } = await start({ signedIn: true });
   try {
     const context = await browser.newContext();
     // the online basemap's host is unreachable throughout, so a cached copy of its style can never make the
@@ -191,16 +299,7 @@ async function main() {
     });
     check(`the shell is stored (${stored} files)`, stored > 10);
 
-    await page.click('.rail >> role=button[name="Offline"s]');
-    await page.click('.newpack .seg button:has-text("Subsquare")');
-    await page.click('button:has-text("Check size")');
-    await page.waitForSelector(".pack-estimate", { timeout: 15_000 });
-    await page.click('.pack-estimate button:has-text("Download")');
-    const saved = await page
-      .waitForSelector('.pack:has-text("1 caches")', { timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    check("a pack of the subsquare at the map centre is saved (IndexedDB)", saved);
+    check("a pack of the subsquare at the map centre is saved (IndexedDB)", await makePack(page));
 
     await context.setOffline(true);
     await page.reload();
@@ -229,15 +328,10 @@ async function main() {
       return !!reg?.pushManager;
     });
     check("the registration still offers Web Push", pushHandlers);
+    await context.close();
   } finally {
-    await browser.close();
-    server.close();
+    await stop();
   }
-  if (failures.length) {
-    console.error(`offline-shell: ${failures.length} check(s) failed`);
-    process.exit(1);
-  }
-  console.log("OFFLINE SHELL E2E PASSED");
 }
 
 await main();

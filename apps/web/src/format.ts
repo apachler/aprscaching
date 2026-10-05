@@ -2,7 +2,7 @@
 /**
  * format.ts — locale & units. The server speaks SI (metres, knots, °C, unix seconds); the client
  * presents it in the user's locale + unit system. Settings default to the browser locale/timezone
- * and a metric/imperial guess from the locale region, with a manual override persisted in
+ * and a metric/imperial guess from the time zone (else the locale region), with a manual override persisted in
  * localStorage. A React context exposes ready-made formatters so any component can render
  * locale-correct numbers, dates, distances, speeds, temperatures, etc.
  */
@@ -87,7 +87,17 @@ export function browserTimeZone(): string {
     return "UTC";
   }
 }
-function unitsForLocale(locale: string): "metric" | "imperial" {
+/** The time zones of the imperial regions: the United States, Liberia and Myanmar. */
+const IMPERIAL_ZONE =
+  /^(America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Adak|Boise|Detroit|Juneau|Sitka|Metlakatla|Nome|Yakutat|Menominee|Indiana\/.+|Kentucky\/.+|North_Dakota\/.+)|Pacific\/Honolulu|US\/.+|Africa\/Monrovia|Asia\/(Yangon|Rangoon))$/;
+
+/**
+ * The unit system to start from: metric unless the device is in the United States, Liberia or Myanmar. The time
+ * zone says where the device is, so it decides when it names a place; a language setting (en-US on a laptop in
+ * Vienna) says less. Without a place in the zone (UTC, none), the locale's region decides. Pure.
+ */
+export function unitsFor(locale: string, timeZone: string): "metric" | "imperial" {
+  if (/^[A-Za-z]+\/[A-Za-z_]/.test(timeZone)) return IMPERIAL_ZONE.test(timeZone) ? "imperial" : "metric";
   try {
     const region = new Intl.Locale(locale).maximize().region ?? "";
     return IMPERIAL_REGIONS.has(region) ? "imperial" : "metric";
@@ -97,8 +107,7 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
 }
 
 function defaultSettings(): LocaleSettings {
-  const locale = browserLocale();
-  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "dark", crt: false };
+  return { locale: "", timeZone: "", units: unitsFor(browserLocale(), browserTimeZone()), theme: "dark", crt: false };
 }
 export function loadSettings(): LocaleSettings {
   try {

@@ -23,6 +23,10 @@ BBS message is never made from an APRS or MeshCom message, and never sent as one
 Signed in, **Messages** opens on **Conversations**: one row per station you exchanged messages with, newest
 first, with the last message and its state. Select a row to read the conversation and **Reply** at its foot.
 
+A station is its base call: OE6BOB, OE6BOB-7 and OE6BOB-9 are one conversation, and each message names the exact
+call it came from or went to. **Reply** answers the call of the latest message. The instance's service call keeps
+a conversation of its own.
+
 Messages from people who erased their account, or who no longer hold the call they wrote from, gather under
 **Withdrawn correspondents**. That conversation has no **Reply**: there is no station to answer.
 

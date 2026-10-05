@@ -51,6 +51,9 @@
     --ok-text: color-mix(in oklch, var(--ok) var(--hue-text), var(--ink));
     --warn-text: color-mix(in oklch, var(--warn) var(--hue-text), var(--ink));
     --bad-text: color-mix(in oklch, var(--bad) var(--hue-text), var(--ink));
+    /* a destructive primary (Delete, Archive, Remove): a red fill deep enough for white ink */
+    --danger-fill: oklch(0.52 0.19 27);
+    --danger-ink: oklch(1 0 0);
 
     /* operator surfaces — denser console chrome, derived in the same OKLCH family.
        Used by the nav rail, side panels and data chips; the core --surface/--ink stay as-is so
@@ -345,6 +348,8 @@
       var(--bad) 72%,
       var(--tint)
     ); /* the red lifted toward white, not toward the green ink */
+    --danger-fill: var(--bad); /* a red fill with the dark terminal ink, like the accent */
+    --danger-ink: var(--accent-ink);
 
     /* recognition chip → amber phosphor */
     --award-bg: oklch(0.24 0.05 95);

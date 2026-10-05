@@ -7,6 +7,7 @@ import {
   nowRoute,
   sendBlocked,
   textMax,
+  threadKey,
   threadsOf,
   validRecipient,
 } from "../src/messages/threads.js";
@@ -41,12 +42,13 @@ describe("conversations", () => {
       "OE8APR-7",
       "OE8APR-15",
     );
-    expect(t.map((x) => x.peer)).toEqual(["DL1ABC", "OE5XYZ-7"]);
+    expect(t.map((x) => x.peer)).toEqual(["DL1ABC", "OE5XYZ"]);
     const xyz = t[1]!;
     expect(xyz.items.map((i) => [i.dir, i.text, i.state])).toEqual([
       ["in", "hi", undefined],
       ["out", "hello", "acked"],
     ]);
+    // a suggestion names the station as the conversation last heard it, SSID included
     expect(correspondents(t)).toEqual(["DL1ABC", "OE5XYZ-7"]);
   });
 
@@ -61,7 +63,7 @@ describe("conversations", () => {
       "OE8APR-15",
     );
     expect(t).toHaveLength(1);
-    expect(t[0]).toMatchObject({ peer: "OE6XRR-9" });
+    expect(t[0]).toMatchObject({ peer: "OE6XRR", replyTo: "OE6XRR-9" });
     expect(t[0]!.items[0]).toMatchObject({ dir: "in", text: "see you at the field day", viaMailbox: true });
   });
 
@@ -80,13 +82,16 @@ describe("conversations", () => {
       null,
     );
     const by = Object.fromEntries(t.map((x) => [x.peer, x.items]));
-    expect(by["OE6XRR"]).toEqual([expect.objectContaining({ dir: "out", state: "waiting", withdrawId: 1 })]);
-    expect(by["OE5XYZ-9"]).toEqual([expect.objectContaining({ dir: "out", state: "delivered" })]);
-    expect(by["OE5XYZ-9"]![0]!.withdrawId).toBeUndefined();
+    // the message left for OE6XRR and the one OE6XRR-9 left are one conversation, each with its own call
+    expect(by["OE6XRR"]).toEqual([
+      expect.objectContaining({ dir: "out", state: "waiting", withdrawId: 1, with: "OE6XRR" }),
+      expect.objectContaining({ dir: "in", state: "waiting", with: "OE6XRR-9" }),
+    ]);
+    expect(by["OE5XYZ"]).toEqual([expect.objectContaining({ dir: "out", state: "delivered", with: "OE5XYZ-9" })]);
+    expect(by["OE5XYZ"]![0]!.withdrawId).toBeUndefined();
     // one already sent on the air can no longer be taken back
-    expect(by["DL2SNT-7"]).toEqual([expect.objectContaining({ dir: "out", state: "sent-no-ack" })]);
-    expect(by["DL2SNT-7"]![0]!.withdrawId).toBeUndefined();
-    expect(by["OE6XRR-9"]).toEqual([expect.objectContaining({ dir: "in", state: "waiting" })]);
+    expect(by["DL2SNT"]).toEqual([expect.objectContaining({ dir: "out", state: "sent-no-ack" })]);
+    expect(by["DL2SNT"]![0]!.withdrawId).toBeUndefined();
     // one already sent on the air arrives as the service call delivered it
     expect(by["DL1ABC"]).toBeUndefined();
   });
@@ -120,6 +125,27 @@ describe("how a new message is delivered", () => {
     expect(validRecipient("OE5XYZ-123")).toBe(false);
     expect(validRecipient("")).toBe(false);
     expect(validRecipient("FORMER")).toBe(false);
+  });
+
+  it("gathers every SSID of a station into one conversation, but keeps the service call apart", () => {
+    const t = threadsOf(
+      [
+        msg(1, 100, "OE8APR-7", "OE6BOB", "are you there?", { direction: "tx" }),
+        msg(2, 200, "OE6BOB-9", "OE8APR-7", "yes, mobile"),
+        msg(3, 300, "OE6BOB-15", "OE8APR-7", "service of another instance"),
+        msg(4, 400, "OE8APR-15", "OE8APR-7", "an answer from the instance"),
+      ],
+      undefined,
+      "OE8APR-7",
+      "OE8APR-15",
+    );
+    expect(t.map((x) => x.peer)).toEqual(["OE8APR-15", "OE6BOB"]);
+    const bob = t[1]!;
+    expect(bob.items.map((i) => i.with)).toEqual(["OE6BOB", "OE6BOB-9", "OE6BOB-15"]);
+    expect(bob.replyTo).toBe("OE6BOB-15");
+    expect(threadKey("oe6bob-9", "OE8APR-15")).toBe("OE6BOB");
+    expect(threadKey("OE8APR-15", "OE8APR-15")).toBe("OE8APR-15");
+    expect(threadKey("WITHDRAWN#ab", null)).toBe("WITHDRAWN#AB");
   });
 
   it("marks the conversation with erased people and former holders as withdrawn, never a reply target", () => {

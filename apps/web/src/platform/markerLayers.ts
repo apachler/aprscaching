@@ -63,12 +63,15 @@ export function useCacheMarkers(
       } else {
         let anchor: maplibregl.PositionAnchor = "bottom";
         if (c.type === "aprs_living") {
-          // living caches ARE a beaconing station — use the brand beacon icon
+          // living caches ARE a beaconing station — the brand beacon icon, on a real button like every pin
+          const btn = document.createElement("button");
+          btn.className = "beacon-pin";
           const img = document.createElement("img");
-          img.className = "beacon-pin";
           img.src = ASSET.beaconBlue;
+          img.alt = "";
+          btn.append(img);
           anchor = "center";
-          el = img;
+          el = btn;
         } else {
           const btn = document.createElement("button");
           btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;

@@ -376,7 +376,7 @@ function RunAnywhere() {
         <li>A Raspberry Pi at home</li>
         <li>Any VM with Docker</li>
         <li>An Android phone in the field</li>
-        <li>Cloudflare, with your own RF box</li>
+        <li>A free cloud VM, with your own RF box</li>
       </ul>
       <ManualLink className="landing-more" page="run/index">
         Choose how to run it

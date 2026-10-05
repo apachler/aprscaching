@@ -69,6 +69,8 @@ export function Hint(props: {
   describe?: boolean;
   /** A click on the child opens and closes the hint (InfoTip); otherwise a click is the child's own action. */
   toggle?: boolean;
+  /** Open below the element rather than above it, for a control whose field or text sits right above. */
+  below?: boolean;
 }) {
   const id = useId();
   const anchor = hintAnchor(id);
@@ -134,6 +136,7 @@ export function Hint(props: {
       popover="manual"
       className="hint"
       data-open={open ? "" : undefined}
+      data-below={props.below ? "" : undefined}
       style={{ "--hint-anchor": anchor } as CSSProperties}
       // the hint sits inside its control: a click on it is not the control's action
       onClick={(e) => {

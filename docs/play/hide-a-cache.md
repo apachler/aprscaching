@@ -119,8 +119,8 @@ owns the cache.
 ## Maintain your cache
 
 - **Needs maintenance.** The cache page shows **needs maintenance** when a finder ticked **The cache needs
-  maintenance** on a find or a **Couldn't find it**, or when the last three find or **Couldn't find it** logs are
-  all **Couldn't find it**. The flagged log shows **flagged: needs maintenance** in the logbook. Your next
+  maintenance** on a find or a **Couldn't find it**, or flagged it later with **Report a problem**, or when the last
+  three find or **Couldn't find it** logs are all **Couldn't find it**. The flagged log shows **flagged: needs maintenance** in the logbook. Your next
   maintenance log clears a finder's flag; the next find clears a run of did-not-finds. Notes do not count.
 - **Owner alerts.** You get an alert each time someone logs a find, a **Couldn't find it** or a maintenance flag
   on your cache. It shows under **Settings → Notifications**, and by push or in the email digest if you switched

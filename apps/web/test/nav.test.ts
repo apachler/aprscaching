@@ -214,6 +214,24 @@ describe("view history", () => {
     h.dispose();
   });
 
+  it("steps back once when a reload at ?view= mounts twice (StrictMode), never out of the app", async () => {
+    const w = makeWin("/before-the-app"); // whatever the tab showed first
+    w.history.pushState(null, "", "/#9/47/15");
+    w.history.pushState({ acsView: true }, "", "/?view=nearby#9/47/15"); // the reloaded entry
+    const first = createViewHistory(w, () => {});
+    first.sync(MAP, false);
+    first.dispose();
+    const second = createViewHistory(w, () => {});
+    second.sync(MAP, false);
+    await settle();
+    expect(w.index).toBe(1);
+    expect(w.url).toBe("/#9/47/15");
+    second.sync(nearby, true); // the deep link opens on the restored base entry
+    await settle();
+    expect(w.url).toBe("/?view=nearby#9/47/15");
+    second.dispose();
+  });
+
   it("stops listening once disposed", async () => {
     const w = makeWin();
     const popped: View[] = [];

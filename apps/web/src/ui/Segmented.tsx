@@ -46,7 +46,7 @@ export function Segmented<T extends string>(props: {
           </button>
         );
         return o.title ? (
-          <Hint key={o.value} text={o.title}>
+          <Hint key={o.value} text={o.title} below>
             {seg}
           </Hint>
         ) : (

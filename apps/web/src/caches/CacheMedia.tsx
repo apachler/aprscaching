@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { MEDIA_LIMITS } from "@aprscaching/shared";
 import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMediaItem } from "../api.js";
 import { mediaUploadProblem } from "../media/limits.js";
-import { Button, Icon, useConfirm } from "../ui/index.js";
+import { Button, FilePick, Icon, useConfirm } from "../ui/index.js";
 import { ContentMenu } from "../moderation/ContentMenu.js";
 
 /**
@@ -137,14 +137,15 @@ export function CacheMedia(props: {
       )}
       {props.isOwner && items.length < MEDIA_LIMITS.items && (
         <div className="mt-2">
-          <input
-            ref={fileRef}
-            type="file"
+          {/* a fresh chooser after each upload, so it names no file that is already in the gallery */}
+          <FilePick
+            key={items.length}
+            inputRef={fileRef}
+            label="Add a photo or sound"
             accept="image/jpeg,image/png,image/webp,image/gif,image/avif,audio/*"
             disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) upload(f);
+            onPick={(f) => {
+              if (f) void upload(f);
             }}
           />
           {busy && <span className="muted fine"> uploading…</span>}

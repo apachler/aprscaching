@@ -41,7 +41,7 @@ import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
 import { isCallsignVerified } from "./callsign.js";
 import { removedCacheResponse } from "./moderation.js";
-import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
+import { alreadyFound, findPoint, logRefusal, personAttempt, personSettled } from "./findrules.js";
 import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cacheplace.js";
 
 // ---- database row shapes (snake_case) ----
@@ -397,6 +397,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
       ? met.map((r) => ({ ...r, ts: r.ts - (r.ts % 86_400) + 43_200, lat: null, lon: null, day: true }))
       : met;
   const stages = await stageCount(env, id);
+  const yourLog = who ? await personAttempt(env, id, who, null) : null;
   const detail: CacheDetail = {
     ...toSummary(row),
     // the minimum a find meets: the cache's own, else the instance's
@@ -420,6 +421,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     rating,
     rendezvous,
     stageCount: stages,
+    ...(yourLog && { yourLog }),
     ...(row.type === "aprs_living" && { stationHeardAt }),
     ...(isOwner && {
       own: {
@@ -431,6 +433,13 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     ...(row.removed_at != null && { removed: { at: row.removed_at, reason: row.removed_reason ?? null } }),
   };
   return json({ cache: detail });
+}
+
+/** GET /api/my/logged — the caches the signed-in person found, logged as a did-not-find, or hid. */
+export async function handleMyLogged(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to see your logged caches" }, { status: 401 });
+  return json(await personSettled(env, me.callsign, me.accountId));
 }
 
 /** GET /api/caches/:id/logs — paginated logbook ("Load more" past the first page in the detail). */
@@ -488,6 +497,34 @@ function hideDailyLimit(env: Env): number {
   return Number.isInteger(n) && n >= 0 ? n : HIDE_DAILY_LIMIT_DEFAULT;
 }
 
+/** The daily hide limit that applies to the caller, or null when none does (the instance lifts it, or the sysop). */
+async function hideLimitFor(req: Request, env: Env): Promise<number | null> {
+  const limit = hideDailyLimit(env);
+  return limit === 0 || !(await requireSysop(req, env)) ? null : limit;
+}
+
+/** The new caches the account hid in the last 24 hours, under any of its calls. */
+async function hidesToday(env: Env, accountId: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM caches c
+      WHERE c.source = 'native' AND c.created_at > ?
+        AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                     AND (c.owner_call = ac.callsign OR c.owner_call LIKE ac.callsign || '-%'))`,
+  )
+    .bind(nowS() - DAY_S, accountId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/** GET /api/my/hides — the signed-in account's hides in the last 24 hours and what the daily limit leaves. */
+export async function handleMyHides(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to see your hides" }, { status: 401 });
+  const limit = await hideLimitFor(req, env);
+  const used = await hidesToday(env, me.accountId);
+  return json({ limit, used, remaining: limit == null ? null : Math.max(0, limit - used) });
+}
+
 /**
  * Why a signed-in member may not hide a cache now, or null. A cache owner answers for a place in the field and
  * for every finder's log, so hiding takes a control-verified call. Each account hides at most
@@ -501,17 +538,8 @@ async function hideRefusal(req: Request, env: Env, accountId: string, owner: str
       { error: `verify ${baseCall(owner)} to hide a cache — control-verification required`, verified: false },
       { status: 403 },
     );
-  const limit = hideDailyLimit(env);
-  if (limit === 0 || !(await requireSysop(req, env))) return null;
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM caches c
-      WHERE c.source = 'native' AND c.created_at > ?
-        AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
-                     AND (c.owner_call = ac.callsign OR c.owner_call LIKE ac.callsign || '-%'))`,
-  )
-    .bind(nowS() - DAY_S, accountId)
-    .first<{ n: number }>();
-  if ((row?.n ?? 0) < limit) return null;
+  const limit = await hideLimitFor(req, env);
+  if (limit == null || (await hidesToday(env, accountId)) < limit) return null;
   return json(
     {
       error: `you have hidden ${limit} new cache${limit === 1 ? "" : "s"} in the last 24 hours, the most this instance allows a day — try again tomorrow`,
@@ -762,6 +790,9 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
   const refused = await logRefusal(env, cache, loggerCall, logType, sessionAccount);
   if (refused) return json({ error: refused }, { status: 409 });
+  // a note flags the cache for maintenance only from someone who has tried it: found it or logged a did-not-find
+  if (logType === "note" && needsMaintenance && !(await personAttempt(env, cacheId, loggerCall, sessionAccount)))
+    return json({ error: `log a find or a did-not-find on ${cache.code} before you flag it` }, { status: 409 });
 
   const now = nowS();
 
@@ -1158,7 +1189,7 @@ export async function applyLogEffects(
     await env.DB.prepare("UPDATE caches SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
       .bind(status.to, now, cache.id, status.from)
       .run();
-  const flagged = needsMaintenance && (logType === "found" || logType === "dnf") && logId != null;
+  const flagged = needsMaintenance && (logType === "found" || logType === "dnf" || logType === "note") && logId != null;
   if (flagged) await env.DB.prepare("UPDATE cache_logs SET needs_maintenance = 1 WHERE id = ?").bind(logId).run();
   if (!flagged && logType !== "dnf") return;
   const owner = !isWithdrawnCall(cache.owner_call) ? await baseHolder(env, baseCall(cache.owner_call)) : null;

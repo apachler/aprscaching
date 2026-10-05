@@ -10,6 +10,9 @@ import { canDrawMap } from "./mapSupport.js";
 // Without it the style never finishes loading, so the map shows no basemap and never fires "load".
 maplibregl.setWorkerUrl(workerUrl);
 
+/** How long a remote style may take to load before the map falls back to the self-contained one. */
+const STYLE_WAIT_MS = 10_000;
+
 export interface MapHandlers {
   /** The style finished loading for the first time. */
   onLoad: (m: maplibregl.Map) => void;
@@ -76,27 +79,44 @@ export function useMapInstance(
     m.getCanvas().setAttribute("aria-label", "Map. Arrow keys pan; plus and minus zoom; Nearby lists every cache.");
     // the locate button joins this stack from LocateControl, driven by the app's own location helper
     // A remote style that cannot load (offline, or the tile service down) never fires "load", so the
-    // map would show nothing and load no caches: switch to the self-contained fallback once.
-    // A failed tile while the style is still loading is not the style failing, so it takes the style's own
-    // URL failing, or no connection at all.
+    // map would show nothing and load no caches: switch to the self-contained fallback once. A failed tile
+    // while the style is still loading is not the style failing; the style's own URL failing is, and so is
+    // a source's description (TileJSON) failing, which a style read from the browser's cache still needs.
+    // A device that reports a connection it does not have fails slowly or not at all, so a style still
+    // unread after STYLE_WAIT_MS falls back too.
     let fellBack = false;
+    let loaded = false;
     const styleUrl = (() => {
       const st = init.current.style();
       return typeof st === "string" ? st.split("?")[0] : null;
     })();
-    m.on("error", (e) => {
-      if (fellBack || !styleUrl || m.isStyleLoaded() || !init.current.fallbackStyle) return;
-      const failed = (e.error as { url?: string } | undefined)?.url?.split("?")[0];
-      if (failed !== styleUrl && navigator.onLine) return;
+    const fallBack = () => {
+      if (fellBack || loaded || !styleUrl || !init.current.fallbackStyle) return;
       fellBack = true;
       m.setStyle(init.current.fallbackStyle());
+    };
+    m.on("error", (e) => {
+      if (fellBack || loaded || !styleUrl || m.isStyleLoaded()) return;
+      const failed = (e.error as { url?: string } | undefined)?.url?.split("?")[0];
+      const sourceFailed = "sourceId" in e && !("tile" in e && e.tile);
+      if (failed !== styleUrl && !sourceFailed && navigator.onLine) return;
+      fallBack();
     });
-    m.on("load", () => h.current.onLoad(m));
+    // only a style still unread falls back on time; one waiting on slow tiles keeps loading
+    const wait = setTimeout(() => {
+      if (!m.isStyleLoaded()) fallBack();
+    }, STYLE_WAIT_MS);
+    m.on("load", () => {
+      loaded = true;
+      clearTimeout(wait);
+      h.current.onLoad(m);
+    });
     m.on("moveend", () => h.current.onMoveEnd(m));
     m.on("click", (e) => h.current.onClick(m, e));
     mapRef.current = m;
     setMap(m);
     return () => {
+      clearTimeout(wait);
       m.remove();
       mapRef.current = null;
       setMap(null);
