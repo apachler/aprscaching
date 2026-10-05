@@ -211,3 +211,125 @@ describe("every combination of internet, 44Net and HAMNET, each address as APP_U
     });
   }
 });
+
+/** GET /auth/session on `origin` (as Caddy hands it over) with `cookie`: the call it resolves to, or null. */
+async function whoOn(env: Env, origin: string, cookie: string): Promise<string | null> {
+  const via = viaCaddy(origin);
+  const res = await serve(env)(
+    new Request(`${via.url}/auth/session`, { headers: { cookie: cookie.split(";")[0]!, ...via.headers } }),
+  );
+  return ((await res.json()) as { callsign: string | null }).callsign;
+}
+
+/** The operator's sign-in link for `callsign` naming `origin`, confirmed there: the session cookie. */
+async function operatorOn(env: Env, origin: string, callsign: string): Promise<string> {
+  const link = await serve(env)(
+    new Request(`${origin}/auth/operator-link`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-operator-secret": "test-operator-secret" },
+      body: JSON.stringify({ callsign, base: origin }),
+    }),
+  );
+  expect(link.status).toBe(200);
+  const token = new URL(((await link.json()) as { link: string }).link).searchParams.get("token")!;
+  const via = viaCaddy(origin);
+  const ok = await serve(env)(
+    new Request(`${via.url}/auth/email/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...via.headers },
+      body: JSON.stringify({ token }),
+    }),
+  );
+  expect(ok.status).toBe(200);
+  return ok.headers.get("set-cookie") ?? "";
+}
+
+/** GET /api/admin/whoami on `origin` with `cookie`: is the session a sysop there? */
+async function sysopOn(env: Env, origin: string, cookie: string): Promise<boolean> {
+  const via = viaCaddy(origin);
+  const res = await serve(env)(
+    new Request(`${via.url}/api/admin/whoami`, { headers: { cookie: cookie.split(";")[0]!, ...via.headers } }),
+  );
+  return ((await res.json()) as { sysop: boolean }).sysop;
+}
+
+describe("a session is honoured only on the address it was issued on", () => {
+  for (const { main, extra } of COMBOS) {
+    if (!extra.length) continue;
+    it(`APP_URL on ${main}, also ${extra.join(" + ")}`, async () => {
+      const env = authEnv({
+        APP_URL: NETWORKS[main],
+        RP_ID: "",
+        INSTANCE: "",
+        EXTRA_ORIGINS: extra.map((k) => NETWORKS[k]).join(","),
+      });
+      const addresses = [main, ...extra].map((k) => NETWORKS[k]);
+      for (const [i, address] of addresses.entries()) {
+        const via = viaCaddy(address);
+        const call = `OE7SC${i}`;
+        const r = await signUpOn(env, via.url, call, via.headers);
+        expect(r.status).toBe(303);
+        for (const other of addresses)
+          expect(await whoOn(env, other, r.cookie), `issued on ${address}, presented on ${other}`).toBe(
+            other === address ? call : null,
+          );
+      }
+    });
+  }
+
+  it("refuses a session issued over plain http on the https address of the same host, and the reverse", async () => {
+    const env = authEnv({ APP_URL: "https://gw.test", EXTRA_ORIGINS: "http://gw.test" });
+    const plain = await signUpOn(env, "http://gw.test", "OE7PLN", { "x-forwarded-proto": "http" });
+    expect(plain.cookie).not.toMatch(/Secure/);
+    expect(await whoOn(env, "http://gw.test", plain.cookie)).toBe("OE7PLN");
+    expect(await whoOn(env, "https://gw.test", plain.cookie)).toBeNull();
+    const tls = await signUpOn(env, "http://gw.test", "OE7TLS", { "x-forwarded-proto": "https" });
+    expect(await whoOn(env, "https://gw.test", tls.cookie)).toBe("OE7TLS");
+    expect(await whoOn(env, "http://gw.test", tls.cookie)).toBeNull();
+  });
+});
+
+describe("the sysop administers over https", () => {
+  const verified = async (env: Env, call: string) =>
+    env.DB.prepare(
+      "INSERT INTO callsign_verifications (callsign, method, status, attempts, created_at, verified_at) VALUES (?, 'operator', 'verified', 0, 0, 0)",
+    )
+      .bind(call)
+      .run();
+
+  it("refuses a sysop session issued on a plain-http address while the instance has an https one", async () => {
+    const env = authEnv({
+      APP_URL: NETWORKS.internet,
+      RP_ID: "",
+      INSTANCE: "",
+      EXTRA_ORIGINS: `${NET44},${HAMNET}`,
+      ADMIN_CALLSIGNS: "OE8ADM",
+    });
+    const onHamnet = await operatorOn(env, HAMNET, "OE8ADM");
+    await verified(env, "OE8ADM");
+    expect(await whoOn(env, HAMNET, onHamnet)).toBe("OE8ADM"); // signed in there as a member
+    expect(await sysopOn(env, HAMNET, onHamnet)).toBe(false);
+    const write = await serve(env)(
+      new Request(`${HAMNET}/api/admin/verifications`, { headers: { cookie: onHamnet.split(";")[0]! } }),
+    );
+    expect(write.status).toBe(403);
+    for (const https of [NETWORKS.internet, NET44]) {
+      const cookie = await operatorOn(env, https, "OE8ADM");
+      expect(await sysopOn(env, https, cookie), https).toBe(true);
+    }
+  });
+
+  it("lets the sysop in over plain http on an instance with no https address, the only way in", async () => {
+    const env = authEnv({
+      APP_URL: HAMNET,
+      RP_ID: "",
+      INSTANCE: "",
+      EXTRA_ORIGINS: HAMNET_IP,
+      ADMIN_CALLSIGNS: "OE8ADM",
+    });
+    const cookie = await operatorOn(env, HAMNET, "OE8ADM");
+    await verified(env, "OE8ADM");
+    expect(await sysopOn(env, HAMNET, cookie)).toBe(true);
+    expect(await sysopOn(env, HAMNET_IP, cookie)).toBe(false); // issued for the name, not the address
+  });
+});

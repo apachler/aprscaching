@@ -88,7 +88,7 @@ describe("BBS post bounds", () => {
     sqlite
       .prepare("INSERT INTO account_callsigns (account_id, callsign, added_at) VALUES ('acct-apr','OE8APR',?)")
       .run(t);
-    const cookie = (await issueSessionCookie(new Request("http://gw/"), env, "acct-apr", "OE8APR")).split(";")[0]!;
+    const cookie = (await issueSessionCookie(new Request("http://gw.test/"), env, "acct-apr", "OE8APR")).split(";")[0]!;
     const send = () =>
       handleBbsPost(
         new Request("http://gw.test/api/bbs/messages", {

@@ -15,7 +15,16 @@ import { accountActionMessage, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
-import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN, suspensionOf } from "./auth.js";
+import {
+  sessionIdentity,
+  accountDataSession,
+  displayCall,
+  accountHoldsCall,
+  holdCall,
+  unclaimableReason,
+  WITHDRAWN,
+  suspensionOf,
+} from "./auth.js";
 import { verificationOf, verificationsOf } from "./callsign.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
@@ -36,6 +45,11 @@ async function authorize(env: Env, req: Request, callsign: string, action: strin
   // a session acts for the calls its own account holds
   const me = await sessionIdentity(req, env);
   if (me && (await accountHoldsCall(env, me.accountId, cs))) return { ok: true, body };
+  // a data-only session exports or erases its own callless account, named by its marker, and does nothing else
+  if (action === "export" || action === "delete") {
+    const data = await accountDataSession(req, env);
+    if (data && data.marker.toUpperCase() === cs) return { ok: true, body };
+  }
   if (!body.key || !body.sig || !body.at)
     return {
       ok: false,
@@ -101,6 +115,15 @@ async function accountScope(
   return { accountId, email, emails, calls: [...new Set([base, ...held])] };
 }
 
+/**
+ * The call a request's path names: `me` names the account of a data-only session by the marker its content
+ * shows under, since an account holding no call has no call to name (auth.ts accountDataSession).
+ */
+async function namedCall(req: Request, env: Env, named: string): Promise<string> {
+  if (named !== "me") return named;
+  return (await accountDataSession(req, env))?.marker ?? named;
+}
+
 /** `col` names one of `calls` or an SSID of it — a SQL fragment plus its binds. */
 function anyCall(col: string, calls: string[]): { sql: string; binds: string[] } {
   return {
@@ -110,7 +133,8 @@ function anyCall(col: string, calls: string[]): { sql: string; binds: string[] }
 }
 
 // ----------------------------------------------------- GDPR: export everything for a callsign
-export async function handleAccountExport(req: Request, env: Env, callsign: string): Promise<Response> {
+export async function handleAccountExport(req: Request, env: Env, named: string): Promise<Response> {
+  const callsign = await namedCall(req, env, named);
   const auth = await authorize(env, req, callsign, "export");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
@@ -182,7 +206,9 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
     uiPrefs: await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=?").bind(acct).first(),
     ...(await accountExport(env, scope)),
   };
-  return json(data, { headers: { "content-disposition": `attachment; filename="aprscaching-${cs}.json"` } });
+  return json(data, {
+    headers: { "content-disposition": `attachment; filename="aprscaching-${displayCall(cs)}.json"` },
+  });
 }
 
 /** The held calls of an account, each with its control-verification from the store. */
@@ -358,7 +384,8 @@ async function accountExport(
 }
 
 // ----------------------------------------------------- GDPR: erase / anonymise a callsign's data
-export async function handleAccountDelete(req: Request, env: Env, callsign: string): Promise<Response> {
+export async function handleAccountDelete(req: Request, env: Env, named: string): Promise<Response> {
+  const callsign = await namedCall(req, env, named);
   const auth = await authorize(env, req, callsign, "delete");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();

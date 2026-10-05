@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Env } from "@aprscaching/gateway/env";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
+import { serviceCall } from "@aprscaching/gateway/servicecall";
 import { newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import {
   authEnv,
@@ -593,5 +594,249 @@ describe("the person's data", () => {
       to_account: string | null;
     }>();
     expect(ev!.to_account).toBeNull();
+  });
+
+  it("an account left with no call exports and erases its data through an email link that opens nothing else", async () => {
+    const env = claimEnv();
+    const squat = await emailSignup(env, "squat@example.test", "OE8APR");
+    const squatAcct = await accountOf(env, squat.cookie);
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    const lic = await status(env, opened.data.claim);
+    expect(lic.data.signedIn).toBe(true);
+
+    // an account that holds a call signs in as usual instead, and an unknown address has nothing to open
+    expect(
+      (await call(env, "POST", "/auth/email/start", { email: "lic@x.test", purpose: "account-data" })).status,
+    ).toBe(404);
+    await call(env, "POST", "/auth/email/change", { email: "lic@example.test" }, { cookie: lic.cookie });
+    await env.DB.prepare(
+      "UPDATE accounts SET email = pending_email, pending_email = NULL WHERE pending_email IS NOT NULL",
+    ).run();
+    const withCall = await call(env, "POST", "/auth/email/start", {
+      email: "lic@example.test",
+      purpose: "account-data",
+    });
+    expect(withCall.status).toBe(409);
+    expect(withCall.data.reason).toBe("has_callsign");
+
+    const start = await call(env, "POST", "/auth/email/start", {
+      email: "squat@example.test",
+      purpose: "account-data",
+    });
+    expect(start.status).toBe(200);
+    expect(start.data.purpose).toBe("account-data");
+    const opens = await call(env, "POST", "/auth/email/verify", { token: start.data.devToken });
+    expect(opens.status).toBe(200);
+    expect(opens.data).toMatchObject({ callsign: null, accountData: true });
+    const cookie = opens.cookie;
+    expect(await session(env, cookie)).toEqual({ callsign: null, accountData: true });
+
+    // the session acts for nothing but the data: no call is added, no list served, no move or bundle signed
+    expect((await call(env, "GET", "/auth/callsigns", undefined, { cookie })).status).toBe(401);
+    expect((await call(env, "POST", "/auth/callsigns", { callsign: "DL9NEW" }, { cookie })).status).toBe(401);
+    expect((await call(env, "POST", "/api/account/me/bundle", {}, { cookie })).status).toBe(401);
+    expect((await call(env, "POST", "/api/account/OE8APR/export", {}, { cookie })).status).toBe(401);
+    // and the licensee's own session never reaches the previous holder's data
+    expect((await call(env, "POST", "/api/account/me/export", {}, { cookie: lic.cookie })).status).toBe(401);
+
+    const exp = await call(env, "POST", "/api/account/me/export", {}, { cookie });
+    expect(exp.status).toBe(200);
+    expect(exp.data.account).toMatchObject({ email: "squat@example.test" });
+    expect(exp.data.callsignChanges).toEqual([
+      expect.objectContaining({ callsign: "OE8APR", action: "claimed", change: "lost" }),
+    ]);
+
+    const del = await call(env, "POST", "/api/account/me/delete", {}, { cookie });
+    expect(del.status).toBe(200);
+    expect(await env.DB.prepare("SELECT 1 AS x FROM accounts WHERE account_id = ?").bind(squatAcct).first()).toBeNull();
+    expect(await holderOf(env, "OE8APR")).not.toBeNull(); // the licensee keeps the call
+    expect((await call(env, "POST", "/api/account/me/export", {}, { cookie })).status).toBe(401);
+  });
+
+  it("a data link stops working once the account takes a call on again", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    const start = await call(env, "POST", "/auth/email/start", {
+      email: "squat@example.test",
+      purpose: "account-data",
+    });
+    const opens = await call(env, "POST", "/auth/email/verify", { token: start.data.devToken });
+    expect((await session(env, opens.cookie)).accountData).toBe(true);
+    const back = await emailSignup(env, "squat@example.test", "DL9NEW");
+    expect(back.status).toBe(200);
+    expect(await session(env, opens.cookie)).toEqual({ callsign: null });
+  });
+});
+
+describe("a suspended holder", () => {
+  const suspend = (env: Env, accountId: string) =>
+    env.DB.prepare(
+      "INSERT INTO account_suspensions (account_id, reason, category, until, by_call, at) VALUES (?, 'spam', 'spam', NULL, 'OE8SYS', ?)",
+    )
+      .bind(accountId, now())
+      .run();
+
+  it("keeps the call against every claim, its own included, until the sysop releases it", async () => {
+    const env = claimEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
+    const sysop = await operatorSignup(env, "OE8SYS");
+    await operatorVerify(env, "OE8SYS");
+    const held = await emailSignup(env, "held@example.test", "OE8APR");
+    const heldAcct = await accountOf(env, held.cookie);
+    await suspend(env, heldAcct);
+
+    const refused = await openClaim(env, "OE8APR");
+    expect(refused.status).toBe(409);
+    expect(refused.data.reason).toBe("holder_suspended");
+    expect(refused.data.error).toMatch(/ask the sysop/);
+
+    // a claim opened before the suspension cannot complete either
+    await env.DB.prepare("DELETE FROM account_suspensions").run();
+    const early = await openClaim(env, "OE8APR");
+    expect(early.status).toBe(201);
+    await suspend(env, heldAcct);
+    const s = await call(env, "POST", "/verify/aprs/start", { callsign: "OE8APR", claim: early.data.claim });
+    expect(s.status).toBe(200);
+    await call(
+      env,
+      "POST",
+      "/ingest",
+      {
+        packets: [
+          {
+            src: "OE8APR-7",
+            dst: "APRS",
+            path: ["WIDE1-1", "qAR", "OE8XXX"],
+            payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
+            kind: "message",
+            heardVia: "rf",
+            igateCall: "OE8XXX",
+            port: "kiss-tnc",
+            ts: now(),
+          },
+        ],
+      },
+      INGEST,
+    );
+    expect((await status(env, early.data.claim)).data.status).toBe("refused");
+    expect(await holderOf(env, "OE8APR")).toBe(heldAcct);
+
+    const release = await call(
+      env,
+      "POST",
+      "/api/admin/callsigns/OE8APR",
+      { action: "release", reason: "licensee asked", holder: heldAcct },
+      { cookie: sysop.cookie },
+    );
+    expect(release.status).toBe(200);
+    expect(await holderOf(env, "OE8APR")).toBeNull();
+  });
+
+  it("collects no session from a claim while suspended, and collects it once the suspension is lifted", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    const newAcct = (await holderOf(env, "OE8APR"))!;
+    await suspend(env, newAcct);
+    const first = await status(env, opened.data.claim);
+    expect(first.status).toBe(403);
+    expect(first.cookie).toBe("");
+    await env.DB.prepare("DELETE FROM account_suspensions").run();
+    const second = await status(env, opened.data.claim);
+    expect(second.data.signedIn).toBe(true);
+    expect(second.cookie).not.toBe("");
+  });
+
+  it("takes no call on through an email link while its account holds none", async () => {
+    const env = claimEnv();
+    const squat = await emailSignup(env, "squat@example.test", "OE8APR");
+    const squatAcct = await accountOf(env, squat.cookie);
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    await suspend(env, squatAcct);
+    const back = await emailSignup(env, "squat@example.test", "DL9NEW");
+    expect(back.status).toBe(403);
+    expect(await holderOf(env, "DL9NEW")).toBeNull();
+    const acct = await env.DB.prepare("SELECT callsign FROM accounts WHERE account_id = ?")
+      .bind(squatAcct)
+      .first<{ callsign: string }>();
+    expect(acct!.callsign).toMatch(/^FORMER#/);
+  });
+});
+
+describe("what beacons under the call", () => {
+  it("goes with a takeover, whichever account lists it", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const club = await emailSignup(env, "club@example.test", "DL1CLB");
+    const clubAcct = await accountOf(env, club.cookie);
+    const t = now();
+    // a station the sysop listed on the call for another member, and its weather key
+    await env.DB.prepare(
+      "INSERT INTO account_stations (account_id, callsign, roles, created_at, updated_at) VALUES (?, 'OE8APR-13', 'weather', ?, ?)",
+    )
+      .bind(clubAcct, t, t)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES ('k-club', 'OE8APR', ?, ?)",
+    )
+      .bind(clubAcct, t)
+      .run();
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    expect((await status(env, opened.data.claim)).data.status).toBe("done");
+    expect(
+      await env.DB.prepare("SELECT 1 AS x FROM account_stations WHERE callsign LIKE 'OE8APR%'").first(),
+    ).toBeNull();
+    expect(await env.DB.prepare("SELECT 1 AS x FROM wx_keys WHERE callsign = 'OE8APR'").first()).toBeNull();
+  });
+
+  it("leaves nothing the previous holder queued for APRS-IS to go on the air", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const service = serviceCall(env);
+    const t = now();
+    const queue = (src: string, payload: string, status = "queued") =>
+      env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, kind, payload, status) VALUES (?, ?, 'message', ?, ?)")
+        .bind(t, src, payload, status)
+        .run();
+    await queue("OE8APR-9", ":DL1ABC   :hello{1");
+    await queue(service, ":DL1ABC   :de OE8APR: mailbox note");
+    await queue("OE8APR", ":DL1ABC   :already out", "sent");
+    await queue("DL1CLB", ":OE8APR   :someone else's");
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    expect((await status(env, opened.data.claim)).data.status).toBe("done");
+    // the service call's answer to the licensee's VERIFY joins the queue after these four
+    const left = await env.DB.prepare("SELECT src_call, status FROM aprs_outbox WHERE id <= 4 ORDER BY id").all();
+    expect(left.results).toEqual([
+      { src_call: "OE8APR", status: "sent" },
+      { src_call: "DL1CLB", status: "queued" },
+    ]);
+  });
+});
+
+describe("the on-air proof of a claim", () => {
+  it("is bounded per claim and per client address, so no claimant uses up another's", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
+    const b = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.2");
+    const start = (claim: string, ip: string) =>
+      call(env, "POST", "/verify/aprs/start", { callsign: "OE8APR", claim }, {}, ip);
+    for (let i = 0; i < 5; i++) expect((await start(a.data.claim, "198.51.100.1")).status).toBe(200);
+    expect((await start(a.data.claim, "198.51.100.1")).status).toBe(429);
+    // another claimant on the same call, from another address, still gets a code
+    expect((await start(b.data.claim, "198.51.100.2")).status).toBe(200);
+    // one address opening claim after claim runs into its own budget: 20 codes an hour across its claims
+    const claims: string[] = [];
+    for (let i = 0; i < 5; i++)
+      claims.push((await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.3")).data.claim);
+    for (const c of claims.slice(0, 4))
+      for (let i = 0; i < 5; i++) expect((await start(c, "198.51.100.3")).status).toBe(200);
+    expect((await start(claims[4]!, "198.51.100.3")).status).toBe(429);
   });
 });

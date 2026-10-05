@@ -22,6 +22,7 @@ import {
   sessionIdentity,
   AccountSuspended,
   suspendedResponse,
+  suspensionOf,
 } from "./auth.js";
 import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
@@ -47,6 +48,12 @@ const TTL_SEC = 15 * 60;
 const OPERATOR_PURPOSE = "operator";
 /** The token purpose of an address confirmation: it binds a pending address to the account that gave it. */
 const CONFIRM_PURPOSE = "confirm";
+/**
+ * The token purpose of a link to an account's data: it opens a session that only exports or erases the data of
+ * an account holding no call (its last call moved to the call's licensee, claims.ts). Such an account has no
+ * other way in until it takes a call on, and its owner keeps the rights of access and erasure meanwhile.
+ */
+const ACCOUNT_DATA_PURPOSE = "account-data";
 /** A confirmation mail may sit unread for a day; a sign-in link lives 15 minutes. */
 const CONFIRM_TTL_SEC = 24 * 3600;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -76,9 +83,17 @@ function verifyLink(req: Request, env: Env, token: string): string {
   return `${base}/auth/email/verify?token=${token}${app}`;
 }
 
-/** POST /auth/email/start {email, callsign?} — begin email register (needs callsign) or login. */
+/**
+ * POST /auth/email/start {email, callsign?, purpose?} — begin email register (needs callsign) or login. With
+ * `purpose: "account-data"` it mails a link that opens only the data of an account holding no call
+ * ({@link ACCOUNT_DATA_PURPOSE}).
+ */
 export async function handleEmailStart(req: Request, env: Env): Promise<Response> {
-  const { email, callsign } = (await req.json().catch(() => ({}))) as { email?: string; callsign?: string };
+  const {
+    email,
+    callsign,
+    purpose: asked,
+  } = (await req.json().catch(() => ({}))) as { email?: string; callsign?: string; purpose?: unknown };
   const e = String(email ?? "")
     .trim()
     .toLowerCase();
@@ -90,6 +105,7 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(e)
     .first<{ account_id: string; callsign: string }>();
+  if (asked === ACCOUNT_DATA_PURPOSE) return startAccountData(req, env, e, acct);
   const purpose = acct ? "login" : "register";
   // an account whose last call moved to its licensee signs in again with the call it operates now
   const callless = !!acct && isFormerMarker(acct.callsign);
@@ -128,6 +144,11 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     "Your aprscaching sign-in link",
     `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`,
   );
+  return linkSent(env, e, purpose, token, link, sent);
+}
+
+/** The answer to a start once its mail went out, or the in-band link of an instance that opts into dev tokens. */
+function linkSent(env: Env, e: string, purpose: string, token: string, link: string, sent: boolean): Response {
   if (sent) return json({ sent: true, purpose });
   // The sign-in token must NOT be handed back to the caller on a real instance. Returning
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
@@ -137,6 +158,42 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     return json({ sent: false, purpose, devToken: token, devLink: link });
   }
   return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
+}
+
+/**
+ * Mail the link that opens an account's data: only to the confirmed address of an account that holds no call.
+ * An account with a call signs in as usual and finds export and erasure in Settings.
+ */
+async function startAccountData(
+  req: Request,
+  env: Env,
+  e: string,
+  acct: { account_id: string; callsign: string } | null,
+): Promise<Response> {
+  if (!acct) return json({ error: "no account uses this email address" }, { status: 404 });
+  if (!isFormerMarker(acct.callsign))
+    return json(
+      {
+        error: "your account holds a callsign — sign in with it, then get or erase your data in Settings",
+        reason: "has_callsign",
+      },
+      { status: 409 },
+    );
+  const token = newToken();
+  await env.DB.prepare(
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, NULL, ?, ?, 0)",
+  )
+    .bind(token, e, ACCOUNT_DATA_PURPOSE, nowS())
+    .run();
+  const link = verifyLink(req, env, token);
+  const sent = await sendEmail(
+    env,
+    e,
+    "Your aprscaching data",
+    `Open your aprscaching account's data to download a copy or erase it:\n${link}\n\n` +
+      "The link opens your data and nothing else, and expires in 15 minutes. If you didn't request it, ignore this email.",
+  );
+  return linkSent(env, e, ACCOUNT_DATA_PURPOSE, token, link, sent);
 }
 
 /**
@@ -295,17 +352,20 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(token).run();
   if (spent.meta?.changes === 0) return json({ error: "invalid or expired link" }, { status: 400 });
 
+  const dataOnly = row.purpose === ACCOUNT_DATA_PURPOSE;
   const acct =
     row.purpose === OPERATOR_PURPOSE
       ? await operatorLinkAccount(env, row.callsign ?? "", now)
       : row.purpose === CONFIRM_PURPOSE
         ? await confirmedAccount(env, row.email, row.callsign ?? "")
-        : await emailAccount(env, row.email, row.callsign, now);
+        : dataOnly
+          ? await accountDataAccount(env, row.email)
+          : await emailAccount(env, row.email, row.callsign, now);
   if (acct instanceof Response) return acct;
 
   let cookie: string;
   try {
-    cookie = await issueSessionCookie(req, env, acct.account_id, acct.callsign);
+    cookie = await issueSessionCookie(req, env, acct.account_id, acct.callsign, dataOnly ? "data" : "full");
   } catch (e) {
     if (e instanceof AccountSuspended) return suspendedResponse(e);
     throw e;
@@ -318,6 +378,7 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     const back = app && isInstanceOrigin(app, env) ? app : requestOrigin(req, env);
     return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: back + "/" } });
   }
+  if (dataOnly) return json({ ok: true, callsign: null, accountData: true }, { headers: { "set-cookie": cookie } });
   return json(
     { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
     { headers: { "set-cookie": cookie } },
@@ -326,6 +387,16 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
 
 type Acct = { account_id: string; callsign: string };
 
+/** The account a data link opens: the mailbox's account, while it still holds no call. */
+async function accountDataAccount(env: Env, email: string): Promise<Acct | Response> {
+  const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
+    .bind(email)
+    .first<Acct>();
+  if (!acct || !isFormerMarker(acct.callsign))
+    return json({ error: "this link no longer applies — sign in with your callsign instead" }, { status: 409 });
+  return acct;
+}
+
 /** The account an email link signs in: the mailbox's account, or a new one registered under its call. */
 async function emailAccount(env: Env, email: string, callsign: string | null, now: number): Promise<Acct | Response> {
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
@@ -333,6 +404,9 @@ async function emailAccount(env: Env, email: string, callsign: string | null, no
     .first<Acct>();
   if (!acct) return createAccount(env, (callsign ?? "").toUpperCase(), email, now);
   if (!isFormerMarker(acct.callsign)) return acct;
+  // a suspended account takes no call on: the sign-in is refused before anything is written
+  const suspended = await suspensionOf(env, acct.account_id);
+  if (suspended) return suspendedResponse(new AccountSuspended(suspended));
   // the account holds no call: it takes on the call the link was asked for, and its content follows
   const cs = (callsign ?? "").toUpperCase();
   const refused = cs.length >= 3 ? await unclaimableReason(env, cs) : "missing callsign";

@@ -61,6 +61,8 @@ export function useSession() {
     email: s.email ?? null,
     pendingEmail: s.pendingEmail ?? null,
     signedIn: !!s.callsign,
+    /** The session opens only the data of an account that holds no callsign (AccountData). */
+    accountData: !s.callsign && !!s.accountData,
     /** The session is the remembered one: the app has no connection to its instance. */
     offline,
     loading,

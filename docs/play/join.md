@@ -97,6 +97,10 @@ it. Next time, this device signs in with **Sign in with passkey** directly.
 passkey, then **Sign out everywhere**. The last passkey of an account without a confirmed email cannot be
 removed: it is your only way in. Confirm your email or add another passkey first.
 
+**Account left without a callsign?** If the licensee took over your only callsign, tap **Sign in**, then **Get
+or erase my data**: a link to your confirmed email opens your data to download or erase
+([Your data](account.md#your-data)).
+
 ## Verify your callsign
 
 Signing in claims a callsign. Verifying proves that you control it, and keeps it yours: the licensee can take

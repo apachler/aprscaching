@@ -19,9 +19,9 @@ import { mainOrigin, passkeyOrigins, requestOrigin } from "./origins.js";
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
  * ceremonies are verified in webauthn.ts (Web Crypto, runtime-agnostic). A session is a signed (HMAC,
- * keyed by SESSION_SECRET) cookie naming the durable account, its session generation and the active
- * call; it is honoured only while that account still exists, holds the call, and has not moved on to a
- * newer generation.
+ * keyed by SESSION_SECRET) cookie naming the durable account, its session generation, the active call, the
+ * address of the instance it was issued on and its scope; it is honoured only on that address, while that
+ * account still exists, holds the call, and has not moved on to a newer generation.
  */
 
 const SESSION_COOKIE = "acs";
@@ -571,11 +571,13 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   }
 }
 
-/** The signed-in person as the session proves them: the durable account, the active call and its base. */
+/** The signed-in person as the session proves them: the durable account, the active call and its base, and the
+ *  address of this instance the session was issued on. */
 interface SessionIdentity {
   accountId: string;
   callsign: string;
   base: string;
+  origin: string;
 }
 
 /**
@@ -586,20 +588,49 @@ interface SessionIdentity {
  * older cookie resolving to nobody.
  */
 export async function sessionIdentity(req: Request, env: Env): Promise<SessionIdentity | null> {
+  const claims = await currentSession(req, env, "full");
+  if (!claims) return null;
+  const base = baseCall(claims.callsign);
+  if ((await baseHolder(env, base)) !== claims.accountId) return null;
+  return { accountId: claims.accountId, callsign: claims.callsign, base, origin: claims.origin };
+}
+
+/**
+ * The session of scope `scope` the request's cookie carries, while its account exists at the session's
+ * generation and is not suspended: a suspended account acts as nobody, with no write and no transmission
+ * through this instance while the suspension holds.
+ */
+async function currentSession(req: Request, env: Env, scope: SessionScope): Promise<SessionClaims | null> {
   const cookie = req.headers.get("cookie") ?? "";
   const m = /(?:^|;\s*)acs=([^;]+)/.exec(cookie);
   if (!m) return null;
-  const claims = await verifySession(m[1]!, env);
-  if (!claims) return null;
+  const claims = await verifySession(m[1]!, req, env);
+  if (!claims || claims.scope !== scope) return null;
   const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
     .bind(claims.accountId)
     .first<{ session_gen: number }>();
   if (!row || Number(row.session_gen) !== claims.gen) return null;
-  // a suspended account acts as nobody: no write and no transmission through this instance while it holds
   if (await suspensionOf(env, claims.accountId)) return null;
-  const base = baseCall(claims.callsign);
-  if ((await baseHolder(env, base)) !== claims.accountId) return null;
-  return { accountId: claims.accountId, callsign: claims.callsign, base };
+  return claims;
+}
+
+/**
+ * The account a data-only session serves, with the marker its content shows under, or null. Such a session is
+ * issued by email link to an account that holds no call (its last call moved to the call's licensee,
+ * claims.ts). It lets its owner export or erase the account's data and nothing else: it never passes
+ * {@link sessionIdentity}, and it ends once the account takes a call on again.
+ */
+export async function accountDataSession(
+  req: Request,
+  env: Env,
+): Promise<{ accountId: string; marker: string } | null> {
+  const claims = await currentSession(req, env, "data");
+  if (!claims) return null;
+  const row = await env.DB.prepare("SELECT callsign FROM accounts WHERE account_id=?")
+    .bind(claims.accountId)
+    .first<{ callsign: string }>();
+  if (!row || !isFormerMarker(row.callsign) || row.callsign.toUpperCase() !== claims.callsign) return null;
+  return { accountId: claims.accountId, marker: row.callsign };
 }
 
 /**
@@ -778,25 +809,42 @@ export function suspendedResponse(e: AccountSuspended): Response {
   return json({ error: e.message, suspended: e.suspension }, { status: 403 });
 }
 
-/** Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`.
- *  Every sign-in path mints its session here, so a suspended account is refused in one place. */
-export async function issueSessionCookie(req: Request, env: Env, accountId: string, callsign: string): Promise<string> {
+/**
+ * Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`, on
+ * the address of this instance the request came on. Every sign-in path mints its session here, so a suspended
+ * account is refused in one place. A `data` session serves only the account's data export and erasure
+ * ({@link accountDataSession}) and lasts an hour.
+ */
+export async function issueSessionCookie(
+  req: Request,
+  env: Env,
+  accountId: string,
+  callsign: string,
+  scope: SessionScope = "full",
+): Promise<string> {
   const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
     .bind(accountId)
     .first<{ session_gen: number }>();
   if (!row) throw new Error("no such account");
   const suspended = await suspensionOf(env, accountId);
   if (suspended) throw new AccountSuspended(suspended);
-  const token = await signSession(env, { accountId, gen: Number(row.session_gen), callsign: callsign.toUpperCase() });
+  const token = await signSession(env, {
+    accountId,
+    gen: Number(row.session_gen),
+    callsign: callsign.toUpperCase(),
+    origin: requestOrigin(req, env),
+    scope,
+  });
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
-  return `${SESSION_COOKIE}=${token}; ${cookieFlags(req, env)}; Max-Age=${ttlDays * 86_400}`;
+  const maxAge = scope === "data" ? DATA_SESSION_TTL_SEC : ttlDays * 86_400;
+  return `${SESSION_COOKIE}=${token}; ${cookieFlags(req, env)}; Max-Age=${maxAge}`;
 }
 
 /** GET /auth/session — "who am I": the signed-in callsign + verification + confirmed email (and an address
- *  still waiting for confirmation), or null. */
+ *  still waiting for confirmation), or null; `accountData` when the session serves only the account's data. */
 export async function handleSession(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
-  if (!me) return json({ callsign: null });
+  if (!me) return json({ callsign: null, ...((await accountDataSession(req, env)) ? { accountData: true } : {}) });
   const acct = await env.DB.prepare("SELECT email, pending_email FROM accounts WHERE account_id = ?")
     .bind(me.accountId)
     .first<{ email: string | null; pending_email: string | null }>();
@@ -828,7 +876,7 @@ async function endAllSessions(env: Env, accountId: string): Promise<void> {
   await env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(accountId).run();
 }
 
-// --- signed session (HMAC over the account, its generation, the call and the mint time) ---
+// --- signed session (HMAC over the account, its generation, the call, the mint time, the address and the scope) ---
 
 /** Constant-time string compare — a `===` on a secret leaks how many leading
  *  characters matched via response timing. XOR-accumulate over the LONGER length so neither
@@ -918,16 +966,24 @@ export async function purposeMac(env: Env, purpose: string, data: string): Promi
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`${purpose}\n${data}`));
   return bytesToB64url(new Uint8Array(sig));
 }
+/** What a session may do: everything its account may (`full`), or only export and erase the account's data. */
+type SessionScope = "full" | "data";
 interface SessionClaims {
   accountId: string;
   gen: number;
   callsign: string;
+  /** The address of this instance the session was issued on (origins.ts); it is honoured there alone. */
+  origin: string;
+  scope: SessionScope;
 }
-const SESSION_VERSION = "v2";
+const SESSION_VERSION = "v3";
+/** A data-only session lasts an hour: long enough to download the export or confirm the erasure. */
+const DATA_SESSION_TTL_SEC = 3600;
 async function signSession(env: Env, c: SessionClaims): Promise<string> {
   const k = await key(env);
   if (!k) throw new SessionUnavailable();
-  const payload = [SESSION_VERSION, c.accountId, c.gen, c.callsign, Date.now()].join(".");
+  const origin = bytesToB64url(new TextEncoder().encode(c.origin));
+  const payload = [SESSION_VERSION, c.accountId, c.gen, c.callsign, Date.now(), origin, c.scope].join(".");
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
   return `${btoa(payload)}.${bytesToB64(new Uint8Array(sig))}`;
 }
@@ -945,7 +1001,13 @@ export function sessionExpired(mintedAtMs: number, env: Env, nowMs: number): boo
   const epoch = Number(env.SESSION_EPOCH ?? 0);
   return epoch > 0 && mintedAtMs < epoch * 1000; // operator-revoked generation
 }
-async function verifySession(token: string, env: Env): Promise<SessionClaims | null> {
+/**
+ * The claims of a session token presented on `req`, or null. A session is honoured only on the address of this
+ * instance it was issued on: the cookie is host-only, but a browser sends it to every scheme and port of that
+ * host, so a session issued over plain http (a HAMNET address, where it travels unencrypted) never passes on
+ * the https address of the same host, and one issued on any other address of the instance never passes here.
+ */
+async function verifySession(token: string, req: Request, env: Env): Promise<SessionClaims | null> {
   try {
     const k = await key(env);
     if (!k) return null; // no usable secret ⇒ no session is ever valid
@@ -956,11 +1018,15 @@ async function verifySession(token: string, env: Env): Promise<SessionClaims | n
     if (!ok) return null;
     // a token without an account (any other shape) is never valid
     const parts = payload.split(".");
-    if (parts.length !== 5 || parts[0] !== SESSION_VERSION) return null;
-    const [, accountId, gen, callsign, minted] = parts as [string, string, string, string, string];
-    if (!accountId || !callsign || !/^\d+$/.test(gen)) return null;
+    if (parts.length !== 7 || parts[0] !== SESSION_VERSION) return null;
+    const [, accountId, gen, callsign, minted, o, scope] = parts as string[];
+    if (!accountId || !callsign || !gen || !o || !/^\d+$/.test(gen)) return null;
+    if (scope !== "full" && scope !== "data") return null;
     if (sessionExpired(Number(minted), env, Date.now())) return null;
-    return { accountId, gen: Number(gen), callsign };
+    if (scope === "data" && Date.now() - Number(minted) > DATA_SESSION_TTL_SEC * 1000) return null;
+    const origin = new TextDecoder().decode(b64urlToBytes(o));
+    if (origin !== requestOrigin(req, env)) return null;
+    return { accountId, gen: Number(gen), callsign, origin, scope };
   } catch {
     return null;
   }
