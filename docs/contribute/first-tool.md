@@ -185,12 +185,6 @@ Signing proves the manifest was not changed since you signed it, and lets a regi
 
 3. Sign again after every change to the manifest, a new `version` included.
 
-!!! warning "Signed manifests are refused"
-    The app's signature check and `tools/toolkey` serialise unset optional fields differently. A signed
-    manifest therefore shows as **Signature INVALID** and the import stops, unless it sets both `remote: true`
-    and `connect`. Leave the tool unsigned until the fix lands;
-    [Signing and trust](tool-reference.md#signing-and-trust) has the detail.
-
 The signature covers the manifest, including the `entry` URL, but not the script's bytes. Serve the script from a
 URL you never reuse for different code, such as one with the version in its path.
 

@@ -267,13 +267,6 @@ The app decides one of six trust labels before it shows the import prompt:
 
 Approving a signed tool stores its key for its author in this browser, under `acs.tool.keys`.
 
-!!! warning "A signed manifest is refused"
-    The app checks the signature over the validated manifest, which holds every optional field, set or not.
-    Its canonical form writes an unset field as `undefined`, while `tools/toolkey` signs the file as written.
-    The two differ unless the manifest sets both `remote: true` and `connect`, so a signed manifest shows as
-    **Signature INVALID** and the import stops. Unsigned tools import. [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md)
-    tracks the fix.
-
 ### What "verified" covers
 
 The registry is a JSON document of entries (`name`, `title`, `author`, `version`, `pubkey`, `entry`,

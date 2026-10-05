@@ -15,13 +15,17 @@ import { validateManifest, type ToolManifest, type Capability } from "@aprscachi
 
 export async function fetchToolManifest(
   url: string,
-): Promise<{ ok: true; manifest: ToolManifest; base: string } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; manifest: ToolManifest; raw: Record<string, unknown>; base: string } | { ok: false; error: string }
+> {
   try {
     const res = await fetch(url, { credentials: "omit" });
     if (!res.ok) return { ok: false, error: `manifest ${res.status}` };
-    const v = validateManifest(await res.json());
+    const raw = (await res.json()) as Record<string, unknown>;
+    const v = validateManifest(raw);
     if (!v.ok) return v;
-    return { ok: true, manifest: v.manifest, base: new URL(url, location.href).href };
+    // the signature covers the file as written, so the caller checks it over `raw`, not the normalised manifest
+    return { ok: true, manifest: v.manifest, raw, base: new URL(url, location.href).href };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
