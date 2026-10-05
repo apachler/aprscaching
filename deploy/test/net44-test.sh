@@ -52,7 +52,10 @@ mock ufw 'echo "Status: inactive"'
 # DNS-over-HTTPS: the A record and the _aprscaching TXT record of the test name
 mock curl 'case "$*" in
   *"name=aprscaching.oe8apr.ampr.org&type=A"*) echo "{\"Status\":0,\"Answer\":[{\"name\":\"x\",\"type\":1,\"data\":\"${MOCK_A:-44.27.132.9}\"}]}" ;;
-  *"name=_aprscaching.aprscaching.oe8apr.ampr.org&type=TXT"*) [ -n "${MOCK_NO_TXT:-}" ] && echo "{\"Status\":0}" || echo "{\"Status\":0,\"Answer\":[{\"data\":\"\\\"v=acs1; inst=aprs.example.net; key=abc\\\"\"}]}" ;;
+  *"name=_aprscaching.oe8apr.ampr.org&type=TXT"*)
+    if [ -n "${MOCK_NO_TXT:-}" ]; then echo "{\"Status\":0}"
+    elif [ -n "${MOCK_VERIFY_ONLY:-}" ]; then echo "{\"Status\":0,\"Answer\":[{\"data\":\"\\\"v=acs1; verify=abc\\\"\"}]}"
+    else echo "{\"Status\":0,\"Answer\":[{\"data\":\"\\\"v=acs1; inst=aprs.example.net; key=abc\\\"\"}]}"; fi ;;
   *) echo "{\"Status\":0}" ;;
 esac'
 export PATH="$TMP/bin:$PATH"
@@ -87,6 +90,7 @@ called() { grep -qF -- "$1" "$MOCK_LOG"; }
 : >"$MOCK_LOG"
 check "a full-tunnel setup succeeds" env MOCK_PMTU=1492 bash -c "$(declare -f n44); H='$H' TMP='$TMP' n44 setup --yes --non-interactive '$TMP/full.conf' --name aprscaching.oe8apr.ampr.org"
 check "  … owner-only" eq "$(stat -c %a "$CONF")" 600
+check "  … and prints the Portal records for the name, the TXT naming both places" bash -c "grep -q 'aprscaching  A    44.27.132.9' '$TMP/out' && grep -q '_aprscaching  TXT  \"v=acs1; inst=aprs.example.net; key=<federation key>; host=aprscaching.oe8apr.ampr.org; web=https://aprs.example.net\"' '$TMP/out'"
 check "  … keeps the issued configuration beside it, owner-only" eq "$(stat -c %a "$APRS_NET44_DIR/wg44.issued.conf")" 600
 check "  … MTU is the path MTU (PPPoE 1492) less 80" in_conf "MTU = 1412"
 check "  … with Table = off" in_conf "Table = off"
@@ -149,6 +153,7 @@ rm -f "$MOCK_STATE/nohandshake"
 printf '[Interface]\nAddress = 10.0.0.2/32\nPrivateKey = x\n[Peer]\nEndpoint = a:1\nAllowedIPs = 0.0.0.0/0\n' >"$TMP/not44.conf"
 check "a configuration without a 44.x address is refused" fails n44 setup --yes "$TMP/not44.conf"
 check "a name outside ampr.org is refused" fails n44 setup --yes "$TMP/full.conf" --name aprs.example.net
+check "the base name <call>.ampr.org is refused" fails n44 setup --yes "$TMP/full.conf" --name oe8apr.ampr.org
 check "without --yes and nobody to ask, nothing changes" bash -c "rm -f '$MOCK_STATE/up'; ! '$H' --non-interactive net44 setup '$TMP/full.conf' --mtu 1300 </dev/null >/dev/null 2>&1 && ! grep -qx 'MTU = 1300' '$CONF'"
 
 # ---- status and check -----------------------------------------------------------------------------------------
@@ -161,6 +166,8 @@ check "check passes with the A record on the tunnel and the TXT record" n44 chec
 check "  … and prints the outside test" grep -q 'curl -fsS http://aprscaching.oe8apr.ampr.org/health' "$TMP/out"
 check "an A record elsewhere fails" bash -c "MOCK_A=44.1.2.3 '$H' net44 check </dev/null 2>&1 | grep -q 'FAIL A record: 44.1.2.3, but the tunnel is 44.27.132.9'"
 check "a missing TXT record fails" bash -c "! MOCK_NO_TXT=1 '$H' net44 check </dev/null >/dev/null 2>&1"
+check "  … and names the records to add" bash -c "MOCK_NO_TXT=1 '$H' net44 check </dev/null 2>&1 | grep -q '_aprscaching  TXT'"
+check "a verify= record is not the identity record" bash -c "! MOCK_VERIFY_ONLY=1 '$H' net44 check </dev/null >/dev/null 2>&1"
 
 # ---- doctor's 44Net checks (the stack's own checks fail here; only these are read) -----------------------------
 if command -v node >/dev/null 2>&1; then
@@ -189,10 +196,13 @@ check "  … and drops the 44net endpoint" eq "$(grep '^FED_ENDPOINTS=' "$ENVF")
 
 # ---- shapes that use an app, and shapes without 44Net ---------------------------------------------------------------
 printf 'shape=pocket\nenv=%s\n' "$ENVF" >"$APRSCACHING_SHAPE_FILE"
+printf 'ADMIN_CALLSIGNS=OE8APR\n' >>"$ENVF"
 : >"$MOCK_LOG"
 MOCK_PMTU=1492 n44 setup "$TMP/full.conf"
 check "on Pocket, setup prints the app steps with the probed MTU" bash -c "grep -q 'set MTU to 1412' '$TMP/out' && grep -q 'Persistent keepalive to 25' '$TMP/out'"
 check "  … and changes nothing on the host" bash -c "! grep -q 'systemctl\|systemd-run' '$MOCK_LOG'"
+check "  … and sets the default Pocket name, aprscaching-pocket.<call>.ampr.org" \
+  bash -c "grep -q '\"44net\",\"address\":\"aprscaching-pocket.oe8apr.ampr.org\"' '$ENVF' && grep -q '_aprscaching.aprscaching-pocket  TXT' '$TMP/out'"
 printf 'shape=ingest-box\nenv=\n' >"$APRSCACHING_SHAPE_FILE"
 check "an ingest box has no 44Net helper" fails n44 setup "$TMP/full.conf"
 

@@ -96,7 +96,9 @@ beside it as `wg44.issued.conf`) and changes four things about the issued config
 It starts the tunnel under a two-minute rollback. Open a new SSH session while it waits and answer `y` once
 that session connects. Without an answer, or when no handshake arrives in a non-interactive run, the tunnel
 goes down again and is not started at boot. Running it again with the same configuration changes nothing.
-`--name` adds the 44Net name to `FED_ENDPOINTS` ([step 4](44net-identity.md#4-configure-the-instance)).
+The instance's 44Net name goes into `FED_ENDPOINTS`: `aprscaching.<call>.ampr.org` by default, with the call from
+`ADMIN_CALLSIGNS`, or the name `--name` gives, never the base name `<call>.ampr.org`
+([step 4](44net-identity.md#4-configure-the-instance)). It then prints the two records to add in the Portal.
 
 The other `net44` commands, in the repository's top directory:
 

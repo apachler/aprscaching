@@ -38,6 +38,12 @@ In every shape the RF ingest runs on your own equipment: the stack's own ingest,
 [ingest box](radios/ingest-box.md) next to the radio. The browser can also bridge a USB or Bluetooth radio with
 no server at all. A cloud VM may add an APRS-IS-only feed, never the RF bridge.
 
+## Joining the network by callsign
+
+Every shape can federate with other instances ([Join the network](federation/index.md)). A licensed sysop can
+also let peers add the instance by callsign: on 44Net, or over the internet alone with one DNS record under
+`<call>.ampr.org` ([Identity without 44Net](networks/44net-identity.md#identity-without-44net)).
+
 You can change your mind later: a backup from one shape restores into another
 ([Moving between shapes](day-to-day/backups.md#moving-between-shapes)).
 

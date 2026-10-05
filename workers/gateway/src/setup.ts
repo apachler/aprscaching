@@ -19,8 +19,8 @@ import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./aut
 import { describeTransport, mailTransport } from "./mail.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
-import { amprCallOf } from "./fed44net.js";
-import { configured44net } from "./fed44netcheck.js";
+import { amprCallOf, configured44net } from "./fed44net.js";
+
 import { attestedSites } from "./attestedsites.js";
 import { updateStatus } from "./updatecheck.js";
 
@@ -227,20 +227,23 @@ function envItems(env: Env, sites: string[]): SetupItem[] {
       : "unset — feeds serve unsigned and peers won't mirror them (generate: node tools/fedkey/genkey.mjs)",
   });
   {
-    // shown only with a 44net endpoint; the DNS side runs on demand (GET /api/admin/setup/44net)
+    // shown only with a 44net endpoint; the DNS side runs on demand (GET /api/admin/federation/identity?check=1)
     const host = configured44net(env);
     const call = host && amprCallOf(host);
+    const underCall = !!call && host.endsWith(`.${call.toLowerCase()}.ampr.org`);
     if (host)
       push({
         key: "44net",
         level: "optional",
         label: "44Net",
         group: "trust",
-        status: call ? "ok" : "warn",
+        status: underCall ? "ok" : "warn",
         source: "env",
-        detail: call
+        detail: underCall
           ? `44net endpoint ${host} (${call}) — run the 44Net check to see what peers find in DNS`
-          : `44net endpoint ${host} is not a name under <call>.ampr.org, where peers look up a callsign's binding`,
+          : call
+            ? `44net endpoint ${host} is the base name; an instance runs at a name under it, e.g. aprscaching.${host}`
+            : `44net endpoint ${host} is not a name under <call>.ampr.org, where peers look up a callsign's binding`,
       });
   }
   if (env.FED_REGISTRY || env.FED_REGISTRY_DNS) {

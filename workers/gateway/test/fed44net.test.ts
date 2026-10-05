@@ -73,7 +73,12 @@ const post = (body: unknown) =>
 
 describe("parse44netTxt", () => {
   it("parses the v=acs1 binding and rejects everything else", () => {
-    expect(parse44netTxt(TXT, "OE8APR")).toEqual({ instance: "oe.pub", publicKey: KEY, host: "oe8apr.ampr.org" });
+    expect(parse44netTxt(TXT, "OE8APR")).toEqual({
+      instance: "oe.pub",
+      publicKey: KEY,
+      host: "aprscaching.oe8apr.ampr.org",
+      web: null,
+    });
     expect(parse44netTxt("v=spf1 include:_spf.example.com ~all", "OE8APR")).toBeNull();
     expect(parse44netTxt("v=acs1; inst=oe.pub", "OE8APR")).toBeNull(); // no key
     expect(parse44netTxt(`v=acs1; inst=oe.pub; key=short`, "OE8APR")).toBeNull(); // not a 32-byte key shape
@@ -84,11 +89,11 @@ describe("parse44netTxt", () => {
 // federation traffic at a third party is refused as a whole.
 describe("parse44netTxt — host=", () => {
   const withHost = (h: string) => parse44netTxt(`${TXT}; host=${h}`, "OE8APR");
-  it("without host= the peer is <call>.ampr.org", () => {
-    expect(parse44netTxt(TXT, "oe8apr")?.host).toBe("oe8apr.ampr.org");
+  it("without host= the peer is aprscaching.<call>.ampr.org", () => {
+    expect(parse44netTxt(TXT, "oe8apr")?.host).toBe("aprscaching.oe8apr.ampr.org");
   });
-  it("accepts the zone itself and any subdomain of it", () => {
-    expect(withHost("oe8apr.ampr.org")?.host).toBe("oe8apr.ampr.org");
+  it("accepts any name under the zone, and refuses the base name itself", () => {
+    expect(withHost("oe8apr.ampr.org")).toBeNull();
     expect(withHost("aprscaching.oe8apr.ampr.org")?.host).toBe("aprscaching.oe8apr.ampr.org");
     expect(withHost("a.b-c.oe8apr.ampr.org")?.host).toBe("a.b-c.oe8apr.ampr.org");
   });
@@ -125,15 +130,16 @@ describe("resolve44net", () => {
     const r = await resolve44net(envWith({}), "oe8apr");
     expect(r).toEqual({
       callsign: "OE8APR",
-      host: "oe8apr.ampr.org",
+      host: "aprscaching.oe8apr.ampr.org",
+      web: null,
       instance: "oe.pub",
       publicKey: KEY,
       dnssec: true,
     });
   });
   it("follows a host= in the zone, and skips a record whose host= leaves it", async () => {
-    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=aprscaching.oe8apr.ampr.org` }));
-    expect((await resolve44net(envWith({}), "oe8apr")).host).toBe("aprscaching.oe8apr.ampr.org");
+    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=node.oe8apr.ampr.org` }));
+    expect((await resolve44net(envWith({}), "oe8apr")).host).toBe("node.oe8apr.ampr.org");
     stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=example.com` }));
     await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no valid aprscaching TXT/);
   });
@@ -154,7 +160,11 @@ describe("handleFed44netAdd — admission policy", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.admitted).toBe("dnssec");
-    expect(body.peer).toMatchObject({ url: "http://oe8apr.ampr.org", instance: "oe.pub", trust: "unvetted" });
+    expect(body.peer).toMatchObject({
+      url: "http://aprscaching.oe8apr.ampr.org",
+      instance: "oe.pub",
+      trust: "unvetted",
+    });
     // the insert pins the DNS key and carries the attested 44net endpoint
     expect(rows).toHaveLength(1);
     expect(rows[0]![2]).toBe(KEY);
@@ -208,7 +218,7 @@ describe("handleFed44netAdd — admission policy", () => {
 
   it("host= moves the contacted URL, the descriptor cross-check, the stored URL and the endpoint — not trust", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=APRScaching.OE8APR.ampr.org` }), {
+    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=Node.OE8APR.ampr.org` }), {
       instance: "oe.pub",
       publicKey: KEY,
       publicKeys: [{ x: KEY }],
@@ -216,21 +226,21 @@ describe("handleFed44netAdd — admission policy", () => {
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(fetched).toContain("http://aprscaching.oe8apr.ampr.org/.well-known/aprscaching");
+    expect(fetched).toContain("http://node.oe8apr.ampr.org/.well-known/aprscaching");
     expect(fetched.some((u) => new URL(u).hostname === "oe8apr.ampr.org")).toBe(false);
     expect(body.peer).toEqual({
-      url: "http://aprscaching.oe8apr.ampr.org",
+      url: "http://node.oe8apr.ampr.org",
       instance: "oe.pub",
       callsign: "OE8APR", // identity stays the callsign whose zone carries the TXT
       trust: "unvetted",
     });
     expect(rows).toHaveLength(1);
     const [url, instance, key, endpoints] = rows[0]!;
-    expect(url).toBe("http://aprscaching.oe8apr.ampr.org");
+    expect(url).toBe("http://node.oe8apr.ampr.org");
     expect(instance).toBe("oe.pub");
     expect(key).toBe(KEY); // the key pin is the DNS key, as without host=
     expect(JSON.parse(String(endpoints))).toEqual([
-      { transport: "44net", address: "aprscaching.oe8apr.ampr.org", priority: 10, verifiedVia: "ardc-lot" },
+      { transport: "44net", address: "node.oe8apr.ampr.org", priority: 10, verifiedVia: "ardc-lot" },
     ]);
   });
 
@@ -238,7 +248,7 @@ describe("handleFed44netAdd — admission policy", () => {
     const sqls: string[] = [];
     const { db, rows } = peersDb();
     const spy = { prepare: (sql: string) => (sqls.push(sql), db.prepare(sql)) };
-    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=aprscaching.oe8apr.ampr.org` }));
+    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=node.oe8apr.ampr.org` }));
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(spy));
     expect(res.status).toBe(201);
     expect((await res.json()).peer.trust).toBe("unvetted");
@@ -252,20 +262,20 @@ describe("handleFed44netAdd — admission policy", () => {
 
   it("a descriptor at host= that contradicts the DNS binding is refused", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=aprscaching.oe8apr.ampr.org` }), {
+    stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=node.oe8apr.ampr.org` }), {
       instance: "someone.else",
       publicKeys: [{ x: KEY }],
     });
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(409);
-    expect(fetched).toContain("http://aprscaching.oe8apr.ampr.org/.well-known/aprscaching");
+    expect(fetched).toContain("http://node.oe8apr.ampr.org/.well-known/aprscaching");
     expect(rows).toHaveLength(0);
   });
 });
 
 // ---- per-host records: one callsign, several instances, each under its own name in the callsign's zone
 
-const HOST = "pocket.oe8apr.ampr.org";
+const HOST = "aprscaching-pocket.oe8apr.ampr.org";
 const KEY2 = "B".repeat(43);
 
 /**
@@ -319,7 +329,7 @@ describe("host44net", () => {
     expect(host44net("oe8apr.ampr.org")).toEqual({ callsign: "OE8APR", host: "oe8apr.ampr.org" });
   });
   it("normalises uppercase, spaces and one trailing dot", () => {
-    expect(host44net(" POCKET.OE8APR.AMPR.ORG. ")).toEqual({ callsign: "OE8APR", host: HOST });
+    expect(host44net(" APRSCACHING-POCKET.OE8APR.AMPR.ORG. ")).toEqual({ callsign: "OE8APR", host: HOST });
   });
   it("refuses a host outside ampr.org, a bare ampr.org and an invalid base call", () => {
     expect(host44net("pocket.example.com")).toBeNull();
@@ -339,6 +349,7 @@ describe("resolve44netHost", () => {
       host: HOST,
       instance: "oe.pub",
       publicKey: KEY,
+      web: null,
       dnssec: true,
     });
     expect(fetched.map((u) => new URL(u).searchParams.get("name"))).toEqual([`_aprscaching.${HOST}`]);
@@ -367,8 +378,8 @@ describe("handleFed44netAdd — by host", () => {
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(409);
     expect((await res.json()).candidates).toEqual([
-      { instance: "oe.pub", host: "oe8apr.ampr.org" },
-      { instance: "oe.pocket", host: HOST },
+      { instance: "oe.pub", host: "aprscaching.oe8apr.ampr.org", web: null },
+      { instance: "oe.pocket", host: HOST, web: null },
     ]);
     expect(rows).toHaveLength(0);
   });
@@ -380,7 +391,7 @@ describe("handleFed44netAdd — by host", () => {
         "_aprscaching.oe8apr.ampr.org": [TXT],
         [`_aprscaching.${HOST}`]: [`v=acs1; inst=oe.pocket; key=${KEY2}`],
       },
-      { "oe8apr.ampr.org": wk("oe.pub", KEY), [HOST]: wk("oe.pocket", KEY2) },
+      { "aprscaching.oe8apr.ampr.org": wk("oe.pub", KEY), [HOST]: wk("oe.pocket", KEY2) },
     );
     expect((await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db))).status).toBe(201);
     const res = await handleFed44netAdd(post({ host: HOST.toUpperCase() }), envWith(db));
@@ -392,7 +403,7 @@ describe("handleFed44netAdd — by host", () => {
       trust: "unvetted",
     });
     expect(rows.map((r) => [r[0], r[1], r[2], r[5]])).toEqual([
-      ["http://oe8apr.ampr.org", "oe.pub", KEY, "OE8APR"],
+      ["http://aprscaching.oe8apr.ampr.org", "oe.pub", KEY, "OE8APR"],
       [`http://${HOST}`, "oe.pocket", KEY2, "OE8APR"],
     ]);
   });
@@ -449,5 +460,165 @@ describe("handleFed44netAdd — by host", () => {
     const insert = sqls.find((s) => s.includes("INSERT INTO fed_peers"))!;
     expect(insert).toContain("trust        = fed_peers.trust");
     expect(insert).not.toMatch(/'trusted'|'blocked'/);
+  });
+});
+
+// ---- web=: an identity under the callsign for an instance on the internet, with or without 44Net
+
+describe("parse44netTxt — web=", () => {
+  it("takes an https origin, and names no 44Net host without host=", () => {
+    expect(parse44netTxt(`${TXT}; web=https://APRS.Example.net`, "OE8APR")).toEqual({
+      instance: "oe.pub",
+      publicKey: KEY,
+      host: null,
+      web: "https://aprs.example.net",
+    });
+    expect(parse44netTxt(`${TXT}; web=https://aprs.example.net:8443/`, "OE8APR")?.web).toBe(
+      "https://aprs.example.net:8443",
+    );
+  });
+  it("with host= both endpoints are known", () => {
+    expect(
+      parse44netTxt(`${TXT}; host=aprscaching.oe8apr.ampr.org; web=https://aprs.example.net`, "OE8APR"),
+    ).toMatchObject({ host: "aprscaching.oe8apr.ampr.org", web: "https://aprs.example.net" });
+  });
+  it("rejects the whole record for anything but an https origin", () => {
+    for (const w of [
+      "http://aprs.example.net",
+      "aprs.example.net",
+      "https://aprs.example.net/path",
+      "https://user@aprs.example.net",
+      "https://aprs.example.net?x=1",
+      "https://aprs.example.net#x",
+      "",
+    ])
+      expect(parse44netTxt(`${TXT}; web=${w}`, "OE8APR")).toBeNull();
+  });
+});
+
+describe("handleFed44netAdd — by callsign over the internet (web=)", () => {
+  const WEB = "https://aprs.example.net";
+  const ZONE_TXT = "_aprscaching.oe8apr.ampr.org";
+  const wk = (instance: string, key: string, aprsCall = "OE8APR-15") => ({
+    instance,
+    publicKey: key,
+    publicKeys: [{ x: key }],
+    aprsCall,
+  });
+
+  it("internet only: fetches the descriptor at the origin and stores one https endpoint", async () => {
+    const { db, rows } = boundDb();
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] }, { "aprs.example.net": wk("oe.pub", KEY) });
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(res.status).toBe(201);
+    expect(fetched).toContain(`${WEB}/.well-known/aprscaching`);
+    expect(fetched.some((u) => u.startsWith("http://"))).toBe(false); // no 44Net contact
+    expect((await res.json()).peer).toEqual({ url: WEB, instance: "oe.pub", callsign: "OE8APR", trust: "unvetted" });
+    expect(rows[0]![0]).toBe(WEB);
+    expect(rows[0]![2]).toBe(KEY);
+    expect(rows[0]![5]).toBe("OE8APR");
+    expect(JSON.parse(String(rows[0]![3]))).toEqual([
+      { transport: "https", address: WEB, priority: 10, verifiedVia: "ardc-lot" },
+    ]);
+  });
+
+  it("refuses a descriptor whose keys do not include the DNS key, or whose instance differs", async () => {
+    const { db, rows } = boundDb();
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] }, { "aprs.example.net": wk("oe.pub", KEY2) });
+    let res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/binding mismatch.*not among the active keys/);
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] }, { "aprs.example.net": wk("third.party", KEY) });
+    res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(res.status).toBe(409);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses another instance's id and key copied into a record: its descriptor must name the callsign", async () => {
+    const { db, rows } = boundDb();
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] }, { "aprs.example.net": wk("oe.pub", KEY, "DL1ABC-15") });
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR", confirm: true }), envWith(db));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/names no call of OE8APR/);
+    expect(rows).toHaveLength(0);
+    // FED_OPERATOR naming the call is the origin's word too
+    stubNames(
+      { [ZONE_TXT]: [`${TXT}; web=${WEB}`] },
+      { "aprs.example.net": { ...wk("oe.pub", KEY, "APRSCG"), operator: "oe8apr" } },
+    );
+    expect((await handleFed44netAdd(post({ callsign: "OE8APR", confirm: true }), envWith(db))).status).toBe(201);
+  });
+
+  it("refuses when the origin does not answer: the key is checked there before it is pinned", async () => {
+    const { db, rows } = boundDb();
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] });
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR", confirm: true }), envWith(db));
+    expect(res.status).toBe(502);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("without DNSSEC the operator still confirms once", async () => {
+    const { db, rows } = boundDb();
+    stubNames({ [ZONE_TXT]: [`${TXT}; web=${WEB}`] }, { "aprs.example.net": wk("oe.pub", KEY) }, false);
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(await res.json()).toMatchObject({
+      requiresConfirm: true,
+      descriptorChecked: true,
+      resolved: { web: WEB, host: null },
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it("both: https first for an instance off 44Net, 44Net first for one on it", async () => {
+    const both = `${TXT}; host=aprscaching.oe8apr.ampr.org; web=${WEB}`;
+    const wks = { "aprs.example.net": wk("oe.pub", KEY) };
+    const off = boundDb();
+    stubNames({ [ZONE_TXT]: [both] }, wks);
+    expect((await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(off.db))).status).toBe(201);
+    expect(off.rows[0]![0]).toBe(WEB);
+    expect(JSON.parse(String(off.rows[0]![3]))).toEqual([
+      { transport: "https", address: WEB, priority: 10, verifiedVia: "ardc-lot" },
+      { transport: "44net", address: "aprscaching.oe8apr.ampr.org", priority: 20, verifiedVia: "ardc-lot" },
+    ]);
+    const on = boundDb();
+    stubNames({ [ZONE_TXT]: [both] }, wks);
+    const on44 = {
+      ...envWith(on.db),
+      FED_ENDPOINTS: '[{"transport":"44net","address":"aprscaching.dl1abc.ampr.org","priority":10}]',
+    } as Env;
+    expect((await handleFed44netAdd(post({ callsign: "OE8APR" }), on44)).status).toBe(201);
+    const order = (JSON.parse(String(on.rows[0]![3])) as { transport: string; priority: number }[]).map((e) => [
+      e.transport,
+      e.priority,
+    ]);
+    expect(order).toEqual([
+      ["https", 20],
+      ["44net", 10],
+    ]);
+  });
+
+  it("a 44Net descriptor contradicting the binding is refused even when the origin matches", async () => {
+    const { db, rows } = boundDb();
+    stubNames(
+      { [ZONE_TXT]: [`${TXT}; host=aprscaching.oe8apr.ampr.org; web=${WEB}`] },
+      { "aprs.example.net": wk("oe.pub", KEY), "aprscaching.oe8apr.ampr.org": wk("someone.else", KEY) },
+    );
+    expect((await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db))).status).toBe(409);
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe("resolve44netHost — the callsign's record as fallback", () => {
+  it("a host without a record of its own takes the callsign's when that one sends peers to it", async () => {
+    stubNames({ "_aprscaching.oe8apr.ampr.org": [TXT] });
+    expect((await resolve44netHost(envWith({}), "aprscaching.oe8apr.ampr.org")).host).toBe(
+      "aprscaching.oe8apr.ampr.org",
+    );
+    stubNames({ "_aprscaching.oe8apr.ampr.org": [TXT] });
+    await expect(resolve44netHost(envWith({}), HOST)).rejects.toThrow(/no _aprscaching/);
+  });
+  it("the base name reads the callsign's record", async () => {
+    stubNames({ "_aprscaching.oe8apr.ampr.org": [TXT] });
+    expect((await resolve44netHost(envWith({}), "oe8apr.ampr.org")).host).toBe("aprscaching.oe8apr.ampr.org");
   });
 });

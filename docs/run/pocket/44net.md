@@ -59,8 +59,9 @@ app** carries the tunnel for the whole phone.
    Store).
 2. In the app, set the tunnel's MTU to 1420 or less (1412 on PPPoE, 1372 on DS-Lite) and the peer's *Persistent
    keepalive* to 25. Keep `AllowedIPs` as issued. On Pocket, `deploy/aprscaching net44 setup <file>` changes
-   nothing: it prints these steps, with the MTU it measures for your path where Termux's `ping` can
-   ([Bring the tunnel up](../networks/44net.md#2-bring-the-tunnel-up)).
+   nothing on the network: it prints these steps, with the MTU it measures for your path where Termux's `ping`
+   can ([Bring the tunnel up](../networks/44net.md#2-bring-the-tunnel-up)), and sets the station's 44Net name
+   ([Federate under your callsign](#federate-under-your-callsign)).
 3. Turn on *Always-on VPN* for the tunnel in Android's VPN settings, so it comes back after a network change.
    Android runs one VPN at a time.
 4. Test inbound from another network: open `http://<44.x address>:8787/health`.
@@ -94,12 +95,26 @@ Also unverified: whether the hotspot and ExtUDP keep working with a full tunnel 
 
 ### Federate under your callsign
 
+The phone runs under a name of its own beside your home station, by default
+`aprscaching-pocket.<call>.ampr.org`; the home station keeps `aprscaching.<call>.ampr.org` and the callsign's
+record.
+
 1. Give the phone its own instance name and its own key in the [setup questions](../install/pocket.md#install).
-2. Publish the `_aprscaching` TXT record and add the 44net endpoint to `FED_ENDPOINTS`
-   ([Name and identity](../networks/44net-identity.md#3-name-and-identity),
-   [Configure the instance](../networks/44net-identity.md#4-configure-the-instance)). When your home station
-   already uses the callsign's record, the phone publishes its own under its host.
-3. Run the self-check under **Instance admin → Setup → 44Net**.
+2. Run `deploy/aprscaching net44 setup`: besides the WireGuard app steps, it puts the phone's 44Net name into
+   `FED_ENDPOINTS` (`--name` picks another label under your call) and prints the records to add.
+3. Add the two records in the 44Net Portal under `<call>.ampr.org`
+   ([Several instances under one call](../networks/44net-identity.md#several-instances-under-one-call)):
+
+    | Name in the Portal | Type | Value |
+    |---|---|---|
+    | `aprscaching-pocket` | A | the phone's 44.x address |
+    | `_aprscaching.aprscaching-pocket` | TXT | `v=acs1; inst=<the phone's INSTANCE>; key=<the phone's federation key>`, plus `; host=…; web=https://…` when the phone has a public https `APP_URL` (a Cloudflare Tunnel) |
+
+    **Instance admin → Federation → Publish your callsign identity** on the phone shows both, ready to copy. The
+    Portal's name field accepts the dotted name `_aprscaching.aprscaching-pocket` as it stands.
+
+4. Restart the gateway (`bash ~/aprscaching/deploy/pocket/restart.sh gateway`), then choose **Check now** on the
+   same page. Peers add the phone by its host, `aprscaching-pocket.<call>.ampr.org`.
 
 Following your home instance works with or without the tunnel
 ([Your home instance as the hub](trips.md#your-home-instance-as-the-hub)).
@@ -112,7 +127,7 @@ portal:
 
 ```bash
 pkg install lego
-bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host <call>.ampr.org --use
+bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host aprscaching-pocket.<call>.ampr.org --use
 ```
 
 1. The script prints the `_acme-challenge` TXT record. Add it in the ARDC portal.

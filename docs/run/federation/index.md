@@ -52,7 +52,9 @@ sequenceDiagram
 **Optional:** publish who runs the instance with `FED_OPERATOR` (the instance publishes its service call beside
 it), and ask a registry authority for an entry
 ([The instance registry](hubs-and-relays.md#the-instance-registry)). A 44Net peer joins by callsign instead
-([Peers by callsign](../networks/44net-identity.md#peers-by-callsign)).
+([Peers by callsign](../networks/44net-identity.md#peers-by-callsign)). An instance without 44Net can be
+added by callsign too, with one DNS record under your `<call>.ampr.org`
+([Identity without 44Net](../networks/44net-identity.md#identity-without-44net)).
 
 ### Peers in `FED_PEERS`
 

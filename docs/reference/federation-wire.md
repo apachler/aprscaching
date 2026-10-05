@@ -139,7 +139,7 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 | Transport | Address form | Mode | Notes |
 |---|---|---|---|
 | `https` | full URL | sync | The default internet path |
-| `44net` | `<call>.ampr.org` hostname | sync | Plain HTTP inside amateur IP space (no public CA); the *name* is the durable identity |
+| `44net` | a name under `<call>.ampr.org` | sync | Plain HTTP inside amateur IP space (no public CA); the *name* is the durable identity |
 | `ax25` | `CALLSIGN-SSID` | forward | Packet circuit via the operator's ingest box |
 | `netrom` | node alias | forward | NET/ROM-routed circuit |
 | `bbs` | `CALL@BBS.#REGION.CC.CONT` | forward | Store-and-forward over FBB forwarding |
@@ -266,62 +266,84 @@ instance. Relay cargo (query params, the
 answered feed page) travels as JSON text inside the CBOR bodies — feed pages carry floats, which the
 deterministic codec refuses by design.
 
-## Verified onboarding on 44Net
+## Verified onboarding by callsign
 
 ARDC's portal reviews an amateur licence before delegating `<call>.ampr.org` (its Level-of-Trust
-process), so the name is an externally-verified callsign binding. A peer advertises its federation
-identity in DNS, under its callsign or under a host of its own in the callsign's zone:
+process), so a record under that name is an externally-verified callsign binding. A peer advertises its
+federation identity in DNS, under its callsign or under a label of its own in the callsign's zone:
 
 ```
-_aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>[; host=<name>]"
-_aprscaching.<host>           TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>"
+_aprscaching.<call>.ampr.org          TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>[; host=<name>][; web=<https origin>]"
+_aprscaching.<label>.<call>.ampr.org  TXT  the same, for a further instance under the call
 ```
 
 | Field | Meaning |
 |---|---|
 | `inst` | The instance id, exactly as `INSTANCE` |
 | `key` | The current federation public key: raw Ed25519, base64url (the descriptor's `publicKey`) |
-| `host` | Optional. Where peers contact the instance: `<call>.ampr.org` itself or a name under it (`aprscaching.oe8apr.ampr.org`). Without it, peers contact the name whose record they read |
+| `host` | Optional. A 44Net name under the call, `<label>.<call>.ampr.org`, never the base name `<call>.ampr.org` |
+| `web` | Optional. An https origin, `https://<host>[:<port>]`, with no path, query, fragment or credentials |
 
-A record at `_aprscaching.<call>.ampr.org` is found by callsign; a record at `_aprscaching.<host>`, for a
-`<host>` under `<call>.ampr.org`, is found by that host and needs no `host=`. Per-host records let one
-callsign publish several instances — a home station and a Pocket — each under its own name. `host=` only
-moves where the peer is reached. It is lowercased and must be a valid hostname (labels of 1–63 letters, digits and inner hyphens, at most
-253 characters, no trailing dot) inside the callsign's own zone. A `host=` anywhere else — another domain,
-another call's zone — rejects the whole record: a TXT in one callsign's zone never points federation traffic
-at a third party. The same name may also carry a `v=acs1; verify=<code>` record for callsign verification;
-that record is separate and does not carry the binding.
+Where peers connect:
 
-`POST /federation/peers/44net { callsign }` or `{ host }` (sysop-only) resolves the TXT at
-`_aprscaching.<call>.ampr.org` or `_aprscaching.<host>` over DNS-over-HTTPS (`DOH_URL`, default
-Cloudflare) and cross-checks the live descriptor at `http://<host>` when reachable. A host is lowercased,
-loses one trailing dot, and must be `<call>.ampr.org` or a name under it for a valid base call; anything
-else is refused before a lookup. More than one valid `acs1` binding at the name is ambiguous: the answer is
-`409` with `candidates: [{ instance, host }]`, and the operator adds one by its host. The peer is stored
-under `http://<host>` with a `44net` endpoint of that address:
+| Record | 44Net (plain http) | https |
+|---|---|---|
+| no `host=`, no `web=` | the record's own name: `aprscaching.<call>.ampr.org` for the callsign's record, `<label>.<call>.ampr.org` for a label's | — |
+| `host=` only | `host=` | — |
+| `web=` only | — | `web=` |
+| `host=` and `web=` | `host=` | `web=` |
 
+An instance never runs on the base name: it carries only the lookup record. A record at
+`_aprscaching.<call>.ampr.org` is found by callsign; a record at `_aprscaching.<host>` is found by that host.
+A host without a record of its own takes the callsign's record when that one sends peers to it. `host=` is
+lowercased and must be a valid hostname (labels of 1–63 letters, digits and inner hyphens, at most 253
+characters, no trailing dot) strictly inside the callsign's own zone. A `host=` anywhere else, the base name
+included, or a `web=` that is not an https origin rejects the whole record. Callsign verification publishes
+its code at `_aprscaching-verify.<call>.ampr.org`, never at the identity's name.
+
+`POST /federation/peers/44net { callsign }` or `{ host }` (sysop-only) resolves the TXT over
+DNS-over-HTTPS (`DOH_URL`, default Cloudflare) and cross-checks the live descriptor where the record sends
+peers. A host is lowercased, loses one trailing dot, and must be `<call>.ampr.org` or a name under it for a
+valid base call; anything else is refused before a lookup. More than one valid `acs1` binding at the name is
+ambiguous: the answer is `409` with `candidates: [{ instance, host, web }]`, and the operator adds one by
+its host.
+
+- **At a `web=` origin** the descriptor must answer through the federation fetch guard (https, no private
+  address unless `FED_ALLOW_PRIVATE`), name the instance of `inst`, list `key` among its active keys, and name
+  the callsign as its `aprsCall` or `operator`. Instance ids and keys are public, so the last check keeps a
+  record from claiming someone else's instance. An origin that does not answer refuses (`502`).
+- **Over 44Net** a descriptor that answers must name the instance and list the key; one that does not answer
+  is not fatal, and the DNS key alone becomes the pin. The host lies in the zone the call holder controls.
 - **DNSSEC-validated** (the resolver's AD flag) → the peer is admitted automatically. The gateway
   does not validate DNSSEC itself: it trusts the AD flag of the DoH resolver it asks, which makes that
   resolver (`DOH_URL`) a trusted party for automatic admission. Point `DOH_URL` only at a validating
   resolver you trust; the admitted peer still starts `unvetted`.
 - **No DNSSEC** → the response returns the resolved binding and the operator confirms once
   (trust-on-first-use); `confirm: true` pins it.
-- A descriptor that **contradicts** the DNS binding is refused outright.
 
-The DNS-advertised key becomes the peer's **key pin** — every sync verifies against exactly that key
+The peer is stored under its `web=` origin, else `http://<host>`, with an endpoint per place, each
+`verifiedVia: "ardc-lot"`. With both, an instance that has a `44net` endpoint of its own reaches the peer
+over 44Net first (priority 10, https 20); any other reaches it over https first.
+
+The DNS-advertised key becomes the peer's **key pin**: every sync verifies against exactly that key
 or a signed rotation from it. Admission attests **identity only** (`verified_via = 'ardc-lot'`): the
-peer enters `unvetted`, and the operator-set trust tier still decides whether its records count. `host=`
-and per-host records change none of this: the identity stays the callsign whose zone holds the record, and
-the key pin and trust are the same either way. An instance id already held by another live peer is refused.
+peer enters `unvetted`, and the operator-set trust tier still decides whether its records count. `host=`,
+`web=` and per-label records change none of this: the identity stays the callsign whose zone holds the
+record, and the key pin and trust are the same either way. An instance id already held by another live peer
+is refused.
 
 The peer row records that callsign as `operator_call`. The corroboration quorum counts a peer by its
 registry operator, else this call, else its signing key, so every instance added under one callsign is one
 voice.
 
-`GET /api/admin/setup/44net` (sysop-only) runs the same lookups against this instance's own records —
-the A record of the host peers contact, the TXT's `inst` and `key` against this instance (the endpoint's
-own `_aprscaching.<host>` record first, then the callsign's), whether the callsign's record sends peers to
-this host with another binding, and the 44net endpoint of the descriptor it serves — and reports each as pass, warn or fail with a fix
+`GET /api/admin/federation/identity` (sysop-only) returns the records this instance publishes, each with
+its name as the 44Net Portal takes it (`portal`), `type`, `value` and `purpose`, computed from `INSTANCE`, the
+federation key, the callsign (the `44net` endpoint's zone, else the first of `ADMIN_CALLSIGNS`), the `44net`
+endpoint and `APP_URL`, the main TXT naming both places when the instance has a `44net` endpoint and a public https
+`APP_URL`, with the 44Net-only value as `alternative`. With `?check=1` it also runs the
+same lookups against those records (the endpoint under the call, the A record of the host peers contact, the
+TXT's `inst` and `key`, whether the callsign's record sends peers to this host with another binding, and
+whether the record sends peers where this instance is) and reports each as pass, warn, fail or info with a fix
 ([The checklist](../run/first-hour.md#the-checklist)). It only reads DNS; it writes nothing.
 
 On amateur RF all of this stays legal because the wire format **signs and never encrypts** — every

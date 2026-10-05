@@ -5,7 +5,7 @@
  * ARDC delegates `<call>.ampr.org` to a ham only after reviewing their licence, and only that holder can
  * publish names under it at the ARDC portal. So a code the holder publishes as
  *
- *   _aprscaching.<call>.ampr.org  TXT  "v=acs1; verify=<code>"
+ *   _aprscaching-verify.<call>.ampr.org  TXT  "v=acs1; verify=<code>"
  *
  * proves control of the call — provided the answer is authentic. Two proofs count:
  *
@@ -21,8 +21,9 @@
  * Either way the answer must be owned by the exact name: an answer through a CNAME or DNAME is refused,
  * because it would take the proof out of the ARDC zone to wherever the alias points. Which proof held is
  * stored in the verification's note (`dnssec`, or `<n> resolvers: <hosts>`), so an operator can find and
- * re-check the weaker ones. The record shares its name with the federation binding (fed44net.ts); both are
- * `v=acs1` TXT records and may coexist.
+ * re-check the weaker ones. The record has a name of its own, apart from the federation identity record
+ * (`_aprscaching.<call>.ampr.org`, fed44net.ts): a member proving their call never touches the record peers
+ * read, and the code at one name is never mistaken for the binding at the other.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -53,7 +54,7 @@ export async function startAmprChallenge(req: Request, env: Env): Promise<Respon
   const code = randomToken(16);
   const issued = await issueChallenge(env, c, "ampr_dns", code);
   if (!issued) return startsLimited();
-  const { name } = amprNames(c.cs);
+  const { verify: name } = amprNames(c.cs);
   const value = amprTxtValue(code);
   return json({
     code,
@@ -81,7 +82,7 @@ export async function checkAmprChallenge(req: Request, env: Env): Promise<Respon
   if (await completionLimited(env, c, "ampr_dns")) return startsLimited();
   const code = await openChallenge(env, c, "ampr_dns", AMPR_CHALLENGE_TTL_SEC);
   if (!code) return noChallenge();
-  const { host, name } = amprNames(c.cs);
+  const { host, verify: name } = amprNames(c.cs);
 
   const refuse = async (error: string) => {
     await failAttempt(env, c, "ampr_dns", code);

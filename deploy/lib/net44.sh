@@ -218,6 +218,67 @@ n44_endpoints_without() {
   printf '%s' "$1" | sed -E -e 's/,\{"transport":"44net"[^}]*\}//' -e 's/\{"transport":"44net"[^}]*\},?//'
 }
 
+# The operator's base call: the first of ADMIN_CALLSIGNS in the shape's settings, lowercased, without its SSID.
+n44_call() {
+  [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  env_file_get "$SHAPE_ENV" ADMIN_CALLSIGNS | cut -d, -f1 | tr -d '[:space:]' | sed 's/-.*//' | tr '[:upper:]' '[:lower:]' |
+    { grep -E '^[a-z0-9]{3,9}$' || true; }
+}
+
+# The default 44Net name for this shape: aprscaching.<call>.ampr.org, and aprscaching-pocket.<call>.ampr.org on
+# Pocket, so a phone and the home station run under one call side by side. Empty without a call.
+n44_default_name() {
+  local call label=aprscaching
+  call="${1:-$(n44_call)}"
+  [ -n "$call" ] || return 0
+  [ "${SHAPE:-}" != pocket ] || label=aprscaching-pocket
+  printf '%s.%s.ampr.org' "$label" "$call"
+}
+
+# n44_valid_name NAME: an instance name under a call's zone, <label>.<call>.ampr.org, never the base name
+# <call>.ampr.org, which stays free for the ham's other uses.
+n44_valid_name() {
+  printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]{3,9}\.ampr\.org$'
+}
+
+# n44_records NAME [V4] [INSTANCE] [WEB]: the records to add in the 44Net Portal under <call>.ampr.org, one per line
+# as "<name as the Portal takes it>  <type>  <value>". With WEB, the instance's public https origin, the TXT names
+# both places peers connect to, as Instance admin's main record does.
+n44_records() {
+  local name="$1" v4="${2:-}" inst="${3:-}" web="${4:-}" call label txt both=""
+  call="$(printf '%s' "$name" | sed -E 's/^.*\.([a-z0-9]+)\.ampr\.org$/\1/')"
+  label="${name%."$call".ampr.org}"
+  if [ "$label" = aprscaching ]; then txt=_aprscaching; else txt="_aprscaching.$label"; fi
+  [ -z "$web" ] || both="; host=$name; web=$web"
+  printf '%s  A    %s\n' "$label" "${v4:-<your 44.x address>}"
+  printf '%s  TXT  "v=acs1; inst=%s; key=<federation key>%s"\n' "$txt" "${inst:-<INSTANCE>}" "$both"
+}
+
+# The instance's public https origin from APP_URL in the shape's settings: https://<host>[:port], lowercased; empty
+# for http, loopback, a LAN suffix or a private IPv4 address, where peers on the internet cannot connect.
+n44_web() {
+  local app origin host
+  [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  app="$(env_file_get "$SHAPE_ENV" APP_URL | tr '[:upper:]' '[:lower:]')"
+  origin="$(printf '%s' "$app" | sed -nE 's#^(https://[^/?\#]+).*#\1#p')"
+  host="$(printf '%s' "${origin#https://}" | sed 's/:.*//')"
+  [ -n "$host" ] || return 0
+  case "$host" in localhost | *.localhost | *.local | *.lan | *.home.arpa | *.internal) return 0 ;; esac
+  if printf '%s' "$host" | grep -Eq '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)'; then
+    return 0
+  fi
+  printf '%s' "${origin%:443}"
+}
+
+# The instance id: INSTANCE in the shape's settings, else APP_URL's host, which the gateway derives it from.
+n44_instance() {
+  local inst
+  [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  inst="$(env_file_get "$SHAPE_ENV" INSTANCE)"
+  [ -n "$inst" ] || inst="$(env_file_get "$SHAPE_ENV" APP_URL | sed -nE 's#^[a-z]+://([^/:?\#]+).*#\1#p' | tr '[:upper:]' '[:lower:]')"
+  printf '%s' "$inst"
+}
+
 n44_name_from_env() {
   [ -n "${SHAPE_ENV:-}" ] || return 0
   env_file_get "$SHAPE_ENV" FED_ENDPOINTS | { grep -oE '"transport":"44net","address":"[^"]+"' || true; } |
@@ -306,7 +367,8 @@ net44_setup() {
       -h | --help)
         printf '%s\n' "deploy/aprscaching net44 setup <connect.conf> [--name NAME] [--mtu N] [--no-firewall]" \
           "Brings the 44Net Connect tunnel up as $N44_IF, with a safe MTU, keepalive, routing that keeps SSH and a" \
-          "firewall that lets only TCP 80/443 in; --name adds the 44Net name to FED_ENDPOINTS."
+          "firewall that lets only TCP 80/443 in; --name sets the 44Net name in FED_ENDPOINTS (by default" \
+          "aprscaching.<call>.ampr.org, on Pocket aprscaching-pocket.<call>.ampr.org; never the base name <call>.ampr.org)."
         return 0
         ;;
       -*) die "Unknown option $1." ;;
@@ -314,14 +376,22 @@ net44_setup() {
     esac
     shift
   done
+  name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+  [ -z "$name" ] || n44_valid_name "$name" ||
+    die "--name takes a name under your call, e.g. $(n44_default_name oe8apr): never the base name <call>.ampr.org." \
+      "The base name stays free for your other uses; an instance runs at a name under it."
   mode="$(n44_shape_mode)"
   case "$mode" in
-    guide) n44_guidance "$file"; return 0 ;;
+    guide)
+      n44_guidance "$file"
+      n44_apply_name "$name"
+      n44_next ""
+      return 0
+      ;;
     none) die "44Net is not set up on the $SHAPE shape." "Set it up on the machine that runs the gateway (Self-host, bare metal, Pocket or Desktop)." ;;
   esac
   [ -n "$file" ] || die "setup needs the configuration 44Net Connect issued: deploy/aprscaching net44 setup <file>"
   case "$mtu" in '' | [0-9]*) ;; *) die "--mtu takes a number, e.g. 1420." ;; esac
-  case "$name" in '' | *.ampr.org) ;; *) die "--name takes the instance's 44Net name, e.g. aprscaching.oe8apr.ampr.org." ;; esac
   n44_validate "$file"
   n44_need_root
   for line in wg wg-quick ip; do
@@ -379,11 +449,26 @@ net44_setup() {
     n44_start
   fi
   n44_apply_name "$name"
+  n44_next "$v4"
+}
+
+# n44_next V4: the records to publish for the 44Net name in FED_ENDPOINTS, and the checks after.
+n44_next() {
+  local v4="$1" name inst web line
+  name="$(n44_name_from_env)"
+  inst="$(n44_instance)"
+  web="$(n44_web)"
   step "Next"
-  info "1. In the 44Net Portal, point an A record for your 44Net name at $v4."
-  info "2. Publish the _aprscaching TXT record that Instance admin -> Setup -> 44Net shows."
-  info "3. From another network (a phone on mobile data): curl -fsS http://<your 44Net name>/health"
-  info "4. deploy/aprscaching net44 check, and deploy/aprscaching doctor"
+  if [ -n "$name" ]; then
+    info "1. In the 44Net Portal (DNS -> My subdomains -> Resource Records), add under $(printf '%s' "$name" | sed -E 's/^.*\.([a-z0-9]+\.ampr\.org)$/\1/'):"
+    while IFS= read -r line; do info "     $line"; done < <(n44_records "$name" "$v4" "$inst" "$web")
+    info "   Instance admin -> Federation -> Publish your callsign identity shows the exact values to copy."
+  else
+    info "1. In the 44Net Portal, add an A record and the _aprscaching TXT record for your 44Net name:"
+    info "   Instance admin -> Federation -> Publish your callsign identity shows them."
+  fi
+  info "2. From another network (a phone on mobile data): curl -fsS http://${name:-<your 44Net name>}/health"
+  info "3. deploy/aprscaching net44 check, and deploy/aprscaching doctor"
   info "Details, including TLS on the 44Net name: $N44_DOCS"
 }
 
@@ -420,14 +505,21 @@ n44_start() {
   fi
 }
 
+# n44_apply_name NAME: set FED_ENDPOINTS' 44net endpoint to NAME; without one, offer the default name (asked
+# when someone can answer, taken as is otherwise) unless FED_ENDPOINTS already names one.
 n44_apply_name() {
-  local name="$1" app cur
+  local name="$1" app cur def
   [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
   if [ -z "$name" ]; then
     [ -z "$(n44_name_from_env)" ] || return 0
-    ask name "This instance's 44Net name for FED_ENDPOINTS (e.g. aprscaching.<call>.ampr.org; blank = later)" ""
+    def="$(n44_default_name)"
+    ask name "This instance's 44Net name for FED_ENDPOINTS (blank = later)" "$def"
+    name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
     [ -n "$name" ] || return 0
-    case "$name" in *.ampr.org) ;; *) warn "$name is not an ampr.org name; FED_ENDPOINTS unchanged"; return 0 ;; esac
+    if ! n44_valid_name "$name"; then
+      warn "$name is not a name under <call>.ampr.org (the base name stays free); FED_ENDPOINTS unchanged"
+      return 0
+    fi
   fi
   app="$(env_file_get "$SHAPE_ENV" APP_URL)"
   cur="$(env_file_get "$SHAPE_ENV" FED_ENDPOINTS)"
@@ -467,11 +559,25 @@ n44_doh() {
     grep -oE '"data": ?"([^"\\]|\\.)*"' | sed -E 's/^"data": ?"//; s/"$//; s/\\"//g' || true
 }
 
+# n44_identity_txt NAME: the identity record peers read for NAME: its own _aprscaching.<name>, else the
+# callsign's _aprscaching.<call>.ampr.org. A verify= record is a callsign verification, not the identity.
+n44_identity_txt() {
+  local txt zone
+  zone="$(printf '%s' "$1" | sed -E 's/^.*\.([a-z0-9]+\.ampr\.org)$/\1/')"
+  txt="$(n44_doh "_aprscaching.$1" TXT | { grep 'v=acs1' || true; } | { grep 'inst=' || true; } | head -n 1)"
+  [ -n "$txt" ] || [ "$zone" = "$1" ] || txt="$(n44_doh "_aprscaching.$zone" TXT | { grep 'v=acs1' || true; } | { grep 'inst=' || true; } | head -n 1)"
+  printf '%s' "$txt"
+}
+
 net44_check() {
-  local name a v4 txt bad=0
+  local name a v4 txt line bad=0
   name="${1:-$(n44_name_from_env)}"
   [ -n "$name" ] || die "No 44Net name: FED_ENDPOINTS has no 44net endpoint." "Pass it: deploy/aprscaching net44 check <name>"
   step "44Net name $name"
+  if ! n44_valid_name "$name"; then
+    info "FAIL name: $name is not a name under <call>.ampr.org; an instance runs at one, e.g. aprscaching.$name"
+    bad=1
+  fi
   a="$(n44_doh "$name" A | grep -E '^[0-9.]+$' | head -n 1)"
   v4="$( [ -f "$(n44_conf)" ] && n44_v4 "$(n44_conf)" || true)"
   case "$a" in
@@ -479,9 +585,12 @@ net44_check() {
     44.*) if [ -n "$v4" ] && [ "$a" != "$v4" ]; then info "FAIL A record: $a, but the tunnel is $v4"; bad=1; else info "ok   A record: $a"; fi ;;
     *) info "WARN A record: $a is outside 44/8" ;;
   esac
-  txt="$(n44_doh "_aprscaching.$name" TXT | grep 'v=acs1' | head -n 1)"
-  [ -n "$txt" ] || txt="$(n44_doh "_aprscaching.${name#*.}" TXT | grep 'v=acs1' | head -n 1)"
-  if [ -n "$txt" ]; then info "ok   _aprscaching TXT: $txt"; else info "FAIL _aprscaching TXT: none; Instance admin -> Setup -> 44Net shows the value"; bad=1; fi
+  txt="$(n44_identity_txt "$name")"
+  if [ -n "$txt" ]; then info "ok   _aprscaching TXT: $txt"; else
+    info "FAIL _aprscaching TXT: none. Add in the 44Net Portal (Instance admin -> Federation -> Publish your callsign identity shows the values):"
+    while IFS= read -r line; do info "       $line"; done < <(n44_records "$name" "$v4" "$(n44_instance)" "$(n44_web)")
+    bad=1
+  fi
   info "Reachability needs a test from outside: on another network (a phone on mobile data) run"
   info "  curl -fsS http://$name/health"
   [ "$bad" = 0 ]

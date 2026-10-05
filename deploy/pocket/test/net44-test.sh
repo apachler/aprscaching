@@ -46,7 +46,7 @@ check "44Net: none without a 44.x address" "$(yes_no net44_address)" no
 
 # ---- ampr.org host names -----------------------------------------------------------------------------
 check "host: <call>.ampr.org" "$(yes_no valid_ampr_host oe8apr.ampr.org)" yes
-check "host: a name under it" "$(yes_no valid_ampr_host pocket.oe8apr.ampr.org)" yes
+check "host: a name under it" "$(yes_no valid_ampr_host aprscaching-pocket.oe8apr.ampr.org)" yes
 check "host: another zone" "$(yes_no valid_ampr_host oe8apr.example.org)" no
 check "host: ampr.org itself" "$(yes_no valid_ampr_host ampr.org)" no
 check "host: uppercase" "$(yes_no valid_ampr_host OE8APR.ampr.org)" no

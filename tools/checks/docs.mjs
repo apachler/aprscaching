@@ -278,7 +278,9 @@ for (const f of TEXT) {
               ? "ingestmeshcomcall"
               : /^federation\.peer\./.test(id)
                 ? "federationpeerhost"
-                : id.replace(/\./g, "");
+                : /^identity\./.test(id)
+                  ? "identityline"
+                  : id.replace(/\./g, "");
   for (const f of tracked.filter((f) => /^deploy\/(lib\/doctor\.sh|lib\/shapes\/[\w-]+\.sh)$/.test(f)))
     read(f)
       .split("\n")

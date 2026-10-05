@@ -41,6 +41,7 @@ doc_see() {
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
     federation.peer.*) a=federationpeerhost ;;
+    identity.*) a=identityline ;;
     *) a="${1//./}" ;;
   esac
   printf '%s#%s' "$DOCS_URL" "$a"
@@ -538,6 +539,45 @@ doc_federation() {
   done
 }
 
+# ---- callsign identity -------------------------------------------------------------------------------------------
+# The gateway's own self-check of the records that let peers add this instance by callsign (44Net, https or both),
+# read with the operator secret and relayed line by line, each fix carrying the exact value to publish.
+DOC_IDENTITY=0
+doc_identity() {
+  local body id status msg fix
+  [ -n "$DOC_BASE" ] && [ -n "$DOC_HEALTH" ] && [ -n "$DOC_OPERATOR_SECRET" ] || return 0
+  body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 30 \
+    "$DOC_BASE/api/admin/federation/identity?check=1" 2>/dev/null || true)"
+  case "$body" in *'"lines"'*) ;; *) return 0 ;; esac
+  DOC_IDENTITY=1
+  while IFS=$'\t' read -r id status msg fix; do
+    [ -n "$id" ] || continue
+    case "$status" in
+      fail) failc "identity.$id" "$msg" "$fix" ;;
+      warn) warnc "identity.$id" "$msg" "$fix" ;;
+      *) pass "identity.$id" "$msg" ;;
+    esac
+  done < <(doc_identity_lines "$body")
+}
+
+# The identity check's lines as tab-separated lines (id, status, "label: detail", fix), parsed with node or python3.
+doc_identity_lines() {
+  if have node; then
+    B="$1" node -e '
+      const flat = (s) => String(s ?? "").replace(/[\t\n]/g, " ");
+      for (const l of JSON.parse(process.env.B).lines ?? [])
+        console.log([l.id, l.status, flat(`${l.label}: ${l.detail}`), flat(l.fix)].join("\t"));
+    ' 2>/dev/null
+  elif have python3; then
+    B="$1" python3 -c '
+import json, os
+for l in json.loads(os.environ["B"]).get("lines") or []:
+    flat = lambda s: " ".join(str(s or "").split())
+    print("\t".join([l["id"], l["status"], flat("%s: %s" % (l["label"], l["detail"])), flat(l.get("fix"))]))
+' 2>/dev/null
+  fi
+}
+
 # ---- 44Net ---------------------------------------------------------------------------------------------------
 # When the instance publishes a 44net endpoint or this host has wg44: the tunnel, its MTU and firewall, the DNS
 # records under the 44Net name, and the certificate when Caddy serves that name with TLS.
@@ -577,10 +617,14 @@ doc_net44() {
   else
     pass net44.dns "$name points at $a"
   fi
-  txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.$name" TXT | grep 'v=acs1' | head -n 1)"
-  [ -n "$txt" ] || txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.${name#*.}" TXT | grep 'v=acs1' | head -n 1)"
-  if [ -n "$txt" ]; then pass net44.txt "the _aprscaching record is published"; else
-    failc net44.txt "no _aprscaching TXT record for $name" "publish the value Instance admin -> Setup -> 44Net shows"
+  # the gateway's own check (doc_identity) compares the record with this instance's id and key; without it, the
+  # record's presence is what this host can see
+  if [ "$DOC_IDENTITY" != 1 ]; then
+    txt="$(SHAPE_ENV="$DOC_ENV" n44_identity_txt "$name")"
+    if [ -n "$txt" ]; then pass net44.txt "the _aprscaching record is published"; else
+      failc net44.txt "no _aprscaching TXT record for $name" \
+        "add it in the 44Net Portal: Instance admin -> Federation -> Publish your callsign identity shows the values"
+    fi
   fi
   domain="$(doc_get DOMAIN)"
   case ", $domain," in
@@ -783,6 +827,7 @@ run_doctor() {
   doc_ingest
   doc_network
   doc_federation
+  doc_identity
   doc_net44
   if declare -F shape_doctor_extra >/dev/null; then shape_doctor_extra; fi
   doc_resources

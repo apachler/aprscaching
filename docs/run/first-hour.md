@@ -87,7 +87,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     **Check:** the *Federation peers* item under **Instance admin → Setup** counts your enabled peers.
 
 8. **44Net**, only with a `44net` endpoint in `FED_ENDPOINTS`: run *Check what peers find in DNS* under
-   **Instance admin → Setup → 44Net** ([44Net name and identity](networks/44net-identity.md) explains each result).
+   **Instance admin → Setup → 44Net**. **Instance admin → Federation → Publish your callsign identity** shows the
+   records to add ([44Net name and identity](networks/44net-identity.md) explains each result).
 
 ## After the checklist
 

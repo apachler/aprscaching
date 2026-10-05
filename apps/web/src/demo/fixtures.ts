@@ -39,6 +39,7 @@ import type {
   Licence,
   LogResult,
   AdminSetup,
+  CallsignIdentity,
   SourceInfo,
   SupportInfo,
   VerifyMethods,
@@ -587,6 +588,68 @@ const PORTS: PortStat[] = [
   { port: "meshcom", rx: 204, tx: 0, lastBucket: NOW - 5 * MIN },
 ];
 
+/** The callsign identity records of the demo instance, on 44Net at the default name, and its self-check. */
+const IDENTITY_KEY = "uKq3Hk2c7oP4Wm1xVt9sR6dN8bF5gL0aZyJ2eQhTiCw";
+const IDENTITY: CallsignIdentity = {
+  applicable: true,
+  callsign: "OE8APR",
+  host: "aprscaching.oe8apr.ampr.org",
+  web: `https://${INSTANCE}`,
+  records: [
+    {
+      name: "aprscaching.oe8apr.ampr.org",
+      portal: "aprscaching",
+      type: "A",
+      value: "<your 44.x address>",
+      placeholder: true,
+      purpose: "The 44Net address peers connect to.",
+    },
+    {
+      name: "_aprscaching.oe8apr.ampr.org",
+      portal: "_aprscaching",
+      type: "TXT",
+      value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}; host=aprscaching.oe8apr.ampr.org; web=https://${INSTANCE}`,
+      placeholder: false,
+      purpose: `Your federation identity: peers add you by callsign, OE8APR, and connect over 44Net or over https at https://${INSTANCE}.`,
+    },
+  ],
+  alternative: {
+    name: "_aprscaching.oe8apr.ampr.org",
+    portal: "_aprscaching",
+    type: "TXT",
+    value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}`,
+    placeholder: false,
+    purpose: "The same identity without your https address: peers then connect over 44Net only.",
+  },
+  lines: [
+    {
+      id: "endpoint",
+      status: "pass",
+      label: "44net endpoint",
+      detail: "aprscaching.oe8apr.ampr.org — callsign OE8APR",
+    },
+    { id: "a", status: "pass", label: "Address record", detail: "aprscaching.oe8apr.ampr.org → 44.143.10.7" },
+    {
+      id: "txt",
+      status: "pass",
+      label: "Identity TXT",
+      detail: `_aprscaching.oe8apr.ampr.org binds ${INSTANCE} and its current key`,
+    },
+    {
+      id: "target",
+      status: "pass",
+      label: "Where peers connect",
+      detail: `44Net aprscaching.oe8apr.ampr.org and https https://${INSTANCE}`,
+    },
+    {
+      id: "dnssec",
+      status: "info",
+      label: "DNSSEC",
+      detail: "the TXT answer is not DNSSEC-validated: a peer's operator confirms your key once when adding you",
+    },
+  ],
+};
+
 const SETUP: AdminSetup = {
   update: {
     current: "1.0.0",
@@ -764,7 +827,7 @@ const ROUTES: Route[] = [
       operator: ME,
       addresses: [
         { transport: "https", address: `https://${INSTANCE}` },
-        { transport: "44net", address: "aprs.oe8apr.ampr.org" },
+        { transport: "44net", address: "aprscaching.oe8apr.ampr.org" },
       ],
       peers: ["oe.aprscaching.org"],
     }),
@@ -925,6 +988,7 @@ const ROUTES: Route[] = [
   ],
   ["GET", /^\/api\/offline\/tiles$/, () => ({ url: null })],
   ["GET", /^\/api\/admin\/setup$/, () => SETUP],
+  ["GET", /^\/api\/admin\/federation\/identity$/, () => IDENTITY],
   ["GET", /^\/api\/admin\/verifications$/, () => ({ verifications: [] })],
   [
     "GET",

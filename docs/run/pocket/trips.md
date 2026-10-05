@@ -87,10 +87,10 @@ that follows your home instance, neither in Instance admin nor in `FIRST_PARTY_S
 
 ### Directly over 44Net
 
-Two stations on 44Net can also follow each other directly, by callsign or by host: the **Add a peer by callsign
-or host (44net)** field under **Instance admin → Federation**, over plain http on their ampr.org names. A phone
-beside your home station publishes its own record under a name such as `pocket.<call>.ampr.org`
-([several instances under one callsign](../networks/44net-identity.md#3-name-and-identity)).
+Two stations on 44Net can also follow each other directly, by callsign or by host: **Add a peer by callsign**
+under **Instance admin → Federation**, over plain http on their ampr.org names. A phone beside your home station
+publishes its own record under its own name, by default `aprscaching-pocket.<call>.ampr.org`
+([Several instances under one call](../networks/44net-identity.md#several-instances-under-one-call)).
 
 The phone is reachable that way only while its tunnel is up, and with a split tunnel only from 44Net
 ([Pocket on 44Net](44net.md#pocket-on-44net)). Following your home instance, which the phone reaches itself, keeps

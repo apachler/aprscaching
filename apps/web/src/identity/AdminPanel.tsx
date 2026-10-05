@@ -13,7 +13,6 @@ import {
   removePeer,
   type FedPeerPreview,
   add44netPeer,
-  getFedDescriptor,
   ApiError,
   type Fed44netCandidate,
   type Fed44netResult,
@@ -27,7 +26,9 @@ import {
   getPorts,
   cotUrl,
   getAdminSetup,
-  run44netCheck,
+  getCallsignIdentity,
+  type CallsignIdentity,
+  type PortalRecord,
   type Net44CheckLine,
   listManualVerifications,
   addManualVerification,
@@ -1748,14 +1749,27 @@ const NET44_BADGE: Record<Net44CheckLine["status"], { kind?: string; text: strin
  * server only reads DNS and its own descriptor; nothing here or there changes peers or trust.
  */
 function Net44Check() {
-  const { data, error, loading, reload } = useLoad(() => run44netCheck(), []);
+  const { data, error, loading, reload } = useLoad(() => getCallsignIdentity(true), []);
   if (error) return <ErrorState onRetry={reload}>{error}</ErrorState>;
   if (!data) return <EmptyState>Looking up this instance's 44Net names…</EmptyState>;
-  if (!data.applicable) return <EmptyState>No 44net endpoint in FED_ENDPOINTS.</EmptyState>;
+  if (!data.applicable || !data.lines)
+    return <EmptyState>{data.reason ?? "No 44net endpoint in FED_ENDPOINTS."}</EmptyState>;
+  return (
+    <>
+      <CheckLines lines={data.lines} />
+      <Button onClick={reload} disabled={loading}>
+        {loading ? "Checking…" : "Check again"}
+      </Button>
+    </>
+  );
+}
+
+/** The self-check's lines: a badge, what was checked, what DNS answered, and the fix with the value to publish. */
+function CheckLines(props: { lines: Net44CheckLine[] }) {
   return (
     <>
       <ul className="setup-list">
-        {data.lines.map((l) => (
+        {props.lines.map((l) => (
           <li key={l.id} className="setup-item">
             <Badge kind={NET44_BADGE[l.status].kind}>{NET44_BADGE[l.status].text}</Badge>
             <span className="setup-name">{l.label}</span>
@@ -1768,10 +1782,153 @@ function Net44Check() {
         Read-only: DNS lookups through <span className="mono">DOH_URL</span> and this instance's own descriptor. It does
         not test whether peers can reach you.
       </p>
-      <Button onClick={reload} disabled={loading}>
-        {loading ? "Checking…" : "Check again"}
-      </Button>
     </>
+  );
+}
+
+/** One copyable field of a Portal record: its words in mono, a hint, and a copy button. */
+function PortalField(props: { label: string; value: string; hint: string; copy?: boolean }) {
+  const toast = useToast();
+  return (
+    <div className="portal-field">
+      <dt>
+        {props.label} <InfoTip text={props.hint} label={`What goes in ${props.label}?`} />
+      </dt>
+      <dd>
+        <span className="mono">{props.value}</span>
+        {props.copy !== false && (
+          <Button
+            variant="icon-subtle"
+            aria-label={`Copy ${props.label.toLowerCase()} ${props.value}`}
+            hint={`Copy ${props.label.toLowerCase()}`}
+            onClick={() =>
+              void copyText(props.value).then((ok) =>
+                toast(ok ? `${props.label} copied` : "Copy failed — select the text and copy it manually"),
+              )
+            }
+          >
+            <Icon name="copy" cp437="≡" />
+          </Button>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/** Records as the 44Net Portal takes them: name (left of `<call>.ampr.org`), type and value, each copyable. */
+function PortalRecords(props: { records: PortalRecord[]; zone: string }) {
+  return (
+    <ul className="portal-records">
+      {props.records.map((r) => (
+        <li key={`${r.type} ${r.name} ${r.value}`} className="portal-record">
+          <p className="comment">{r.purpose}</p>
+          <dl>
+            <PortalField
+              label="Name"
+              value={r.portal}
+              hint={`Enter only this part in the Portal's Name field: it stands for ${r.name}, under your subdomain ${props.zone}.`}
+            />
+            <PortalField
+              label="Type"
+              value={r.type}
+              copy={false}
+              hint={
+                r.type === "A"
+                  ? "An address record: the name points at this instance's 44Net address."
+                  : "A text record: it carries your instance id and federation key for peers to read."
+              }
+            />
+            <PortalField
+              label="Value"
+              value={r.value}
+              copy={!r.placeholder}
+              hint={
+                r.placeholder
+                  ? "Your 44.x address from 44Net Connect: ip addr show wg44, or deploy/aprscaching net44 status, shows it."
+                  : "Copy it exactly, without quotes; the Portal adds them."
+              }
+            />
+          </dl>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Publish your callsign identity: the records that let other instances add this one by callsign, computed by the
+ * gateway from INSTANCE, the federation key, the operator's call, the 44net endpoint and APP_URL, with the
+ * read-only check of what DNS answers today.
+ */
+function CallsignIdentityPanel() {
+  const { data, error, reload } = useLoad(() => getCallsignIdentity(), []);
+  const [checked, setChecked] = useState<CallsignIdentity | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const runCheck = async () => {
+    setChecking(true);
+    setCheckError(null);
+    try {
+      setChecked(await getCallsignIdentity(true));
+    } catch (e) {
+      setCheckError((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  };
+  if (error) return <ErrorState onRetry={reload}>Couldn&apos;t load this instance&apos;s identity records.</ErrorState>;
+  if (!data)
+    return (
+      <p className="muted" role="status">
+        Loading…
+      </p>
+    );
+  if (!data.applicable || !data.callsign) return <EmptyState>{data.reason ?? "Nothing to publish yet."}</EmptyState>;
+  const zone = `${data.callsign.toLowerCase()}.ampr.org`;
+  return (
+    <div className="fed-identity">
+      <p className="comment">
+        {data.host ? (
+          <>
+            On 44Net at <span className="mono">{data.host}</span>: add these records in the 44Net Portal under{" "}
+            <span className="mono">{zone}</span>. Peers then add this instance by{" "}
+            {data.records[1]?.portal === "_aprscaching" ? (
+              <>
+                callsign, <span className="mono">{data.callsign}</span>
+              </>
+            ) : (
+              <>
+                its host, <span className="mono">{data.host}</span>
+              </>
+            )}
+            .
+          </>
+        ) : (
+          <>
+            Without 44Net: this one record, and no address record, lets peers add this instance by callsign,{" "}
+            <span className="mono">{data.callsign}</span>, and reach it at <span className="mono">{data.web}</span>.
+          </>
+        )}
+      </p>
+      <PortalRecords records={data.records} zone={zone} />
+      {data.alternative && (
+        <Disclosure label="44Net only instead?">
+          <p className="comment">
+            The text record above names your https address too. Use this value instead to keep peers on 44Net.
+          </p>
+          <PortalRecords records={[data.alternative]} zone={zone} />
+        </Disclosure>
+      )}
+      <p className="muted fine">
+        In the Portal: DNS → My subdomains → Resource Records. Changes there publish within about an hour.{" "}
+        <ManualLink page="run/networks/44net-identity">Name and identity</ManualLink>
+      </p>
+      <Button onClick={() => void runCheck()} disabled={checking}>
+        {checking ? "Checking…" : "Check now"}
+      </Button>
+      {checkError && <div className="comment error">{checkError}</div>}
+      {checked?.lines && <CheckLines lines={checked.lines} />}
+    </div>
   );
 }
 
@@ -1921,7 +2078,7 @@ function FederationAdmin() {
           Loading…
         </p>
       ) : peers.length === 0 ? (
-        <EmptyState>No peers yet. Add one by its address, or by callsign over 44Net below.</EmptyState>
+        <EmptyState>No peers yet. Add one by its address, or by callsign below.</EmptyState>
       ) : (
         <ul className="logs">
           {peers.map((p) => (
@@ -1929,8 +2086,11 @@ function FederationAdmin() {
           ))}
         </ul>
       )}
-      <Disclosure label="Add a 44Net peer by callsign">
+      <Disclosure label="Add a peer by callsign">
         <Fed44netWizard onAdmitted={refresh} />
+      </Disclosure>
+      <Disclosure label="Publish your callsign identity">
+        <CallsignIdentityPanel />
       </Disclosure>
     </>
   );
@@ -2238,12 +2398,11 @@ function targetOf(value: string): Fed44netTarget | null {
 }
 
 /**
- * 44net verified onboarding. ARDC's portal reviews a licence before delegating `<call>.ampr.org`,
- * so adding a peer by callsign, or by a host in that zone, resolves its `_aprscaching` TXT binding:
- * DNSSEC-validated bindings admit in one click, anything else shows the resolved key for an explicit
- * operator confirm (a trust-on-first-use pin). A name with several bindings lists them to add one by
- * its host. The disclosure underneath emits this instance's OWN TXT record to paste into the ARDC
- * portal so other operators can add us the same way.
+ * Verified onboarding by callsign. ARDC's portal reviews a licence before delegating `<call>.ampr.org`,
+ * so adding a peer by callsign, or by a host in that zone, resolves its `_aprscaching` TXT binding, which
+ * sends this instance to the peer over 44Net, https or both: DNSSEC-validated bindings admit in one click,
+ * anything else shows the resolved key for an explicit operator confirm (a trust-on-first-use pin). A name
+ * with several bindings lists them to add one by its host.
  */
 function Fed44netWizard(props: { onAdmitted: () => void }) {
   const toast = useToast();
@@ -2283,7 +2442,7 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
     <div className="fed44net">
       <div className="row">
         <input
-          placeholder="Add a peer by callsign or host (44net)"
+          placeholder="Add a peer by callsign or host"
           value={value}
           onChange={(e) => {
             setValue(e.target.value.includes(".") ? e.target.value : e.target.value.toUpperCase());
@@ -2292,7 +2451,7 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
             setError(null);
           }}
           onKeyDown={(e) => e.key === "Enter" && !busy && !pending && void submit(targetOf(value), false)}
-          aria-label="Peer callsign or host on 44net"
+          aria-label="Peer callsign or host under ampr.org"
         />
         <Button
           variant="primary"
@@ -2303,18 +2462,22 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
         </Button>
       </div>
       <div className="comment">
-        Resolves the peer's ARDC-verified binding: a callsign reads <span className="mono">&lt;call&gt;.ampr.org</span>,
-        a host such as <span className="mono">pocket.&lt;call&gt;.ampr.org</span> reads that host's own record.
+        Resolves the peer's ARDC-verified binding: a callsign reads{" "}
+        <span className="mono">_aprscaching.&lt;call&gt;.ampr.org</span>, a host such as{" "}
+        <span className="mono">aprscaching-pocket.&lt;call&gt;.ampr.org</span> reads that host's own record. The peer is
+        reached over 44Net, https or both, as its record says.
       </div>
       {error && <div className="comment error">{error}</div>}
       {candidates.length > 0 && (
         <ul className="fed44net-candidates">
           {candidates.map((c) => (
-            <li key={`${c.instance} ${c.host}`} className="row">
-              <span className="mono">{c.host}</span> · <span className="mono">{c.instance}</span>
-              <Button disabled={busy} onClick={() => void submit({ host: c.host }, false)}>
-                Add by host
-              </Button>
+            <li key={`${c.instance} ${c.host} ${c.web}`} className="row">
+              <span className="mono">{c.host ?? c.web}</span> · <span className="mono">{c.instance}</span>
+              {c.host && (
+                <Button disabled={busy} onClick={() => void submit({ host: c.host! }, false)}>
+                  Add by host
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -2322,7 +2485,8 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
       {pending && resolved && (
         <div className="confirmbox">
           <div>
-            <Badge kind="warn">no DNSSEC</Badge> <span className="mono">{resolved.host}</span> ·{" "}
+            <Badge kind="warn">no DNSSEC</Badge>{" "}
+            <span className="mono">{[resolved.host, resolved.web].filter(Boolean).join(" · ")}</span> ·{" "}
             <span className="mono">{resolved.instance}</span>
           </div>
           <div className="comment mono">key {resolved.publicKey.slice(0, 16)}…</div>
@@ -2343,74 +2507,7 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
           </div>
         </div>
       )}
-      <MyTxtRecord />
     </div>
-  );
-}
-
-/** The instance's own DNS binding — what an operator pastes into the ARDC portal to be addable. */
-function MyTxtRecord() {
-  return (
-    <Disclosure label="Be reachable on 44net">
-      <TxtRecordBody />
-    </Disclosure>
-  );
-}
-
-/** The disclosure's body: mounts on open, so a failed descriptor load retries by reopening. */
-function TxtRecordBody() {
-  const toast = useToast();
-  const [call, setCall] = useState("");
-  const { data: desc, error } = useLoad(
-    () =>
-      getFedDescriptor().then((d) => {
-        if (d.aprsCall) setCall((c) => c || (d.aprsCall!.split("-")[0] ?? ""));
-        return d;
-      }),
-    [],
-  );
-  const zone = `${call.trim().toLowerCase()}.ampr.org`;
-  // a 44net endpoint on a subdomain of the call's zone publishes its own record, so one callsign can run
-  // several instances; peers add it by that host
-  const sub = desc?.addresses
-    ?.find((a) => a.transport === "44net" && a.address.toLowerCase().endsWith(`.${zone}`))
-    ?.address.toLowerCase();
-  const record =
-    desc?.signed && desc.publicKey && call.trim()
-      ? `_aprscaching.${sub ?? zone}  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}"`
-      : null;
-  if (error)
-    return <div className="comment error">Couldn't load this instance's descriptor — close and reopen to retry.</div>;
-  if (desc && !desc.signed)
-    return <div className="comment">Configure a federation signing key to publish a verifiable 44net binding.</div>;
-  return (
-    <>
-      <div className="row">
-        <input
-          placeholder="Your base callsign"
-          value={call}
-          onChange={(e) => setCall(e.target.value.toUpperCase())}
-          aria-label="Your base callsign"
-        />
-        <Button
-          disabled={!record}
-          onClick={() => {
-            if (record)
-              void copyText(record).then((ok) =>
-                toast(ok ? "TXT record copied" : "Copy failed — select the record text and copy manually"),
-              );
-          }}
-        >
-          Copy
-        </Button>
-      </div>
-      {record && <div className="comment mono">{record}</div>}
-      <div className="comment">
-        Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
-        (portal.ampr.org) — other instances can then add you by {sub ? <span className="mono">{sub}</span> : "callsign"}
-        , verified. Portal changes publish within about an hour.
-      </div>
-    </>
   );
 }
 
