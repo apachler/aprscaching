@@ -404,7 +404,7 @@ describe("suspension", () => {
 
     expect((await sysopCall(w, "POST", "/accounts/DL1BAD/suspend", { reason: "x" })).status).toBe(400);
     expect((await sysopCall(w, "POST", "/accounts/DL1BAD/suspend", { reason: "spam", until: 5 })).status).toBe(400);
-    const s = await sysopCall(w, "POST", "/accounts/DL1BAD/suspend", { reason: "repeated spam" });
+    const s = await sysopCall(w, "POST", "/accounts/DL1BAD/suspend", { reason: "repeated spam", category: "spam" });
     expect(s.status).toBe(200);
 
     // the old session is gone, writes are refused, and a new sign-in is refused with the reason
@@ -462,7 +462,10 @@ describe("suspension", () => {
     const w = await world();
     await user(w, "DL1TMP");
     const until = Math.floor(Date.now() / 1000) + 3600;
-    expect((await sysopCall(w, "POST", "/accounts/DL1TMP/suspend", { reason: "cool down", until })).status).toBe(200);
+    expect(
+      (await sysopCall(w, "POST", "/accounts/DL1TMP/suspend", { reason: "cool down", category: "offensive", until }))
+        .status,
+    ).toBe(200);
     expect((await emailSignup(w.env, "dl1tmp@example.test", "DL1TMP", nextIp())).status).toBe(403);
     await w.env.DB.prepare("UPDATE account_suspensions SET until=? WHERE 1")
       .bind(Math.floor(Date.now() / 1000) - 1)
@@ -472,7 +475,9 @@ describe("suspension", () => {
 
   it("never suspends an operator's account", async () => {
     const w = await world();
-    expect((await sysopCall(w, "POST", "/accounts/OE8APR/suspend", { reason: "self lock-out" })).status).toBe(409);
+    expect(
+      (await sysopCall(w, "POST", "/accounts/OE8APR/suspend", { reason: "self lock-out", category: "other" })).status,
+    ).toBe(409);
   });
 });
 
@@ -498,7 +503,7 @@ describe("the audit log", () => {
     const rep = await user(w, "DL1REP");
     const { id } = await hide(w, owner);
     await call(w.env, "POST", "/api/reports", { kind: "cache", id, category: "spam" }, as(rep));
-    await sysopCall(w, "POST", "/accounts/DL1OWN/suspend", { reason: "spam" });
+    await sysopCall(w, "POST", "/accounts/DL1OWN/suspend", { reason: "spam", category: "spam" });
     expect((await call(w.env, "POST", "/api/account/DL1REP/delete", {}, as(rep))).status).toBe(200);
     const report = await w.env.DB.prepare("SELECT reporter_account, reporter_call FROM moderation_reports").first();
     expect(report).toEqual({ reporter_account: null, reporter_call: null });

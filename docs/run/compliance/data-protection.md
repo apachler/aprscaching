@@ -50,7 +50,10 @@ Reports other people filed about the person stay out, because they would name th
   others posted stay), Mailbox mail, near-cache radio messages, MeshCom group messages, and the radio messages
   queued for or addressed to the person.
 - **Kept, without the reporter:** the reports the person filed stay with the sysop, with the reporter's account
-  and call removed. The person's suspension, if any, is deleted with the account.
+  and call removed.
+- **Kept while it holds:** a suspension in force leaves one record per base callsign the account held: the
+  callsign, the category and the end date, with no account and no reason text
+  ([Moderation records](#moderation-records)).
 - **Kept as a record:** the audit log rows about the person's account and content
   ([Moderation records](#moderation-records)).
 - **Kept:** the Shack raw-packet ring and NET/ROM MHeard rows, which record what the instance heard on the air;
@@ -79,6 +82,7 @@ signed account-move record points attribution at the new instance across the net
 | NET/ROM MHeard rows | 7 days | `RETENTION` (`mheardDays`) |
 | Delete tombstones | permanently | — |
 | Moderation reports and the audit log | until the sysop deletes them | — |
+| A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
 
 `RETENTION` is JSON naming only what you change, for example `{"packetsHours":6,"sensorDays":90}`
 ([Configuration](../../reference/configuration.md)). What the instance keeps beyond accounts is public ham
@@ -102,6 +106,10 @@ They never federate.
   call (none for a signed-out visitor). Only the sysop reads it; the reported person never learns who filed it.
 - **The audit log** holds who acted, when, the action, the target and the reason. Its rows stay after the
   person concerned erases their account.
+- **A suspension** holds the account, the reason, the category and the end. When the account is erased while
+  it is suspended, only the callsign, the category and the end date stay, so the person cannot come back under
+  the same callsign before the suspension ends. That record is deleted at the end date, or when the sysop lifts
+  it; an open-ended suspension keeps it until it is lifted.
 - **A report email** goes to `OPERATOR_EMAIL` through the configured email provider, with the item, the
   category, the reporter's words and the reporter's call.
 - **A removal or suspension notice** goes to the person concerned as an in-app alert, by push where configured,

@@ -125,6 +125,13 @@ export async function pruneOperational(env: Env, now: number, bulletinLifetimeS:
     "SELECT rowid FROM watch_alerts WHERE seen = 0 AND ts < ?",
     now - UNSEEN_ALERT_KEEP_S,
   );
+  // The record a suspension leaves on an erased account's calls lasts exactly as long as the suspension.
+  await pruneBounded(
+    env,
+    "callsign_suspensions",
+    "SELECT rowid FROM callsign_suspensions WHERE until IS NOT NULL AND until <= ?",
+    now,
+  );
   // A living cache sits at its station's last heard position, and a registered station or a MeshCom node is
   // drawn from its station row, so those rows stay however long they are silent.
   await pruneBounded(

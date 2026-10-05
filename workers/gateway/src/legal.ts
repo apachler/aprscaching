@@ -120,8 +120,10 @@ ${contact}
 <li><strong>Game data</strong> — caches you hide, finds you log, ratings, and media you upload.</li>
 <li><strong>Moderation</strong> — reports players file (the item, a category, the reporter's words and, when signed
   in, the reporter's call) and the operator's record of each moderation action and suspension, kept to answer
-  abuse (legitimate interest). Your export includes the actions about your account; who reported you is not
-  shown to you.</li>
+  abuse (legitimate interest). If you erase your account while it is suspended, your callsigns keep a record of
+  the suspension (the callsign, its category and its end, nothing else) until it ends or the operator lifts it, so
+  they cannot be registered again before then. Your export includes the actions about your account; who reported
+  you is not shown to you.</li>
 <li><strong>Technical minimum</strong> — one session cookie (sign-in only, no tracking), and
   short-lived per-IP counters for rate limiting. No analytics, no advertising, no third-party
   trackers.</li>
