@@ -1,7 +1,7 @@
 # Launch list & deferred work
 
-What actually **shipped** is in [`CHANGELOG.md`](CHANGELOG.md) and the product manual under
-[`docs/`](docs/). This file holds two lists: the short **launch list** of what remains before the
+What ships is described in the product manual under [`docs/`](docs/); [`CHANGELOG.md`](CHANGELOG.md) records
+each release from 1.0.0 on. This file holds two lists: the short **launch list** of what remains before the
 1.0.0 tag, and below it the honest list of what is _intentionally_ left for after it — and **why**
 each piece waits. It's a live checklist: boxes get ticked as items land. Nothing here is a known defect — defects
 are fixed, not listed.
@@ -47,9 +47,9 @@ start order: the first ones wait on replies from outside, so they start first, a
       reply is slow.
 - [ ] **APRS tocall registration** _(S — needs a reply)_ — `APZACG`, the default tocall in the gateway, the
       ingest and the browser bridge, lies in the experimental `APZ` range, which aprs-deviceid reserves for
-      development. Request `APACG?` (free in `tocalls.yaml`) through a GitHub issue at
-      https://github.com/aprsorg/aprs-deviceid/issues, then switch the default tocall in the code to the
-      allocated one.
+      development. `APRCG?` (`APRCG0`–`APRCGZ`) and a Mic-E identifier are requested in
+      [aprsorg/aprs-deviceid#376](https://github.com/aprsorg/aprs-deviceid/issues/376); once allocated, switch
+      the default tocall in the code to it.
 - [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, an abuse address and
       `security@aprscaching.net` exist and are read. Player reports land under Instance admin → Reports and are
       mailed to `OPERATOR_EMAIL` when mail is configured; the owner still names an abuse address on the imprint.
@@ -66,8 +66,8 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [ ] **Sign-in mail deliverable** _(S)_ — the `EMAIL_FROM` domain has SPF, DKIM (the provider's selector) and a
       DMARC record (`p=quarantine` once the reports are clean); a sign-in link reaches Gmail, Outlook and GMX
       inboxes, not spam. The three records are documented in Sign-in links or Your first hour.
-- [ ] **Protect `main`** _(S)_ — branch protection on `main` (no direct pushes, the PR checks required), so only
-      the release PR and `dev` → `main` merges reach it.
+- [x] **Protect `main`** — the `main` ruleset blocks deletion and force pushes and requires a pull request (no
+      approvals; squash and merge allowed), so only the release PR and `dev` → `main` merges reach it.
 - [ ] **aprscaching.net live** _(M)_ — DNS points at the public instance; `INSTANCE`, `APP_URL` and `RP_ID` are
       `aprscaching.net` and the gateway answers on the same origin; `aprscaching.com` (and `www.`) answer `301`
       to `.net` at the edge, before any sign-in; TLS and HSTS checked; a passkey registered and used on `.net`;
@@ -77,13 +77,13 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [x] **Docs current with the code** — the manual, this file and the changelog match what `dev` ships: trusted
       receiving stations, media limits and offline tiles in the API reference, every migration in the data
       model, the player pages.
-- [x] **CHANGELOG overview current** — the deployment shapes counted right, and MeshCom, the Mailbox, the near
-      prompt and near radio message, the compass Find view and lent receivers listed.
-- [ ] **Release pipeline proven** _(S — last)_ — in the repository settings, enable _Settings → Actions → General
-      → Allow GitHub Actions to create and approve pull requests_ (release-please opens the release PR with
-      `GITHUB_TOKEN`; the setting is off). Run `release-verify.yml` once by `workflow_dispatch` (it has never
-      run). Merge `dev` → `main`; check that the release PR proposes 1.0.0 and puts its generated entry above the
-      hand-written overview in `CHANGELOG.md`; merge it. Confirm the release carries the OCI stack zip, the
+- [x] **CHANGELOG starts at 1.0.0** — `CHANGELOG.md` holds no pre-release history: release-please reads only
+      the commits after `bootstrap-sha` in `release-please-config.json`, and a commit after it carries the
+      `Release-As: 1.0.0` footer.
+- [ ] **Release pipeline proven** _(S — last)_ — _Allow GitHub Actions to create and approve pull requests_ is
+      on, so release-please can open the release PR with `GITHUB_TOKEN`. Merge `dev` → `main`; check that the
+      release PR proposes 1.0.0 and that its `CHANGELOG.md` entry lists only the commits after `bootstrap-sha`;
+      merge it. Confirm the release carries the OCI stack zip, the
       desktop binaries, `SHA256SUMS` and the attestations, and that the README's "Deploy to Oracle Cloud" button
       resolves. Then merge `main` back into `dev`, so the version bump lands there.
 - [x] **Privacy-first APRS-map positioning** — the four invariants that differentiate us from incumbent

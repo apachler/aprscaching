@@ -2,8 +2,10 @@ name: release-please
 
 # Automates versioning + CHANGELOG + release tags from Conventional Commits. Releases happen only on
 # `main`: each push opens/updates a release PR; merging that PR creates the vX.Y.Z tag and the GitHub
-# release. The initial commit carries a `Release-As: 1.0.0` footer, so the first merge of `dev` into
-# `main` yields the 1.0.0 release PR.
+# release. Before the first release, release-please reads only the commits after `bootstrap-sha`
+# (release-please-config.json), so the 1.0.0 entry in CHANGELOG.md lists no pre-release history; a
+# commit after it carries a `Release-As: 1.0.0` footer, and the first merge of `dev` into `main` yields
+# the 1.0.0 release PR. CHANGELOG.md is empty until that PR writes the first entry.
 #
 # The release artifacts (the OCI stack zip and the desktop binaries) are built here, as called
 # workflows, once release-please reports a new release, and nowhere else: a pushed tag starts no
