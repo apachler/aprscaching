@@ -84,7 +84,7 @@ export interface RegistryEntry {
   author: string;
   version: string;
   pubkey: string; // the author key this tool's manifest MUST match to be "verified"
-  entry: string; // absolute URL to the tool.json
+  entry: string; // the tool.json's URL; a relative one resolves against the registry's own URL
   description?: string;
 }
 /** An authority-signed registry: `sig` (base64) covers the canonical `entries`; `authority` is its pubkey. */
@@ -121,25 +121,28 @@ export async function signRegistry(
 
 /**
  * The registry entry a fetched manifest stands for: the entry with its `name` whose `entry` URL is the URL the
- * manifest was fetched from. A copy of a listed manifest served from another URL matches no entry — its
- * relative script `entry` resolves against that other URL, so it runs another site's script and is trusted
- * as any other signed manifest is (trust-on-first-use), never as the listed tool.
+ * manifest was fetched from. An entry's relative `entry` (`/tools/hello/tool.json`) resolves against
+ * `registryUrl`, the address the registry was fetched from; without it only absolute entries match. A copy of a
+ * listed manifest served from another URL matches no entry — its relative script `entry` resolves against that
+ * other URL, so it runs another site's script and is trusted as any other signed manifest is
+ * (trust-on-first-use), never as the listed tool.
  */
 export function registryEntryFor(
   entries: readonly RegistryEntry[],
   name: string,
   manifestUrl: string,
+  registryUrl?: string,
 ): RegistryEntry | undefined {
-  const href = (u: string): string | null => {
+  const href = (u: string, base?: string): string | null => {
     try {
-      return new URL(u).href;
+      return new URL(u, base).href;
     } catch {
       return null;
     }
   };
   const fetched = href(manifestUrl);
   if (!fetched) return undefined;
-  return entries.find((e) => e.name === name && href(e.entry) === fetched);
+  return entries.find((e) => e.name === name && href(e.entry, registryUrl) === fetched);
 }
 
 /** Overall trust of a fetched manifest given signature status + registry match + a TOFU pin. */

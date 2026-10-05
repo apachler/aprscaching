@@ -186,6 +186,9 @@ importers:
 
   packages/tools:
     dependencies:
+      '@aprscaching/aprs':
+        specifier: workspace:*
+        version: link:../aprs
       '@aprscaching/packet':
         specifier: workspace:*
         version: link:../packet

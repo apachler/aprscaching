@@ -6,17 +6,18 @@ app does and where to read more.
 
 A laptop and a radio are a complete station, even with no internet: the apps talk to a USB or Bluetooth
 [TNC](../glossary.md#tnc), or to the soundcard, straight from the browser. Open the Shack from **Shack** in
-the left rail (on a phone: **More → Shack**). Each app opens its own screen, and the pin
-button next to an app puts it on the left rail.
+the left rail (on a phone: **More → Shack**). Each app opens its own screen. The pin button next to an app, or next
+to a tool inside **Tools**, puts it on the left rail; on a phone, pinned apps and tools are in **More**.
 
 ## Your journey
 
 1. [Your radio in the browser](my-radio.md): connect a TNC, a Mobilinkd or a soundcard.
 2. [The live map](live-map.md): stations, spots and MeshCom nodes as they are heard.
-3. [Packet terminal & BBS](packet-and-bbs.md): decode frames, connect to nodes, read and send mail.
-4. [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
-5. [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
-6. [On-air etiquette and rules](on-air.md): before you transmit.
+3. [Packet terminal & BBS](packet-and-bbs.md): connect to nodes, read and send mail.
+4. [Tools and plugins](tools.md): decode packets, CW and PSK31, run built-in tools and import plugins.
+5. [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
+6. [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
+7. [On-air etiquette and rules](on-air.md): before you transmit.
 
 ## The apps
 
@@ -26,8 +27,7 @@ button next to an app puts it on the left rail.
 |---|---|---|---|
 | **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over a [KISS](../glossary.md#kiss) TNC on USB or Bluetooth. | everyone | [Connect to a BBS or node](packet-and-bbs.md#connect-to-a-bbs-or-node) |
 | **BBS** | Store-and-forward mail, bulletins and threads on the instance's [BBS](../glossary.md#bbs). Bulletins are open to everyone; your mail needs you signed in as your callsign. | everyone | [Use the instance's BBS](packet-and-bbs.md#use-the-instances-bbs) |
-| **Packet decoder** | Paste a raw [APRS](../glossary.md#aprs) or [AX.25](../glossary.md#ax25) line and see every field decoded. | everyone | [Decode a packet](packet-and-bbs.md#decode-a-packet) |
-| **Tools** | Plugins and signal decoders, including CW and PSK31 decoding from your microphone. | everyone | [Tools and plugins](#tools-and-plugins) |
+| **Tools** | Built-in tools and plugins: the packet decoder for raw [APRS](../glossary.md#aprs) and [AX.25](../glossary.md#ax25) lines, CW and PSK31 from your microphone, macros, panels and more. Each tool can be pinned to the rail. | everyone | [Tools and plugins](tools.md) |
 | **Rig control** | Tune your radio over USB ([CAT](../glossary.md#cat)). | everyone | [CAT rig control](rig-weather.md#cat-rig-control) |
 | **[NET/ROM](../glossary.md#netrom) node** | The instance's node: routing table, [digipeater](../glossary.md#digipeater), [sysop](../glossary.md#sysop) console. | sysop | [Packet: BBS & NET/ROM node](../run/radios/packet-node.md) |
 | **Remote box** | Send commands to the instance's [ingest box](../glossary.md#ingest-box) without opening a port on it. | sysop | [Remote control of your box](../run/radios/remote-box.md) |
@@ -45,8 +45,8 @@ Three things live outside the launcher:
 
 ## CW and PSK31 by ear
 
-1. Open **Shack → Tools**.
-2. Select **Listen (mic)** and allow the microphone.
+1. Open **Shack → Tools** and switch on **PSK31 + CW decoders**.
+2. Under **Decode**, pick **CW (Morse)** or **PSK31**, select **Listen (mic)** and allow the microphone.
 3. Hold your phone or laptop to the radio's speaker, or connect the radio's audio output to the line-in.
 
 CW (Morse) and PSK31 appear as text while you listen. The decoders follow slightly off-tune and noisy
@@ -54,23 +54,10 @@ signals, and everything runs in the browser. **Stop** ends it.
 
 ## Tools and plugins
 
-**Tools** also runs plugins: extra commands, decoders, colour schemes, panels and map layers. Import one from
-the **Registry** list or by its `tool.json` URL under **Import a tool**, then approve the permissions it asks
-for with **Approve + run**. Before you approve, the app shows who signed it:
-
-| Shown as | Meaning | Import |
-|---|---|---|
-| **Signed · registry-listed author key** | Signed by a key the project's registry lists, and fetched from the address the registry lists. The signature covers the manifest, not the script it points to. | allowed |
-| **Signed · matches the key you trusted before** | You accepted this author key before. | allowed |
-| **Signed · unknown author key (trust-on-first-use)** | Signed by a key nobody vouched for yet. | allowed, with a warning |
-| **Unsigned · you're trusting the URL only** | No signature. | allowed, with a warning |
-| **Author key CHANGED since you last trusted it — refused** | The author key differs from the one you accepted. | blocked |
-| **Signature INVALID — refused** | The signature does not match the manifest. | blocked |
-
-A plugin runs in a sealed-off sandbox, apart from your session and the keys this browser holds for you. It
-reaches the network, your location, or a scheduled beacon only when you grant that permission, and the network
-only at the addresses its import prompt lists. A plugin that transmits passes the same callsign check as you, and no plugin
-changes how finds are verified.
+**Tools** holds the packet decoder and twenty-one other built-in tools, and runs plugins you import from the
+**Registry** list or by a `tool.json` address. Each plugin runs in a sealed sandbox with only the permissions you
+approve, and the import prompt says who signed it. [Tools and plugins](tools.md) lists the built-in tools, explains
+every permission and trust label, and shows how to pin, switch off and remove a tool.
 
 ## Next
 

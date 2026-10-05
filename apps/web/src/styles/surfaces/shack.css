@@ -1,46 +1,5 @@
-/* Shack: app launcher, packet decoder, field station, rig control. */
+/* Shack: app launcher, field station, rig control. */
 @layer surfaces {
-  /* shack packet decoder: two field columns once the panel/sheet is wide (tablet) —
-   the slim docked drawer (<30rem) keeps the single-column default unchanged. */
-  @container panel (min-width: 30rem) {
-    .decoded dl.fields {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      column-gap: var(--space-md);
-    }
-  }
-  /* shack packet decoder */
-  .decoded .kind {
-    display: inline-block;
-    margin: var(--space-xs) 0;
-    font-weight: 700;
-    color: var(--heading);
-    text-transform: capitalize;
-    background: var(--chip-bg);
-    border-radius: var(--radius-card);
-    padding: 1px 9px;
-    font-size: var(--text-label);
-  }
-  .decoded dl.fields {
-    margin: 0;
-  }
-  .decoded dl.fields > div {
-    display: flex;
-    gap: var(--space-sm);
-    padding: 3px 0;
-    border-top: 1px solid var(--line);
-    font-size: var(--text-data);
-  }
-  .decoded dt {
-    color: var(--muted);
-    min-width: 92px;
-  }
-  .decoded dd {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    word-break: break-word;
-  }
   .wx {
     margin-top: var(--space-xs);
     font-size: var(--text-data);

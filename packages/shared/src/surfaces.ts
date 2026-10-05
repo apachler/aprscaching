@@ -111,7 +111,7 @@ export const SURFACES: Surface[] = [
     access: "public",
     indexable: true,
     summary:
-      "App launcher for the operator tools — packet terminal, BBS, decoder, NET/ROM node, plugins, rig & remote control.",
+      "App launcher for the operator tools — packet terminal, BBS, NET/ROM node, tools and plugins (the packet decoder among them), rig & remote control.",
   },
   {
     key: "bbs",

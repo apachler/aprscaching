@@ -2,7 +2,7 @@
 
 This page is for developers who write a plugin (a *tool*) for the Shack's **Tools** app. It sets out the
 manifest, the permissions a tool asks for, where it appears and how it is signed; using plugins is under
-[Tools and plugins](../shack/index.md#tools-and-plugins). To build one, follow
+[Tools and plugins](../shack/tools.md). To build one, follow
 [Write your first tool](first-tool.md); every field, message and limit is in the [Tool reference](tool-reference.md).
 
 ## The manifest
@@ -84,7 +84,7 @@ a tool's behaviour.
 ## Signing
 
 The app checks a signed manifest against an authority-signed registry whose key it pins: a tool whose key
-matches its registry entry shows as verified. Sign your own tools with the
+matches its registry entry shows as registry-listed ([The tool registry](tool-registry.md)). Sign your own tools with the
 [`toolkey` CLI](../reference/cli.md#toolkey); [Signing and trust](tool-reference.md#signing-and-trust) says what
 the signature covers and what it does not.
 

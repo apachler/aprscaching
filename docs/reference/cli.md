@@ -137,7 +137,7 @@ machine-readable output. Related:
 ## Tool signing — `tools/toolkey/` {#toolkey}
 
 Sign tool plugins and the tool registry so the app can verify them (see
-[the tools platform](../shack/index.md#tools-and-plugins)):
+[Tools and plugins](../shack/tools.md); [The tool registry](../contribute/tool-registry.md) covers keys and registries):
 
 ```bash
 node tools/toolkey/genkey.mjs                                   # a tool-author keypair

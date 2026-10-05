@@ -401,11 +401,10 @@ Next release:
 Imported-tool API gaps an outside author meets (each is described as it stands in
 [`docs/contribute/tool-reference.md`](docs/contribute/tool-reference.md)):
 
-- [ ] **Imported tools vanish when the Tools app closes** _(P2 · S)_ — the list of imported tools is
-      `ToolsPanel` state, so leaving the app drops their commands and decoders from the console while
-      their frames, panels and bus subscriptions keep running; a re-import then collides with the
-      registered name. Keep imported tools in the shared host, give them an on/off switch and a remove
-      action, and remember them across reloads.
+- [ ] **Imported tools across reloads** _(P2 · S)_ — imported tools live beside the shared host with a
+      switch and a **Remove** action, but only for the page's session: a reload drops them and hides
+      their rail pins until they are imported again. Remember the approved manifests (URL, grants, trust
+      label) and offer to restart them on load, re-checking the signature each time.
 - [ ] **Imported tools reach events, map layers and transmit** _(P2 · M)_ — the sandbox bridges commands,
       colour rules, panels, decoders and the bus, but not `on()` events, `setMapLayer()`, `scheduleBeacon()`
       or `requestTx()`, so `event`, `map`, `beacon` and `tx` grant an imported tool nothing; `geo` has no API
@@ -413,6 +412,22 @@ Imported-tool API gaps an outside author meets (each is described as it stands i
       node, and ignore the console's "as a remote peer" switch.
 - [ ] **Async command and decoder handlers** _(P3 · S)_ — a handler that returns a `Promise` prints
       `[object Promise]`; await it in the worker bootstrap so a tool that fetches can answer a command.
+- [ ] **A tool's transmit reaches the radio** _(P2 · M)_ — `requestTx()` and `scheduleBeacon()` pass the
+      verified-callsign gate and then only show a notice (`apps/web/src/tools/host.ts`); only the
+      scheduled query keys the radio, through the packet terminal's session. Route both to the browser
+      radio link under the tab's transmit consent, rate-limited and listed in the transmit log.
+
+Tool registry gaps a sysop meets ([The tool registry](docs/contribute/tool-registry.md)):
+
+- [ ] **The Docker image takes the web build settings** _(P2 · S)_ — `deploy/Dockerfile` builds the web
+      app with no `VITE_*` build arguments and `.env` is outside the build context, so a Docker instance
+      cannot set `VITE_TOOL_REGISTRY`, `VITE_TOOL_REGISTRY_AUTHORITY` or any other web setting. Pass them
+      as build arguments from compose (`.env`), and treat an empty value as unset in
+      `apps/web/src/tools/registry-config.ts`.
+- [ ] **Author-key revocation** _(P2 · S)_ — removing an entry stops the registry vouching, but a
+      browser that accepted a leaked author key keeps showing "matches the key you trusted before" for
+      anything it signs. Add a signed `revoked` list of author keys to the registry that the import
+      check refuses and that clears a matching trust-on-first-use pin.
 
 Marketplace track (a separate repo on its own timeline; only the first two items touch a shipped
 build, and neither gates the release):

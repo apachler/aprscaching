@@ -163,6 +163,15 @@ export class ToolHost {
     });
   }
 
+  /** Remove a tool: it is switched off first (its contributions and bus registrations go), then forgotten, so a
+   *  tool of the same name can register again. False when no tool has that name. */
+  unregister(name: string): boolean {
+    if (!this.tools.has(name)) return false;
+    this.setEnabled(name, false);
+    this.tools.delete(name);
+    return true;
+  }
+
   /** True if a registered tool targets the given surface (its manifest `surfaces` includes it). */
   private onSurface(r: Registered, surface?: Surface): boolean {
     return surface === undefined || r.tool.manifest.surfaces.includes(surface);

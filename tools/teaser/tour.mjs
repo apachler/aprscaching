@@ -196,7 +196,7 @@ async function gotoDemo(page, variant, waitSel) {
   await page.waitForTimeout(800);
 }
 // Launch a shack app from the drawer's launcher (every app opens its own surface) and wait for
-// it. Used for the apps that work against the seeded gateway (tools, node, decoder) — the hardware ones
+// it. Used for the apps that work against the seeded gateway (tools, node) — the hardware ones
 // (terminal, rig, remote) + BBS are shown via the ?demo= sims instead.
 async function launchShackApp(page, label, waitSel) {
   await openShack(page);
@@ -541,9 +541,10 @@ for (const v of VIEWS) {
     await shot(page, v.id, "tools", "Tools — sandboxed plugins");
   });
   await step("decoder", async () => {
-    await launchShackApp(page, "Packet decoder", ".panel textarea");
-    await clickAny(page, [".panel button:has-text('use a sample')"]);
-    await clickAny(page, [".panel button:has-text('Decode')"]);
+    // the packet decoder is a built-in tool: Tools opens on it the way its rail pin does
+    await openView(page, "tools&tool=packet-decoder", ".tools-panel textarea");
+    await clickAny(page, [".tool-sub button:has-text('Use a sample')"]);
+    await clickAny(page, [".tool-sub button:has-text('Decode')"]);
     await page.waitForTimeout(500);
     await shot(page, v.id, "decoder", "Packet decoder — raw AX.25 / APRS");
   });

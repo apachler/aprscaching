@@ -36,12 +36,12 @@ function AppPanel(props: { app: ShackApp; onClose: () => void; children: React.R
  * app's Panel meanwhile. Apps with their own chrome (terminal, BBS) render bare; the rest are wrapped
  * in a Panel titled from the registry.
  */
-export function ShackAppSurface(props: { app: ShackAppId; onClose: () => void }) {
+export function ShackAppSurface(props: { app: ShackAppId; tool?: string; onClose: () => void }) {
   const { callsign, verified, map } = usePlatform();
   const app = appById(props.app);
   if (!app) return null;
   const App = component(app);
-  const body = <App callsign={callsign} verified={verified} map={map} onClose={props.onClose} />;
+  const body = <App callsign={callsign} verified={verified} map={map} tool={props.tool} onClose={props.onClose} />;
   const skeleton = (
     <div className="skeleton" role="status" aria-label={`Loading ${app.label}…`}>
       <span />

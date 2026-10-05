@@ -51,7 +51,7 @@ describe("ToolHost — capability enforcement + dispatch", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(21);
+    expect(host.list()).toHaveLength(22);
     expect(host.list().every((t) => !t.enabled)).toBe(true); // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -161,6 +161,19 @@ describe("Tool surfaces — a tool's type routes its contributions", () => {
     host.dispatch("on_connect", { surface: "bbs", peerCall: "OE3ABC", myCall: "OE8APR-1", reply });
     expect(reply).toHaveBeenCalledWith(expect.stringContaining("OE3ABC"));
     expect(reply).toHaveBeenCalledWith(expect.stringContaining("OE8APR-1"));
+  });
+
+  it("unregister switches a tool off, drops its contributions and frees its name", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "ctext-macros")!);
+    host.setEnabled("ctext-macros", true);
+    expect(host.runCommand("cq")).not.toBeNull();
+    expect(host.unregister("ctext-macros")).toBe(true);
+    expect(host.runCommand("cq")).toBeNull();
+    expect(host.list()).toHaveLength(0);
+    expect(host.unregister("ctext-macros")).toBe(false);
+    host.register(builtinTools().find((t) => t.manifest.name === "ctext-macros")!); // the name is free again
+    expect(host.list()).toHaveLength(1);
   });
 
   it("(B) on_tick dispatches to tools hooking it", () => {
