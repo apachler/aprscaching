@@ -608,18 +608,18 @@ const IDENTITY: CallsignIdentity = {
       name: "_aprscaching.oe8apr.ampr.org",
       portal: "_aprscaching",
       type: "TXT",
-      value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}`,
+      value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}; host=aprscaching.oe8apr.ampr.org; web=https://${INSTANCE}`,
       placeholder: false,
-      purpose: "Your federation identity: peers add you by callsign, OE8APR.",
+      purpose: `Your federation identity: peers add you by callsign, OE8APR, and connect over 44Net or over https at https://${INSTANCE}.`,
     },
   ],
   alternative: {
     name: "_aprscaching.oe8apr.ampr.org",
     portal: "_aprscaching",
     type: "TXT",
-    value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}; host=aprscaching.oe8apr.ampr.org; web=https://${INSTANCE}`,
+    value: `v=acs1; inst=${INSTANCE}; key=${IDENTITY_KEY}`,
     placeholder: false,
-    purpose: "The same identity naming your https address too, for peers that cannot reach 44Net.",
+    purpose: "The same identity without your https address: peers then connect over 44Net only.",
   },
   lines: [
     {
@@ -635,7 +635,12 @@ const IDENTITY: CallsignIdentity = {
       label: "Identity TXT",
       detail: `_aprscaching.oe8apr.ampr.org binds ${INSTANCE} and its current key`,
     },
-    { id: "target", status: "pass", label: "Where peers connect", detail: "44Net aprscaching.oe8apr.ampr.org" },
+    {
+      id: "target",
+      status: "pass",
+      label: "Where peers connect",
+      detail: `44Net aprscaching.oe8apr.ampr.org and https https://${INSTANCE}`,
+    },
     {
       id: "dnssec",
       status: "info",

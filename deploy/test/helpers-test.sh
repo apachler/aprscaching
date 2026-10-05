@@ -569,6 +569,16 @@ check "  … nor a name outside ampr.org" fails n44f n44_valid_name aprscaching.
 check "the Portal records of the default name: A aprscaching, TXT _aprscaching" eq \
   "$(n44f n44_records aprscaching.oe8apr.ampr.org 44.1.2.3 aprs.example.net)" \
   "$(printf '%s\n' 'aprscaching  A    44.1.2.3' '_aprscaching  TXT  "v=acs1; inst=aprs.example.net; key=<federation key>"')"
+check "  … naming both places for an instance with a public https origin" eq \
+  "$(n44f n44_records aprscaching.oe8apr.ampr.org 44.1.2.3 aprs.example.net https://aprs.example.net | tail -n 1)" \
+  '_aprscaching  TXT  "v=acs1; inst=aprs.example.net; key=<federation key>; host=aprscaching.oe8apr.ampr.org; web=https://aprs.example.net"'
+printf 'APP_URL=https://APRS.example.net:443/app\n' >"$TMP/w1.env"
+printf 'APP_URL=https://192.168.1.10\n' >"$TMP/w2.env"
+printf 'APP_URL=http://aprs.example.net\n' >"$TMP/w3.env"
+check "the public https origin comes from APP_URL" eq "$(SHAPE_ENV="$TMP/w1.env" n44f n44_web)" "https://aprs.example.net"
+check "  … and the instance id from its host" eq "$(SHAPE_ENV="$TMP/w1.env" n44f n44_instance)" "aprs.example.net"
+check "  … a private address or plain http is none" eq \
+  "$(SHAPE_ENV="$TMP/w2.env" n44f n44_web)$(SHAPE_ENV="$TMP/w3.env" n44f n44_web)" ""
 check "  … and of another name, under its own label" eq \
   "$(n44f n44_records aprscaching-pocket.oe8apr.ampr.org | cut -d' ' -f1)" \
   "$(printf '%s\n' aprscaching-pocket _aprscaching.aprscaching-pocket)"

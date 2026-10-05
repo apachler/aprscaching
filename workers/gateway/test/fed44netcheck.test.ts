@@ -60,19 +60,25 @@ const line = (lines: CheckLine[], id: CheckLine["id"]) => lines.find((l) => l.id
 const problems = (lines: CheckLine[]) => lines.filter((l) => l.status === "fail" || l.status === "warn");
 
 describe("identityPlan — the records to publish", () => {
-  it("on 44Net at the default name: A aprscaching and TXT _aprscaching, plus the both-endpoints value", () => {
+  it("on 44Net with a public https origin: the main TXT names both, the 44Net-only value is the alternative", () => {
     const p = identityPlan(ctx());
     expect(p.callsign).toBe("OE8APR");
     expect(p.host).toBe(HOST);
     expect(p.records.map((r) => [r.portal, r.type, r.value, r.name])).toEqual([
       ["aprscaching", "A", "<your 44.x address>", HOST],
-      ["_aprscaching", "TXT", GOOD_TXT, TXT_NAME],
+      ["_aprscaching", "TXT", `${GOOD_TXT}; host=${HOST}; web=${WEB}`, TXT_NAME],
     ]);
     expect(p.records[0]!.placeholder).toBe(true);
-    expect(p.alternative).toMatchObject({
-      portal: "_aprscaching",
-      value: `${GOOD_TXT}; host=${HOST}; web=${WEB}`,
-    });
+    expect(p.alternative).toMatchObject({ portal: "_aprscaching", value: GOOD_TXT });
+  });
+
+  it("on 44Net only: the plain TXT, and no alternative", () => {
+    const p = identityPlan(ctx(HOST, {}, null));
+    expect(p.records.map((r) => [r.portal, r.type, r.value])).toEqual([
+      ["aprscaching", "A", "<your 44.x address>"],
+      ["_aprscaching", "TXT", GOOD_TXT],
+    ]);
+    expect(p.alternative).toBeNull();
   });
 
   it("a further instance under the call publishes under its own label", () => {
@@ -123,7 +129,7 @@ describe("check44net — the TXT binding", () => {
       [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.pub; key=${OTHER_KEY}`]),
       [`A ${HOST}`]: ok(["44.143.1.2"]),
     });
-    const txt = line((await check44net(ctx(), dns))!.lines, "txt")!;
+    const txt = line((await check44net(ctx(HOST, {}, null), dns))!.lines, "txt")!;
     expect(txt.status).toBe("fail");
     expect(txt.fix).toBe(
       `Publish TXT ${TXT_NAME} "${GOOD_TXT}" in the 44Net Portal (changes there publish within about an hour); the Portal name is _aprscaching.`,
@@ -385,11 +391,20 @@ describe("GET /api/admin/federation/identity", () => {
       body.records.map((r: { portal: string; type: string; value: string }) => [r.portal, r.type, r.value]),
     ).toEqual([
       ["aprscaching", "A", "<your 44.x address>"],
-      ["_aprscaching", "TXT", `v=acs1; inst=oe.pub; key=${publicX}`],
+      ["_aprscaching", "TXT", `v=acs1; inst=oe.pub; key=${publicX}; host=${HOST}; web=https://oe.pub`],
     ]);
-    expect(body.alternative.value).toBe(`v=acs1; inst=oe.pub; key=${publicX}; host=${HOST}; web=https://oe.pub`);
+    expect(body.alternative.value).toBe(`v=acs1; inst=oe.pub; key=${publicX}`);
     expect(body.lines).toBeUndefined();
     expect(fetched).toEqual([]);
+  });
+
+  it("a LAN or loopback APP_URL is no https origin for peers: 44Net only", async () => {
+    const { db } = spyDb();
+    for (const app of ["https://localhost:8443", "https://192.168.1.10", "https://aprs.lan"]) {
+      const body = await (await handleIdentity(get(), checkEnv(db, EP44, { APP_URL: app }))).json();
+      expect(body.web).toBeNull();
+      expect(body.records[1].value).toBe(`v=acs1; inst=oe.pub; key=${publicX}`);
+    }
   });
 
   it("without 44Net returns the web= record", async () => {

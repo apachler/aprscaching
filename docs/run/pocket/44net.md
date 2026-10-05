@@ -108,7 +108,7 @@ record.
     | Name in the Portal | Type | Value |
     |---|---|---|
     | `aprscaching-pocket` | A | the phone's 44.x address |
-    | `_aprscaching.aprscaching-pocket` | TXT | `v=acs1; inst=<the phone's INSTANCE>; key=<the phone's federation key>` |
+    | `_aprscaching.aprscaching-pocket` | TXT | `v=acs1; inst=<the phone's INSTANCE>; key=<the phone's federation key>`, plus `; host=…; web=https://…` when the phone has a public https `APP_URL` (a Cloudflare Tunnel) |
 
     **Instance admin → Federation → Publish your callsign identity** on the phone shows both, ready to copy. The
     Portal's name field accepts the dotted name `_aprscaching.aprscaching-pocket` as it stands.

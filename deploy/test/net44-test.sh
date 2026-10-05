@@ -90,7 +90,7 @@ called() { grep -qF -- "$1" "$MOCK_LOG"; }
 : >"$MOCK_LOG"
 check "a full-tunnel setup succeeds" env MOCK_PMTU=1492 bash -c "$(declare -f n44); H='$H' TMP='$TMP' n44 setup --yes --non-interactive '$TMP/full.conf' --name aprscaching.oe8apr.ampr.org"
 check "  … owner-only" eq "$(stat -c %a "$CONF")" 600
-check "  … and prints the Portal records for the name" bash -c "grep -q 'aprscaching  A    44.27.132.9' '$TMP/out' && grep -q '_aprscaching  TXT  \"v=acs1; inst=' '$TMP/out'"
+check "  … and prints the Portal records for the name, the TXT naming both places" bash -c "grep -q 'aprscaching  A    44.27.132.9' '$TMP/out' && grep -q '_aprscaching  TXT  \"v=acs1; inst=aprs.example.net; key=<federation key>; host=aprscaching.oe8apr.ampr.org; web=https://aprs.example.net\"' '$TMP/out'"
 check "  … keeps the issued configuration beside it, owner-only" eq "$(stat -c %a "$APRS_NET44_DIR/wg44.issued.conf")" 600
 check "  … MTU is the path MTU (PPPoE 1492) less 80" in_conf "MTU = 1412"
 check "  … with Table = off" in_conf "Table = off"

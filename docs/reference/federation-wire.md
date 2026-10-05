@@ -339,7 +339,8 @@ voice.
 `GET /api/admin/federation/identity` (sysop-only) returns the records this instance publishes, each with
 its name as the 44Net Portal takes it (`portal`), `type`, `value` and `purpose`, computed from `INSTANCE`, the
 federation key, the callsign (the `44net` endpoint's zone, else the first of `ADMIN_CALLSIGNS`), the `44net`
-endpoint and `APP_URL`, plus an `alternative` TXT value naming both places. With `?check=1` it also runs the
+endpoint and `APP_URL`, the main TXT naming both places when the instance has a `44net` endpoint and a public https
+`APP_URL`, with the 44Net-only value as `alternative`. With `?check=1` it also runs the
 same lookups against those records (the endpoint under the call, the A record of the host peers contact, the
 TXT's `inst` and `key`, whether the callsign's record sends peers to this host with another binding, and
 whether the record sends peers where this instance is) and reports each as pass, warn, fail or info with a fix

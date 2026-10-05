@@ -241,15 +241,42 @@ n44_valid_name() {
   printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]{3,9}\.ampr\.org$'
 }
 
-# n44_records NAME [V4] [INSTANCE]: the records to add in the 44Net Portal under <call>.ampr.org, one per line as
-# "<name as the Portal takes it>  <type>  <value>".
+# n44_records NAME [V4] [INSTANCE] [WEB]: the records to add in the 44Net Portal under <call>.ampr.org, one per line
+# as "<name as the Portal takes it>  <type>  <value>". With WEB, the instance's public https origin, the TXT names
+# both places peers connect to, as Instance admin's main record does.
 n44_records() {
-  local name="$1" v4="${2:-}" inst="${3:-}" call label txt
+  local name="$1" v4="${2:-}" inst="${3:-}" web="${4:-}" call label txt both=""
   call="$(printf '%s' "$name" | sed -E 's/^.*\.([a-z0-9]+)\.ampr\.org$/\1/')"
   label="${name%."$call".ampr.org}"
   if [ "$label" = aprscaching ]; then txt=_aprscaching; else txt="_aprscaching.$label"; fi
+  [ -z "$web" ] || both="; host=$name; web=$web"
   printf '%s  A    %s\n' "$label" "${v4:-<your 44.x address>}"
-  printf '%s  TXT  "v=acs1; inst=%s; key=<federation key>"\n' "$txt" "${inst:-<INSTANCE>}"
+  printf '%s  TXT  "v=acs1; inst=%s; key=<federation key>%s"\n' "$txt" "${inst:-<INSTANCE>}" "$both"
+}
+
+# The instance's public https origin from APP_URL in the shape's settings: https://<host>[:port], lowercased; empty
+# for http, loopback, a LAN suffix or a private IPv4 address, where peers on the internet cannot connect.
+n44_web() {
+  local app origin host
+  [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  app="$(env_file_get "$SHAPE_ENV" APP_URL | tr '[:upper:]' '[:lower:]')"
+  origin="$(printf '%s' "$app" | sed -nE 's#^(https://[^/?\#]+).*#\1#p')"
+  host="$(printf '%s' "${origin#https://}" | sed 's/:.*//')"
+  [ -n "$host" ] || return 0
+  case "$host" in localhost | *.localhost | *.local | *.lan | *.home.arpa | *.internal) return 0 ;; esac
+  if printf '%s' "$host" | grep -Eq '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)'; then
+    return 0
+  fi
+  printf '%s' "${origin%:443}"
+}
+
+# The instance id: INSTANCE in the shape's settings, else APP_URL's host, which the gateway derives it from.
+n44_instance() {
+  local inst
+  [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  inst="$(env_file_get "$SHAPE_ENV" INSTANCE)"
+  [ -n "$inst" ] || inst="$(env_file_get "$SHAPE_ENV" APP_URL | sed -nE 's#^[a-z]+://([^/:?\#]+).*#\1#p' | tr '[:upper:]' '[:lower:]')"
+  printf '%s' "$inst"
 }
 
 n44_name_from_env() {
@@ -427,13 +454,14 @@ net44_setup() {
 
 # n44_next V4: the records to publish for the 44Net name in FED_ENDPOINTS, and the checks after.
 n44_next() {
-  local v4="$1" name inst line
+  local v4="$1" name inst web line
   name="$(n44_name_from_env)"
-  inst="$( [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] && env_file_get "$SHAPE_ENV" INSTANCE || true)"
+  inst="$(n44_instance)"
+  web="$(n44_web)"
   step "Next"
   if [ -n "$name" ]; then
     info "1. In the 44Net Portal (DNS -> My subdomains -> Resource Records), add under $(printf '%s' "$name" | sed -E 's/^.*\.([a-z0-9]+\.ampr\.org)$/\1/'):"
-    while IFS= read -r line; do info "     $line"; done < <(n44_records "$name" "$v4" "$inst")
+    while IFS= read -r line; do info "     $line"; done < <(n44_records "$name" "$v4" "$inst" "$web")
     info "   Instance admin -> Federation -> Publish your callsign identity shows the exact values to copy."
   else
     info "1. In the 44Net Portal, add an A record and the _aprscaching TXT record for your 44Net name:"
@@ -560,7 +588,7 @@ net44_check() {
   txt="$(n44_identity_txt "$name")"
   if [ -n "$txt" ]; then info "ok   _aprscaching TXT: $txt"; else
     info "FAIL _aprscaching TXT: none. Add in the 44Net Portal (Instance admin -> Federation -> Publish your callsign identity shows the values):"
-    while IFS= read -r line; do info "       $line"; done < <(n44_records "$name" "$v4")
+    while IFS= read -r line; do info "       $line"; done < <(n44_records "$name" "$v4" "$(n44_instance)" "$(n44_web)")
     bad=1
   fi
   info "Reachability needs a test from outside: on another network (a phone on mobile data) run"

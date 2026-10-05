@@ -1912,9 +1912,9 @@ function CallsignIdentityPanel() {
       </p>
       <PortalRecords records={data.records} zone={zone} />
       {data.alternative && (
-        <Disclosure label="Reachable over the internet too?">
+        <Disclosure label="44Net only instead?">
           <p className="comment">
-            Use this value for the text record instead, and peers that cannot reach 44Net connect over https.
+            The text record above names your https address too. Use this value instead to keep peers on 44Net.
           </p>
           <PortalRecords records={[data.alternative]} zone={zone} />
         </Disclosure>

@@ -38,15 +38,27 @@ The normal recipe is two records:
 No NS record, CNAME or delegation is needed, and an AAAA record is not used. Don't put `_aprscaching` behind a
 CNAME: the lookup must stay inside the ARDC zone.
 
-**Worked example.** OE8APR runs an instance whose `APP_URL` is `https://aprs.example.net`:
+The admin page shows the TXT value that matches the instance's own configuration as its main record:
+
+| The instance has | Main TXT value | Under the disclosure |
+|---|---|---|
+| a `44net` endpoint and a public https `APP_URL` | `v=acs1; inst=…; key=…; host=<44Net name>; web=https://<APP_URL host>` | the 44Net-only value (**44Net only instead?**) |
+| a `44net` endpoint only (a LAN, loopback or plain-http `APP_URL`) | `v=acs1; inst=…; key=…` | — |
+| a public https `APP_URL` only | `v=acs1; inst=…; key=…; web=https://<APP_URL host>`, and no A record | — |
+
+`net44 setup` and `net44 check` print the same main value.
+
+**Worked example.** OE8APR runs an instance on 44Net whose `APP_URL` is `https://aprs.example.net`:
 
 ```
 aprscaching.oe8apr.ampr.org   A    44.27.132.9
-_aprscaching.oe8apr.ampr.org  TXT  "v=acs1; inst=aprs.example.net; key=<federation key>"
+_aprscaching.oe8apr.ampr.org  TXT  "v=acs1; inst=aprs.example.net; key=<federation key>; host=aprscaching.oe8apr.ampr.org; web=https://aprs.example.net"
 ```
 
 `inst=` is `aprs.example.net`, the instance's `INSTANCE`. A peer that adds `OE8APR` reads
-`_aprscaching.oe8apr.ampr.org` and connects to `http://aprscaching.oe8apr.ampr.org`.
+`_aprscaching.oe8apr.ampr.org`; a peer on 44Net connects to `http://aprscaching.oe8apr.ampr.org`, any other to
+`https://aprs.example.net`. Without the https address the record is the plain `v=acs1; inst=…; key=…`, and peers
+connect over 44Net only.
 
 **The fields of the TXT record.**
 
@@ -98,9 +110,9 @@ its service call (from `ADMIN_CALLSIGNS` or `SERVICE_CALL`) or its operator (`FE
 the same rules as every federation fetch: https only, and no private addresses unless the peer sets
 `FED_ALLOW_PRIVATE`. A descriptor that does not answer refuses the addition; the peer tries again later.
 
-An instance on both networks may name both places: `v=acs1; inst=…; key=…; host=aprscaching.<call>.ampr.org;
-web=https://…`. The admin page offers that value under **Reachable over the internet too?**. A peer that is on
-44Net itself connects over 44Net first; any other peer connects over https.
+An instance on both networks names both places: `v=acs1; inst=…; key=…; host=aprscaching.<call>.ampr.org;
+web=https://…`, the main record the admin page shows for it. A peer that is on 44Net itself connects over 44Net
+first; any other peer connects over https.
 
 `web=` cannot usefully send peers to a third party. The origin it names must serve a descriptor that lists the
 key of the record and names your call. A record with your own key at someone else's origin fails because their

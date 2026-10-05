@@ -11,8 +11,8 @@
  * - on 44Net at the default name `aprscaching.<call>.ampr.org`: A `aprscaching` → the 44.x address, and TXT
  *   `_aprscaching` = `v=acs1; inst=…; key=…`;
  * - on 44Net at another name `<label>.<call>.ampr.org`: A `<label>` and TXT `_aprscaching.<label>`;
- * - on 44Net with an https `APP_URL` as well: the same TXT may carry `; host=<name>; web=<origin>`, so peers
- *   adding by callsign learn both endpoints (offered as the alternative value);
+ * - on 44Net with a public https `APP_URL` as well: the TXT carries `; host=<name>; web=<origin>`, so peers
+ *   adding by callsign learn both endpoints; the 44Net-only value is offered as the alternative;
  * - without 44Net: TXT `_aprscaching` = `v=acs1; inst=…; key=…; web=<APP_URL origin>`, and no A record.
  *
  * The check's lines, each pass / warn / fail / info, with a one-sentence fix on the non-passing ones:
@@ -67,7 +67,7 @@ interface IdentityPlan {
   /** The https origin peers contact, or null without one. */
   web: string | null;
   records: PortalRecord[];
-  /** The identity TXT with both endpoints, for an instance on 44Net with an https origin too. */
+  /** The identity TXT naming 44Net only, for an instance whose main record names both endpoints. */
   alternative: PortalRecord | null;
   /** Set when there is nothing to publish yet, saying what is missing. */
   reason?: string;
@@ -89,7 +89,7 @@ export interface IdentityContext {
   desc: OwnDescriptor;
   /** The operator's base call, when no 44net endpoint names one (the first of `ADMIN_CALLSIGNS`). */
   operatorCall?: string | null;
-  /** The https origin of `APP_URL`, or null. */
+  /** The public https origin of `APP_URL`, or null. */
   web: string | null;
 }
 
@@ -147,17 +147,15 @@ export function identityPlan(ctx: IdentityContext): IdentityPlan {
           purpose: "The 44Net address peers connect to.",
         },
         txt(
-          base,
-          host === instanceHost
-            ? `Your federation identity: peers add you by callsign, ${callsign}.`
-            : `This instance's federation identity: peers add it by its host, ${host}.`,
+          ctx.web ? `${base}; host=${host}; web=${ctx.web}` : base,
+          (host === instanceHost
+            ? `Your federation identity: peers add you by callsign, ${callsign}`
+            : `This instance's federation identity: peers add it by its host, ${host}`) +
+            (ctx.web ? `, and connect over 44Net or over https at ${ctx.web}.` : "."),
         ),
       ],
       alternative: ctx.web
-        ? txt(
-            `${base}; host=${host}; web=${ctx.web}`,
-            "The same identity naming your https address too, for peers that cannot reach 44Net.",
-          )
+        ? txt(base, "The same identity without your https address: peers then connect over 44Net only.")
         : null,
     };
   }
@@ -452,6 +450,14 @@ export async function check44net(
   return { ...plan, lines };
 }
 
+/** A hostname peers on the internet can reach: not loopback, a LAN suffix or a private IPv4 address. */
+function publicHost(h: string): boolean {
+  if (h === "localhost" || /\.(localhost|local|lan|home\.arpa|internal)$/.test(h)) return false;
+  return !/^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(
+    h,
+  );
+}
+
 /** This instance's identity context: its own descriptor (built in-process), the operator's call and APP_URL. */
 async function contextOf(req: Request, env: Env): Promise<IdentityContext> {
   applyDerivedDefaults(env);
@@ -459,6 +465,7 @@ async function contextOf(req: Request, env: Env): Promise<IdentityContext> {
   let web: string | null;
   try {
     web = env.APP_URL ? webOrigin(new URL(env.APP_URL).origin) : null;
+    if (web && !publicHost(new URL(web).hostname)) web = null; // a LAN or loopback origin is no place for peers
   } catch {
     web = null; // an APP_URL that does not parse names no origin
   }
