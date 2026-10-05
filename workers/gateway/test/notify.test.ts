@@ -41,6 +41,12 @@ describe("notify — email digest + helpers", () => {
         { callsign: "AC-3", kind: "adoption_approved", ts: 4 },
       ]),
     ).toBe("aprscaching: 2 finds of your caches, 1 watched station heard, 1 cache adoption update");
+    expect(
+      digestSubject([
+        { callsign: "DL1FND", kind: "cache_dnf", ts: 1 },
+        { callsign: "DL1FND", kind: "cache_maintenance", ts: 2 },
+      ]),
+    ).toBe("aprscaching: 2 reports on your caches");
     expect(digestSubject([{ callsign: "X", kind: "cache_found", detail: "y".repeat(300), ts: 1 }]).length).toBeLessThan(
       120,
     );
