@@ -11,7 +11,8 @@ import {
 import { SURFACES, FEEDS } from "@aprscaching/shared";
 import type { Env } from "../src/env.js";
 
-const env = { APP_URL: "https://app.example" } as unknown as Env;
+// a gateway on its own host beside the app lists that host as an address of the instance
+const env = { APP_URL: "https://app.example", EXTRA_ORIGINS: "https://api.example" } as unknown as Env;
 const req = new Request("https://api.example/");
 
 describe("sitemap (manifest-driven)", () => {
@@ -80,7 +81,7 @@ describe("sitemap (manifest-driven)", () => {
     expect(body).toContain("Allow: /");
   });
 
-  it("gatewayBase: the app host keeps APP_URL; another host uses the request host and the proxy's scheme", () => {
+  it("gatewayBase: the address the request came on when listed, with the proxy's scheme; APP_URL otherwise", () => {
     // same-host deployment (Caddy / Docker): the gateway answers on the app's host
     expect(gatewayBase(new Request("http://app.example/robots.txt"), env)).toBe("https://app.example");
     // split deployment (Pages + API host)
@@ -93,5 +94,16 @@ describe("sitemap (manifest-driven)", () => {
     // a header raises the scheme of a proxied request, never lowers an https one
     const lowered = new Request("https://api.example/robots.txt", { headers: { "x-forwarded-proto": "http" } });
     expect(gatewayBase(lowered, env)).toBe("https://api.example");
+    // a host nobody configured is answered as APP_URL: a forged Host never reaches a link
+    expect(gatewayBase(new Request("https://evil.test/robots.txt"), env)).toBe("https://app.example");
+    // a plain-http HAMNET address stays plain http; the same name over https is another address
+    const hamnet = { ...env, EXTRA_ORIGINS: "http://aprscaching.oe8xyz.hamnet.example" } as Env;
+    expect(gatewayBase(new Request("http://aprscaching.oe8xyz.hamnet.example/x"), hamnet)).toBe(
+      "http://aprscaching.oe8xyz.hamnet.example",
+    );
+    const upgraded = new Request("http://aprscaching.oe8xyz.hamnet.example/x", {
+      headers: { "x-forwarded-proto": "https" },
+    });
+    expect(gatewayBase(upgraded, hamnet)).toBe("https://app.example");
   });
 });

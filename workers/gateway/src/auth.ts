@@ -14,6 +14,7 @@ import { FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { normalEmail, sendEmailConfirmation } from "./email.js";
 import { mailTransport } from "./mail.js";
 import { adminCalls } from "./admin.js";
+import { mainOrigin, passkeyOrigins, requestOrigin } from "./origins.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -26,12 +27,14 @@ import { adminCalls } from "./admin.js";
 const SESSION_COOKIE = "acs";
 const CHALLENGE_TTL = 300;
 
-/** The expected WebAuthn origin/rpId MUST come from configuration. Falling back to the
+/** The expected WebAuthn origins/rpId MUST come from configuration. Falling back to the
  *  request's Origin header validates the binding against an attacker-supplied value — any site could
- *  satisfy the ceremony. Unconfigured ⇒ null, and the passkey endpoints refuse (fail closed);
- *  the email magic-link path is unaffected. */
+ *  satisfy the ceremony. The origins are APP_URL and every https EXTRA_ORIGINS entry, all under the one
+ *  rpId (origins.ts). Unconfigured ⇒ null, and the passkey endpoints refuse (fail closed); the email
+ *  magic-link path is unaffected. */
 function authOrigins(env: Env): string[] | null {
-  return env.APP_URL ? [env.APP_URL] : null;
+  const origins = mainOrigin(env) ? passkeyOrigins(env) : [];
+  return origins.length ? origins : null;
 }
 function rpId(env: Env): string | null {
   if (env.RP_ID) return env.RP_ID;
@@ -41,24 +44,15 @@ function rpId(env: Env): string | null {
     return null;
   }
 }
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-function appUrl(env: Env): URL | null {
-  try {
-    return env.APP_URL ? new URL(env.APP_URL) : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
- * The sign-in paths this instance offers. Passkeys need a secure-context origin (https, or http on the
- * loopback host) named by APP_URL; email needs a mail transport (mail.ts); the operator-issued link needs
+ * The sign-in paths this instance offers. Passkeys need a secure-context address (https, or http on the
+ * loopback host): APP_URL or one in EXTRA_ORIGINS; email needs a mail transport (mail.ts); the operator-issued link needs
  * OPERATOR_SECRET. An instance with neither passkeys nor email is off-grid: the operator's link is then
  * the only way in, and it serves every account (see handleOperatorLink).
  */
 export function signInPaths(env: Env): { passkeys: boolean; email: boolean; operatorLink: boolean } {
-  const u = appUrl(env);
-  const passkeys = !!u && (u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname)));
+  const passkeys = authOrigins(env) !== null;
   return {
     passkeys,
     email: mailTransport(env) !== null,
@@ -66,10 +60,11 @@ export function signInPaths(env: Env): { passkeys: boolean; email: boolean; oper
   };
 }
 
-/** A browser drops a `Secure` cookie set over plain http, so an instance whose declared origin is http
- *  (an off-grid LAN box) issues its session cookie without the flag; every other instance keeps it. */
-function cookieFlags(env: Env): string {
-  return appUrl(env)?.protocol === "http:"
+/** A browser drops a `Secure` cookie set over plain http, so a session issued on an http address of the
+ *  instance (an off-grid LAN box, a HAMNET name) goes without the flag; one issued over https keeps it. The
+ *  cookie is host-only (no Domain), so each address holds its own session. */
+function cookieFlags(req: Request, env: Env): string {
+  return requestOrigin(req, env).startsWith("http:")
     ? "HttpOnly; SameSite=Lax; Path=/"
     : "HttpOnly; Secure; SameSite=Lax; Path=/";
 }
@@ -471,7 +466,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
         licence: await licenceFor(env, sessionCall),
         ...(confirmation ? { emailPending: true, ...confirmation } : {}),
       },
-      { headers: { "set-cookie": await issueSessionCookie(env, accountId, sessionCall) } },
+      { headers: { "set-cookie": await issueSessionCookie(req, env, accountId, sessionCall) } },
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
@@ -542,7 +537,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
     await env.DB.prepare("UPDATE credentials SET counter=? WHERE id=?").bind(r.newCounter, credential.id).run();
     return json(
       { ok: true, callsign: acct.callsign },
-      { headers: { "set-cookie": await issueSessionCookie(env, acct.accountId, acct.callsign) } },
+      { headers: { "set-cookie": await issueSessionCookie(req, env, acct.accountId, acct.callsign) } },
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
@@ -714,7 +709,7 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   }
   return json(
     { ok: true, callsign: next, verified },
-    { headers: { "set-cookie": await issueSessionCookie(env, me.accountId, next) } },
+    { headers: { "set-cookie": await issueSessionCookie(req, env, me.accountId, next) } },
   );
 }
 
@@ -760,7 +755,7 @@ export function suspendedResponse(e: AccountSuspended): Response {
 
 /** Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`.
  *  Every sign-in path mints its session here, so a suspended account is refused in one place. */
-export async function issueSessionCookie(env: Env, accountId: string, callsign: string): Promise<string> {
+export async function issueSessionCookie(req: Request, env: Env, accountId: string, callsign: string): Promise<string> {
   const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
     .bind(accountId)
     .first<{ session_gen: number }>();
@@ -769,7 +764,7 @@ export async function issueSessionCookie(env: Env, accountId: string, callsign: 
   if (suspended) throw new AccountSuspended(suspended);
   const token = await signSession(env, { accountId, gen: Number(row.session_gen), callsign: callsign.toUpperCase() });
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
-  return `${SESSION_COOKIE}=${token}; ${cookieFlags(env)}; Max-Age=${ttlDays * 86_400}`;
+  return `${SESSION_COOKIE}=${token}; ${cookieFlags(req, env)}; Max-Age=${ttlDays * 86_400}`;
 }
 
 /** GET /auth/session — "who am I": the signed-in callsign + verification + confirmed email (and an address
@@ -788,11 +783,11 @@ export async function handleSession(req: Request, env: Env): Promise<Response> {
   });
 }
 
-const clearCookie = (env: Env) => `${SESSION_COOKIE}=; ${cookieFlags(env)}; Max-Age=0`;
+const clearCookie = (req: Request, env: Env) => `${SESSION_COOKIE}=; ${cookieFlags(req, env)}; Max-Age=0`;
 
 /** POST /auth/logout — clear the session cookie. */
-export function handleLogout(env: Env): Response {
-  return json({ ok: true }, { headers: { "set-cookie": clearCookie(env) } });
+export function handleLogout(req: Request, env: Env): Response {
+  return json({ ok: true }, { headers: { "set-cookie": clearCookie(req, env) } });
 }
 
 /** POST /auth/logout-all — end every session of the signed-in account, on every device. */
@@ -800,7 +795,7 @@ export async function handleLogoutAll(req: Request, env: Env): Promise<Response>
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   await endAllSessions(env, me.accountId);
-  return json({ ok: true }, { headers: { "set-cookie": clearCookie(env) } });
+  return json({ ok: true }, { headers: { "set-cookie": clearCookie(req, env) } });
 }
 
 /** Invalidate every outstanding session of an account by moving it to the next generation. */

@@ -18,12 +18,12 @@ const offGrid = (extra: Record<string, unknown> = {}) =>
   instanceEnv("lan.test", null, { APP_URL: LAN, ADMIN_CALLSIGNS: "OE8APR", ...extra });
 
 /** Mint a link the way the operator's script does on the box itself: over loopback. */
-async function mint(env: Env, callsign: string, headers: Record<string, string> = OP, url = LOOPBACK) {
+async function mint(env: Env, callsign: string, headers: Record<string, string> = OP, url = LOOPBACK, base?: string) {
   const res = await serve(env)(
     new Request(`${url}/auth/operator-link`, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ callsign }),
+      body: JSON.stringify({ callsign, ...(base ? { base } : {}) }),
     }),
   );
   return { status: res.status, data: (await res.json().catch(() => null)) as any };
@@ -141,10 +141,20 @@ describe("operator sign-in link — instance with another sign-in path", () => {
     expect(ok.headers.get("set-cookie")).toMatch(/; Secure;/);
   });
 
-  it("names the gateway's public origin when the script reaches it there (app on another host)", async () => {
-    const env = offGrid({ APP_URL: "https://app.test" });
+  it("names the address of the instance the script reaches it on, and APP_URL for any other host", async () => {
+    const env = offGrid({ APP_URL: "https://app.test", EXTRA_ORIGINS: "https://api.test" });
     const r = await mint(env, "OE8APR", OP, "https://api.test");
     expect(r.data.link.startsWith("https://api.test/auth/email/verify?token=")).toBe(true);
+    const forged = await mint(env, "OE8APR", OP, "https://evil.test");
+    expect(forged.data.link.startsWith("https://app.test/auth/email/verify?token=")).toBe(true);
+  });
+
+  it("names an EXTRA_ORIGINS address when the script asks for it, and refuses one not listed", async () => {
+    const env = offGrid({ APP_URL: "https://app.test", EXTRA_ORIGINS: "http://aprscaching.oe8xyz.hamnet.example" });
+    const r = await mint(env, "OE8APR", OP, LOOPBACK, "http://aprscaching.oe8xyz.hamnet.example");
+    expect(r.status).toBe(200);
+    expect(r.data.link.startsWith("http://aprscaching.oe8xyz.hamnet.example/auth/email/verify?token=")).toBe(true);
+    expect((await mint(env, "OE8APR", OP, LOOPBACK, "http://other.hamnet.example")).status).toBe(400);
   });
 
   it("serves only ADMIN_CALLSIGNS calls when email is configured", async () => {

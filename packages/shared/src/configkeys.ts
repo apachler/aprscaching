@@ -104,6 +104,7 @@ export const CONFIG_KEYS = {
   BASEMAP_STYLE: { type: "string", units: ["gateway"], default: "https://tiles.openfreemap.org/styles/liberty" },
   BASEMAP_HOSTS: { type: "list", units: ["gateway"] },
   APP_URL: { type: "url", units: ["gateway", "pocket"], publicRequired: true },
+  EXTRA_ORIGINS: { type: "origins", units: ["gateway"] },
   CORS_ORIGINS: { type: "list", units: ["gateway"] },
   RP_ID: { type: "string", units: ["gateway"] },
   EMAIL_FROM: { type: "string", units: ["gateway"] },

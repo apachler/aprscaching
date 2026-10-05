@@ -16,6 +16,7 @@ import { json, xml } from "./app.js";
 import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching/shared";
 import { escapeHtml } from "./util/html.js";
 import { trimEndChars } from "./util/text.js";
+import { requestOrigin } from "./origins.js";
 
 const CANONICAL = "https://aprscaching.net";
 
@@ -25,20 +26,13 @@ export function appBase(env: Env): string {
 }
 
 /**
- * The public origin of this gateway, no trailing slash. Resources only the gateway serves — feeds, the
- * sitemap, robots.txt, the read API — link here, because the app may live on another host (a Pages site in
- * front of an API host) that would answer those paths with the app itself. On the app's own host APP_URL
- * carries the right scheme; elsewhere the request host is used, with the scheme a TLS-terminating proxy
- * reports (the Node/Bun servers only ever see plain http). A request that arrived over https stays https:
- * a header can raise the scheme, never lower it.
+ * The public origin of this gateway for this request, no trailing slash: the address it came on when that is
+ * APP_URL or an EXTRA_ORIGINS entry, otherwise APP_URL (origins.ts). Resources only the gateway serves — feeds,
+ * the sitemap, robots.txt, the read API, the sign-in confirm page — link here. A gateway on another host than
+ * its web app (`VITE_API_BASE`) lists its own origin in EXTRA_ORIGINS, or these links name APP_URL.
  */
 export function gatewayBase(req: Request, env: Env): string {
-  const u = new URL(req.url);
-  const app = appBase(env);
-  if (new URL(app).host === u.host) return app;
-  const fwd = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const scheme = u.protocol === "https:" || fwd === "https" ? "https" : "http";
-  return `${scheme}://${u.host}`;
+  return requestOrigin(req, env);
 }
 
 /** XML text/attribute escape — the shared markup escape, which XML accepts as-is. */

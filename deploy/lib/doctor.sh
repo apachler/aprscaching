@@ -458,6 +458,86 @@ doc_network() {
   fi
 }
 
+# ---- further addresses (EXTRA_ORIGINS) ----------------------------------------------------------------------
+# origin_scope ADDRESS: where an IPv4 address lies — hamnet (44.128.0.0/10, not on the internet), private (a LAN,
+# loopback or CGNAT range), or public (the internet, 44Net Connect included).
+origin_scope() {
+  local a b
+  IFS=. read -r a b _ _ <<<"$1"
+  case "$a" in '' | *[!0-9]*) echo public; return 0 ;; esac
+  if [ "$a" = 44 ] && [ "${b:-0}" -ge 128 ] && [ "${b:-0}" -le 191 ]; then echo hamnet
+  elif [ "$a" = 10 ] || [ "$a" = 127 ] || { [ "$a" = 192 ] && [ "$b" = 168 ]; } ||
+    { [ "$a" = 172 ] && [ "$b" -ge 16 ] && [ "$b" -le 31 ]; } || { [ "$a" = 169 ] && [ "$b" = 254 ]; } ||
+    { [ "$a" = 100 ] && [ "$b" -ge 64 ] && [ "$b" -le 127 ]; }; then echo private
+  else echo public; fi
+}
+
+# Each further address of the instance: listed once, resolves, answers from here as this gateway, a valid
+# certificate on an https one, and no plain http on the internet.
+doc_origins() {
+  local list o seen="," host hostport port ip ips health end end_s now days scope
+  list="$(doc_get EXTRA_ORIGINS)"
+  [ -n "${list//[[:space:],]/}" ] || return 0
+  for o in ${list//,/ }; do
+    o="$(printf '%s' "${o%/}" | tr '[:upper:]' '[:lower:]')"
+    case "$o" in https://* | http://*) ;; *) continue ;; esac # config.value.EXTRA_ORIGINS names a malformed one
+    if [ "$o" = "$(printf '%s' "${DOC_PUBLIC%/}" | tr '[:upper:]' '[:lower:]')" ] || [[ "$seen" == *",$o,"* ]]; then
+      warnc origins.duplicate "$o is listed twice (EXTRA_ORIGINS, or EXTRA_ORIGINS and APP_URL)" "list each address once"
+      continue
+    fi
+    seen="$seen$o,"
+    hostport="${o#*://}"
+    host="${hostport%%:*}"
+    if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      ips="$host"
+    else
+      ips="$(getent hosts "$host" 2>/dev/null | awk '{print $1}' | grep -E '^[0-9.]+$' | sort -u | tr '\n' ' ' || true)"
+      if [ -z "$ips" ]; then
+        failc origins.dns "$host ($o) does not resolve from here" "create its DNS record (the 44Net Portal, or HAMNET's DNS)"
+        continue
+      fi
+      pass origins.dns "$host resolves (${ips% })"
+    fi
+    if [ -n "$DOC_HEALTH" ] && health="$(curl -sS --max-time 10 "$o/health" 2>/dev/null)"; then
+      if [ "$(json_field "$health" instance)" = "$(json_field "$DOC_HEALTH" instance)" ]; then
+        pass origins.route "$o reaches this gateway"
+      else
+        failc origins.route "$o answers, but not as this gateway" "point its DNS record at this host, and restart Caddy after changing EXTRA_ORIGINS"
+      fi
+    elif [ -n "$DOC_HEALTH" ]; then
+      failc origins.route "$o/health does not answer from here" "restart Caddy after changing EXTRA_ORIGINS (docker compose up -d), and check the firewall"
+    fi
+    case "$o" in
+      https://*)
+        port="${hostport#"$host"}"
+        port="${port#:}"
+        end="$(echo | timeout 10 openssl s_client -connect "$host:${port:-443}" -servername "$host" 2>/dev/null |
+          openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+        if [ -z "$end" ]; then
+          failc origins.tls "no TLS certificate from $o" "Caddy fetches one once the name resolves and ports 80 and 443 reach it"
+        else
+          end_s="$(date -d "$end" +%s 2>/dev/null || echo 0)"
+          now="$(date +%s)"
+          days=$(((end_s - now) / 86400))
+          if [ "$end_s" -le "$now" ]; then failc origins.tls "the certificate of $o expired on $end" "check Caddy's renewal (docker compose logs caddy)"
+          elif [ "$days" -lt 14 ]; then warnc origins.tls "the certificate of $o expires in $days days" "check Caddy's renewal (docker compose logs caddy)"
+          else pass origins.tls "the certificate of $o is valid for $days more days"; fi
+        fi
+        ;;
+      http://*)
+        for ip in $ips; do
+          scope="$(origin_scope "$ip")"
+          if [ "$scope" = public ]; then
+            warnc origins.http "$o is plain http on an internet address ($ip): sign-ins and sessions cross the internet unencrypted" \
+              "list it as https://$hostport instead; plain http suits HAMNET (44.128.0.0/10) and a LAN"
+            break
+          fi
+        done
+        ;;
+    esac
+  done
+}
+
 # ---- federation ---------------------------------------------------------------------------------------------
 # fed_fingerprint KEY: a federation key's fingerprint, as Instance admin shows it (federation.ts keyFingerprint):
 # the first 64 bits of SHA-256 over the raw Ed25519 key (base64url), in four groups of four hex digits. Two sysops
@@ -626,10 +706,12 @@ doc_net44() {
         "add it in the 44Net Portal: Instance admin -> Federation -> Publish your callsign identity shows the values"
     fi
   fi
-  domain="$(doc_get DOMAIN)"
-  case ", $domain," in
-    *", $name,"* | *" $name,"*)
-      end="$(echo | openssl s_client -connect "${a:-$name}:443" -servername "$name" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)"
+  # Caddy serves the name with TLS when DOMAIN or EXTRA_ORIGINS (as https://<name>) lists it
+  domain=" $(doc_get DOMAIN | tr ',' ' ') $(doc_get EXTRA_ORIGINS | tr ',' ' ') "
+  case "$domain" in
+    *" $name "* | *" https://$name "* | *" https://$name/ "*)
+      end="$(echo | timeout 10 openssl s_client -connect "${a:-$name}:443" -servername "$name" 2>/dev/null |
+        openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
       if [ -z "$end" ]; then
         warnc net44.cert "no certificate answered for $name" "Caddy fetches one once the name resolves and is reachable"
       else
@@ -826,6 +908,7 @@ run_doctor() {
   doc_setup_checklist
   doc_ingest
   doc_network
+  doc_origins
   doc_federation
   doc_identity
   doc_net44

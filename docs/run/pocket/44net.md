@@ -139,7 +139,7 @@ Running it means accepting the Let's Encrypt Subscriber Agreement. The certifica
 hotspot visitors who open the station by address then see a name warning, and `tls.sh` switches back to the
 station certificate. Each renewal repeats the record; `status.sh` warns 14 days before the certificate expires.
 Over a HAMNET radio link plain http stays the way in, since RF carries no encryption.
-[TLS on the 44Net name](../networks/44net-identity.md#tls-on-the-44net-name) has the background.
+[TLS on the 44Net name](../networks/several-addresses.md#get-a-certificate-for-the-44net-name) has the background.
 
 ## Check that it worked
 

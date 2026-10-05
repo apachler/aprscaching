@@ -4,7 +4,8 @@ import { handleEmbed, handleQr } from "../src/embed.js";
 import type { Env } from "../src/env.js";
 import { DEFAULT_BASEMAP_STYLE, GRATICULE_PALETTE, MAPLIBRE_VENDOR_DIR } from "@aprscaching/shared";
 
-const env = { APP_URL: "https://app.example" } as unknown as Env;
+// the gateway answers on its own address beside the app's, listed as an address of the instance
+const env = { APP_URL: "https://app.example", EXTRA_ORIGINS: "https://api.example" } as unknown as Env;
 
 describe("embed widget + QR", () => {
   it("/embed?cache= serves a self-contained HTML map referencing the read API", async () => {
@@ -55,19 +56,29 @@ describe("embed widget + QR", () => {
     expect(all).not.toContain("tile.openstreetmap.org");
   });
 
-  it("loads the MapLibre script, stylesheet and worker from the app origin's vendored path", async () => {
+  it("loads the MapLibre script, stylesheet and worker from the vendored path of the address it was loaded from", async () => {
     const res = handleEmbed(new Request("https://api.example/embed?cache=AC-0001"), env);
     const body = await res.text();
-    const dir = `https://app.example/${MAPLIBRE_VENDOR_DIR}`;
+    const dir = `https://api.example/${MAPLIBRE_VENDOR_DIR}`;
     expect(MAPLIBRE_VENDOR_DIR).toMatch(/^vendor\/maplibre-gl\/\d+$/);
     expect(body).toContain(`<link href="${dir}/maplibre-gl.css" rel="stylesheet">`);
     expect(body).toContain(`"lib":"${dir}/maplibre-gl.js"`);
     expect(body).toContain(`"worker":"${dir}/maplibre-gl-worker.js"`);
     expect(body).toContain("setWorkerUrl(CFG.worker)");
     const csp = res.headers.get("content-security-policy") ?? "";
-    expect(csp).toContain("script-src 'unsafe-inline' https://app.example");
-    expect(csp).toContain("style-src 'unsafe-inline' https://app.example");
-    expect(csp).toContain("worker-src https://app.example blob:");
+    expect(csp).toContain("script-src 'unsafe-inline' 'self'");
+    expect(csp).toContain("style-src 'unsafe-inline' 'self'");
+    expect(csp).toContain("worker-src 'self' blob:");
+  });
+
+  it("stays on the HAMNET address it was loaded from, and answers an unknown host for APP_URL", async () => {
+    const multi = { APP_URL: "https://app.example", EXTRA_ORIGINS: "http://44.143.1.2" } as unknown as Env;
+    const hamnet = await handleEmbed(new Request("http://44.143.1.2/embed?cache=AC-0001"), multi).text();
+    expect(hamnet).toContain(`"lib":"http://44.143.1.2/${MAPLIBRE_VENDOR_DIR}/maplibre-gl.js"`);
+    expect(hamnet).toContain('"app":"http://44.143.1.2"');
+    const forged = await handleEmbed(new Request("http://evil.test/embed?cache=AC-0001"), multi).text();
+    expect(forged).not.toContain("evil.test");
+    expect(forged).toContain('"api":"https://app.example"');
   });
 
   it("serves MapLibre from its own origin when no APP_URL names another host", async () => {

@@ -64,6 +64,14 @@ cfg_check() {
       [ "$ok" -eq 1 ] && return 0
       echo "$key: expected callsigns such as OE8APR,OE8APR-10, separated by commas"
       ;;
+    origins)
+      local o ok=1
+      for o in ${v//,/ }; do
+        [[ "$o" =~ ^https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?/?$ ]] || ok=0
+      done
+      [ "$ok" -eq 1 ] && return 0
+      echo "$key: expected origins such as https://aprs.example.net,http://44.143.1.2, separated by commas (no path)"
+      ;;
     json)
       if have node; then
         V="$v" node -e 'JSON.parse(process.env.V)' 2>/dev/null && return 0

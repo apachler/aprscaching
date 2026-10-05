@@ -81,7 +81,7 @@ instance.
 
     It prints `FED_REGISTRY`, the signed document, and `FED_REGISTRY_KEY`, the authority's public key. Pass the
     authority key in `AUTHORITY` to sign again with the same one. An entry may carry `addresses`, the
-    instance's typed endpoints (https, 44net, ax25, netrom, bbs): a directory of where to reach it, never a
+    instance's typed endpoints (https, 44net, hamnet, ax25, netrom, bbs): a directory of where to reach it, never a
     trust upgrade.
 
 2. **Each member pins the authority key** in `FED_REGISTRY_KEY`, and gets the document one of two ways:

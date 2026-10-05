@@ -25,7 +25,9 @@ describe("session secret", () => {
   it("refuses to mint without SESSION_SECRET, however strong INGEST_SECRET is", async () => {
     const env = envWith({ INGEST_SECRET: "strong-ingest-secret-xyz" });
     expect(sessionsEnabled(env)).toBe(false);
-    await expect(issueSessionCookie(env, "acct-1", "OE8APR")).rejects.toThrow(/SESSION_SECRET/);
+    await expect(issueSessionCookie(new Request("http://gw/"), env, "acct-1", "OE8APR")).rejects.toThrow(
+      /SESSION_SECRET/,
+    );
   });
 
   it("refuses a default SESSION_SECRET, or one equal to a machine secret", async () => {
@@ -34,7 +36,7 @@ describe("session secret", () => {
       { SESSION_SECRET: "shared-value-123", INGEST_SECRET: "shared-value-123" },
       { SESSION_SECRET: "shared-value-123", OPERATOR_SECRET: "shared-value-123" },
     ])
-      await expect(issueSessionCookie(envWith(o), "acct-1", "OE8APR")).rejects.toThrow();
+      await expect(issueSessionCookie(new Request("http://gw/"), envWith(o), "acct-1", "OE8APR")).rejects.toThrow();
   });
 
   it("mints and round-trips a session under a dedicated SESSION_SECRET", async () => {
@@ -45,7 +47,7 @@ describe("session secret", () => {
   it("the ingest secret does not change session validity; the session secret does", async () => {
     const a = envWith({ INGEST_SECRET: "ingest-A", SESSION_SECRET: "session-shared" });
     const b = envWith({ INGEST_SECRET: "ingest-B", SESSION_SECRET: "session-shared" });
-    const setCookie = await issueSessionCookie(a, "acct-1", "OE8APR");
+    const setCookie = await issueSessionCookie(new Request("http://gw/"), a, "acct-1", "OE8APR");
     expect(await sessionCallsign(reqWith(setCookie), b)).toBe("OE8APR");
     expect(await sessionCallsign(reqWith(setCookie), envWith({ SESSION_SECRET: "other-session" }))).toBeNull();
     // an instance that loses its session secret honours no cookie at all

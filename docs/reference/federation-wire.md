@@ -2,7 +2,7 @@
 
 Federation records travel as **deterministic CBOR signed under Ed25519**. A record's authenticity
 lives entirely in its bytes — the same signed frame is valid over HTTPS on the public internet,
-plain HTTP on a 44net/HAMNET amateur-IP name, an AX.25/NET-ROM circuit, or BBS store-and-forward.
+HTTPS or plain HTTP on a 44Net name, plain HTTP on a HAMNET host, an AX.25/NET-ROM circuit, or BBS store-and-forward.
 The verify engine never consults the path a frame took: **transport is never trust** ([Core
 concepts](trust-model.md)).
 
@@ -139,13 +139,17 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 | Transport | Address form | Mode | Notes |
 |---|---|---|---|
 | `https` | full URL | sync | The default internet path |
-| `44net` | a name under `<call>.ampr.org` | sync | Plain HTTP inside amateur IP space (no public CA); the *name* is the durable identity |
+| `44net` | a name under `<call>.ampr.org`, or `https://<name>` when the name has a certificate | sync | Plain HTTP on the name; with `https://`, HTTPS first, then plain HTTP on the same name. The *name* is the durable identity |
+| `hamnet` | a HAMNET name or 44.x address, optional `:port` (`http://` in front is allowed) | sync | Plain HTTP on HAMNET, which is not on the internet: tried with a 2-second timeout, so a peer without a route moves on quickly |
 | `ax25` | `CALLSIGN-SSID` | forward | Packet circuit via the operator's ingest box |
 | `netrom` | node alias | forward | NET/ROM-routed circuit |
 | `bbs` | `CALL@BBS.#REGION.CC.CONT` | forward | Store-and-forward over FBB forwarding |
 
-Sync transports (request/response) pick the lowest-priority endpoint that resolves to a URL; a peer
-that stores no endpoint set is reached at its `url`, the https address it was added under. Forward transports are fire-and-forget carriers whose
+Sync transports (request/response) try the peer's addresses in priority order and keep the first that
+answers for the rest of the sync: an address that fails to connect, refuses its certificate or times out
+gives way to the next. A `44net` endpoint with `https://` counts as two addresses, its https one first. A peer
+that stores no endpoint set is reached at its `url`, the address it was added under. Records are signed
+either way, so the fall back to plain http changes no trust. Forward transports are fire-and-forget carriers whose
 limits are operator configuration — frames apply idempotently on arrival, whatever path they took.
 
 An instance publishes its own endpoint set from `FED_ENDPOINTS` in two places: its

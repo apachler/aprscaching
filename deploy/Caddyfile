@@ -1,6 +1,9 @@
 # Serves the built SPA and reverse-proxies dynamic paths to the gateway.
 # DOMAIN=:80 -> plain HTTP (local/off-grid). DOMAIN=host -> automatic Let's Encrypt TLS.
-{$DOMAIN} {
+# EXTRA_SITES: the instance's further addresses (EXTRA_ORIGINS in .env, separated by spaces by the caddy
+# service's command). An https:// one gets automatic TLS like DOMAIN; an http:// one (a HAMNET name or 44.x
+# address) is served as plain http, with no certificate and no redirect to https.
+(instance) {
 	encode zstd gzip
 	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /ingest/* /outbox* /federation/* /source /support /imprint /privacy /health /.well-known/* /feeds/* /sitemap /sitemap.xml /robots.txt /embed /embed/* /v/* /tiles/*
 	# handle blocks, because Caddy runs try_files (a rewrite) before reverse_proxy: without them every
@@ -13,4 +16,8 @@
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+{$DOMAIN} {$EXTRA_SITES} {
+	import instance
 }

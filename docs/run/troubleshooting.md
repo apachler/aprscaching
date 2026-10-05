@@ -363,6 +363,52 @@ A public instance only: one whose `APP_URL` starts with `https://`.
 - **See:** [Cloudflare Tunnel and CDN](networks/cloudflare.md) and
   [Self-host with Docker](install/self-host-docker.md).
 
+## Further addresses (`origins`)
+
+Each address in `EXTRA_ORIGINS`: the instance's 44Net name, a HAMNET address and any other address beside
+`APP_URL` ([One instance, several addresses](networks/several-addresses.md)).
+
+### `origins.duplicate`
+
+- **Tests:** each address is listed once, and none repeats `APP_URL`.
+- **Message:** `<origin> is listed twice` (warn).
+- **Fix:** list each address once in `EXTRA_ORIGINS`.
+- **See:** [One instance, several addresses](networks/several-addresses.md#steps).
+
+### `origins.dns`
+
+- **Tests:** the address's name resolves from this box. A 44.x address needs no lookup.
+- **Message:** `<host> (<origin>) does not resolve from here` (fail).
+- **Fix:** create its record: the A record in the 44Net Portal, or the record in your region's HAMNET DNS.
+- **See:** [44Net name and identity](networks/44net-identity.md#3-name-and-identity).
+
+### `origins.route`
+
+- **Tests:** the address's `/health` answers from this box as this gateway.
+- **Message:** `<origin> answers, but not as this gateway` (fail). Its record points at another machine.
+- **Message:** `<origin>/health does not answer from here` (fail). Caddy does not serve it yet, or a firewall
+  or a missing route stops it.
+- **Fix:** restart the stack after changing `EXTRA_ORIGINS` (`docker compose up -d` in `deploy/`); check the
+  record, the tunnel and the firewall.
+- **See:** [One instance, several addresses](networks/several-addresses.md#check-that-it-worked).
+
+### `origins.tls`
+
+- **Tests:** an `https://` address serves a certificate that is valid for more than 14 days.
+- **Message:** `no TLS certificate from <origin>` (fail). Caddy has not got one yet.
+- **Message:** `the certificate of <origin> expires in <n> days` (warn), or expired (fail).
+- **Fix:** read Caddy's logs: `docker compose logs caddy` in `deploy/`. Its challenge needs ports 80 and 443
+  reachable on the address.
+- **See:** [Get a certificate for the 44Net name](networks/several-addresses.md#get-a-certificate-for-the-44net-name).
+
+### `origins.http`
+
+- **Tests:** an `http://` address is on HAMNET (44.128.0.0/10) or a LAN, not on the internet.
+- **Message:** `<origin> is plain http on an internet address` (warn). Sign-ins and sessions cross the internet
+  unencrypted.
+- **Fix:** list it as `https://<name>` instead, so Caddy gets a certificate for it.
+- **See:** [One instance, several addresses](networks/several-addresses.md#how-the-addresses-differ).
+
 ## Federation (`federation`)
 
 Every shape with a gateway. A LAN instance gets one check, `federation.off` or `federation.lan`.
@@ -461,12 +507,13 @@ the DNS records only.
 
 ### `net44.cert`
 
-- **Tests:** when `DOMAIN` lists the 44Net name, its certificate is valid for more than 14 days.
+- **Tests:** when `DOMAIN` lists the 44Net name, or `EXTRA_ORIGINS` lists it as `https://<name>`, its
+  certificate is valid for more than 14 days.
 - **Message:** `no certificate answered for <name>` (warn). Caddy fetches one once the name resolves and is
   reachable.
 - **Message:** `the certificate for <name> expires in <n> days` (warn).
 - **Fix:** read Caddy's logs: `docker compose logs caddy` in `deploy/`.
-- **See:** [TLS on the 44Net name](networks/44net-identity.md#tls-on-the-44net-name).
+- **See:** [TLS on the 44Net name](networks/several-addresses.md#get-a-certificate-for-the-44net-name).
 
 ### `identity.<line>`
 

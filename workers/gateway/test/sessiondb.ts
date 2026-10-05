@@ -50,6 +50,6 @@ export async function sessionRequest(
   url = "http://gw/api/whoami",
   init: RequestInit = {},
 ): Promise<Request> {
-  const cookie = (await issueSessionCookie(env, accountId, callsign)).split(";")[0]!;
+  const cookie = (await issueSessionCookie(new Request(url), env, accountId, callsign)).split(";")[0]!;
   return new Request(url, { ...init, headers: { ...(init.headers as Record<string, string>), cookie } });
 }

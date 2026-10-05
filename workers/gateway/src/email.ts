@@ -26,7 +26,8 @@ import {
 import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
 import { appBase, gatewayBase } from "./sitemap.js";
-import { hotspotOrigin, linkOrigin } from "./visitor.js";
+import { linkOrigin } from "./visitor.js";
+import { instanceOrigins, isInstanceOrigin, requestOrigin } from "./origins.js";
 import { sendEmail } from "./mail.js";
 
 /**
@@ -62,8 +63,17 @@ function newToken(): string {
 }
 /** The shape {@link newToken} produces: 64 lowercase hex digits. Anything else is not a sign-in token. */
 const TOKEN_SHAPE = /^[0-9a-f]{64}$/;
-function appOrigin(req: Request, env: Env): string {
-  return env.APP_URL ?? new URL(req.url).origin;
+
+/**
+ * The verify link of a token, on this gateway's address for the request. When the page that asked for the link
+ * is another address of this instance (a web app on another host than its gateway), the link names that page's
+ * origin as `app`, where the confirm step returns to.
+ */
+function verifyLink(req: Request, env: Env, token: string): string {
+  const base = gatewayBase(req, env);
+  const page = req.headers.get("origin");
+  const app = page && page !== base && isInstanceOrigin(page, env) ? `&app=${encodeURIComponent(page)}` : "";
+  return `${base}/auth/email/verify?token=${token}${app}`;
 }
 
 /** POST /auth/email/start {email, callsign?} — begin email register (needs callsign) or login. */
@@ -109,10 +119,9 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     .bind(token, e, cs, purpose, nowS())
     .run();
 
-  // The link opens this gateway's confirm page. It names the gateway's own public origin, which is the
-  // app's origin wherever the two share a host; an app served from another host (a static site in front
-  // of an API host) does not route /auth/* to the gateway, so a link to it would open the app instead.
-  const link = `${gatewayBase(req, env)}/auth/email/verify?token=${token}`;
+  // The link opens this gateway's confirm page on the address the sign-in started on (origins.ts), so a member
+  // who asked on the HAMNET address confirms there too.
+  const link = verifyLink(req, env, token);
   const sent = await sendEmail(
     env,
     e,
@@ -142,8 +151,9 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
  * off-grid station whose owner signs in with a passkey on localhost, and whose visitors on its hotspot
  * have no other way in.
  *
- * `base` picks the origin the link names: APP_URL, or the station's hotspot origin (visitor.ts), the only
- * one a visitor's phone can open. Any other value is refused, so the link never points anywhere else.
+ * `base` picks the origin the link names: APP_URL, an EXTRA_ORIGINS address (a member on HAMNET opens the
+ * HAMNET one), or the station's hotspot origin (visitor.ts), the only one a visitor's phone can open. Any other
+ * value is refused, so the link never points anywhere else.
  */
 export async function handleOperatorLink(req: Request, env: Env): Promise<Response> {
   if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
@@ -153,10 +163,18 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
     .toUpperCase()
     .trim();
   if (!isRegistrableCall(cs)) return json({ error: "a valid, unreserved callsign is required" }, { status: 400 });
-  const requested = body.base === undefined ? null : typeof body.base === "string" ? linkOrigin(body.base, env) : null;
+  const requested =
+    body.base === undefined
+      ? null
+      : typeof body.base === "string"
+        ? linkOrigin(body.base, env, instanceOrigins(env))
+        : null;
   if (body.base !== undefined && requested === null)
     return json(
-      { error: "base must be APP_URL or this station's https hotspot origin (a private IPv4 address on HTTPS_PORT)" },
+      {
+        error:
+          "base must be APP_URL, an EXTRA_ORIGINS address, or this station's https hotspot origin (a private IPv4 address on HTTPS_PORT)",
+      },
       { status: 400 },
     );
   const base = baseCall(cs);
@@ -181,7 +199,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
     .bind(token, cs, OPERATOR_PURPOSE, nowS())
     .run();
   // A script on the box reaches the gateway over loopback, which no other device can open: the link then
-  // names the app origin. Reached on a public host (an API host beside a static app), it names that host.
+  // names the app origin. Reached on another address of this instance, it names that address.
   const onLoopback = LOOPBACK_HOSTS.has(new URL(req.url).hostname);
   const origin = requested ?? (onLoopback && env.APP_URL ? appBase(env) : gatewayBase(req, env));
   console.log(`operator sign-in link issued for ${cs} (${existing ? "existing" : "new"} account)`);
@@ -199,7 +217,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
  * POST still carries this page's origin — under `no-referrer` a browser sends `Origin: null`, which the
  * origin check refuses.
  */
-function confirmPage(token: string): Response {
+function confirmPage(token: string, app: string | null): Response {
   return new Response(
     `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=referrer content=same-origin>
@@ -209,7 +227,9 @@ h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height
 button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
 <h1>Sign in to aprscaching</h1>
 <p>Confirm that you want to sign in on this device.</p>
-<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${escapeHtml(token)}">
+<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${escapeHtml(token)}">${
+      app ? `<input type="hidden" name="app" value="${escapeHtml(app)}">` : ""
+    }
 <button type="submit">Sign in</button></form>
 <p class=m>Didn't request this? Close this page — nothing happens until you confirm.</p>`,
     {
@@ -247,15 +267,17 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     if (!token) return json({ error: "missing token" }, { status: 400 });
     // only a well-formed token ever reaches the HTML page, so nothing a link carries is reflected into it
     if (!TOKEN_SHAPE.test(token)) return json({ error: "invalid token" }, { status: 400 });
-    if ((req.headers.get("accept") ?? "").includes("text/html")) return confirmPage(token);
+    // `app` reaches the page only when it is an address of this instance
+    const app = url.searchParams.get("app");
+    if ((req.headers.get("accept") ?? "").includes("text/html"))
+      return confirmPage(token, app && isInstanceOrigin(app, env) ? app : null);
     return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
   }
 
   if (!sameSiteOrigin(req, env)) return json({ error: "cross-site sign-in refused" }, { status: 403 });
   const isForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
-  const token = isForm
-    ? new URLSearchParams(await req.text().catch(() => "")).get("token")
-    : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);
+  const form = isForm ? new URLSearchParams(await req.text().catch(() => "")) : null;
+  const token = form ? form.get("token") : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);
   if (!token) return json({ error: "missing token" }, { status: 400 });
   if (!sessionsEnabled(env)) return sessionUnavailable();
 
@@ -283,15 +305,17 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
 
   let cookie: string;
   try {
-    cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
+    cookie = await issueSessionCookie(req, env, acct.account_id, acct.callsign);
   } catch (e) {
     if (e instanceof AccountSuspended) return suspendedResponse(e);
     throw e;
   }
-  // the confirm form → back into the app with the session set; an API client → JSON. A visitor who
-  // confirmed on the station's hotspot origin returns there: APP_URL is the owner's localhost.
-  if (isForm) {
-    const back = hotspotOrigin(url.origin, env) ?? appOrigin(req, env);
+  // the confirm form → back into the app with the session set; an API client → JSON. The app is on the
+  // address the confirm came on (a visitor on the station's hotspot origin returns there, not to the owner's
+  // localhost), or on the address of this instance the sign-in started on.
+  if (form) {
+    const app = form.get("app");
+    const back = app && isInstanceOrigin(app, env) ? app : requestOrigin(req, env);
     return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: back + "/" } });
   }
   return json(
@@ -364,7 +388,7 @@ export async function sendEmailConfirmation(
   )
     .bind(token, email, callsign, CONFIRM_PURPOSE, nowS())
     .run();
-  const link = `${gatewayBase(req, env)}/auth/email/verify?token=${token}`;
+  const link = verifyLink(req, env, token);
   const sent = await sendEmail(
     env,
     email,

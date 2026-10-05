@@ -13,7 +13,7 @@
  * addresses, so an origin at another private address fails TLS in the visitor's browser.
  */
 import type { Env } from "./env.js";
-import { appBase } from "./sitemap.js";
+import { bareWebOrigin } from "@aprscaching/shared";
 
 /** 10/8, 172.16/12, 192.168/16 as a canonical dotted quad (the URL parser normalises other spellings). */
 function rfc1918(host: string): boolean {
@@ -23,19 +23,6 @@ function rfc1918(host: string): boolean {
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
-/** `candidate` as a bare origin (scheme, host, port; an optional trailing slash), or null. */
-function bareOrigin(candidate: string): URL | null {
-  let u: URL;
-  try {
-    u = new URL(candidate);
-  } catch {
-    return null;
-  }
-  if (u.username || u.password || u.search || u.hash || u.pathname !== "/") return null;
-  if (!/^[a-z][a-z0-9+.-]*:\/\/[^/?#]+\/?$/i.test(candidate)) return null;
-  return u;
-}
-
 /**
  * The hotspot origin `candidate` names — https, an RFC 1918 IPv4 host, the running https listener's port —
  * or null. Closed while no https listener runs (Bun never has one).
@@ -43,24 +30,19 @@ function bareOrigin(candidate: string): URL | null {
 export function hotspotOrigin(candidate: string, env: Env): string | null {
   const port = env.HTTPS_LISTENER_PORT;
   if (!port) return null;
-  const u = bareOrigin(candidate);
+  const u = bareWebOrigin(candidate);
   if (!u || u.protocol !== "https:" || (u.port || "443") !== port || !rfc1918(u.hostname)) return null;
   return u.origin;
 }
 
 /**
- * The origin an operator sign-in link may name when the minting call asks for one: APP_URL, or this
- * station's hotspot origin. Anything else is null — the link never names an origin a caller made up.
+ * The origin an operator sign-in link may name when the minting call asks for one: an address of this instance
+ * (APP_URL or an EXTRA_ORIGINS entry, passed in as `listed`), or this station's hotspot origin. Anything else is
+ * null — the link never names an origin a caller made up.
  */
-export function linkOrigin(candidate: string, env: Env): string | null {
-  const u = bareOrigin(candidate);
+export function linkOrigin(candidate: string, env: Env, listed: readonly string[]): string | null {
+  const u = bareWebOrigin(candidate);
   if (!u) return null;
-  let app: string | null = null;
-  try {
-    app = env.APP_URL ? new URL(env.APP_URL).origin : null;
-  } catch {
-    /* a malformed APP_URL names no origin */
-  }
-  if (app && u.origin === app) return appBase(env);
+  if (listed.includes(u.origin)) return u.origin;
   return hotspotOrigin(candidate, env);
 }

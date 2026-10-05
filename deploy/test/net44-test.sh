@@ -124,6 +124,13 @@ MOCK_PMTU=1492 n44 setup --yes --non-interactive "$TMP/full.conf" --name aprscac
 check "a second run with the same configuration changes nothing" bash -c "grep -q 'nothing to change' '$TMP/out' && ! grep -q 'start wg-quick@wg44' '$MOCK_LOG'"
 check "  … nor duplicates the endpoint" eq "$(grep -o '"44net"' "$ENVF" | wc -l)" 1
 
+MOCK_PMTU=1492 n44 setup --yes --non-interactive "$TMP/full.conf" --https
+check "--https serves the name over https: the endpoint becomes https://<name>" eq "$(grep '^FED_ENDPOINTS=' "$ENVF")" \
+  "FED_ENDPOINTS='[{\"transport\":\"https\",\"address\":\"https://aprs.example.net\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"https://aprscaching.oe8apr.ampr.org\",\"priority\":20}]'"
+check "  … and the name joins EXTRA_ORIGINS" eq "$(grep '^EXTRA_ORIGINS=' "$ENVF")" "EXTRA_ORIGINS=https://aprscaching.oe8apr.ampr.org"
+MOCK_PMTU=1492 n44 setup --yes --non-interactive "$TMP/full.conf" --https
+check "  … once" eq "$(grep '^EXTRA_ORIGINS=' "$ENVF")" "EXTRA_ORIGINS=https://aprscaching.oe8apr.ampr.org"
+
 rm -f "$MOCK_STATE/up"
 MOCK_PMTU=1500 n44 setup --yes --non-interactive "$TMP/split.conf"
 check "a split tunnel stays as issued" bash -c "! grep -q 'Table = off' '$CONF' && ! grep -q 'ip -4 rule\|CONNMARK' '$CONF' && grep -qx 'AllowedIPs = 44.0.0.0/8' '$CONF'"
@@ -178,6 +185,7 @@ if command -v node >/dev/null 2>&1; then
   check "doctor: the firewall passes" eq "$(status_of net44.firewall)" pass
   check "doctor: the A record passes" eq "$(status_of net44.dns)" pass
   check "doctor: the TXT record passes" eq "$(status_of net44.txt)" pass
+  check "doctor: the certificate of a name EXTRA_ORIGINS serves over https is checked" eq "$(status_of net44.cert)" warn
   rm -f "$MOCK_STATE/up"
   "$H" --json doctor </dev/null >"$TMP/doc.json" 2>/dev/null || true
   check "doctor: a configured 44net endpoint without the tunnel fails" eq "$(status_of net44.tunnel)" fail

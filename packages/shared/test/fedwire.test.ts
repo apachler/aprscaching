@@ -17,6 +17,8 @@ import {
   parseEndpoints,
   validEndpointAddress,
   is44netName,
+  net44Host,
+  endpointBaseUrls,
   negotiateCaps,
   tierForRateClass,
   type FedRecord,
@@ -96,6 +98,40 @@ describe("typed peer endpoints", () => {
     expect(validEndpointAddress("netrom", "ACSNOD")).toBe(true);
     expect(validEndpointAddress("bbs", "OE8APR@OE8XBB.#KTN.AUT.EU")).toBe(true);
     expect(validEndpointAddress("bbs", "no-at-sign")).toBe(false);
+  });
+
+  it("takes a 44net name with a certificate as https://<name>, and nothing after it", () => {
+    expect(validEndpointAddress("44net", "https://aprscaching.oe8apr.ampr.org")).toBe(true);
+    expect(validEndpointAddress("44net", "https://44.143.1.1")).toBe(false);
+    expect(validEndpointAddress("44net", "http://aprscaching.oe8apr.ampr.org")).toBe(false);
+    expect(validEndpointAddress("44net", "https://aprscaching.oe8apr.ampr.org/path")).toBe(false);
+    expect(net44Host("https://Aprscaching.OE8APR.ampr.org")).toBe("aprscaching.oe8apr.ampr.org");
+    expect(net44Host("aprscaching.oe8apr.ampr.org")).toBe("aprscaching.oe8apr.ampr.org");
+  });
+
+  it("takes a hamnet host as a name or a 44.x address, plain http, an optional port", () => {
+    expect(validEndpointAddress("hamnet", "aprscaching.oe8xyz.hamnet.example")).toBe(true);
+    expect(validEndpointAddress("hamnet", "44.143.1.2")).toBe(true);
+    expect(validEndpointAddress("hamnet", "http://44.143.1.2:8080")).toBe(true);
+    expect(validEndpointAddress("hamnet", "https://44.143.1.2")).toBe(false);
+    expect(validEndpointAddress("hamnet", "http://44.143.1.2/x")).toBe(false);
+    expect(validEndpointAddress("hamnet", "44.143.1")).toBe(false);
+    expect(validEndpointAddress("hamnet", "44.143.1.2:99999")).toBe(false);
+  });
+
+  it("orders the base URLs of an endpoint: a 44net name with a certificate over https, then plain http", () => {
+    expect(endpointBaseUrls({ transport: "44net", address: "https://aprscaching.oe8apr.ampr.org" })).toEqual([
+      "https://aprscaching.oe8apr.ampr.org",
+      "http://aprscaching.oe8apr.ampr.org",
+    ]);
+    expect(endpointBaseUrls({ transport: "44net", address: "aprscaching.oe8apr.ampr.org" })).toEqual([
+      "http://aprscaching.oe8apr.ampr.org",
+    ]);
+    expect(endpointBaseUrls({ transport: "hamnet", address: "44.143.1.2:8080" })).toEqual(["http://44.143.1.2:8080"]);
+    expect(endpointBaseUrls({ transport: "https", address: "https://aprs.example.net//" })).toEqual([
+      "https://aprs.example.net",
+    ]);
+    expect(endpointBaseUrls({ transport: "ax25", address: "OE8APR-7" })).toEqual([]);
   });
 
   it("parses stored endpoint lists, dropping malformed entries, sorted by priority", () => {

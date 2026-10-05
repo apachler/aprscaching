@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { CONFIG_KEYS } from "./configkeys.js";
+import { parseOriginList } from "./origins.js";
 
 export { CONFIG_KEYS };
 
@@ -29,10 +30,11 @@ export type ConfigShape = "selfhost" | "baremetal" | "ingest-box" | "pocket" | "
  * exactly; `list` is comma-separated; `json` must parse; `url` must parse as an absolute URL; `call` is one
  * callsign an AX.25 station can transmit under (a base of up to six letters and digits with a digit in it,
  * and an optional SSID 0–15); `calls` is a comma- or space-separated list of callsigns, whose SSID may run
- * to 99 as a MeshCom node's does; `string` takes anything (including the keys that switch a feature on by
+ * to 99 as a MeshCom node's does; `origins` is a comma- or space-separated list of bare http(s) origins
+ * (origins.ts); `string` takes anything (including the keys that switch a feature on by
  * being set at all).
  */
-export type ConfigType = "string" | "int" | "number" | "enum" | "list" | "json" | "url" | "call" | "calls";
+export type ConfigType = "string" | "int" | "number" | "enum" | "list" | "json" | "url" | "call" | "calls" | "origins";
 
 export interface ConfigKey {
   readonly type: ConfigType;
@@ -124,6 +126,11 @@ function validator(k: ConfigKey): z.ZodType<string> {
             .filter(Boolean)
             .every((c) => isCall(c, 99)),
         "expected callsigns such as OE8APR,OE8APR-10, separated by commas",
+      );
+    case "origins":
+      return s.refine(
+        (v) => parseOriginList(v).invalid.length === 0,
+        "expected origins such as https://aprs.example.net,http://44.143.1.2, separated by commas (no path)",
       );
     default:
       return s;

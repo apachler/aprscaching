@@ -166,7 +166,7 @@ FED_ENDPOINTS='[{"transport":"https","address":"https://aprs.example.net","prior
 ```
 
 The `44net` address is a **name** under your call, never a raw 44.x address and never the base name; peers
-reach it over plain http. It must be the name your TXT record sends peers to: the default name for the
+reach it over plain http, or over https first when it is written `https://<name>`. It must be the name your TXT record sends peers to: the default name for the
 callsign's record without `host=`, `host=` when it names one, or the record's own name for a record under a
 label. An instance without 44Net leaves `FED_ENDPOINTS` as it is.
 
@@ -176,9 +176,11 @@ Make Caddy answer that name on the tunnel:
   on port 80. In Tunnel mode `compose.home.yml` publishes no ports, so publish port 80 on the tunnel address
   only, for example `ports: ["44.x.y.z:80:80"]` on the `caddy` service in a `compose.override.yml`. In
   `deploy/`, check the merged result with `docker compose config`.
-- **Caddy with TLS** (`DOMAIN=<public host>`): Caddy answers only the names it serves. Add the 44Net name,
-  `DOMAIN="aprs.example.net, aprscaching.<call>.ampr.org"`. Caddy then also fetches a certificate for it and
-  redirects its http to https; federation fetches follow redirects, checking each hop.
+- **Caddy with TLS** (`DOMAIN=<public host>`): Caddy answers only the names it serves. Add the 44Net name to
+  `EXTRA_ORIGINS`: `https://aprscaching.<call>.ampr.org` gets a certificate, and the `44net` endpoint may then
+  name `https://aprscaching.<call>.ampr.org`, which peers try over https first and over plain http after
+  (`net44 setup --https` writes both). `http://aprscaching.<call>.ampr.org` serves the name as plain http
+  only ([One instance, several addresses](several-addresses.md)).
 
 Set `DOH_URL` if the default resolver (Cloudflare's DNS-over-HTTPS) is not reachable from the box. It must
 be a DNS-over-HTTPS resolver that speaks the JSON API (`?name=&type=` with `accept: application/dns-json`)
@@ -189,27 +191,10 @@ Restart the gateway after editing `deploy/.env`: in `deploy/`, `docker compose u
 
 ### TLS on the 44Net name
 
-Federation over the `44net` endpoint needs no TLS: every record is signed. Browsers are different: passkeys,
-device location, Web Serial / Web Bluetooth and web push work only on https or `localhost`. Members who open
-the plain-http 44Net name sign in with the sysop's
-[one-time link](../day-to-day/sign-in-links.md#off-grid-sign-in) and lose those features.
-
-- Because a Connect address is publicly reachable ([Who can reach you](44net.md#who-can-reach-you)),
-  Caddy's usual certificate challenge on port 80/443 can reach it. **Unverified** on a live Connect address;
-  the first Caddy start with the name in `DOMAIN` settles it.
-- **DNS-01 by hand, once per renewal.** The Portal has no API, so each issue and each renewal takes one
-  `_acme-challenge.<name>` TXT record entered by hand. Underscore labels work in the Portal; the hourly
-  export makes each challenge wait up to an hour. Pocket's `extras/ampr-cert.sh` runs this with
-  [lego](https://go-acme.github.io/lego/) (a Termux package): it prints the record, polls DNS until it is
-  published, lets lego finish and warns 14 days before expiry ([Pocket on 44Net](../pocket/44net.md#pocket-on-44net)).
-  **Unverified** end to end against the live Portal. Delegating a subdomain to your own name server with an
-  NS record ([DNS](https://wiki.ampr.org/wiki/DNS)) lets an ACME client with a DNS API renew unattended.
-- **DNS-PERSIST-01**, one standing TXT record that authorises an ACME account for a name so renewals need no
-  new record, would suit the Portal well. Let's Encrypt announced it in February 2026; it is not in
-  production (September 2026), held until an open point in the IETF draft is settled. lego already has a
-  `--dns-persist` option for it.
-- **Over amateur RF, plain http stays.** A HAMNET radio link or a packet channel carries no encryption, so
-  the plain-http 44Net name remains the way in there; https serves members who come over the internet.
+Federation over the `44net` endpoint needs no TLS: every record is signed. Browsers need https for passkeys,
+device location, Web Serial, Web Bluetooth and web push. [One instance, several
+addresses](several-addresses.md#get-a-certificate-for-the-44net-name) gets a certificate for the 44Net name and
+serves it beside the internet name, with passkeys shared between both.
 
 ## 5. Verify with the self-check
 

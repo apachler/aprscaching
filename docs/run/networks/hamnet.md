@@ -4,6 +4,11 @@ This page lists what an instance can still do when it has no internet path: a 44
 HAMNET, or an [off-grid](off-grid.md) box on a LAN. It is for the sysop. The instance runs, but everything
 that calls a service on the internet stops; the table names each one and its workaround.
 
+An instance that is on the internet as well can add its HAMNET address as a third route beside its internet and
+44Net names ([One instance, several addresses](several-addresses.md)): `EXTRA_ORIGINS` lists
+`http://<HAMNET name or 44.x address>`, Caddy serves it as plain http, and members who sign in there keep a
+session over plain http.
+
 ## What works, and the workarounds
 
 | Feature | Works without the internet? | Workaround |
@@ -14,12 +19,13 @@ that calls a service on the internet stops; the table names each one and its wor
 | Topo and satellite layers (OpenTopoMap, EOX) | No | Stay on the vector or offline base map; both layers are opt-in |
 | "Navigate" links (Google Maps, Apple Maps, OpenStreetMap) | No | They are plain links; the cache's coordinates stay on the sheet |
 | Embeddable map widget (`/embed`) | Works with `BASEMAP_STYLE=offline` or a HAMNET style | MapLibre comes from the instance's own web build. The base map is the gateway's `BASEMAP_STYLE`: `offline` draws the self-contained grid, or point it at a style served inside HAMNET ([configuration](../../reference/configuration.md#gateway-read-api-spots-emailpush)) |
-| Passkeys, device location (Tier B finds), Web Serial / Web Bluetooth radio, web push | Only over https | [TLS on the 44Net name](44net-identity.md#tls-on-the-44net-name). Over plain http, members sign in with the sysop's [one-time link](../day-to-day/sign-in-links.md#off-grid-sign-in) and log finds unsigned |
+| Sign-in and sessions | Yes, over plain http | An email link (with a mail server on HAMNET) or the sysop's [one-time link](../day-to-day/sign-in-links.md#off-grid-sign-in); the session cookie works over plain http |
+| Passkeys, device location (Tier B finds), Web Serial / Web Bluetooth radio, web push | Only over https | An https address of the instance ([a certificate for the 44Net name](several-addresses.md#get-a-certificate-for-the-44net-name)). Over plain http, members sign in with an email link or the sysop's one-time link and log finds unsigned |
 | Email sign-in links and the watch digest | Only with an SMTP server reachable on HAMNET; the Resend API needs the internet | Set `SMTP_HOST` to a mail server inside HAMNET ([Send mail](../day-to-day/mail.md)), or use passkeys or the sysop's one-time link |
 | Web push delivery (the browser vendor's push service) | No | The in-app watchlist |
 | APRS-IS feed and uplink (`rotate.aprs2.net` by default) | No | Set `APRSIS_HOST` to an APRS-IS server reachable on HAMNET, if your region runs one (**Unverified** per region). RF from your own TNC is unaffected |
 | RF ingest from your own radio | Yes | The [off-grid](off-grid.md) shape: the ingest box and a local gateway on one machine, `INGEST_URL=http://localhost:8787/ingest` |
-| Federation with https peers on the internet | No | Peers with a `44net` endpoint reachable over HAMNET (**Unverified**, see [below](#hamnet-and-44net-connect)); packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md)). Discovery learns only https peers |
+| Federation with https peers on the internet | No | Peers with a `hamnet` endpoint, or a `44net` endpoint reachable over HAMNET (**Unverified**, see [below](#hamnet-and-44net-connect)); packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md#peer-endpoints)). Discovery learns only https peers |
 | Adding a peer by callsign, `ampr.org` callsign verification, the 44Net self-check | No, with the default resolvers | Set `DOH_URL` (and `AMPR_DNS_RESOLVERS`) to DNS-over-HTTPS resolvers reachable on HAMNET that can still reach ARDC's name servers; otherwise do these while connected. Verification over RF works offline |
 | Instance registry located by `FED_REGISTRY_DNS` | No | This lookup always asks Cloudflare's resolver and ignores `DOH_URL`. Set `FED_REGISTRY` to a document URL reachable on HAMNET instead; the last good document keeps binding meanwhile |
 | Source link (`/source` → `SOURCE_REPO`, GitHub by default) | The link works, the target doesn't | Point `SOURCE_REPO` at a mirror reachable on HAMNET: any forge with `<repo>/tree/<commit>` URLs (AGPL §13) |
