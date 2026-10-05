@@ -59,7 +59,7 @@ export type {
 import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
 import { openSealedStage, type StagePayload } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
-import { packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
+import { packCache, packCachesInBox, packSearch, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
 import { fromB64u, toB64u } from "./base64url.js";
 import { stageRefusalText } from "./log/stageUnlock.js";
@@ -302,9 +302,14 @@ export function getProfile(callsign: string): Promise<Profile> {
 }
 import type { SearchResults } from "@aprscaching/shared";
 export type { SearchResults, SearchHitCache, SearchHitStation } from "@aprscaching/shared";
-/** Enriched as-you-type suggestions across caches + stations. */
-export function searchSuggest(q: string, signal?: AbortSignal, limit = 8): Promise<SearchResults> {
-  return call(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
+/** Enriched as-you-type suggestions across caches + stations; without a connection, the offline packs' caches. */
+export async function searchSuggest(q: string, signal?: AbortSignal, limit = 8): Promise<SearchResults> {
+  try {
+    return await call<SearchResults>(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
+  } catch (e) {
+    if (!isOffline(e)) throw e;
+    return { caches: await packSearch(await offlineReady(), q, limit), stations: [] };
+  }
 }
 import type { ActivityItem, PageInfo } from "@aprscaching/shared";
 export type { ActivityItem };

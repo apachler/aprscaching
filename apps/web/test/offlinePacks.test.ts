@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import type { MapCache, PackCache, PackResponse } from "@aprscaching/shared";
 import { memoryStore, type PackMeta } from "../src/offline/store.js";
-import { packCache, packCachesInBox, saveAutoArea, userPacks } from "../src/offline/packs.js";
+import { packCache, packCachesInBox, packSearch, saveAutoArea, userPacks } from "../src/offline/packs.js";
 import { estimatePack, imageKey, refreshPack, storePack, type Fetcher } from "../src/offline/download.js";
 
 const map = (id: number, lat = 47.1, lon = 15.1): MapCache => ({
@@ -76,6 +76,20 @@ describe("reading packs offline", () => {
     expect(r.source).toMatchObject({ name: "Saualpe", auto: false, packs: 3 });
     expect((await packCache(st, 1))?.pack.id).toBe("old"); // the details over the automatic area's bare copy
     expect((await userPacks(st)).map((p) => p.id)).toEqual(["new", "old"]);
+  });
+
+  it("searches the packs without a connection: each cache once, a code match first, no archived cache", async () => {
+    const st = memoryStore();
+    await saveAutoArea(st, [map(12)], "x", 50);
+    await st.putPack(meta("p", 10), [
+      { ...full(1), title: "Schlossberg clock tower" },
+      { ...full(12), title: "Am Schlossberg" },
+      { ...full(3), title: "Schlossberg cellar", status: "archived" },
+    ]);
+    const hits = await packSearch(st, "schlossberg", 8);
+    expect(hits.map((h) => h.code)).toEqual(["AC-1", "AC-12"]);
+    expect((await packSearch(st, "ac-12", 8)).map((h) => h.code)).toEqual(["AC-12"]);
+    expect(await packSearch(st, "x", 8)).toEqual([]);
   });
 
   it("returns nothing outside every pack", async () => {
