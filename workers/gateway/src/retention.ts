@@ -2,31 +2,23 @@
 /**
  * How long the nightly job keeps the diagnostic and telemetry tables. These rings exist for the
  * Shack and for troubleshooting, never for verification, so they are short by default. An operator
- * may shorten or lengthen any of them with one JSON setting, e.g.
- * `RETENTION={"packetsHours":6,"sensorDays":90}`; an absent, non-numeric or non-positive value keeps
- * the default.
+ * may shorten or lengthen any of them with one setting, RETENTION: Instance settings → Privacy & retention,
+ * or JSON in the environment, e.g. `RETENTION={"packetsHours":6,"sensorDays":90}`. An absent, non-numeric
+ * or non-positive value keeps the default.
  */
 import type { Env } from "./env.js";
+import { RETENTION_FIELDS, type RetentionField } from "@aprscaching/shared";
 import { jsonObjectSetting } from "./util/config.js";
+import { setting } from "./siteconfig.js";
 
-export const RETENTION_DEFAULTS = {
-  /** The Shack raw-packet ring (packets_recent), in hours. */
-  packetsHours: 24,
-  /** The firehose message log and MeshCom group messages. */
-  messagesDays: 7,
-  /** Weather and telemetry readings. */
-  sensorDays: 30,
-  /** Per-port RX/TX counters. */
-  portStatsDays: 7,
-  /** Watch alerts the user has seen. */
-  alertsDays: 30,
-  /** NET/ROM node MHeard rows. */
-  mheardDays: 7,
-};
+/** The retention of each table when RETENTION does not name it (RETENTION_FIELDS holds what each one is). */
+export const RETENTION_DEFAULTS = Object.fromEntries(
+  Object.entries(RETENTION_FIELDS).map(([k, f]) => [k, f.default]),
+) as Record<RetentionField, number>;
 type Retention = typeof RETENTION_DEFAULTS;
 
 export function retentionFrom(env: Env): Retention {
-  const set = jsonObjectSetting(env.RETENTION);
+  const set = jsonObjectSetting(setting(env, "RETENTION"));
   const out = { ...RETENTION_DEFAULTS };
   for (const k of Object.keys(out) as (keyof Retention)[]) {
     const v = set[k];
@@ -73,7 +65,7 @@ const EMAIL_TOKEN_KEEP_S = 2 * DAY_S;
 
 /** Days resolved reports and moderation log rows are kept: `MODERATION_RETENTION_DAYS`, else the default. */
 export function moderationKeepDays(env: Env): number {
-  const n = Number(env.MODERATION_RETENTION_DAYS);
+  const n = Number(setting(env, "MODERATION_RETENTION_DAYS"));
   return Number.isInteger(n) && n > 0 ? n : MODERATION_KEEP_DAYS;
 }
 

@@ -4,6 +4,7 @@ import { requireSysop } from "../admin.js";
 /** Import engine: upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
 import { json } from "../app.js";
+import { setting } from "../siteconfig.js";
 import { haversineMeters } from "@aprscaching/aprs";
 import { webLink } from "@aprscaching/shared";
 import { SOURCES, type ImportedCache, type ImportScope } from "./sources.js";
@@ -22,7 +23,7 @@ export class ImportNotPermitted extends Error {}
 /** The sources the operator holds permission for (IMPORT_ALLOW, comma-separated ids). */
 function allowedSources(env: Env): Set<string> {
   return new Set(
-    (env.IMPORT_ALLOW ?? "")
+    (setting(env, "IMPORT_ALLOW") ?? "")
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),

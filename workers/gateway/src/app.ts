@@ -221,6 +221,8 @@ import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommand
 import { handleMailboxPost, handleMailboxList, handleMailboxWithdraw, expireMailbox } from "./mailbox.js";
 import { handleNearRadioPrefs, pruneNearCacheMessages } from "./nearradio.js";
 import { runUpdateCheck } from "./updatecheck.js";
+import { handleAdminSettings } from "./sitesettings.js";
+import { loadSiteSettings } from "./siteconfig.js";
 export { syncAllPeers } from "./fedpull.js";
 
 export { isGatewayPath } from "./paths.js";
@@ -229,6 +231,7 @@ export { isGatewayPath } from "./paths.js";
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   applyDerivedDefaults(env);
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
+  await loadSiteSettings(env);
   const res = await route(req, env, ctx);
   // gossip ping: a successful federated write coalesces into one "come pull" to our peers
   if (res.ok && isFederatedWrite(req.method, new URL(req.url).pathname))
@@ -256,6 +259,7 @@ export interface FrequentSyncResult {
 
 async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<FrequentSyncResult> {
   applyDerivedDefaults(env);
+  await loadSiteSettings(env);
   let push: PushResult | null = null;
   try {
     await syncAllPeers(env);
@@ -286,6 +290,7 @@ async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<F
  */
 export async function runScheduled(env: Env): Promise<void> {
   applyDerivedDefaults(env);
+  await loadSiteSettings(env);
   const now = nowS();
   // Prune in bounded batches (pruneBounded), range-scanned via idx_pos_source_ts.
   await pruneBounded(
@@ -484,6 +489,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
+  if (p === "/api/admin/settings") return handleAdminSettings(req, env);
+  const settingKey = /^\/api\/admin\/settings\/([A-Za-z0-9_]{1,64})$/.exec(p);
+  if (settingKey) return handleAdminSettings(req, env, settingKey[1]!);
   if (p === "/api/admin/mail-test" && m === "POST") return handleMailTest(req, env);
   if (p === "/api/admin/station-status" && m === "GET") return handleStationStatus(req, env);
   if (p === "/api/admin/federation/identity" && m === "GET") return handleIdentity(req, env); // records to publish; ?check=1 runs the read-only DNS self-check

@@ -49,6 +49,36 @@ export interface ConfigKey {
   readonly publicRequired?: boolean;
   /** The shapes it applies to, when that is narrower than its units imply. */
   readonly shapes?: readonly ConfigShape[];
+  /** A site setting: a sysop may also set it in Instance admin → Instance settings (sitesettings.ts). */
+  readonly site?: SiteSetting;
+}
+
+/** The groups of Instance admin → Instance settings, in display order. */
+export const SITE_GROUPS = ["game", "accounts", "retention", "imports", "imprint", "support", "updates"] as const;
+export type SiteGroup = (typeof SITE_GROUPS)[number];
+
+/**
+ * A policy value the sysop tunes while the instance runs, stored in the database (`site_settings`). The
+ * environment wins when it sets the key; otherwise the stored value applies, else the schema default. Only
+ * a key the gateway reads afresh on each use is one: never a secret, an address, a key, a path or a port.
+ * The value's type is the key's `type`; these fields narrow it.
+ */
+export interface SiteSetting {
+  readonly group: SiteGroup;
+  /** The bounds of an `int` or a `number`. */
+  readonly min?: number;
+  readonly max?: number;
+  /** The unit a number is in, as the form shows it beside the field. */
+  readonly unit?: string;
+  /** The items a `list` may hold, when they are known ids. */
+  readonly options?: readonly string[];
+  /** The longest accepted text of a `string` (default 200 characters). */
+  readonly maxLength?: number;
+  /**
+   * A value that needs more than its type: an email address, contact URIs (a bare address becomes
+   * `mailto:`), donation links (`[{label,url}]`), or the retention fields (RETENTION_FIELDS).
+   */
+  readonly format?: "email" | "contacts" | "links" | "retention";
 }
 
 export type ConfigKeyName = keyof typeof CONFIG_KEYS;
@@ -135,6 +165,12 @@ function validator(k: ConfigKey): z.ZodType<string> {
     default:
       return s;
   }
+}
+
+/** Why `value` does not fit the type of `key`, or null when it does. */
+export function configValueProblem(key: ConfigKeyName, value: string): string | null {
+  const r = validator(CONFIG_KEYS[key]).safeParse(value);
+  return r.success ? null : (r.error.issues[0]?.message ?? "invalid value");
 }
 
 export interface ConfigProblem {

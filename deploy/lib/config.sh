@@ -5,10 +5,12 @@
 CONFIG_TSV="${CONFIG_TSV:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config-keys.tsv}"
 
 # One column of KEY's row (1 name, 2 type, 3 units, 4 default, 5 values, 6 secret, 7 publicRequired,
-# 8 shapes, 9 hint); empty for an unknown key.
+# 8 shapes, 9 hint, 10 site: the Instance settings group of a site setting); empty for an unknown key.
 cfg_field() { awk -F'\t' -v k="$1" -v c="$2" '!/^#/ && $1==k {print $c; exit}' "$CONFIG_TSV"; }
 
 cfg_known() { awk -F'\t' -v k="$1" '!/^#/ && $1==k {f=1; exit} END{exit !f}' "$CONFIG_TSV"; }
+# A site setting: the sysop may also set it in Instance admin -> Instance settings (stored in the database).
+cfg_site() { [ -n "$(cfg_field "$1" 10)" ]; }
 cfg_secret() { [ "$(cfg_field "$1" 6)" = 1 ]; }
 cfg_hint() { cfg_field "$1" 9; }
 cfg_default() { cfg_field "$1" 4; }

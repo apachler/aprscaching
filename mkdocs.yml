@@ -158,6 +158,7 @@ nav:
           - "Before a trip: sync and your home hub": run/pocket/trips.md
       - Day to day:
           - Instance admin at a glance: run/day-to-day/index.md
+          - Instance settings: run/day-to-day/instance-settings.md
           - The deploy/aprscaching command: run/day-to-day/helper-command.md
           - Backups and moving: run/day-to-day/backups.md
           - Updates: run/day-to-day/updates.md

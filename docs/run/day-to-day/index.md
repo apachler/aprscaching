@@ -20,6 +20,7 @@ preferences, media, tools, their own data) stay under **Settings** and are not p
 | Group | What you do there | Page |
 |---|---|---|
 | **Setup** | the first-install checklist: *Blocking*, *Recommended* and *Optional* items, and the 44Net self-check | [Your first hour](../first-hour.md) |
+| **Instance settings** | the policy values: game rules, API limits, retention, imports and spots, the imprint, donation links, the update check; a value the environment sets shows read-only | [Instance settings](instance-settings.md) |
 | **Callsigns** | look a call up, verify it by hand, release it from an account, list and revoke manual verifications | [Callsign verification](callsign-verification.md) |
 | **Stations for members** | list a club station for the member who runs it, when that member does not hold the club call: give the member's callsign, the station's callsign and its position (blank takes a heard station's) | [Stations for members](#stations-for-members) |
 | **Reports**, **Accounts**, **Audit log** | the moderation queue: settle reports, remove content, find and suspend an account, and the record of every action | [Moderation](moderation.md) |

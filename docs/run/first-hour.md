@@ -59,8 +59,10 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
    radio ([quick starts](radios/quick-starts.md)).
 
 5. **Make it public-ready**, the *Recommended* items:
-    - `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL` for `/imprint` and `/privacy`; `OPERATOR_EMAIL` is
-      also the contact in `/.well-known/security.txt` unless `SECURITY_CONTACT` names another;
+    - your name, postal address and contact email for `/imprint` and `/privacy`, under **Instance admin →
+      Instance settings → Imprint & contact** ([Instance settings](day-to-day/instance-settings.md)), or
+      `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL` in the environment. The contact email is also the
+      contact in `/.well-known/security.txt` unless **Security contacts** names another;
     - mail, so members without a passkey can sign in and recover: `EMAIL_FROM` and an SMTP server or a
       Resend key ([Send mail](day-to-day/mail.md));
     - a scheduled backup ([Backups](day-to-day/backups.md#what-to-back-up));
@@ -100,8 +102,9 @@ Once members join, reports about caches, logs, photos, messages and profiles rea
 Reports**, and by email to `OPERATOR_EMAIL` when mail is configured
 ([Moderation](day-to-day/moderation.md)).
 
-Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_LINKS`).
-The [Configuration reference](../reference/configuration.md) lists every key.
+Optional extras: web push (`VAPID_*`), and under **Instance admin → Instance settings** activity spots, donation
+links, the game rules and the retention periods. The [Configuration reference](../reference/configuration.md)
+lists every key, and which ones are [instance settings](../reference/configuration.md#instance-settings).
 
 Secrets and the operator list are environment-only, and the Setup page never writes them: a compromised
 session must not be able to rewrite them. The server reports only whether each is set and healthy, never its

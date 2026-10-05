@@ -10,6 +10,7 @@ import { haversineMeters } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { requireSysop } from "./admin.js";
 import { resealStage } from "./stages.js";
 
@@ -24,7 +25,7 @@ export interface Pin {
 
 /** How far (metres) an owner moves a coordinate of a found cache from its pin. `0` keeps it where it was found. */
 function moveLimitM(env: Env): number {
-  const raw = env.CACHE_MOVE_LIMIT_M;
+  const raw = setting(env, "CACHE_MOVE_LIMIT_M");
   if (raw == null || raw.trim() === "") return CACHE_MOVE_LIMIT_M_DEFAULT;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : CACHE_MOVE_LIMIT_M_DEFAULT;

@@ -19,6 +19,7 @@ import { escapeHtml } from "./util/html.js";
 import { nowS } from "./util/time.js";
 import { instanceHost, type Env } from "./env.js";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { sendEmail } from "./mail.js";
 import { purposeMac, sessionIdentity, timingSafeEqual } from "./auth.js";
 import { appBase } from "./sitemap.js";
@@ -270,7 +271,7 @@ export async function pushAlert(env: Env, accountId: string): Promise<void> {
 export function vapidSubject(env: Env): string | null {
   const set = env.VAPID_SUBJECT?.trim();
   if (set) return set;
-  const email = env.OPERATOR_EMAIL?.trim();
+  const email = setting(env, "OPERATOR_EMAIL")?.trim();
   if (email) return `mailto:${email}`;
   const host = instanceHost(env);
   return host ? `https://${host}` : null;

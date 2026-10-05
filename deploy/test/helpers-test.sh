@@ -368,6 +368,8 @@ if have python3; then
     check "  … a blocking checklist item fails" eq "$(status_of setup.db:ingest)" fail
     check "  … a newer release warns, never fails" eq "$(status_of setup.update)" warn
     check "  … naming the release and the update command" grep -q 'APRScaching v1.1.0 is available: https://example.org/acs/releases/tag/v1.1.0.*deploy/aprscaching update' "$TMP/out"
+    check "  … the instance settings changed in Instance admin are listed" eq "$(status_of site.settings)" pass
+    check "  … with their values, and the ones the environment overrides" grep -q 'HIDE_DAILY_LIMIT=3; overridden by the environment: UPDATE_CHECK' "$TMP/out"
     check "  … a LAN instance has federation off" eq "$(status_of federation.off)" pass
     check "  … a recent backup passes" eq "$(status_of resources.backup)" pass
     check "  … the source link passes" eq "$(status_of source.link)" pass

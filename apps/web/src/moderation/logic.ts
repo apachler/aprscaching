@@ -32,6 +32,9 @@ const ACTION_NAMES: Record<string, string> = {
   unsuspend: "lifted the suspension of",
   resolve: "resolved",
   reopen: "reopened",
+  // an Instance settings change: "OE8APR changed setting HIDE_DAILY_LIMIT"
+  set: "changed",
+  reset: "reset",
 };
 /** An audit row as a verb phrase: "OE8APR removed". */
 export const actionName = (a: string): string => ACTION_NAMES[a] ?? a;

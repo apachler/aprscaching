@@ -127,7 +127,13 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
 
   it("every env item is marked read-only (source: env)", async () => {
     const items = await itemsOf(await get(baseEnv(), "OE8APR"));
-    for (const i of items.filter((x) => !x.key.startsWith("db:"))) expect(i.source).toBe("env");
+    for (const i of items.filter((x) => !x.key.startsWith("db:") && x.key !== "OPERATOR")) expect(i.source).toBe("env");
+  });
+
+  it("marks the imprint editable in Instance settings unless the environment sets all of it", async () => {
+    expect(find(await itemsOf(await get(baseEnv(), "OE8APR")), "OPERATOR").source).toBe("db");
+    const env = baseEnv({ OPERATOR_NAME: "Max", OPERATOR_ADDRESS: "Musterweg 1", OPERATOR_EMAIL: "op@example.net" });
+    expect(find(await itemsOf(await get(env, "OE8APR")), "OPERATOR").source).toBe("env");
   });
 
   it("reports missing/warn states for an unconfigured instance", async () => {

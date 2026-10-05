@@ -40,8 +40,8 @@ export function ApiKeysAdmin() {
   return (
     <>
       <p className="muted fine">
-        Members create keys under Settings → Developer, up to {data.cap} each (
-        <span className="mono">API_KEYS_PER_ACCOUNT</span>). A key raises the read-API rate limit and gates nothing.
+        Members create keys under Settings → Developer, up to {data.cap} each (Instance settings → Accounts &amp; API).
+        A key raises the read-API rate limit and gates nothing.
       </p>
       {data.keys.length === 0 ? (
         <EmptyState>No member has created an API key yet.</EmptyState>

@@ -31,6 +31,7 @@ import { baseCall } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { requireSysop, adminCalls, isSysop } from "./admin.js";
 import {
   sessionIdentity,
@@ -328,11 +329,12 @@ async function notifyAccount(
 }
 
 /** The acting sysop's call for the audit log: the session's call, or OPERATOR for a scripted request. */
-async function actorOf(req: Request, env: Env): Promise<string> {
+export async function actorOf(req: Request, env: Env): Promise<string> {
   return (await sessionIdentity(req, env))?.callsign ?? "OPERATOR";
 }
 
-function audit(
+/** One audit-log row: a moderation action, or a change to an instance setting (sitesettings.ts). */
+export function audit(
   env: Env,
   a: {
     actor: string;
@@ -950,7 +952,7 @@ export async function handleReport(req: Request, env: Env): Promise<Response> {
     )
     .run();
   const id = Number(r.meta?.last_row_id);
-  const to = env.OPERATOR_EMAIL?.trim();
+  const to = setting(env, "OPERATOR_EMAIL")?.trim();
   if (to)
     await sendEmail(
       env,

@@ -133,7 +133,9 @@ it too.
 ## The audit log
 
 **Instance admin → Audit log** lists every action: who, when, the action (`remove`, `restore`, `suspend`,
-`unsuspend`, `resolve`, `reopen`), the target and the reason. It is kept on this instance and never federates.
+`unsuspend`, `resolve`, `reopen`), the target and the reason. A change to an
+[instance setting](instance-settings.md) shows too, with its old and new value. It is kept on this instance
+and never federates.
 A person's export carries the rows about their account; the rows stay after their erasure
 ([Moderation records](../compliance/data-protection.md#moderation-records)).
 

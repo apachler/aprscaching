@@ -8,6 +8,7 @@
  * are unit-tested with fixtures; this module is the thin fetch+map layer.
  */
 import type { Env } from "../env.js";
+import { setting } from "../siteconfig.js";
 import type { AttributionPart, CacheType } from "@aprscaching/shared";
 import { htmlToAttribution, parseCsv, parseGeoJsonFeatures, parseGpxWaypoints } from "./parse.js";
 import { APP_VERSION } from "../version.js";
@@ -62,7 +63,7 @@ interface SourceAdapter {
 export function importerUserAgent(env: Env): string {
   const host = env.INSTANCE?.trim();
   const site = host ? `https://${host}` : "https://github.com/apachler/aprscaching";
-  const email = env.OPERATOR_EMAIL?.trim();
+  const email = setting(env, "OPERATOR_EMAIL")?.trim();
   return `aprscaching/${APP_VERSION} (+${site}${email ? `; ${email}` : ""})`;
 }
 

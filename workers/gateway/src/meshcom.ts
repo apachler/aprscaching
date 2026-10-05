@@ -22,6 +22,7 @@ import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { meshcomBattLevel, meshcomQuality, type MeshcomMeta } from "@aprscaching/shared";
 import { json } from "./app.js";
+import { setting } from "./siteconfig.js";
 import { sessionIdentity } from "./auth.js";
 import { nowS } from "./util/time.js";
 import { parsePage, keyset, paginate } from "./paging.js";
@@ -210,8 +211,8 @@ export async function ownMeshcomVia(
 
 /** Nightly: drop nodes and links not heard within their windows. */
 export async function pruneMeshcom(env: Env, now: number): Promise<void> {
-  const nodeDays = intEnv(env.MESHCOM_NODE_TTL_DAYS, 7, 1);
-  const linkHours = intEnv(env.MESHCOM_LINK_TTL_HOURS, 48, 1);
+  const nodeDays = intEnv(setting(env, "MESHCOM_NODE_TTL_DAYS"), 7, 1);
+  const linkHours = intEnv(setting(env, "MESHCOM_LINK_TTL_HOURS"), 48, 1);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM meshcom_nodes WHERE last_heard < ?").bind(now - nodeDays * 86400),
     env.DB.prepare("DELETE FROM meshcom_links WHERE last_seen < ?").bind(now - linkHours * 3600),

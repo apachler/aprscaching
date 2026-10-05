@@ -2,7 +2,8 @@
 /**
  * legal.ts — per-instance legal pages: the imprint (provider identification) and the privacy
  * notice. Like the AGPL §13 source link, these are obligations of WHOEVER RUNS an instance, not of
- * the project — so they are served by the gateway and filled from the operator's environment:
+ * the project — so they are served by the gateway and filled from the operator's site settings (Instance
+ * settings, or the environment, which wins):
  *
  *   OPERATOR_NAME     the natural/legal person operating this instance (imprint requirement)
  *   OPERATOR_ADDRESS  a postal address ("," separates lines)
@@ -14,7 +15,7 @@
  * The privacy text states what the software ACTUALLY does (session cookie only, callsign accounts,
  * public-broadcast APRS positions, federation per fed_scope, export/erase self-service), and names
  * who receives data, listing the mail transport's host and the push services only when they are
- * configured. Until the OPERATOR_* variables are set, both pages render a visible not-yet-configured
+ * configured. Until the OPERATOR_* settings are set, both pages render a visible not-yet-configured
  * warning so an operator cannot ship the placeholders unnoticed.
  */
 import type { Env } from "./env.js";
@@ -22,6 +23,7 @@ import { escapeHtml } from "./util/html.js";
 import { mailTransport } from "./mail.js";
 import { updateCheckOn } from "./updatecheck.js";
 import { moderationKeepDays } from "./retention.js";
+import { setting } from "./siteconfig.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -31,18 +33,19 @@ h1{font-size:1.4rem}h2{font-size:1.1rem;margin-top:1.5rem}.m{opacity:.7}
 </style>`;
 
 function operator(env: Env): { name: string; address: string[]; email: string; configured: boolean } {
-  const name = env.OPERATOR_NAME?.trim() ?? "";
-  const address = (env.OPERATOR_ADDRESS ?? "")
+  const name = setting(env, "OPERATOR_NAME")?.trim() ?? "";
+  const address = (setting(env, "OPERATOR_ADDRESS") ?? "")
     .split(",")
     .map((l) => l.trim())
     .filter(Boolean);
-  const email = env.OPERATOR_EMAIL?.trim() ?? "";
+  const email = setting(env, "OPERATOR_EMAIL")?.trim() ?? "";
   return { name, address, email, configured: !!(name && email) };
 }
 
 const unconfigured = `<div class=warn><strong>This instance's operator has not configured this page yet.</strong>
-Set <code>OPERATOR_NAME</code>, <code>OPERATOR_ADDRESS</code>, and <code>OPERATOR_EMAIL</code> in the
-gateway environment before making the instance public.</div>`;
+The operator sets their name, postal address and contact email under Instance admin → Instance settings
+(or <code>OPERATOR_NAME</code>, <code>OPERATOR_ADDRESS</code> and <code>OPERATOR_EMAIL</code> in the gateway
+environment) before making the instance public.</div>`;
 
 const page = (title: string, body: string): Response =>
   new Response(
