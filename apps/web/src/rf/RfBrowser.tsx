@@ -277,11 +277,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                   options={[
                     {
                       value: "signed",
-                      label: `signed${signedIn ? ` (${props.callsign})` : " — sign in to enable"}`,
+                      label: `Signed${signedIn ? ` (${props.callsign})` : " — sign in to enable"}`,
                       disabled: !signedIn,
                       title: signedIn ? undefined : "Sign in to forward under your own callsign",
                     },
-                    { value: "secret", label: "secret (self-host)" },
+                    { value: "secret", label: "Secret (self-host)" },
                   ]}
                 />
               </Row>

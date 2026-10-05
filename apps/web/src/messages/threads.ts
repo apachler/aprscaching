@@ -3,10 +3,10 @@
  * threads.ts — the operator's own messages as conversations, and the choice of how a new one is delivered. Pure:
  * the messenger view (Conversations.tsx) renders what these return.
  *
- * A conversation is the pair of the operator (any SSID of their base call) and one other callsign. It gathers the
- * APRS and MeshCom messages the instance logged between them, the messages the operator left in the Mailbox for
- * that station, and those left for the operator that wait until they are heard. A Mailbox message the service call
- * delivered (`de <call>: <text>`) belongs to the conversation with the station that left it.
+ * A conversation is the pair of the operator (any SSID of their base call) and one other station (any SSID of its
+ * base call). It gathers the APRS and MeshCom messages the instance logged between them, the messages the operator
+ * left in the Mailbox for that station, and those left for the operator that wait until they are heard. A Mailbox
+ * message the service call delivered (`de <call>: <text>`) belongs to the conversation with the station that left it.
  */
 import type { MailboxMessage, MessageItem } from "../api.js";
 import type { LinkKind } from "../rf/radioLink.js";
@@ -27,6 +27,8 @@ export interface ThreadItem {
   dir: "in" | "out";
   /** The callsign that sent it: the operator's own call (any SSID) on an outgoing message. */
   from: string;
+  /** The other station's exact callsign, SSID included: the sender of an incoming message, the addressee of one sent. */
+  with: string;
   text: string;
   transport?: string | null;
   /** Delivered by the Mailbox: left in the app or by a MAIL command, sent when the station was heard. */
@@ -37,8 +39,10 @@ export interface ThreadItem {
 }
 
 export interface Thread {
-  /** The other station: the conversation's key. */
+  /** The other station's base call: the conversation's key ({@link threadKey}). */
   peer: string;
+  /** Where a reply goes: the exact callsign of the conversation's latest message. */
+  replyTo: string;
   /** The other side erased their account or gave up their call: the messages stay, there is no one to reply to. */
   withdrawn?: boolean;
   /** Oldest first. */
@@ -73,10 +77,10 @@ export function threadsOf(
   const mine = (call: string | null | undefined) =>
     !!call && call.toUpperCase() !== svc && baseOf(call) === myBase && myBase.length >= 3;
   const byPeer = new Map<string, ThreadItem[]>();
-  const add = (peer: string, item: ThreadItem) => {
-    const p = peer.toUpperCase();
+  const add = (peer: string, item: Omit<ThreadItem, "with">) => {
+    const p = threadKey(peer, svc);
     const list = byPeer.get(p) ?? [];
-    list.push(item);
+    list.push({ ...item, with: peer.toUpperCase() });
     byPeer.set(p, list);
   };
 
@@ -143,9 +147,28 @@ export function threadsOf(
   const threads: Thread[] = [];
   for (const [peer, items] of byPeer) {
     items.sort((a, b) => a.ts - b.ts || a.key.localeCompare(b.key));
-    threads.push({ peer, items, last: items[items.length - 1]!, ...(isPersonMarker(peer) && { withdrawn: true }) });
+    const last = items[items.length - 1]!;
+    threads.push({
+      peer,
+      replyTo: last.with,
+      items,
+      last,
+      ...(isPersonMarker(peer) && { withdrawn: true }),
+    });
   }
   return threads.sort((a, b) => b.last.ts - a.last.ts);
+}
+
+/**
+ * The conversation a callsign belongs to: its base call, so every SSID of one station is one conversation and a
+ * message waiting in the Mailbox for OE6BOB stays beside the one OE6BOB-9 answered. The service call speaks for
+ * the instance, not for the sysop who shares its base call, and keeps a conversation of its own; a withdrawn
+ * marker stays as it is.
+ */
+export function threadKey(call: string, service: string | null): string {
+  const c = call.trim().toUpperCase();
+  if (isPersonMarker(c) || (service && c === service.toUpperCase())) return c;
+  return baseOf(c);
 }
 
 /** The callsigns the operator wrote with most recently, for the recipient field's suggestions. */
@@ -153,7 +176,7 @@ export function correspondents(threads: readonly Thread[], limit = 20): string[]
   return threads
     .filter((t) => !t.withdrawn)
     .slice(0, limit)
-    .map((t) => t.peer);
+    .map((t) => t.replyTo);
 }
 
 /** How a new message travels: now, or kept in the Mailbox until the instance hears the station. */

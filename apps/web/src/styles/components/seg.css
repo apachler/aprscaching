@@ -52,7 +52,6 @@
     background: var(--surface);
     color: var(--muted);
     padding: 5px var(--space-md);
-    text-transform: capitalize;
     white-space: nowrap;
   }
   /* the bar clips a segment's touch extension, so on touch each segment is a full-size target itself */

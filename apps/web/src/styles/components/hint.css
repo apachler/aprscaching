@@ -59,6 +59,17 @@
         bottom span-left,
         right;
     }
+    /* a segment's hint opens under the bar: the field the choice is for sits right above it */
+    .hint[data-open][data-below] {
+      position-area: bottom;
+      position-try-fallbacks:
+        top,
+        bottom span-right,
+        top span-right,
+        bottom span-left,
+        top span-left,
+        right;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .hint[data-open] {

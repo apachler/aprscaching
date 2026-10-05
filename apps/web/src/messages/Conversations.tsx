@@ -44,6 +44,7 @@ import {
   nowRoute,
   sendBlocked,
   textMax,
+  threadKey,
   threadsOf,
   validRecipient,
   type Delivery,
@@ -105,7 +106,8 @@ export function Conversations(props: {
     () => threadsOf(messages.items, box.data, me, service),
     [messages.items, box.data, me, service],
   );
-  const open = props.peer ? (threads.find((t) => t.peer === props.peer!.toUpperCase()) ?? null) : null;
+  const openKey = props.peer ? threadKey(props.peer, service) : null;
+  const open = openKey ? (threads.find((t) => t.peer === openKey) ?? null) : null;
 
   async function withdraw(id: number, to: string) {
     try {
@@ -134,8 +136,12 @@ export function Conversations(props: {
     />
   );
 
-  if (props.peer) {
-    const peer = props.peer.toUpperCase();
+  if (props.peer && openKey) {
+    const peer = openKey;
+    // a reply goes to the station as it was named (a Reply from On the air, a new message), else to the SSID of
+    // the conversation's latest message
+    const named = props.peer.toUpperCase();
+    const replyTo = named !== peer ? named : (open?.replyTo ?? peer);
     const withdrawn = isPersonMarker(peer);
     return (
       <section aria-labelledby="thread-h">
@@ -152,7 +158,7 @@ export function Conversations(props: {
         ) : (
           <ol className="msg-thread">
             {open.items.map((it) => (
-              <ThreadRow key={it.key} it={it} fmt={fmt} onWithdraw={(id) => void withdraw(id, peer)} />
+              <ThreadRow key={it.key} it={it} peer={peer} fmt={fmt} onWithdraw={(id) => void withdraw(id, peer)} />
             ))}
           </ol>
         )}
@@ -161,7 +167,7 @@ export function Conversations(props: {
         ) : (
           <>
             <h4 className="set-subh">Reply</h4>
-            {compose(peer)}
+            {compose(replyTo)}
           </>
         )}
       </section>
@@ -240,7 +246,13 @@ function ThreadLink(props: { t: Thread; fmt: ReturnType<typeof useFmt>; onOpen: 
   );
 }
 
-function ThreadRow(props: { it: ThreadItem; fmt: ReturnType<typeof useFmt>; onWithdraw: (id: number) => void }) {
+function ThreadRow(props: {
+  it: ThreadItem;
+  /** The conversation's base call: a message to another SSID of it names that SSID. */
+  peer: string;
+  fmt: ReturnType<typeof useFmt>;
+  onWithdraw: (id: number) => void;
+}) {
   const { it } = props;
   return (
     <li className={`msg-row${it.dir === "out" ? " mine" : ""}`}>
@@ -249,7 +261,9 @@ function ThreadRow(props: { it: ThreadItem; fmt: ReturnType<typeof useFmt>; onWi
           {it.dir === "in" && isPersonMarker(it.from) ? (
             <span className="msg-from">{WITHDRAWN_LABEL}</span>
           ) : (
-            <span className="mono msg-from">{it.dir === "out" ? `You (${it.from})` : it.from}</span>
+            <span className="mono msg-from">
+              {it.dir === "out" ? `You (${it.from})${it.with !== props.peer ? ` to ${it.with}` : ""}` : it.from}
+            </span>
           )}
         </span>
         {it.viaMailbox ? (
