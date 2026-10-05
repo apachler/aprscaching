@@ -79,14 +79,6 @@ start order: the first ones wait on replies from outside, so they start first, a
       model, the player pages.
 - [x] **CHANGELOG overview current** — the deployment shapes counted right, and MeshCom, the Mailbox, the near
       prompt and near radio message, the compass Find view and lent receivers listed.
-- [ ] **Signed tools import** _(S)_ — the Tools app refuses every signed manifest as **Signature INVALID**,
-      the registry's own `hello-tool` included. `validateManifest()` returns every optional field, set or not
-      (`remote`, `connect`, …), and `stableStringify()` in `packages/tools/src/registry.ts` writes an unset one
-      as `"remote":undefined`, while `tools/toolkey/sign.mjs` signs the file as written. Skip `undefined`
-      values in `stableStringify()` the way `JSON.stringify` does (or sign and verify the raw manifest), add a
-      test that signs a file with `sign.mjs` and verifies it through `fetchToolManifest` →
-      `checkManifestSignature`, and drop the warnings in `docs/contribute/tool-reference.md` and
-      `first-tool.md`.
 - [ ] **Release pipeline proven** _(S — last)_ — in the repository settings, enable _Settings → Actions → General
       → Allow GitHub Actions to create and approve pull requests_ (release-please opens the release PR with
       `GITHUB_TOKEN`; the setting is off). Run `release-verify.yml` once by `workflow_dispatch` (it has never

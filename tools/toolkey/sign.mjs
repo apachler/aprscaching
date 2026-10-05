@@ -13,6 +13,7 @@ const stable = (v) =>
     : Array.isArray(v)
       ? `[${v.map(stable).join(",")}]`
       : `{${Object.keys(v)
+          .filter((k) => v[k] !== undefined)
           .sort()
           .map((k) => `${JSON.stringify(k)}:${stable(v[k])}`)
           .join(",")}}`;

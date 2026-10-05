@@ -16,7 +16,10 @@ function stableStringify(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
   const o = v as Record<string, unknown>;
+  // An unset field is left out, as JSON.stringify leaves it out: the validated manifest carries every optional
+  // field, set or not, while an author signs the file as written, so both sides must serialise the same keys.
   return `{${Object.keys(o)
+    .filter((k) => o[k] !== undefined)
     .sort()
     .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
     .join(",")}}`;
@@ -40,7 +43,7 @@ export function bytesToB64(bytes: Uint8Array, url = false): string {
 const buf = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 
 /** The exact bytes an author signs: the canonical manifest with `signature` removed (pubkey stays in). */
-export function manifestSigningBytes(m: ToolManifest): Uint8Array {
+export function manifestSigningBytes(m: ToolManifest | Record<string, unknown>): Uint8Array {
   const rest: Record<string, unknown> = { ...m };
   delete rest.signature;
   return new TextEncoder().encode(stableStringify(rest));
@@ -52,9 +55,13 @@ const importVerifyKey = (rawB64url: string): Promise<CryptoKey> =>
 /** Signature outcome for a manifest. `invalid` MUST block the import; `unsigned` is allowed-with-warning. */
 export type ManifestSig = "unsigned" | "valid" | "invalid";
 
-/** Check a manifest's own signature against its self-carried pubkey (integrity, not identity). */
-export async function checkManifestSignature(m: ToolManifest): Promise<ManifestSig> {
-  if (!m.signature || !m.pubkey) return "unsigned";
+/**
+ * Check a manifest's own signature against its self-carried pubkey (integrity, not identity). Pass the manifest
+ * as fetched, before `validateManifest`: validation fills in defaults and normalises fields, and the author signed
+ * the file as written.
+ */
+export async function checkManifestSignature(m: ToolManifest | Record<string, unknown>): Promise<ManifestSig> {
+  if (typeof m.signature !== "string" || typeof m.pubkey !== "string" || !m.signature || !m.pubkey) return "unsigned";
   try {
     const key = await importVerifyKey(m.pubkey);
     const ok = await crypto.subtle.verify("Ed25519", key, buf(b64ToBytes(m.signature)), buf(manifestSigningBytes(m)));

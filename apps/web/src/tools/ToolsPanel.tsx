@@ -230,7 +230,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       return;
     }
     // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
-    const sig = await checkManifestSignature(r.manifest);
+    const sig = await checkManifestSignature(r.raw);
     const regEntry = registry.find((e) => e.name === r.manifest.name);
     const trust = resolveTrust(sig, {
       registryPubkey: regEntry?.pubkey,
