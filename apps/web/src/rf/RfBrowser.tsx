@@ -194,7 +194,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       disabled={busy}
       hint={hint}
     >
-      {busy ? "…" : label}
+      {busy ? `${label}…` : label}
     </Button>
   );
 
