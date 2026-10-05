@@ -916,6 +916,8 @@ export interface FedPeer {
   url: string;
   instance: string | null;
   signed: number;
+  /** The pinned key's fingerprint (four groups of four hex digits); null until a signed sync pins a key */
+  fingerprint: string | null;
   trust: "trusted" | "unvetted" | "blocked";
   added_via?: string | null; // manual | registry | discovered | auto-promoted
   /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
@@ -932,7 +934,11 @@ export interface FedPeer {
   rep_failed: number;
   lastCounts: Record<string, number> | null;
 }
-export function listFederationPeers(): Promise<{ peers: FedPeer[] }> {
+export function listFederationPeers(): Promise<{
+  /** This instance and its own key fingerprint (null when it signs nothing) */
+  self: { instance: string | null; fingerprint: string | null };
+  peers: FedPeer[];
+}> {
   return call(`/federation/peers`);
 }
 

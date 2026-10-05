@@ -133,6 +133,16 @@ ok(
   (peers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.signed),
   JSON.stringify(peers.data),
 );
+// the key the subscriber pinned has the fingerprint the publisher reports as its own
+{
+  const own = (await call(PUB, "GET", "/federation/peers")).data?.self?.fingerprint;
+  const pinned = (peers.data?.peers ?? []).find((p) => p.instance === pubInstance)?.fingerprint;
+  ok(
+    "the pinned key's fingerprint matches the publisher's own",
+    /^[0-9a-f]{4}( [0-9a-f]{4}){3}$/.test(pinned ?? "") && pinned === own,
+    `pinned=${pinned} own=${own}`,
+  );
+}
 
 // the publisher's cache now appears on the SUBSCRIBER's map, marked mirrored
 const list = await call(SUB, "GET", "/api/caches?bbox=15,46,16,48");

@@ -8,7 +8,15 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { trimTrailingSlashes } from "./fetchguard.js";
-import { isInstanceId, loadRegistry, parseAcceptKeys, usableKeys, type RegistryEntry } from "./federation.js";
+import {
+  isInstanceId,
+  keyFingerprint,
+  loadRegistry,
+  ownKeyFingerprint,
+  parseAcceptKeys,
+  usableKeys,
+  type RegistryEntry,
+} from "./federation.js";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -151,26 +159,30 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   await seedPeers(env);
   const rows = (
     await env.DB.prepare(
-      `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
+      `SELECT url, instance, public_key IS NOT NULL AS signed, public_key, trust, added_via, approved_at,
             rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, moves_cursor,
             enabled, last_sync, last_ok, last_error, sync_ok, sync_err, mirrored_total, last_counts
        FROM fed_peers ORDER BY url`,
     ).all<Record<string, unknown>>()
   ).results;
   // derive a health signal + error rate so an operator scans state without doing the math.
-  const peers = rows.map((p) => {
-    const okN = Number(p.sync_ok ?? 0),
-      errN = Number(p.sync_err ?? 0);
-    const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
-    const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? "new" : lastErrored ? "error" : "ok";
-    return {
-      ...p,
-      lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
-      errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
-      health,
-    };
-  });
-  return json({ peers });
+  const peers = await Promise.all(
+    rows.map(async ({ public_key, ...p }) => {
+      const okN = Number(p.sync_ok ?? 0),
+        errN = Number(p.sync_err ?? 0);
+      const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
+      const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? "new" : lastErrored ? "error" : "ok";
+      return {
+        ...p,
+        // the key this instance pinned, for the sysop to compare with the peer's own out of band
+        fingerprint: await keyFingerprint(public_key as string | null),
+        lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
+        errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
+        health,
+      };
+    }),
+  );
+  return json({ self: { instance: ours(env), fingerprint: await ownKeyFingerprint(env) }, peers });
 }
 
 /**

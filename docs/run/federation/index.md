@@ -28,7 +28,9 @@ Desktop or Pocket.
     FED_PEERS=https://a.example,https://b.example
     ```
 
-    They start `trusted`: your instance mirrors them and counts their corroboration.
+    They start `trusted`: your instance mirrors them and counts their corroboration. Their keys are not
+    checked yet: your instance pins whatever key a peer signs its first sync with. Compare fingerprints with
+    each peer's sysop next ([Compare key fingerprints](#compare-key-fingerprints)).
 
 3. **Ask each peer's sysop to add your `APP_URL`** to their `FED_PEERS`. Until they do, their instance holds you
    `unvetted` if it learns of you at all: your records are mirrored there but hidden on the map, and your
@@ -70,6 +72,24 @@ a leaked key at once, publish it as revoked:
 `FED_KEY_HISTORY='[{"x":"<leaked public key>","revoked":true}]'`.
 [Signed feeds](../../reference/federation-trust.md#signed-feeds) explains how peers follow a rotation.
 
+### Compare key fingerprints
+
+A peer in `FED_PEERS` starts `trusted` with a key nobody has checked: your instance pins the key the peer
+signs its first sync with. Someone between you and the peer at that moment could put their own key there.
+Comparing fingerprints with the peer's sysop closes that gap.
+
+1. Open **Instance admin → Federation**. The line above the peer list shows your instance's key fingerprint,
+   four groups of four hex digits, for example `630d cd29 66c4 3366`. Each peer shows the fingerprint of the
+   key your instance pinned for it, under **key**.
+2. Reach the peer's sysop by a channel the network does not carry: a phone call, a QSO, or in person.
+3. Read your fingerprint to them, and have them read theirs to you. Each compares what they hear with the
+   peer's line on their own list.
+4. They match: the keys are the right ones. They differ: [block the peer](#peers-and-trust) and find out why
+   before you trust it again.
+
+`deploy/aprscaching doctor` prints the same fingerprints, yours and each `FED_PEERS` peer's. Compare again
+after either of you [rotates a key](#rotate-your-key).
+
 ## What the installer sets
 
 On a public instance `deploy/setup.sh` writes the safe posture out, so you see it in `.env`:
@@ -92,7 +112,7 @@ The defaults are safe. These settings decide how much a stranger can do.
 
 | Setting | Safe choice | Secure by default |
 |---|---|---|
-| `FED_PEERS` | List the peers you know. They start `trusted`; everything else starts `unvetted`. | yes |
+| `FED_PEERS` | List the peers you know. They start `trusted` with an unchecked key, so [compare fingerprints](#compare-key-fingerprints); everything else starts `unvetted`. | yes |
 | `FED_DISCOVER` | Leave at `0`, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
 | `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |
@@ -156,8 +176,10 @@ ask for a pull after they write, so new records arrive sooner.
 
 ## Check that it worked
 
-- **Instance admin → Federation** shows each peer with its trust, its last sync and any error.
-- `deploy/aprscaching doctor` checks the key, the posture and that each peer in `FED_PEERS` answers
+- **Instance admin → Federation** shows each peer with its trust, its last sync, any error and its key
+  fingerprint.
+- `deploy/aprscaching doctor` checks the key, the posture and that each peer in `FED_PEERS` answers, and prints
+  each key fingerprint
   ([federation checks](../troubleshooting.md#federation-federation)).
 
 ## Next

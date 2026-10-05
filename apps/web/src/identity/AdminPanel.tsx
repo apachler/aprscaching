@@ -1525,8 +1525,9 @@ function FederationAdmin() {
   const fmt = useFmt();
   const toast = useToast();
   const confirmDialog = useConfirm();
-  const list = useLoad(() => listFederationPeers().then((r) => r.peers), []);
-  const peers = list.data;
+  const list = useLoad(() => listFederationPeers(), []);
+  const peers = list.data?.peers;
+  const self = list.data?.self;
   const refresh = list.reload;
   const trust = async (p: FedPeer, t: "trusted" | "unvetted" | "blocked", done: string) => {
     if (
@@ -1551,6 +1552,18 @@ function FederationAdmin() {
     <>
       <FederationSyncStatus onSynced={refresh} />
       <Fed44netWizard onAdmitted={refresh} />
+      {self && (
+        <p className="muted fine">
+          {self.fingerprint ? (
+            <>
+              This instance&apos;s key fingerprint: <span className="mono">{self.fingerprint}</span>. Read it to a
+              peer&apos;s sysop by phone or on the air, and compare theirs with the one listed under their instance.
+            </>
+          ) : (
+            "This instance has no federation key: its feeds go out unsigned."
+          )}
+        </p>
+      )}
       {list.error ? (
         <ErrorState onRetry={refresh}>Couldn&apos;t load the peer list.</ErrorState>
       ) : peers === undefined ? (
@@ -1591,6 +1604,15 @@ function FederationAdmin() {
                   {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
                   {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
                   {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+                </div>
+                <div className="comment">
+                  {p.fingerprint ? (
+                    <>
+                      key <span className="mono">{p.fingerprint}</span>
+                    </>
+                  ) : (
+                    "no key pinned yet: the first signed sync pins one"
+                  )}
                 </div>
                 {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
                 <div className="row">

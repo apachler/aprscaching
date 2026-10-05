@@ -540,6 +540,13 @@ check "MeshCom firmware 4.35u is new enough" bash -c ". '$DEPLOY/lib/doctor.sh';
 check "  … 4.40a too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.40a 4 35 u"
 check "  … 4.35t is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35t 4 35 u"
 check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 u"
+# the same key and value as workers/gateway/test/fed_fingerprint.test.ts: doctor and Instance admin agree
+FP_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
+check "a federation key's fingerprint matches Instance admin's" eq \
+  "$(bash -c ". '$DEPLOY/lib/doctor.sh'; fed_fingerprint $FP_KEY")" "630d cd29 66c4 3366"
+check "  … read from a descriptor's publicKey" eq \
+  "$(bash -c ". '$DEPLOY/lib/doctor.sh'; desc_key '{\"publicKey\":\"$FP_KEY\",\"publicKeyJwk\":{\"x\":\"y\"}}'")" "$FP_KEY"
+check "  … and nothing for a malformed key" eq "$(bash -c ". '$DEPLOY/lib/doctor.sh'; fed_fingerprint AAEC")" ""
 if have python3; then
   check "the checklist is read without node, with python3" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
     have() { [ \"\$1\" != node ] && command -v \"\$1\" >/dev/null; };
