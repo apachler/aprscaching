@@ -21,7 +21,9 @@
 #          --yes (replace existing values without asking) · --app-port PORT (the LAN URL's port, when the
 #          gateway answers on its own port rather than through Caddy) · --no-tunnel (offer no Cloudflare
 #          Tunnel: the installer has no compose stack to run one) · --no-next-steps (the caller prints its
-#          own) · --help
+#          own) · --extra-origins ORIGIN,… (further addresses of this instance: https://<name> for a name Caddy
+#          fetches a certificate for, such as the 44Net name; http://<name or 44.x address> for HAMNET, served as
+#          plain http; "-" clears them) · --help
 # Federation (public instances): --fed-peers URL[#FINGERPRINT],… (https peers you know; trusted once a pinned
 #          fingerprint matches, unvetted otherwise) ·
 #          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
@@ -40,7 +42,7 @@ INTERACTIVE=1
 NETWORK=1
 ASSUME_YES=0
 CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" TUNNEL="" SITE="" SITE_SET=0 APP_PORT="" NO_TUNNEL=0 NEXT_STEPS=1
-FED_PEERS_IN="" FED_PEERS_SET=0 FED_SUBMIT_IN="" FED_REGKEY_IN="" NET44_IN="" NET44_SET=0
+FED_PEERS_IN="" FED_PEERS_SET=0 FED_SUBMIT_IN="" FED_REGKEY_IN="" NET44_IN="" NET44_SET=0 EXTRA_IN="" EXTRA_SET=0
 MAIL="" MAIL_FROM="" SMTP_HOST_IN="" SMTP_PORT_IN="" SMTP_SECURE_IN="" SMTP_USER_IN=""
 SMTP_PASS_IN="${SMTP_PASS:-}" RESEND_KEY_IN="${EMAIL_API_KEY:-}"
 
@@ -63,6 +65,7 @@ while [ $# -gt 0 ]; do
     --fed-submit-instances) FED_SUBMIT_IN="$2"; shift ;;
     --fed-registry-key) FED_REGKEY_IN="$2"; shift ;;
     --net44-name) NET44_IN="$2"; NET44_SET=1; shift ;;
+    --extra-origins) EXTRA_IN="$2"; EXTRA_SET=1; shift ;;
     --mail) MAIL="$2"; shift ;;
     --email-from) MAIL_FROM="$2"; shift ;;
     --smtp-host) SMTP_HOST_IN="$2"; shift ;;
@@ -256,6 +259,37 @@ case "$MODE" in
     ;;
 esac
 
+# ---- further addresses (EXTRA_ORIGINS) ------------------------------------------------------------------------
+# norm_origins LIST: LIST as bare origins, lowercased, comma-joined, without APP_URL's own; non-zero with the
+# offending entry on stderr when one is not https:// or http:// followed by a host and an optional port.
+norm_origins() {
+  local o out="" app
+  app="$(printf '%s' "$APP_URL" | tr '[:upper:]' '[:lower:]')"
+  for o in ${1//,/ }; do
+    o="$(printf '%s' "${o%/}" | tr '[:upper:]' '[:lower:]')"
+    if ! printf '%s' "$o" | grep -Eq '^https?://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$'; then
+      echo "'$o' is not an origin: https://<name> or http://<name or 44.x address>, an optional port, no path." >&2
+      return 1
+    fi
+    [ "$o" != "$app" ] || continue
+    case ",$out," in *",$o,"*) continue ;; esac
+    out="${out:+$out,}$o"
+  done
+  printf '%s' "$out"
+}
+if [ "$EXTRA_SET" -eq 0 ] && [ "$INTERACTIVE" -eq 1 ]; then
+  echo "Further addresses of this instance, beside $APP_URL: https://<name> for a name with a certificate (the"
+  echo "44Net name), http://<name or 44.x address> for HAMNET, which serves plain http."
+  ask EXTRA_IN "Comma-separated (blank = none, - = remove them)" "$(unquoted EXTRA_ORIGINS)"
+  EXTRA_SET=1
+fi
+if [ "$EXTRA_SET" -eq 1 ] && [ "$EXTRA_IN" != - ]; then
+  EXTRA_IN="$(norm_origins "$EXTRA_IN")" || exit 2
+fi
+if [ "$MODE" = tunnel ] && printf '%s' "$EXTRA_IN" | grep -q 'https://'; then
+  echo "  NOTE: in Tunnel mode Caddy publishes no ports; an https address needs ports 80 and 443 reachable on it."
+fi
+
 # ---- federation (public instances only) -------------------------------------------------------------------
 # A peer listed in FED_PEERS with its key fingerprint starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
 # admin (admitted unvetted) instead. A name under ampr.org or an address in 44/8 is a 44Net peer.
@@ -389,6 +423,11 @@ setvar APP_URL "$APP_URL"
 # DOMAIN (what Caddy serves) follows the public URL: it changes exactly when APP_URL does
 [ "$WROTE" -eq 1 ] && write_line DOMAIN "$CADDY_DOMAIN"
 [ "$MODE" = tunnel ] && setvar TUNNEL_TOKEN "$TUNNEL" secret
+if [ "$EXTRA_IN" = - ]; then
+  unset_var EXTRA_ORIGINS
+elif [ -n "$EXTRA_IN" ]; then
+  setvar EXTRA_ORIGINS "$EXTRA_IN"
+fi
 if [ -n "$SITE" ]; then
   # one receiving site, named on both sides: the ingest box stamps it, the gateway attests it
   setvar RF_SITE_CALL "$SITE"
@@ -408,8 +447,12 @@ else
   [ -z "$FED_SUBMIT_IN" ] || setvar FED_SUBMIT_INSTANCES "$FED_SUBMIT_IN"
   [ -z "$FED_REGKEY_IN" ] || setvar FED_REGISTRY_KEY "$FED_REGKEY_IN"
   if [ -n "$NET44_IN" ]; then
+    # a 44Net name that is also an https address of the instance is published as https://<name>: peers try https
+    # first and fall back to plain http on the same name
+    net44_addr="$NET44_IN"
+    case ",$EXTRA_IN,$(unquoted EXTRA_ORIGINS)," in *",https://$NET44_IN,"*) net44_addr="https://$NET44_IN" ;; esac
     # single-quoted, as compose and systemd both read a quoted JSON value intact
-    setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$NET44_IN\",\"priority\":20}]'"
+    setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$net44_addr\",\"priority\":20}]'"
     echo "  44Net: Instance admin -> Federation -> Publish your callsign identity shows the records to add (docs/run/networks/44net-identity.md)."
   fi
   case "$(current FED_DISCOVER)" in 1 | true | yes)

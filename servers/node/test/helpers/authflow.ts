@@ -149,8 +149,8 @@ export async function newAuthenticator(): Promise<Authenticator> {
   return { priv: kp.privateKey, cose, credId: crypto.getRandomValues(new Uint8Array(16)), counter: 0 };
 }
 
-async function authData(a: Authenticator, attested: boolean): Promise<Uint8Array> {
-  const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(RP_ID)));
+async function authData(a: Authenticator, attested: boolean, rp = RP_ID): Promise<Uint8Array> {
+  const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(rp)));
   a.counter++;
   const cnt = new Uint8Array([a.counter >>> 24, (a.counter >>> 16) & 0xff, (a.counter >>> 8) & 0xff, a.counter & 0xff]);
   if (!attested) return concat(rpHash, new Uint8Array([0x01]), cnt);
@@ -164,21 +164,25 @@ export async function passkeyRegister(
   callsign: string,
   a: Authenticator,
   headers: Record<string, string> = {},
+  origin = ORIGIN,
 ): Promise<Res> {
   const begin = await call(env, "POST", "/auth/passkey/register/begin", { callsign }, headers);
   if (begin.status !== 200) return begin;
-  return passkeyRegisterFinish(env, callsign, a, begin.data.challenge, headers);
+  // the authenticator signs for the relying party the instance names, as a browser does
+  return passkeyRegisterFinish(env, callsign, a, begin.data.challenge, headers, origin, begin.data.rp.id);
 }
 
-/** The finish step; a browser sends its session cookie here too (HEADERS). */
+/** The finish step; a browser sends its session cookie here too (HEADERS), and names the page's ORIGIN. */
 export async function passkeyRegisterFinish(
   env: Env,
   callsign: string,
   a: Authenticator,
   challenge: string,
   headers: Record<string, string> = {},
+  origin = ORIGIN,
+  rp = RP_ID,
 ) {
-  const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.create", challenge, origin: ORIGIN }));
+  const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.create", challenge, origin }));
   const attestationObject = concat(
     new Uint8Array([0xa3]),
     cborText("fmt"),
@@ -186,7 +190,7 @@ export async function passkeyRegisterFinish(
     cborText("attStmt"),
     new Uint8Array([0xa0]),
     cborText("authData"),
-    cborBytes(await authData(a, true)),
+    cborBytes(await authData(a, true, rp)),
   );
   return call(
     env,

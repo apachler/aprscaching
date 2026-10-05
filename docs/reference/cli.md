@@ -33,7 +33,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 
 | Command | Options |
 |---|---|
-| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
+| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--extra-origins`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
 | `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
@@ -42,7 +42,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
 | `update` | `--ref`, `--rollback-window` |
 | `rotate-secret <name>` | none |
-| `net44 setup <connect.conf>` | `--name`, `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |
+| `net44 setup <connect.conf>` | `--name`, `--https` (serve the name over https too: [One instance, several addresses](../run/networks/several-addresses.md)), `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |
 | `net44 status`, `net44 check [name]`, `net44 remove` | none |
 
 ## Operator callsign — `tools/admin/` {#operator-callsign}
@@ -77,9 +77,10 @@ the call — or creates one, unverified, for a new call. It never verifies a cal
 passkeys or email work, the gateway issues links only for `ADMIN_CALLSIGNS` calls, unless it runs with
 `OPERATOR_LINKS_FOR_ANY_CALL=1`. Run from the box itself, the link names `APP_URL`.
 
-`--link-origin <origin>` names another origin for the link: the station's https hotspot origin
-(`https://<its private IPv4 address>:<HTTPS_PORT>`), the one a visitor's phone opens. The gateway refuses any
-origin other than that and `APP_URL`. `--qr` also prints the link as a QR code for the phone to scan (Node
+`--link-origin <origin>` names another origin for the link: an address in `EXTRA_ORIGINS`, such as the HAMNET
+address a member opens ([One instance, several addresses](../run/networks/several-addresses.md)), or the
+station's https hotspot origin (`https://<its private IPv4 address>:<HTTPS_PORT>`), the one a visitor's phone
+opens. The gateway refuses any origin other than those and `APP_URL`. `--qr` also prints the link as a QR code for the phone to scan (Node
 22.18 or later). `BASE` stays the address the script reaches the gateway on.
 
 ```bash

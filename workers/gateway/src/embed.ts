@@ -10,7 +10,8 @@
  */
 import type { Env } from "./env.js";
 import { DEFAULT_BASEMAP_STYLE, GRATICULE_PALETTE, MAPLIBRE_VENDOR_DIR } from "@aprscaching/shared";
-import { appBase, gatewayBase } from "./sitemap.js";
+import { gatewayBase } from "./sitemap.js";
+import { requestOrigin } from "./origins.js";
 import { qrSvg } from "./qr.js";
 import { escapeHtml } from "./util/html.js";
 
@@ -61,21 +62,19 @@ function basemap(env: Env): { style: string | null; hosts: string[] } {
 
 /**
  * GET /embed — a MapLibre widget that reads the public API. MapLibre itself comes from the instance's own
- * web build (MAPLIBRE_VENDOR_DIR on the app origin: APP_URL, or this gateway when it serves the app
- * itself), and the basemap from BASEMAP_STYLE, so the widget needs no third-party host beyond the
- * basemap the instance chose — none at all with `offline`.
+ * web build (MAPLIBRE_VENDOR_DIR on the address the widget was loaded from, which serves the web app beside
+ * the gateway), and the basemap from BASEMAP_STYLE, so the widget needs no third-party host beyond the
+ * basemap the instance chose — none at all with `offline`. A widget loaded over HAMNET stays on HAMNET.
  */
 export function handleEmbed(req: Request, env: Env): Response {
   const u = new URL(req.url);
   const cache = u.searchParams.get("cache");
   const bbox = safeBbox(u.searchParams.get("bbox"));
-  const self = gatewayBase(req, env); // the gateway serves this page → its own origin hosts /api/v1
-  const app = appBase(env);
-  // Without APP_URL the gateway serves the web app itself (the desktop app), so MapLibre is same-origin.
-  const appOrigin = env.APP_URL?.trim() ? httpOrigin(app) : null;
-  const lib = `${appOrigin ? app : self}/${MAPLIBRE_VENDOR_DIR}`;
-  const libOrigin = appOrigin ?? new URL(self).origin;
-  const libSrc = libOrigin === new URL(self).origin ? "'self'" : libOrigin;
+  // the gateway serves this page → its own address hosts /api/v1, the web app and MapLibre
+  const self = gatewayBase(req, env);
+  const app = self;
+  const lib = `${self}/${MAPLIBRE_VENDOR_DIR}`;
+  const libSrc = "'self'";
   const map = basemap(env);
   // cache code: letters/digits/hyphen only — never markup, even before JSON escaping
   const safeCache = cache ? cache.toUpperCase().replace(/[^A-Z0-9-]/g, "") || null : null;
@@ -147,8 +146,8 @@ map.on('load', async () => {
     headers: {
       "content-type": "text/html; charset=utf-8",
       // Embeddable by design (frame-ancestors *), but lock down what may execute/connect as
-      // defence-in-depth behind the JSON escaping above. Scripts, styles and the worker come only from the
-      // app origin; MapLibre starts a cross-origin worker from a blob: that imports it. Fetches reach only
+      // defence-in-depth behind the JSON escaping above. Scripts, styles and the worker come only from this
+      // origin; MapLibre starts a cross-origin worker from a blob: that imports it. Fetches reach only
       // this gateway and the basemap's hosts. No plugins, no <base> hijack.
       "content-security-policy": [
         "default-src 'none'",
@@ -170,7 +169,9 @@ export function handleQr(req: Request, env: Env): Response {
   const u = new URL(req.url);
   const cache = u.searchParams.get("cache");
   const url = u.searchParams.get("url");
-  const data = cache ? `${appBase(env)}/?cache=${encodeURIComponent(cache.toUpperCase())}` : url || appBase(env);
+  const data = cache
+    ? `${requestOrigin(req, env)}/?cache=${encodeURIComponent(cache.toUpperCase())}`
+    : url || requestOrigin(req, env);
   if (new TextEncoder().encode(data).length > 106) return new Response("data too long", { status: 400 });
   const sizeParam = Number(u.searchParams.get("size"));
   try {

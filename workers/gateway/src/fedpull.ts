@@ -205,11 +205,10 @@ async function syncPeer(
   moves: number;
   bulletins: number;
 }> {
-  // endpoint selection: the peer's typed endpoint set picks the sync transport (https, or plain
-  // http on a 44net/HAMNET name); packet endpoints are forward-mode and never pulled from here
+  // endpoint selection: the peer's typed endpoint set picks the sync transport (https, a 44Net name over
+  // https or plain http, a HAMNET host); packet endpoints are forward-mode and never pulled from here
   const transport = syncTransportFor(p, (u, i) => fedFetch(env, u, i));
   if (!transport) throw new Error("peer has no sync-capable endpoint");
-  const base = transport.baseUrl;
   const wk = await transport.fetchJson<{
     instance: string;
     signed: boolean;
@@ -220,6 +219,8 @@ async function syncPeer(
     capabilities?: string[];
     protocolVersions?: string[];
   }>("/.well-known/aprscaching");
+  // the address that answered the descriptor carries the rest of the sync
+  const base = transport.baseUrl;
   const pub = wk.signed ? wk.publicKey : null;
 
   // Identity first, and nothing is written until every check below has passed. The instance id

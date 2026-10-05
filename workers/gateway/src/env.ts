@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { SqlDatabase, TileArchive, MediaStore, RoomNamespace } from "./runtime.js";
-import { keysOf, validateConfig, type ConfigKeysOf, type ConfigProblem } from "@aprscaching/shared";
+import { keysOf, parseOriginList, validateConfig, type ConfigKeysOf, type ConfigProblem } from "@aprscaching/shared";
 
 /**
  * Every string setting the gateway reads comes from the configuration schema (packages/shared config.ts):
@@ -59,7 +59,9 @@ const blank = (v: string | undefined): boolean => typeof v !== "string" || v.tri
 
 /**
  * Fill the settings that follow from APP_URL: INSTANCE and RP_ID default to its hostname, so an operator
- * configures one public URL instead of three strings that must agree. An explicit value always wins; a
+ * configures one public URL instead of three strings that must agree. A passkey needs a secure page, so when
+ * APP_URL is plain http on a network host (a HAMNET main address) RP_ID follows the first https address in
+ * EXTRA_ORIGINS instead, where passkeys work and where browsers fetch the related-origins file. An explicit value always wins; a
  * blank one (compose passes `${VAR:-}`) counts as unset. Without a parseable APP_URL both stay unset,
  * which keeps their own fallbacks (the request host; passkeys closed). Idempotent: it fills `env` in place
  * so per-env caches keyed on the object stay valid, and returns it.
@@ -73,8 +75,22 @@ export function applyDerivedDefaults(env: Env): Env {
     host = null;
   }
   if (blank(env.INSTANCE)) env.INSTANCE = host ?? undefined;
-  if (blank(env.RP_ID)) env.RP_ID = host ?? undefined;
+  if (blank(env.RP_ID)) env.RP_ID = passkeyHost(env, host) ?? undefined;
   return env;
+}
+
+/** The default relying-party host: APP_URL's when it is a secure page, else the first https EXTRA_ORIGINS entry's. */
+function passkeyHost(env: Env, appHost: string | null): string | null {
+  let secureApp = false;
+  try {
+    const u = new URL(env.APP_URL as string);
+    secureApp = u.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+  } catch {
+    /* no APP_URL: nothing secure there */
+  }
+  if (secureApp || !appHost) return appHost;
+  const https = parseOriginList(env.EXTRA_ORIGINS).origins.find((o) => o.startsWith("https://"));
+  return https ? new URL(https).hostname : appHost;
 }
 
 /**

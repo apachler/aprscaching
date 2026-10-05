@@ -14,7 +14,8 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { xml } from "./app.js";
 import { userFeedPath } from "@aprscaching/shared";
-import { appBase, gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
+import { gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
+import { requestOrigin } from "./origins.js";
 
 const rfc822 = (unixSec: number) => new Date(unixSec * 1000).toUTCString();
 
@@ -109,7 +110,7 @@ export async function handleCachesFeed(req: Request, env: Env): Promise<Response
   ).results;
   const items: Item[] = rows.map((r) => ({
     title: `${r.title} (${r.code})`,
-    link: `${appBase(env)}/?cache=${encodeURIComponent(r.code)}`,
+    link: `${requestOrigin(req, env)}/?cache=${encodeURIComponent(r.code)}`,
     description: `New ${String(r.type).replace(/_/g, " ")} cache by ${r.ownerCall} · D${r.difficulty}/T${r.terrain}.`,
     guid: `cache:${r.code}`,
     pubDate: r.createdAt,
@@ -222,7 +223,7 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
   const items: Item[] = [
     ...finds.map((r) => ({
       title: `Found ${r.cacheTitle} (${r.cacheCode})`,
-      link: `${appBase(env)}/?cache=${encodeURIComponent(r.cacheCode)}`,
+      link: `${requestOrigin(req, env)}/?cache=${encodeURIComponent(r.cacheCode)}`,
       description:
         `${cs} found ${r.cacheTitle}` + (r.verified ? ` · verified Tier ${r.tier ?? "?"}` : " · unverified") + ".",
       guid: `find:${r.id}`,
@@ -243,7 +244,7 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
 
   return rss({
     title: `aprscaching — ${cs}`,
-    link: `${appBase(env)}/?view=profile&call=${encodeURIComponent(cs)}`,
+    link: `${requestOrigin(req, env)}/?view=profile&call=${encodeURIComponent(cs)}`,
     description: `${cs} — ${findCount} verified finds · ${hides} hides · ${badges.length} badges.`,
     selfPath: userFeedPath(cs),
     gateway: gatewayBase(req, env),

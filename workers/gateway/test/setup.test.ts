@@ -59,7 +59,8 @@ const baseEnv = (over: Partial<Env> = {}, counts: Record<string, number> = {}): 
 
 const get = async (env: Env, callsign: string | null) => {
   const headers: Record<string, string> = {};
-  if (callsign) headers.cookie = (await issueSessionCookie(env, "acct-op", callsign)).split(";")[0]!;
+  if (callsign)
+    headers.cookie = (await issueSessionCookie(new Request("http://gw/"), env, "acct-op", callsign)).split(";")[0]!;
   return handleAdminSetup(new Request("http://gw/api/admin/setup", { headers }), env);
 };
 

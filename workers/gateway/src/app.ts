@@ -74,6 +74,7 @@ import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleImprintPage, handlePrivacyPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
+import { extraOrigins, handleWebauthnOrigins } from "./origins.js";
 import {
   handleActivityFeed,
   handleCachesFeed,
@@ -382,6 +383,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // RFC 9116 security contact (SECURITY_CONTACT, else OPERATOR_EMAIL)
   if (p === "/.well-known/security.txt" && m === "GET") return handleSecurityTxt(env);
 
+  // WebAuthn related origins: the https addresses of this instance share RP_ID's passkeys
+  if (p === "/.well-known/webauthn" && m === "GET") return handleWebauthnOrigins(env);
+
   // per-instance legal pages — the operator's imprint + privacy notice (OPERATOR_* env)
   if (p === "/imprint" && m === "GET") return handleImprintPage(env);
   if (p === "/privacy" && m === "GET") return handlePrivacyPage(env);
@@ -625,7 +629,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   if (p === "/auth/callsigns" && m === "GET") return handleListCallsigns(req, env);
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
-  if (p === "/auth/logout" && m === "POST") return handleLogout(env);
+  if (p === "/auth/logout" && m === "POST") return handleLogout(req, env);
   if (p === "/auth/logout-all" && m === "POST") return handleLogoutAll(req, env);
 
   // callsign control-verification: an RF challenge, the operator's bootstrap, and the badge status
@@ -812,7 +816,7 @@ export function xml(body: string, init: ResponseInit = {}): Response {
 }
 
 /** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
- *  APP_URL plus any CORS_ORIGINS. An empty list allows none: an unconfigured instance serves only
+ *  APP_URL, the instance's other addresses (EXTRA_ORIGINS) and any CORS_ORIGINS. An empty list allows none: an unconfigured instance serves only
  *  non-credentialed CORS, so no third-party page can ride a signed-in user's cookie. */
 export function corsAllowlist(env: Env): Set<string> {
   const list = new Set<string>();
@@ -826,6 +830,7 @@ export function corsAllowlist(env: Env): Set<string> {
     }
   };
   add(env.APP_URL);
+  for (const o of extraOrigins(env)) add(o);
   for (const o of (env.CORS_ORIGINS ?? "").split(",")) add(o);
   return list;
 }

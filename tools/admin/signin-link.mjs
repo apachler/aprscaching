@@ -13,7 +13,8 @@
 // never over a channel others read. BASE is where this script reaches the gateway: it defaults to the
 // gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787).
 //
-//   --link-origin <origin>  the origin the link names: APP_URL, or the station's https hotspot origin
+//   --link-origin <origin>  the origin the link names: APP_URL, an EXTRA_ORIGINS address (a member on HAMNET
+//                    opens the HAMNET one), or the station's https hotspot origin
 //                    (https://<its private IPv4 address>:<HTTPS_PORT>), the one a visitor's phone opens.
 //                    The gateway refuses any other origin. Default: APP_URL.
 //   --qr             also print the link as a QR code for a phone to scan.

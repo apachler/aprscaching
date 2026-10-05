@@ -19,8 +19,14 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | **x-relay-secret / x-fed-secret / wx-key** | Federation relay / federation submit-corroborate / weather-station keys.                                                                                                                                                           |
 | **spoke-signed**                           | `x-relay-instance`, `x-relay-at` and `x-relay-sig`: the request signed with the spoke instance's federation key, which the hub already holds; the signing time must sit within 120 s of the hub's clock.                           |
 
-Cross-origin requests carry credentials only from `APP_URL` and `CORS_ORIGINS`; with neither set the
-gateway answers `Access-Control-Allow-Origin: *` without credentials.
+Cross-origin requests carry credentials only from `APP_URL`, `EXTRA_ORIGINS` and `CORS_ORIGINS`; with none set
+the gateway answers `Access-Control-Allow-Origin: *` without credentials.
+
+An instance with several addresses (`EXTRA_ORIGINS`) answers each request for the address it came on, when that
+address is `APP_URL` or listed: the session cookie (host-only, `Secure` only on https), sign-in links and links
+into the app name it. A request on any other host is answered as if it came to `APP_URL`. Passkeys keep one
+relying party, `RP_ID`; `GET /.well-known/webauthn` lists every https address as a related origin, so a browser
+on one of them accepts that relying party ([One instance, several addresses](../run/networks/several-addresses.md)).
 
 An enrolled ingest box sends no `x-ingest-secret`: it signs each request with its own Ed25519 key in the
 headers `x-box-id`, `x-box-at` (unix seconds), `x-box-nonce` and `x-box-sig`. The signature covers the
@@ -295,6 +301,7 @@ every mailbox, since it carries the mail of the stations it hears and forwards.
 | ---------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | GET        | `/health`                                                    | Readiness: `{ok, db, instance, commit, schema}`, `schema` being the newest applied migration; `?live` for liveness                                                            | public            |
 | GET        | `/source` · `/.well-known/source`                            | The running source (AGPL §13)                                                                                                                                                 | public            |
+| GET        | `/.well-known/webauthn`                                      | WebAuthn related origins: `{origins}`, `APP_URL` and every https `EXTRA_ORIGINS` entry                                                                                        | public            |
 | GET        | `/imprint` · `/privacy`                                      | Legal pages from `OPERATOR_*`                                                                                                                                                 | public            |
 | GET        | `/sitemap` · `/sitemap.xml` · `/api/sitemap` · `/robots.txt` | Human-readable site map · XML sitemap · the same as JSON · crawler rules                                                                                                      | public            |
 | GET        | `/support` · `/api/support`                                  | Supporter recognition page · its data                                                                                                                                         | public            |

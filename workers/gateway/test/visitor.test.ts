@@ -52,12 +52,16 @@ describe("hotspotOrigin", () => {
 });
 
 describe("linkOrigin", () => {
-  it("is APP_URL, or the hotspot origin, and nothing else", () => {
-    expect(linkOrigin("http://localhost:8787", pocket())).toBe("http://localhost:8787");
-    expect(linkOrigin("http://localhost:8787/", pocket())).toBe("http://localhost:8787");
-    expect(linkOrigin("https://192.168.43.1:8443", pocket())).toBe("https://192.168.43.1:8443");
-    expect(linkOrigin("https://localhost:8787", pocket())).toBeNull();
-    expect(linkOrigin("http://localhost:8787/x", pocket())).toBeNull();
-    expect(linkOrigin("https://evil.test", pocket())).toBeNull();
+  const listed = ["http://localhost:8787", "http://aprscaching.oe8xyz.hamnet.example"];
+  it("is an address of the instance, or the hotspot origin, and nothing else", () => {
+    expect(linkOrigin("http://aprscaching.oe8xyz.hamnet.example/", pocket(), listed)).toBe(
+      "http://aprscaching.oe8xyz.hamnet.example",
+    );
+    expect(linkOrigin("http://localhost:8787", pocket(), listed)).toBe("http://localhost:8787");
+    expect(linkOrigin("http://localhost:8787/", pocket(), listed)).toBe("http://localhost:8787");
+    expect(linkOrigin("https://192.168.43.1:8443", pocket(), listed)).toBe("https://192.168.43.1:8443");
+    expect(linkOrigin("https://localhost:8787", pocket(), listed)).toBeNull();
+    expect(linkOrigin("http://localhost:8787/x", pocket(), listed)).toBeNull();
+    expect(linkOrigin("https://evil.test", pocket(), listed)).toBeNull();
   });
 });

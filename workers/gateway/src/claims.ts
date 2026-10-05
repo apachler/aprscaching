@@ -218,7 +218,7 @@ export async function handleClaimStatus(req: Request, env: Env): Promise<Respons
   if (!sessionsEnabled(env)) return sessionUnavailable();
   return json(
     { ...body, signedIn: true, licence: await licenceFor(env, c.callsign) },
-    { headers: { "set-cookie": await issueSessionCookie(env, c.accountId, c.callsign) } },
+    { headers: { "set-cookie": await issueSessionCookie(req, env, c.accountId, c.callsign) } },
   );
 }
 

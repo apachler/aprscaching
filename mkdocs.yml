@@ -147,6 +147,7 @@ nav:
           - 44Net address: run/networks/44net.md
           - 44Net name and identity: run/networks/44net-identity.md
           - HAMNET only: run/networks/hamnet.md
+          - One instance, several addresses: run/networks/several-addresses.md
       - Federation:
           - Join the network: run/federation/index.md
           - Hubs, relays and the registry: run/federation/hubs-and-relays.md

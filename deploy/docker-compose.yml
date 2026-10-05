@@ -111,6 +111,12 @@ services:
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       DOMAIN: ${DOMAIN:-:80}
+      # the instance's further addresses; Caddy takes a site list separated by spaces, .env by commas
+      EXTRA_ORIGINS: ${EXTRA_ORIGINS:-}
+    command:
+      - sh
+      - -c
+      - EXTRA_SITES="$$(printf '%s' "$$EXTRA_ORIGINS" | tr ',' ' ')" exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - webdist:/srv/web:ro

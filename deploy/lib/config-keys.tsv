@@ -63,6 +63,7 @@ GMA_API_KEY	string	gateway			1	0	selfhost,baremetal,pocket,desktop	API key from 
 BASEMAP_STYLE	string	gateway	https://tiles.openfreemap.org/styles/liberty		0	0	selfhost,baremetal,pocket,desktop	Map widget basemap: a MapLibre style URL, or offline for the built-in grid
 BASEMAP_HOSTS	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Extra comma-separated origins the basemap style loads tiles or fonts from
 APP_URL	url	gateway,pocket			0	1	selfhost,baremetal,pocket,desktop	Public origin people open, e.g. https://aprs.example.net
+EXTRA_ORIGINS	origins	gateway			0	0	selfhost,baremetal,pocket,desktop	Further addresses of this instance: comma-separated https:// or http:// origins
 CORS_ORIGINS	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Extra comma-separated origins allowed credentialed CORS
 RP_ID	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Passkey (WebAuthn) domain; defaults to the host of APP_URL
 EMAIL_FROM	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Sender address for sign-in links and digest mail

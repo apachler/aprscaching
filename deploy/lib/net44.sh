@@ -2,7 +2,7 @@
 # Sourced by deploy/aprscaching (the `net44` command) and by doctor; the shape modules decide whether the host
 # runs the tunnel itself (Self-host, bare metal) or only gets guidance (Pocket and Desktop use a WireGuard app).
 #
-#   net44 setup <connect.conf> [--name NAME] [--mtu N] [--no-firewall]
+#   net44 setup <connect.conf> [--name NAME] [--https] [--mtu N] [--no-firewall]
 #   net44 status
 #   net44 check
 #   net44 remove
@@ -200,14 +200,15 @@ n44_render() {
 }
 
 # ---- FED_ENDPOINTS ---------------------------------------------------------------------------------------------
-# n44_endpoints_with VALUE APP_URL NAME: VALUE with its 44net endpoint set to NAME (added when there is none).
+# n44_endpoints_with VALUE APP_URL ADDRESS: VALUE with its 44net endpoint set to ADDRESS, the name or
+# https://<name> when the name has a certificate (added when there is none).
 n44_endpoints_with() {
   local v="$1" app="$2" name="$3" e
   e="{\"transport\":\"44net\",\"address\":\"$name\",\"priority\":20}"
   if [ -z "$v" ] || [ "$v" = "[]" ]; then
     printf '[{"transport":"https","address":"%s","priority":10},%s]' "$app" "$e"
   elif printf '%s' "$v" | grep -q '"transport":"44net"'; then
-    printf '%s' "$v" | sed -E "s/\\{\"transport\":\"44net\"[^}]*\\}/$e/"
+    printf '%s' "$v" | sed -E "s|\\{\"transport\":\"44net\"[^}]*\\}|$e|"
   else
     printf '%s' "${v%]},$e]"
   fi
@@ -279,10 +280,20 @@ n44_instance() {
   printf '%s' "$inst"
 }
 
+# The 44Net name of FED_ENDPOINTS' 44net endpoint, without the https:// a name with a certificate carries.
 n44_name_from_env() {
   [ -n "${SHAPE_ENV:-}" ] || return 0
   env_file_get "$SHAPE_ENV" FED_ENDPOINTS | { grep -oE '"transport":"44net","address":"[^"]+"' || true; } |
-    sed 's/.*"address":"//; s/"$//' | head -n 1
+    sed 's/.*"address":"//; s/"$//; s#^https://##' | head -n 1
+}
+
+# n44_add_origin ORIGIN: add ORIGIN to EXTRA_ORIGINS (comma-separated), once.
+n44_add_origin() {
+  local cur
+  cur="$(env_file_get "$SHAPE_ENV" EXTRA_ORIGINS)"
+  case ",${cur// /}," in *",$1,"*) return 0 ;; esac
+  env_file_set "$SHAPE_ENV" EXTRA_ORIGINS "${cur:+$cur,}$1"
+  info "EXTRA_ORIGINS: added $1; Caddy fetches its certificate once the name resolves"
 }
 
 # ---- state of the host -------------------------------------------------------------------------------------------
@@ -358,17 +369,20 @@ n44_shape_mode() {
 }
 
 net44_setup() {
-  local file="" name="" mtu="" fw=1 mode issued conf new pmtu host v4 ports docker=0 changed=1 line
+  local file="" name="" mtu="" fw=1 https=0 mode issued conf new pmtu host v4 ports docker=0 changed=1 line
   while [ $# -gt 0 ]; do
     case "$1" in
       --name) name="$2"; shift ;;
+      --https) https=1 ;;
       --mtu) mtu="$2"; shift ;;
       --no-firewall) fw=0 ;;
       -h | --help)
-        printf '%s\n' "deploy/aprscaching net44 setup <connect.conf> [--name NAME] [--mtu N] [--no-firewall]" \
+        printf '%s\n' "deploy/aprscaching net44 setup <connect.conf> [--name NAME] [--https] [--mtu N] [--no-firewall]" \
           "Brings the 44Net Connect tunnel up as $N44_IF, with a safe MTU, keepalive, routing that keeps SSH and a" \
           "firewall that lets only TCP 80/443 in; --name sets the 44Net name in FED_ENDPOINTS (by default" \
-          "aprscaching.<call>.ampr.org, on Pocket aprscaching-pocket.<call>.ampr.org; never the base name <call>.ampr.org)."
+          "aprscaching.<call>.ampr.org, on Pocket aprscaching-pocket.<call>.ampr.org; never the base name <call>.ampr.org)." \
+          "--https also serves the name over https: it joins EXTRA_ORIGINS, Caddy fetches its certificate, and the" \
+          "44net endpoint becomes https://<name>, which peers try first and fall back to plain http from."
         return 0
         ;;
       -*) die "Unknown option $1." ;;
@@ -384,7 +398,7 @@ net44_setup() {
   case "$mode" in
     guide)
       n44_guidance "$file"
-      n44_apply_name "$name"
+      n44_apply_name "$name" "$https"
       n44_next ""
       return 0
       ;;
@@ -448,7 +462,7 @@ net44_setup() {
     install -m 600 "$new" "$conf"
     n44_start
   fi
-  n44_apply_name "$name"
+  n44_apply_name "$name" "$https"
   n44_next "$v4"
 }
 
@@ -505,11 +519,13 @@ n44_start() {
   fi
 }
 
-# n44_apply_name NAME: set FED_ENDPOINTS' 44net endpoint to NAME; without one, offer the default name (asked
-# when someone can answer, taken as is otherwise) unless FED_ENDPOINTS already names one.
+# n44_apply_name NAME [HTTPS]: set FED_ENDPOINTS' 44net endpoint to NAME; without one, offer the default name
+# (asked when someone can answer, taken as is otherwise) unless FED_ENDPOINTS already names one. HTTPS=1 serves the
+# name over https too: https://<name> joins EXTRA_ORIGINS and becomes the endpoint's address.
 n44_apply_name() {
-  local name="$1" app cur def
+  local name="$1" https="${2:-0}" app cur def
   [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] || return 0
+  if [ -z "$name" ] && [ "$https" = 1 ]; then name="$(n44_name_from_env)"; fi
   if [ -z "$name" ]; then
     [ -z "$(n44_name_from_env)" ] || return 0
     def="$(n44_default_name)"
@@ -524,8 +540,14 @@ n44_apply_name() {
   app="$(env_file_get "$SHAPE_ENV" APP_URL)"
   cur="$(env_file_get "$SHAPE_ENV" FED_ENDPOINTS)"
   # single-quoted, as compose and systemd both read a quoted JSON value intact
-  env_file_set "$SHAPE_ENV" FED_ENDPOINTS "'$(n44_endpoints_with "$cur" "$app" "$name")'"
-  info "FED_ENDPOINTS: added the 44net endpoint $name; restart the instance to publish it"
+  if [ "$https" = 1 ]; then
+    env_file_set "$SHAPE_ENV" FED_ENDPOINTS "'$(n44_endpoints_with "$cur" "$app" "https://$name")'"
+    info "FED_ENDPOINTS: added the 44net endpoint https://$name; restart the instance to publish it"
+    n44_add_origin "https://$name"
+  else
+    env_file_set "$SHAPE_ENV" FED_ENDPOINTS "'$(n44_endpoints_with "$cur" "$app" "$name")'"
+    info "FED_ENDPOINTS: added the 44net endpoint $name; restart the instance to publish it"
+  fi
 }
 
 net44_status() {

@@ -226,10 +226,55 @@ export function fromE7(e7: number): number {
 
 // ---- typed peer endpoints: identity is the instance id + key; addresses are signed data ----
 
-export const FedTransportKind = z.enum(["https", "44net", "ax25", "netrom", "bbs"]);
+/**
+ * `https`: an https URL on the internet. `44net`: a name under `<call>.ampr.org`, reached over plain http, or
+ * `https://<name>` when the name has a certificate (tried over https first, then plain http). `hamnet`: a host
+ * on HAMNET, a name or a 44.x address with an optional port, reached over plain http only by a peer that can
+ * route to it. Packet kinds carry forward-mode frames.
+ */
+export const FedTransportKind = z.enum(["https", "44net", "hamnet", "ax25", "netrom", "bbs"]);
 export type FedTransportKind = z.infer<typeof FedTransportKind>;
 
 const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i;
+const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const HAMNET_RE = /^(?:http:\/\/)?([^/:?#\s]+)(?::(\d{1,5}))?\/?$/i;
+
+/** `s` without its trailing slashes (a plain loop: linear on any input, unlike a `/+$` regex). */
+function withoutTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
+/** The name of a `44net` endpoint address (`<name>` or `https://<name>`), lowercased. */
+export function net44Host(address: string): string {
+  return address
+    .replace(/^https:\/\//i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
+/**
+ * The base URLs a sync-capable endpoint is tried at, in order; empty for packet kinds. A `44net` name with a
+ * certificate (`https://<name>`) is tried over https, then plain http on the same name: its records are signed
+ * either way, and a peer without a route to the certificate's checks still reaches it.
+ */
+export function endpointBaseUrls(e: { transport: FedTransportKind; address: string }): string[] {
+  switch (e.transport) {
+    case "https":
+      return [withoutTrailingSlashes(e.address)];
+    case "44net": {
+      const host = net44Host(e.address);
+      return /^https:\/\//i.test(e.address) ? [`https://${host}`, `http://${host}`] : [`http://${host}`];
+    }
+    case "hamnet": {
+      const m = HAMNET_RE.exec(e.address);
+      return m ? [`http://${m[1]!.toLowerCase()}${m[2] ? `:${m[2]}` : ""}`] : [];
+    }
+    default:
+      return [];
+  }
+}
 const CALLSIGN_SSID_RE = /^[A-Z0-9]{3,9}(-(?:[0-9]|1[0-5]))?$/;
 const NETROM_ALIAS_RE = /^[A-Z0-9#]{1,6}$/;
 const BBS_HIER_RE = /^[A-Z0-9-]{3,9}@[A-Z0-9][A-Z0-9.#-]{1,60}$/i;
@@ -239,14 +284,27 @@ export function validEndpointAddress(transport: FedTransportKind, address: strin
   switch (transport) {
     case "https":
       try {
-        // plain http inside HAMNET/44net space is the `44net` transport, addressed by name
+        // plain http inside 44Net and HAMNET is the `44net` or `hamnet` transport
         return new URL(address).protocol === "https:";
       } catch {
         return false;
       }
-    case "44net":
-      // a NAME (survives renumbering + IPv6), never a raw 44.x address — reject IPv4-literal shapes
-      return HOSTNAME_RE.test(address) && !/^\d+(\.\d+)+$/.test(address);
+    case "44net": {
+      // a NAME (survives renumbering + IPv6), never a raw 44.x address — reject IPv4-literal shapes; `https://`
+      // in front says the name has a certificate, and nothing may follow the name
+      const name = address.replace(/^https:\/\//i, "").replace(/\/$/, "");
+      return HOSTNAME_RE.test(name) && !/^\d+(\.\d+)+$/.test(name);
+    }
+    case "hamnet": {
+      // a HAMNET name or IPv4 address, plain http, an optional port
+      const m = HAMNET_RE.exec(address);
+      if (!m) return false;
+      const host = m[1]!;
+      const port = m[2] ? Number(m[2]) : 80;
+      return (
+        (IPV4_RE.test(host) || (HOSTNAME_RE.test(host) && !/^\d+(\.\d+)+$/.test(host))) && port >= 1 && port <= 65535
+      );
+    }
     case "ax25":
       return CALLSIGN_SSID_RE.test(address.toUpperCase());
     case "netrom":

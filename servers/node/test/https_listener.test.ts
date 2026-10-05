@@ -133,6 +133,8 @@ describe.skipIf(!hasOpenssl)("the https listener", () => {
     const env = stationEnv();
     const tlsPort = await start({ env, tls: pki });
     const plainPort = await start({ env });
+    // both are addresses of the instance; a host nobody listed is answered as APP_URL
+    env.EXTRA_ORIGINS = `https://127.0.0.1:${tlsPort},http://127.0.0.1:${plainPort}`;
     const secure = await get(`https://127.0.0.1:${tlsPort}/robots.txt`, { ca: pki.caCert });
     expect(secure.body).toContain(`Sitemap: https://127.0.0.1:${tlsPort}/sitemap.xml`);
     const plain = await get(`http://127.0.0.1:${plainPort}/robots.txt`);

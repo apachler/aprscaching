@@ -2,13 +2,15 @@
 /**
  * Why passkeys are unavailable, when they are. WebAuthn exists only in a secure context (https, or
  * localhost), and some browsers — privacy-hardened Chromium builds among them — ship without it even
- * there. Either way the one-time sign-in link by email still works, and the sign-in panel says so.
+ * there. Either way the one-time sign-in link by email (or one the sysop mints) still works, and the sign-in
+ * panel says so. An instance reached over plain http on HAMNET may also have an https address that takes them.
  */
 export type PasskeyProblem = "insecure" | "unsupported";
 
 /** One line each: why there is no passkey button, and what to use instead. */
 export const PASSKEY_PROBLEM_TEXT: Record<PasskeyProblem, string> = {
-  insecure: "Passkeys need a secure page (https or localhost). Use the one-time sign-in link by email instead.",
+  insecure:
+    "Passkeys need a secure page (https or localhost). Use the one-time sign-in link by email, or one from the sysop, or open this instance's https address.",
   unsupported: "This browser offers no passkeys. Use the one-time sign-in link by email instead.",
 };
 

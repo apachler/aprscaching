@@ -35,6 +35,7 @@ import { activeFedKeys, handleWellKnown, type FedPublicKey } from "./federation.
 import { amprCallOf, parse44netTxt, webOrigin, type AcsBinding } from "./fed44net.js";
 import { acsFields, amprNames, resolveRecord, type DnsAnswer, type RecordType } from "./doh.js";
 import { nowS } from "./util/time.js";
+import { net44Host } from "@aprscaching/shared";
 
 export interface CheckLine {
   id: "endpoint" | "a" | "txt" | "callsign" | "target" | "dnssec" | "aaaa";
@@ -100,7 +101,7 @@ const IN_44_NET = /^44\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 /** The 44net endpoint the descriptor lists first, lowercased. */
 const endpointOf = (desc: OwnDescriptor) =>
-  (desc.addresses ?? []).find((a) => a.transport === "44net")?.address.toLowerCase() ?? null;
+  (desc.addresses ?? []).filter((a) => a.transport === "44net").map((a) => net44Host(a.address))[0] ?? null;
 
 /** The base call this instance's identity lives under: its 44net endpoint's zone, else the operator's call. */
 function callsignOf(ctx: IdentityContext): string | null {
@@ -352,7 +353,7 @@ export async function check44net(
   // ---- where the record sends peers, against where this instance is
   let target: CheckLine | null = null;
   if (binding && txt.status !== "fail") {
-    const listed44 = (desc.addresses ?? []).filter((a) => a.transport === "44net").map((a) => a.address.toLowerCase());
+    const listed44 = (desc.addresses ?? []).filter((a) => a.transport === "44net").map((a) => net44Host(a.address));
     const webs = new Set(
       [
         ctx.web,

@@ -449,7 +449,7 @@ describe("hardening", () => {
     freshEnv({ INGEST_SECRET: "a-strong-test-secret", SESSION_SECRET: "a-strong-session-secret", INSTANCE: "gw.test" });
     sqlite.prepare("INSERT INTO accounts (account_id, callsign, created_at) VALUES ('acct-apr','OE8APR',?)").run(t);
     await handleRadioMessage(env, onAir());
-    const cookie = (await issueSessionCookie(env, "acct-apr", "OE8APR")).split(";")[0]!;
+    const cookie = (await issueSessionCookie(new Request("http://gw/"), env, "acct-apr", "OE8APR")).split(";")[0]!;
     const req = () => new Request("http://gw.test/x", { method: "POST", headers: { cookie } });
     const exp = (await (await handleAccountExport(req(), env, "OE8APR")).json()) as { logs: unknown[] };
     expect(exp.logs).toHaveLength(1);
@@ -466,7 +466,7 @@ describe("hardening", () => {
         "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier) VALUES (1,'OE8APR',?,'found',0,'C'), (1,'OE8APR-7',?,'found',0,'C')",
       )
       .run(t - 10, t);
-    const cookie = (await issueSessionCookie(env, "acct-apr", "OE8APR")).split(";")[0]!;
+    const cookie = (await issueSessionCookie(new Request("http://gw/"), env, "acct-apr", "OE8APR")).split(";")[0]!;
     const res = await handleAccountDelete(
       new Request("http://gw.test/x", { method: "POST", headers: { cookie } }),
       env,
@@ -507,7 +507,7 @@ describe("the player's list of logs sent over the air", () => {
       .run(t, t);
     await handleRadioMessage(env, onAir({ src: "OE5NEW-7" }));
     const list = async (acct: string, call: string) => {
-      const cookie = (await issueSessionCookie(env, acct, call)).split(";")[0]!;
+      const cookie = (await issueSessionCookie(new Request("http://gw/"), env, acct, call)).split(";")[0]!;
       const res = await handleRadioCommandsList(new Request("http://gw.test/x", { headers: { cookie } }), env);
       return ((await res.json()) as { commands: { fromCall: string; status: string; reason: string }[] }).commands;
     };

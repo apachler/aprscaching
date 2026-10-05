@@ -74,6 +74,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BASEMAP_STYLE: "Map widget basemap: a MapLibre style URL, or offline for the built-in grid",
   BASEMAP_HOSTS: "Extra comma-separated origins the basemap style loads tiles or fonts from",
   APP_URL: "Public origin people open, e.g. https://aprs.example.net",
+  EXTRA_ORIGINS: "Further addresses of this instance: comma-separated https:// or http:// origins",
   CORS_ORIGINS: "Extra comma-separated origins allowed credentialed CORS",
   RP_ID: "Passkey (WebAuthn) domain; defaults to the host of APP_URL",
   EMAIL_FROM: "Sender address for sign-in links and digest mail",
@@ -253,7 +254,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`APP_URL`",
-        "The public origin people open (`https://aprs.example.net`, or `http://<LAN address>` off-grid): where sign-in links return to, the passkey origin, and the credentialed-CORS allowlist. An emailed link opens the gateway's confirm page — on `APP_URL` when the app and the gateway share a host, otherwise on the gateway's own origin. Passkeys need an `https` origin (or `http://localhost`); an `http` origin gets a session cookie without the `Secure` flag, which a browser would otherwise drop",
+        "The main public origin people open (`https://aprs.example.net`, or `http://<LAN address>` off-grid): the canonical address of the sitemap, mails sent without a request (the digest) and the federation descriptor, the passkey origin, and the credentialed-CORS allowlist. A request on a host that is neither `APP_URL` nor in `EXTRA_ORIGINS` is answered as if it came to `APP_URL`. Passkeys need an `https` origin (or `http://localhost`); an `http` origin gets a session cookie without the `Secure` flag, which a browser would otherwise drop",
+        "—",
+      ],
+      [
+        "`EXTRA_ORIGINS`",
+        "Further addresses of this instance, comma-separated bare origins with no path: `https://` for a name with a certificate (a 44Net name reachable from the internet), `http://` for a name or 44.x address on a network without one (HAMNET). A request on one of them gets its session cookie, sign-in links and links into the app on that address; an `https` one also takes passkeys under `RP_ID` ([`/.well-known/webauthn`](api.md#authentication)), an `http` one signs in with an email link or the sysop's link. The Docker stack's Caddy serves each with automatic TLS or as plain http ([One instance, several addresses](../run/networks/several-addresses.md)). A gateway on another host than its web app (`VITE_API_BASE`) lists its own origin here",
         "—",
       ],
       [
@@ -264,7 +270,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "`RP_ID`",
         "WebAuthn relying-party id (registrable domain). Set it only to differ from `APP_URL`'s host — for example the parent domain, so passkeys work on several subdomains. Choose it before users register passkeys",
-        "`APP_URL`'s host",
+        "`APP_URL`'s host; with a plain-http `APP_URL`, the host of the first https `EXTRA_ORIGINS` entry",
       ],
       ["`SESSION_TTL_DAYS`", "Session cookie lifetime", "`30`"],
       [

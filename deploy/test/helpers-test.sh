@@ -115,6 +115,9 @@ if have node || have python3; then
   check "broken JSON fails" eq "$(cfg_check FED_KEY_HISTORY '[{' || true)" "FED_KEY_HISTORY: expected valid JSON"
   check "JSON passes" cfg_check FED_KEY_HISTORY '[]'
 fi
+check "origins pass, https and http, a name or a 44.x address" cfg_check EXTRA_ORIGINS "https://aprscaching.oe8apr.ampr.org,http://44.143.1.2:8080"
+check "an origin with a path fails" eq "$(cfg_check EXTRA_ORIGINS "https://a.example/app" || true)" \
+  "EXTRA_ORIGINS: expected origins such as https://aprs.example.net,http://44.143.1.2, separated by commas (no path)"
 check "a failure never shows the value" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/config.sh'; ! cfg_check APP_URL s3cr3t-value | grep -q s3cr3t"
 
 # ---- questions ---------------------------------------------------------------------------------------------
@@ -167,6 +170,14 @@ check "a .env with operator settings is a self-host gateway" eq "$(probe)" "self
 printf 'INGEST_URL=https://gw.example/ingest\nINGEST_SECRET=x\n' >"$TMP/d/.env"
 check "a .env with only the ingest link is an ingest box" eq "$(probe)" "ingest-box"
 
+# ---- doctor: where a further address lies ---------------------------------------------------------------------
+scope() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'; . '$DEPLOY/lib/doctor.sh'; origin_scope \"\$1\"" _ "$1"; }
+check "a 44.128/10 address is HAMNET" eq "$(scope 44.143.1.2)" hamnet
+check "a 44Net Connect address is on the internet" eq "$(scope 44.27.132.9)" public
+check "a LAN address is private" eq "$(scope 192.168.1.10)" private
+check "a CGNAT address is private" eq "$(scope 100.64.0.1)" private
+check "a public address is public" eq "$(scope 203.0.113.7)" public
+
 # ---- setup.sh: the federation posture ---------------------------------------------------------------------
 S="$DEPLOY/setup.sh"
 setup() { "$S" --non-interactive --no-network "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
@@ -208,6 +219,23 @@ env_file_set "$P" FED_AUTO_PROMOTE 3
 check "a re-run keeps the operator's own choice" setup --env-file "$P" --call OE8APR --domain aprs.example.net --fed-peers ""
 check "  … unchanged" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "3"
 check "  … and warns about it" grep -q "FED_AUTO_PROMOTE is not 0" "$TMP/out"
+X="$TMP/extra.env"
+check "setup writes the further addresses" setup --env-file "$X" --call OE8APR --domain aprs.example.net --fed-peers "" \
+  --extra-origins "HTTPS://aprscaching.oe8apr.ampr.org/, http://44.143.1.2,https://aprs.example.net" \
+  --net44-name aprscaching.oe8apr.ampr.org
+check "  … normalised, without APP_URL's own" eq "$(env_file_get "$X" EXTRA_ORIGINS)" \
+  "https://aprscaching.oe8apr.ampr.org,http://44.143.1.2"
+check "  … and publishes the 44Net name with a certificate as https://<name>" \
+  bash -c "grep -q '\"44net\",\"address\":\"https://aprscaching.oe8apr.ampr.org\"' '$X'"
+if setup --env-file "$TMP/xbad.env" --call OE8APR --domain aprs.example.net --fed-peers "" --extra-origins "http://44.143.1.2/app"; then
+  bad "an address with a path is refused"
+else
+  ok "an address with a path is refused"
+fi
+check "  … and the refusal names it" grep -q "http://44.143.1.2/app" "$TMP/err"
+check "\"-\" removes the further addresses" setup --env-file "$X" --call OE8APR --domain aprs.example.net --fed-peers "" \
+  --extra-origins -
+check "  … from the .env" eq "$(env_file_get "$X" EXTRA_ORIGINS)" ""
 L="$TMP/lan.env"
 check "a LAN instance is set up" setup --env-file "$L" --call OE8APR --lan-host 10.0.0.5 --app-port 8080
 check "  … on its own port" eq "$(env_file_get "$L" APP_URL)" "http://10.0.0.5:8080"

@@ -42,7 +42,7 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
 import { resolveTxt, acsFields, amprNames } from "./doh.js";
-import { parseEndpoints } from "@aprscaching/shared";
+import { net44Host, parseEndpoints } from "@aprscaching/shared";
 
 const RESOLVE_TIMEOUT_MS = 5000;
 const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
@@ -109,7 +109,7 @@ export function host44net(value: string): { callsign: string; host: string } | n
   return callsign && BASE_CALL_RE.test(callsign) ? { callsign, host } : null;
 }
 
-/** The address of this instance's first 44net endpoint in `FED_ENDPOINTS`, lowercased, or null without one. */
+/** The name of this instance's first 44net endpoint in `FED_ENDPOINTS`, lowercased, or null without one. */
 export function configured44net(env: Env): string | null {
   let raw: unknown;
   try {
@@ -119,8 +119,8 @@ export function configured44net(env: Env): string | null {
   }
   return (
     parseEndpoints(raw)
-      .find((e) => e.transport === "44net")
-      ?.address.toLowerCase() ?? null
+      .filter((e) => e.transport === "44net")
+      .map((e) => net44Host(e.address))[0] ?? null
   );
 }
 
