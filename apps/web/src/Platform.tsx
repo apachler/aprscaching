@@ -104,6 +104,7 @@ import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
 import { MeshcomLinks } from "./meshcom/MeshcomLinks.js";
 import { GRATICULE_PAINT, paintFromTokens, useAppliedTheme } from "./map/mapPaint.js";
+import { useFineGrid } from "./map/fineGrid.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // Keyless online basemap by default: OpenFreeMap's OSM vector tiles (free, no key, no usage caps —
@@ -424,6 +425,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       },
     },
   );
+  useFineGrid(map);
   const flyTo = useCallback(
     (lat: number, lon: number, minZoom: number) =>
       mapRef.current?.flyTo({ center: [lon, lat], zoom: Math.max(mapRef.current.getZoom(), minZoom) }),

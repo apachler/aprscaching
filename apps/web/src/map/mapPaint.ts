@@ -57,6 +57,7 @@ export const GRATICULE_PAINT: TokenPaint = {
   ocean: { "background-color": "--map-graticule-bg" },
   "grid-minor": { "line-color": "--map-graticule-line" },
   "grid-major": { "line-color": "--map-graticule-line" },
+  "grid-fine": { "line-color": "--map-graticule-line" },
 };
 
 /**

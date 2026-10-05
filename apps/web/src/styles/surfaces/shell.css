@@ -208,7 +208,8 @@
     margin-top: auto;
     padding-top: var(--space-xs);
   }
-  /* a short window: tighter items, so more of the rail shows before it scrolls */
+  /* a short window, or a laptop-height one with apps pinned: tighter items, so the whole rail shows before it
+     has to scroll */
   @media (max-height: 760px) {
     .rail button,
     .rail .rail-link {
@@ -218,6 +219,24 @@
     .rail-scroll,
     .rail-bottom {
       gap: var(--space-2xs);
+    }
+  }
+  @media (max-height: 920px) {
+    .rail:has(.rail-div) {
+      padding-block: var(--space-xs);
+    }
+    .rail:has(.rail-div) button,
+    .rail:has(.rail-div) .rail-link {
+      min-height: var(--hit);
+      padding-block: var(--space-2xs);
+      gap: 1px;
+    }
+    .rail:has(.rail-div) .rail-scroll,
+    .rail:has(.rail-div) .rail-bottom {
+      gap: 0;
+    }
+    .rail:has(.rail-div) .rail-div {
+      margin: 1px 0;
     }
   }
   @media (min-width: 1024px) {
