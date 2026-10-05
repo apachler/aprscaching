@@ -39,7 +39,8 @@ Messages from people who erased their account, or who no longer hold the call th
 3. Enter the **Message**, up to 67 characters.
 4. Choose the **Delivery**:
     - **Now** sends it at once. With a USB or Bluetooth TNC connected in
-      [My radio](my-radio.md#connect) and transmit switched on, it goes out from your radio as your TX callsign.
+      [My radio](my-radio.md#connect) and transmitting allowed for this tab, it goes out from your radio as your
+      TX callsign.
       Otherwise the instance sends it to [APRS-IS](../glossary.md#aprs-is) under your callsign, through its
       ingest box. The line under the choice says which.
     - **When next heard** leaves it in the [Mailbox](#leave-a-message-in-the-mailbox): the instance sends it the
@@ -102,8 +103,9 @@ APRS-IS. A message stored without its network shows no badge.
 
 ### Steps
 
-1. In **Settings → My radio (browser)**, switch on **Enable transmit**. From **Messages**, **Open My radio**
-   takes you there.
+1. In **Settings → My radio (browser)**, allow transmitting for this tab: answer **Allow** when the radio
+   connects, or switch on **Transmit in this tab** ([Allow transmitting for this tab](my-radio.md#allow-transmitting-for-this-tab)).
+   From **Messages**, **Open My radio** takes you there.
 2. Check the **TX callsign** SSID, `-7` by default.
 3. Under **Message**, enter the recipient's callsign in **to** (up to nine characters) and the text in
    **message** (up to 67 characters).
@@ -115,8 +117,8 @@ number, so the recipient's station acknowledges it. It joins the **Messages** li
 ## Acknowledge a message sent to you
 
 The **Local inbox** in the **Field station** panel lists the messages your radio heard, newest first. When a
-message to your callsign carries a message number, and transmit is on, the row shows **ACK** and that
-number.
+message to your callsign carries a message number, and transmitting is allowed for this tab, the row shows
+**ACK** and that number.
 
 1. Select **ACK <number>**.
 2. The app shows **ACK <number> → <CALL>** once your radio has sent it.

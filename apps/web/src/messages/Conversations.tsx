@@ -311,12 +311,10 @@ function Compose(props: {
         // a numbered message asks the station to acknowledge it
         const msgNo = nextMsgNo();
         const from = radioLink.txCall();
-        await radioLink.transmit({
-          src: from,
-          dst: "APRS",
-          path: ["WIDE1-1"],
-          payload: encodeAprsMessage(recipient, body, msgNo),
-        });
+        await radioLink.transmit(
+          { src: from, dst: "APRS", path: ["WIDE1-1"], payload: encodeAprsMessage(recipient, body, msgNo) },
+          "Messages",
+        );
         // the message went out either way; a failed record only leaves it out of the conversation
         const recorded = await recordSentMessage({ from, to: recipient, text: body, msgNo }).then(
           () => true,

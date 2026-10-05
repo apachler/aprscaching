@@ -21,8 +21,10 @@ responsibility for what leaves your antenna. The software helps in three ways:
   **control-verified**: you sent `VERIFY <code>` and a receiving site the instance attests heard it on the
   air, you proved the call another way ([Verify your callsign](../play/join.md#verify-your-callsign)), or a
   sysop vouched for it. The APRS-IS passcode verifies nothing and is never the gate.
-- **Every transmission is a choice.** The browser asks you to confirm each beacon and message, and switching
-  on **Enable transmit** is a separate step.
+- **Every transmission is a choice.** The browser asks you to confirm each beacon and message, and your radio
+  or TNC transmits only after you allow it for the tab, once per tab
+  ([Allow transmitting for this tab](my-radio.md#allow-transmitting-for-this-tab)). The radio chip lights
+  **TX** for every frame, and **Recent transmissions** lists what the tab sent.
 - **Receiving never obliges you to transmit.** Receiving is always allowed and never raises trust
   ([The trust model](../reference/trust-model.md)).
 

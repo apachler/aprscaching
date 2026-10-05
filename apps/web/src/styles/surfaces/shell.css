@@ -313,6 +313,31 @@
   .radio-chip-n {
     font-family: var(--font-mono);
   }
+  /* "TX" lights for each frame this tab transmits: the word carries the state, the flash only draws the eye */
+  .radio-chip-tx {
+    padding: 0 var(--space-xs);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: var(--text-caption);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .radio-chip-tx {
+      animation: radio-tx var(--motion-slow) ease-out;
+    }
+  }
+  @keyframes radio-tx {
+    from {
+      opacity: 0.3;
+      transform: scale(0.75);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
   /* a destination that needs attention (platform/useAttention.ts): a dot by the icon, with words for a screen reader */
   .nav-dot {
     display: inline-block;

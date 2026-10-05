@@ -2,8 +2,8 @@
 /**
  * The app's one browser radio link (radioLink.ts) wired to the browser: the real Web Serial / Web Bluetooth /
  * Web Audio links, the gateway forwarders and the field station. `RadioLinkHost` is mounted once at the platform
- * root: it follows the signed-in identity, turns the store's events into toasts and closes the link when the
- * page goes away. Views read the store through `useRadioLink`.
+ * root: it follows the signed-in identity, asks for transmit consent, turns the store's events into toasts and
+ * closes the link when the page goes away. Views read the store through `useRadioLink`.
  */
 import { useEffect, useSyncExternalStore } from "react";
 import { WebSerialKiss, WebBluetoothKiss } from "./kiss.js";
@@ -11,7 +11,7 @@ import { WebAudioAfsk, WebSerialMeshtastic } from "./extralinks.js";
 import { fieldStation } from "./fieldStation.js";
 import { RadioLinkStore, LINK_LABEL, holdRadio, radioBusyText, type RadioState } from "./radioLink.js";
 import { ingestPackets, ingestSigned } from "../api.js";
-import { useToast } from "../ui/index.js";
+import { useConfirm, useToast } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 
@@ -65,6 +65,29 @@ export function useRadioLink(): RadioState {
 /** Mounted once at the platform root: identity, toasts and page unload for the app-wide radio link. */
 export function RadioLinkHost(props: { callsign: string; verified: boolean }) {
   const toast = useToast();
+  const confirm = useConfirm();
+  useEffect(() => {
+    radioLink.setConsentAsker(({ call, via }) =>
+      confirm({
+        title: `Allow transmitting from ${call} over ${via} until you close this tab?`,
+        message: (
+          <>
+            <p>
+              You are the licensed operator of <span className="mono">{call}</span> and answer for what it sends.
+              Receive only keeps listening; the transmit switch in Settings → My radio, or the radio chip in the top
+              bar, allows it later. Disconnecting the radio, signing out or a change of callsign ends it.
+            </p>
+            <p className="muted fine">
+              Messages the instance sends for you (APRS-IS, the Mailbox, announcements) follow their own settings.
+            </p>
+          </>
+        ),
+        confirmLabel: "Allow",
+        cancelLabel: "Receive only",
+      }),
+    );
+    return () => radioLink.setConsentAsker(null);
+  }, [confirm]);
   useEffect(() => {
     radioLink.setIdentity(props.callsign, props.verified);
   }, [props.callsign, props.verified]);
@@ -74,7 +97,7 @@ export function RadioLinkHost(props: { callsign: string; verified: boolean }) {
         if (e.kind === "connected") toast(`${LINK_LABEL[e.link]} connected`);
         else if (e.kind === "lost") toast(`Radio disconnected: ${e.message}`);
         else if (e.kind === "connect-failed") toast(`Could not connect: ${e.message}`);
-        else toast(`Forwarding failed: ${e.message}`);
+        else if (e.kind === "forward-failed") toast(`Forwarding failed: ${e.message}`);
       }),
     [toast],
   );

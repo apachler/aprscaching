@@ -44,7 +44,8 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
-  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret } = useRadioLink();
+  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent } = useRadioLink();
+  const rxOnlyLink = link === "audio" || link === "mesh";
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
   const [msg, setMsg] = useState({ to: "", text: "" });
   const [txBusy, setTxBusy] = useState(false);
@@ -60,7 +61,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     if (!info || !radioLink.canTransmit()) return;
     setTxBusy(true);
     try {
-      await radioLink.transmit({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info });
+      await radioLink.transmit({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info }, "My radio");
       toast(`ACK ${mm.msgNo} → ${mm.from}`);
     } catch (e) {
       toast(`TX failed: ${(e as Error).message}`);
@@ -114,12 +115,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     radioLink.setForward(on);
   }
 
-  // Transmit, gated on callsign control-verification + opt-in; every send is a deliberate, confirmed action.
+  // Transmit, gated on callsign control-verification and this session's consent; every send is a deliberate,
+  // confirmed action.
   async function tx(payload: string, what: string): Promise<boolean> {
     if (!radioLink.canTransmit()) return false;
     setTxBusy(true);
     try {
-      await radioLink.transmit({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload });
+      await radioLink.transmit({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload }, "My radio");
       toast(`Transmitted: ${what}`);
       return true;
     } catch (e) {
@@ -326,10 +328,23 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               Transmit is for <strong>licensed, control-verified</strong> operators only — verify your callsign in
               Settings → Account to enable it. (RX is always available; trust is unaffected.)
             </p>
+          ) : rxOnlyLink ? (
+            <p className="muted">This link only receives. Connect a USB or Bluetooth TNC to transmit.</p>
           ) : (
             <>
-              <Row label="Enable transmit" help="You are a licensed operator and are responsible for what you send">
-                <Switch label="Enable transmit" checked={txOn} onChange={(v) => radioLink.setTxOn(v)} />
+              <Row
+                label="Transmit in this tab"
+                help={
+                  txOn
+                    ? `Allowed as ${txCall} until you close this tab, disconnect or sign out. Switch off to stop.`
+                    : "Receive only. Switching on asks once, for this tab only."
+                }
+              >
+                <Switch
+                  label="Transmit in this tab"
+                  checked={txOn}
+                  onChange={(v) => (v ? void radioLink.requestTx() : radioLink.revokeTx())}
+                />
               </Row>
               {txOn && (
                 <>
@@ -351,6 +366,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     />
                     <span className="muted"> → {txCall}</span>
                   </Row>
+                  <p className="muted fine">
+                    A different SSID ends this tab&apos;s consent; switching transmit on asks again.
+                  </p>
                   <h5>Beacon position</h5>
                   <div className="row gap-2">
                     <input
@@ -422,6 +440,40 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           )}
         </div>
       )}
+
+      <div className="tx-log-block">
+        <div className="row between">
+          <h4>
+            Recent transmissions <span className="muted fine">this tab only</span>
+          </h4>
+          <Button
+            onClick={() => radioLink.clearSent()}
+            disabled={sent.length === 0}
+            hint="Empty this list. It lives in this tab's memory only and is never sent to the instance."
+          >
+            Clear
+          </Button>
+        </div>
+        {sent.length === 0 ? (
+          <EmptyState>Nothing transmitted in this session.</EmptyState>
+        ) : (
+          <ul className="logs tx-log">
+            {sent.map((t) => (
+              <li key={t.id}>
+                <span className="mono">
+                  <strong>{t.src}</strong>&gt;{t.dst}
+                  {t.path.length > 0 && `,${t.path.join(",")}`}
+                </span>
+                <span className="muted">
+                  {" "}
+                  · {t.feature} · <time dateTime={new Date(t.at).toISOString()}>{fmt.time(t.at / 1000)}</time>
+                </span>
+                <div className="comment mono">{t.summary}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* Field station: local RF -> live stations + inbox, no gateway needed. */}
       {(() => {

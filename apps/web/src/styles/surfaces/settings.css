@@ -14,6 +14,16 @@
   .tx-block h5 {
     margin: var(--space-sm) 0 var(--space-xs);
   }
+  /* this tab's recent transmissions: set apart like the transmit block, the list capped like live RX */
+  .tx-log-block {
+    border-top: 1px dashed var(--line);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+  }
+  .tx-log {
+    max-height: 320px;
+    overflow: auto;
+  }
   /* operated-stations registry (Settings → My stations) */
   .station-card {
     border: 1px solid var(--line);
