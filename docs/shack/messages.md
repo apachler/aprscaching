@@ -61,7 +61,7 @@ APRS-IS. A message stored without its network shows no badge.
 
 ### Steps
 
-1. In **Settings → My radio (browser)**, switch on **Enable transmit**. From **Messages**, **Open Settings**
+1. In **Settings → My radio (browser)**, switch on **Enable transmit**. From **Messages**, **Open My radio**
    takes you there.
 2. Check the **TX callsign** SSID, `-7` by default.
 3. Under **Message**, enter the recipient's callsign in **to** (up to nine characters) and the text in

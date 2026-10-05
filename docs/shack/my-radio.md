@@ -19,9 +19,10 @@ your radio hears, shows it live, and can pass it on to an instance.
 | Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | A software modem: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only |
 | A [Meshtastic](../glossary.md#meshtastic) node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed mode on, callsign as long name) and shows them under their callsign; licence-free nodes are ignored. Receive only |
 
-The page shows only the buttons your browser supports. Firefox and Safari, and every browser on an iPhone or
-iPad, cannot talk to USB or Bluetooth radios. There, an [ingest box](../run/radios/ingest-box.md) feeds the
-instance instead.
+The page shows only the buttons your browser supports, and a line under them names the links it lacks. USB
+radios and Meshtastic nodes need Web Serial; Bluetooth TNCs need Web Bluetooth. Only Chromium-based browsers
+have them, so Firefox and Safari, and every browser on an iPhone or iPad, show **Soundcard AFSK** alone. For
+those, an [ingest box](../run/radios/ingest-box.md) feeds the instance instead.
 
 ## Connect
 
@@ -30,8 +31,14 @@ instance instead.
 3. Select the button for your hardware and pick the device in the browser's dialog.
 4. The status line shows **● live (USB radio) · N frames**. Heard packets appear under **Live RX**.
 
-**Disconnect** ends the session. The connection lasts as long as the page is open. For a station that runs
-around the clock, the instance's sysop runs an [ingest box](../run/radios/ingest-box.md) instead.
+The radio stays connected while you use the rest of the app: close Settings, open the map or **Messages**, and
+it keeps listening. While it is connected, a radio chip in the top bar shows the radio, the number of frames
+heard and the transmit state (**TX on**, **RX only** or **TX locked** until your callsign is verified). Select
+the chip to come back here.
+
+The link ends when you select **Disconnect**, sign out, or close or reload the page. When the device goes away
+(unplugged, out of Bluetooth range), the app says **Radio disconnected** and why. For a station that runs around
+the clock, the instance's sysop runs an [ingest box](../run/radios/ingest-box.md) instead.
 
 ## Work off-grid
 
@@ -79,7 +86,9 @@ Every transmission asks you to confirm first; nothing is sent automatically. To 
 
 | Problem | What to check |
 |---|---|
-| No connect buttons | The browser is not Chromium-based, or the page is not on `https://`. |
+| No connect buttons | The page is not on `https://`, or the browser has none of Web Serial, Web Bluetooth and Web Audio. |
+| Only **Soundcard AFSK** shows | The browser is not Chromium-based: use Chrome or Edge for a USB or Bluetooth TNC. |
+| **The radio is in use by the packet terminal** | One USB port opens in one place at a time. Close the TNC in the [packet terminal](packet-and-bbs.md) first, or the other way round. |
 | Connected, but **0 frames** | The TNC is not in KISS mode, or the radio is on the wrong frequency. With the soundcard, the input level is too low or too high: aim for the loudest level that does not clip. |
 | **Meshtastic node** missing | It needs Web Serial: use desktop Chrome or Edge. |
 | The Bluetooth TNC is missing from the dialog | Switch on the TNC's Bluetooth and pair it in the system settings first, if it asks for pairing. A TNC that offers only classic Bluetooth, not Bluetooth Low Energy, cannot connect. |

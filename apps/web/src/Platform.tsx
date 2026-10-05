@@ -26,6 +26,7 @@ import {
   type SearchHitStation,
 } from "./api.js";
 import { TopBar } from "./TopBar.js";
+import { RadioLinkHost } from "./rf/RadioLinkHost.js";
 import { Tour, TOUR_STEPS, Button, useToast, Icon, usePoll } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET } from "./brand.js";
@@ -837,10 +838,17 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [session.signedIn]);
   usePoll(loadUnseen, 60_000, { enabled: session.signedIn });
   useEffect(loadUnseen, [loadUnseen, view]);
+  // Settings opened at the browser radio: each request opens and scrolls to the "My radio (browser)" group
+  const [radioAsk, setRadioAsk] = useState(0);
+  const openRadio = () => {
+    setRadioAsk((n) => n + 1);
+    openView(panel("settings"));
+  };
 
   return (
     <PlatformContext.Provider value={ctx}>
       <FormatContext.Provider value={fmt}>
+        <RadioLinkHost callsign={session.signedIn ? callsign : ""} verified={session.signedIn && verified} />
         <div className="app">
           <TopBar
             callsign={callsign}
@@ -866,6 +874,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             onAdmin={() => openView(panel("admin"))}
             alerts={unseenAlerts}
             onAlerts={session.signedIn ? () => openView(panel("alerts")) : undefined}
+            onRadio={session.signedIn ? openRadio : undefined}
           />
           <div className="shell">
             <NavRail
@@ -913,11 +922,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             )}
             {isPanel("offline") && <OfflinePanel onClose={closeView} />}
             {isPanel("messages") && (
-              <MessagesPanel
-                onClose={closeView}
-                onRadio={() => openView(panel("settings"))}
-                onSignIn={() => openView(panel("signin"))}
-              />
+              <MessagesPanel onClose={closeView} onRadio={openRadio} onSignIn={() => openView(panel("signin"))} />
             )}
             {isPanel("filter") && (
               <FilterPanel
@@ -977,6 +982,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             {isPanel("settings") && (
               <SettingsPanel
                 settings={locSettings}
+                radioAsk={radioAsk}
                 onApply={applySettings}
                 onFly={(lat, lon) => flyTo(lat, lon, 12)}
                 operatorPending={operatorPending}
