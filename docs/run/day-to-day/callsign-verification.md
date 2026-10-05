@@ -77,17 +77,55 @@ when it issued the certificate below it; that its subject attribute `AROcallsign
 (OID `1.3.6.1.4.1.12348.1.1`) is exactly the base call; and the member's signature over the challenge. It does
 not consult LoTW's certificate revocation service.
 
+## Look a call up
+
+Open **Instance admin → Callsigns**, type the callsign and select **Look up**. The card shows:
+
+- who holds the call: the account (its id, abbreviated), its active call, every call it holds, its passkeys
+  and whether it has an email;
+- how the call is verified, by whom and when, or **unverified**;
+- open claims on the call, and its holder changes: every claim and release.
+
+Both actions below act on the account the card shows. If another account took the call meanwhile, the gateway
+refuses with `confirm_holder` and you look it up again.
+
 ## Verify a call by hand
 
-For an operator out of range of every attested site, a sysop verifies the call under **Instance admin →
-Callsign verification**.
+For an operator out of range of every attested site:
 
-1. Enter the callsign, and a required note saying how you checked control of the licence.
-2. Select **Verify callsign**. The call is verified with method `sysop`, recording your call and the time.
+1. Look the call up, and check that the account the card shows is the licensee's.
+2. Type how you checked control of the licence, and select **Verify by hand**.
+3. Confirm. The call is verified with method `sysop` for that account, recording your call and the time.
 
-The list shows every manual verification, and **Revoke** returns a call to unverified. Revoking touches only
-manual verifications: a call verified on the air or by the operator CLI is neither listed nor revocable there.
-Both actions are logged in `account_events`.
+**Verified by hand** lists every manual verification, and **Revoke** returns a call to unverified. Revoking
+touches only manual verifications: a call verified on the air or by the operator CLI is neither listed nor
+revocable there. Both actions are logged in `account_events`.
+
+## Claims: a licensee takes a call over
+
+Holding a call is not proof of the licence. While the account holding a call has not proven control, the
+licensee can open a claim and complete any method above for the call. The call then moves to the licensee,
+verified, and the claim shows in the call's holder changes. Nothing waits for you.
+
+A claim never displaces a verified holder, and never takes a held `ADMIN_CALLSIGNS` call. An `ADMIN_CALLSIGNS`
+call nobody holds is registered only through your sign-in link or by a claim, never by an unproven sign-up.
+
+The account that loses a call keeps its other calls. What it wrote in the app under the call (caches, logs,
+ratings, favourites, watches, badges, saved views) stays on that account and shows under its remaining call,
+or as `FORMER` when it holds no other. Its device keys and stations on the call are removed. The federation
+learns of it from signed tombstones for those keys and the moved finds, and from the caches served again.
+Positions, stations and messages the radio sent stay with the call.
+
+## Release a call from an account
+
+When a verified holder does not hold the licence, or a member asks to drop a call:
+
+1. Look the call up.
+2. Type the reason, select **Release** and confirm.
+
+The call leaves the account the card shows, and nobody holds it until someone signs up with it or claims it.
+The account keeps its other calls and its content, as for a claim, and is told why in the app and by email if
+it has one. The release, with your call and the reason, is recorded in `callsign_events`.
 
 ## Next
 

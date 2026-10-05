@@ -9,6 +9,7 @@ import {
   call,
   emailSignup,
   newAuthenticator,
+  operatorSignup,
   passkeyLogin,
   passkeyLoginFinish,
   passkeyRegister,
@@ -176,7 +177,10 @@ describe("account import is throttled per address", () => {
 describe("operator verification names the holding account", () => {
   it("previews the holder without verifying, then verifies and names it again", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
-    const reg = await passkeyRegister(env, "OE8SYS", await newAuthenticator());
+    // an operator call opens only through the operator's link; the operator then adds a passkey from it
+    expect((await passkeyRegister(env, "OE8SYS", await newAuthenticator())).data.reason).toBe("operator_call");
+    const op = await operatorSignup(env, "OE8SYS");
+    const reg = await passkeyRegister(env, "OE8SYS", await newAuthenticator(), { cookie: op.cookie });
     const preview = await call(env, "POST", "/verify/operator", { callsign: "OE8SYS", preview: true }, OPERATOR);
     expect(preview.status).toBe(200);
     expect(preview.data.verified).toBe(false);

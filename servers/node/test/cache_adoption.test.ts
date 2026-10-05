@@ -4,7 +4,7 @@
 // sysop approves — or the sysop assigns it straight to a verified holder. Ownership follows the account
 // holding the call, every step is audited, and the audit rows are inside export/erase.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, operatorVerify, sysopVerifyCall, type Res } from "./helpers/authflow.js";
 import { newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { ADOPTION_NOTICE_SEC } from "@aprscaching/gateway/adoption";
@@ -32,13 +32,7 @@ async function user(w: World, cs: string, verified = true): Promise<Res> {
   const s = await emailSignup(w.env, `${cs.toLowerCase()}@example.test`, cs);
   expect(s.status).toBe(200);
   if (verified) {
-    const v = await call(
-      w.env,
-      "POST",
-      "/api/admin/verifications",
-      { callsign: cs, note: "licence checked" },
-      { cookie: w.sysop.cookie },
-    );
+    const v = await sysopVerifyCall(w.env, w.sysop.cookie, cs);
     expect(v.status).toBe(201);
   }
   return s;

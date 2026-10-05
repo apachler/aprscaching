@@ -26,7 +26,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { markVerified } from "./callsign.js";
+import { recordProof } from "./callsign.js";
 import { resolveTxt, resolveTxtAt, amprResolvers, acsFields, amprNames, NXDOMAIN, type TxtAnswer } from "./doh.js";
 import {
   holderOf,
@@ -103,8 +103,9 @@ export async function checkAmprChallenge(req: Request, env: Env): Promise<Respon
     refuse(`${name} answers through a CNAME — publish the TXT record at ${name} itself, inside ampr.org`);
   const verify = async (proof: string, note: string) => {
     if (!(await spendChallenge(env, c, "ampr_dns", code))) return noChallenge();
-    await markVerified(env, c.cs, "ampr_dns", { by: host, note });
-    return json({ verified: true, callsign: c.cs, method: "ampr_dns", proof });
+    const refused = await recordProof(env, c, "ampr_dns", { by: host, note });
+    if (refused) return json({ error: refused }, { status: 409 });
+    return json({ verified: true, callsign: c.cs, method: "ampr_dns", proof, claimed: !!c.claim });
   };
   const wrongCode = () => refuse(`${name} does not carry the current code — publish "${amprTxtValue(code)}"`);
 

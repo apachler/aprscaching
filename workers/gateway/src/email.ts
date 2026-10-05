@@ -4,9 +4,13 @@ import { escapeHtml } from "./util/html.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, corsAllowlist } from "./app.js";
+import { reclaimStatements } from "./claims.js";
 import {
   issueSessionCookie,
   unclaimableReason,
+  callRefusal,
+  refusalResponse,
+  isFormerMarker,
   authThrottled,
   sessionsEnabled,
   sessionUnavailable,
@@ -71,16 +75,29 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   const limited = await authThrottled(env, req, "email-start", e, { perIp: 20, perIdentity: 5, windowMs: 600_000 });
   if (limited) return limited;
 
-  const acct = await env.DB.prepare("SELECT account_id FROM accounts WHERE email = ?").bind(e).first();
+  const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
+    .bind(e)
+    .first<{ account_id: string; callsign: string }>();
   const purpose = acct ? "login" : "register";
+  // an account whose last call moved to its licensee signs in again with the call it operates now
+  const callless = !!acct && isFormerMarker(acct.callsign);
   let cs: string | null = null;
-  if (purpose === "register") {
+  if (purpose === "register" || callless) {
     cs = String(callsign ?? "")
       .toUpperCase()
       .trim();
-    if (cs.length < 3) return json({ error: "callsign required to register" }, { status: 400 });
-    const refused = await unclaimableReason(env, cs);
-    if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
+    if (cs.length < 3)
+      return callless
+        ? json(
+            {
+              error: "your account holds no callsign now — give the callsign you operate to sign in with it",
+              reason: "needs_callsign",
+            },
+            { status: 409 },
+          )
+        : json({ error: "callsign required to register" }, { status: 400 });
+    const refused = await callRefusal(env, cs);
+    if (refused) return refusalResponse(refused);
   }
 
   const token = newToken();
@@ -280,7 +297,18 @@ async function emailAccount(env: Env, email: string, callsign: string | null, no
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(email)
     .first<Acct>();
-  return acct ?? createAccount(env, (callsign ?? "").toUpperCase(), email, now);
+  if (!acct) return createAccount(env, (callsign ?? "").toUpperCase(), email, now);
+  if (!isFormerMarker(acct.callsign)) return acct;
+  // the account holds no call: it takes on the call the link was asked for, and its content follows
+  const cs = (callsign ?? "").toUpperCase();
+  const refused = cs.length >= 3 ? await unclaimableReason(env, cs) : "missing callsign";
+  if (refused) return json({ error: refused }, { status: 409 });
+  try {
+    await env.DB.batch(reclaimStatements(env, acct.account_id, acct.callsign, cs, now));
+  } catch {
+    return json({ error: "callsign already claimed" }, { status: 409 });
+  }
+  return { account_id: acct.account_id, callsign: cs };
 }
 
 /**
@@ -413,14 +441,23 @@ async function operatorLinkAccount(env: Env, callsign: string, now: number): Pro
       .first<Acct>();
     if (acct) return acct;
   }
-  return createAccount(env, callsign.toUpperCase(), null, now);
+  return createAccount(env, callsign.toUpperCase(), null, now, { operatorLink: true });
 }
 
-/** Register a durable account under `cs` (unverified control), with an optional recovery email. */
-async function createAccount(env: Env, cs: string, email: string | null, now: number): Promise<Acct | Response> {
+/**
+ * Register a durable account under `cs` (unverified control), with an optional recovery email. Only the
+ * operator's link (`operatorLink`) registers an ADMIN_CALLSIGNS call this way.
+ */
+async function createAccount(
+  env: Env,
+  cs: string,
+  email: string | null,
+  now: number,
+  o: { operatorLink?: boolean } = {},
+): Promise<Acct | Response> {
   if (cs.length < 3) return json({ error: "missing callsign for registration" }, { status: 400 });
   // guard the race: the call (or its base, via another SSID) may have been claimed since the link was issued
-  const refused = await unclaimableReason(env, cs);
+  const refused = await unclaimableReason(env, cs, o);
   if (refused) return json({ error: refused }, { status: 409 });
   const id = crypto.randomUUID();
   try {

@@ -40,6 +40,8 @@ on https or `localhost`. It usually has no email either. The sysop signs people 
 - **Single use, 15 minutes.** The first confirm spends the token; after 15 minutes it is refused.
 - **No login CSRF.** Opening the link signs nobody in. Only the confirm page's own form, a same-origin POST,
   spends it, so a page that makes a browser load someone's link cannot sign that browser in.
+- **The operator's own call.** An `ADMIN_CALLSIGNS` call opens only through this link or a proof of control;
+  an ordinary sign-up with it is refused, so nobody registers it before the operator does.
 - **Not a verification.** A link opens an account; it never proves control of a callsign. Transmit stays gated
   on control-verification ([Callsign verification](callsign-verification.md)).
 - **A bearer credential.** Until it is used or expires, whoever opens the link first gets the session. Over

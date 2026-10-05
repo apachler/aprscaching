@@ -126,7 +126,8 @@ import {
   handleMeshcomGroupMessages,
 } from "./meshcom.js";
 import { retryCorroborations } from "./corroborate_retry.js";
-import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
+import { handleAdminWhoami, handleAdminVerifications, handleAdminCallsigns } from "./admin.js";
+import { handleClaimStart, handleClaimStatus } from "./claims.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleMailTest } from "./mail.js";
 import { handleStationStatus } from "./station_status.js";
@@ -479,6 +480,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);
   const adminVerif = /^\/api\/admin\/verifications\/([A-Za-z0-9-]{3,12})$/.exec(p);
   if (adminVerif) return handleAdminVerifications(req, env, adminVerif[1]);
+  const adminCall = /^\/api\/admin\/callsigns\/([A-Za-z0-9-]{3,12})$/.exec(p);
+  if (adminCall) return handleAdminCallsigns(req, env, adminCall[1]!);
   if (p === "/api/admin/adoptions") return handleAdminAdoptions(req, env);
   const adminAdopt = /^\/api\/admin\/adoptions\/(\d+)(\/assign)?$/.exec(p);
   if (adminAdopt) return handleAdminAdoptions(req, env, { cacheId: Number(adminAdopt[1]), assign: !!adminAdopt[2] });
@@ -563,6 +566,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // auth (passkey + email magic-link). Sessions attribute logs and gate announce.
   if (p === "/auth/claim" && m === "POST") return handleClaim(req, env);
+  if (p === "/auth/claims" && m === "POST") return handleClaimStart(req, env);
+  if (p === "/auth/claims/status" && m === "POST") return handleClaimStatus(req, env);
   if (p === "/auth/passkeys" && m === "GET") return handleListPasskeys(req, env);
   const passkeyDel = /^\/auth\/passkeys\/([A-Za-z0-9_-]+)$/.exec(p);
   if (passkeyDel && m === "DELETE") return handleRemovePasskey(req, env, passkeyDel[1]!);

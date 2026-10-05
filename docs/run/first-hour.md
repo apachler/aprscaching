@@ -35,8 +35,11 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 
     **Check:** `deploy/aprscaching doctor` reports no failure in its `config` and `gateway` groups.
 
-2. **Sign in as your call.** Open `APP_URL` and create the account with a passkey. Over plain http (a LAN,
-   no email), use a one-time link instead: see [Off-grid sign-in](day-to-day/sign-in-links.md#off-grid-sign-in).
+2. **Sign in as your call.** Your call is in `ADMIN_CALLSIGNS`, so it opens only through your one-time sign-in
+   link (or a proof of control), never by an ordinary sign-up: nobody can register it before you. Mint the link
+   on the gateway host and open it, as in [Off-grid sign-in](day-to-day/sign-in-links.md#off-grid-sign-in), on
+   any instance. Then add a passkey under **Settings → Account** (on https or `localhost`), so you sign in
+   without a link next time.
 
 3. **Confirm your call.** Run the operator script for your shape:
 
@@ -89,7 +92,7 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 
 Other members verify their calls themselves (**You → Verify callsign**): over the air once your RF site hears
 them, by `ampr.org` DNS, or with a LoTW certificate. A sysop can verify an out-of-range member by hand under
-**Instance admin → Callsign verification** ([Callsign verification](day-to-day/callsign-verification.md)).
+**Instance admin → Callsigns** ([Callsign verification](day-to-day/callsign-verification.md)).
 
 Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_LINKS`).
 The [Configuration reference](../reference/configuration.md) lists every key.

@@ -9,6 +9,7 @@ import {
   changeEmail,
   resendEmailConfirmation,
   errorText,
+  ApiError,
   type EmailConfirmation,
   type HeldCallsign,
 } from "../api.js";
@@ -26,6 +27,7 @@ import {
   useLoad,
 } from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
+import { ClaimCall } from "./ClaimCall.js";
 import { Passkeys } from "./Passkeys.js";
 
 type Session = {
@@ -61,6 +63,8 @@ export function AccountSettings(props: {
   );
   const held = heldList ?? [];
   const [verifying, setVerifying] = useState<string | null>(null);
+  // a call another account holds without proof (or the operator's call), taken over by proving control
+  const [takeover, setTakeover] = useState<{ callsign: string; operatorCall: boolean } | null>(null);
   const [newCs, setNewCs] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; kind: "ok" | "error" } | null>(null);
@@ -99,6 +103,9 @@ export function AccountSettings(props: {
       setMsg({ text: `Added ${n} — verify it below to enable announce + leaderboard credit.${reg}`, kind: "ok" });
       reload();
     } catch (e) {
+      const reason = e instanceof ApiError ? (e.data as { reason?: string } | null)?.reason : undefined;
+      if (reason === "held_unverified" || reason === "operator_call")
+        setTakeover({ callsign: n, operatorCall: reason === "operator_call" });
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
     } finally {
       setBusy(false);
@@ -181,6 +188,26 @@ export function AccountSettings(props: {
       </ul>
       {verifying && (
         <VerifyCall key={verifying} callsign={verifying} onVerified={onVerified} onClose={() => setVerifying(null)} />
+      )}
+      {held.some((c) => !c.verified) && (
+        <p className="muted fine">
+          An unverified callsign is held, not proven: its licensee can take it over by proving control. Verify each
+          callsign that is yours.
+        </p>
+      )}
+      {takeover && (
+        <ClaimCall
+          key={takeover.callsign}
+          callsign={takeover.callsign}
+          signedIn={true}
+          operatorCall={takeover.operatorCall}
+          onDone={() => {
+            setMsg({ text: `${takeover.callsign} is on your account now, verified.`, kind: "ok" });
+            setNewCs("");
+            reload();
+          }}
+          onClose={() => setTakeover(null)}
+        />
       )}
       <Advanced label="Add a callsign">
         <p className="muted fine">

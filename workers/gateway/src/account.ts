@@ -227,6 +227,21 @@ async function accountExport(
       "SELECT callsign, set_at, verified FROM callsign_history WHERE account_id=? ORDER BY set_at",
       acct,
     ),
+    // the claims the person opened to take a call over, and every call that came to or left the account by a
+    // claim or a sysop's release
+    callsignClaims: await rows(
+      env,
+      "SELECT callsign, status, method, created_at, completed_at FROM callsign_claims WHERE account_id=? ORDER BY created_at",
+      acct,
+    ),
+    callsignChanges: await rows(
+      env,
+      `SELECT callsign, action, CASE WHEN to_account=? THEN 'gained' ELSE 'lost' END AS change, actor, note, at
+         FROM callsign_events WHERE from_account=? OR to_account=? ORDER BY id`,
+      acct,
+      acct,
+      acct,
+    ),
     emailTokens: emails.length
       ? await rows(
           env,
@@ -534,6 +549,22 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
   ];
   for (const e of emails) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(e));
   if (accountId)
+    stmts.push(
+      // the challenges of the person's claims go with the claims, below
+      env.DB.prepare(
+        "DELETE FROM callsign_challenges WHERE account_id IN (SELECT 'claim:' || id FROM callsign_claims WHERE account_id=?)",
+      ).bind(accountId),
+      // the holder-change trail stays for the instance, without the person: their account, and the sysop's note
+      // on rows naming it, go
+      env.DB.prepare("UPDATE callsign_events SET note=NULL WHERE from_account=? OR to_account=?").bind(
+        accountId,
+        accountId,
+      ),
+      env.DB.prepare("UPDATE callsign_events SET from_account=NULL WHERE from_account=?").bind(accountId),
+      env.DB.prepare("UPDATE callsign_events SET to_account=NULL WHERE to_account=?").bind(accountId),
+      env.DB.prepare("UPDATE callsign_claims SET holder_id=NULL WHERE holder_id=?").bind(accountId),
+    );
+  if (accountId)
     for (const table of [
       "credentials",
       "cache_adoption_requests",
@@ -547,6 +578,7 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
       "account_stations",
       "account_prefs",
       "callsign_challenges",
+      "callsign_claims",
       "accounts",
     ])
       stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE account_id=?`).bind(accountId));

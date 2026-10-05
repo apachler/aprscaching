@@ -29,6 +29,9 @@ import {
   addManualVerification,
   revokeManualVerification,
   type ManualVerification,
+  lookupCallsign,
+  releaseCallsign,
+  type CallsignView,
   listEnrolledBoxes,
   createBoxCode,
   revokeBox,
@@ -58,6 +61,7 @@ import {
   Button,
   Panel,
   Group,
+  Card,
   Row,
   Badge,
   EmptyState,
@@ -126,14 +130,14 @@ export function AdminPanel(props: { onClose: () => void }) {
           <SetupAdmin setup={setup} />
         </Group>
       )}
-      {show("verification", "verify", "callsign", "manual", "licence", "sysop") && (
+      {show("callsigns", "verification", "verify", "callsign", "manual", "licence", "sysop", "release", "holder") && (
         <Group
-          title="Callsign verification"
-          status="manual"
-          help="Mark a callsign as verified by hand, for an operator no receiving station can hear."
+          title="Callsigns"
+          status="look up · verify · release"
+          help="See who holds a callsign, verify it by hand for an operator no receiving station can hear, or release it from an account."
           defaultOpen={false}
         >
-          <VerificationAdmin />
+          <CallsignAdmin />
         </Group>
       )}
       {show("stations", "club", "member", "digipeater", "igate", "list") && (
@@ -303,48 +307,50 @@ function StationsAdmin() {
   );
 }
 
-// ---------------------------------------------------------------- manual callsign verification
+// ---------------------------------------------------------------- callsigns: look up, verify by hand, release
 
 // the gateway's own pattern, so a form never accepts a call the server refuses
 const CALL_RE = SITE_CALL_RE;
 
+const METHOD_LABEL: Record<string, string> = {
+  rf_heard: "on the air",
+  ampr_dns: "ampr.org DNS",
+  lotw: "LoTW certificate",
+  operator: "operator secret",
+  sysop: "by hand",
+};
+
 /**
- * Verify a callsign by hand for an operator no attested receiving site can hear. Each one carries a note
- * saying how control of the licence was checked, is listed here, and can be revoked. Calls verified on
- * the air or by the operator CLI are not listed and cannot be revoked from here.
+ * The sysop's callsign tools. A call is looked up first: who holds it (the account, its other calls and sign-in
+ * paths) and how it is verified. Only then can it be verified by hand — for the account shown, so the
+ * verification never lands on an account the sysop has not seen — or released from that account, with a reason.
+ * Below, the calls verified by hand, each revocable.
  */
-function VerificationAdmin() {
+function CallsignAdmin() {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
   const list = useLoad(() => listManualVerifications().then((r) => r.verifications), []);
   const rows = list.data;
-  const refresh = list.reload;
   const [call, setCall] = useState("");
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<CallsignView | null>(null);
+  const [looking, setLooking] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
 
   const cs = call.trim().toUpperCase();
-  const callOk = CALL_RE.test(cs);
-  const noteOk = note.trim().length >= 3;
-  const submit = async () => {
-    if (!callOk || !noteOk) {
-      setFormErr(!callOk ? "Enter a valid callsign." : "Say how you checked control of the licence.");
+  const lookup = async (target = cs) => {
+    if (!CALL_RE.test(target)) {
+      setFormErr("Enter a valid callsign.");
       return;
     }
-    setSaving(true);
+    setLooking(true);
     setFormErr(null);
     try {
-      const r = await addManualVerification(cs, note.trim());
-      toast(`${r.callsign} verified`);
-      setCall("");
-      setNote("");
-      refresh();
+      setView(await lookupCallsign(target));
     } catch (e) {
       setFormErr((e as Error).message);
     } finally {
-      setSaving(false);
+      setLooking(false);
     }
   };
   const revoke = async (v: ManualVerification) => {
@@ -360,7 +366,8 @@ function VerificationAdmin() {
     try {
       await revokeManualVerification(v.callsign);
       toast(`${v.callsign} verification revoked`);
-      refresh();
+      list.reload();
+      if (view?.callsign === v.callsign) void lookup(v.callsign);
     } catch (e) {
       toast((e as Error).message);
     }
@@ -369,8 +376,8 @@ function VerificationAdmin() {
   return (
     <>
       <p className="muted fine">
-        For operators out of range of every receiving site this instance attests. Verify only a call whose licence you
-        have checked yourself; the note records how.
+        Look a callsign up to see which account holds it. Verify a call by hand only for an operator out of range of
+        every receiving station, after checking the licence yourself.
       </p>
       <div className="partner-form">
         <label>
@@ -381,26 +388,16 @@ function VerificationAdmin() {
             value={call}
             autoCapitalize="characters"
             spellCheck={false}
-            aria-invalid={!!formErr && !callOk}
+            aria-invalid={!!formErr}
             onChange={(e) => setCall(e.target.value)}
-          />
-        </label>
-        <label>
-          How control was checked
-          <input
-            placeholder="licence seen on a video call"
-            value={note}
-            maxLength={200}
-            aria-invalid={!!formErr && !noteOk}
-            onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void submit();
+              if (e.key === "Enter") void lookup();
             }}
           />
         </label>
         <div className="row end">
-          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
-            {saving ? "Verifying…" : "Verify callsign"}
+          <Button variant="primary" disabled={looking} aria-busy={looking} onClick={() => void lookup()}>
+            {looking ? "Looking up…" : "Look up"}
           </Button>
         </div>
       </div>
@@ -409,17 +406,25 @@ function VerificationAdmin() {
           {formErr}
         </p>
       )}
+      {view && (
+        <CallsignCard
+          key={view.callsign}
+          view={view}
+          onChanged={() => {
+            list.reload();
+            void lookup(view.callsign);
+          }}
+        />
+      )}
       <h4 className="set-subh">Verified by hand</h4>
       {list.error ? (
-        <ErrorState onRetry={refresh}>Couldn&apos;t load the manual verifications.</ErrorState>
+        <ErrorState onRetry={list.reload}>Couldn&apos;t load the manual verifications.</ErrorState>
       ) : rows === undefined ? (
         <p className="muted" role="status">
           Loading…
         </p>
       ) : rows.length === 0 ? (
-        <EmptyState>
-          No calls verified by hand. Use the form above for an operator no receiving site can hear.
-        </EmptyState>
+        <EmptyState>No calls verified by hand. Look a call up above to verify it.</EmptyState>
       ) : (
         <ul className="logs">
           {rows.map((v) => (
@@ -443,6 +448,154 @@ function VerificationAdmin() {
         </ul>
       )}
     </>
+  );
+}
+
+/** One looked-up call: its holder and verification, its holder-change trail, and the two sysop actions. */
+function CallsignCard(props: { view: CallsignView; onChanged: () => void }) {
+  const { view } = props;
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const [note, setNote] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const h = view.holder;
+  const who = h ? `the account operating ${h.activeCallsign}` : "nobody";
+
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+      toast(done);
+      setNote("");
+      setReason("");
+      props.onChanged();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const verify = async () => {
+    if (note.trim().length < 3) {
+      setErr("Say how you checked control of the licence.");
+      return;
+    }
+    const ok = await confirmDialog({
+      title: `Verify ${view.callsign}?`,
+      message: h
+        ? `The verification goes to ${who} (account ${h.accountId.slice(0, 8)}…). Verify only if you checked that this account's owner holds the licence.`
+        : `Nobody holds ${view.callsign}. The verification is cleared again when someone signs up with it.`,
+      confirmLabel: "Verify",
+    });
+    if (ok)
+      await act(
+        () => addManualVerification(view.callsign, note.trim(), h?.accountId ?? null),
+        `${view.callsign} verified`,
+      );
+  };
+  const release = async () => {
+    if (!h) return;
+    if (reason.trim().length < 3) {
+      setErr("Give the reason for the release.");
+      return;
+    }
+    const ok = await confirmDialog({
+      title: `Release ${view.callsign}?`,
+      message: `${view.callsign} leaves ${who}. That account keeps its other callsigns and what it logged, and is told why.`,
+      confirmLabel: "Release",
+      danger: true,
+    });
+    if (ok) await act(() => releaseCallsign(view.callsign, reason.trim(), h.accountId), `${view.callsign} released`);
+  };
+
+  return (
+    <Card className="mt-2" role="group" aria-label={`Callsign ${view.callsign}`}>
+      <p className="m-0">
+        <span className="mono">{view.callsign}</span>{" "}
+        {view.verification ? (
+          <Badge kind="found">
+            verified · {METHOD_LABEL[view.verification.method ?? ""] ?? view.verification.method}
+          </Badge>
+        ) : (
+          <Badge kind="warn">unverified</Badge>
+        )}
+        {view.adminCall && <Badge>operator call</Badge>}
+        {view.openClaims > 0 && (
+          <Badge>
+            {view.openClaims} open claim{view.openClaims === 1 ? "" : "s"}
+          </Badge>
+        )}
+      </p>
+      {h ? (
+        <p className="muted fine m-0">
+          Held by account <span className="mono">{h.accountId.slice(0, 8)}…</span> since {fmt.date(h.createdAt)},
+          operating <span className="mono">{h.activeCallsign}</span> · holds{" "}
+          <span className="mono">{h.held.map((c) => c.callsign).join(", ")}</span> · {h.passkeys} passkey
+          {h.passkeys === 1 ? "" : "s"} · {h.email ? "email" : "no email"}
+        </p>
+      ) : (
+        <p className="muted fine m-0">No account holds this callsign.</p>
+      )}
+      {view.verification && (
+        <p className="muted fine m-0">
+          Verified {fmt.date(view.verification.verifiedAt ?? 0)}
+          {view.verification.verifiedBy ? ` by ${view.verification.verifiedBy}` : ""}
+          {view.verification.note ? ` — ${view.verification.note}` : ""}
+        </p>
+      )}
+      {!view.verification && (
+        <div className="row mt-2">
+          <input
+            placeholder="how control was checked, e.g. licence seen on a video call"
+            aria-label={`How control of ${view.callsign} was checked`}
+            value={note}
+            maxLength={200}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <Button disabled={busy} onClick={() => void verify()}>
+            Verify by hand
+          </Button>
+        </div>
+      )}
+      {h && (
+        <div className="row mt-2">
+          <input
+            placeholder="reason, e.g. licence belongs to someone else"
+            aria-label={`Reason to release ${view.callsign}`}
+            value={reason}
+            maxLength={200}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button variant="danger" disabled={busy} onClick={() => void release()}>
+            Release
+          </Button>
+        </div>
+      )}
+      {err && (
+        <p className="error fine" role="alert">
+          {err}
+        </p>
+      )}
+      {view.events.length > 0 && (
+        <ul className="logs mt-2" aria-label={`Holder changes of ${view.callsign}`}>
+          {view.events.map((e, i) => (
+            <li key={i}>
+              <span className="muted">
+                {fmt.date(e.at)} ·{" "}
+                {e.action === "claimed"
+                  ? `claimed by proof (${METHOD_LABEL[e.actor] ?? e.actor})`
+                  : `released by ${e.actor}`}
+              </span>
+              {e.note && <div className="comment">{e.note}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

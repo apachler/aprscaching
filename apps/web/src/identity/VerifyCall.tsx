@@ -8,6 +8,7 @@ import {
   checkAmprVerify,
   startLotwVerify,
   completeLotwVerify,
+  claimStatus,
   errorText,
   ApiError,
   type VerifyChallenge,
@@ -39,8 +40,11 @@ const NO_SITE = "This instance has no receiving station yet — ask the operator
  * call's ampr.org DNS, or a signature from the call's LoTW certificate. A sysop can also verify by hand.
  * The methods this instance offers are asked for once; without a receiving site the on-air method says
  * so and points at the others instead of handing out a code nothing could hear.
+ *
+ * With `claim` (a claim token, ClaimCall.tsx) the same methods prove control of a call another account holds,
+ * and success moves the call to the claimant.
  */
-export function VerifyCall(props: { callsign: string; onVerified: () => void; onClose: () => void }) {
+export function VerifyCall(props: { callsign: string; claim?: string; onVerified: () => void; onClose: () => void }) {
   const [methods, setMethods] = useState<VerifyMethods | null>(null);
   const [method, setMethod] = useState<Method | null>(null);
   const [done, setDone] = useState(false);
@@ -95,6 +99,7 @@ export function VerifyCall(props: { callsign: string; onVerified: () => void; on
                 (rfOk ? (
                   <OnAir
                     callsign={props.callsign}
+                    claim={props.claim}
                     sites={methods.rfSites ?? []}
                     onVerified={verified}
                     onNoSite={() => setMethods({ ...methods, methods: { ...methods.methods, rf_heard: false } })}
@@ -116,8 +121,8 @@ export function VerifyCall(props: { callsign: string; onVerified: () => void; on
                     instead.
                   </p>
                 ))}
-              {active === "ampr" && <AmprDns callsign={props.callsign} onVerified={verified} />}
-              {active === "lotw" && <LotwCert callsign={props.callsign} onVerified={verified} />}
+              {active === "ampr" && <AmprDns callsign={props.callsign} claim={props.claim} onVerified={verified} />}
+              {active === "lotw" && <LotwCert callsign={props.callsign} claim={props.claim} onVerified={verified} />}
             </>
           )}
           <p className="muted fine mt-2 mb-0">
@@ -140,7 +145,13 @@ function siteList(sites: string[]): string {
 }
 
 /** Transmit `VERIFY <code>` to the service call; a receiving station this instance trusts must hear it. */
-function OnAir(props: { callsign: string; sites: string[]; onVerified: () => void; onNoSite: () => void }) {
+function OnAir(props: {
+  callsign: string;
+  claim?: string;
+  sites: string[];
+  onVerified: () => void;
+  onNoSite: () => void;
+}) {
   const [ch, setCh] = useState<VerifyChallenge | null>(null);
   const [state, setState] = useState<RfState>("idle");
   const [busy, setBusy] = useState(false);
@@ -148,13 +159,13 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
   const [pollErr, setPollErr] = useState(false);
   const fmt = useFmt();
   const toast = useToast();
-  const { callsign, onVerified } = props;
+  const { callsign, claim, onVerified } = props;
 
   async function start() {
     setBusy(true);
     setErr(null);
     try {
-      setCh(await startAprsVerify(callsign));
+      setCh(await startAprsVerify(callsign, claim));
       setState("waiting");
       setPollErr(false);
     } catch (e) {
@@ -173,11 +184,25 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
         setState("expired");
         return;
       }
-      getVerifyStatus(callsign).then(
-        (r) => {
+      // a claim is done when the call has moved; the holder's own call when it reads as verified
+      const done = claim
+        ? claimStatus(claim).then((r) => {
+            if (r.status === "refused" || r.status === "expired") {
+              setState("idle");
+              setErr(
+                r.status === "refused"
+                  ? "The claim was refused: the holder proved control first, or the call changed hands. Start again."
+                  : "The claim expired. Start again.",
+              );
+            }
+            return r.status === "done";
+          })
+        : getVerifyStatus(callsign).then((r) => r.verified);
+      done.then(
+        (ok) => {
           if (signal.aborted) return;
           setPollErr(false);
-          if (r.verified) onVerified();
+          if (ok) onVerified();
         },
         () => {
           if (!signal.aborted) setPollErr(true);
@@ -261,7 +286,7 @@ function Listening(props: { sites: string[] }) {
 }
 
 /** Publish a code as a TXT record under the call's ampr.org name, then have the gateway look it up. */
-function AmprDns(props: { callsign: string; onVerified: () => void }) {
+function AmprDns(props: { callsign: string; claim?: string; onVerified: () => void }) {
   const [ch, setCh] = useState<AmprChallenge | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -278,10 +303,10 @@ function AmprDns(props: { callsign: string; onVerified: () => void }) {
       setBusy(false);
     }
   }
-  const start = () => run(async () => setCh(await startAmprVerify(props.callsign)));
+  const start = () => run(async () => setCh(await startAmprVerify(props.callsign, props.claim)));
   const check = () =>
     run(async () => {
-      await checkAmprVerify(props.callsign);
+      await checkAmprVerify(props.callsign, props.claim);
       props.onVerified();
     });
 
@@ -333,7 +358,7 @@ function AmprDns(props: { callsign: string; onVerified: () => void }) {
 }
 
 /** Sign a challenge with the call's LoTW certificate, opened from its TQSL .p12 file in this browser. */
-function LotwCert(props: { callsign: string; onVerified: () => void }) {
+function LotwCert(props: { callsign: string; claim?: string; onVerified: () => void }) {
   const [offered, setOffered] = useState<boolean | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState("");
@@ -355,9 +380,9 @@ function LotwCert(props: { callsign: string; onVerified: () => void }) {
     setBusy(true);
     setErr(null);
     try {
-      const ch = await startLotwVerify(props.callsign);
+      const ch = await startLotwVerify(props.callsign, props.claim);
       const proof = await signWithP12(await file.arrayBuffer(), password, ch.message);
-      await completeLotwVerify(props.callsign, proof);
+      await completeLotwVerify(props.callsign, proof, props.claim);
       setPassword("");
       props.onVerified();
     } catch (e) {

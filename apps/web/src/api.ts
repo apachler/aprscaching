@@ -1043,11 +1043,51 @@ export interface ManualVerification {
 export function listManualVerifications(): Promise<{ verifications: ManualVerification[] }> {
   return call(`/api/admin/verifications`);
 }
+/** Verify a call by hand for the account the sysop looked at (`holder`, null when nobody holds the call). */
 export function addManualVerification(
   callsign: string,
   note: string,
+  holder: string | null,
 ): Promise<{ verified: boolean; callsign: string }> {
-  return call(`/api/admin/verifications`, { method: "POST", body: JSON.stringify({ callsign, note }) });
+  return call(`/api/admin/verifications`, { method: "POST", body: JSON.stringify({ callsign, note, holder }) });
+}
+/** The sysop's view of a call: who holds it, how it is verified, open claims, and its holder-change trail. */
+export interface CallsignView {
+  callsign: string;
+  adminCall: boolean;
+  holder: {
+    accountId: string;
+    activeCallsign: string;
+    passkeys: number;
+    email: boolean;
+    createdAt: number;
+    held: { callsign: string; isPrimary: boolean }[];
+  } | null;
+  verification: {
+    method: string | null;
+    verifiedAt: number | null;
+    verifiedBy: string | null;
+    note: string | null;
+  } | null;
+  openClaims: number;
+  events: {
+    action: "claimed" | "released";
+    fromAccount: string | null;
+    toAccount: string | null;
+    actor: string;
+    note: string | null;
+    at: number;
+  }[];
+}
+export function lookupCallsign(callsign: string): Promise<CallsignView> {
+  return call(`/api/admin/callsigns/${encodeURIComponent(callsign)}`);
+}
+/** Detach a call from the account the sysop looked at (`holder`), with the reason. */
+export function releaseCallsign(callsign: string, reason: string, holder: string): Promise<{ released: boolean }> {
+  return call(`/api/admin/callsigns/${encodeURIComponent(callsign)}`, {
+    method: "POST",
+    body: JSON.stringify({ action: "release", reason, holder }),
+  });
 }
 export function revokeManualVerification(callsign: string): Promise<{ revoked: boolean }> {
   return call(`/api/admin/verifications/${encodeURIComponent(callsign)}`, { method: "DELETE" });
@@ -1788,8 +1828,8 @@ export interface VerifyChallenge {
   /** The receiving-site calls listening for the message. */
   sites?: string[];
 }
-export function startAprsVerify(callsign: string): Promise<VerifyChallenge> {
-  return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+export function startAprsVerify(callsign: string, claim?: string): Promise<VerifyChallenge> {
+  return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign, claim }) });
 }
 export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }> {
   return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);
@@ -1815,12 +1855,12 @@ export interface AmprChallenge {
   record: string;
   expiresAt: number;
 }
-export function startAmprVerify(callsign: string): Promise<AmprChallenge> {
-  return call(`/verify/ampr/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+export function startAmprVerify(callsign: string, claim?: string): Promise<AmprChallenge> {
+  return call(`/verify/ampr/start`, { method: "POST", body: JSON.stringify({ callsign, claim }) });
 }
 /** Look the published record up; rejects with the server's reason when it does not verify. */
-export function checkAmprVerify(callsign: string): Promise<{ verified: boolean; method: string }> {
-  return call(`/verify/ampr/check`, { method: "POST", body: JSON.stringify({ callsign }) });
+export function checkAmprVerify(callsign: string, claim?: string): Promise<{ verified: boolean; method: string }> {
+  return call(`/verify/ampr/check`, { method: "POST", body: JSON.stringify({ callsign, claim }) });
 }
 
 /** A LoTW challenge: the exact `message` to sign with the callsign certificate's key. */
@@ -1829,14 +1869,40 @@ export interface LotwChallenge {
   message: string;
   expiresAt: number;
 }
-export function startLotwVerify(callsign: string): Promise<LotwChallenge> {
-  return call(`/verify/lotw/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+export function startLotwVerify(callsign: string, claim?: string): Promise<LotwChallenge> {
+  return call(`/verify/lotw/start`, { method: "POST", body: JSON.stringify({ callsign, claim }) });
 }
 export function completeLotwVerify(
   callsign: string,
   proof: { certificates: string[]; signature: string },
+  claim?: string,
 ): Promise<{ verified: boolean; method: string }> {
-  return call(`/verify/lotw/complete`, { method: "POST", body: JSON.stringify({ callsign, ...proof }) });
+  return call(`/verify/lotw/complete`, { method: "POST", body: JSON.stringify({ callsign, ...proof, claim }) });
+}
+
+/**
+ * A claim on a call an account holds without having proven control of it: the licensee proves control with
+ * any verification method, passing the claim token in place of a session, and the call moves to them.
+ */
+export interface CallClaim {
+  /** The bearer token the verification methods take as `claim`; given once. */
+  claim: string;
+  callsign: string;
+  /** An account holds the call now (false: an operator call nobody holds yet). */
+  held: boolean;
+  expiresAt: number;
+}
+export function startClaim(callsign: string): Promise<CallClaim> {
+  return call(`/auth/claims`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+/** Where a claim stands; the first answer that finds a sign-up claim done signs the claimant in. */
+export function claimStatus(claim: string): Promise<{
+  status: "open" | "done" | "refused" | "expired";
+  callsign: string;
+  method: string | null;
+  signedIn?: boolean;
+}> {
+  return call(`/auth/claims/status`, { method: "POST", body: JSON.stringify({ claim }) });
 }
 
 // ---- auth: session, passkey ceremonies, email magic-link ----
@@ -1857,9 +1923,16 @@ export function logout(): Promise<{ ok: boolean }> {
 export function logoutAll(): Promise<{ ok: boolean }> {
   return call(`/auth/logout-all`, { method: "POST" });
 }
-export function claim(
-  callsign: string,
-): Promise<{ callsign: string; exists: boolean; hasPasskey: boolean; licence?: Licence }> {
+export function claim(callsign: string): Promise<{
+  callsign: string;
+  exists: boolean;
+  hasPasskey: boolean;
+  /** An account that has not proven control holds the call: its licensee can take it over by proof. */
+  claimable?: boolean;
+  /** The instance operator's call, which nobody holds yet: only a proof of control or the operator's link opens it. */
+  operatorCall?: boolean;
+  licence?: Licence;
+}> {
   return call(`/auth/claim`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 export function emailStart(

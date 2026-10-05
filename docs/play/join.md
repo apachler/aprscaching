@@ -33,6 +33,10 @@ The same steps create an account for a callsign that has none.
 
 **← different callsign** takes you back to step 2.
 
+If another account holds your callsign without having proven control, the panel offers **Take over**: see
+[Take over your callsign](account.md#take-over-your-callsign). The instance operator's own callsign opens only
+with a proof of control or the operator's sign-in link.
+
 Passkeys work only on a secure page: an address that starts with `https://`. On other pages the app says so
 and offers the email link instead.
 
@@ -95,7 +99,8 @@ removed: it is your only way in. Confirm your email or add another passkey first
 
 ## Verify your callsign
 
-Signing in claims a callsign. Verifying proves that you control it. A verified callsign gets:
+Signing in claims a callsign. Verifying proves that you control it, and keeps it yours: the licensee can take
+over a callsign held without proof. A verified callsign gets:
 
 - a place on the leaderboard,
 - announcements of your finds on [APRS-IS](../glossary.md#aprs-is), and

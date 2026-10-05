@@ -3,8 +3,15 @@ import { useState } from "react";
 import { claim, registerPasskey, loginPasskey, emailStart, errorText, ApiError, type Licence } from "../api.js";
 import { Button, Panel, Icon, LicenceBadge, ManualLink } from "../ui/index.js";
 import { PASSKEY_PROBLEM_TEXT, passkeyErrorText, passkeyProblem } from "./passkeySupport.js";
+import { ClaimCall } from "./ClaimCall.js";
 
-type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
+type Probe = {
+  exists: boolean;
+  hasPasskey: boolean;
+  claimable?: boolean;
+  operatorCall?: boolean;
+  licence?: Licence;
+} | null;
 
 /** Sign in / create account: passkey first, email magic-link fallback. Callsign-led. */
 export function SignIn(props: {
@@ -19,6 +26,9 @@ export function SignIn(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState<{ text: string; devLink?: string } | null>(null);
+  // taking the call over by proof of control; `claimed` once it moved to this person
+  const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(false);
   const callsign = cs.toUpperCase().trim();
   const noPasskey = passkeyProblem();
   const canPasskey = noPasskey === null;
@@ -91,6 +101,29 @@ export function SignIn(props: {
             </>
           )}
         </p>
+      ) : probe && claiming ? (
+        <ClaimCall
+          callsign={callsign}
+          signedIn={false}
+          operatorCall={probe.operatorCall}
+          onDone={() => setClaimed(true)}
+          onClose={() => (claimed ? props.onDone() : setClaiming(false))}
+        />
+      ) : probe?.operatorCall && !probe.exists ? (
+        <>
+          <p className="muted">
+            <span className="mono">{callsign}</span> is this instance&apos;s operator callsign. It opens only to the
+            licensee who proves control of it, or through the operator&apos;s sign-in link.
+          </p>
+          <div className="row end">
+            <Button variant="primary" onClick={() => setClaiming(true)}>
+              Prove control
+            </Button>
+          </div>
+          <Button variant="quiet" className="mt-3" onClick={() => setProbe(null)}>
+            ← different callsign
+          </Button>
+        </>
       ) : !probe ? (
         <>
           <p className="muted">Sign in with your callsign to claim and log your finds.</p>
@@ -192,6 +225,17 @@ export function SignIn(props: {
               </Button>
             </div>
           </div>
+          {probe.claimable && (
+            <div className="mt-3">
+              <p className="muted fine m-0">
+                Not your account? An account that has not proven control holds <span className="mono">{callsign}</span>.
+                If the licence is yours, prove you control it to take the callsign over.
+              </p>
+              <div className="row end mt-2">
+                <Button onClick={() => setClaiming(true)}>Take over {callsign}</Button>
+              </div>
+            </div>
+          )}
           <Button
             variant="quiet"
             className="mt-3"

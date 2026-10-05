@@ -759,6 +759,18 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       and the deploy helpers, so a Pi needs no setup beyond `deploy/aprscaching init selfhost`. It is a large
       build and maintenance effort (image builds per release, updates of the base system), so it waits until the
       helpers have settled on real installations.
+- [ ] **One audit trail for sysop actions** _(P2 · S)_ — a claim or release of a callsign is written to
+      `callsign_events`, beside `account_events` (manual verifications) and `cache_adoptions` (hand-overs). Fold
+      them into the moderation audit log once it lands, keeping each table's erasure rule (the person's account
+      and the sysop's note go, the row stays).
+- [ ] **Sign back in after losing a passkey-only account's last call** _(P2 · S)_ — an account whose only
+      callsign its licensee took over signs in again with an email link and the call it operates now. A
+      passkey-only account has no such path: passkey sign-in starts from a callsign. Discoverable-credential
+      sign-in (no callsign typed) would let it in to add a call; until then the sysop helps.
+- [ ] **Re-serve moved finds to peers** _(P3 · M)_ — finds that move off a claimed call with their account are
+      tombstoned on peers, because the finds feed is append-only by id and never re-serves a row. Peers then lose
+      those finds instead of showing them under the account's remaining call. A revision-versioned finds feed,
+      like the caches feed, would carry them across.
 - [ ] **Move the gateway app out of `workers/`** _(P3 · M)_ — `workers/gateway` (`@aprscaching/gateway`) holds the
       runtime-neutral gateway app the Node and Bun servers share, not a Worker. Rename it to `packages/gateway` or
       `core/gateway` — the directory, the package name, every import, the CI paths, the Dockerfiles and the manual —
