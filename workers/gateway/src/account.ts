@@ -15,7 +15,7 @@ import { accountActionMessage, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
-import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN, suspensionOf } from "./auth.js";
 import { verificationOf, verificationsOf } from "./callsign.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
@@ -372,7 +372,18 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     tombstoned.push(...erased.tombstones);
     mediaKeys.push(...erased.mediaKeys);
   }
+  const suspended = scope.accountId ? await suspensionOf(env, scope.accountId) : null;
   await eraseAccount(env, scope.accountId, scope.emails, calls);
+  // A suspension outlives the erasure: each base call the account held keeps a minimal record (category and
+  // end, no account and no free text) until it ends, so the person cannot come back under the same call.
+  if (suspended)
+    await env.DB.batch(
+      [...new Set(calls.map((c) => baseCall(c)))].map((c) =>
+        env.DB.prepare(
+          "INSERT OR REPLACE INTO callsign_suspensions (callsign, category, until, at) VALUES (?,?,?,?)",
+        ).bind(c, suspended.category, suspended.until, suspended.at),
+      ),
+    );
   // uploaded cache media leaves the object store too; best-effort, the index rows are already gone
   for (const k of mediaKeys) {
     try {

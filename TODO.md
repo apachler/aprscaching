@@ -841,6 +841,12 @@ lands with a regression test that fails without it.
 - [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
       key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
       signatures, and a "Running federation safely" guide.
+- [ ] **Hide one mirrored cache or find from a peer** _(P2 · M, after 1.0)_ — the sysop's **Remove…** reaches
+      this instance's own records and bulletins mirrored from peers, but not a single cache or find mirrored from
+      a peer: today the sysop asks the peer's operator or blocks the whole peer under **Federation**. Add a
+      local suppression keyed to the record's global id (the way a removed mirrored bulletin is suppressed), so
+      the item leaves the map, search and offline packs here, a later sync skips it, and the audit log records
+      it; the peer keeps its copy.
 - [x] **Federation safe-mode defaults in `setup.sh` and the one-click stacks** — the wizard writes
       auto-promotion off and a quorum of 2, leaves discovery unset, takes only https non-44Net peers for
       `FED_PEERS`, requires the spoke list on a hub and the pinned key with a registry, and keeps a LAN instance

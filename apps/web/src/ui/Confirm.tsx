@@ -36,6 +36,8 @@ export interface PromptOpts {
   maxLength?: number;
   /** A pick-one field shown above the text; the first option is preselected. */
   select?: { label: string; options: { value: string; label: string }[] };
+  /** A second pick-one field, below the first (`choice2` in the answer); its first option is preselected. */
+  select2?: { label: string; options: { value: string; label: string }[] };
   /** With `select`: the picks that need the text. Others take it as optional. */
   textRequiredFor?: string[];
   confirmLabel?: string;
@@ -44,6 +46,7 @@ export interface PromptOpts {
 export interface PromptAnswer {
   text: string;
   choice: string | null;
+  choice2: string | null;
 }
 
 type Pending =
@@ -111,12 +114,13 @@ function PromptDialog(props: { opts: PromptOpts; onSettle: (a: PromptAnswer | nu
   useModalDialog(ref, () => props.onSettle(null));
   const { opts } = props;
   const [choice, setChoice] = useState<string | null>(opts.select?.options[0]?.value ?? null);
+  const [choice2, setChoice2] = useState<string | null>(opts.select2?.options[0]?.value ?? null);
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const submit = () => {
     const p = promptProblem(opts, text, choice);
     if (p) return setProblem(p);
-    props.onSettle({ text: text.trim(), choice });
+    props.onSettle({ text: text.trim(), choice, choice2 });
   };
   const errId = "prompt-err";
   return (
@@ -143,6 +147,18 @@ function PromptDialog(props: { opts: PromptOpts; onSettle: (a: PromptAnswer | nu
               {opts.select.label}
               <select data-autofocus value={choice ?? ""} onChange={(e) => setChoice(e.target.value)}>
                 {opts.select.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {opts.select2 && (
+            <label className="prompt-field">
+              {opts.select2.label}
+              <select value={choice2 ?? ""} onChange={(e) => setChoice2(e.target.value)}>
+                {opts.select2.options.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

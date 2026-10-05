@@ -58,6 +58,14 @@ export function restoreCache(id: number, reason: string) {
 
 export interface Suspension {
   reason: string;
+  category: ReportCategory;
+  until: number | null;
+  at: number;
+}
+/** A call whose account was erased while suspended: the call, the category and the end are all that remain. */
+export interface ErasedCallSuspension {
+  callsign: string;
+  category: ReportCategory;
   until: number | null;
   at: number;
 }
@@ -93,20 +101,24 @@ export interface ModAction {
 }
 
 export function searchAccounts(q: string) {
-  return call<{ accounts: ModAccount[] }>(`/api/admin/moderation/accounts?q=${encodeURIComponent(q)}`);
+  return call<{ accounts: ModAccount[]; erasedCalls?: ErasedCallSuspension[] }>(
+    `/api/admin/moderation/accounts?q=${encodeURIComponent(q)}`,
+  );
 }
 export function suspendedAccounts() {
-  return call<{ accounts: ModAccount[] }>(`/api/admin/moderation/accounts?suspended=1`);
+  return call<{ accounts: ModAccount[]; erasedCalls: ErasedCallSuspension[] }>(
+    `/api/admin/moderation/accounts?suspended=1`,
+  );
 }
 export function getModAccount(call_: string) {
   return call<{ account: ModAccount; openReports: number; content: ModContent[]; actions: ModAction[] }>(
     `/api/admin/moderation/accounts/${encodeURIComponent(call_)}`,
   );
 }
-export function suspendAccount(call_: string, reason: string, until: number | null) {
+export function suspendAccount(call_: string, reason: string, category: ReportCategory, until: number | null) {
   return call<{ ok: true }>(`/api/admin/moderation/accounts/${encodeURIComponent(call_)}/suspend`, {
     method: "POST",
-    body: JSON.stringify({ reason, until }),
+    body: JSON.stringify({ reason, category, until }),
   });
 }
 export function unsuspendAccount(call_: string, reason: string) {
