@@ -46,6 +46,67 @@ export async function alreadyFound(
   return r?.call ?? null;
 }
 
+/** SQL matching `l.logger_call` to a person: an SSID of the base call (`?`, `?`) or a call on the account (`?`). */
+const BY_PERSON = `(l.logger_call = ? OR l.logger_call LIKE ? || '-%'
+   OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+              AND (l.logger_call = ac.callsign OR l.logger_call LIKE ac.callsign || '-%')))`;
+
+/**
+ * The person's own attempt at the cache: `found` when they found it, else `dnf` when they logged a did-not-find,
+ * else null. Any SSID of the base call or any call on the account counts, as for {@link alreadyFound}.
+ */
+export async function personAttempt(
+  env: Env,
+  cacheId: number,
+  loggerCall: string,
+  accountId: string | null,
+): Promise<"found" | "dnf" | null> {
+  const base = baseCall(loggerCall);
+  const acct = accountId ?? (await baseHolder(env, base));
+  const r = await env.DB.prepare(
+    `SELECT MAX(l.log_type = 'found') AS found, MAX(l.log_type = 'dnf') AS dnf FROM cache_logs l
+      WHERE l.cache_id = ? AND l.log_type IN ('found','dnf') AND ${BY_PERSON}`,
+  )
+    .bind(cacheId, base, base, acct)
+    .first<{ found: number | null; dnf: number | null }>();
+  return r?.found ? "found" : r?.dnf ? "dnf" : null;
+}
+
+/**
+ * Every cache the person has settled: found, logged as a did-not-find, or hidden themselves. The app keeps its
+ * "you're near" prompt off these.
+ */
+export async function personSettled(
+  env: Env,
+  callsign: string,
+  accountId: string,
+): Promise<{ found: number[]; dnf: number[]; owned: number[] }> {
+  const base = baseCall(callsign);
+  const logs = (
+    await env.DB.prepare(
+      `SELECT DISTINCT l.cache_id AS id, l.log_type AS t FROM cache_logs l
+        WHERE l.log_type IN ('found','dnf') AND ${BY_PERSON}`,
+    )
+      .bind(base, base, accountId)
+      .all<{ id: number; t: string }>()
+  ).results;
+  const owned = (
+    await env.DB.prepare(
+      `SELECT c.id FROM caches c WHERE UPPER(c.owner_call) = ? OR UPPER(c.owner_call) LIKE ? || '-%'
+          OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                     AND (UPPER(c.owner_call) = ac.callsign OR UPPER(c.owner_call) LIKE ac.callsign || '-%'))`,
+    )
+      .bind(base, base, accountId)
+      .all<{ id: number }>()
+  ).results;
+  const found = new Set(logs.filter((r) => r.t === "found").map((r) => r.id));
+  return {
+    found: [...found],
+    dnf: [...new Set(logs.filter((r) => r.t === "dnf" && !found.has(r.id)).map((r) => r.id))],
+    owned: owned.map((r) => r.id),
+  };
+}
+
 /** Has this person unlocked the stage? An unlock by any SSID of the base call, or any call on the account, counts. */
 async function hasUnlocked(
   env: Env,

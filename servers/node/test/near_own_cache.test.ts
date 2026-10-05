@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A beacon near a cache raises the "you're near" prompt for its station, except near a cache the station's own
-// operator hid: under the station's base call, an SSID of it, or another call of the same account.
+// operator hid or already logged (found or did-not-find): under the station's base call, an SSID of it, or another
+// call of the same account.
 import { describe, it, expect } from "vitest";
 import { authEnv } from "./helpers/authflow.js";
 import { envelopeForPosition } from "@aprscaching/gateway/live";
@@ -41,5 +42,23 @@ describe("the near prompt", () => {
         .run();
     await add("AC-OTHER", "OE8ZZZ-5", 47.0701);
     expect(await prompted(env, "OE8NER-7")).toEqual([]);
+  });
+
+  it("skips a cache the station's operator found or logged as a did-not-find, under any SSID", async () => {
+    const { env, add } = await world();
+    const found = await add("AC-FOUND", "OE1XYZ", 47.0701);
+    const dnf = await add("AC-DNF", "OE1XYZ", 47.0702);
+    await add("AC-OPEN", "OE1XYZ", 47.0703);
+    for (const [id, type] of [
+      [found, "found"],
+      [dnf, "dnf"],
+    ] as const)
+      await env.DB.prepare(
+        "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, received_at) VALUES (?, 'OE8NER-7', 1, ?, 0, 1)",
+      )
+        .bind(id, type)
+        .run();
+    expect(await prompted(env, "OE8NER-9")).toEqual(["AC-OPEN"]);
+    expect(await prompted(env, "OE1ABC")).toEqual(["AC-DNF", "AC-FOUND", "AC-OPEN"]);
   });
 });

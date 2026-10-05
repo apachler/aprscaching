@@ -41,7 +41,7 @@ import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
 import { isCallsignVerified } from "./callsign.js";
 import { removedCacheResponse } from "./moderation.js";
-import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
+import { alreadyFound, findPoint, logRefusal, personAttempt, personSettled } from "./findrules.js";
 import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cacheplace.js";
 
 // ---- database row shapes (snake_case) ----
@@ -397,6 +397,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
       ? met.map((r) => ({ ...r, ts: r.ts - (r.ts % 86_400) + 43_200, lat: null, lon: null, day: true }))
       : met;
   const stages = await stageCount(env, id);
+  const yourLog = who ? await personAttempt(env, id, who, null) : null;
   const detail: CacheDetail = {
     ...toSummary(row),
     // the minimum a find meets: the cache's own, else the instance's
@@ -420,6 +421,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     rating,
     rendezvous,
     stageCount: stages,
+    ...(yourLog && { yourLog }),
     ...(row.type === "aprs_living" && { stationHeardAt }),
     ...(isOwner && {
       own: {
@@ -431,6 +433,13 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     ...(row.removed_at != null && { removed: { at: row.removed_at, reason: row.removed_reason ?? null } }),
   };
   return json({ cache: detail });
+}
+
+/** GET /api/my/logged — the caches the signed-in person found, logged as a did-not-find, or hid. */
+export async function handleMyLogged(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to see your logged caches" }, { status: 401 });
+  return json(await personSettled(env, me.callsign, me.accountId));
 }
 
 /** GET /api/caches/:id/logs — paginated logbook ("Load more" past the first page in the detail). */
@@ -762,6 +771,9 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
   const refused = await logRefusal(env, cache, loggerCall, logType, sessionAccount);
   if (refused) return json({ error: refused }, { status: 409 });
+  // a note flags the cache for maintenance only from someone who has tried it: found it or logged a did-not-find
+  if (logType === "note" && needsMaintenance && !(await personAttempt(env, cacheId, loggerCall, sessionAccount)))
+    return json({ error: `log a find or a did-not-find on ${cache.code} before you flag it` }, { status: 409 });
 
   const now = nowS();
 
@@ -1158,7 +1170,7 @@ export async function applyLogEffects(
     await env.DB.prepare("UPDATE caches SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
       .bind(status.to, now, cache.id, status.from)
       .run();
-  const flagged = needsMaintenance && (logType === "found" || logType === "dnf") && logId != null;
+  const flagged = needsMaintenance && (logType === "found" || logType === "dnf" || logType === "note") && logId != null;
   if (flagged) await env.DB.prepare("UPDATE cache_logs SET needs_maintenance = 1 WHERE id = ?").bind(logId).run();
   if (!flagged && logType !== "dnf") return;
   const owner = !isWithdrawnCall(cache.owner_call) ? await baseHolder(env, baseCall(cache.owner_call)) : null;

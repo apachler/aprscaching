@@ -57,12 +57,32 @@ describe("cache maintenance", () => {
     expect(await w.detail()).toMatchObject({ needsMaintenance: false, maintenanceReason: null });
   });
 
-  it("a plain did-not-find tells the owner; a note carries no flag", async () => {
+  it("a plain did-not-find tells the owner; a note flags only from someone who tried the cache", async () => {
     const w = await world();
-    await w.log(w.finder, { logType: "note", comment: "nice spot", needsMaintenance: true });
+    const early = await w.log(w.finder, { logType: "note", comment: "nice spot", needsMaintenance: true });
+    expect(early.status).toBe(409);
     expect((await w.detail()).needsMaintenance).toBe(false);
     await w.log(w.finder, { logType: "dnf" });
     expect(await w.alerts()).toEqual([{ kind: "cache_dnf", detail: "DL1FND did not find " + (await w.detail()).code }]);
+    expect((await w.log(w.finder, { logType: "note", comment: "lid cracked", needsMaintenance: true })).status).toBe(
+      200,
+    );
+    expect(await w.detail()).toMatchObject({ needsMaintenance: true, maintenanceReason: "flagged" });
+    expect((await w.alerts()).at(-1)).toMatchObject({ kind: "cache_maintenance" });
+  });
+
+  it("the detail names the viewer's own attempt, and /api/my/logged lists the settled caches", async () => {
+    const w = await world();
+    const mine = async (who: Res) =>
+      (await call(w.env, "GET", `/api/caches/${w.id}`, undefined, { cookie: who.cookie })).data.cache.yourLog;
+    expect(await mine(w.finder)).toBeUndefined();
+    await w.log(w.finder, { logType: "dnf" });
+    expect(await mine(w.finder)).toBe("dnf");
+    const finderLogged = await call(w.env, "GET", "/api/my/logged", undefined, { cookie: w.finder.cookie });
+    expect(finderLogged.data).toEqual({ found: [], dnf: [w.id], owned: [] });
+    const ownerLogged = await call(w.env, "GET", "/api/my/logged", undefined, { cookie: w.owner.cookie });
+    expect(ownerLogged.data).toEqual({ found: [], dnf: [], owned: [w.id] });
+    expect((await call(w.env, "GET", "/api/my/logged")).status).toBe(401);
   });
 
   it("the owner's disabled and enabled logs set the status; only the owner posts them", async () => {
