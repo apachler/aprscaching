@@ -195,6 +195,8 @@ nav:
           - Caches on the MeshCom map: contribute/design/meshcom-tdeck-map.md
       - The AX.25 stack: contribute/ax25-stack.md
       - Writing a Shack plugin: contribute/plugins.md
+      - Write your first tool: contribute/first-tool.md
+      - Tool reference: contribute/tool-reference.md
       - Style guide for the manual: contribute/style-guide.md
       - Specification registry: contribute/specs.md
   - Glossary: glossary.md

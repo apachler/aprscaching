@@ -2,7 +2,8 @@
 
 This page is for developers who write a plugin (a *tool*) for the Shack's **Tools** app. It sets out the
 manifest, the permissions a tool asks for, where it appears and how it is signed; using plugins is under
-[Tools and plugins](../shack/index.md#tools-and-plugins).
+[Tools and plugins](../shack/index.md#tools-and-plugins). To build one, follow
+[Write your first tool](first-tool.md); every field, message and limit is in the [Tool reference](tool-reference.md).
 
 ## The manifest
 
@@ -18,7 +19,7 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `surfaces` | no | Where the tool appears (below); `["web"]` when left out |
 | `remote` | no | `true` lets a remote connected station invoke the tool's commands |
 | `description` | no | One line for the registry and the import prompt |
-| `entry` | for an imported tool | The URL or path of the JavaScript module the sandbox runs |
+| `entry` | for an imported tool | The URL or path of the script the sandbox runs, relative to the manifest; `tool.js` when left out |
 | `connect` | with `network` | The `https://` or `wss://` origins the tool reaches, at most 8, without a path |
 | `pubkey` | to sign | The author's raw Ed25519 public key, base64url |
 | `signature` | to sign | A detached Ed25519 signature over the canonical manifest (every field but `signature`) |
@@ -34,13 +35,18 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `panel` | Add a small panel |
 | `map` | Add a declarative map layer |
 | `ipc` | Publish and subscribe on the bus between tools, and offer or call named services |
-| `beacon` | Schedule a beacon. Needs a separate grant and passes the transmit gate |
-| `network` | Make an outbound request to the origins in `connect`. Needs a separate grant |
-| `tx` | Transmit a frame. Needs a separate grant and passes the transmit gate |
-| `geo` | Read the device's location. Needs a separate grant |
+| `beacon` | Schedule a beacon. Gated, and passes the transmit gate |
+| `network` | Make an outbound request to the origins in `connect`. Gated |
+| `tx` | Transmit a frame. Gated, and passes the transmit gate |
+| `geo` | Read the device's location. Gated |
 
-The transmit gate checks that the user's callsign is control-verified each time the tool transmits. No
-capability lets a tool change how finds are verified.
+The import prompt lists every permission a tool asks for, and the user approves them together. The transmit gate
+checks that the user's callsign is control-verified each time the tool transmits. No capability lets a tool change
+how finds are verified.
+
+The table says what each capability means for the built-in tools. An imported tool reaches a narrower set
+through its sandbox: commands, colour rules, panels, decoders, the bus and the network. The
+[capability table in the Tool reference](tool-reference.md#capabilities) says which.
 
 ## Surfaces
 
@@ -79,9 +85,10 @@ a tool's behaviour.
 
 The app checks a signed manifest against an authority-signed registry whose key it pins: a tool whose key
 matches its registry entry shows as verified. Sign your own tools with the
-[`toolkey` CLI](../reference/cli.md#toolkey).
+[`toolkey` CLI](../reference/cli.md#toolkey); [Signing and trust](tool-reference.md#signing-and-trust) says what
+the signature covers and what it does not.
 
 ## Next
 
-- [Command-line tools](../reference/cli.md#toolkey): signing a tool.
-- [Testing & verification](testing.md): the checks a change runs through.
+- [Write your first tool](first-tool.md): build, run, test and publish a tool.
+- [Tool reference](tool-reference.md): the manifest, the script API and the messages, field by field.

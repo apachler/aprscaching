@@ -126,6 +126,14 @@ git commit -s -m "fix(packet): guard the FBB session after FQ"
 which appends `Signed-off-by: Your Name <you@example.com>`. The DCO check on your PR verifies every
 commit carries it. (Set `git config user.name`/`user.email` to your real identity first.)
 
+## Writing a Shack tool
+
+A tool (a plugin for the Shack's **Tools** app) needs no change to this repository: it is a `tool.json` and a
+script on any web server. [Write your first tool](docs/contribute/first-tool.md) builds one from the example in
+`packages/tools/examples/station-log/`, and the [Tool reference](docs/contribute/tool-reference.md) lists every
+field, message and limit. To list a tool in the project's registry, open a pull request that adds its entry to
+`apps/web/public/tools/registry.json`.
+
 ## Licensing: inbound = outbound
 
 The monorepo is licensed **by unit** (see `LICENSE` and each package's `LICENSE`):

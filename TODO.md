@@ -77,6 +77,14 @@ start order: the first ones wait on replies from outside, so they start first, a
       model, the player pages.
 - [x] **CHANGELOG overview current** — the deployment shapes counted right, and MeshCom, the Mailbox, the near
       prompt and near radio message, the compass Find view and lent receivers listed.
+- [ ] **Signed tools import** _(S)_ — the Tools app refuses every signed manifest as **Signature INVALID**,
+      the registry's own `hello-tool` included. `validateManifest()` returns every optional field, set or not
+      (`remote`, `connect`, …), and `stableStringify()` in `packages/tools/src/registry.ts` writes an unset one
+      as `"remote":undefined`, while `tools/toolkey/sign.mjs` signs the file as written. Skip `undefined`
+      values in `stableStringify()` the way `JSON.stringify` does (or sign and verify the raw manifest), add a
+      test that signs a file with `sign.mjs` and verifies it through `fetchToolManifest` →
+      `checkManifestSignature`, and drop the warnings in `docs/contribute/tool-reference.md` and
+      `first-tool.md`.
 - [ ] **Release pipeline proven** _(S — last)_ — in the repository settings, enable _Settings → Actions → General
       → Allow GitHub Actions to create and approve pull requests_ (release-please opens the release PR with
       `GITHUB_TOKEN`; the setting is off). Run `release-verify.yml` once by `workflow_dispatch` (it has never
@@ -388,6 +396,29 @@ Next release:
       replacement. "Run it on the Pi your HamClock used — or on the TV you already own, free." Honest
       about OpenHamClock being complementary with a different centre of gravity. Ships with the dashboard
       or it misses the window.
+
+Imported-tool API gaps an outside author meets (each is described as it stands in
+[`docs/contribute/tool-reference.md`](docs/contribute/tool-reference.md)):
+
+- [ ] **The bus names the sender `(host)`** _(P1 · S)_ — the sandbox bridge routes an imported tool's
+      `emit`/`call` through `hostEmit`/`hostCallService`, so subscribers see `(host)` as the sender and a
+      tool can pass for the app. Route them under the tool's own name.
+- [ ] **`session.script` needs only `ipc`** _(P1 · S)_ — an imported tool holding `ipc` can call the packet
+      terminal's `session.script` service and run a connected-mode script (connect, send) over the user's
+      TNC. The terminal's own transmit gate still requires a control-verified callsign, but the tool never
+      asked for `tx`. Refuse it unless the caller holds `tx`.
+- [ ] **Imported tools vanish when the Tools app closes** _(P2 · S)_ — the list of imported tools is
+      `ToolsPanel` state, so leaving the app drops their commands and decoders from the console while
+      their frames, panels and bus subscriptions keep running; a re-import then collides with the
+      registered name. Keep imported tools in the shared host, give them an on/off switch and a remove
+      action, and remember them across reloads.
+- [ ] **Imported tools reach events, map layers and transmit** _(P2 · M)_ — the sandbox bridges commands,
+      colour rules, panels, decoders and the bus, but not `on()` events, `setMapLayer()`, `scheduleBeacon()`
+      or `requestTx()`, so `event`, `map`, `beacon` and `tx` grant an imported tool nothing; `geo` has no API
+      at all. Imported commands and decoders answer only in the Tools console, not on the terminal, BBS or
+      node, and ignore the console's "as a remote peer" switch.
+- [ ] **Async command and decoder handlers** _(P3 · S)_ — a handler that returns a `Promise` prints
+      `[object Promise]`; await it in the worker bootstrap so a tool that fetches can answer a command.
 
 Marketplace track (a separate repo on its own timeline; only the first two items touch a shipped
 build, and neither gates the release):

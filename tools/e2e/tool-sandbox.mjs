@@ -4,7 +4,8 @@
  * (`apps/web/src/tools/sandbox.ts`). It bundles the real module, loads tools into it from a page that holds a
  * session cookie and an IndexedDB database, and asserts what a tool reaches:
  *
- *   1. the example hello tool loads, answers its command and runs its decoder;
+ *   1. the example hello tool loads, answers its command and runs its decoder, and the station-log example
+ *      (packages/tools/examples/station-log) talks to the bus through the ipc bridge;
  *   2. a tool without the network grant reaches no network (fetch, XHR, nested Worker, EventSource) and no
  *      app storage (IndexedDB, Cache Storage, localStorage, cookies);
  *   3. a tool with the network grant reaches its `connect` origin, without the page's cookie, and not the
@@ -82,6 +83,7 @@ async function main() {
   });
   const bundleJs = bundled.outputFiles[0].text;
   const helloJs = readFileSync(path.join(ROOT, "apps/web/public/tools/hello/tool.js"), "utf8");
+  const stationLogJs = readFileSync(path.join(ROOT, "packages/tools/examples/station-log/tool.js"), "utf8");
 
   // The peer: a second origin a network-granted tool may reach. It records the cookie header it receives.
   const peerHits = [];
@@ -103,6 +105,9 @@ async function main() {
     } else if (req.url === "/hello.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(helloJs);
+    } else if (req.url === "/station-log.js") {
+      res.setHeader("content-type", "application/javascript");
+      res.end(stationLogJs);
     } else if (req.url === "/probe.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(probeTool(appUrl, peerUrl));
@@ -164,6 +169,44 @@ async function main() {
     expect(hello.rot === "hello", "runs its decoder");
     expect(hello.rules === 1 && hello.panel, "contributes its colour rule and panel");
     expect(hello.frames === 1 && hello.framesAfter === 0, "destroy() removes the frame");
+
+    // The station-log example: it subscribes on the bus, calls a service and pushes panel updates.
+    const stationLog = await page.evaluate(async () => {
+      const subs = {};
+      const calls = [];
+      const bridge = {
+        emit: () => {},
+        subscribe: (topic, cb) => {
+          subs[topic] = cb;
+          return () => {};
+        },
+        call: (name, args) => {
+          calls.push([name, args]);
+          return "digi";
+        },
+      };
+      const sb = await window.ToolSandbox.loadSandbox("/station-log.js", ["command", "panel", "ipc"], bridge);
+      const panels = [];
+      sb.onPanel((spec) => panels.push(spec));
+      subs["station.seen"]?.({ call: "OE6XRR-9", type: "digi", source: "APRS" }, "station-db");
+      const seen = await sb.runCommand("seen", "");
+      await sb.runCommand("whois", "oe6xrr-9");
+      for (let i = 0; i < 50 && panels.length < 2; i++) await new Promise((r) => setTimeout(r, 20));
+      sb.destroy();
+      return { commands: sb.commands, subscribed: Object.keys(subs), seen, calls, panels };
+    });
+    console.log("station-log example");
+    expect(stationLog.commands.join(",") === "seen,whois", "registers /seen and /whois");
+    expect(stationLog.subscribed.join(",") === "station.seen", "subscribes to station.seen");
+    expect(stationLog.seen[0] === "OE6XRR-9  digi  APRS", "lists a station it heard on the bus");
+    expect(
+      stationLog.calls[0]?.[0] === "station.type" && stationLog.calls[0]?.[1] === "OE6XRR-9",
+      "calls station.type",
+    );
+    expect(
+      stationLog.panels.length === 2 && stationLog.panels[1].nodes[0].value === "digi",
+      "pushes panel updates with the service's answer",
+    );
 
     const probe = (granted, connect) =>
       page.evaluate(
