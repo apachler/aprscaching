@@ -431,7 +431,9 @@ build, and neither gates the release):
       and verifies it independently. A new signed field changes `manifestSigningBytes`, so the shipped
       `hello` tool and `apps/web/public/tools/registry.json` are re-signed in the same change. Must land
       before anyone lists — a required signed field cannot be retrofitted afterwards. Side effect worth
-      having: a script change forces a version bump and a re-signed manifest.
+      having: a script change forces a version bump and a re-signed manifest. Until it lands, **Tools**
+      shows a registry tool as "Signed · registry-listed author key" and with no "verified" badge; with it,
+      the badge can come back.
 - [ ] **Multi-pin registry authority** _(P1 · S)_ — `verifyRegistry` accepts a small allowlist of
       authority keys instead of a single pinned one, so a rotation ships the new key alongside the old and
       older builds keep verifying through the overlap window. Keep the list at three or fewer and cover
