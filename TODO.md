@@ -401,13 +401,6 @@ Next release:
 Imported-tool API gaps an outside author meets (each is described as it stands in
 [`docs/contribute/tool-reference.md`](docs/contribute/tool-reference.md)):
 
-- [ ] **The bus names the sender `(host)`** _(P1 · S)_ — the sandbox bridge routes an imported tool's
-      `emit`/`call` through `hostEmit`/`hostCallService`, so subscribers see `(host)` as the sender and a
-      tool can pass for the app. Route them under the tool's own name.
-- [ ] **`session.script` needs only `ipc`** _(P1 · S)_ — an imported tool holding `ipc` can call the packet
-      terminal's `session.script` service and run a connected-mode script (connect, send) over the user's
-      TNC. The terminal's own transmit gate still requires a control-verified callsign, but the tool never
-      asked for `tx`. Refuse it unless the caller holds `tx`.
 - [ ] **Imported tools vanish when the Tools app closes** _(P2 · S)_ — the list of imported tools is
       `ToolsPanel` state, so leaving the app drops their commands and decoders from the console while
       their frames, panels and bus subscriptions keep running; a re-import then collides with the

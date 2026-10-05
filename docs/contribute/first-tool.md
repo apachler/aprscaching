@@ -205,8 +205,8 @@ To be listed, give the registry's keeper the entry for your tool:
 
 The keeper adds the entry and signs the registry again with
 `TOOL_PRIVATE_KEY=<authority key> node tools/toolkey/sign.mjs registry registry.json`. Once the new registry is
-deployed, your tool shows with the **verified** badge, and importing it shows **Verified · registry-listed author
-key**. For the project's registry, open a pull request that adds your entry; the maintainers sign it.
+deployed, your tool shows with the **verified** badge, and importing it from the entry's URL shows **Signed ·
+registry-listed author key**. A copy imported from any other URL gets the trust-on-first-use label. For the project's registry, open a pull request that adds your entry; the maintainers sign it.
 
 ### What a reviewer checks
 

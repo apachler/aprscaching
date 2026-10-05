@@ -53,7 +53,7 @@ capability only through the script API below; the right-hand column says what th
 | `ipc` | `emit`, `subscribe`, `provideService`, `callService` | the `ipc` object: `emit`, `subscribe`, `call`, `setPanel` |
 | `network` | not used | `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource`, to the `connect` origins only |
 | `beacon` | `scheduleBeacon()`, behind the transmit gate | nothing |
-| `tx` | `requestTx()`, behind the transmit gate | nothing |
+| `tx` | `requestTx()`, behind the transmit gate, and the bus services that transmit | the bus services that transmit, with `ipc` |
 | `geo` | nothing | nothing |
 
 The transmit gate lets a tool transmit only while the user's callsign is control-verified. No capability lets a
@@ -114,26 +114,35 @@ never matches. The first matching rule wins.
 
 | Method | Content |
 |---|---|
-| `ipc.emit(topic, data)` | Publish `data` on `topic` to every subscriber. Subscribers see the sender as `(host)`. |
+| `ipc.emit(topic, data)` | Publish `data` on `topic` to every subscriber. Subscribers see the tool's manifest `name` as the sender. |
 | `ipc.subscribe(topic, cb)` | Call `cb(data, from)` for each message on `topic`. There is no unsubscribe; the subscription ends with the tool. |
-| `ipc.call(name, args)` | Call the service `name`. Returns a `Promise` of its answer, which is `undefined` when nobody offers it. |
+| `ipc.call(name, args)` | Call the service `name`. Returns a `Promise` of its answer, which is `undefined` when nobody offers it. The promise rejects when the service needs a capability the tool does not hold. |
 | `ipc.setPanel(spec)` | Replace the tool's panel. Needs `panel` as well. Calls made before the tool finishes loading are dropped. |
 
 Topic and service names are cut to 64 characters, and an empty one is refused. Every payload is copied with the
 structured-clone algorithm, so it carries data, never functions. The app's bus stops a chain of messages that
 nests deeper than 16.
 
+The sender name a subscriber receives is the emitting tool's manifest `name`, for a built-in and an imported tool
+alike. The app itself sends as `(host)`. An imported tool cannot take a built-in tool's name: the import is
+refused.
+
+A service that makes the radio transmit needs `tx` as well as `ipc`. A call from a tool without `tx` is refused
+with the error `service "<name>" needs the 'tx' permission, which <tool> does not hold`, and the service does not
+run. Holding `tx` does not open the transmit gate: the packet terminal still transmits only while the user's
+callsign is control-verified.
+
 The app and the built-in tools use these names:
 
-| Name | Kind | Offered by | Payload |
-|---|---|---|---|
-| `station.seen` | topic | the **Station DB (NAMES.GP)** tool, while it is on | `{ call, type, source }` for each heard station: `source` is `RF` from the packet terminal or `APRS` from the map's live stations |
-| `station.type` | service | the **Station DB (NAMES.GP)** tool, while it is on | Takes a callsign; answers its station type, or `""` when it has not heard it |
-| `render.blocks` | topic | listened to by the **Block art (GIP)** tool | `{ text }`, or `{ cols, cells }` as in a `blocks` node, shown in its panel |
-| `session.progress` | topic | the packet terminal, while a TNC is open | The state of a running session script: `{ status, step, total, captured, note }` |
-| `session.script` | service | the packet terminal, while a TNC is open | Takes `{ steps }`, a connected-mode script; answers `{ ok: true }` |
-| `link.ping.request` | topic | the **Link ping (RTT)** tool's `/ping` | `{}` |
-| `link.rtt` | topic | listened to by the **Link ping (RTT)** tool | `{ ms }` |
+| Name | Kind | Offered by | Needs | Payload |
+|---|---|---|---|---|
+| `station.seen` | topic | the **Station DB (NAMES.GP)** tool, while it is on | `ipc` | `{ call, type, source }` for each heard station: `source` is `RF` from the packet terminal or `APRS` from the map's live stations |
+| `station.type` | service | the **Station DB (NAMES.GP)** tool, while it is on | `ipc` | Takes a callsign; answers its station type, or `""` when it has not heard it |
+| `render.blocks` | topic | listened to by the **Block art (GIP)** tool | `ipc` | `{ text }`, or `{ cols, cells }` as in a `blocks` node, shown in its panel |
+| `session.progress` | topic | the packet terminal, while a TNC is open | `ipc` | The state of a running session script: `{ status, step, total, captured, note }` |
+| `session.script` | service | the packet terminal, while a TNC is open | `ipc` and `tx` | Takes `{ steps }`, a connected-mode script that connects and sends over the TNC; answers `{ ok: true }` |
+| `link.ping.request` | topic | the **Link ping (RTT)** tool's `/ping` | `ipc` | `{}` |
+| `link.rtt` | topic | listened to by the **Link ping (RTT)** tool | `ipc` | `{ ms }` |
 
 ## Panel nodes
 
@@ -258,9 +267,9 @@ The app decides one of six trust labels before it shows the import prompt:
 
 | Label | When |
 |---|---|
-| **Verified · registry-listed author key** | The signature is valid and `pubkey` equals the key the registry lists for this `name`. |
-| **Signed · matches the key you trusted before** | Valid, not in the registry, and the key equals the one this browser accepted for this author before. |
-| **Signed · unknown author key (trust-on-first-use)** | Valid, and neither the registry nor this browser knows the key. |
+| **Signed · registry-listed author key** | The signature is valid, the manifest was fetched from the URL the registry lists for this `name`, and `pubkey` equals the key the registry lists for it. |
+| **Signed · matches the key you trusted before** | Valid, not registry-listed, and the key equals the one this browser accepted for this author before. |
+| **Signed · unknown author key (trust-on-first-use)** | Valid, not registry-listed, and this browser does not know the key. |
 | **Unsigned · you're trusting the URL only** | No `signature` or no `pubkey`. |
 | **Author key CHANGED since you last trusted it — refused** | Valid, but the key differs from the registry's or the accepted one. The import stops. |
 | **Signature INVALID — refused** | The signature does not verify. The import stops. |
@@ -275,8 +284,12 @@ reads it from `VITE_TOOL_REGISTRY`, `/tools/registry.json` by default. A registr
 a broken signature is ignored, and the **Registry** list stays empty.
 
 - The **verified** badge in the **Registry** list means the entry is in that signed registry.
-- The **Verified** label in the import prompt means the manifest was signed by the key the registry lists for its
-  name.
+- The **registry-listed** label in the import prompt means the manifest was fetched from the URL the registry
+  lists for its name and signed by the key the registry lists for it. A relative script `entry` resolves against
+  that URL, so the script comes from the listed site.
+- A copy of a listed manifest served from any other URL is not registry-listed, even with a valid signature by
+  the listed key: its relative `entry` resolves against the copy's site and runs that site's script. It gets
+  the trust-on-first-use labels above and the normal import prompt.
 - Neither covers the script. The signature covers the `entry` URL, not the bytes served there, so whoever
   controls that server can change the script without breaking the signature. Pinning the script's hash in the
   manifest is planned (`entryHash` in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md)).

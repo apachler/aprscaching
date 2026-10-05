@@ -453,6 +453,115 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
   });
 });
 
+describe("The bus for an imported tool — its own sender name, its own grants", () => {
+  const listener = (sink: string[]): Tool => ({
+    manifest: { name: "listen", title: "L", author: "X", version: "1", permissions: ["ipc"], surfaces: ["web"] },
+    activate(ctx) {
+      ctx.subscribe("topic.a", (data, from) => sink.push(`${from}:${String(data)}`));
+      ctx.provideService("whoami", () => "listen");
+    },
+  });
+
+  it("emit from an imported tool carries the tool's manifest name, not (host)", () => {
+    const sink: string[] = [];
+    const host = new ToolHost();
+    host.register(listener(sink));
+    host.setEnabled("listen", true);
+    host.toolBus("imported-x", ["ipc"]).emit("topic.a", "hi");
+    expect(sink).toEqual(["imported-x:hi"]);
+  });
+
+  it("subscribers of an imported tool see each sender's own name", () => {
+    const host = new ToolHost();
+    const seen: string[] = [];
+    const off = host.toolBus("imported-x", ["ipc"]).subscribe("topic.b", (data, from) => seen.push(`${from}:${data}`));
+    host.toolBus("imported-y", ["ipc"]).emit("topic.b", 1);
+    host.hostEmit("topic.b", 2);
+    off();
+    host.hostEmit("topic.b", 3);
+    expect(seen).toEqual(["imported-y:1", "(host):2"]);
+  });
+
+  it("built-in tool and app sender names are unchanged", () => {
+    const sink: string[] = [];
+    const host = new ToolHost();
+    const builtin: Tool = {
+      manifest: {
+        name: "emitter",
+        title: "E",
+        author: "X",
+        version: "1",
+        permissions: ["ipc", "command"],
+        surfaces: ["web"],
+      },
+      activate(ctx) {
+        ctx.registerCommand("go", () => {
+          ctx.emit("topic.a", "b");
+          return [];
+        });
+      },
+    };
+    host.register(listener(sink));
+    host.register(builtin);
+    host.setEnabled("listen", true);
+    host.setEnabled("emitter", true);
+    host.runCommand("go");
+    host.hostEmit("topic.a", "h");
+    expect(sink).toEqual(["emitter:b", "(host):h"]);
+  });
+
+  it("an imported tool calls a service that requires nothing with ipc alone", () => {
+    const host = new ToolHost();
+    host.register(listener([]));
+    host.setEnabled("listen", true);
+    expect(host.toolBus("imported-x", ["ipc"]).call("whoami")).toBe("listen");
+  });
+
+  it("session.script is refused to an imported tool without 'tx' and served with it", () => {
+    const host = new ToolHost();
+    const got: unknown[] = [];
+    host.registerHostService(
+      "session.script",
+      (a) => {
+        got.push(a);
+        return { ok: true };
+      },
+      { requires: "tx" },
+    );
+    expect(() => host.toolBus("imported-x", ["ipc"]).call("session.script", { steps: [] })).toThrow(
+      /service "session.script" needs the 'tx' permission, which imported-x does not hold/,
+    );
+    expect(got).toEqual([]);
+    expect(host.toolBus("imported-x", ["ipc", "tx"]).call("session.script", { steps: [] })).toEqual({ ok: true });
+    expect(got).toHaveLength(1);
+  });
+
+  it("session.script is refused to a built-in tool without 'tx' and served with it", () => {
+    const host = new ToolHost();
+    host.registerHostService("session.script", () => ({ ok: true }), { requires: "tx" });
+    const caller = (name: string, permissions: Tool["manifest"]["permissions"]): Tool => ({
+      manifest: { name, title: "C", author: "X", version: "1", permissions, surfaces: ["terminal"] },
+      activate(ctx) {
+        ctx.registerCommand(name, () => [JSON.stringify(ctx.callService("session.script", { steps: [] }))]);
+      },
+    });
+    host.register(caller("notx", ["ipc", "command"]));
+    host.register(caller("withtx", ["ipc", "command", "tx"]));
+    host.setEnabled("notx", true);
+    host.setEnabled("withtx", true);
+    expect(host.runCommand("notx")![0]).toMatch(/error: service "session.script" needs the 'tx' permission/);
+    expect(host.runCommand("withtx")).toEqual(['{"ok":true}']);
+  });
+
+  it("the built-in sched-query tool holds 'tx' and still reaches session.script", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "sched-query")!);
+    host.setEnabled("sched-query", true);
+    host.registerHostService("session.script", () => ({ ok: true }), { requires: "tx" });
+    expect(host.runCommand("gpauto", "connect HB9W-8; disconnect", "terminal")![0]).toMatch(/Running 2 steps/);
+  });
+});
+
 describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
   it("per-command remote gate: a peer reaches /info but not operator-only /setinfo", () => {
     const host = new ToolHost();

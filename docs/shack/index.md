@@ -60,7 +60,7 @@ for with **Approve + run**. Before you approve, the app shows who signed it:
 
 | Shown as | Meaning | Import |
 |---|---|---|
-| **Signed · registry-listed author key** | Signed by a key the project's registry lists. The signature covers the manifest, not the script it points to. | allowed |
+| **Signed · registry-listed author key** | Signed by a key the project's registry lists, and fetched from the address the registry lists. The signature covers the manifest, not the script it points to. | allowed |
 | **Signed · matches the key you trusted before** | You accepted this author key before. | allowed |
 | **Signed · unknown author key (trust-on-first-use)** | Signed by a key nobody vouched for yet. | allowed, with a warning |
 | **Unsigned · you're trusting the URL only** | No signature. | allowed, with a warning |
