@@ -3,7 +3,7 @@
 // account), finds under an SSID count for the person on the leaderboard, an archived or disabled cache takes
 // no find or did-not-find, and an owner does not find their own cache.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify, ORIGIN, type Res } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, operatorVerify, ORIGIN, type Res } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -13,7 +13,7 @@ const here = () => ({ lat: 47.0001, lon: 15.0001, accuracyM: 10, ts: at() });
 async function world(): Promise<{ env: Env; owner: Res; finder: Res; cacheId: number }> {
   // the finder's call is confirmed with the operator secret, the quickest way to a control-verified call here
   const env = authEnv({ ADMIN_CALLSIGNS: "DL1FND" });
-  const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+  const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
   const created = await call(
     env,
     "POST",

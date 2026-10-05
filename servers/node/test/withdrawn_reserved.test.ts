@@ -3,7 +3,7 @@
 // anyone can sign in as, a cache owned by it must be uneditable, and two erased people must never
 // collide on it.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, newAuthenticator, passkeyRegister } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, newAuthenticator, passkeyRegister } from "./helpers/authflow.js";
 import { addCache } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -70,7 +70,7 @@ describe("erasure keeps find counts without colliding", () => {
 
   it("an erased owner's cache is archived and uneditable", async () => {
     const env = authEnv();
-    const s = await emailSignup(env, "o@example.test", "DL1OWN");
+    const s = await hiderSignup(env, "o@example.test", "DL1OWN");
     const created = await call(
       env,
       "POST",

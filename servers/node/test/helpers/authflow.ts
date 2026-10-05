@@ -73,6 +73,24 @@ export async function operatorSignup(env: Env, callsign: string, email?: string)
   return res;
 }
 
+/** Mark a base call control-verified in the store, as any verification method would; hiding a cache needs it. */
+export async function markCallVerified(env: Env, callsign: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO callsign_verifications (callsign, method, status, attempts, created_at, verified_at)
+     VALUES (?, 'operator', 'verified', 0, 0, 0)
+     ON CONFLICT(callsign) DO UPDATE SET status='verified'`,
+  )
+    .bind(callsign.toUpperCase().replace(/-\d+$/, ""))
+    .run();
+}
+
+/** Email sign-up of a hider: the account, with its call control-verified. */
+export async function hiderSignup(env: Env, email: string, callsign: string, ip?: string): Promise<Res> {
+  const r = await emailSignup(env, email, callsign, ip);
+  if (r.status === 200) await markCallVerified(env, callsign);
+  return r;
+}
+
 // ---- a software WebAuthn authenticator ----
 
 const concat = (...parts: Uint8Array[]) => {

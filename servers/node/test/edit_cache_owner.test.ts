@@ -2,12 +2,12 @@
 // The edit form's starting point: the cache detail carries the owner's own settings, and the stage list shows the
 // owner every stage with its position and tag code; anyone else sees neither.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup } from "./helpers/authflow.js";
 
 describe("the owner's view of a cache", () => {
   it("carries the settings to edit, and every stage as set", async () => {
     const env = authEnv();
-    const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+    const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
     const other = await emailSignup(env, "other@example.test", "OE8OTH");
     const made = await call(
       env,

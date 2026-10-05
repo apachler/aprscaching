@@ -2,7 +2,7 @@
 // An unlisted cache stays off the map and out of search for everyone but its owner, and opens by its link.
 // A living cache's rendezvous show their time and place to the cache's owner only.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup } from "./helpers/authflow.js";
 
 const BBOX = "/api/caches?bbox=14,46,16,48";
 const codes = (r: { data: { caches: { code: string }[] } }) => r.data.caches.map((c) => c.code);
@@ -10,7 +10,7 @@ const codes = (r: { data: { caches: { code: string }[] } }) => r.data.caches.map
 describe("an unlisted cache", () => {
   it("is off the map and out of search, except for its owner, and opens by its link", async () => {
     const env = authEnv();
-    const owner = await emailSignup(env, "owner@example.test", "OE8UNL");
+    const owner = await hiderSignup(env, "owner@example.test", "OE8UNL");
     const other = await emailSignup(env, "other@example.test", "OE8OTH");
     const hidden = await call(
       env,
@@ -42,7 +42,7 @@ describe("an unlisted cache", () => {
 describe("a living cache's rendezvous", () => {
   it("give the time and place to the owner, and the day alone to anyone else", async () => {
     const env = authEnv();
-    const owner = await emailSignup(env, "rover@example.test", "OE8RDV");
+    const owner = await hiderSignup(env, "rover@example.test", "OE8RDV");
     // the station rule is covered in living_cache_station.test.ts; the ingest secret path skips it here
     const made = await call(
       env,

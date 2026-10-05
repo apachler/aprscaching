@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A log is posted to its cache: `POST /api/caches/:id/logs`. No route takes the cache id from the body.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 
 describe("the log route", () => {
   it("logs against the cache named in the path, and no body-addressed route exists", async () => {
     const env = authEnv();
-    const me = await emailSignup(env, "logger@example.test", "OE8LOG");
+    const me = await hiderSignup(env, "logger@example.test", "OE8LOG");
     expect(me.status).toBe(200);
     const created = await call(
       env,

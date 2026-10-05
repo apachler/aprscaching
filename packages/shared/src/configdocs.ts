@@ -182,6 +182,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MIGRATIONS_DIR: "Directory of schema migrations applied at boot",
   MEDIA_DIR: "Directory for uploaded cache media",
   MEDIA_QUOTA_MB: "Megabytes of cache media the instance stores in all; uploads stop there",
+  HIDE_DAILY_LIMIT: "New caches one account may hide in 24 hours; 0 lifts the limit",
   OFFLINE_TILES_URL: "Where phones fetch the offline map archive, when it is hosted elsewhere",
   OFFLINE_TILES_ATTRIBUTION: "Attribution of the offline map's data",
   OFFLINE_TILES_MAXZOOM: "The most detailed zoom level a pack takes from the offline map",
@@ -269,6 +270,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`MEDIA_QUOTA_MB`",
         "Megabytes of cache media (photos, sound, audio clues) the instance stores in all; past it, uploads are refused. Set it to what the disk or bucket can spare",
         "`1024`",
+      ],
+      [
+        "`HIDE_DAILY_LIMIT`",
+        "New caches one account may hide in 24 hours (its sysop excepted); `0` lifts the limit. Imports by the instance itself never count",
+        "`5`",
       ],
       [
         "`SESSION_EPOCH`",

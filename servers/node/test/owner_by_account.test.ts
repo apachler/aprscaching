@@ -4,7 +4,7 @@
 // owner while operating any call it holds; another account never does, whatever call string it presents;
 // and a machine acts for an owner only over the ingest plane, naming that exact owner call.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, type Res } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, type Res } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -20,7 +20,7 @@ interface World {
 async function world(): Promise<World> {
   const media = { put: async () => {}, get: async () => null, delete: async () => {} };
   const env = authEnv({ MEDIA: media });
-  const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+  const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
   expect(owner.status).toBe(200);
   const created = await call(
     env,

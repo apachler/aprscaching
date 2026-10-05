@@ -2,7 +2,7 @@
 // A staged cache is found at its last stage: a find needs that stage unlocked and is verified at its position,
 // and replacing the stage list drops the unlocks of every stage from the first one that changed.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, operatorVerify } from "./helpers/authflow.js";
 
 const at = () => Math.floor(Date.now() / 1000);
 const near = (lat: number, lon: number) => ({ lat: lat + 0.0001, lon, accuracyM: 10, ts: at() });
@@ -16,7 +16,7 @@ const STAGES = [
 
 async function world() {
   const env = authEnv({ ADMIN_CALLSIGNS: "DL1FND" });
-  const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+  const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
   const made = await call(
     env,
     "POST",

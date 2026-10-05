@@ -2,7 +2,7 @@
 // A locked stage keeps its clue and clip until the finder unlocks it, except an audio stage, whose clip is the
 // puzzle that opens it. The start is always open.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup } from "./helpers/authflow.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 async function world() {
@@ -14,7 +14,7 @@ async function world() {
       delete: async (k: string) => void objects.delete(k),
     },
   }) as Env;
-  const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+  const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
   const finder = await emailSignup(env, "finder@example.test", "DL1FND");
   const id = (
     await call(

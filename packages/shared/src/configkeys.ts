@@ -216,6 +216,7 @@ export const CONFIG_KEYS = {
   OFFLINE_TILES_PATH: { type: "string", units: ["server"], shapes: ["selfhost", "baremetal", "pocket", "desktop"] },
   MEDIA_DIR: { type: "string", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },
   MEDIA_QUOTA_MB: { type: "int", units: ["gateway"], default: "1024" },
+  HIDE_DAILY_LIMIT: { type: "int", units: ["gateway"], default: "5" },
   FED_SYNC_INTERVAL_MS: { type: "int", units: ["server"], default: "300000" },
   WEB_DIST: { type: "string", units: ["server", "desktop"] },
   HTTPS_PORT: { type: "int", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },

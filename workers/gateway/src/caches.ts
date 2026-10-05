@@ -39,6 +39,7 @@ import { rendezvousFor } from "./rendezvous.js";
 import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
+import { isCallsignVerified } from "./callsign.js";
 import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
 import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cacheplace.js";
 
@@ -469,6 +470,47 @@ async function heritageRefusal(req: Request, env: Env, type: string): Promise<st
 // ---------------------------------------------------------------- create ("hide a cache")
 /** The form of the codes the instance mints, `AC-` and the cache id. */
 const MINTED_CODE = /^AC-\d+$/i;
+const HIDE_DAILY_LIMIT_DEFAULT = 5;
+const DAY_S = 86_400;
+
+/** The new caches one account may hide in 24 hours; 0 lifts the limit. */
+function hideDailyLimit(env: Env): number {
+  const n = Number(env.HIDE_DAILY_LIMIT ?? HIDE_DAILY_LIMIT_DEFAULT);
+  return Number.isInteger(n) && n >= 0 ? n : HIDE_DAILY_LIMIT_DEFAULT;
+}
+
+/**
+ * Why a signed-in member may not hide a cache now, or null. A cache owner answers for a place in the field and
+ * for every finder's log, so hiding takes a control-verified call. Each account hides at most
+ * HIDE_DAILY_LIMIT new caches in 24 hours, which keeps one account from flooding the map; the sysop is
+ * exempt. The instance's own backend (the ingest secret: imports, the over-APRS path) is not a member and
+ * passes.
+ */
+async function hideRefusal(req: Request, env: Env, accountId: string, owner: string): Promise<Response | null> {
+  if (!(await isCallsignVerified(env, owner)))
+    return json(
+      { error: `verify ${baseCall(owner)} to hide a cache — control-verification required`, verified: false },
+      { status: 403 },
+    );
+  const limit = hideDailyLimit(env);
+  if (limit === 0 || !(await requireSysop(req, env))) return null;
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM caches c
+      WHERE c.source = 'native' AND c.created_at > ?
+        AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                     AND (c.owner_call = ac.callsign OR c.owner_call LIKE ac.callsign || '-%'))`,
+  )
+    .bind(nowS() - DAY_S, accountId)
+    .first<{ n: number }>();
+  if ((row?.n ?? 0) < limit) return null;
+  return json(
+    {
+      error: `you have hidden ${limit} new cache${limit === 1 ? "" : "s"} in the last 24 hours, the most this instance allows a day — try again tomorrow`,
+      limit,
+    },
+    { status: 429 },
+  );
+}
 
 export async function handleCreateCache(req: Request, env: Env): Promise<Response> {
   const parsed = CreateCacheRequest.safeParse(await req.json().catch(() => null));
@@ -477,6 +519,11 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
 
   const owner = await actor(req, env, b.ownerCall);
   if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
+  const member = await sessionIdentity(req, env);
+  if (member) {
+    const refused = await hideRefusal(req, env, member.accountId, owner);
+    if (refused) return refused;
+  }
   const notOwn = await livingStationRefusal(req, env, b.type, b.stationCall);
   if (notOwn) return json({ error: notOwn }, { status: 403 });
   const heritage = await heritageRefusal(req, env, b.type);

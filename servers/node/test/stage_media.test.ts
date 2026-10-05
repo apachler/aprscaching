@@ -3,7 +3,7 @@
 // clip never answers from a cache, and stays with its stage when the owner saves the stage list again. Every
 // stored object belongs to exactly one stage row, so the media quota counts all of it.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -18,7 +18,7 @@ async function world() {
       delete: async (k: string) => void objects.delete(k),
     },
   }) as Env;
-  const owner = await emailSignup(env, "clips@example.test", "OE8CLP");
+  const owner = await hiderSignup(env, "clips@example.test", "OE8CLP");
   const id = (
     await call(
       env,
