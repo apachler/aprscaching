@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { connectSources, frameCsp, frameSource, parseFrameMessage } from "../src/tools/sandbox.js";
+import { ToolHost } from "@aprscaching/tools";
+import { callResult, connectSources, frameCsp, frameSource, parseFrameMessage } from "../src/tools/sandbox.js";
 
 describe("the tool frame's CSP", () => {
   it("blocks every connection when the tool reaches nothing", () => {
@@ -80,5 +81,31 @@ describe("parseFrameMessage", () => {
       id: 2,
       lines: ["1", "a"],
     });
+  });
+});
+
+describe("a sandboxed tool's service call", () => {
+  const hostWithScript = () => {
+    const host = new ToolHost();
+    host.registerHostService("session.script", () => ({ ok: true }), { requires: "tx" });
+    return host;
+  };
+  it("answers with the service's result when the tool holds the capability it requires", () => {
+    const bus = hostWithScript().toolBus("imported-x", ["ipc", "tx"]);
+    expect(callResult(bus, 7, "session.script", { steps: [] })).toEqual({
+      type: "callResult",
+      id: 7,
+      result: { ok: true },
+    });
+  });
+  it("answers a refusal as an error the tool's promise rejects with", () => {
+    const bus = hostWithScript().toolBus("imported-x", ["ipc"]);
+    const r = callResult(bus, 8, "session.script", { steps: [] });
+    expect(r.id).toBe(8);
+    expect(r.result).toBeUndefined();
+    expect(r.error).toMatch(/needs the 'tx' permission, which imported-x does not hold/);
+  });
+  it("rejects the worker's call promise when the answer carries an error", () => {
+    expect(frameSource("default-src 'none'")).toContain("p.rej(new Error(m.error))");
   });
 });

@@ -229,6 +229,11 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       toast(r.error);
       return;
     }
+    // The bus names an imported tool by its manifest name, so it may not take a built-in tool's name.
+    if (host.list().some((t) => t.manifest.name === r.manifest.name && !t.manifest.entry)) {
+      toast(`Refused: a built-in tool is already named "${r.manifest.name}".`);
+      return;
+    }
     // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
     const sig = await checkManifestSignature(r.raw);
     const regEntry = registry.find((e) => e.name === r.manifest.name);
@@ -255,13 +260,10 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     setPrompt(null);
     try {
       const scriptUrl = new URL(manifest.entry ?? "tool.js", base).href;
-      // Bridge the sandboxed tool to the shared bus — only if it was granted 'ipc'. The
-      // host routes emit/subscribe/call; the worker never holds a host or another-tool reference.
-      const bridge = {
-        emit: (t: string, d: unknown) => host.hostEmit(t, d),
-        subscribe: (t: string, cb: (data: unknown, from: string) => void) => host.hostSubscribe(t, cb),
-        call: (n: string, a: unknown) => host.hostCallService(n, a),
-      };
+      // Bridge the sandboxed tool to the shared bus — only if it was granted 'ipc'. The host routes
+      // emit/subscribe/call under the tool's own name and checks its grants on every service call; the
+      // worker never holds a host or another-tool reference.
+      const bridge = host.toolBus(manifest.name, manifest.permissions);
       const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge, {
         connect: manifest.connect,
         appOrigins: [location.origin, new URL(API_BASE || location.origin, location.href).origin],

@@ -196,12 +196,17 @@ export function PacketTerminal(props: {
       };
       const runner = new ScriptRunner(port);
       runnerRef.current = runner;
-      disposeScriptSvc.current = host.registerHostService("session.script", (a) => {
-        const steps = (a as { steps?: unknown }).steps;
-        if (!Array.isArray(steps)) return null;
-        runner.load(steps as SessionStep[], Date.now());
-        return { ok: true };
-      });
+      // A session script connects and sends over the TNC, so a calling tool must hold 'tx'.
+      disposeScriptSvc.current = host.registerHostService(
+        "session.script",
+        (a) => {
+          const steps = (a as { steps?: unknown }).steps;
+          if (!Array.isArray(steps)) return null;
+          runner.load(steps as SessionStep[], Date.now());
+          return { ok: true };
+        },
+        { requires: "tx" },
+      );
 
       pollRef.current = setInterval(() => {
         session.poll();

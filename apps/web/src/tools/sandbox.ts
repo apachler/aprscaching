@@ -11,7 +11,7 @@
  * (colour rules, panel) into the shared ToolHost synchronously, while code-bearing ones (commands,
  * decoders) round-trip to the worker asynchronously. Every message from the frame is shape-checked here.
  */
-import { validateManifest, type ToolManifest, type Capability } from "@aprscaching/tools";
+import { validateManifest, type ToolManifest, type Capability, type ToolBus } from "@aprscaching/tools";
 
 export async function fetchToolManifest(
   url: string,
@@ -31,12 +31,11 @@ export async function fetchToolManifest(
   }
 }
 
-/** The bus bridge the host provides to an imported tool (only wired when it was granted 'ipc'). */
-export interface IpcBridge {
-  emit(topic: string, data: unknown): void;
-  subscribe(topic: string, cb: (data: unknown, from: string) => void): () => void;
-  call(name: string, args: unknown): unknown;
-}
+/**
+ * The bus bridge the host provides to an imported tool (only wired when it was granted 'ipc'): the
+ * host's `toolBus()`, which sends under the tool's own name and checks its grants on every service call.
+ */
+export type IpcBridge = ToolBus;
 
 /** A declarative monitor colour rule — evaluated host-side (sync), so no per-line Worker round-trip. */
 export interface ColourRule {
@@ -61,7 +60,7 @@ function workerSource(): string {
     const ipc = {
       emit: (topic, data) => self.postMessage({ type: "emit", topic, data }),
       subscribe: (topic, cb) => { (subs[topic] = subs[topic] || []).push(cb); self.postMessage({ type: "subscribe", topic }); },
-      call: (name, args) => new Promise((res) => { const id = ++callSeq; pendingCalls[id] = res; self.postMessage({ type: "call", id, name, args }); }),
+      call: (name, args) => new Promise((res, rej) => { const id = ++callSeq; pendingCalls[id] = { res, rej }; self.postMessage({ type: "call", id, name, args }); }),
       setPanel: (spec) => { panel = spec; self.postMessage({ type: "panel", spec }); },
     };
     const register = (t) => {
@@ -87,7 +86,7 @@ function workerSource(): string {
       } else if (m.type === "ipcEvent") {
         for (const cb of subs[m.topic] || []) { try { cb(m.data, m.from); } catch (e) {} }
       } else if (m.type === "callResult") {
-        const res = pendingCalls[m.id]; if (res) { delete pendingCalls[m.id]; res(m.result); }
+        const p = pendingCalls[m.id]; if (p) { delete pendingCalls[m.id]; if (typeof m.error === "string") p.rej(new Error(m.error)); else p.res(m.result); }
       }
     };`;
 }
@@ -223,6 +222,23 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
   }
 }
 
+/**
+ * Answer a tool's service call. A refusal (the tool lacks the capability the service requires) or a
+ * failing service travels back as `error`, which rejects the tool's `ipc.call()` promise with that message.
+ */
+export function callResult(
+  bridge: IpcBridge,
+  id: number,
+  name: string,
+  args: unknown,
+): { type: "callResult"; id: number; result?: unknown; error?: string } {
+  try {
+    return { type: "callResult", id, result: bridge.call(name, args) };
+  } catch (e) {
+    return { type: "callResult", id, error: (e as Error).message || "service call failed" };
+  }
+}
+
 export interface Sandbox {
   commands: string[];
   colourRules: ColourRule[];
@@ -299,7 +315,7 @@ export async function loadSandbox(
     if (m.type === "emit") bridge.emit(m.topic, m.data);
     else if (m.type === "subscribe")
       disposers.push(bridge.subscribe(m.topic, (data, from) => post({ type: "ipcEvent", topic: m.topic, data, from })));
-    else if (m.type === "call") post({ type: "callResult", id: m.id, result: bridge.call(m.name, m.args) });
+    else if (m.type === "call") post(callResult(bridge, m.id, m.name, m.args));
   };
 
   const destroy = () => {

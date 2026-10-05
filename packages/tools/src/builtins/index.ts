@@ -662,7 +662,7 @@ export function schedQueryTool(): Tool {
       title: "Scheduled query (GPAUTO)",
       author: AUTHOR,
       version: v,
-      permissions: ["command", "event", "ipc", "panel"],
+      permissions: ["command", "event", "ipc", "panel", "tx"],
       surfaces: ["terminal", "node"],
       description: "/gpauto <steps> — run/schedule a connect/waitfor/send/disconnect batch (GP GPAUTO).",
     },

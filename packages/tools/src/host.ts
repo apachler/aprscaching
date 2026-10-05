@@ -103,6 +103,26 @@ export interface ToolHostOpts {
   onChange?: () => void;
 }
 
+/** A named bus service: its provider, and the capability a caller must hold to reach it. */
+interface BusService {
+  tool: string;
+  fn: (args: unknown) => unknown;
+  requires?: Capability;
+}
+
+/** Who calls a bus service: the name it is known by and its granted capabilities. */
+interface BusCaller {
+  name: string;
+  has(cap: Capability): boolean;
+}
+
+/** The bus as a tool outside the host reaches it (a sandboxed import), under that tool's own name. */
+export interface ToolBus {
+  emit(topic: string, data?: unknown): void;
+  subscribe(topic: string, handler: IpcHandler): () => void;
+  call(name: string, args?: unknown): unknown;
+}
+
 interface Registered {
   tool: Tool;
   enabled: boolean;
@@ -122,7 +142,7 @@ export class ToolHost {
   private vars = new Map<string, string>(); // cooperative shared store (LinPac vars); bounded below
   // Inter-tool bus. The host only ROUTES between tools; payloads are opaque to it.
   private busSubs = new Map<string, { tool: string; fn: IpcHandler }[]>(); // topic → subscribers
-  private busSvcs = new Map<string, { tool: string; fn: (args: unknown) => unknown }>(); // name → provider
+  private busSvcs = new Map<string, BusService>(); // name → provider
   private busDepth = 0; // re-entrancy guard so a topic loop can't run away
   private static readonly BUS_MAX_DEPTH = 16;
   constructor(private opts: ToolHostOpts = {}) {}
@@ -338,7 +358,7 @@ export class ToolHost {
       },
       callService: (svc, args) => {
         need("ipc");
-        return this.busCall(this.busKey(svc), args);
+        return this.busCall(this.busKey(svc), args, { name, has });
       },
     };
   }
@@ -367,9 +387,12 @@ export class ToolHost {
       this.busDepth--;
     }
   }
-  private busCall(name: string, args: unknown): unknown {
+  /** Call a service. A tool caller must hold the capability the service requires; the app calls any. */
+  private busCall(name: string, args: unknown, caller?: BusCaller): unknown {
     const svc = this.busSvcs.get(name);
     if (!svc) return undefined;
+    if (caller && svc.requires && !caller.has(svc.requires))
+      throw new Error(`service "${name}" needs the '${svc.requires}' permission, which ${caller.name} does not hold`);
     if (this.busDepth >= ToolHost.BUS_MAX_DEPTH) {
       this.opts.onLog?.(svc.tool, `ipc: max depth calling "${name}"`);
       return undefined;
@@ -396,24 +419,42 @@ export class ToolHost {
   // ---- surface participation on the bus: the trusted app (a surface like the packet
   // terminal) may offer a SERVICE to tools and PUBLISH to them — GPRI's model where GP the host exposed
   // getQsoData/transmit to plugins. Still route-only: the host never interprets the payload. Not
-  // capability-gated (the app is trusted); each registration returns a disposer for teardown. ----
+  // capability-gated for the app itself (the app is trusted, and publishes as `(host)`); a service it
+  // offers may still require a capability of the tools that call it. Each registration returns a
+  // disposer for teardown. ----
   private static readonly HOST = "(host)";
-  registerHostService(name: string, fn: (args: unknown) => unknown): () => void {
+  /**
+   * Offer a service from the app. `requires` names the capability a calling tool must hold: a service that
+   * makes the radio transmit requires `tx`, so a tool granted only `ipc` cannot key the transmitter.
+   */
+  registerHostService(name: string, fn: (args: unknown) => unknown, opts: { requires?: Capability } = {}): () => void {
     const n = this.busKey(name);
-    this.busSvcs.set(n, { tool: ToolHost.HOST, fn });
+    const entry: BusService = { tool: ToolHost.HOST, fn, requires: opts.requires };
+    this.busSvcs.set(n, entry);
     return () => {
-      if (this.busSvcs.get(n)?.tool === ToolHost.HOST) this.busSvcs.delete(n);
+      if (this.busSvcs.get(n) === entry) this.busSvcs.delete(n);
     };
   }
   hostEmit(topic: string, data?: unknown): void {
     this.busEmit(this.busKey(topic), data, ToolHost.HOST);
   }
-  hostCallService(name: string, args?: unknown): unknown {
-    return this.busCall(this.busKey(name), args);
+
+  /**
+   * The bus for a tool that runs outside the host (a sandboxed import), under the tool's manifest name:
+   * subscribers see that name as the sender, never the app's `(host)`, and a service checks `permissions`
+   * (the tool's granted capabilities) exactly as it does for a built-in tool.
+   */
+  toolBus(name: string, permissions: readonly Capability[]): ToolBus {
+    const caller: BusCaller = { name, has: (c) => permissions.includes(c) };
+    return {
+      emit: (topic, data) => this.busEmit(this.busKey(topic), data, name),
+      subscribe: (topic, handler) => this.addSub(this.busKey(topic), name, handler),
+      call: (svc, args) => this.busCall(this.busKey(svc), args, caller),
+    };
   }
-  hostSubscribe(topic: string, handler: IpcHandler): () => void {
-    const t = this.busKey(topic);
-    const entry = { tool: ToolHost.HOST, fn: handler };
+
+  private addSub(t: string, tool: string, fn: IpcHandler): () => void {
+    const entry = { tool, fn };
     (this.busSubs.get(t) ?? this.busSubs.set(t, []).get(t)!).push(entry);
     return () => {
       const l = this.busSubs.get(t);
