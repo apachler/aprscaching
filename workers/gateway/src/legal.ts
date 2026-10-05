@@ -21,6 +21,7 @@ import type { Env } from "./env.js";
 import { escapeHtml } from "./util/html.js";
 import { mailTransport } from "./mail.js";
 import { updateCheckOn } from "./updatecheck.js";
+import { moderationKeepDays } from "./retention.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -120,12 +121,16 @@ ${contact}
 <li><strong>Game data</strong> — caches you hide, finds you log, ratings, and media you upload.</li>
 <li><strong>Moderation</strong> — reports players file (the item, a category, the reporter's words and, when signed
   in, the reporter's call) and the operator's record of each moderation action and suspension, kept to answer
-  abuse (legitimate interest). If you erase your account while it is suspended, your callsigns keep a record of
+  abuse (legitimate interest). A settled report and the record of an action are deleted after
+  ${moderationKeepDays(env)} days; an open report stays until it is settled, and the record of a suspension while it
+  holds. If you erase your account while it is suspended, your callsigns keep a record of
   the suspension (the callsign, its category and its end, nothing else) until it ends or the operator lifts it, so
   they cannot be registered again before then. Your export includes the actions about your account; who reported
   you is not shown to you.</li>
-<li><strong>Technical minimum</strong> — one session cookie (sign-in only, no tracking), and
-  short-lived per-IP counters for rate limiting. No analytics, no advertising, no third-party
+<li><strong>Callsign changes</strong> — a claim to take over a callsign and each change of a callsign's
+  holder, kept for one year to answer a dispute over the call.</li>
+<li><strong>Technical minimum</strong> — one session cookie (sign-in only, no tracking), e-mail sign-in links
+  (deleted a day after they are used or expire), and short-lived per-IP counters for rate limiting. No analytics, no advertising, no third-party
   trackers.</li>
 </ul></div>
 <h2>Who receives data</h2>

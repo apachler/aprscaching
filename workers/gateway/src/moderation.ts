@@ -38,8 +38,11 @@ import {
   displayCall,
   authThrottled,
   suspensionOf,
+  callsignSuspension,
   mayActAsOwner,
 } from "./auth.js";
+import { dropQueuedFor } from "./outbox.js";
+import { serviceCall } from "./servicecall.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
@@ -365,9 +368,19 @@ async function removeItem(
       await env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(id).run();
       return { tombstones: [], mediaKeys: m ? [m.media_key, ...(m.thumb_key ? [m.thumb_key] : [])] : [] };
     }
-    case "message":
-      await env.DB.prepare("DELETE FROM messages WHERE id=?").bind(id).run();
+    case "message": {
+      // a message still queued for APRS-IS is cancelled with it, so the removal also keeps it off the air
+      const m = await env.DB.prepare("SELECT outbox_id FROM messages WHERE id=?")
+        .bind(id)
+        .first<{ outbox_id: number | null }>();
+      await env.DB.batch([
+        ...(m?.outbox_id != null
+          ? [env.DB.prepare("DELETE FROM aprs_outbox WHERE id=? AND status='queued'").bind(m.outbox_id)]
+          : []),
+        env.DB.prepare("DELETE FROM messages WHERE id=?").bind(id),
+      ]);
       return { tombstones: [], mediaKeys: [] };
+    }
     case "bbs": {
       const b = await env.DB.prepare("SELECT type, bid, origin FROM bbs_messages WHERE id=?")
         .bind(id)
@@ -387,9 +400,24 @@ async function removeItem(
       const own = !!b && b.type === "B" && b.origin === "local";
       return { tombstones: own ? [{ kind: "bulletin", targetId: `${instance}:bulletin:${id}` }] : [], mediaKeys: [] };
     }
-    case "mailbox":
-      await env.DB.prepare("DELETE FROM mailbox_messages WHERE id=?").bind(id).run();
+    case "mailbox": {
+      // a delivery the service call still has queued for APRS-IS goes with it: `:<station>:de <call>: …{<no>`
+      const m = await env.DB.prepare("SELECT delivered_to, msg_no FROM mailbox_messages WHERE id=?")
+        .bind(id)
+        .first<{ delivered_to: string | null; msg_no: string | null }>();
+      await env.DB.batch([
+        ...(m?.delivered_to && m.msg_no
+          ? [
+              env.DB.prepare(
+                `DELETE FROM aprs_outbox WHERE status='queued' AND kind='message' AND upper(src_call)=?
+                   AND substr(payload, 1, 11)=? AND payload LIKE ?`,
+              ).bind(serviceCall(env), `:${m.delivered_to.toUpperCase().padEnd(9, " ")}:`, `%{${m.msg_no}`),
+            ]
+          : []),
+        env.DB.prepare("DELETE FROM mailbox_messages WHERE id=?").bind(id),
+      ]);
       return { tombstones: [], mediaKeys: [] };
+    }
     case "meshcom":
       await env.DB.prepare("DELETE FROM meshcom_group_messages WHERE id=?").bind(id).run();
       return { tombstones: [], mediaKeys: [] };
@@ -504,10 +532,15 @@ export async function removedCacheResponse(req: Request, env: Env, cacheId: numb
 
 // ---------------------------------------------------------------- suspension
 
-/** Is a call held by a suspended account? The ingest plane asks before it logs, posts or sends for a call. */
+/**
+ * Is a call suspended: held by a suspended account, or a base call whose suspension outlived the erasure of its
+ * account? The ingest plane asks before it logs, posts or sends for a call.
+ */
 export async function callSuspended(env: Env, call: string): Promise<boolean> {
+  if (isWithdrawnCall(call)) return false;
   const acct = await accountOfCall(env, call);
-  return !!acct && !!(await suspensionOf(env, acct));
+  if (acct && (await suspensionOf(env, acct))) return true;
+  return !!(await callsignSuspension(env, baseCall(call.trim().toUpperCase())));
 }
 
 /** The text a refused write over the radio or the ingest plane carries. */
@@ -570,7 +603,11 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
   const category = REPORT_CATEGORIES.find((c) => c === b.category);
   if (!category) return json({ error: `category must be one of ${REPORT_CATEGORIES.join(", ")}` }, { status: 400 });
   const now = nowS();
+  const calls = await heldCalls(env, acct);
   await env.DB.batch([
+    // mail the account left in the Mailbox is dropped, not held for a lift: it would reach its station late
+    // and out of context, and the sender can leave it again once the suspension ends
+    env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=? AND status IN ('held','sent')").bind(acct),
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_suspensions (account_id, reason, category, until, by_call, at) VALUES (?,?,?,?,?,?)",
     ).bind(acct, r.reason, category, until, actor, now),
@@ -586,6 +623,8 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
       reason: `${category}: ${r.reason}${until ? ` (until ${new Date(until * 1000).toISOString().slice(0, 10)})` : ""}`,
     }),
   ]);
+  // whatever the account queued for APRS-IS stays off the air
+  await dropQueuedFor(env, calls);
   const untilText = until ? ` until ${new Date(until * 1000).toISOString().slice(0, 10)}` : "";
   await notifyAccount(
     env,

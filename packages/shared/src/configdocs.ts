@@ -47,6 +47,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_HUB_URL: "Spoke: URL of the hub this instance pushes its signed records to",
   FED_RELAY_SECRET: "Shared secret that enables the rendezvous relay between hub and spokes",
   RETENTION: 'JSON of retention overrides for diagnostic tables, e.g. {"packetsHours":6}',
+  MODERATION_RETENTION_DAYS: "Days resolved reports and moderation log rows are kept",
   MESHCOM_META_MIN_S: "Seconds between rewrites of an unchanged MeshCom node or link row",
   MESHCOM_NODE_TTL_DAYS: "Days without a hearing before a MeshCom node is pruned",
   MESHCOM_LINK_TTL_HOURS: "Hours without a sighting before a MeshCom link is pruned",
@@ -465,6 +466,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`RETENTION`",
         'How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays` (the message log and MeshCom group messages), `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default',
         "`24` h / `7` / `30` / `7` / `30` / `7` d",
+      ],
+      [
+        "`MODERATION_RETENTION_DAYS`",
+        "Days the nightly job keeps a resolved report (counted from its resolution) and a moderation log row. Open reports stay until resolved, and the log rows of a suspension in force stay while it holds",
+        "`730`",
       ],
       [
         "`MESHCOM_META_MIN_S`",

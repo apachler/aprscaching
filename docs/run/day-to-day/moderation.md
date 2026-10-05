@@ -85,7 +85,9 @@ While a suspension holds:
 - sign-in by passkey, email link or operator link is refused with the reason and the end date;
 - the account writes nothing: no log, no hide, no message, and no radio command in its callsigns' name;
 - the ingest box cannot post a BBS message in its name, and its Mailbox messages are refused;
-- nothing is transmitted for it through this instance.
+- its weather stations' pushes are refused, so they store no reading and send no weather beacon;
+- nothing is transmitted for it through this instance: what it had queued for APRS-IS is deleted, and the
+  Mailbox messages it left that were still waiting are deleted, not held for a lift.
 
 The account's public content stays. Remove items one by one where needed.
 
@@ -104,7 +106,9 @@ and no other data. While it holds:
 
 - nobody registers the callsign, by passkey or email link;
 - no account adds it, switches to it or claims it;
-- each attempt is refused with *this callsign is suspended on this instance*, the end date and the category.
+- each attempt is refused with *this callsign is suspended on this instance*, the end date and the category;
+- the ingest box posts nothing in the callsign's name, a weather push for it is refused, and nothing is sent
+  for it.
 
 The record goes when the suspension ends: at its end date (the nightly job deletes it), or when you lift it.
 The callsign shows under **Accounts → Suspended** as *account erased*, with **Lift suspension**.

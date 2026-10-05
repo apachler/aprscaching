@@ -36,6 +36,7 @@ FED_SUBMIT_INSTANCES	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Hub: c
 FED_HUB_URL	string	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	Spoke: URL of the hub this instance pushes its signed records to
 FED_RELAY_SECRET	string	gateway			1	0	selfhost,baremetal,pocket,desktop	Shared secret that enables the rendezvous relay between hub and spokes
 RETENTION	json	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	JSON of retention overrides for diagnostic tables, e.g. {"packetsHours":6}
+MODERATION_RETENTION_DAYS	int	gateway	730		0	0	selfhost,baremetal,pocket,desktop	Days resolved reports and moderation log rows are kept
 MESHCOM_META_MIN_S	int	gateway	300		0	0	selfhost,baremetal,pocket,desktop	Seconds between rewrites of an unchanged MeshCom node or link row
 MESHCOM_NODE_TTL_DAYS	int	gateway	7		0	0	selfhost,baremetal,pocket,desktop	Days without a hearing before a MeshCom node is pruned
 MESHCOM_LINK_TTL_HOURS	int	gateway	48		0	0	selfhost,baremetal,pocket,desktop	Hours without a sighting before a MeshCom link is pruned

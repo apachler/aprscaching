@@ -25,11 +25,12 @@ or erase someone else's account.
 `POST /api/account/<call>/export` returns a full, machine-readable copy of the account's data, whichever held
 call names it. It covers every base call the account holds and every SSID of them: the email address (and one
 waiting for confirmation), the profile and preferences, caches, finds, positions, the APRS messages the person
-sent or was sent, keys, stations, mail and the rest of the account-scoped rows. Secrets such as passkey public
-keys and push keys stay out of it.
+sent or was sent with their delivery state, keys, stations, mail and the rest of the account-scoped rows.
+Secrets such as passkey public keys and push keys stay out of it.
 
 It also carries what moderation holds about the person: the sysop's actions on their account and content
-(`moderationActions`), a suspension in force (`suspension`), and the reports the person filed (`reportsFiled`).
+(`moderationActions`), a suspension in force with its category (`suspension`), and the reports the person
+filed (`reportsFiled`).
 Reports other people filed about the person stay out, because they would name the reporter.
 
 ## Erase
@@ -47,8 +48,9 @@ Reports other people filed about the person stay out, because they would name th
 - **Deleted:** every personal row: passkeys, email links, held calls and their verifications, positions and the
   map's station entry under the call and every SSID of it, device keys, watches, alerts, favourites, saved views, push subscriptions, boxes, ratings, API keys,
   adoption requests, personal BBS mail in both directions, the bulletins and NTS traffic the person posted (replies
-  others posted stay), Mailbox mail, near-cache radio messages, MeshCom group messages, and the radio messages
-  queued for or addressed to the person.
+  others posted stay), Mailbox mail and the copies the service call sent of it (`de <call>: …`, in the message
+  log and the outbox), near-cache radio messages, MeshCom group messages, and the radio messages queued for or
+  addressed to the person.
 - **Kept, without the reporter:** the reports the person filed stay with the sysop, with the reporter's account
   and call removed.
 - **Kept while it holds:** a suspension in force leaves one record per base callsign the account held: the
@@ -81,7 +83,10 @@ signed account-move record points attribution at the new instance across the net
 | Watch alerts the member has seen | 30 days | `RETENTION` (`alertsDays`) |
 | NET/ROM MHeard rows | 7 days | `RETENTION` (`mheardDays`) |
 | Delete tombstones | permanently | — |
-| Moderation reports and the audit log | until the sysop deletes them | — |
+| Open moderation reports | until the sysop resolves them | — |
+| Resolved reports and the audit log | 730 days, pruned nightly; the log rows of a suspension in force stay while it holds | `MODERATION_RETENTION_DAYS` |
+| Callsign claims and the holder-change trail | 1 year after the claim ends or the change | fixed |
+| Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
 
 `RETENTION` is JSON naming only what you change, for example `{"packetsHours":6,"sensorDays":90}`
@@ -106,6 +111,9 @@ They never federate.
   call (none for a signed-out visitor). Only the sysop reads it; the reported person never learns who filed it.
 - **The audit log** holds who acted, when, the action, the target and the reason. Its rows stay after the
   person concerned erases their account.
+- **Retention:** the nightly job deletes a resolved report and an audit log row after `MODERATION_RETENTION_DAYS`
+  (730 by default). An open report stays until you resolve it, and the log rows of a suspension in force stay
+  while it holds, since they record why.
 - **A suspension** holds the account, the reason, the category and the end. When the account is erased while
   it is suspended, only the callsign, the category and the end date stay, so the person cannot come back under
   the same callsign before the suspension ends. That record is deleted at the end date, or when the sysop lifts

@@ -20,6 +20,7 @@ import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
 import { baseCall, encodeAprsWeather, type WxEncodeFields } from "@aprscaching/aprs";
 import { isCallsignVerified } from "./callsign.js";
+import { callSuspended, SUSPENDED_TEXT } from "./moderation.js";
 
 const WX_BEACON_MIN_SEC = 300; // throttle WX beacons to ≤ once / 5 min (cost + APRS etiquette)
 
@@ -45,6 +46,14 @@ export interface WxReading {
   rain_24h_mm?: number;
   luminosity_wm2?: number;
 }
+
+/**
+ * A home locator as a station position: the centre of its 6-character square (about 5 × 2.5 km), however
+ * precise the stored locator is. A weather station without coordinates is placed here on the public map, and
+ * the home locator itself stays as private as the profile keeps it.
+ */
+export const homeLocatorPosition = (grid: string): { lat: number; lon: number } | null =>
+  gridToLatLon(grid.trim().slice(0, 6));
 
 /** Parse an Ecowitt / WU parameter bag (imperial) into our metric reading. */
 export function parseWx(get: (k: string) => string | undefined): WxReading {
@@ -125,13 +134,15 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
     .bind(key)
     .first<{ callsign: string; stationId: number }>();
   if (!row) return new Response("unknown key", { status: 401 });
+  // the key needs no session, so a suspended call's station is refused here: no reading, no beacon
+  if (await callSuspended(env, row.callsign)) return new Response(SUSPENDED_TEXT, { status: 403 });
 
   const wx = parseWx(get);
   if (wx.temp_c == null && wx.humidity == null && wx.pressure_hpa == null && wx.wind_kn == null && wx.rain_mm == null)
     return new Response("no recognised weather fields", { status: 400 });
 
   // The reading lands under the key's station and sits at the station's own coordinates (a remote summit
-  // PWS at its real location); a station without coordinates sits at its operator's home locator.
+  // PWS at its real location); a station without coordinates sits at its operator's home locator, rounded.
   const s = await env.DB.prepare(
     `SELECT s.callsign AS callsign, s.lat AS lat, s.lon AS lon,
             (SELECT a.home_grid FROM accounts a WHERE a.account_id = s.account_id AND a.home_grid IS NOT NULL LIMIT 1) AS homeGrid
@@ -142,7 +153,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
   if (!s) return new Response("unknown key", { status: 401 });
   const station = s.callsign.toUpperCase();
   const place =
-    s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : s.homeGrid ? gridToLatLon(s.homeGrid) : null;
+    s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : s.homeGrid ? homeLocatorPosition(s.homeGrid) : null;
 
   const ts = readingTime(get("dateutc"), nowS());
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
@@ -216,6 +227,7 @@ async function maybeBeaconWx(
   if (!o.place) return; // a WX report must carry a position
   if (nowS() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return; // throttle
   if (!(await isCallsignVerified(env, o.baseCall))) return; // control-verified gate
+  if (await callSuspended(env, o.station)) return; // a suspended call sends nothing
 
   const info = encodeAprsWeather(o.place.lat, o.place.lon, toWxFields(o.wx));
   const ts = nowS();

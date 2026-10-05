@@ -37,6 +37,12 @@ describe("legal pages", () => {
     expect(html).toContain("tombstones"); // erasure propagation is stated, not implied
   });
 
+  it("privacy states how long moderation records are kept, from MODERATION_RETENTION_DAYS", async () => {
+    expect(await handlePrivacyPage(configured).text()).toContain("deleted after\n  730 days");
+    const set = await handlePrivacyPage({ ...configured, MODERATION_RETENTION_DAYS: "365" } as Env).text();
+    expect(set).toContain("deleted after\n  365 days");
+  });
+
   it("privacy escapes operator-supplied values (no HTML injection)", async () => {
     const evil = { ...base, OPERATOR_NAME: "<script>x</script>", OPERATOR_EMAIL: "a@b.c" } as Env;
     const html = await handlePrivacyPage(evil).text();

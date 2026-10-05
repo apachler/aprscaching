@@ -145,17 +145,18 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
       "owner_call",
     ),
     logs: await q(
-      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, signer_key, signed_at FROM cache_logs WHERE $CALLS ORDER BY ts",
+      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, needs_maintenance, signer_key, signed_at FROM cache_logs WHERE $CALLS ORDER BY ts",
       "logger_call",
     ),
     positions: await q(
       "SELECT callsign, ts, lat, lon, heard_via, source FROM positions WHERE $CALLS ORDER BY ts",
       "callsign",
     ),
-    // the APRS message log rows the person sent or was sent, on any of their calls
+    // the APRS message log rows the person sent or was sent, on any of their calls, with the delivery state of
+    // what they sent: when it went out on APRS-IS and when the addressee acknowledged it
     messages: await rows(
       env,
-      `SELECT ts, from_call, to_call, body, ack, direction, transport FROM messages WHERE ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY ts`,
+      `SELECT ts, from_call, to_call, body, ack, direction, transport, sent_at, acked_at FROM messages WHERE ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY ts`,
       ...by("from_call").binds,
       ...by("to_call").binds,
     ),
@@ -345,7 +346,7 @@ async function accountExport(
       "SELECT at, action, target_kind, target_label, reason FROM moderation_log WHERE target_account=? ORDER BY id",
       acct,
     ),
-    suspension: await env.DB.prepare("SELECT reason, until, at FROM account_suspensions WHERE account_id=?")
+    suspension: await env.DB.prepare("SELECT reason, category, until, at FROM account_suspensions WHERE account_id=?")
       .bind(acct)
       .first(),
     reportsFiled: await rows(
@@ -573,6 +574,19 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
     // nine-character field that opens an APRS message payload)
     del("DELETE FROM aprs_outbox WHERE $CALLS", "src_call"),
     del("DELETE FROM aprs_outbox WHERE kind='message' AND $CALLS", "rtrim(substr(payload, 2, 9))"),
+    // A Mailbox message goes on the air from the service call as `de <call>: <text>`, so the service call's
+    // copy in the message log and in the outbox carries the person's words: it goes with them. (The text of an
+    // APRS message payload starts at its twelfth character, after `:ADDRESSEE:`.)
+    ...calls.flatMap((c) => [
+      env.DB.prepare("DELETE FROM messages WHERE from_call=? AND (body LIKE ? OR body LIKE ?)").bind(
+        service,
+        `de ${c}:%`,
+        `de ${c}-%`,
+      ),
+      env.DB.prepare(
+        "DELETE FROM aprs_outbox WHERE upper(src_call)=? AND kind='message' AND (substr(payload, 12) LIKE ? OR substr(payload, 12) LIKE ?)",
+      ).bind(service, `de ${c}:%`, `de ${c}-%`),
+    ]),
   ];
   for (const e of emails) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(e));
   if (accountId)
