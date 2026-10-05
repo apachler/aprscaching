@@ -200,6 +200,16 @@ The gateway's own checklist, the one under **Instance admin → Setup**. The doc
   Or open **Instance admin → Setup** in the app.
 - **See:** [Your first hour](first-hour.md#the-checklist).
 
+### `setup.update`
+
+- **Tests:** the gateway's daily update check found a release newer than the one it runs. Off with
+  `UPDATE_CHECK=0`; the check is then skipped.
+- **Message:** `APRScaching <version> is available: <release page>` (warn). It never fails, and it clears once the
+  gateway runs that release.
+- **Fix:** read the release notes, then run `deploy/aprscaching update`. The desktop app updates by
+  replacing its binary with the new release's.
+- **See:** [Updates](day-to-day/updates.md#how-you-hear-about-a-new-release).
+
 ### `setup.<item>`
 
 One check per checklist item. An item that is met passes. An item that is not met warns, and fails when it

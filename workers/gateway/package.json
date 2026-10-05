@@ -41,7 +41,8 @@
     "./migrate": "./src/migrate.ts",
     "./forward": "./src/forward.ts",
     "./bbs": "./src/bbs.ts",
-    "./outbox": "./src/outbox.ts"
+    "./outbox": "./src/outbox.ts",
+    "./updatecheck": "./src/updatecheck.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

@@ -125,6 +125,7 @@ const INTERNAL = new Set([
   "ROOMS",
   "FED_FETCH_GUARD",
   "HTTPS_LISTENER_PORT",
+  "DESKTOP_APP",
   "NODE_ENV",
   "HOME",
   "PATH",
@@ -267,7 +268,7 @@ for (const f of TEXT) {
   const see = (id) =>
     /^config\.value\./.test(id)
       ? "configvaluekey"
-      : /^setup\.(checklist|budget)$/.test(id)
+      : /^setup\.(checklist|budget|update)$/.test(id)
         ? id.replace(/\./g, "")
         : /^setup\./.test(id)
           ? "setupitem"

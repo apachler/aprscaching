@@ -14,6 +14,12 @@
     border-left-color: var(--bad);
     background: color-mix(in oklch, var(--bad) 12%, transparent);
   }
+  /* a newer release, at the top of Instance admin: the note's lines and its command stacked */
+  .release-notice {
+    display: grid;
+    gap: var(--space-xs);
+    margin-block: var(--space-sm);
+  }
   /* the location wait: "Waiting for GPS… 23 s" and its actions on one wrapping line */
   .locate-status {
     display: flex;

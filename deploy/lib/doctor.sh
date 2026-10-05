@@ -36,7 +36,7 @@ doc_see() {
   local a
   case "$1" in
     config.value.*) a=configvaluekey ;;
-    setup.checklist) a="${1//./}" ;;
+    setup.checklist | setup.update) a="${1//./}" ;;
     setup.*) a=setupitem ;;
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
@@ -268,6 +268,42 @@ doc_setup_checklist() {
       fi ;;
     esac
   done < <(doc_setup_items "$body")
+  doc_setup_update "$body"
+}
+
+# A newer release, as the gateway's daily update check found it: a warning, never a failure, so update's
+# before/after comparison never rolls back over it; it clears once the gateway runs the new release.
+doc_setup_update() {
+  local current latest url
+  IFS=$'\t' read -r current latest url < <(doc_update_fields "$1") || true
+  [ -n "$latest" ] || return 0
+  if [ "$current" = available ]; then
+    if [ "$SHAPE" = desktop ]; then
+      warnc setup.update "APRScaching $latest is available: $url" "download it from the release page and replace the app's binary"
+    else
+      warnc setup.update "APRScaching $latest is available: $url" "read its release notes, then run deploy/aprscaching update"
+    fi
+  else
+    pass setup.update "the gateway runs the newest release ($latest)"
+  fi
+}
+
+# The checklist's update fields as one tab-separated line: "available" or "current", the newest release and its
+# page. Nothing when the check is off or has not answered yet.
+doc_update_fields() {
+  if have node; then
+    B="$1" node -e '
+      const u = JSON.parse(process.env.B).update;
+      if (u && u.latest) console.log([u.available ? "available" : "current", u.latest, u.url ?? ""].join("\t"));
+    ' 2>/dev/null
+  elif have python3; then
+    B="$1" python3 -c '
+import json, os
+u = json.loads(os.environ["B"]).get("update")
+if u and u.get("latest"):
+    print("\t".join(["available" if u.get("available") else "current", u["latest"], u.get("url") or ""]))
+' 2>/dev/null
+  fi
 }
 
 # The checklist's items as tab-separated lines (key, level, status, detail), parsed with node or python3.

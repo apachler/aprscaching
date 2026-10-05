@@ -356,6 +356,11 @@ export const ENV_FILES = [
       "# SOURCE_REPO to YOUR published fork (and SOURCE_COMMIT if not deploying from git).",
       { key: "SOURCE_REPO", value: "https://github.com/<you>/aprscaching", off: true },
       { key: "SOURCE_COMMIT", value: "", off: true },
+      "",
+      "# ---- new releases ----",
+      "# Once a day the gateway asks GitHub for the newest release; Instance admin and doctor say when one is",
+      "# out. 0 stops the request (an off-grid instance, or one that should not contact GitHub).",
+      { key: "UPDATE_CHECK", value: "0", off: true },
     ],
   },
 ];

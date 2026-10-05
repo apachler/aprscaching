@@ -86,6 +86,7 @@ SECURITY_CONTACT	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Contact UR
 SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Commit or tag the instance runs; resolved at build or start when unset
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds
+UPDATE_CHECK	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops the daily request to GitHub that looks for a newer release
 INGEST_URL	url	ingest	http://127.0.0.1:8787/ingest		0	0	selfhost,baremetal,ingest-box,pocket	Gateway ingest endpoint the box posts packet batches to
 BATCH_MS	int	ingest	1500		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between batch flushes to the gateway
 INGEST_SPOOL_MAX	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Most undelivered packets kept while the gateway is unreachable (oldest dropped)

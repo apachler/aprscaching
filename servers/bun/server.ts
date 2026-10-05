@@ -53,6 +53,8 @@ export interface BunServerOptions {
   sourceCommit?: string;
   /** Serves every request no gateway route claims — the desktop app's embedded SPA. */
   spa?: (pathname: string) => Response;
+  /** This gateway is the desktop app: the update notice says to replace the binary. */
+  desktop?: boolean;
 }
 
 export interface BunServer {
@@ -91,6 +93,7 @@ export function createServer(opts: BunServerOptions): BunServer {
     ...stringEnvFrom(opts.environment), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway
     ...opts.secrets,
     SOURCE_COMMIT: opts.environment.SOURCE_COMMIT ?? opts.sourceCommit,
+    ...(opts.desktop ? { DESKTOP_APP: true as const } : {}),
   };
   guardFederationFetches(env);
 

@@ -27,6 +27,8 @@ export type Env = {
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   /** Installed by the Node server while its https listener runs: that listener's port (visitor.ts). */
   HTTPS_LISTENER_PORT?: string;
+  /** Installed by the desktop launcher: this gateway is the desktop app, which updates by replacing its binary. */
+  DESKTOP_APP?: true;
 } & { [K in GatewayStringKey]?: string };
 
 /** An on/off setting is on for 1, true or yes; unset, 0, false and no leave it off. */

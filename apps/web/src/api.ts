@@ -1373,7 +1373,23 @@ export interface SetupItem {
   source: "env" | "db";
   detail: string;
 }
-export function getAdminSetup(): Promise<{ items: SetupItem[] }> {
+/** The newest release against the running one, from the gateway's daily update check. */
+export interface UpdateStatus {
+  current: string;
+  /** null until a check has answered */
+  latest: string | null;
+  url: string | null;
+  checkedAt: number | null;
+  available: boolean;
+  /** the desktop app updates by replacing its binary */
+  desktop: boolean;
+}
+export interface AdminSetup {
+  items: SetupItem[];
+  /** null when the operator turned the check off (UPDATE_CHECK=0) */
+  update?: UpdateStatus | null;
+}
+export function getAdminSetup(): Promise<AdminSetup> {
   return call(`/api/admin/setup`);
 }
 /** One line of the 44Net self-check; `fix` is set on every warn and fail. */

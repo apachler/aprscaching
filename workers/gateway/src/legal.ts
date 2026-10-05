@@ -20,6 +20,7 @@
 import type { Env } from "./env.js";
 import { escapeHtml } from "./util/html.js";
 import { mailTransport } from "./mail.js";
+import { updateCheckOn } from "./updatecheck.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -89,6 +90,9 @@ function recipients(env: Env): string {
   its own caches (except local-only ones) and of their finds with peer instances, under each record's
   federation scope. Owner contact fields are redacted, and deletions propagate as signed tombstones.
   Imported places are never shared.</li>`);
+  if (updateCheckOn(env))
+    items.push(`<li><strong>GitHub</strong> (api.github.com) — once a day this instance asks GitHub whether a newer
+  APRScaching release exists. The request names this instance and carries nothing about you.</li>`);
   return `<div class=box><ul>\n${items.join("\n")}\n</ul></div>`;
 }
 

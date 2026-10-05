@@ -55,6 +55,7 @@ import {
   decideAdoptionRequest,
   type AdminAdoptions,
   type SetupItem,
+  type UpdateStatus,
   type FedPeer,
   type ForwardPartner,
   type ForwardRuleRow,
@@ -79,6 +80,7 @@ import {
   Icon,
   InfoTip,
   ManualLink,
+  CommandBlock,
 } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { usePlatform } from "../platform/PlatformContext.js";
@@ -116,6 +118,7 @@ export function AdminPanel(props: { onClose: () => void }) {
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}
         <span className="mono">{callsign}</span> is configured as an operator.
       </p>
+      {setup.data?.update?.available && <ReleaseNotice update={setup.data.update} />}
       <label className="srch">
         <span className="srch-ic" aria-hidden="true">
           ⌕
@@ -1573,6 +1576,38 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
 }
 
 // ---------------------------------------------------------------- first-install checklist (Setup)
+/**
+ * A newer release than the one this instance runs, from the gateway's daily update check: the release notes and
+ * how this shape updates. The desktop app replaces its binary; every other shape runs the update helper.
+ */
+function ReleaseNotice(props: { update: UpdateStatus }) {
+  const u = props.update;
+  return (
+    <div className="inline-note release-notice" role="note">
+      <p className="m-0">
+        <strong>APRScaching {u.latest} is available.</strong> This instance runs{" "}
+        <span className="mono">v{u.current}</span>.{" "}
+        {u.url && (
+          <a className="ext-link" href={u.url} target="_blank" rel="noopener">
+            Release notes
+            <Icon name="external" size={12} cp437="" className="ext-ic" />
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        )}
+      </p>
+      {u.desktop ? (
+        <p className="m-0">
+          Download the new app from the release page and replace the old one. Your data stays, and the app applies new
+          migrations when it starts.
+        </p>
+      ) : (
+        <CommandBlock label="On the instance's host, in the checkout" command="deploy/aprscaching update" />
+      )}
+      <ManualLink page="run/day-to-day/updates">How to update each kind of install</ManualLink>
+    </div>
+  );
+}
+
 const SETUP_GROUP_ORDER: SetupItem["group"][] = ["security", "identity", "delivery", "trust", "legal", "data"];
 const byGroup = (a: SetupItem, b: SetupItem) => SETUP_GROUP_ORDER.indexOf(a.group) - SETUP_GROUP_ORDER.indexOf(b.group);
 
