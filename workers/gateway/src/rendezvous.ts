@@ -25,7 +25,9 @@ export async function recordRendezvous(env: Env, heard: { src: string; lat: numb
   const now = nowS();
   for (const h of heard) {
     const me = await env.DB.prepare(
-      "SELECT id, station_call, lat, lon FROM caches WHERE type='aprs_living' AND rendezvous=1 AND UPPER(station_call)=UPPER(?)",
+      `SELECT id, station_call, lat, lon FROM caches
+        WHERE type='aprs_living' AND rendezvous=1 AND status='active' AND removed_at IS NULL
+          AND UPPER(station_call)=UPPER(?)`,
     )
       .bind(h.src)
       .first<LivingRow>();
@@ -36,7 +38,8 @@ export async function recordRendezvous(env: Env, heard: { src: string; lat: numb
       await env.DB.prepare(
         `SELECT c.id, c.station_call, s.lat, s.lon, s.last_seen AS lastSeen
          FROM caches c JOIN stations s ON UPPER(s.callsign)=UPPER(c.station_call)
-        WHERE c.type='aprs_living' AND c.rendezvous=1 AND UPPER(c.station_call)<>UPPER(?)
+        WHERE c.type='aprs_living' AND c.rendezvous=1 AND c.status='active' AND c.removed_at IS NULL
+          AND UPPER(c.station_call)<>UPPER(?)
           AND s.last_seen >= ? AND s.lat IS NOT NULL AND s.lon IS NOT NULL`,
       )
         .bind(h.src, now - HEARD_WINDOW)

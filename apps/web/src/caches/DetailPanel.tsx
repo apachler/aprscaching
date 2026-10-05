@@ -373,11 +373,11 @@ export function DetailPanel(props: {
         )}
         {c.needsMaintenance && (
           <Hint
-            text={`${
+            text={
               c.maintenanceReason === "flagged"
-                ? "A finder flagged it for its owner"
-                : "The last three find attempts were all DNFs, so the owner should check the cache"
-            }. A maintenance log by the owner clears it.`}
+                ? "A finder flagged it for its owner. The owner's next maintenance log clears it."
+                : "The last three find attempts were all DNFs, so the owner should check the cache. The next find clears it."
+            }
           >
             <span className="warn"> · ⚠ needs maintenance</span>
           </Hint>

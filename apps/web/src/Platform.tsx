@@ -64,7 +64,7 @@ import { OutboxPanel } from "./log/OutboxPanel.js";
 import { AlertsPanel } from "./shack/AlertsPanel.js";
 import { OfflinePanel } from "./offline/OfflinePanel.js";
 import type { OfflineSource } from "./offline/packs.js";
-import { offlineReady, listWatch, type OfflineFrom } from "./api.js";
+import { cacheLoadText, offlineReady, listWatch, type OfflineFrom } from "./api.js";
 
 // offline packs' map tiles answer acs-pack:// requests (offline/packTiles.ts)
 registerPackTiles(offlineReady);
@@ -744,10 +744,10 @@ export default function Platform({ session, startTour }: { session: SessionState
         setDetail(r.cache);
         setDetailFrom(r.offlineFrom ?? null);
       })
-      .catch(() => {
+      .catch((e: unknown) => {
         // the core cacher action must never fail silently: say so and close the empty selection
         if (!live) return;
-        toast("Couldn't load that cache — check your connection and tap it again.");
+        toast(cacheLoadText(e, "Couldn't load that cache — check your connection and tap it again."));
         setSelectedId(null);
       });
     return () => {
@@ -762,8 +762,8 @@ export default function Platform({ session, startTour }: { session: SessionState
       const r = await getCache(selectedId, callsignRef.current);
       setDetail(r.cache);
       setDetailFrom(r.offlineFrom ?? null);
-    } catch {
-      toast("Couldn't refresh the cache — check your connection.");
+    } catch (e) {
+      toast(cacheLoadText(e, "Couldn't refresh the cache — check your connection."));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- toast identity is stable (context push)
   }, [selectedId]);

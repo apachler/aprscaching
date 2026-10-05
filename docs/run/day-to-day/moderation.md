@@ -35,7 +35,8 @@ configured.
    reporter's callsign.
 2. Open the item from its link to see it in place.
 3. Choose one:
-    - **Remove…** takes the item down and settles every open report on it.
+    - **Remove…** takes the item down and settles every open report on it. A profile report whose call has
+      since moved to another account is refused: resolve it instead.
     - **Resolve** closes the report without action, with an optional note.
 
 A resolved report can be reopened from the **Resolved** tab. The reported person never sees a report or learns
@@ -48,7 +49,7 @@ concerned.
 
 | Item | What removal does |
 |---|---|
-| Cache | Archived and hidden from everyone but its owner and you; its page, logbook, gallery and stages answer *removed by the instance operator*. The owner cannot edit it. Finds and the adoption trail keep the row. |
+| Cache | Archived and hidden from everyone but its owner and you; its page, logbook, gallery and stages answer *removed by the instance operator*, and its photos and sounds open for the two of you only. It leaves the map, search, offline packs, nearby prompts, living-cache rendezvous, the leaderboards and the feeds, and its finds stop counting for points and ranks. It takes no log or stage unlock: a player, in the app or over the radio, gets the answer for a code that names no cache. Its adoption offer is withdrawn and open requests on it lapse. The owner cannot edit it, its stages or its media. Finds and the adoption trail keep the row. |
 | Log | Deleted (a find, a did-not-find or a note) |
 | Photo or sound | Deleted, with its stored file and thumbnail |
 | APRS message, BBS message or bulletin, Mailbox message, MeshCom group message | Deleted from this instance |

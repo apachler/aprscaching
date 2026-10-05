@@ -53,7 +53,7 @@ export async function handleLeaderboard(req: Request, env: Env): Promise<Respons
       `SELECT person AS loggerCall, SUM(pts) AS points, COUNT(*) AS finds FROM (
        SELECT ${baseSql("l.logger_call")} AS person, l.cache_id, MAX(${POINTS}) AS pts
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.log_type='found' AND l.verified=1 AND l.ts >= ? ${VERIFIED_LOGGER}${bb.sql}
+       WHERE l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL AND l.ts >= ? ${VERIFIED_LOGGER}${bb.sql}
        GROUP BY person, l.cache_id
      ) GROUP BY person ORDER BY ${metric === "finds" ? "finds" : "points"} DESC, finds DESC LIMIT ?`,
     )
@@ -77,7 +77,7 @@ export async function standing(env: Env, person: string): Promise<{ finds: numbe
   const stat = await env.DB.prepare(
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
+       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
   )
     .bind(person, person)
     .first<{ finds: number; points: number }>();
@@ -90,7 +90,7 @@ export async function standing(env: Env, person: string): Promise<{ finds: numbe
        SELECT person, SUM(pts) AS points FROM (
          SELECT ${baseSql("l.logger_call")} AS person, l.cache_id, MAX(${POINTS}) AS pts
          FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-         WHERE l.log_type='found' AND l.verified=1 ${VERIFIED_LOGGER}
+         WHERE l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL ${VERIFIED_LOGGER}
          GROUP BY person, l.cache_id) GROUP BY person)
      SELECT COUNT(*)+1 AS rank FROM agg WHERE points > ?`,
   )
@@ -107,14 +107,15 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points, MIN(firstTs) AS firstFind, MAX(lastTs) AS lastFind FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts, MIN(l.ts) AS firstTs, MAX(l.ts) AS lastTs
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
+       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
   )
     .bind(person, person)
     .first<{ finds: number; points: number; firstFind: number | null; lastFind: number | null }>();
 
   const byTier = (
     await env.DB.prepare(
-      `SELECT tier, COUNT(*) AS n FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1 GROUP BY tier`,
+      `SELECT l.tier, COUNT(*) AS n FROM cache_logs l JOIN caches c ON c.id=l.cache_id
+      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.tier`,
     )
       .bind(person, person)
       .all<{ tier: string | null; n: number }>()
@@ -122,7 +123,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   const byType = (
     await env.DB.prepare(
       `SELECT c.type, COUNT(DISTINCT l.cache_id) AS n FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY c.type`,
+      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY c.type`,
     )
       .bind(person, person)
       .all<{ type: string; n: number }>()
@@ -211,7 +212,7 @@ export async function handleCorroborators(req: Request, env: Env): Promise<Respo
     await env.DB.prepare(
       `SELECT l.corroborator_igate AS igate, COUNT(*) AS corroborations
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-      WHERE l.tier='A' AND l.verified=1 AND l.corroborator_igate IS NOT NULL AND l.ts >= ?${bb.sql}
+      WHERE l.tier='A' AND l.verified=1 AND l.corroborator_igate IS NOT NULL AND c.removed_at IS NULL AND l.ts >= ?${bb.sql}
       GROUP BY l.corroborator_igate ORDER BY corroborations DESC, igate ASC LIMIT ?`,
     )
       .bind(since, ...bb.binds, limit)

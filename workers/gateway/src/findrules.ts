@@ -96,14 +96,22 @@ async function isOwner(env: Env, ownerCall: string, loggerCall: string, accountI
 }
 
 /**
- * Why this log is refused, or null when it may be written: a find or a did-not-find on a cache that is not active,
+ * Why this log is refused, or null when it may be written: any log on a cache the sysop removed, a find or a
+ * did-not-find on a cache that is not active,
  * a find by the cache's owner (the owner's base call, or a call on the owner's account), a maintenance, enabled
  * or disabled log by anyone else, or a find on a staged
  * cache whose last stage the finder has not unlocked.
  */
 export async function logRefusal(
   env: Env,
-  cache: { id?: number; code: string; status: string; owner_call: string; source?: string | null },
+  cache: {
+    id?: number;
+    code: string;
+    status: string;
+    owner_call: string;
+    source?: string | null;
+    removed_at?: number | null;
+  },
   loggerCall: string,
   /** found, dnf, note, maintenance, enabled or disabled; over the radio, the command (found, dnf, note) */
   logType: string,
@@ -111,6 +119,8 @@ export async function logRefusal(
 ): Promise<string | null> {
   // a suspended account writes nothing here, from the app or over the radio
   if (await callSuspended(env, loggerCall)) return SUSPENDED_TEXT;
+  // a cache the sysop removed takes no log of any kind, and the refusal reads as for a code that names nothing
+  if (cache.removed_at != null) return `unknown cache ${cache.code}`;
   if (OWNER_LOGS.has(logType) && !(await isOwner(env, cache.owner_call, loggerCall, accountId)))
     return `only the owner of ${cache.code} posts ${logType} logs`;
   if ((logType === "found" || logType === "dnf") && cache.status !== "active")

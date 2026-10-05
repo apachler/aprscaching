@@ -19,6 +19,7 @@ import { usePlatform } from "../platform/PlatformContext.js";
 import { Conversations } from "./Conversations.js";
 import { MeshcomGroupsSection } from "./MeshcomGroupsSection.js";
 import { TransportBadge } from "./transport.js";
+import { isPersonMarker } from "./threads.js";
 import { ContentMenu } from "../moderation/ContentMenu.js";
 
 type Scope = "all" | "mine";
@@ -161,7 +162,7 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
                         m.body
                       )}
                     </div>
-                    {other && other !== "WITHDRAWN" && (
+                    {other && !isPersonMarker(other) && (
                       <Button
                         variant="quiet"
                         onClick={() => reply(other)}

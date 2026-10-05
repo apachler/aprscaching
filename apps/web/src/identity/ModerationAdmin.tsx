@@ -61,7 +61,7 @@ function CacheLink(props: { code: string | null | undefined }) {
 function useRemove() {
   const prompt = usePrompt();
   const toast = useToast();
-  return async (kind: ContentKind, id: string | number, label: string): Promise<boolean> => {
+  return async (kind: ContentKind, id: string | number, label: string, reportId?: number): Promise<boolean> => {
     const a = await prompt({
       title: `Remove this ${kindName(kind)}?`,
       message: (
@@ -82,7 +82,7 @@ function useRemove() {
     });
     if (!a) return false;
     try {
-      await removeContent(kind, id, a.text);
+      await removeContent(kind, id, a.text, reportId);
       toast(`${label} removed`);
       return true;
     } catch (e) {
@@ -130,7 +130,7 @@ export function ReportsAdmin(props: { onChanged?: () => void }) {
   };
   const takeDown = async (r: ModReport) => {
     setBusy(r.id);
-    if (await remove(r.kind, r.targetId, r.label ?? `${kindName(r.kind)} ${r.targetId}`)) {
+    if (await remove(r.kind, r.targetId, r.label ?? `${kindName(r.kind)} ${r.targetId}`, r.id)) {
       reports.reload();
       props.onChanged?.();
     }

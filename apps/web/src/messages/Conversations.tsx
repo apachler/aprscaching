@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Conversations — the operator's own APRS messages as a messenger: one conversation per station, a New message
- * action, Reply in every conversation, and the delivery state of each message. A new message goes out now (from
- * the operator's own radio when it is connected and transmit is on, otherwise through the instance to APRS-IS), or
- * waits in the Mailbox until the instance next hears the station. Every path puts the text on the air in the
+ * action, Reply in every conversation with a station that still holds its call, and the delivery state of each
+ * message. A new message goes out now (from the operator's own radio when it is connected and transmit is on,
+ * otherwise through the instance to APRS-IS), or waits in the Mailbox until the instance next hears the station. Every path puts the text on the air in the
  * operator's name, so sending is gated on callsign control-verification and says so before anything is typed.
  */
 import { useId, useMemo, useState } from "react";
@@ -39,6 +39,7 @@ import { TERMS } from "../terms.js";
 import { TransportBadge } from "./transport.js";
 import {
   correspondents,
+  isPersonMarker,
   MAILBOX_SENT_NOTE,
   nowRoute,
   sendBlocked,
@@ -50,6 +51,11 @@ import {
   type Thread,
   type ThreadItem,
 } from "./threads.js";
+
+/** How a conversation with an erased person, or a call's former holder, is named: there is no station to show. */
+const WITHDRAWN_LABEL = "Withdrawn correspondents";
+const WITHDRAWN_NOTE =
+  "These people erased their accounts or no longer hold the call they wrote from, so there is no one to reply to.";
 
 /** Each state in words, with the line its hint gives. */
 const STATE: Record<ItemState, { label: string; hint: string; kind?: string }> = {
@@ -130,6 +136,7 @@ export function Conversations(props: {
 
   if (props.peer) {
     const peer = props.peer.toUpperCase();
+    const withdrawn = isPersonMarker(peer);
     return (
       <section aria-labelledby="thread-h">
         <div className="row between">
@@ -137,8 +144,8 @@ export function Conversations(props: {
             ← All conversations
           </Button>
         </div>
-        <h3 className="set-subh mono" id="thread-h">
-          {peer}
+        <h3 className={`set-subh${withdrawn ? "" : " mono"}`} id="thread-h">
+          {withdrawn ? WITHDRAWN_LABEL : peer}
         </h3>
         {!open ? (
           <EmptyState>No messages with {peer} yet. Write the first one below.</EmptyState>
@@ -149,8 +156,14 @@ export function Conversations(props: {
             ))}
           </ol>
         )}
-        <h4 className="set-subh">Reply</h4>
-        {compose(peer)}
+        {withdrawn ? (
+          <p className="inline-note">{WITHDRAWN_NOTE}</p>
+        ) : (
+          <>
+            <h4 className="set-subh">Reply</h4>
+            {compose(peer)}
+          </>
+        )}
       </section>
     );
   }
@@ -207,7 +220,11 @@ function ThreadLink(props: { t: Thread; fmt: ReturnType<typeof useFmt>; onOpen: 
     <Button className="msg-row msg-thread-link" onClick={props.onOpen}>
       <span className="msg-h">
         <span className="msg-calls">
-          <span className="mono msg-from">{t.peer}</span>
+          {t.withdrawn ? (
+            <span className="msg-from">{WITHDRAWN_LABEL}</span>
+          ) : (
+            <span className="mono msg-from">{t.peer}</span>
+          )}
           <span className="muted">
             {t.items.length} message{t.items.length === 1 ? "" : "s"}
           </span>
@@ -229,7 +246,11 @@ function ThreadRow(props: { it: ThreadItem; fmt: ReturnType<typeof useFmt>; onWi
     <li className={`msg-row${it.dir === "out" ? " mine" : ""}`}>
       <div className="msg-h">
         <span className="msg-calls">
-          <span className="mono msg-from">{it.dir === "out" ? `You (${it.from})` : it.from}</span>
+          {it.dir === "in" && isPersonMarker(it.from) ? (
+            <span className="msg-from">{WITHDRAWN_LABEL}</span>
+          ) : (
+            <span className="mono msg-from">{it.dir === "out" ? `You (${it.from})` : it.from}</span>
+          )}
         </span>
         {it.viaMailbox ? (
           <Badge title={TERMS.mailbox}>Mailbox</Badge>
@@ -296,10 +317,16 @@ function Compose(props: {
           path: ["WIDE1-1"],
           payload: encodeAprsMessage(recipient, body, msgNo),
         });
-        await recordSentMessage({ from, to: recipient, text: body, msgNo }).catch(() => {
-          // the message went out; only its place in the conversation is missing
-        });
-        toast(`Transmitted to ${recipient}`);
+        // the message went out either way; a failed record only leaves it out of the conversation
+        const recorded = await recordSentMessage({ from, to: recipient, text: body, msgNo }).then(
+          () => true,
+          () => false,
+        );
+        toast(
+          recorded
+            ? `Transmitted to ${recipient}`
+            : `Transmitted to ${recipient}, but the instance could not record it, so it is missing from this conversation`,
+        );
       } else {
         await sendAprsMessage({ to: recipient, text: body, msgNo: nextMsgNo() });
         toast(`Sent to ${recipient} through the instance`);

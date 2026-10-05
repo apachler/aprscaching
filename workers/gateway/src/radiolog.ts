@@ -452,7 +452,8 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
   const acct = holder && (await isCallsignVerified(env, src)) ? { account_id: holder } : null;
   if (!acct) return reject(`${baseCall(src)} is not a verified callsign here - verify it in the app`);
 
-  const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ? COLLATE NOCASE")
+  // a cache the sysop removed answers as a code that names nothing
+  const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ? COLLATE NOCASE AND removed_at IS NULL")
     .bind(parsed.code)
     .first<CacheForLog>();
   if (!cache) return reject(`unknown cache ${parsed.code}`, { accountId: acct.account_id });
