@@ -83,6 +83,7 @@ import {
 import { TERMS } from "../terms.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { ImportsAdmin } from "./ImportsAdmin.js";
+import { ApiKeysAdmin } from "./ApiKeysAdmin.js";
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -175,6 +176,16 @@ export function AdminPanel(props: { onClose: () => void }) {
           defaultOpen={false}
         >
           <ImportsAdmin />
+        </Group>
+      )}
+      {show("api keys", "developer", "read api", "revoke", "scrape") && (
+        <Group
+          title="API keys"
+          status="read API"
+          help="The members' read-API keys, with their owners; revoke one that is misused."
+          defaultOpen={false}
+        >
+          <ApiKeysAdmin />
         </Group>
       )}
       {show("federation", "peers", "trust", "44net", "sync") && (

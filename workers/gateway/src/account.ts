@@ -286,9 +286,11 @@ async function accountExport(
       ...by("call_b").binds,
     ),
     entitlements: await rows(env, "SELECT key, granted_at FROM entitlements WHERE account_id=?", acct),
-    apiKeys: await q(
-      "SELECT key, label, rate_tier, created_at, last_used_at FROM api_keys WHERE $CALLS",
-      by("owner_call"),
+    // the key itself is never stored; its prefix tells the keys apart
+    apiKeys: await rows(
+      env,
+      "SELECT name, prefix, rate_tier, created_at, last_used_at FROM api_keys WHERE account_id=?",
+      acct,
     ),
     whitePages: await q("SELECT callsign, home_bbs, updated_at FROM white_pages WHERE $CALLS", by("callsign")),
     bbsMessages: await rows(
@@ -521,7 +523,6 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
     del("DELETE FROM auth_challenges WHERE $CALLS", "callsign"),
     del("DELETE FROM email_tokens WHERE $CALLS", "callsign"),
     del("DELETE FROM saved_views WHERE $CALLS", "owner_call"),
-    del("DELETE FROM api_keys WHERE $CALLS", "owner_call"),
     del("DELETE FROM cache_ratings WHERE $CALLS", "callsign"),
     del("DELETE FROM rendezvous_log WHERE $CALLS OR $CALLS", "call_a", "call_b"),
     del("DELETE FROM white_pages WHERE $CALLS", "callsign"),
@@ -574,6 +575,7 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
       "watch_alerts",
       "push_subs",
       "entitlements",
+      "api_keys",
       "wx_keys",
       "account_stations",
       "account_prefs",

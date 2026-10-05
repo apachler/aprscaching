@@ -107,11 +107,25 @@ Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, 
 | **Near-cache radio message** | An APRS or MeshCom message to your radio near a cache; off by default, needs a verified callsign ([The "you're near" prompt](find-a-cache.md#the-youre-near-prompt)) |
 | **Notifications** | **Email digest**, **Browser push** and the **Watchlist** ([Alerts](community.md#alerts-and-the-watchlist)) |
 | **Locale & time** | Language, date and number format, time zone |
+| **Developer** | Keys for your own apps and scripts that read this instance ([API keys](#api-keys)) |
 | **Your data** | Export or erase your data |
 | **Support the project** | Donations, and what they pay for. A donation earns thanks, never features. |
 | **Help & credits** | The manual, the tour again, a link to report a bug, **About this instance**, credits |
 
 Dark is the default appearance. Phosphor is a green-screen terminal look.
+
+## API keys
+
+The read API is free and needs no key. A key raises its rate limit, for an app or script of yours that reads
+the instance often ([the read API](../reference/api.md#public-read-api)). A key unlocks no feature.
+
+1. Open **Settings → Developer**.
+2. Type a name for the key, such as the app that uses it, and tap **Create key**.
+3. Copy the key now: the app shows it only once. **Try it** shows how a script sends it.
+
+The list shows each key's name, its first characters, when you created it and when it was last used. **Revoke**
+stops a key at once; create a new one if you lose a key. An account holds up to five keys, unless the instance
+sets another number. The sysop can revoke a key that is misused.
 
 ## Your data
 

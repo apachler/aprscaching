@@ -428,7 +428,6 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
     ...moveRows("achievements", "callsign"),
     ...moveRows("stage_unlocks", "callsign"),
     env.DB.prepare(`UPDATE saved_views SET owner_call = ? WHERE ${ofCall("owner_call")}`).bind(shownAs, cs, like),
-    env.DB.prepare(`UPDATE api_keys SET owner_call = ? WHERE ${ofCall("owner_call")}`).bind(shownAs, cs, like),
     // what spoke for the call goes: device keys, stations and weather keys registered on it, pending requests
     env.DB.prepare(`DELETE FROM callsign_keys WHERE ${ofCall("callsign")}`).bind(cs, like),
     env.DB.prepare(`DELETE FROM account_stations WHERE account_id = ? AND ${ofCall("callsign")}`).bind(
@@ -530,7 +529,6 @@ export function reclaimStatements(
     move("achievements", "callsign"),
     move("stage_unlocks", "callsign"),
     env.DB.prepare("UPDATE saved_views SET owner_call = ? WHERE owner_call = ?").bind(cs, marker),
-    env.DB.prepare("UPDATE api_keys SET owner_call = ? WHERE owner_call = ?").bind(cs, marker),
     env.DB.prepare("UPDATE credentials SET callsign = ? WHERE account_id = ?").bind(cs, accountId),
   ];
 }

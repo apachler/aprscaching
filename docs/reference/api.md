@@ -47,7 +47,7 @@ No box key logs a find, acts as a cache owner, creates a cache or runs an import
 ```bash
 curl -s https://aprs.example.net/api/v1                                          # index: routes, limits, how to get a key
 curl -s "https://aprs.example.net/api/v1/caches?bbox=15.3,47.0,15.5,47.1"        # bbox = minLon,minLat,maxLon,maxLat
-KEY=$(curl -s -X POST https://aprs.example.net/api/v1/keys | jq -r .key)         # free key, no sign-up
+KEY=acg_…                                                                         # from Settings → Developer
 curl -s -H "Authorization: Bearer $KEY" "https://aprs.example.net/api/v1/stations?bbox=15.3,47.0,15.5,47.1"
 curl -s "https://aprs.example.net/api/v1/activity?key=$KEY"                       # or pass the key as ?key=
 ```
@@ -64,9 +64,22 @@ most 20° a side.
 | GET        | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots`                        | Activity feed (unlisted caches stay out), rankings, top corroborating IGates, live spots.                  |
 | GET        | `/api/v1/licence/:call`                                                                  | Callsign validity from public licence registers (same as `/api/licence/:call`). |
 | GET        | `/api/v1/stats`                                                                          | The instance's counts for its landing page: active caches, finds heard on the air (Tier A) in the last 7 days, stations heard in the last hour. Cached for 5 minutes. |
-| POST · GET | `/api/v1/keys` · `/api/v1/keys/:id`                                                      | Issue a free API key (`ownerCall` is recorded only for a session holding that call) · look one up.                                             |
+| GET        | `/api/v1/key`                                                                            | The key the request presents: its name, prefix, creation and last use (`401` for none or an unknown one). |
 
 Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys never gate a feature.
+
+A key belongs to a signed-in account. Create one under **Settings → Developer**, or with the account's session:
+
+| Method     | Path                                     | Purpose                                                                                                     | Auth                       |
+| ---------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------- |
+| GET · POST | `/api/keys`                              | The account's keys (`name`, `prefix`, `createdAt`, `lastUsedAt`) and its `cap` · create one `{ name }` → the full `key`, shown this once (`409` at the cap) | session                    |
+| DELETE     | `/api/keys/:id`                          | Revoke one of the account's keys                                                                            | session                    |
+| GET        | `/api/admin/api-keys`                    | Every key on the instance, with its `owner` call                                                            | sysop or x-operator-secret |
+| DELETE     | `/api/admin/api-keys/:id`                | Revoke any key                                                                                              | sysop or x-operator-secret |
+
+An account holds at most `API_KEYS_PER_ACCOUNT` keys (default 5) and creates at most 10 an hour. The instance
+stores only each key's SHA-256: a lost key cannot be shown again, so revoke it and create another.
+`POST /api/v1/keys` answers `410`: there are no anonymous keys.
 
 ## Caching & finds
 

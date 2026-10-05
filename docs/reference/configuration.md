@@ -135,6 +135,7 @@ app do not read these.
 | Variable | Purpose | Default |
 |---|---|---|
 | `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits | `60` / `60` / `600` |
+| `API_KEYS_PER_ACCOUNT` | Read-API keys one account may hold at once; `0` lets nobody create one | `5` |
 | `SPOTS_ENABLED` | Enable outbound activity-spot polling | off |
 | `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT` | Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream | all / `120` / names aprscaching |
 | `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs | — |
