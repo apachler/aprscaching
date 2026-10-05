@@ -43,13 +43,13 @@
   .tr-controls .seg {
     display: flex;
     flex-wrap: nowrap;
-    gap: 0;
     border: 1px solid var(--hair);
     border-radius: var(--radius-control);
-    background: none;
     overflow: visible;
   }
   .tr-controls .seg button {
+    margin: 0;
+    box-shadow: none;
     min-height: 32px;
     padding: 0 var(--space-sm);
     border: none;

@@ -29,21 +29,24 @@
     outline-offset: 2px;
   }
   /* segmented control (pick one of 2–4 modes). The bar is never wider than its container: in a narrow one its
-     segments wrap onto a second row, each row filled edge to edge. The 1px gaps show the bar's line colour as the
-     dividers, and the bar clips its segments to its own rounded corners on any row. */
+     segments wrap onto a second row, each row filled edge to edge, and the bar clips its segments to its own
+     rounded corners on any row. Each segment draws the line on its left and top edge; the -1px margins tuck those
+     lines under the bar's own border on the first column and the first row. */
   .seg {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 1px;
     max-width: 100%;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);
-    background: var(--line);
     overflow: hidden;
     overflow: clip;
   }
   .seg button {
     flex: 1 1 auto;
+    margin: -1px 0 0 -1px;
+    box-shadow:
+      inset 1px 0 0 var(--line),
+      inset 0 1px 0 var(--line);
     border: none;
     border-radius: 0;
     background: var(--surface);
