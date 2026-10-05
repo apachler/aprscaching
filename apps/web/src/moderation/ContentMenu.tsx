@@ -52,15 +52,10 @@ export function ContentMenu(props: {
   const report = async () => {
     const a = await prompt({
       title: `Report this ${kindName(t.kind)}`,
-      message: (
-        <>
-          The sysop of this instance reads every report. <span className="mono">{t.label}</span> is not told who
-          reported it.
-        </>
-      ),
+      message: "The sysop of this instance reads every report. The person you report is not told who reported them.",
       select: { label: "What is wrong", options: REPORT_CATEGORIES },
       textRequiredFor: ["other"],
-      label: "Details (optional for the first four)",
+      label: "Details (optional, except for Other)",
       maxLength: 1000,
       confirmLabel: "Send report",
     });

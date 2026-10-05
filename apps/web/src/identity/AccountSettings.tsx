@@ -29,6 +29,8 @@ import {
 import { VerifyCall } from "./VerifyCall.js";
 import { ClaimCall } from "./ClaimCall.js";
 import { Passkeys } from "./Passkeys.js";
+import { RecoveryPrompt } from "./RecoveryPrompt.js";
+import { needsRecovery } from "./accountNotices.js";
 
 type Session = {
   callsign: string;
@@ -37,6 +39,10 @@ type Session = {
   /** An address waiting for its owner to open the confirmation link: shown, never a way in. */
   pendingEmail?: string | null;
   signedIn: boolean;
+  /** The app has no connection to its instance: the session is the remembered one. */
+  offline?: boolean;
+  /** The account's passkey count, when the gateway said. */
+  passkeys?: number;
   signOut: () => void;
   signOutEverywhere: () => Promise<void>;
   refresh: () => void;
@@ -56,6 +62,8 @@ export function AccountSettings(props: {
   const confirmDialog = useConfirm();
   const toast = useToast();
   const active = baseCall(callsign);
+  // no passkey and no confirmed email: this session is the account's only way in
+  const noWayBack = needsRecovery({ ...props.session, offline: !!props.session.offline });
   // the calls this account holds; a failed reload keeps the last list
   const { data: heldList, reload } = useLoad<HeldCallsign[] | undefined>(
     () => (signedIn ? listCallsigns().then((r) => r.callsigns) : Promise.resolve(undefined)),
@@ -144,7 +152,10 @@ export function AccountSettings(props: {
     );
   }
   return (
-    <Group title="Account" status={active}>
+    <Group title="Account" status={noWayBack ? "add a way to sign in" : active}>
+      {noWayBack && (
+        <RecoveryPrompt variant="inline" callsign={callsign} pendingEmail={pendingEmail ?? null} onChanged={refresh} />
+      )}
       {props.operatorPending && <OperatorVerify callsign={active} onDone={refresh} />}
       <ul className="cs-list">
         {held.map((c) => (
@@ -230,7 +241,7 @@ export function AccountSettings(props: {
         </div>
       </Advanced>
       <EmailSettings email={email} pendingEmail={pendingEmail ?? null} onChanged={refresh} />
-      <Passkeys />
+      <Passkeys onChanged={refresh} />
       <div className="row end wrap gap-2 mt-3">
         <Button onClick={endEverywhere} disabled={busy} hint="Sign out every device on this account, this one included">
           Sign out everywhere

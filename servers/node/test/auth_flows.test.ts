@@ -76,8 +76,10 @@ describe("the email link needs a confirm step", () => {
       new Request(`${ORIGIN}/auth/email/verify?token=${probe}`, { headers: { accept: "text/html" } }),
     );
     expect(page.status).toBe(400);
-    expect(page.headers.get("content-type") ?? "").not.toContain("text/html");
-    expect(await page.text()).not.toContain("<script>");
+    const html = await page.text();
+    expect(html).not.toContain("<script>alert");
+    expect(html).not.toContain('method="post"');
+    expect(html).toContain("This link has expired or was already used");
   });
 
   it("POST with the same token signs in (JSON and the confirm form)", async () => {
@@ -131,6 +133,100 @@ describe("the email link needs a confirm step", () => {
     );
     expect(res.status).toBe(403);
     expect(res.headers.get("set-cookie")).toBeNull();
+  });
+});
+
+describe("every outcome of a link is a page for a browser and JSON for an API client", () => {
+  const start = async (env: ReturnType<typeof authEnv>, email: string, callsign: string) =>
+    (await call(env, "POST", "/auth/email/start", { email, callsign })).data.devToken as string;
+  const open = (env: ReturnType<typeof authEnv>, token: string) =>
+    serve(env)(new Request(`${ORIGIN}/auth/email/verify?token=${token}`, { headers: { accept: "text/html" } }));
+  const confirmForm = (env: ReturnType<typeof authEnv>, token: string) =>
+    serve(env)(
+      new Request(`${ORIGIN}/auth/email/verify`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+          origin: ORIGIN,
+        },
+        body: `token=${token}`,
+      }),
+    );
+  const isPage = (r: Response) => (r.headers.get("content-type") ?? "").startsWith("text/html");
+
+  it("the confirm page is the branded page with one primary button, following the theme", async () => {
+    const env = authEnv();
+    const page = await open(env, await start(env, "brand@example.test", "DL1BRD"));
+    const html = await page.text();
+    expect(html).toContain('alt="APRScaching"');
+    expect(html).toContain("<h1>Sign in to APRScaching</h1>");
+    expect(html.match(/class=primary/g)).toHaveLength(1);
+    expect(html).toContain("prefers-color-scheme:light");
+    expect(html).toContain("<html lang=en>");
+  });
+
+  it("a spent link shows the expired page at once, and its confirm shows it too; an API client gets JSON", async () => {
+    const env = authEnv();
+    const token = await start(env, "spent@example.test", "DL1SPN");
+    expect((await confirmForm(env, token)).status).toBe(303);
+    const again = await open(env, token);
+    expect(again.status).toBe(400);
+    expect(isPage(again)).toBe(true);
+    const html = await again.text();
+    expect(html).toContain("This link has expired or was already used — request a new one.");
+    expect(html).toContain(`href="${ORIGIN}/?view=signin"`);
+    const form = await confirmForm(env, token);
+    expect(form.status).toBe(400);
+    expect(isPage(form)).toBe(true);
+    const api = await call(env, "POST", "/auth/email/verify", { token });
+    expect(api).toMatchObject({ status: 400, data: { error: "invalid or expired link" } });
+  });
+
+  it("a suspended account's link ends on a page that says until when and why", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const sysop = await emailSignup(env, "op@example.test", "OE8APR");
+    await operatorVerify(env, "OE8APR");
+    await emailSignup(env, "susp@example.test", "DL1SUS");
+    const until = Math.floor(Date.UTC(2099, 9, 12) / 1000);
+    const s = await call(
+      env,
+      "POST",
+      "/api/admin/moderation/accounts/DL1SUS/suspend",
+      { reason: "spam reports", category: "spam", until },
+      { cookie: sysop.cookie },
+    );
+    expect(s.status).toBe(200);
+    const token = (await call(env, "POST", "/auth/email/start", { email: "susp@example.test" })).data.devToken;
+    const form = await confirmForm(env, token);
+    expect(form.status).toBe(403);
+    expect(form.headers.get("set-cookie")).toBeNull();
+    const html = await form.text();
+    expect(html).toContain("This account is suspended until 12 October 2099: spam reports.");
+    expect(html).toContain("role=alert");
+  });
+
+  it("a confirmation link and a data link name what they do", async () => {
+    const env = authEnv();
+    const key = await call(env, "POST", "/auth/email/start", { email: "x@example.test", callsign: "DL1XYZ" });
+    expect(key.status).toBe(200);
+    await env.DB.prepare("UPDATE email_tokens SET purpose = 'confirm' WHERE token = ?").bind(key.data.devToken).run();
+    expect(await (await open(env, key.data.devToken)).text()).toContain("<h1>Confirm your email address</h1>");
+  });
+
+  it("a cross-site form POST is refused with a page", async () => {
+    const env = authEnv();
+    const token = await start(env, "xsite@example.test", "DL1XST");
+    const res = await serve(env)(
+      new Request(`${ORIGIN}/auth/email/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.example" },
+        body: `token=${token}`,
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(isPage(res)).toBe(true);
+    expect(await res.text()).toContain("Sign-in refused");
   });
 });
 

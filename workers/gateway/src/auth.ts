@@ -840,19 +840,71 @@ export async function issueSessionCookie(
   return `${SESSION_COOKIE}=${token}; ${cookieFlags(req, env)}; Max-Age=${maxAge}`;
 }
 
-/** GET /auth/session — "who am I": the signed-in callsign + verification + confirmed email (and an address
- *  still waiting for confirmation), or null; `accountData` when the session serves only the account's data. */
+/** Why a session the browser still holds no longer signs anyone in, when the person should be told. */
+type SessionEnded =
+  | { reason: "suspended"; until: number | null; why: string }
+  | { reason: "released"; callsign: string; by: "licensee" | "sysop"; note: string | null; callless: boolean };
+
+/**
+ * Why the session cookie on `req` stopped resolving, or null when there is nothing to tell: no cookie, a forged
+ * or expired one, a sign-out everywhere, an erased account. A suspension of the account, or its call moving to
+ * its licensee or released by the sysop, is told, so the app can say what happened instead of dropping the
+ * person on the landing page without a word. Only a cookie this instance signed is read, so a request learns
+ * nothing about an account it never held a session of.
+ */
+async function sessionEnded(req: Request, env: Env): Promise<SessionEnded | null> {
+  const m = /(?:^|;\s*)acs=([^;]+)/.exec(req.headers.get("cookie") ?? "");
+  if (!m) return null;
+  const claims = await verifySession(m[1]!, req, env);
+  if (!claims || claims.scope !== "full") return null;
+  const acct = await env.DB.prepare("SELECT callsign FROM accounts WHERE account_id = ?")
+    .bind(claims.accountId)
+    .first<{ callsign: string }>();
+  if (!acct) return null;
+  const suspended = await suspensionOf(env, claims.accountId);
+  if (suspended) return { reason: "suspended", until: suspended.until, why: suspended.reason };
+  const base = baseCall(claims.callsign);
+  if ((await baseHolder(env, base)) === claims.accountId) return null;
+  const moved = await env.DB.prepare(
+    "SELECT action, note FROM callsign_events WHERE callsign = ? AND from_account = ? ORDER BY id DESC LIMIT 1",
+  )
+    .bind(base, claims.accountId)
+    .first<{ action: string; note: string | null }>();
+  if (!moved) return null;
+  const claimed = moved.action === "claimed";
+  return {
+    reason: "released",
+    callsign: base,
+    by: claimed ? "licensee" : "sysop",
+    note: claimed ? null : moved.note,
+    callless: isFormerMarker(acct.callsign),
+  };
+}
+
+/**
+ * GET /auth/session — "who am I": the signed-in callsign + verification + confirmed email (and an address still
+ * waiting for confirmation) + the account's passkey count, or null; `accountData` when the session serves only
+ * the account's data, and `ended` when a session this browser held ended for a reason it is told
+ * ({@link sessionEnded}).
+ */
 export async function handleSession(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
-  if (!me) return json({ callsign: null, ...((await accountDataSession(req, env)) ? { accountData: true } : {}) });
-  const acct = await env.DB.prepare("SELECT email, pending_email FROM accounts WHERE account_id = ?")
+  if (!me) {
+    if (await accountDataSession(req, env)) return json({ callsign: null, accountData: true });
+    const ended = await sessionEnded(req, env);
+    return json({ callsign: null, ...(ended ? { ended } : {}) });
+  }
+  const acct = await env.DB.prepare(
+    "SELECT email, pending_email, (SELECT COUNT(*) FROM credentials c WHERE c.account_id = a.account_id) AS passkeys FROM accounts a WHERE account_id = ?",
+  )
     .bind(me.accountId)
-    .first<{ email: string | null; pending_email: string | null }>();
+    .first<{ email: string | null; pending_email: string | null; passkeys: number }>();
   return json({
     callsign: me.callsign,
     verified: await isCallsignVerified(env, me.base),
     email: acct?.email ?? null,
     pendingEmail: acct?.pending_email ?? null,
+    passkeys: Number(acct?.passkeys ?? 0),
   });
 }
 

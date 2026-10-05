@@ -52,8 +52,9 @@ take the callsign over by proving that the licence is yours.
 2. Tap **Take over**, then **Prove control**.
 3. Pick a **Verification method** and follow it, as in [Verify your callsign](join.md#verify-your-callsign).
 
-When the proof succeeds, the callsign is yours and verified, and you are signed in to a new account. Add a
-passkey or an email under **Settings → Account** right away, so you can sign in again.
+When the proof succeeds, the callsign is yours and verified, and you are signed in to a new account. The app
+then asks you to **Add a passkey** or **Add an email**: the new account has neither, so once this session ends
+nothing else signs you in. Until you add one, a bar over the map and **Settings → Account** keep asking.
 
 The other account keeps what it logged: its finds and caches never move to you. An account that has proven
 control is not taken over this way. If that account holds your licence, ask the sysop of the instance.
@@ -64,7 +65,8 @@ operator's sign-in link.
 ## If you lose a callsign
 
 You lose a callsign when its licensee takes it over, or when the sysop releases it from your account. The app
-tells you under your alerts, and the instance emails you if your account has a confirmed email.
+signs you out and says why, then tells you under your alerts; the instance emails you if your account has a
+confirmed email. If the callsign was your only one, the notice offers **Get or erase my data**.
 
 - Your account keeps its other callsigns. The finds and caches you logged under the lost callsign stay yours
   and now show under your active callsign.
@@ -72,6 +74,11 @@ tells you under your alerts, and the instance emails you if your account has a c
   link and the callsign you operate now: the finds and caches come with you. To export or erase your data
   instead, see [Your data](#your-data).
 - Your device keys for the lost callsign are removed. Register a key for your active callsign again.
+
+## If your account is suspended
+
+The sysop of an instance can suspend an account for a while, or until they lift it. The app signs you out and
+says until when and why; a sign-in link you open says the same. Ask the sysop if you think it is a mistake.
 
 ## The register badge
 

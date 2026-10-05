@@ -19,7 +19,7 @@ function kind(p: Passkey): string {
  * sysop's link, or another device's passkey by QR code) adds this device's own passkey here, and removes a lost
  * device's. The passkeys are bound to the account's primary call.
  */
-export function Passkeys() {
+export function Passkeys(props: { onChanged?: () => void } = {}) {
   const fmt = useFmt();
   const toast = useToast();
   const confirm = useConfirm();
@@ -36,6 +36,7 @@ export function Passkeys() {
       await registerPasskey(data.callsign);
       toast("Passkey added: this device signs you in with it");
       reload();
+      props.onChanged?.();
     } catch (e) {
       setMsg({ text: passkeyErrorText(e, (x) => errorText(x).replace(/^.*?: /, "")), kind: "error" });
     } finally {
@@ -57,6 +58,7 @@ export function Passkeys() {
       await removePasskey(p.id);
       toast("Passkey removed");
       reload();
+      props.onChanged?.();
     } catch (e) {
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
     } finally {

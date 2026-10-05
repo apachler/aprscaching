@@ -6,6 +6,7 @@ import { useSession } from "./identity/useSession.js";
 import { Landing } from "./Landing.js";
 import { SignIn } from "./identity/SignIn.js";
 import { AccountData } from "./identity/AccountData.js";
+import { SessionEndedNotice } from "./identity/SessionEndedNotice.js";
 import { ASSET } from "./brand.js";
 import { UpdateNotice } from "./shell/UpdateNotice.js";
 
@@ -37,7 +38,8 @@ const prerenderShown = () =>
 export function App() {
   const session = useSession();
   const [prerendered] = useState(prerenderShown);
-  const [showSignIn, setShowSignIn] = useState(false);
+  // the sign-in panel, opened on its callsign step or on "Get or erase my data"
+  const [showSignIn, setShowSignIn] = useState<false | "signin" | "data">(false);
   // landing gate: signed-in skips the landing; signed-out sees it until they Explore
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
   const [explored, setExplored] = useState(() => {
@@ -63,20 +65,22 @@ export function App() {
     if (!tourSeen()) setStartTour(true);
   }, []);
 
-  // Signing out returns to the landing (clears the per-session explore intent).
+  /** Back to the landing: the per-session explore intent is cleared. */
+  const toLanding = useCallback(() => {
+    try {
+      sessionStorage.removeItem("acs.explore");
+    } catch {
+      /* ignore */
+    }
+    setExplored(false);
+    setStartTour(false);
+  }, []);
+  // Signing out returns to the landing.
   const prevSignedIn = useRef(session.signedIn);
   useEffect(() => {
-    if (prevSignedIn.current && !session.signedIn) {
-      try {
-        sessionStorage.removeItem("acs.explore");
-      } catch {
-        /* ignore */
-      }
-      setExplored(false);
-      setStartTour(false);
-    }
+    if (prevSignedIn.current && !session.signedIn) toLanding();
     prevSignedIn.current = session.signedIn;
-  }, [session.signedIn]);
+  }, [session.signedIn, toLanding]);
 
   // the app's own landing or platform is up: the prerendered copy goes (the platform also hides it by CSS)
   const ready = !session.loading;
@@ -94,10 +98,11 @@ export function App() {
           )
         ) : !active ? (
           <>
-            <Landing onSignIn={() => setShowSignIn(true)} onExplore={onExplore} resume={prerendered} />
+            <Landing onSignIn={() => setShowSignIn("signin")} onExplore={onExplore} resume={prerendered} />
             {session.accountData && !showSignIn && <AccountData onSignOut={() => void session.signOut()} />}
             {showSignIn && (
               <SignIn
+                start={showSignIn}
                 onDone={() => {
                   session.refresh();
                   setShowSignIn(false);
@@ -114,6 +119,23 @@ export function App() {
           <Suspense fallback={<Splash />}>
             <Platform session={session} startTour={startTour} />
           </Suspense>
+        )}
+        {/* signed out by a suspension or a released callsign: say why, wherever the person lands */}
+        {!session.loading && session.ended && !showSignIn && (
+          <SessionEndedNotice
+            ended={session.ended}
+            onClose={() => void session.dismissEnded()}
+            onSignIn={() => {
+              void session.dismissEnded();
+              toLanding();
+              setShowSignIn("signin");
+            }}
+            onData={() => {
+              void session.dismissEnded();
+              toLanding();
+              setShowSignIn("data");
+            }}
+          />
         )}
       </ConfirmProvider>
     </ToastProvider>

@@ -650,7 +650,8 @@ export interface WatchEntry {
 export interface WatchAlert {
   id: number;
   callsign: string;
-  kind: "heard" | "near_cache" | "cache_found" | "corroborated";
+  /** The alert kind (shack/alertKinds.ts): a watched station, or a notice about the account. */
+  kind: string;
   detail?: string;
   cacheId?: number | null;
   lat?: number | null;
@@ -2070,7 +2071,15 @@ export type Session = {
   pendingEmail?: string | null;
   /** The session opens only the data of an account that holds no callsign: its export and its erasure. */
   accountData?: boolean;
+  /** How many passkeys the account has: with none and no confirmed email, the session is its only way in. */
+  passkeys?: number;
+  /** Signed out: why the session this browser held ended, when the person is to be told. */
+  ended?: SessionEnded;
 };
+/** Why a session ended: the account was suspended, or its callsign moved to its licensee or was released. */
+export type SessionEnded =
+  | { reason: "suspended"; until: number | null; why: string }
+  | { reason: "released"; callsign: string; by: "licensee" | "sysop"; note: string | null; callless: boolean };
 export function getSession(): Promise<Session> {
   return call(`/auth/session`);
 }

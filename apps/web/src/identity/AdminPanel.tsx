@@ -620,31 +620,43 @@ function CallsignCard(props: { view: CallsignView; onChanged: () => void }) {
         </p>
       )}
       {!view.verification && (
-        <div className="row mt-2">
-          <input
-            placeholder="how control was checked, e.g. licence seen on a video call"
-            aria-label={`How control of ${view.callsign} was checked`}
-            value={note}
-            maxLength={200}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <Button disabled={busy} onClick={() => void verify()}>
-            Verify by hand
-          </Button>
+        <div className="mt-2">
+          <label className="m-0">
+            How you checked control of {view.callsign}
+            <input
+              placeholder="e.g. licence seen on a video call"
+              value={note}
+              maxLength={200}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </label>
+          <div className="row end mt-2">
+            <Button disabled={busy} onClick={() => void verify()}>
+              Verify by hand
+            </Button>
+          </div>
         </div>
       )}
       {h && (
-        <div className="row mt-2">
-          <input
-            placeholder="reason, e.g. licence belongs to someone else"
-            aria-label={`Reason to release ${view.callsign}`}
-            value={reason}
-            maxLength={200}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <Button variant="danger" disabled={busy} onClick={() => void release()}>
-            Release
-          </Button>
+        <div className="mt-2">
+          <label className="m-0">
+            Reason for releasing {view.callsign}
+            <input
+              placeholder="e.g. licence belongs to someone else"
+              aria-describedby={`release-help-${view.callsign}`}
+              value={reason}
+              maxLength={200}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+          <p className="muted fine m-0" id={`release-help-${view.callsign}`}>
+            The account is told this reason.
+          </p>
+          <div className="row end mt-2">
+            <Button variant="danger" disabled={busy} onClick={() => void release()}>
+              Release
+            </Button>
+          </div>
         </div>
       )}
       {err && (

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { escapeHtml } from "./util/html.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, corsAllowlist } from "./app.js";
@@ -21,7 +20,6 @@ import {
   signInPaths,
   sessionIdentity,
   AccountSuspended,
-  suspendedResponse,
   suspensionOf,
 } from "./auth.js";
 import { adminCalls } from "./admin.js";
@@ -30,6 +28,7 @@ import { appBase, gatewayBase } from "./sitemap.js";
 import { linkOrigin } from "./visitor.js";
 import { instanceOrigins, isInstanceOrigin, requestOrigin } from "./origins.js";
 import { sendEmail } from "./mail.js";
+import { linkPageResponse, wantsPage } from "./linkpage.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -268,37 +267,6 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   });
 }
 
-/**
- * The confirm step a browser sees when it opens the link: one button that POSTs the token back. The
- * `same-origin` referrer policy keeps the token-bearing URL from reaching any other site, while the form
- * POST still carries this page's origin — under `no-referrer` a browser sends `Origin: null`, which the
- * origin check refuses.
- */
-function confirmPage(token: string, app: string | null): Response {
-  return new Response(
-    `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=referrer content=same-origin>
-<title>Sign in · aprscaching</title><style>
-:root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}
-h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height:44px;padding:.6rem 1.2rem;border-radius:10px}
-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
-<h1>Sign in to aprscaching</h1>
-<p>Confirm that you want to sign in on this device.</p>
-<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${escapeHtml(token)}">${
-      app ? `<input type="hidden" name="app" value="${escapeHtml(app)}">` : ""
-    }
-<button type="submit">Sign in</button></form>
-<p class=m>Didn't request this? Close this page — nothing happens until you confirm.</p>`,
-    {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "referrer-policy": "same-origin",
-      },
-    },
-  );
-}
-
 /** A browser POST must come from this gateway's own page or the configured app origins. A request with
  *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
 function sameSiteOrigin(req: Request, env: Env): boolean {
@@ -312,46 +280,176 @@ function sameSiteOrigin(req: Request, env: Env): boolean {
   }
 }
 
-/**
- * GET /auth/email/verify?token= — the link target: a confirm page for a browser, `{ confirm: true }` for
- * an API client. Never consumes the token.
- * POST /auth/email/verify {token} (JSON or a form) — consume the token and open a session.
- */
-export async function handleEmailVerify(req: Request, env: Env): Promise<Response> {
-  const url = new URL(req.url);
-  if (req.method === "GET") {
-    const token = url.searchParams.get("token");
-    if (!token) return json({ error: "missing token" }, { status: 400 });
-    // only a well-formed token ever reaches the HTML page, so nothing a link carries is reflected into it
-    if (!TOKEN_SHAPE.test(token)) return json({ error: "invalid token" }, { status: 400 });
-    // `app` reaches the page only when it is an address of this instance
-    const app = url.searchParams.get("app");
-    if ((req.headers.get("accept") ?? "").includes("text/html"))
-      return confirmPage(token, app && isInstanceOrigin(app, env) ? app : null);
-    return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
+/** What a link's confirm can end in, short of a session: the API's JSON error, and the page a browser sees. */
+type LinkProblemKind =
+  "invalid" | "expired" | "suspended" | "callsign" | "address" | "data" | "cross-site" | "unavailable";
+interface LinkProblem {
+  status: number;
+  error: string;
+  kind: LinkProblemKind;
+  suspended?: { reason: string; until: number | null };
+}
+const problem = (status: number, kind: LinkProblemKind, error: string): LinkProblem => ({ status, kind, error });
+const expired = (): LinkProblem => problem(400, "expired", "invalid or expired link");
+const suspendedProblem = (e: AccountSuspended): LinkProblem => ({
+  status: 403,
+  kind: "suspended",
+  error: e.message,
+  suspended: e.suspension,
+});
+const isProblem = (x: Acct | LinkProblem): x is LinkProblem => "kind" in x;
+
+/** A day in words, for a page: "12 October 2026". */
+const dayText = (unixS: number) =>
+  new Date(unixS * 1000).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+/** An API error message as a sentence on a page. */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1) + (/[.!?]$/.test(s) ? "" : ".");
+
+/** What each kind of link does, for its confirm page; a sign-in or an operator link is the default. */
+const CONFIRM_COPY: Record<string, { title: string; body: string; button: string }> = {
+  [CONFIRM_PURPOSE]: {
+    title: "Confirm your email address",
+    body: "Confirm this address for your APRScaching account. Once confirmed, it signs you in and recovers the account.",
+    button: "Confirm address",
+  },
+  [ACCOUNT_DATA_PURPOSE]: {
+    title: "Open your data",
+    body: "This link opens your account's data to download a copy or erase it, and nothing else.",
+    button: "Open my data",
+  },
+};
+const SIGN_IN_COPY = {
+  title: "Sign in to APRScaching",
+  body: "Confirm that you want to sign in on this device.",
+  button: "Sign in",
+};
+
+/** The page a browser sees for a link that ends in `p`; `app` is the app's address, where its links lead. */
+function problemPage(p: LinkProblem, app: string): Response {
+  const back = { kind: "link" as const, label: "Back to APRScaching", href: `${app}/` };
+  const again = { kind: "link" as const, label: "Request a new link", href: `${app}/?view=signin` };
+  const page = (title: string, body: string[], action: typeof back, note?: string) =>
+    linkPageResponse({ title, body, action, note, alert: true }, p.status);
+  switch (p.kind) {
+    case "invalid":
+    case "expired":
+      return page(
+        "This link has expired",
+        ["This link has expired or was already used — request a new one."],
+        again,
+        "A sign-in link works once, within 15 minutes; an address confirmation within 24 hours.",
+      );
+    case "suspended": {
+      const s = p.suspended;
+      const until = s?.until ? `until ${dayText(s.until)}` : "until the sysop lifts it";
+      return page(
+        "Account suspended",
+        [sentence(`This account is suspended ${until}: ${s?.reason ?? "no reason given"}`)],
+        back,
+        "While the suspension holds, the account cannot sign in on this instance.",
+      );
+    }
+    case "callsign":
+      return page(
+        "This callsign cannot sign in",
+        [sentence(p.error)],
+        again,
+        "Request a new link with the callsign you operate.",
+      );
+    case "address":
+      return page("This address was not confirmed", [sentence(p.error)], back);
+    case "data":
+      return page("This link no longer applies", [sentence(p.error)], again);
+    case "cross-site":
+      return page(
+        "Sign-in refused",
+        ["The confirmation came from another site, so nobody was signed in. Open the link from your email again."],
+        back,
+      );
+    case "unavailable":
+      return page("Sign-in is not available", ["This instance cannot open sessions. Tell its sysop."], back);
   }
+}
 
-  if (!sameSiteOrigin(req, env)) return json({ error: "cross-site sign-in refused" }, { status: 403 });
-  const isForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
-  const form = isForm ? new URLSearchParams(await req.text().catch(() => "")) : null;
-  const token = form ? form.get("token") : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);
-  if (!token) return json({ error: "missing token" }, { status: 400 });
-  if (!sessionsEnabled(env)) return sessionUnavailable();
+/** The answer to a confirm that ends in `p`: a page for a browser, the JSON error for an API client. */
+function answerProblem(p: LinkProblem, asPage: boolean, app: string): Response {
+  if (asPage) return problemPage(p, app);
+  return json({ error: p.error, ...(p.suspended ? { suspended: p.suspended } : {}) }, { status: p.status });
+}
 
+/** The app address a link's pages lead back to: the page's `app` when it is an address of this instance. */
+function appFor(req: Request, env: Env, app: string | null | undefined): string {
+  return app && isInstanceOrigin(app, env) ? app : requestOrigin(req, env);
+}
+
+type TokenRow = { email: string; callsign: string | null; purpose: string; created_at: number; used: number };
+/** The token's row while it is usable: unspent and within its purpose's lifetime. */
+async function liveToken(env: Env, token: string): Promise<TokenRow | null> {
   const row = await env.DB.prepare(
     "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE token = ?",
   )
     .bind(token)
-    .first<{ email: string; callsign: string | null; purpose: string; created_at: number; used: number }>();
-  const now = nowS();
+    .first<TokenRow>();
   const ttl = row?.purpose === CONFIRM_PURPOSE ? CONFIRM_TTL_SEC : TTL_SEC;
-  if (!row || row.used || now - row.created_at > ttl) {
-    return json({ error: "invalid or expired link" }, { status: 400 });
+  return row && !row.used && nowS() - row.created_at <= ttl ? row : null;
+}
+
+/**
+ * GET /auth/email/verify?token= — the link target: a confirm page for a browser, `{ confirm: true }` for
+ * an API client. Never consumes the token; a browser opening a spent or expired link learns so at once.
+ * POST /auth/email/verify {token} (JSON or a form) — consume the token and open a session. The confirm form
+ * returns to the app on success and shows a page for every other outcome; an API client gets JSON.
+ */
+export async function handleEmailVerify(req: Request, env: Env): Promise<Response> {
+  const url = new URL(req.url);
+  if (req.method === "GET") {
+    const asPage = wantsPage(req);
+    // `app` reaches the page only when it is an address of this instance
+    const asked = url.searchParams.get("app");
+    const app = asked && isInstanceOrigin(asked, env) ? asked : null;
+    const token = url.searchParams.get("token");
+    // only a well-formed token ever reaches the HTML page, so nothing a link carries is reflected into it
+    if (!token || !TOKEN_SHAPE.test(token))
+      return answerProblem(
+        problem(400, "invalid", token ? "invalid token" : "missing token"),
+        asPage,
+        appFor(req, env, app),
+      );
+    if (!asPage) return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
+    const row = await liveToken(env, token);
+    if (!row) return problemPage(expired(), appFor(req, env, app));
+    const copy = CONFIRM_COPY[row.purpose] ?? SIGN_IN_COPY;
+    return linkPageResponse({
+      title: copy.title,
+      body: [copy.body],
+      action: { kind: "form", label: copy.button, fields: { token, ...(app ? { app } : {}) } },
+      note: "Didn't request this? Close this page — nothing happens until you confirm.",
+    });
   }
+
+  const isForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
+  const asPage = isForm || wantsPage(req);
+  if (!sameSiteOrigin(req, env))
+    return answerProblem(problem(403, "cross-site", "cross-site sign-in refused"), asPage, requestOrigin(req, env));
+  const form = isForm ? new URLSearchParams(await req.text().catch(() => "")) : null;
+  const app = appFor(req, env, form?.get("app"));
+  const token = form ? form.get("token") : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);
+  if (!token) return answerProblem(problem(400, "invalid", "missing token"), asPage, app);
+  if (!sessionsEnabled(env))
+    return asPage ? problemPage(problem(503, "unavailable", "sessions are disabled"), app) : sessionUnavailable();
+
+  const row = await liveToken(env, token);
+  if (!row) return answerProblem(expired(), asPage, app);
   // spend the token atomically: of two concurrent confirms only one sees the row still unused
   const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(token).run();
-  if (spent.meta?.changes === 0) return json({ error: "invalid or expired link" }, { status: 400 });
+  if (spent.meta?.changes === 0) return answerProblem(expired(), asPage, app);
 
+  const now = nowS();
   const dataOnly = row.purpose === ACCOUNT_DATA_PURPOSE;
   const acct =
     row.purpose === OPERATOR_PURPOSE
@@ -361,23 +459,19 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
         : dataOnly
           ? await accountDataAccount(env, row.email)
           : await emailAccount(env, row.email, row.callsign, now);
-  if (acct instanceof Response) return acct;
+  if (isProblem(acct)) return answerProblem(acct, asPage, app);
 
   let cookie: string;
   try {
     cookie = await issueSessionCookie(req, env, acct.account_id, acct.callsign, dataOnly ? "data" : "full");
   } catch (e) {
-    if (e instanceof AccountSuspended) return suspendedResponse(e);
+    if (e instanceof AccountSuspended) return answerProblem(suspendedProblem(e), asPage, app);
     throw e;
   }
   // the confirm form → back into the app with the session set; an API client → JSON. The app is on the
   // address the confirm came on (a visitor on the station's hotspot origin returns there, not to the owner's
   // localhost), or on the address of this instance the sign-in started on.
-  if (form) {
-    const app = form.get("app");
-    const back = app && isInstanceOrigin(app, env) ? app : requestOrigin(req, env);
-    return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: back + "/" } });
-  }
+  if (form) return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: app + "/" } });
   if (dataOnly) return json({ ok: true, callsign: null, accountData: true }, { headers: { "set-cookie": cookie } });
   return json(
     { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
@@ -388,17 +482,22 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
 type Acct = { account_id: string; callsign: string };
 
 /** The account a data link opens: the mailbox's account, while it still holds no call. */
-async function accountDataAccount(env: Env, email: string): Promise<Acct | Response> {
+async function accountDataAccount(env: Env, email: string): Promise<Acct | LinkProblem> {
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(email)
     .first<Acct>();
   if (!acct || !isFormerMarker(acct.callsign))
-    return json({ error: "this link no longer applies — sign in with your callsign instead" }, { status: 409 });
+    return problem(409, "data", "this link no longer applies — sign in with your callsign instead");
   return acct;
 }
 
 /** The account an email link signs in: the mailbox's account, or a new one registered under its call. */
-async function emailAccount(env: Env, email: string, callsign: string | null, now: number): Promise<Acct | Response> {
+async function emailAccount(
+  env: Env,
+  email: string,
+  callsign: string | null,
+  now: number,
+): Promise<Acct | LinkProblem> {
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(email)
     .first<Acct>();
@@ -406,15 +505,15 @@ async function emailAccount(env: Env, email: string, callsign: string | null, no
   if (!isFormerMarker(acct.callsign)) return acct;
   // a suspended account takes no call on: the sign-in is refused before anything is written
   const suspended = await suspensionOf(env, acct.account_id);
-  if (suspended) return suspendedResponse(new AccountSuspended(suspended));
+  if (suspended) return suspendedProblem(new AccountSuspended(suspended));
   // the account holds no call: it takes on the call the link was asked for, and its content follows
   const cs = (callsign ?? "").toUpperCase();
   const refused = cs.length >= 3 ? await unclaimableReason(env, cs) : "missing callsign";
-  if (refused) return json({ error: refused }, { status: 409 });
+  if (refused) return problem(409, "callsign", refused);
   try {
     await env.DB.batch(reclaimStatements(env, acct.account_id, acct.callsign, cs, now));
   } catch {
-    return json({ error: "callsign already claimed" }, { status: 409 });
+    return problem(409, "callsign", "callsign already claimed");
   }
   return { account_id: acct.account_id, callsign: cs };
 }
@@ -424,7 +523,7 @@ async function emailAccount(env: Env, email: string, callsign: string | null, no
  * while that address is still the one it waits for. The address then becomes the account's sign-in and
  * recovery email; an address already confirmed on another account stays there.
  */
-async function confirmedAccount(env: Env, email: string, callsign: string): Promise<Acct | Response> {
+async function confirmedAccount(env: Env, email: string, callsign: string): Promise<Acct | LinkProblem> {
   const holder = await baseHolder(env, baseCall(callsign));
   const acct = holder
     ? await env.DB.prepare("SELECT account_id, callsign, pending_email FROM accounts WHERE account_id = ?")
@@ -432,7 +531,7 @@ async function confirmedAccount(env: Env, email: string, callsign: string): Prom
         .first<Acct & { pending_email: string | null }>()
     : null;
   if (!acct || acct.pending_email !== email)
-    return json({ error: "this address is no longer waiting for confirmation" }, { status: 400 });
+    return problem(400, "address", "this address is no longer waiting for confirmation");
   try {
     await env.DB.prepare(
       "UPDATE accounts SET email = ?, pending_email = NULL WHERE account_id = ? AND pending_email = ?",
@@ -440,7 +539,7 @@ async function confirmedAccount(env: Env, email: string, callsign: string): Prom
       .bind(email, acct.account_id, email)
       .run();
   } catch {
-    return json({ error: "that address already belongs to another account" }, { status: 409 });
+    return problem(409, "address", "that address already belongs to another account");
   }
   return { account_id: acct.account_id, callsign: acct.callsign };
 }
@@ -544,7 +643,7 @@ export async function handleEmailResend(req: Request, env: Env): Promise<Respons
 }
 
 /** The account an operator link signs in: the holder of the call's base call, or a new one for the call. */
-async function operatorLinkAccount(env: Env, callsign: string, now: number): Promise<Acct | Response> {
+async function operatorLinkAccount(env: Env, callsign: string, now: number): Promise<Acct | LinkProblem> {
   const holder = await baseHolder(env, baseCall(callsign));
   if (holder) {
     const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE account_id = ?")
@@ -565,11 +664,11 @@ async function createAccount(
   email: string | null,
   now: number,
   o: { operatorLink?: boolean } = {},
-): Promise<Acct | Response> {
-  if (cs.length < 3) return json({ error: "missing callsign for registration" }, { status: 400 });
+): Promise<Acct | LinkProblem> {
+  if (cs.length < 3) return problem(400, "callsign", "missing callsign for registration");
   // guard the race: the call (or its base, via another SSID) may have been claimed since the link was issued
   const refused = await unclaimableReason(env, cs, o);
-  if (refused) return json({ error: refused }, { status: 409 });
+  if (refused) return problem(409, "callsign", refused);
   const id = crypto.randomUUID();
   try {
     // seed the held-callsign set with this call as the account's primary base call; the unique
@@ -589,7 +688,7 @@ async function createAccount(
       ),
     ]);
   } catch {
-    return json({ error: "callsign already claimed" }, { status: 409 });
+    return problem(409, "callsign", "callsign already claimed");
   }
   return { account_id: id, callsign: cs };
 }

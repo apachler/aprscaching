@@ -88,8 +88,12 @@ address when the phone has several private ones.
 
 ## Check that it worked
 
-After **Sign in**, the person sees the map signed in under their call. A link confirmed a second time, or after 15
-minutes, is refused as an invalid or expired link; mint a new one.
+After **Sign in**, the person sees the map signed in under their call. A link opened a second time, or after 15
+minutes, shows a page that says it expired or was already used; mint a new one. A suspended account's link shows
+until when the suspension holds and why.
+
+An account opened by a link has no passkey and no email yet. The app asks the person to add one, and
+**Settings → Account** warns until they do: once the session ends, nothing else signs them in.
 
 ## Next
 

@@ -68,6 +68,11 @@ const SURFACES = [
     steps: [["click", "text=/^Sign in/i"]],
     after: "form, .signin",
   },
+  // signed out because the callsign moved to its licensee: the notice says why and offers the data
+  { name: "session-ended", as: "ended", query: "", wait: ".landing", after: "text=is no longer yours" },
+  // an account with no passkey and no email: the bar over the map, and the warning in Settings → Account
+  { name: "recovery", as: "fresh", query: "", wait: ".recovery-notice" },
+  { name: "recovery-settings", as: "fresh", query: "?view=settings", wait: ".recovery-inline" },
   { name: "map", as: "user", query: "", wait: ".topbar" },
   // the top bar's search field from 960px up; narrower screens open it in a sheet from the search button
   {
