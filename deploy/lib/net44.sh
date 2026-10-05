@@ -432,7 +432,7 @@ n44_next() {
   inst="$( [ -n "${SHAPE_ENV:-}" ] && [ -f "${SHAPE_ENV:-}" ] && env_file_get "$SHAPE_ENV" INSTANCE || true)"
   step "Next"
   if [ -n "$name" ]; then
-    info "1. In the 44Net Portal (DNS -> My subdomains -> Resource Records), add under ${name#*.}:"
+    info "1. In the 44Net Portal (DNS -> My subdomains -> Resource Records), add under $(printf '%s' "$name" | sed -E 's/^.*\.([a-z0-9]+\.ampr\.org)$/\1/'):"
     while IFS= read -r line; do info "     $line"; done < <(n44_records "$name" "$v4" "$inst")
     info "   Instance admin -> Federation -> Publish your callsign identity shows the exact values to copy."
   else
