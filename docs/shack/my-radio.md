@@ -34,7 +34,8 @@ those, an [ingest box](../run/radios/ingest-box.md) feeds the instance instead.
 The radio stays connected while you use the rest of the app: close Settings, open the map or **Messages**, and
 it keeps listening. While it is connected, a radio chip in the top bar shows the radio, the number of frames
 heard and the transmit state (**TX on**, **RX only** or **TX locked** until your callsign is verified). Select
-the chip to come back here.
+the chip to come back here; while your radio waits for [transmit consent](#allow-transmitting-for-this-tab),
+selecting it asks for it instead.
 
 The link ends when you select **Disconnect**, sign out, or close or reload the page. When the device goes away
 (unplugged, out of Bluetooth range), the app says **Radio disconnected** and why. For a station that runs around
@@ -69,18 +70,44 @@ packets still put stations on the map and messages in the log.
 
 ## Transmit
 
-Receiving is always allowed. Transmitting needs a [verified callsign](../play/join.md#verify-your-callsign)
-and a USB or Bluetooth TNC; until your callsign is verified, the **Transmit** section says so.
+Receiving is always allowed. Transmitting needs a [verified callsign](../play/join.md#verify-your-callsign),
+a USB or Bluetooth TNC, and your consent for this tab; until your callsign is verified, the **Transmit**
+section says so.
 
-1. Switch on **Enable transmit**. You are the licensed control operator and responsible for what you send.
-2. Check the **TX callsign**: your callsign with the SSID you type, `-7` by default.
-3. Under **Beacon position**, enter the latitude and longitude or select **Use my location**, and add an
+### Allow transmitting for this tab
+
+When a USB or Bluetooth TNC connects under a verified callsign, the app asks once:
+**Allow transmitting from YOURCALL-7 over your USB radio until you close this tab?**
+
+- **Allow** lets this tab transmit from that callsign over that radio.
+- **Receive only** keeps the radio listening and sends nothing. Switch on **Transmit in this tab**, or select
+  the radio chip in the top bar, to be asked again.
+
+The consent lasts until you close the tab, and ends sooner when you switch **Transmit in this tab** off,
+disconnect the radio, lose the device, change the SSID, sign out or lose your callsign's verification. The
+app keeps it in the tab's memory only, so a reload or a new tab asks again. Nothing your radio sends goes out
+without it. Messages the instance sends for you (to APRS-IS, from the Mailbox, announcements) do not use your
+radio and follow their own settings.
+
+### Send a beacon
+
+1. Check the **TX callsign**: your callsign with the SSID you type, `-7` by default.
+2. Under **Beacon position**, enter the latitude and longitude or select **Use my location**, and add an
    optional comment.
-4. Select **Beacon**, then **Transmit** in the confirmation.
+3. Select **Beacon**, then **Transmit** in the confirmation.
 
 Every transmission asks you to confirm first; nothing is sent automatically. To send a text message, see
 [Send an APRS message](messages.md#send-an-aprs-message-from-your-radio). Read
 [On-air etiquette and rules](on-air.md) before you transmit.
+
+### See what you transmitted
+
+For every frame your browser sends, the radio chip in the top bar lights **TX**, and a screen reader hears
+**Transmitted to CALL** at most once every few seconds. **Recent transmissions**, under the transmit section,
+lists the last 20 frames this tab sent: the time, the source callsign, the destination and path, a short
+summary (a message's text, a position, a status, a connect or disconnect) and the part of the app that sent
+it: **My radio**, **Messages** or **Terminal**. The list lives in this tab's memory only: the app never sends
+it to the instance and never stores it. **Clear** empties it, and signing out does too.
 
 ## Troubleshooting
 

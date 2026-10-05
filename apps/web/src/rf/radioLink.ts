@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * radioLink.ts — the browser radio link as one app-wide store. The link to a radio (USB or Bluetooth KISS TNC,
- * soundcard AFSK, Meshtastic node), what it hears, the forward-to-a-gateway path and the transmit opt-in live
+ * soundcard AFSK, Meshtastic node), what it hears, the forward-to-a-gateway path and the transmit consent live
  * here, outside any component, so the link stays up while the user moves around the app: closing Settings,
  * collapsing a group or searching settings never drops the radio. It goes down only on an explicit Disconnect,
  * on the loss of the device, on a change of account, or when the page unloads.
+ *
+ * Transmit consent lasts one browser session and lives in memory only. The operator grants it in a dialog
+ * (asked when a transmit-capable radio connects under a verified callsign, or at the first transmit), for one
+ * callsign over one link; it ends on Disconnect, on the loss of the device, on a change of callsign or SSID, on
+ * the loss of verification, on signing out, and with the tab. No frame leaves without a live grant. The packet
+ * terminal, which opens its own port, asks for and records its transmissions through the same store. Every
+ * outgoing frame lands in the session's Recent transmissions (memory only, never sent anywhere) and raises a
+ * `tx` event for the top-bar indicator.
  *
  * The store holds no browser globals of its own: the link factory, the forwarder and the local sink are injected,
  * so the lifecycle is testable without a radio.
  */
 import type { Packet } from "@aprscaching/shared";
 import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
+import { aprsTxNote, type TxEntry, type TxFeature, type TxNote } from "./txLog.js";
 
 export type LinkKind = "serial" | "ble" | "audio" | "mesh";
 
@@ -38,8 +47,16 @@ export interface RadioState {
   gatewayUrl: string;
   /** The ingest secret, held in memory for this page's life only. */
   secret: string;
-  /** The transmit opt-in; only meaningful for a control-verified callsign. */
+  /** A live transmit grant for the radio link: this session's consent, for the current callsign and link. */
   txOn: boolean;
+  /** A live transmit grant for the packet terminal's own port. */
+  termTx: boolean;
+  /** The packet terminal's open TNC ("the USB TNC"), or null while it has no port open. */
+  terminal: string | null;
+  /** This session's outgoing frames, newest first, at most TX_KEPT. */
+  sent: TxEntry[];
+  /** Frames transmitted since the page loaded; the indicator keys its flash on it. */
+  txCount: number;
   ssid: string;
   callsign: string;
   verified: boolean;
@@ -50,7 +67,15 @@ export type RadioEvent =
   | { kind: "connected"; link: LinkKind }
   | { kind: "lost"; message: string }
   | { kind: "connect-failed"; message: string }
-  | { kind: "forward-failed"; message: string };
+  | { kind: "forward-failed"; message: string }
+  | { kind: "tx"; entry: TxEntry };
+
+/** Who may transmit: a part of the app with a radio port, the callsign it sends as and the words for its link. */
+export interface ConsentRequest {
+  who: RadioHolder;
+  call: string;
+  via: string;
+}
 
 type ConnectableLink = RfLink & { connect(): Promise<void> };
 
@@ -66,9 +91,12 @@ export interface RadioDeps {
   connectError?(err: Error): string | null;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(t: unknown): void;
+  now?(): number;
 }
 
 const FRAMES_KEPT = 100;
+/** Recent transmissions keeps this many outgoing frames. */
+export const TX_KEPT = 20;
 /** Forwarded frames go out in batches: one POST per this many frames, or after this long, whichever comes first. */
 export const FLUSH_FRAMES = 20;
 export const FLUSH_MS = 2000;
@@ -84,6 +112,12 @@ export class RadioLinkStore {
   private timer: unknown = null;
   /** Surface a forward error only once per link session. */
   private fwdReported = false;
+  /** The callsign each live grant was given for; a grant holds only while that call is still the one sent as. */
+  private grants: Partial<Record<RadioHolder, string>> = {};
+  private asking: Partial<Record<RadioHolder, Promise<boolean>>> = {};
+  private asker: ((r: ConsentRequest) => Promise<boolean>) | null = null;
+  private terminalCall = "";
+  private txSeq = 0;
 
   constructor(
     private deps: RadioDeps,
@@ -99,6 +133,10 @@ export class RadioLinkStore {
       gatewayUrl: init.gatewayUrl ?? "",
       secret: "",
       txOn: false,
+      termTx: false,
+      terminal: null,
+      sent: [],
+      txCount: 0,
       ssid: "7",
       callsign: "",
       verified: false,
@@ -121,9 +159,80 @@ export class RadioLinkStore {
     };
   }
 
-  /** Transmit is possible: a live link, a control-verified callsign and the operator's opt-in. */
+  /** Transmit is possible: a live, transmit-capable link, a control-verified callsign and this session's grant. */
   canTransmit(): boolean {
-    return this.state.link != null && this.state.verified && this.state.txOn;
+    return this.current != null && this.granted("bridge");
+  }
+
+  /** The dialog that asks the operator for transmit consent; the host registers it, null removes it. */
+  setConsentAsker(fn: ((r: ConsentRequest) => Promise<boolean>) | null): void {
+    this.asker = fn;
+  }
+
+  /**
+   * Ask for transmit consent unless it is already granted. Resolves true only with a live grant: the operator
+   * allowed it and the callsign and link it was asked for are still the ones in use. A second request while the
+   * dialog is open shares its answer.
+   */
+  async requestTx(who: RadioHolder = "bridge"): Promise<boolean> {
+    if (this.granted(who)) return true;
+    const want = this.txTarget(who);
+    if (!want || !this.asker) return false;
+    let answer = this.asking[who];
+    if (!answer) {
+      answer = this.asker({ who, ...want }).catch(() => false);
+      this.asking[who] = answer;
+      void answer.then(() => {
+        delete this.asking[who];
+      });
+    }
+    const ok = await answer;
+    const now = this.txTarget(who);
+    if (!ok || !now || now.call !== want.call || now.via !== want.via) return this.granted(who);
+    this.grants[who] = want.call;
+    this.set({});
+    return true;
+  }
+
+  /** End every transmit grant: the radio link's and the packet terminal's. */
+  revokeTx(): void {
+    this.grants = {};
+    this.set({});
+  }
+
+  /** Note the packet terminal's port: open (the words for its TNC and the call it sends as) or closed (null). */
+  setTerminal(via: string | null, call = ""): void {
+    delete this.grants.terminal;
+    this.terminalCall = via ? call.toUpperCase() : "";
+    this.set({ terminal: via });
+    if (via && this.txTarget("terminal")) void this.requestTx("terminal");
+  }
+
+  /** Record one outgoing frame: it joins Recent transmissions and raises a `tx` event for the indicator. */
+  recordTx(note: TxNote): void {
+    const entry: TxEntry = { ...note, id: ++this.txSeq, at: this.deps.now?.() ?? Date.now() };
+    this.set({ sent: [entry, ...this.state.sent].slice(0, TX_KEPT), txCount: this.txSeq });
+    this.emit({ kind: "tx", entry });
+  }
+
+  clearSent(): void {
+    this.set({ sent: [] });
+  }
+
+  /** What a part of the app would transmit as, and over what, or null when it cannot transmit at all. */
+  private txTarget(who: RadioHolder): { call: string; via: string } | null {
+    if (!this.state.verified || this.state.callsign.length < 3) return null;
+    if (who === "terminal")
+      return this.state.terminal && this.terminalCall ? { call: this.terminalCall, via: this.state.terminal } : null;
+    const k = this.state.link;
+    // the soundcard modem and a Meshtastic node only receive
+    if (k !== "serial" && k !== "ble") return null;
+    return { call: this.txCall(), via: `your ${LINK_LABEL[k]}` };
+  }
+
+  private granted(who: RadioHolder): boolean {
+    const t = this.txTarget(who);
+    return t != null && this.grants[who] === t.call;
   }
 
   /** The callsign this browser transmits under: the base call with the chosen SSID. */
@@ -133,17 +242,19 @@ export class RadioLinkStore {
   }
 
   /**
-   * Follow the signed-in identity. The transmit opt-in holds for the verified callsign it was given under, so a
-   * change of callsign or of verification switches it off. A different account (or signing out) also ends the
-   * link and the forwarding: both act under the callsign that set them up.
+   * Follow the signed-in identity. A transmit grant holds for the verified callsign it was given under, so a
+   * change of callsign or of verification (and signing out) ends it. A different account (or signing out) also
+   * ends the link, the forwarding and the session's Recent transmissions: they belong to the callsign that set
+   * them up.
    */
   setIdentity(callsign: string, verified: boolean): void {
     const prev = this.state;
     const sameCall = prev.callsign.toUpperCase() === callsign.toUpperCase();
     const txKey = (c: string, v: boolean) => (v ? c.toUpperCase() : null);
     const patch: Partial<RadioState> = { callsign, verified };
-    if (txKey(prev.callsign, prev.verified) !== txKey(callsign, verified)) patch.txOn = false;
+    if (txKey(prev.callsign, prev.verified) !== txKey(callsign, verified)) this.grants = {};
     if (!sameCall) {
+      patch.sent = [];
       patch.fwdOn = false;
       patch.mode = callsign.length >= 3 ? "signed" : "secret";
     }
@@ -159,6 +270,7 @@ export class RadioLinkStore {
       if (this.current !== l) return;
       this.current = null;
       this.flush();
+      delete this.grants.bridge;
       this.set({ link: null });
       void l.disconnect();
       if (err) this.emit({ kind: "lost", message: err.message || "the device went away" });
@@ -170,6 +282,8 @@ export class RadioLinkStore {
       this.fwdReported = false;
       this.set({ link: kind, busy: false, frames: [], count: 0 });
       this.emit({ kind: "connected", link: kind });
+      // a transmit-capable radio under a verified callsign asks for this session's consent as it connects
+      if (this.txTarget("bridge")) void this.requestTx("bridge");
     } catch (e) {
       this.set({ busy: false });
       const err = e as Error;
@@ -187,15 +301,24 @@ export class RadioLinkStore {
     const l = this.current;
     this.current = null;
     this.flush();
-    if (this.state.link) this.set({ link: null });
+    delete this.grants.bridge;
+    if (this.state.link || this.state.txOn) this.set({ link: null });
     await l?.disconnect();
   }
 
-  /** Transmit one frame; the caller confirms with the operator first. Throws when transmit is not allowed. */
-  async transmit(frame: TxFrame): Promise<void> {
+  /**
+   * Transmit one frame for a part of the app. Without a grant it asks for consent first; it throws when transmit
+   * is not allowed, or when the frame names another source than the callsign the grant was given for.
+   */
+  async transmit(frame: TxFrame, feature: TxFeature): Promise<void> {
+    if (!this.canTransmit()) await this.requestTx("bridge");
     const l = this.current;
-    if (!l || !this.canTransmit()) throw new Error("transmit needs a connected radio and a verified callsign");
+    if (!l || !this.canTransmit())
+      throw new Error("transmit needs a connected radio, a verified callsign and your consent for this tab");
+    const as = this.grants.bridge ?? "";
+    if (frame.src.toUpperCase() !== as) throw new Error(`transmit is allowed as ${as} only`);
     await l.send(frame);
+    this.recordTx(aprsTxNote(frame, feature));
   }
 
   setForward(on: boolean): void {
@@ -215,11 +338,12 @@ export class RadioLinkStore {
   setSecret(secret: string): void {
     this.set({ secret: secret.trim() });
   }
-  setTxOn(on: boolean): void {
-    this.set({ txOn: on && this.state.verified });
-  }
+  /** Pick the SSID transmitted under; a grant is for one CALL-SSID, so a different one ends it. */
   setSsid(ssid: string): void {
-    this.set({ ssid: ssid.replace(/[^0-9]/g, "").slice(0, 2) });
+    const before = this.txCall();
+    this.state = { ...this.state, ssid: ssid.replace(/[^0-9]/g, "").slice(0, 2) };
+    if (this.txCall() !== before) delete this.grants.bridge;
+    this.set({});
   }
 
   /** Send whatever is queued for the gateway now. */
@@ -250,6 +374,9 @@ export class RadioLinkStore {
 
   private set(patch: Partial<RadioState>): void {
     this.state = { ...this.state, ...patch };
+    // the grants follow from the identity, the links and the consent given; the state reports them as they stand
+    this.state.txOn = this.current != null && this.granted("bridge");
+    this.state.termTx = this.granted("terminal");
     for (const fn of this.subs)
       try {
         fn();

@@ -24,6 +24,8 @@ import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { BleKissTransport } from "./bleKiss.js";
 import { webBluetoothSupported } from "../rf/bleKiss.js";
 import { holdRadio, radioBusyText } from "../rf/radioLink.js";
+import { radioLink, useRadioLink } from "../rf/RadioLinkHost.js";
+import { terminalTxNote } from "../rf/txLog.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
@@ -137,6 +139,11 @@ export function PacketTerminal(props: {
 
   const myCall = props.callsign && props.callsign.length >= 3 ? props.callsign.toUpperCase() : "N0CALL-7";
   const session = sessionRef.current;
+  // An injected transport is the simulator: nothing reaches the air, so it needs no consent and logs nothing.
+  // A real TNC transmits only with this session's consent (rf/radioLink.ts), on top of a verified callsign.
+  const simulated = !!props.makeTransport;
+  const radio = useRadioLink();
+  const txOk = props.verified && (simulated || radio.termTx);
 
   // CTEXT: when a channel becomes connected and we haven't greeted it, send the connect-text once.
   useEffect(() => {
@@ -170,8 +177,17 @@ export function PacketTerminal(props: {
           void closePort();
         },
       );
-      const session = new TerminalSession(myCall, transport, notify, namesRef.current);
-      session.allowTransmit(props.verified); // transmit is gated on callsign control-verification
+      // every frame that leaves a real TNC joins the session's Recent transmissions and lights the TX indicator
+      const onAir = simulated
+        ? transport
+        : {
+            send: (f: Ax25Frame) => {
+              transport.send(f);
+              radioLink.recordTx(terminalTxNote(f));
+            },
+          };
+      const session = new TerminalSession(myCall, onAir, notify, namesRef.current);
+      session.allowTransmit(props.verified && (simulated || radioLink.getState().termTx));
       await transport.connect(9600);
       transportRef.current = transport;
       sessionRef.current = session;
@@ -215,6 +231,8 @@ export function PacketTerminal(props: {
       }, 1000);
       setPortOpen(true);
       holdRadio("terminal", true);
+      // a verified callsign is asked once whether this tab may transmit through the TNC
+      if (!simulated) radioLink.setTerminal(tncLink === "ble" ? "the Bluetooth TNC" : "the USB TNC", myCall);
       notify();
     } catch (e) {
       const m = (e as Error).message || "";
@@ -226,6 +244,7 @@ export function PacketTerminal(props: {
   /** Stop the poll, withdraw the session.script service and release the link — all of it, every time. */
   function releaseLink(): Promise<void> | undefined {
     holdRadio("terminal", false);
+    if (radioLink.getState().terminal) radioLink.setTerminal(null);
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = null;
     disposeScriptSvc.current?.();
@@ -272,12 +291,17 @@ export function PacketTerminal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // a callsign that loses (or gains) its verification while the port is open stops (or may start) transmitting
-  useEffect(() => sessionRef.current?.allowTransmit(props.verified), [props.verified]);
+  // a callsign that loses its verification, or a consent that ends, stops transmitting while the port is open
+  useEffect(() => sessionRef.current?.allowTransmit(txOk), [txOk]);
 
-  function connect() {
+  async function connect() {
     const s = sessionRef.current;
     if (!s || !props.verified || remoteCall.trim().length < 3) return;
+    if (!s.canTransmit) {
+      // connecting transmits: without this session's consent it asks first
+      if (!(await radioLink.requestTx("terminal")) || sessionRef.current !== s) return;
+      s.allowTransmit(true);
+    }
     const id = s.connect(remoteCall.trim().toUpperCase());
     setActiveId(id);
     setViewMon(false);
@@ -383,6 +407,28 @@ export function PacketTerminal(props: {
           TNC hears.
         </p>
       )}
+      {portOpen && props.verified && !simulated && (
+        <p className="muted row gap-2">
+          {txOk ? (
+            <>
+              Transmitting as <span className="mono">{myCall}</span> is allowed until you close this tab.
+              <Button onClick={() => radioLink.revokeTx()} hint="Stop transmitting; the terminal keeps listening">
+                Receive only
+              </Button>
+            </>
+          ) : (
+            <>
+              Receive only: the terminal listens and answers no one.
+              <Button
+                onClick={() => void radioLink.requestTx("terminal")}
+                hint="Ask to allow transmitting through this TNC until you close this tab"
+              >
+                Allow transmit
+              </Button>
+            </>
+          )}
+        </p>
+      )}
 
       {!portOpen && (
         <EmptyState
@@ -451,11 +497,11 @@ export function PacketTerminal(props: {
                 disabled={!props.verified}
                 onChange={(e) => setRemoteCall(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") connect();
+                  if (e.key === "Enter") void connect();
                 }}
               />
               <Button
-                onClick={connect}
+                onClick={() => void connect()}
                 disabled={!props.verified || remoteCall.trim().length < 3}
                 hint={
                   props.verified ? "Open a connected-mode link to this callsign" : "Verify your callsign to connect"

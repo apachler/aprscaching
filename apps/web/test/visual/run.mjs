@@ -142,6 +142,18 @@ const SURFACES = [
     ],
     after: ".station-card .setrow",
   },
+  // My radio (browser): the transmit section and this tab's Recent transmissions
+  {
+    name: "myradio",
+    as: "user",
+    query: "?view=settings",
+    wait: "text=My radio (browser)",
+    steps: [
+      ["click", "button:has-text('My radio (browser)')"],
+      ["scroll", ".tx-log-block"],
+    ],
+    after: ".tx-log li",
+  },
   { name: "nearby", as: "user", query: "?view=nearby" },
   { name: "filter", as: "user", query: "?view=filter" },
   { name: "alerts", as: "user", query: "?view=alerts" },

@@ -11,6 +11,8 @@
  * its offline graticule and nothing leaves the page; `&net=1` lets them through, to check the overlays on the
  * real basemaps.
  */
+import { radioLink } from "../rf/RadioLinkHost.js";
+import { aprsTxNote } from "../rf/txLog.js";
 import type {
   ActivityItem,
   CacheDetail,
@@ -1085,6 +1087,7 @@ export function fixtureAnswer(method: string, path: string, persona: Persona): u
 
 /** Answer the app's gateway requests from the fixtures; refuse third-party requests. */
 export function installAppFixtures(persona: Persona, network = false): void {
+  if (persona !== "out") seedRecentTransmissions();
   const real = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
@@ -1102,4 +1105,37 @@ export function installAppFixtures(persona: Persona, network = false): void {
     }
     return Response.json(body);
   };
+}
+
+/**
+ * A few of this tab's transmissions for Settings → My radio's Recent transmissions. The radio store forgets them
+ * when the signed-in callsign changes, so they go in once the platform has set OE8APR as the identity.
+ */
+function seedRecentTransmissions(): void {
+  let seeded = false;
+  const off = radioLink.subscribe(() => {
+    if (seeded || !radioLink.getState().callsign) return;
+    seeded = true;
+    queueMicrotask(() => {
+      off();
+      const src = "OE8APR-7";
+      radioLink.recordTx(
+        aprsTxNote({ src, dst: "APZACG", path: ["WIDE1-1"], payload: "!4704.25N/01526.30E>On the trail" }, "My radio"),
+      );
+      radioLink.recordTx(
+        aprsTxNote(
+          { src, dst: "APRS", path: ["WIDE1-1"], payload: ":OE6XRR-9 :Greetings from the Schlossberg{12" },
+          "Messages",
+        ),
+      );
+      radioLink.recordTx({
+        src: "OE8APR",
+        dst: "OE8XBM-7",
+        path: [],
+        to: "OE8XBM-7",
+        summary: "connect request",
+        feature: "Terminal",
+      });
+    });
+  });
 }

@@ -25,16 +25,22 @@ Bluetooth on a computer or an Android phone. Browsers on an iPhone or iPad have 
 
 !!! warning "Connecting transmits"
     A connect keys your radio under your callsign, so the terminal connects only for a verified callsign
-    ([Verify your callsign](../play/join.md#verify-your-callsign)). Until then it listens: channel 0 shows
-    everything your TNC hears. Read [On-air etiquette and rules](on-air.md) first.
+    ([Verify your callsign](../play/join.md#verify-your-callsign)) and with your consent for this tab. Until
+    then it listens: channel 0 shows everything your TNC hears. Read [On-air etiquette and rules](on-air.md)
+    first.
 
 1. Open **Shack → Packet terminal**.
 2. Choose **USB** or **Bluetooth**, switch on or plug in the TNC, and select **Open KISS TNC…**. Pick the
    device in the browser's dialog. Channel 0 shows everything the TNC hears.
-3. Type a callsign in **connect to…** and select **Connect**. The connection opens on a channel of its own.
-4. Type a line and select **Send**.
+3. Answer **Allow** when the app asks whether this tab may transmit through the TNC. **Receive only** keeps it
+   listening; **Allow transmit**, or the first **Connect**, asks again. The consent ends when you close the
+   tab or the TNC, select **Receive only**, or sign out
+   ([Allow transmitting for this tab](my-radio.md#allow-transmitting-for-this-tab)).
+4. Type a callsign in **connect to…** and select **Connect**. The connection opens on a channel of its own.
+5. Type a line and select **Send**.
 
-**Close TNC** releases the TNC. **↓ .ans** saves the current pane as ANSI art.
+Every frame the terminal sends lights **TX** on the radio chip in the top bar and joins **Recent
+transmissions** in **Settings → My radio (browser)**, marked **Terminal**. **Close TNC** releases the TNC. **↓ .ans** saves the current pane as ANSI art.
 
 ## Use the instance's BBS
 
