@@ -296,8 +296,7 @@ export function LogForm(props: {
           </label>
           {flagMaintenance && (
             <p id="log-maint-help" className="muted fine">
-              Sent with your find or your did-not-find. The owner hears of it, and the cache shows it until they fix
-              it.
+              Sent with your find or your did-not-find. The owner hears of it, and the cache shows it until they fix it.
             </p>
           )}
           <Button
