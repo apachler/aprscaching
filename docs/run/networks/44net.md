@@ -45,7 +45,8 @@ settle it.
 
 ## 1. Get an address
 
-Follow ARDC's own instructions rather than a copy here; they change.
+Both steps happen on ARDC's sites. When a screen there differs from the steps below, follow the linked ARDC
+page.
 
 1. Create a **44Net Portal** account at [portal.ampr.org](https://portal.ampr.org/) and verify your callsign
    through the Portal ([Verification](https://wiki.ampr.org/wiki/Verification)). A callsign subdomain
