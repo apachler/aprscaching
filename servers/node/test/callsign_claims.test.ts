@@ -14,6 +14,7 @@ import {
   authEnv,
   call,
   emailSignup,
+  hiderSignup,
   newAuthenticator,
   operatorSignup,
   operatorVerify,
@@ -257,7 +258,7 @@ describe("the previous holder's content", () => {
       await call(env, "POST", "/auth/callsigns", { callsign: "OE8APR" }, { cookie });
       cookie = (await call(env, "POST", "/auth/callsign", { callsign: "OE8APR" }, { cookie })).cookie;
     }
-    const finder = await emailSignup(env, "owner@example.test", "DL1OWN");
+    const finder = await hiderSignup(env, "owner@example.test", "DL1OWN");
     const theirs = await call(
       env,
       "POST",
@@ -271,10 +272,9 @@ describe("the previous holder's content", () => {
       env,
       "POST",
       "/api/caches",
-      { title: "elm", type: "traditional", lat: 46, lon: 14 },
-      {
-        cookie,
-      },
+      { title: "elm", type: "traditional", lat: 46, lon: 14, ownerCall: "OE8APR" },
+      // an unverified holder hides nothing from the web; the cache came in over the air, owned by the call
+      INGEST,
     );
     expect(mine.status).toBe(201);
     const log = await call(
@@ -392,7 +392,7 @@ describe("federation", () => {
     stubFetch({ "https://a.example": serve(env) });
 
     const squat = await emailSignup(env, "squat@example.test", "OE8APR");
-    const finder = await emailSignup(env, "owner@example.test", "DL1OWN");
+    const finder = await hiderSignup(env, "owner@example.test", "DL1OWN");
     const theirs = await call(
       env,
       "POST",
@@ -406,10 +406,9 @@ describe("federation", () => {
       env,
       "POST",
       "/api/caches",
-      { title: "elm", type: "traditional", lat: 46, lon: 14 },
-      {
-        cookie: squat.cookie,
-      },
+      { title: "elm", type: "traditional", lat: 46, lon: 14, ownerCall: "OE8APR" },
+      // an unverified holder hides nothing from the web; the cache came in over the air, owned by the call
+      INGEST,
     );
     await call(
       env,

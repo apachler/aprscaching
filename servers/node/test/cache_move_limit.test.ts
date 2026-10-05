@@ -3,7 +3,7 @@
 // of its coordinates (its own and every stage's) moves at most CACHE_MOVE_LIMIT_M from where it stood at the first
 // find, a found stage stays part of the cache, a living cache is exempt, and the sysop corrects any coordinate.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, hiderSignup, operatorVerify } from "./helpers/authflow.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const at = () => Math.floor(Date.now() / 1000);
@@ -15,7 +15,7 @@ const FAR = { lat: 47.002, lon: 15 };
 
 async function world(extra: Record<string, unknown> = {}, type = "traditional") {
   const env = authEnv({ ADMIN_CALLSIGNS: "OE8SYS,DL1FND", ...extra });
-  const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+  const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
   const made = await call(env, "POST", "/api/caches", { title: "the oak", type, ...HOME }, { cookie: owner.cookie });
   expect(made.status, JSON.stringify(made.data)).toBe(201);
   const id = made.data.cache.id as number;
@@ -122,7 +122,7 @@ describe("moving a cache", () => {
 
   it("does not hold a living cache, which follows its station", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8OWN" });
-    const owner = await emailSignup(env, "owner@example.test", "OE8OWN");
+    const owner = await hiderSignup(env, "owner@example.test", "OE8OWN");
     await operatorVerify(env, "OE8OWN"); // only a verified call's stations are listed
     const st = await call(env, "POST", "/api/my/stations", { callsign: "OE8OWN-9", ...HOME }, { cookie: owner.cookie });
     expect(st.status, JSON.stringify(st.data)).toBe(201);
