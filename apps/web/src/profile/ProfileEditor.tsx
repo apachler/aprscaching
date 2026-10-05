@@ -66,10 +66,13 @@ export function ProfileEditor(props: { callsign: string }) {
       <p className="muted">
         A self-curated card on your public profile. Everything is opt-in; leave a field blank to hide it.
       </p>
-      <Row label="Show my profile publicly">
+      <Row
+        label="Show my profile publicly"
+        help="Off until you turn it on. Your callsign, finds and badges show on the leaderboards either way."
+      >
         <Switch
           label="Show my profile publicly"
-          checked={p.profilePublic !== false}
+          checked={p.profilePublic === true}
           onChange={(v) => edit((s) => ({ ...s, profilePublic: v }))}
         />
       </Row>

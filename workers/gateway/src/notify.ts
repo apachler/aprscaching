@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * notify.ts — push + email-digest delivery over the watch alerts. The email
- * digest is the MANDATORY fallback (iOS/no-push); web push is the enhancement. In-app alerts
+ * notify.ts — push + email-digest delivery over the watch alerts. Every instance with mail offers the email
+ * digest, the fallback for devices without push (iOS, no PWA); both start off for a new account. In-app alerts
  * remain the always-on baseline.
  *
  *   GET  /api/push/key          VAPID public key (null when push isn't configured)
  *   POST /api/push/subscribe    store a Web Push subscription { endpoint, keys{p256dh,auth}, topics }
  *   POST /api/push/unsubscribe  remove { endpoint }
- *   GET/POST /api/notify/prefs  read / set the email-digest opt-out
+ *   GET/POST /api/notify/prefs  read / set the email digest (off until the user turns it on)
  *   GET/POST /api/notify/unsubscribe  the digest's signed one-click unsubscribe (confirm page, then POST)
  *
  * A push carries no payload: it is the VAPID-signed wake-up alone, and the service worker fetches the alert
@@ -202,13 +202,13 @@ export async function handleNotifyPrefs(req: Request, env: Env): Promise<Respons
   if (req.method === "POST") {
     const b = (await req.json().catch(() => ({}))) as { digest?: boolean };
     await env.DB.prepare("UPDATE accounts SET notify_digest = ? WHERE account_id = ?")
-      .bind(b.digest === false ? 0 : 1, acct)
+      .bind(b.digest === true ? 1 : 0, acct)
       .run();
   }
   const r = await env.DB.prepare("SELECT notify_digest AS digest, email FROM accounts WHERE account_id = ?")
     .bind(acct)
     .first<{ digest: number; email: string | null }>();
-  return json({ digest: (r?.digest ?? 1) === 1, hasEmail: !!r?.email, pushConfigured: !!env.VAPID_PUBLIC });
+  return json({ digest: (r?.digest ?? 0) === 1, hasEmail: !!r?.email, pushConfigured: !!env.VAPID_PUBLIC });
 }
 
 /** Scheduled: email each account its un-notified watch alerts, then mark them sent. */

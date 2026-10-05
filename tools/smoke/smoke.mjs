@@ -1856,7 +1856,16 @@ ok(
   ).status === 401,
 );
 ok(
-  "GET /api/notify/prefs reports the digest opt-in (default on)",
+  "GET /api/notify/prefs reports the digest off for a new account",
+  (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === false,
+);
+await fetch(`${BASE}/api/notify/prefs`, {
+  method: "POST",
+  headers: { "content-type": "application/json", cookie: wcookie },
+  body: JSON.stringify({ digest: true }),
+});
+ok(
+  "POST /api/notify/prefs turns the email digest on",
   (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === true,
 );
 await fetch(`${BASE}/api/notify/prefs`, {
@@ -2160,7 +2169,16 @@ ok(
   ).data?.supporter === "OE9PROF",
 );
 ok(
-  "the supporter flag shows on the profile (recognition)",
+  "the supporter flag stays off a hidden profile",
+  (await call("GET", "/api/profile/OE9PROF")).data?.supporter === false,
+);
+await fetch(`${BASE}/auth/profile`, {
+  method: "POST",
+  headers: { "content-type": "application/json", cookie: prcookie },
+  body: JSON.stringify({ displayName: "Andreas", profilePublic: true }),
+});
+ok(
+  "the supporter flag shows on a shown profile (recognition)",
   (await call("GET", "/api/profile/OE9PROF")).data?.supporter === true,
 );
 const support = await call("GET", "/api/support");

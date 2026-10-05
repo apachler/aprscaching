@@ -166,7 +166,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
 
   // opt-in profile: surfaced only when the master switch is on; empty fields omitted
   let profile: Record<string, unknown> | undefined;
-  if (acct && (acct.profilePublic ?? 1) === 1) {
+  if (acct && (acct.profilePublic ?? 0) === 1) {
     const links = acct.links ? (JSON.parse(acct.links) as unknown[]) : [];
     const p: Record<string, unknown> = {};
     if (acct.displayName) p.displayName = acct.displayName;
@@ -182,7 +182,8 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     callsign: cs,
     homeInstance: env.INSTANCE, // where this operator is homed
     accountVerified: !!acct && (await isCallsignVerified(env, cs)),
-    supporter: acct?.tier === "supporter", // recognition only; never gates anything
+    // recognition only, never gates anything; named only while the owner shows their profile
+    supporter: acct?.tier === "supporter" && (acct.profilePublic ?? 0) === 1,
     finds: stat?.finds ?? 0,
     points: Math.round(stat?.points ?? 0),
     firstFind: stat?.firstFind ?? null,

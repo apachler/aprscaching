@@ -42,8 +42,8 @@ alerts:
 
 - **Browser push**: tap **Enable**. The instance must offer push, and on an iPhone you install the app to
   your home screen first. Signing out turns push off in that browser.
-- **Email digest**: alerts batched into an email. It needs an email on your account. The subject says what
-  the alerts are about, and the mail links your instance. To stop it, turn off **Email digest**, or open the
+- **Email digest**: alerts batched into an email, off until you turn it on. It needs an email on your account.
+  The subject says what the alerts are about, and the mail links your instance. To stop it, turn off **Email digest**, or open the
   unsubscribe link at the end of the mail and confirm. Your mail program's **Unsubscribe** button does the
   same in one step.
 

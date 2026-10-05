@@ -127,6 +127,26 @@ The list shows each key's name, its first characters, when you created it and wh
 stops a key at once; create a new one if you lose a key. An account holds up to five keys, unless the instance
 sets another number. The sysop can revoke a key that is misused.
 
+## What a new account shares
+
+A new account shares only what the game needs. Everything else starts off until you turn it on.
+
+| What | A new account | Where you change it |
+|---|---|---|
+| Your callsign, finds, hides and badges | Shown on leaderboards and your profile page: the game ranks by callsign | — |
+| Profile card (name, locator, picture, bio, links, contact address) | Hidden, and every field empty | **Settings → Profile** |
+| Your email address | Never shown; used for sign-in links and the digest only | **Settings → Account** |
+| Email digest | Off | **Settings → Notifications** |
+| Browser push | Off | **Settings → Notifications** |
+| Watchlist | Empty | **Settings → Notifications** |
+| Announce finds on APRS-IS | Off | **Settings → Announce finds** |
+| Near-cache radio message | Off | **Settings → Near-cache radio message** |
+| Your device's location | Stays in the browser; sent only with a find you log, as its evidence | — |
+| Radio forwarding and transmit from the browser | Off | **Settings → My radio (browser)** |
+| Supporter badge and thanks list | Shown only while your profile card is shown | **Settings → Profile** |
+
+The app has no analytics and no ads. It sets one session cookie when you sign in.
+
 ## Your data
 
 Open **Settings → Your data**.
