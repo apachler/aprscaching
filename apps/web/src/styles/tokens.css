@@ -185,7 +185,7 @@
     /* shell geometry */
     --topbar-h: 50px;
     --tabbar-h: 60px;
-    --rail-w: 64px;
+    --rail-w: 72px;
     --panel-w: 348px; /* floating drawer */
     --dock-w: 340px; /* docked left column */
     --dock-w-detail: 392px; /* docked right (detail) column */

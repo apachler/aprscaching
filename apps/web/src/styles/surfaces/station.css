@@ -39,12 +39,17 @@
     gap: var(--space-xs);
     align-items: center;
   }
+  /* the replay's compact bar keeps one row and lets each button's touch extension reach past it */
   .tr-controls .seg {
     display: flex;
+    flex-wrap: nowrap;
     border: 1px solid var(--hair);
     border-radius: var(--radius-control);
+    overflow: visible;
   }
   .tr-controls .seg button {
+    margin: 0;
+    box-shadow: none;
     min-height: 32px;
     padding: 0 var(--space-sm);
     border: none;
@@ -53,6 +58,20 @@
     font-weight: 600;
     font-size: var(--text-label);
     cursor: pointer;
+  }
+  @media (pointer: coarse) {
+    .tr-controls .seg button {
+      position: relative;
+    }
+    .tr-controls .seg button::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, var(--hit));
+      height: max(100%, var(--hit));
+      transform: translate(-50%, -50%);
+    }
   }
   /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
      area of each button can reach past the bar */

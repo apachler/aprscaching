@@ -1,13 +1,16 @@
 /* Segmented controls: the segment bar and the full-width chip segments. */
 @layer components {
+  /* the chips share the row; in a narrow container they wrap whole onto a second row rather than breaking a label */
   .seg-chips {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-xs);
     margin-bottom: var(--space-md);
   }
   .seg-chips button {
-    flex: 1;
-    padding: 7px 0;
+    flex: 1 1 auto;
+    padding: 7px var(--space-sm);
+    white-space: nowrap;
     border-radius: var(--radius-control);
     font-size: var(--text-label);
     font-weight: 600;
@@ -25,35 +28,38 @@
     outline: 2px solid var(--heading);
     outline-offset: 2px;
   }
-  /* segmented control (pick one of 2–4 modes) */
+  /* segmented control (pick one of 2–4 modes). The bar is never wider than its container: in a narrow one its
+     segments wrap onto a second row, each row filled edge to edge, and the bar clips its segments to its own
+     rounded corners on any row. Each segment draws the line on its left and top edge; the -1px margins tuck those
+     lines under the bar's own border on the first column and the first row. */
   .seg {
     display: inline-flex;
+    flex-wrap: wrap;
+    max-width: 100%;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);
-  }
-  .seg.verify-methods {
-    overflow: hidden; /* wraps onto several rows; its buttons are already full-size targets */
+    overflow: hidden;
+    overflow: clip;
   }
   .seg button {
+    flex: 1 1 auto;
+    margin: -1px 0 0 -1px;
+    box-shadow:
+      inset 1px 0 0 var(--line),
+      inset 0 1px 0 var(--line);
     border: none;
     border-radius: 0;
     background: var(--surface);
     color: var(--muted);
     padding: 5px var(--space-md);
     text-transform: capitalize;
+    white-space: nowrap;
   }
-  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
-     area of each button can reach past the bar */
-  .seg:not(.verify-methods) > button:first-child {
-    border-start-start-radius: calc(var(--radius-control) - 1px);
-    border-end-start-radius: calc(var(--radius-control) - 1px);
-  }
-  .seg:not(.verify-methods) > button:last-child {
-    border-start-end-radius: calc(var(--radius-control) - 1px);
-    border-end-end-radius: calc(var(--radius-control) - 1px);
-  }
-  .seg button + button {
-    border-left: 1px solid var(--line);
+  /* the bar clips a segment's touch extension, so on touch each segment is a full-size target itself */
+  @media (pointer: coarse) {
+    .seg button {
+      min-height: var(--hit);
+    }
   }
   .seg button.on {
     background: var(--accent);

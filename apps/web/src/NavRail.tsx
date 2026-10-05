@@ -36,33 +36,32 @@ export function NavRail(props: {
     </Button>
   );
   const core = (section: NavItem["section"]) =>
-    NAV_ITEMS.filter((i) => i.section === section && (!i.sysop || props.sysop)).map((i, n) =>
-      item(
-        i.key,
-        i.icon,
-        i.label,
-        i.hint,
-        () => props.onNav(i.key),
-        section === "bottom" && n === 0 ? "rail-sp" : undefined,
-      ),
+    NAV_ITEMS.filter((i) => i.section === section && (!i.sysop || props.sysop)).map((i) =>
+      item(i.key, i.icon, i.label, i.hint, () => props.onNav(i.key)),
     );
+  // the destinations and the pinned apps scroll when the window is too short for them all; the bottom group (You,
+  // Offline, Settings, Admin, Manual) stays in view, so the rail is never taller than the shell
   return (
     <nav className="rail" aria-label="Primary">
-      {core("top")}
-      {props.pinnedApps.length > 0 && <span className="rail-div" aria-hidden="true" />}
-      {props.pinnedApps.map((app) =>
-        item(app.id, app.icon, app.label, app.blurb, () => props.onLaunchApp(app.id), "rail-pinned"),
-      )}
-      {core("bottom")}
-      {NAV_LINKS.map((l) => (
-        <Hint key={l.key} text={l.hint}>
-          <a className="rail-link" href={l.href} target="_blank" rel="noopener">
-            <Icon name={l.icon} size={21} />
-            <span>{l.label}</span>
-            <span className="sr-only"> (opens in a new tab)</span>
-          </a>
-        </Hint>
-      ))}
+      <div className="rail-scroll">
+        {core("top")}
+        {props.pinnedApps.length > 0 && <span className="rail-div" aria-hidden="true" />}
+        {props.pinnedApps.map((app) =>
+          item(app.id, app.icon, app.label, app.blurb, () => props.onLaunchApp(app.id), "rail-pinned"),
+        )}
+      </div>
+      <div className="rail-bottom">
+        {core("bottom")}
+        {NAV_LINKS.map((l) => (
+          <Hint key={l.key} text={l.hint}>
+            <a className="rail-link" href={l.href} target="_blank" rel="noopener">
+              <Icon name={l.icon} size={21} />
+              <span>{l.label}</span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </Hint>
+        ))}
+      </div>
       {/* the words of an attention dot, outside the buttons so they describe one without joining its name */}
       <span id="rail-attn" className="sr-only">
         needs attention

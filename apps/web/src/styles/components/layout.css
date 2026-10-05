@@ -8,6 +8,10 @@
   .row > label {
     flex: 1;
   }
+  /* a field in a row shares the line and shrinks with it, never pushing its neighbours past the row's edge */
+  .row > :is(input, select, textarea) {
+    min-width: 0;
+  }
   .row.end {
     justify-content: flex-end;
     margin-top: var(--space-md);
@@ -15,5 +19,21 @@
   .row.between {
     justify-content: space-between;
     align-items: center;
+  }
+  /* a line of text with its action: side by side while the text keeps a readable measure, the action on a row of
+     its own below in a narrow container, never a squeezed column of words beside a squeezed button */
+  .row.between:has(> :is(p, span):first-child + :is(button, a):last-child) {
+    flex-wrap: wrap;
+  }
+  .row.between > :is(p, span):first-child:has(+ :is(button, a):last-child) {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  .row.between > :is(p, span):first-child + :is(button, a):last-child {
+    flex: none;
+  }
+  /* a segmented bar sharing a row with other controls: the row wraps before the bar breaks */
+  .row:has(> .seg) {
+    flex-wrap: wrap;
   }
 }

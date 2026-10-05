@@ -118,14 +118,19 @@ CI runs it in the `dev-stack` job ([Run from source](run-from-source.md#check-th
     ```bash
     pnpm --filter @aprscaching/web visual                      # every surface × theme × phone/desktop
     node apps/web/test/visual/run.mjs --only map,detail --themes light --keyboard
+    node apps/web/test/visual/run.mjs --themes dark --views phone-320,phone-340,phone-360,desktop-600,tall
     ```
 
     It writes screenshots, `axe.json`, `keyboard.json` and an HTML index to `apps/web/test/visual/out/`.
     `pnpm --filter @aprscaching/web journeys` walks the main tasks (first visit, sign in, find and log, hide,
     settings search, the Shack, the sysop's first hour) by their visible controls on a phone and a desktop, with a
     screenshot per step and a log that marks every step it could not complete.
+    Every render also reports layout findings: the document scrolling past the viewport (something escaping the
+    shell), and a control or its words reaching past its panel or its own edge. The views beyond the default phone
+    and desktop sweep narrow phones (`phone-320`, `phone-340`, `phone-360`), a short and a tall laptop
+    (`desktop-600`, `desktop-1000`) and a tall desktop window (`tall`, 1868×1891).
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
-    axe finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
+    axe finding or a layout finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
     the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and
     keeps them as an artifact.
 

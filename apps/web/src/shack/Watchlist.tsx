@@ -133,7 +133,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
               </Badge>
               <strong className="mono"> {a.callsign}</strong>
               <span className="muted"> · {fmt.ago(a.ts)}</span>
-              {a.detail && <div className="comment">{a.detail}</div>}
+              {a.detail && <div className="comment">{a.detail}</div>}{" "}
               {a.lat != null && a.lon != null && props.onFly && (
                 <Button variant="quiet" onClick={() => props.onFly!(a.lat!, a.lon!)}>
                   show on map

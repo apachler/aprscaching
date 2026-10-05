@@ -1,11 +1,21 @@
 /* Nearby list: cache cards and station rows. */
 @layer surfaces {
   /* ---- Nearby: operator cache cards + station rows ---- */
+  /* where the distances run from, then its actions; in a narrow panel the actions wrap below the words */
   .nearby-h {
     display: flex;
-    align-items: baseline;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
+    gap: var(--space-xs) var(--space-sm);
     margin: var(--space-2xs) 0 var(--space-md);
+  }
+  .nearby-h > span {
+    min-width: 0;
+  }
+  .nearby-h > button {
+    flex: none;
+    white-space: nowrap;
   }
   .nearby-grid {
     font-family: var(--font-mono);

@@ -45,9 +45,14 @@
     width: 100%;
     accent-color: var(--accent);
   }
+  /* one column that never grows past the card: a wide child (the size switch) wraps instead of widening it */
   .newpack {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-sm);
+  }
+  .newpack > .seg {
+    justify-self: start;
   }
   .newpack .slider {
     display: grid;

@@ -2,7 +2,7 @@
 /**
  * The visual and accessibility harness: renders the app's surfaces against the demo fixtures
  * (src/demo/fixtures.ts, `/?demo=app`) in the dark, light and Phosphor themes at a phone (390×844) and a
- * desktop (1280×800) viewport, saves a screenshot of each, runs axe-core (WCAG 2.0–2.2 A/AA) on each, and
+ * desktop (1280×800) viewport (`--views` picks others: narrow phones, short and tall desktops), saves a screenshot of each, runs axe-core (WCAG 2.0–2.2 A/AA) on each, and
  * writes an HTML index beside them. Nothing leaves the machine: the built app is served locally and every
  * third-party request is refused.
  *
@@ -40,7 +40,18 @@ const ALLOW = new Map([
 const VIEWS = {
   phone: { width: 390, height: 844, isMobile: true, hasTouch: true },
   desktop: { width: 1280, height: 800 },
+  // the layout sweep (`--views`): narrow phones, a short and a tall laptop, a tall desktop window
+  "phone-320": { width: 320, height: 640, isMobile: true, hasTouch: true },
+  "phone-340": { width: 340, height: 720, isMobile: true, hasTouch: true },
+  "phone-360": { width: 360, height: 760, isMobile: true, hasTouch: true },
+  "desktop-600": { width: 1280, height: 600 },
+  "desktop-1000": { width: 1280, height: 1000 },
+  tall: { width: 1868, height: 1891 },
 };
+/** The views a run renders unless `--views` names others (CI runs these). */
+const DEFAULT_VIEWS = ["phone", "desktop"];
+/** A view's kind, for a surface's `views` list: every phone-* view is a phone, every other one a desktop. */
+const kindOf = (view) => (VIEWS[view].isMobile ? "phone" : "desktop");
 const THEMES = ["dark", "light", "phosphor"];
 
 /**
@@ -170,6 +181,25 @@ const SURFACES = [
     after: ".about-facts",
   },
   { name: "offline", as: "user", query: "?view=offline" },
+  // a new pack: the size switch under the locator, then the cache-type checkboxes
+  {
+    name: "newpack-size",
+    as: "user",
+    query: "?view=offline",
+    wait: ".newpack",
+    steps: [["scroll", ".newpack > p"]],
+  },
+  {
+    name: "newpack",
+    as: "user",
+    query: "?view=offline",
+    wait: ".newpack",
+    steps: [
+      ["click", "button:has-text('Only some cache types')"],
+      ["scroll", ".pack-types"],
+    ],
+    after: ".pack-types",
+  },
   { name: "shack", as: "user", query: "?view=shack" },
   { name: "terminal", as: "user", query: "?view=terminal" },
   { name: "bbs", as: "user", query: "?view=bbs" },
@@ -178,6 +208,15 @@ const SURFACES = [
   { name: "rig", as: "user", query: "?view=rig" },
   { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
   { name: "admin", as: "sysop", query: "?view=admin" },
+  // the nav rail with every Shack app pinned: the pinned section scrolls, the bottom group stays in view
+  {
+    name: "rail-pinned",
+    as: "sysop",
+    query: "?view=messages",
+    views: ["desktop"],
+    pins: ["terminal", "bbs", "decoder", "tools", "rig", "node", "remote"],
+    wait: ".rail",
+  },
   { name: "node", as: "sysop", query: "?view=node" },
   { name: "remote", as: "sysop", query: "?view=remote" },
   { name: "ui", as: "user", url: "/?demo=ui", wait: "main", fullPage: true },
@@ -246,7 +285,7 @@ async function open(page, origin, s, theme) {
   // the map opens on the fixtures' region (MapLibre keeps its position in the hash)
   const url = s.url
     ? `${origin}${s.url}&theme=${theme}`
-    : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}#14/47.0725/15.4380`;
+    : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}${s.pins ? `&pins=${s.pins.join(",")}` : ""}#14/47.0725/15.4380`;
   // a fresh document for every surface: going to the URL the page already shows would keep the last surface's
   // state (an open sheet, a filled field) instead of loading it again
   await page.goto("about:blank");
@@ -276,7 +315,9 @@ async function main() {
   }
   const only = arg("only");
   const themes = arg("themes") ?? THEMES;
-  const views = arg("views") ?? Object.keys(VIEWS);
+  const views = arg("views") ?? DEFAULT_VIEWS;
+  const unknown = views.filter((v) => !VIEWS[v]);
+  if (unknown.length) throw new Error(`unknown view ${unknown.join(", ")}; known: ${Object.keys(VIEWS).join(", ")}`);
   const shots = !process.argv.includes("--no-shots");
   mkdirSync(OUT, { recursive: true });
 
@@ -307,6 +348,8 @@ async function main() {
           try {
             if (!location.search.includes("tour=1")) localStorage.setItem("acs.tour.seen", "1");
             localStorage.setItem("acs.locale", JSON.stringify({ theme: t }));
+            const pins = new URLSearchParams(location.search).get("pins");
+            localStorage.setItem("acs.pins", JSON.stringify(pins ? pins.split(",") : []));
           } catch {
             /* storage refused */
           }
@@ -316,12 +359,13 @@ async function main() {
         const page = await ctx.newPage();
         for (const s of SURFACES) {
           if (only && !only.includes(s.name)) continue;
-          if (s.views && !s.views.includes(view)) continue;
+          if (s.views && !s.views.includes(kindOf(view))) continue;
           const id = `${s.name}-${theme}-${view}`;
-          const row = { id, surface: s.name, theme, view, error: null, violations: [] };
+          const row = { id, surface: s.name, theme, view, error: null, violations: [], layout: [] };
           try {
             await open(page, origin, s, theme);
             if (shots) await page.screenshot({ path: path.join(OUT, `${id}.png`), fullPage: !!s.fullPage });
+            if (!s.fullPage) row.layout = await page.evaluate(layoutFindings);
             await page.addScriptTag({ content: AXE });
             const r = await page.evaluate(() =>
               window.axe.run(document, {
@@ -344,6 +388,7 @@ async function main() {
           console.log(
             `${row.error ? "ERR " : "    "}${id.padEnd(34)} ${row.error ?? `${row.violations.length} axe rules (${serious} serious/critical)`}`,
           );
+          for (const f of row.layout) console.log(`      layout: ${f}`);
         }
         await ctx.close();
       }
@@ -363,10 +408,74 @@ async function main() {
       )
       .map((v) => `${r.id}: ${v.id} (${v.impact}) ${v.help}`),
   );
+  const layout = results.flatMap((r) => r.layout.map((f) => `${r.id}: ${f}`));
   console.log(
-    `\n${results.length} renders, ${results.filter((r) => r.error).length} errors, ${blocking.length} serious/critical axe findings → ${path.relative(process.cwd(), OUT)}/index.html`,
+    `\n${results.length} renders, ${results.filter((r) => r.error).length} errors, ${blocking.length} serious/critical axe findings, ${layout.length} layout findings → ${path.relative(process.cwd(), OUT)}/index.html`,
   );
-  if (process.argv.includes("--strict") && (blocking.length || results.some((r) => r.error))) process.exit(1);
+  if (process.argv.includes("--strict") && (blocking.length || layout.length || results.some((r) => r.error)))
+    process.exit(1);
+}
+
+/**
+ * Layout findings, run in the page: the document scrolling at all (the shell spans the viewport, so a taller or
+ * wider document is something escaping it: an empty band below the app, a sideways scroll on a phone), and a
+ * control or text in a panel or sheet that reaches past the panel's own edge (a clipped field, a switch wider
+ * than its card). Content inside a container that scrolls sideways on purpose (a table, a terminal) is not a
+ * finding.
+ */
+function layoutFindings() {
+  const out = [];
+  const de = document.documentElement;
+  if (de.scrollHeight > innerHeight + 1)
+    out.push(`document is ${de.scrollHeight - innerHeight}px taller than the viewport`);
+  if (de.scrollWidth > innerWidth + 1) out.push(`document is ${de.scrollWidth - innerWidth}px wider than the viewport`);
+  const scrollsX = (el) => {
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      const o = getComputedStyle(n).overflowX;
+      if ((o === "auto" || o === "scroll") && n.scrollWidth > n.clientWidth) return true;
+      if (n.matches(".panel, .sheet, .rail, .tabbar, .topbar")) return false;
+    }
+    return false;
+  };
+  // the words a control shows, leaving out a hint's tip and screen-reader text, which sit outside on purpose
+  const textSpills = (el, r) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      const host = t.parentElement;
+      if (!t.textContent.trim() || host.closest(".sr-only, [role=tooltip], .tip")) continue;
+      const hs = getComputedStyle(host);
+      if (host !== el && (["absolute", "fixed"].includes(hs.position) || hs.transform !== "none")) continue;
+      const range = document.createRange();
+      range.selectNodeContents(t);
+      const tr = range.getBoundingClientRect();
+      if (tr.width && (tr.left < r.left - 1 || tr.right > r.right + 1)) return true;
+    }
+    return false;
+  };
+  const seen = new Set();
+  for (const box of document.querySelectorAll(".panel, .sheet, .rail, .tabbar, .topbar")) {
+    const b = box.getBoundingClientRect();
+    if (!b.width || getComputedStyle(box).visibility === "hidden") continue;
+    for (const el of box.querySelectorAll("button, input, select, textarea, label, a, p, h1, h2, h3, .seg, .muted")) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      // a control whose own words reach past its box: a label spilling out of its highlight or a squeezed button
+      const spills = el.matches("button, a") && textSpills(el, r);
+      if (!spills && r.right <= b.right + 1 && r.left >= b.left - 1) continue;
+      if (el.closest(".sr-only") || scrollsX(el)) continue;
+      const name = `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : ""}`;
+      const key = `${box.className.split(" ")[0]} ${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const text = (el.textContent || el.getAttribute("placeholder") || "").trim().slice(0, 30);
+      out.push(
+        spills
+          ? `${key} "${text}": its words reach past the control's edge`
+          : `${key} "${text}" overflows its ${box.className.split(" ")[0]} by ${Math.round(Math.max(r.right - b.right, b.left - r.left))}px`,
+      );
+    }
+  }
+  return out.slice(0, 12);
 }
 
 /**
