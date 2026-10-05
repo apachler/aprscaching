@@ -105,7 +105,7 @@ export function SerialWeather(props: { wxKey: string | null }) {
           </Button>
         )}
       </div>
-      {!props.wxKey && <p className="muted fine">Enable your weather station above first to get a push key.</p>}
+      {!props.wxKey && <p className="muted fine">Enable weather push above first to get a push key.</p>}
       {connected && (
         <div className="serial-live mono">
           {reading ? (

@@ -442,7 +442,7 @@ export interface OperatedStation {
   roles: StationRole[];
   createdAt: number;
   updatedAt: number;
-  wx?: StationWxKey; // present only on weather-capable stations
+  wx?: StationWxKey; // on the reply that adds a weather station: its push key, issued with it
   /** The living caches riding this station, in the list only; absent when there are none. */
   livingCaches?: { id: number; code: string; title: string; rendezvous: boolean }[];
 }

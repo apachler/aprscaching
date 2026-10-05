@@ -572,15 +572,15 @@ CREATE TABLE account_stations (
 CREATE UNIQUE INDEX idx_account_stations_call ON account_stations (callsign);
 CREATE INDEX idx_account_stations_acct ON account_stations (account_id);
 
--- PWS push keys. A key bound to a registered station feeds that station at its own location; a key
--- without one feeds the operator's <call>-13 home PWS, placed from their home grid. Weather TX (an
+-- PWS push keys, one per weather station in the operator's registry: a key feeds its station at the station's
+-- own location (the home grid when the station has none). Weather TX (an
 -- APRS-IS beacon or the CWOP relay) is off by default, gated on callsign control-verification, and
 -- throttled.
 CREATE TABLE wx_keys (
   key         TEXT PRIMARY KEY,
   callsign    TEXT NOT NULL,                       -- base call
   account_id  TEXT,
-  station_id  INTEGER,                             -- account_stations.id; NULL = the <call>-13 home PWS
+  station_id  INTEGER,                             -- account_stations.id; a key without one feeds nothing
   tx_is       INTEGER NOT NULL DEFAULT 0,          -- APRS-IS weather beacon
   tx_cwop     INTEGER NOT NULL DEFAULT 0,          -- CWOP relay
   last_beacon INTEGER,                             -- beacon throttle

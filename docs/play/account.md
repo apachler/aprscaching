@@ -101,8 +101,7 @@ Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, 
 | **Account** | Sign in and out, your callsigns, verification, your email, your passkeys ([Use more than one device](join.md#use-more-than-one-device)) |
 | **Display** | **Appearance** (Auto, Light, Dark or Phosphor), **Units**, and the CRT effect in Phosphor |
 | **Profile** | What others see on your profile |
-| **Home weather station** | Your own weather station ([Weather stations](../shack/rig-weather.md#weather-stations)) |
-| **My stations** | Your stations and living caches |
+| **My stations** | Your stations, your weather stations and their push keys ([Weather stations](../shack/rig-weather.md#weather-stations)), and living caches |
 | **My radio (browser)** | A radio connected to the browser ([Connect your radio](../shack/my-radio.md)) |
 | **Announce finds** | Each verified find sent to APRS-IS as a status message; off by default, needs a verified callsign ([Announce your finds](log-a-find.md#announce-your-finds-on-aprs-is)) |
 | **Near-cache radio message** | An APRS or MeshCom message to your radio near a cache; off by default, needs a verified callsign ([The "you're near" prompt](find-a-cache.md#the-youre-near-prompt)) |

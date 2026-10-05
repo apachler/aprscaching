@@ -1926,17 +1926,48 @@ ok(
   (await call("GET", "/api/profile/OE9PROF")).data?.profile === undefined,
 );
 
-// weather user-origination — set a home grid so the -13 station is placed on the map
+// weather user-origination — a weather station in My stations, placed at the home grid when it has no coords
 await fetch(`${BASE}/auth/profile`, {
   method: "POST",
   headers: { "content-type": "application/json", cookie: prcookie },
   body: JSON.stringify({ displayName: "Andreas", homeGrid: "JN77" }),
 });
-const wxKey = await (await fetch(`${BASE}/api/wx/key`, { method: "POST", headers: { cookie: prcookie } })).json();
 ok(
-  "POST /api/wx/key issues a PWS key + -13 station",
-  /^wx_/.test(wxKey.key ?? "") && wxKey.station === "OE9PROF-13",
-  JSON.stringify({ key: (wxKey.key ?? "").slice(0, 6), station: wxKey.station }),
+  "there is no account-level weather key (404)",
+  (await fetch(`${BASE}/api/wx/key`, { method: "POST", headers: { cookie: prcookie } })).status === 404,
+);
+const wxMk = await (
+  await fetch(`${BASE}/api/my/stations`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: prcookie },
+    body: JSON.stringify({ callsign: "OE9PROF-13", roles: ["weather"] }),
+  })
+).json();
+const wxKey = wxMk.station?.wx ?? {};
+ok(
+  "an unverified call adds a weather-only station at its home locator, with its push key",
+  wxMk.station?.callsign === "OE9PROF-13" && wxMk.station?.lat != null && /^wx_/.test(wxKey.key ?? ""),
+  JSON.stringify({ station: wxMk.station?.callsign, lat: wxMk.station?.lat, key: (wxKey.key ?? "").slice(0, 6) }),
+);
+ok(
+  "a weather-only station on an unverified call gains no other role (403)",
+  (
+    await fetch(`${BASE}/api/my/stations/${wxMk.station?.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: prcookie },
+      body: JSON.stringify({ roles: ["weather", "digipeater"] }),
+    })
+  ).status === 403,
+);
+ok(
+  "weather TX on an unverified call is refused (403)",
+  (
+    await fetch(`${BASE}/api/wx/tx`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: prcookie },
+      body: JSON.stringify({ stationId: wxMk.station?.id, txIs: true, txCwop: false }),
+    })
+  ).status === 403,
 );
 ok(
   "wx submit with a bad key is rejected (401)",
@@ -2016,6 +2047,12 @@ ok(
       body: JSON.stringify({ callsign: "DL9XXX-7", lat: 50.1, lon: 8.6, roles: ["igate"] }),
     })
   ).status === 403,
+);
+// remove the weather station: its key stops working, and its call stays heard on the map
+await fetch(`${BASE}/api/my/stations/${wxMk.station?.id}`, { method: "DELETE", headers: { cookie: prcookie } });
+ok(
+  "removing a weather station revokes its push key (401)",
+  (await call("GET", `/api/wx/submit?key=${wxKey.key}&tempf=70`)).status === 401,
 );
 // adopt an own station already heard on the map (no coords given → inherit OE9PROF-13's fix)
 const adopt = await (
