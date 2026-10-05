@@ -2,7 +2,7 @@
 // A locale tag the browser or a stored setting supplies always becomes one Intl accepts, so the
 // formatters build instead of throwing a RangeError.
 import { describe, expect, it } from "vitest";
-import { canonicalLocale, makeFormatters, type LocaleSettings } from "../src/format.js";
+import { canonicalLocale, makeFormatters, unitsFor, type LocaleSettings } from "../src/format.js";
 
 describe("canonicalLocale", () => {
   const table: [string | undefined | null, string][] = [
@@ -41,5 +41,20 @@ describe("makeFormatters with an unusual locale", () => {
     expect(fmt.resolvedLocale).toBe("en-US");
     expect(fmt.num(1234.5)).toBe("1,234.5");
     expect(fmt.date(0)).toContain("1970");
+  });
+});
+
+describe("the starting unit system", () => {
+  it("follows the time zone where it names a place, so English on a laptop in Vienna stays metric", () => {
+    expect(unitsFor("en-US", "Europe/Vienna")).toBe("metric");
+    expect(unitsFor("de-AT", "America/New_York")).toBe("imperial");
+    expect(unitsFor("en-US", "America/Indiana/Indianapolis")).toBe("imperial");
+    expect(unitsFor("en-US", "America/Toronto")).toBe("metric");
+    expect(unitsFor("my-MM", "Asia/Yangon")).toBe("imperial");
+  });
+
+  it("falls back to the locale's region without a place in the zone", () => {
+    expect(unitsFor("en-US", "UTC")).toBe("imperial");
+    expect(unitsFor("en-GB", "")).toBe("metric");
   });
 });
