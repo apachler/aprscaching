@@ -75,7 +75,8 @@ aprscaching-pocket.oe8apr.ampr.org               A    44.27.132.10
 _aprscaching.aprscaching-pocket.oe8apr.ampr.org  TXT  "v=acs1; inst=oe8apr-pocket; key=<Pocket key>"
 ```
 
-In the Portal the Pocket's names are `aprscaching-pocket` and `_aprscaching.aprscaching-pocket`. Peers add
+In the Portal the Pocket's names are `aprscaching-pocket` and `_aprscaching.aprscaching-pocket`; the Portal's name
+field accepts the dotted underscore name as it stands (checked on 2026-10-05). Peers add
 the home station by callsign and the Pocket by its host, `aprscaching-pocket.oe8apr.ampr.org`, in the same
 field under **Instance admin → Federation**. Both are recorded as instances of your callsign, so a peer's
 corroboration quorum counts them as one voice. A name that carries two federation records is ambiguous: the

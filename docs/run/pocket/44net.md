@@ -110,7 +110,8 @@ record.
     | `aprscaching-pocket` | A | the phone's 44.x address |
     | `_aprscaching.aprscaching-pocket` | TXT | `v=acs1; inst=<the phone's INSTANCE>; key=<the phone's federation key>` |
 
-    **Instance admin → Federation → Publish your callsign identity** on the phone shows both, ready to copy.
+    **Instance admin → Federation → Publish your callsign identity** on the phone shows both, ready to copy. The
+    Portal's name field accepts the dotted name `_aprscaching.aprscaching-pocket` as it stands.
 
 4. Restart the gateway (`bash ~/aprscaching/deploy/pocket/restart.sh gateway`), then choose **Check now** on the
    same page. Peers add the phone by its host, `aprscaching-pocket.<call>.ampr.org`.
