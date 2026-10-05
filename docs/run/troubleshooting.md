@@ -228,7 +228,7 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `RP_ID` | optional | unset: the passkey domain is missing | set `APP_URL`; `RP_ID` follows its host |
 | `FIRST_PARTY_SITES` | optional | no trusted receiving station: no find reaches Tier A | trust your receiver's call under **Instance admin → Trusted receiving stations**, or list it here ([RF ingest](radios/rf-ingest.md#receiving-site-and-tier-a)) |
 | `FED_PRIVATE_KEY` | recommended | unset: feeds go out unsigned | see [`federation.key`](#federationkey) |
-| `44net` | optional | the 44net endpoint is not a name under `<call>.ampr.org` | [44Net name and identity](networks/44net-identity.md#3-name-and-identity) |
+| `44net` | optional | the 44net endpoint is not a name under `<call>.ampr.org`, or is the base name itself | [44Net name and identity](networks/44net-identity.md#3-name-and-identity) |
 | `FED_REGISTRY_KEY` | blocking | a registry is configured without its authority key | [Hubs, relays and the registry](federation/hubs-and-relays.md) |
 | `OPERATOR` | recommended | `OPERATOR_NAME`, `OPERATOR_ADDRESS` or `OPERATOR_EMAIL` missing: `/imprint` and `/privacy` warn | set all three ([duties](compliance/index.md)) |
 | `SOURCE_REPO` | optional | unset: the source link names the upstream repository | set your fork if you changed the code ([`source.fork`](#sourcefork)) |
@@ -451,9 +451,12 @@ the DNS records only.
 
 ### `net44.txt`
 
-- **Tests:** the `_aprscaching` TXT record is published for the name or its parent.
+- **Tests:** an identity record (`v=acs1; inst=…`) is published at `_aprscaching.<name>` or at the callsign's
+  `_aprscaching.<call>.ampr.org`. A `verify=` record does not count. Doctor runs this only when it cannot read
+  the gateway's own check ([`identity.<line>`](#identityline)).
 - **Message:** `no _aprscaching TXT record for <name>` (fail).
-- **Fix:** publish the value **Instance admin → Setup → 44Net** shows.
+- **Fix:** add the records **Instance admin → Federation → Publish your callsign identity** shows;
+  `deploy/aprscaching net44 check` prints them too.
 - **See:** [Name and identity](networks/44net-identity.md#3-name-and-identity).
 
 ### `net44.cert`
@@ -464,6 +467,19 @@ the DNS records only.
 - **Message:** `the certificate for <name> expires in <n> days` (warn).
 - **Fix:** read Caddy's logs: `docker compose logs caddy` in `deploy/`.
 - **See:** [TLS on the 44Net name](networks/44net-identity.md#tls-on-the-44net-name).
+
+### `identity.<line>`
+
+One check per line of the gateway's callsign-identity self-check, read with `OPERATOR_SECRET`: `endpoint`, `a`,
+`txt`, `callsign`, `target`, `dnssec` and `aaaa`. A pass or info line passes; a warn or fail line carries the
+gateway's fix, with the exact record to publish and its name in the Portal.
+
+- **Tests:** the records that let peers add this instance by callsign: the `44net` endpoint is a name under
+  `<call>.ampr.org` and not the base name, its A record is in 44/8, the `_aprscaching` TXT record names this
+  instance and its current key, and the record sends peers where this instance is.
+- **Fix:** publish or correct the records **Instance admin → Federation → Publish your callsign identity**
+  shows, then choose **Check now** there.
+- **See:** [Name and identity](networks/44net-identity.md#3-name-and-identity).
 
 ## Services (`service`)
 

@@ -27,6 +27,8 @@ interface Doh {
   txt?: string[];
   /** Answer with a CNAME for the name first, then the TXT under the target name. */
   cname?: string;
+  /** Answer only this name; any other is NXDOMAIN. */
+  only?: string;
   /** Owner name of the TXT records, when not the queried name. */
   owner?: string;
 }
@@ -44,6 +46,10 @@ function stubDns(answers: Record<string, Reply>): string[] {
     if (a === "timeout") throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
     if (a === "http-error") return new Response("oops", { status: 502 });
     const name = new URL(url).searchParams.get("name")!;
+    if (a.only && a.only !== name)
+      return new Response(JSON.stringify({ Status: 3, AD: false, Answer: [] }), {
+        headers: { "content-type": "application/dns-json" },
+      });
     const google = base === R2;
     const dn = (n: string) => (google ? `${n}.` : n);
     const data = (t: string) => (google ? t : `"${t}"`);
@@ -81,9 +87,9 @@ describe("starting an ampr.org DNS verification", () => {
     const { s } = await started(e);
     expect(s.status).toBe(200);
     expect(s.data.code).toMatch(/^[A-Za-z0-9_-]{16,}$/);
-    expect(s.data.name).toBe("_aprscaching.oe8apr.ampr.org");
+    expect(s.data.name).toBe("_aprscaching-verify.oe8apr.ampr.org");
     expect(s.data.value).toBe(`v=acs1; verify=${s.data.code}`);
-    expect(s.data.record).toBe(`_aprscaching.oe8apr.ampr.org TXT "v=acs1; verify=${s.data.code}"`);
+    expect(s.data.record).toBe(`_aprscaching-verify.oe8apr.ampr.org TXT "v=acs1; verify=${s.data.code}"`);
     expect(s.data.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
@@ -108,7 +114,7 @@ describe("a DNSSEC-validated answer", () => {
     expect(r.data).toMatchObject({ verified: true, callsign: "OE8APR", method: "ampr_dns", proof: "dnssec" });
     expect(asked).toHaveLength(1);
     const q = new URL(asked[0]!).searchParams;
-    expect([q.get("name"), q.get("type")]).toEqual(["_aprscaching.oe8apr.ampr.org", "TXT"]);
+    expect([q.get("name"), q.get("type")]).toEqual(["_aprscaching-verify.oe8apr.ampr.org", "TXT"]);
     expect(await verified(e, "OE8APR")).toBe(true);
     expect(await row(e, "OE8APR")).toMatchObject({
       status: "verified",
@@ -210,7 +216,7 @@ describe("independent resolvers agreeing, without DNSSEC", () => {
   it("refuses TXT records under another owner name", async () => {
     const e = env();
     const { me, s } = await started(e);
-    stubDns(everywhere({ owner: "_aprscaching.dl1aaa.ampr.org", txt: [s.data.value] }));
+    stubDns(everywhere({ owner: "_aprscaching-verify.dl1aaa.ampr.org", txt: [s.data.value] }));
     expect((await check(e, me.cookie)).status).toBe(422);
     expect(await verified(e, "OE8APR")).toBe(false);
   });
@@ -243,6 +249,20 @@ describe("independent resolvers agreeing, without DNSSEC", () => {
   });
 });
 
+describe("the record's own name", () => {
+  it("a code at the federation identity's name does not count: it belongs at _aprscaching-verify", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns(everywhere({ only: "_aprscaching.oe8apr.ampr.org", ad: true, txt: [s.data.value] }));
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(422);
+    expect(r.data.error).toMatch(/_aprscaching-verify\.oe8apr\.ampr\.org is not published yet/);
+    expect(await verified(e, "OE8APR")).toBe(false);
+    stubDns(everywhere({ only: "_aprscaching-verify.oe8apr.ampr.org", ad: true, txt: [s.data.value] }));
+    expect((await check(e, me.cookie)).status).toBe(200);
+  });
+});
+
 describe("checking before the record resolves", () => {
   it("says the name is not published yet, and does not burn an attempt", async () => {
     const e = env();
@@ -252,7 +272,7 @@ describe("checking before the record resolves", () => {
       const nx = await check(e, me.cookie);
       expect(nx.status).toBe(422);
       expect(nx.data.error).toMatch(/not published yet/);
-      expect(nx.data.error).toMatch(/_aprscaching\.oe8apr\.ampr\.org/);
+      expect(nx.data.error).toMatch(/_aprscaching-verify\.oe8apr\.ampr\.org/);
     }
     // the challenge is still open after more checks than the attempts cap
     stubDns(everywhere({ txt: [s.data.value] }));

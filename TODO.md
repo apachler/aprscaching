@@ -885,8 +885,9 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
       documents (registry, key rotation, account operations, find-log device signatures).
 - [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
       callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
-      explicit trust-on-first-use pin) and emits this instance's own `_aprscaching.<call>.ampr.org` TXT to
-      paste into the ARDC portal.
+      explicit trust-on-first-use pin) and shows this instance's own records (an instance name under the call,
+      by default `aprscaching.<call>.ampr.org`, and the `_aprscaching` TXT, or a `web=` TXT without 44Net) to copy
+      into the ARDC portal, with a self-check.
 - [x] **Connected-mode sync binding** — the `ACSL1` line protocol (HELLO caps negotiation → one CBOR
       sync page per request, `deflateDict1`-compressed when negotiated) rides the existing session
       machinery; `FedSyncApp` mounts as a node service sourcing pages from the local gateway, the pull

@@ -314,7 +314,8 @@ function AmprDns(props: { callsign: string; claim?: string; onVerified: () => vo
     <>
       <p className="muted fine">
         If ARDC has delegated <span className="mono">{props.callsign.toLowerCase()}.ampr.org</span> to you, publish a
-        TXT record there at the ARDC portal (DNS → My subdomains).
+        TXT record named <span className="mono">_aprscaching-verify</span> under it in the 44Net Portal (DNS → My
+        subdomains → Resource Records). It has a name of its own, so it never touches a federation record.
       </p>
       <p className="muted fine">
         Without DNSSEC, several public DNS resolvers must return the same record. The portal can take a while to publish
@@ -322,7 +323,9 @@ function AmprDns(props: { callsign: string; claim?: string; onVerified: () => vo
       </p>
       {ch && (
         <dl className="verify-msg">
-          <dt>Name</dt>
+          <dt>Name in the Portal</dt>
+          <dd className="mono">{ch.name.replace(/\.[^.]+\.ampr\.org$/, "")}</dd>
+          <dt>Full name</dt>
           <dd className="mono">{ch.name}</dd>
           <dt>Type</dt>
           <dd className="mono">TXT</dd>

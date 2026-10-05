@@ -96,6 +96,65 @@
     padding: var(--space-sm) 0 var(--space-xs) var(--space-md);
     border-left: 1px solid var(--hair);
   }
+  /* the callsign identity (Instance admin → Federation): each DNS record as the 44Net Portal takes it,
+   name, type and value, every field copyable; a long value (a key) wraps anywhere rather than overflowing */
+  .fed-identity {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .fed-identity .comment {
+    font-size: var(--text-label);
+    color: var(--muted);
+  }
+  .portal-records {
+    display: grid;
+    gap: var(--space-sm);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .portal-record {
+    display: grid;
+    gap: var(--space-2xs);
+    padding: var(--space-sm);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+  }
+  .portal-record dl {
+    display: grid;
+    gap: var(--space-2xs);
+    margin: 0;
+    container: portal-record / inline-size;
+  }
+  .portal-field {
+    display: grid;
+    gap: var(--space-2xs);
+  }
+  .portal-field dt {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    font-size: var(--text-label);
+    color: var(--muted);
+  }
+  .portal-field dd {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin: 0;
+    min-width: 0;
+  }
+  .portal-field dd .mono {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  @container portal-record (min-width: 30rem) {
+    .portal-field {
+      grid-template-columns: 6rem 1fr;
+      align-items: center;
+    }
+  }
   /* FBB forwarding-partner add form (Settings → Network) — a sectioned grid, not one long scroll */
   .partner-form {
     display: grid;

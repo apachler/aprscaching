@@ -9,7 +9,7 @@
 // An entry MAY carry `addresses`: the instance's typed transport endpoints, signed by the authority so
 // the registry doubles as a tamper-proof directory of who-is-reachable-where (addressing only, never a
 // trust uplift). Each is {transport: https|44net|ax25|netrom|bbs, address, priority?}, e.g.
-//   {"instance":"oe.net","key":"<pub>","addresses":[{"transport":"44net","address":"oe8apr.ampr.org","priority":10}]}
+//   {"instance":"oe.net","key":"<pub>","addresses":[{"transport":"44net","address":"aprscaching.oe8apr.ampr.org","priority":10}]}
 //
 // Reuse one authority key across signings by passing it in AUTHORITY (base64 {pkcs8,pub}); else a fresh
 // one is minted and printed. The registry binds each instance id to its key so a peer can't impersonate

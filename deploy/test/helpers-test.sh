@@ -179,6 +179,11 @@ check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORRO
 check "  … with discovery off" eq "$(env_file_get "$P" FED_DISCOVER)" "0"
 check "  … with the peers it was given" eq "$(env_file_get "$P" FED_PEERS)" "https://peer.example.org"
 check "  … with its 44Net endpoint beside https" bash -c "grep -q '\"44net\",\"address\":\"aprscaching.oe8apr.ampr.org\"' '$P'"
+if setup --env-file "$TMP/b44.env" --call OE8APR --domain a.example.net --net44-name oe8apr.ampr.org; then
+  bad "the base name <call>.ampr.org is refused as the 44Net name"
+else
+  ok "the base name <call>.ampr.org is refused as the 44Net name"
+fi
 if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://gw.oe1xyz.ampr.org; then
   bad "a 44Net peer is refused for FED_PEERS"
 else
@@ -549,6 +554,28 @@ check "a federation key's fingerprint matches Instance admin's" eq \
 check "  … read from a descriptor's publicKey" eq \
   "$(bash -c ". '$DEPLOY/lib/doctor.sh'; desc_key '{\"publicKey\":\"$FP_KEY\",\"publicKeyJwk\":{\"x\":\"y\"}}'")" "$FP_KEY"
 check "  … and nothing for a malformed key" eq "$(bash -c ". '$DEPLOY/lib/doctor.sh'; fed_fingerprint AAEC")" ""
+# ---- the 44Net name: a name under the call, never the base name ------------------------------------------------
+n44f() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/net44.sh'; \"\$@\"" _ "$@"; }
+fails() { ! "$@"; }
+printf 'ADMIN_CALLSIGNS=OE8APR-10,OE1XYZ\n' >"$TMP/n44.env"
+check "the default 44Net name is aprscaching.<call>.ampr.org, from ADMIN_CALLSIGNS' base call" eq \
+  "$(SHAPE=selfhost SHAPE_ENV="$TMP/n44.env" n44f n44_default_name)" "aprscaching.oe8apr.ampr.org"
+check "  … and aprscaching-pocket.<call>.ampr.org on Pocket" eq \
+  "$(SHAPE=pocket SHAPE_ENV="$TMP/n44.env" n44f n44_default_name)" "aprscaching-pocket.oe8apr.ampr.org"
+check "  … and nothing without a call" eq "$(SHAPE=selfhost SHAPE_ENV="" n44f n44_default_name)" ""
+check "a name under the call is an instance name" n44f n44_valid_name aprscaching.oe8apr.ampr.org
+check "  … the base name is not" fails n44f n44_valid_name oe8apr.ampr.org
+check "  … nor a name outside ampr.org" fails n44f n44_valid_name aprscaching.example.net
+check "the Portal records of the default name: A aprscaching, TXT _aprscaching" eq \
+  "$(n44f n44_records aprscaching.oe8apr.ampr.org 44.1.2.3 aprs.example.net)" \
+  "$(printf '%s\n' 'aprscaching  A    44.1.2.3' '_aprscaching  TXT  "v=acs1; inst=aprs.example.net; key=<federation key>"')"
+check "  … and of another name, under its own label" eq \
+  "$(n44f n44_records aprscaching-pocket.oe8apr.ampr.org | cut -d' ' -f1)" \
+  "$(printf '%s\n' aprscaching-pocket _aprscaching.aprscaching-pocket)"
+ID_BODY='{"applicable":true,"lines":[{"id":"txt","status":"fail","label":"Identity TXT","detail":"no TXT record","fix":"Publish TXT _aprscaching.oe8apr.ampr.org \"v=acs1; inst=a; key=k\"."}]}'
+check "doctor relays the identity self-check's lines, the fix with the value to publish" eq \
+  "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_identity_lines '$ID_BODY'")" \
+  "$(printf 'txt\tfail\tIdentity TXT: no TXT record\tPublish TXT _aprscaching.oe8apr.ampr.org "v=acs1; inst=a; key=k".')"
 if have python3; then
   check "the checklist is read without node, with python3" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
     have() { [ \"\$1\" != node ] && command -v \"\$1\" >/dev/null; };

@@ -133,8 +133,17 @@ export function acsFields(txt: string): Map<string, string> | null {
   return fields.get("v") === "acs1" ? fields : null;
 }
 
-/** A base call's ARDC-delegated name and the aprscaching record under it. */
-export function amprNames(baseCall: string): { host: string; name: string } {
+/**
+ * A base call's ARDC-delegated zone and the names under it: the federation identity record, the callsign
+ * verification record, and the default name an instance runs at. The zone itself stays free for the ham's
+ * other uses; no instance runs on it.
+ */
+export function amprNames(baseCall: string): { host: string; name: string; verify: string; instanceHost: string } {
   const host = `${baseCall.toLowerCase()}.ampr.org`;
-  return { host, name: `_aprscaching.${host}` };
+  return {
+    host,
+    name: `_aprscaching.${host}`,
+    verify: `_aprscaching-verify.${host}`,
+    instanceHost: `aprscaching.${host}`,
+  };
 }

@@ -147,8 +147,10 @@ APRS-IS passcode proves nothing either.
 
 1. If you do not hold `<call>.ampr.org` yet, ask for it in the [ARDC portal](https://portal.ampr.org) under
    **DNS → My subdomains**. ARDC checks your licence first.
-2. In the app, tap **Get the record**. It shows a **Name**, a **Type** (TXT) and a **Value**.
-3. In the ARDC portal, under **DNS → My subdomains**, add a TXT record with that name and value. Do not use
+2. In the app, tap **Get the record**. It shows the **Name in the Portal** (`_aprscaching-verify`), the full
+   name, a **Type** (TXT) and a **Value**.
+3. In the ARDC portal, under **DNS → My subdomains → Resource Records**, add a TXT record with that name and
+   value. The record has a name of its own, so a federation record under your call stays as it is. Do not use
    an alias (CNAME).
 4. Wait until the record is live. This can take hours.
 5. Tap **Check**. The app verifies the callsign when it finds the record. Until then, **Check** says the

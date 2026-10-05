@@ -295,6 +295,14 @@ if [ "$MODE" != lan ]; then
   if [ "$NET44_SET" -eq 0 ]; then
     ask NET44_IN "This instance's 44Net name, if it has one (e.g. aprscaching.$(printf '%s' "$CALL" | tr '[:upper:]' '[:lower:]').ampr.org; blank = none)" ""
   fi
+  NET44_IN="$(printf '%s' "$NET44_IN" | tr '[:upper:]' '[:lower:]')"
+  case "$NET44_IN" in
+    '' | *.*.ampr.org) ;;
+    *)
+      echo "--net44-name takes a name under your call, e.g. aprscaching.<call>.ampr.org; the base name <call>.ampr.org stays free for your other uses." >&2
+      exit 2
+      ;;
+  esac
 fi
 
 if [ "$SITE_SET" -eq 0 ]; then
@@ -402,7 +410,7 @@ else
   if [ -n "$NET44_IN" ]; then
     # single-quoted, as compose and systemd both read a quoted JSON value intact
     setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$NET44_IN\",\"priority\":20}]'"
-    echo "  44Net: check the name with the self-check in Instance admin -> Setup (docs/run/networks/44net.md)."
+    echo "  44Net: Instance admin -> Federation -> Publish your callsign identity shows the records to add (docs/run/networks/44net-identity.md)."
   fi
   case "$(current FED_DISCOVER)" in 1 | true | yes)
     echo "  WARN: FED_DISCOVER is on, so learned peers are added (disabled). Set it to 0 to turn discovery off." ;;

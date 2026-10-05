@@ -12,7 +12,7 @@ method (`callsign_verifications.method`) and who vouched for it (`verified_by`):
 | Method | How | `verified_by` | Needs on this instance |
 |---|---|---|---|
 | `rf_heard` | `VERIFY <code>` sent to the service call, heard by a trusted receiving station (`FIRST_PARTY_SITES`, or **Instance admin → Trusted receiving stations**, including enrolled boxes trusted there) on its own TNC, or by its MeshCom node directly over LoRa | the receiving site | attested sites |
-| `ampr_dns` | a code in the `_aprscaching.<call>.ampr.org` TXT record: a DNSSEC-validated answer over `DOH_URL`, or else the same TXT set from every resolver of `AMPR_DNS_RESOLVERS` that answers (at least 2) | `<call>.ampr.org` | outbound HTTPS to the resolvers |
+| `ampr_dns` | a code in the `_aprscaching-verify.<call>.ampr.org` TXT record (a name of its own, apart from the [federation identity record](../networks/44net-identity.md#3-name-and-identity)): a DNSSEC-validated answer over `DOH_URL`, or else the same TXT set from every resolver of `AMPR_DNS_RESOLVERS` that answers (at least 2) | `<call>.ampr.org` | outbound HTTPS to the resolvers |
 | `lotw` | a challenge signed with the member's LoTW callsign certificate, which must chain to a CA in `LOTW_CA_PEM` and name the call | the trusted CA's name | `LOTW_CA_PEM` |
 | `operator` | the operator CLI with the operator secret, for an `ADMIN_CALLSIGNS` call | `operator` | — |
 | `sysop` | by hand, [below](#verify-a-call-by-hand) | the sysop's call | — |
@@ -29,7 +29,9 @@ else. So verify a call, including your own operator call with the CLI, after its
 
 ## The ampr.org DNS proofs
 
-The `ampr_dns` method accepts one of two proofs, and stores which one held in the verification's `note`:
+The member publishes the code at `_aprscaching-verify.<call>.ampr.org`, entered as `_aprscaching-verify` in the
+44Net Portal; the record at `_aprscaching.<call>.ampr.org`, the instance's federation identity, is never read for
+it. The `ampr_dns` method accepts one of two proofs, and stores which one held in the verification's `note`:
 
 | Proof | `note` | Strength |
 |---|---|---|

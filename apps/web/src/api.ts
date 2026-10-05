@@ -1009,7 +1009,10 @@ export function setPeerTrust(
 
 export interface Fed44netResolved {
   callsign: string;
-  host: string;
+  /** The 44Net name the peer is reached at, or null when it publishes an https origin only. */
+  host: string | null;
+  /** The https origin the peer is reached at, or null on 44Net only. */
+  web: string | null;
   instance: string;
   publicKey: string;
   dnssec: boolean;
@@ -1023,12 +1026,12 @@ export interface Fed44netResult {
   descriptorChecked?: boolean;
   error?: string;
 }
-/** Who to add over 44net: a callsign (`_aprscaching.<call>.ampr.org`) or a host in its zone (`_aprscaching.<host>`). */
+/** Who to add by callsign: a callsign (`_aprscaching.<call>.ampr.org`) or a host in its zone (`_aprscaching.<host>`). */
 export type Fed44netTarget = { callsign: string } | { host: string };
-/** The bindings an ambiguous 44net lookup found, carried by its 409 refusal; each is added by its host. */
-export type Fed44netCandidate = { instance: string; host: string };
+/** The bindings an ambiguous lookup found, carried by its 409 refusal; one with a host is added by it. */
+export type Fed44netCandidate = { instance: string; host: string | null; web: string | null };
 /**
- * Operator: add a peer by its ARDC-verified `<call>.ampr.org` binding (sysop-gated). A
+ * Operator: add a peer by its ARDC-verified `<call>.ampr.org` binding (sysop-gated), over 44Net, https or both. A
  * DNSSEC-validated binding admits directly; otherwise the response carries the resolved binding and
  * a second call with `confirm: true` pins it. A name carrying several bindings is refused with 409 and
  * `candidates`.
@@ -1391,19 +1394,38 @@ export interface AdminSetup {
 export function getAdminSetup(): Promise<AdminSetup> {
   return call(`/api/admin/setup`);
 }
-/** One line of the 44Net self-check; `fix` is set on every warn and fail. */
+/** One line of the callsign-identity self-check; `fix` is set on every warn and fail. */
 export interface Net44CheckLine {
-  id: "endpoint" | "a" | "txt" | "descriptor" | "dnssec" | "aaaa";
+  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "dnssec" | "aaaa";
   status: "pass" | "warn" | "fail" | "info";
   label: string;
   detail: string;
   fix?: string;
 }
-/** The read-only 44Net self-check: what peers find in DNS when they add this instance by callsign. */
-export function run44netCheck(): Promise<
-  { applicable: false } | { applicable: true; callsign: string | null; host: string; lines: Net44CheckLine[] }
-> {
-  return call(`/api/admin/setup/44net`);
+/** One DNS record to publish, named as the 44Net Portal takes it (`portal`: the part left of `<call>.ampr.org`). */
+export interface PortalRecord {
+  name: string;
+  portal: string;
+  type: "A" | "TXT";
+  value: string;
+  /** The value is a placeholder to fill in (the 44.x address). */
+  placeholder: boolean;
+  purpose: string;
+}
+/** The records this instance publishes so peers add it by callsign, and, when checked, what DNS answers. */
+export interface CallsignIdentity {
+  applicable: boolean;
+  callsign: string | null;
+  host: string | null;
+  web: string | null;
+  records: PortalRecord[];
+  alternative: PortalRecord | null;
+  reason?: string;
+  lines?: Net44CheckLine[];
+}
+/** The callsign-identity records; with `check`, the read-only self-check of what peers find in DNS. */
+export function getCallsignIdentity(check = false): Promise<CallsignIdentity> {
+  return call(`/api/admin/federation/identity${check ? "?check=1" : ""}`);
 }
 /** FBB forwarding routing rules (route token → partner). Sysop-gated. */
 export interface ForwardRuleRow {
@@ -1954,7 +1976,7 @@ export function getVerifyMethods(): Promise<VerifyMethods> {
   return call(`/verify/methods`);
 }
 
-/** An ampr.org DNS challenge: publish `record` (name, TXT, value) under the call's ampr.org name. */
+/** An ampr.org DNS challenge: publish `record` (name, TXT, value) at `_aprscaching-verify.<call>.ampr.org`. */
 export interface AmprChallenge {
   code: string;
   name: string;

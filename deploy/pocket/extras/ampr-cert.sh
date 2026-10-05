@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# A Let's Encrypt certificate for the station's ampr.org name (e.g. oe8apr.ampr.org), obtained by hand
-# with a DNS-01 challenge: browsers grant passkeys, location and Web Bluetooth only to https origins, and
-# members who reach the station by that name over 44Net get them with a certificate the browser trusts.
+# A Let's Encrypt certificate for the station's ampr.org name (by default aprscaching-pocket.<call>.ampr.org),
+# obtained by hand with a DNS-01 challenge: browsers grant passkeys, location and Web Bluetooth only to https
+# origins, and members who reach the station by that name over 44Net get them with a certificate the browser trusts.
 #
-#   bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host oe8apr.ampr.org
-#   bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host oe8apr.ampr.org --use
+#   bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host aprscaching-pocket.oe8apr.ampr.org
+#   bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host aprscaching-pocket.oe8apr.ampr.org --use
 #
 # lego (pkg install lego) asks Let's Encrypt for the certificate. This script prints the TXT record to add
 # at _acme-challenge.<name> in the ARDC portal, looks it up every minute until it is published (the portal
@@ -19,7 +19,7 @@
 # stays the way in: RF carries no encryption.
 #
 # Options:
-#   --host NAME          the ampr.org name: your <call>.ampr.org or a name under it
+#   --host NAME          the station's ampr.org name, e.g. aprscaching-pocket.<call>.ampr.org
 #   --email ADDR         contact address for the ACME account (optional)
 #   --use                serve the certificate on the https port (HTTPS_PORT, default 8443)
 #   --force              renew even when the certificate is not due
@@ -59,7 +59,7 @@ pocket_paths
 
 HOST="$(printf '%s' "$HOST" | tr '[:upper:]' '[:lower:]')"
 HOST="${HOST%.}"
-valid_ampr_host "$HOST" || die "--host takes your ampr.org name, e.g. --host oe8apr.ampr.org (got '${HOST}')."
+valid_ampr_host "$HOST" || die "--host takes the station's ampr.org name, e.g. --host aprscaching-pocket.oe8apr.ampr.org (got '${HOST}')."
 case "$WAIT_MIN" in '' | *[!0-9]*) die "--wait-min takes a number of minutes (got '$WAIT_MIN')." ;; esac
 have lego || die "lego is missing." "Install it with:  pkg install lego"
 
