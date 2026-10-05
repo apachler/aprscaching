@@ -169,11 +169,13 @@ Each peer is a row with a trust level:
 |-------|-----------|
 | `trusted` | Mirrors it, and counts it toward Tier A corroboration. A `FED_PEERS` entry whose pinned fingerprint matches starts here. |
 | `unvetted` | Mirrors it, hidden on the map by default. Peers added by URL, unpinned `FED_PEERS` entries, and peers from the registry, discovery, 44Net and hub pushes start here. |
-| `blocked` | Never mirrors it, never shows it. A blocked peer stays blocked even when `FED_PEERS` lists it. |
+| `blocked` | Never mirrors it, never shows it. The block covers the instance at every address: `FED_PEERS`, the registry, discovery, 44Net and hub pushes never bring it back. |
 
 Change a peer's trust under **Instance admin → Federation**. Each row shows the peer's trust level, its key
-fingerprint with a copy button, and its last pull and push. **Trust** needs a pinned key: a peer found by
-discovery pins one on its first sync, as `unvetted`, and you compare its fingerprint before you trust it.
+fingerprint with a copy button, and its last pull and push. **Trust** needs a pinned key and sends the
+fingerprint you compared: a peer found by discovery pins one on its first sync, as `unvetted`, and you compare
+its fingerprint before you trust it. A script that trusts a peer over `OPERATOR_SECRET` sends the fingerprint
+too.
 Blocking a peer hides everything it sent.
 
 ### Remove a peer
@@ -197,8 +199,12 @@ restart the gateway before you remove it.
 ## Keeping mirrors fresh
 
 Your instance pulls from its peers on a schedule, every 5 minutes (`FED_SYNC_INTERVAL_MS`, `0` turns it off).
-Peers also
+The schedule covers every enabled peer, the ones you added in Instance admin as well as `FED_PEERS`. Peers also
 ask for a pull after they write, so new records arrive sooner.
+
+- **Sync one peer now.** **Sync now** on a peer's row pulls from that peer at once and shows what arrived, or
+  why the pull failed; the row keeps its last pull time and error. A peer takes three of these a minute.
+  From a script: `POST /federation/peers/sync` with `{"url":"<the peer's url>"}` and the operator secret.
 
 - **Sync now.** **Instance admin → Federation → Sync now** pulls from every peer and pushes to the hub at
   once. From a script, post to `/federation/sync` with the operator secret; this one only pulls:

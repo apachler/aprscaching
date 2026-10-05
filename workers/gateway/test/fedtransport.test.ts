@@ -2,7 +2,8 @@
 // The sync transport tries a peer's addresses in priority order and keeps the first that answers: a 44Net name
 // with a certificate over https and then plain http, a HAMNET host with a short timeout, then the next endpoint.
 import { describe, it, expect } from "vitest";
-import { syncTransportFor } from "../src/fedtransport.js";
+import { mergeEndpoints, syncAddresses, syncTransportFor } from "../src/fedtransport.js";
+import type { FedEndpoint } from "@aprscaching/shared";
 
 /** A fetch that answers the listed bases and fails every other connection, recording what was tried. */
 function net(reachable: string[]) {
@@ -85,5 +86,66 @@ describe("syncTransportFor", () => {
     const t = syncTransportFor({ url: "https://peer.example/" }, fetchFn)!;
     await t.get("/x");
     expect(t.baseUrl).toBe("https://peer.example");
+  });
+
+  it("tries the row's url after its endpoint set, unless the set lists it", () => {
+    const set = endpoints([{ transport: "https", address: "https://alt.example", priority: 10 }]);
+    expect(syncAddresses({ ...set, url: "https://peer.example" }).map((a) => a.baseUrl)).toEqual([
+      "https://alt.example",
+      "https://peer.example",
+    ]);
+    expect(syncAddresses({ ...set, url: "https://alt.example" }).map((a) => a.baseUrl)).toEqual([
+      "https://alt.example",
+    ]);
+    expect(syncAddresses({ ...set, url: "submit:spoke.example" }).map((a) => a.baseUrl)).toEqual([
+      "https://alt.example",
+    ]);
+  });
+});
+
+describe("mergeEndpoints", () => {
+  const dns: FedEndpoint = {
+    transport: "44net",
+    address: "aprscaching.oe8apr.ampr.org",
+    priority: 10,
+    verifiedVia: "ardc-lot",
+  };
+  const own: FedEndpoint = { transport: "https", address: "https://peer.example", priority: 40 };
+  const said: FedEndpoint = { transport: "https", address: "https://said.example", priority: 30 };
+  const url = "https://peer.example";
+
+  it("a whole list replaces what the peer said, never what DNS attested or the row's own address", () => {
+    const next: FedEndpoint = { transport: "hamnet", address: "44.143.1.2", priority: 20 };
+    expect(mergeEndpoints([dns, own, said], [next], { url, replace: true })).toEqual([dns, next, own]);
+  });
+
+  it("a partial list adds and updates, and drops nothing", () => {
+    const moved: FedEndpoint = { ...said, priority: 5 };
+    expect(mergeEndpoints([dns, said], [moved], { url, replace: false })).toEqual([moved, dns]);
+  });
+
+  it("a peer cannot attest itself or move an attested endpoint", () => {
+    const claim: FedEndpoint = {
+      transport: "https",
+      address: "https://x.example",
+      priority: 1,
+      verifiedVia: "ardc-lot",
+    };
+    const steal: FedEndpoint = { ...dns, priority: 1, verifiedVia: undefined };
+    expect(mergeEndpoints([dns], [claim, steal], { url, replace: true })).toEqual([
+      { transport: "https", address: "https://x.example", priority: 1 },
+      dns,
+    ]);
+  });
+
+  it("keeps a row's set bounded, lowest priority first to go", () => {
+    const many = Array.from({ length: 40 }, (_, i): FedEndpoint => ({
+      transport: "https",
+      address: `https://p${i}.example`,
+      priority: 50 + (i % 50),
+    }));
+    const out = mergeEndpoints([dns], many, { url, replace: true });
+    expect(out).toHaveLength(16);
+    expect(out[0]).toEqual(dns);
   });
 });

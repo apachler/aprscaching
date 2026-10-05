@@ -38,12 +38,14 @@ function parseJsonArray(s: string | undefined): unknown[] {
 /**
  * GET /federation/beacon — the instance's current presence beacon, application/octet-stream. The
  * endpoint set is trimmed from the lowest priority up until the datagram fits the single-frame
- * bound; identity (instance + signing key on the frame) always rides.
+ * bound, and a trimmed set says so (`partial`), so a receiver adds it to what it knows rather than
+ * dropping the addresses left out; identity (instance + signing key on the frame) always rides.
  */
 export async function handleBeaconEmit(req: Request, env: Env): Promise<Response> {
   const instance = instanceOf(req, env);
   const at = nowS();
-  let addresses: FedEndpoint[] = parseEndpoints(parseJsonArray(env.FED_ENDPOINTS));
+  const all: FedEndpoint[] = parseEndpoints(parseJsonArray(env.FED_ENDPOINTS));
+  let addresses = all;
   for (;;) {
     const frame = await signFedRecord(env, {
       kind: "peer",
@@ -52,7 +54,7 @@ export async function handleBeaconEmit(req: Request, env: Env): Promise<Response
       v: at,
       at,
       signer: instance,
-      body: addresses.length ? { addresses } : {},
+      body: addresses.length ? { addresses, ...(addresses.length < all.length && { partial: true }) } : {},
     });
     if (!frame) return json({ error: "instance is unsigned — configure FED_PRIVATE_KEY" }, { status: 404 });
     if (frame.length <= MAX_BEACON_BYTES)

@@ -130,6 +130,11 @@ check "--https serves the name over https: the endpoint becomes https://<name>" 
 check "  … and the name joins EXTRA_ORIGINS" eq "$(grep '^EXTRA_ORIGINS=' "$ENVF")" "EXTRA_ORIGINS=https://aprscaching.oe8apr.ampr.org"
 MOCK_PMTU=1492 n44 setup --yes --non-interactive "$TMP/full.conf" --https
 check "  … once" eq "$(grep '^EXTRA_ORIGINS=' "$ENVF")" "EXTRA_ORIGINS=https://aprscaching.oe8apr.ampr.org"
+cp "$ENVF" "$TMP/env.kept"
+printf 'APP_URL=https://AprsCaching.oe8apr.ampr.org:443/\nDOMAIN=aprscaching.oe8apr.ampr.org\n' >"$ENVF"
+MOCK_PMTU=1492 n44 setup --yes --non-interactive "$TMP/full.conf" --name aprscaching.oe8apr.ampr.org --https
+check "  … but not when it is APP_URL's own address, which Caddy already serves" eq "$(grep -c '^EXTRA_ORIGINS=' "$ENVF")" 0
+cp "$TMP/env.kept" "$ENVF"
 
 rm -f "$MOCK_STATE/up"
 MOCK_PMTU=1500 n44 setup --yes --non-interactive "$TMP/split.conf"

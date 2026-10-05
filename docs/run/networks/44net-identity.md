@@ -213,6 +213,8 @@ each failing one with a one-sentence fix that carries the exact value to publish
 - when both records carry a binding, whether the callsign's record sends peers to this host as another
   instance: a warning. A callsign record for your other instance is information;
 - where the record sends peers matches where this instance is: its `44net` endpoint and its https origin;
+- with `web=`, the descriptor names your call as its service call or its `FED_OPERATOR`, as a peer adding you
+  requires. Neither naming it fails, with `FED_OPERATOR=<call>` as the fix;
 - whether the DNS answer carried the DNSSEC AD flag, and whether the host has an AAAA record: information.
 
 An instance without 44Net that has published nothing gets one information line with the record to publish:

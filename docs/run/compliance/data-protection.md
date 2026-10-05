@@ -130,7 +130,10 @@ PII-free tombstone** that names only a global record id, never a callsign. A pee
 purges the mirrored rows and refuses to mirror them again.
 
 Tombstones are kept permanently on both sides. They hold only ids, and a mirror checks them on every update, so
-deleted data never comes back through a cursor reset, a new hub or a replayed feed.
+deleted data never comes back through a cursor reset, a new hub or a replayed feed. The one bounded tombstone is
+the sysop's removal of a cache: it covers the cache up to that removal, so a cache the sysop restores reaches the
+peers again, while every copy from before the removal stays suppressed
+([Moderation](../day-to-day/moderation.md#what-the-peers-see)).
 [How federation stays honest](../../reference/federation-trust.md) covers the signed feeds that carry them.
 
 ## Next

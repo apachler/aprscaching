@@ -100,7 +100,7 @@ export function ContentMenu(props: {
   const restore = async () => {
     const a = await prompt({
       title: "Restore this cache?",
-      message: "It comes back disabled; its owner enables it again. Peers that dropped it keep it dropped.",
+      message: "It comes back disabled; its owner enables it again. Peers mirror it again.",
       label: "Reason",
       minLength: 3,
       maxLength: 500,

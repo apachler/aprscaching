@@ -772,6 +772,11 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 // only NATIVE caches are federated; imported third-party data stays local
 /** Cache versions count revisions from here: above every unix-second timestamp a version could be. */
 const CACHE_VERSION_BASE = 2 ** 32;
+/** A native cache's current federation version, the `v` its next frame carries. */
+export async function cacheFedVersion(env: Env, id: number): Promise<number> {
+  const r = await env.DB.prepare("SELECT fed_rev FROM caches WHERE id = ?").bind(id).first<{ fed_rev: number }>();
+  return CACHE_VERSION_BASE + (r?.fed_rev ?? 0);
+}
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   composite: true,

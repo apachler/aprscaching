@@ -62,8 +62,9 @@ removals are final.
 
 A removal of a cache, a log or one of this instance's own bulletins emits a signed tombstone. Peers that mirror
 the record drop it and never mirror it again
-([Erasure across the network](../compliance/data-protection.md#erasure-across-the-network)). A restored cache
-therefore comes back on this instance only.
+([Erasure across the network](../compliance/data-protection.md#erasure-across-the-network)). A cache's tombstone
+covers the cache as it stood when you removed it: a restore changes the cache, so peers mirror the restored
+cache again, disabled like here.
 
 A bulletin mirrored from a peer is removed here and blocked against that peer's id, so the next sync does not
 bring it back. The peer keeps its own copy; ask its operator, or block the peer under **Federation**.

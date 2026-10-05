@@ -422,11 +422,19 @@ ok(
 );
 
 // promote back to trusted → corroboration is restored, and approval is stamped
-const prom = await call(
+const bare = await call(
   SUB,
   "POST",
   "/federation/peers/trust",
   { url: PUB, trust: "trusted" },
+  { "x-operator-secret": OPERATOR_SECRET },
+);
+ok("trusting a peer without the compared fingerprint -> 400", bare.status === 400, `status=${bare.status}`);
+const prom = await call(
+  SUB,
+  "POST",
+  "/federation/peers/trust",
+  { url: PUB, trust: "trusted", fingerprint: peerRec.fingerprint },
   { "x-operator-secret": OPERATOR_SECRET },
 );
 ok(
@@ -673,7 +681,7 @@ const promote = await call(
   SUB,
   "POST",
   "/federation/peers/trust",
-  { url: "submit:oe.spoke", trust: "trusted" },
+  { url: "submit:oe.spoke", trust: "trusted", fingerprint: spokeRow?.fingerprint },
   { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("the operator promotes the spoke", promote.status === 200, `status=${promote.status}`);
@@ -794,7 +802,7 @@ await call(
   SUB,
   "POST",
   "/federation/peers/trust",
-  { url: PUB, trust: "trusted" },
+  { url: PUB, trust: "trusted", fingerprint: peerRec.fingerprint },
   { "x-operator-secret": OPERATOR_SECRET },
 );
 const mRe = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);

@@ -11,6 +11,7 @@ import {
   lookUpPeer,
   addPeer,
   removePeer,
+  syncPeerNow,
   type FedPeerPreview,
   add44netPeer,
   ApiError,
@@ -2009,6 +2010,19 @@ function FederationAdmin() {
       toast((e as Error).message);
     }
   };
+  const sync = async (p: FedPeer) => {
+    const name = p.instance ?? p.url;
+    try {
+      const r = await syncPeerNow(p.url);
+      if (r.ok && r.pulled) {
+        const n = Object.values(r.pulled).reduce((a, b) => a + b, 0);
+        toast(`${name}: pulled, ${n} ${n === 1 ? "record" : "records"} new`);
+      } else toast(`${name}: the pull failed: ${r.error ?? "unknown error"}`);
+    } catch (e) {
+      toast((e as Error).message);
+    }
+    refresh();
+  };
   const remove = async (p: FedPeer) => {
     const name = p.instance ?? p.url;
     const ok = await confirmDialog({
@@ -2082,7 +2096,7 @@ function FederationAdmin() {
       ) : (
         <ul className="logs">
           {peers.map((p) => (
-            <PeerRow key={p.url} peer={p} onTrust={trust} onRemove={remove} />
+            <PeerRow key={p.url} peer={p} onTrust={trust} onRemove={remove} onSync={sync} />
           ))}
         </ul>
       )}
@@ -2101,8 +2115,10 @@ function PeerRow(props: {
   peer: FedPeer;
   onTrust: (p: FedPeer, t: FedPeer["trust"], done: string) => Promise<void>;
   onRemove: (p: FedPeer) => Promise<void>;
+  onSync: (p: FedPeer) => Promise<void>;
 }) {
   const fmt = useFmt();
+  const [syncing, setSyncing] = useState(false);
   const p = props.peer;
   const name = p.instance ?? p.url;
   // a discovered peer is listed but never synced until the operator picks a level for it
@@ -2132,6 +2148,7 @@ function PeerRow(props: {
       <div className="comment">
         {p.instance && <span className="mono">{p.url}</span>}
         {p.added_via ? `${p.instance ? " · " : ""}added via ${p.added_via}` : ""}
+        {p.auto_promoted_at != null ? " · trusted by auto-promotion" : ""}
         {p.configured ? " · listed in FED_PEERS" : ""}
       </div>
       {p.fingerprint ? (
@@ -2163,6 +2180,23 @@ function PeerRow(props: {
             Enable
           </Button>
         )}
+        <Button
+          disabled={waiting || p.trust === "blocked" || syncing}
+          aria-label={`Sync ${name} now`}
+          hint={
+            p.trust === "blocked"
+              ? "Blocked: it is never contacted"
+              : waiting
+                ? "Enable it first: it is not synced until then"
+                : "Pull from it now, without waiting for the schedule"
+          }
+          onClick={() => {
+            setSyncing(true);
+            void props.onSync(p).finally(() => setSyncing(false));
+          }}
+        >
+          {syncing ? "Syncing…" : "Sync now"}
+        </Button>
         <Button
           disabled={p.trust === "trusted" || !p.fingerprint}
           aria-label={`Trust ${name}`}

@@ -13,8 +13,13 @@
  * Endpoint selection: a peer row carries an ordered typed endpoint set (`endpoints` JSON). The sync
  * transport tries the sync-capable addresses in priority order — a `44net` name with a certificate over
  * https and then plain http, a `hamnet` host with a short timeout, since most peers have no route to
- * HAMNET — and keeps the first that answers. A peer without an endpoint set (a FED_PEERS URL, a
- * discovered or submitted peer) is reached at its `url`, the address it was added under.
+ * HAMNET — and keeps the first that answers. The row's `url`, the address the peer was added under, is
+ * always among them: last, unless the endpoint set lists it. A peer without an endpoint set (a FED_PEERS URL, a
+ * discovered or submitted peer before its first sync) is reached at its `url` alone.
+ *
+ * The endpoint set comes from DNS (a peer added by callsign, fed44net.ts), from the `addresses` of the peer's
+ * own descriptor (fedpull.ts) or from its presence beacon (fedapply.ts); {@link mergeEndpoints} folds what a
+ * peer says about itself into the stored set without dropping what DNS attested or the row's own address.
  */
 import { endpointBaseUrls, parseEndpoints, type FedEndpoint, type FedTransportKind } from "@aprscaching/shared";
 
@@ -39,19 +44,57 @@ interface PeerAddressing {
   endpoints?: string | null;
 }
 
-/** A peer's typed endpoint set, priority-ordered; without one, its `url`. */
-function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
-  if (p.endpoints) {
-    try {
-      const list = parseEndpoints(JSON.parse(p.endpoints));
-      if (list.length) return list;
-    } catch {
-      /* a malformed stored endpoint set leaves the url */
-    }
+/** A stored endpoint set, priority-ordered; empty when there is none or it does not parse. */
+export function storedEndpoints(raw: string | null | undefined): FedEndpoint[] {
+  if (!raw) return [];
+  try {
+    return parseEndpoints(JSON.parse(raw));
+  } catch {
+    return []; // a malformed stored endpoint set leaves the url
   }
+}
+
+/** A peer's typed endpoint set, priority-ordered, with its `url` last unless the set lists it. */
+function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
+  const list = storedEndpoints(p.endpoints);
   // The url column is written by the operator (FED_PEERS, the admin surface) or by a path that already
   // validated it, and may be plain http on a LAN or HAMNET peer, so it is taken as given.
-  return p.url && /^https?:\/\//.test(p.url) ? [{ transport: "https", address: p.url, priority: 50 }] : [];
+  const url = p.url && /^https?:\/\//.test(p.url) ? p.url : null;
+  if (url && !list.some((e) => endpointBaseUrls(e).includes(url)))
+    list.push({ transport: "https", address: url, priority: 100 });
+  return list;
+}
+
+/** Most endpoints a peer row keeps: a peer cannot grow its row without bound through what it announces. */
+const MAX_PEER_ENDPOINTS = 16;
+
+const endpointKey = (e: FedEndpoint) => `${e.transport} ${e.address.toLowerCase()}`;
+
+/**
+ * Fold the endpoints a peer publishes about itself (its descriptor's `addresses`, a presence beacon) into the
+ * stored set. `replace` takes the incoming set as the peer's whole list, so an address it no longer lists goes;
+ * otherwise (a beacon, trimmed to fit one datagram) nothing stored is dropped. Either way an endpoint DNS
+ * attested (`verifiedVia: "ardc-lot"`) and the row's own `url` stay as stored, and an incoming endpoint never
+ * carries an attestation: a peer cannot vouch for itself. Pure.
+ */
+export function mergeEndpoints(
+  stored: FedEndpoint[],
+  incoming: FedEndpoint[],
+  opts: { url?: string | null; replace: boolean },
+): FedEndpoint[] {
+  const kept = (e: FedEndpoint) =>
+    e.verifiedVia === "ardc-lot" || (!!opts.url && endpointBaseUrls(e).includes(opts.url));
+  const out = new Map<string, { e: FedEndpoint; kept: boolean }>();
+  for (const e of stored) if (!opts.replace || kept(e)) out.set(endpointKey(e), { e, kept: kept(e) });
+  for (const raw of incoming) {
+    const e: FedEndpoint = { transport: raw.transport, address: raw.address, priority: raw.priority };
+    const k = endpointKey(e);
+    if (!out.get(k)?.kept) out.set(k, { e, kept: false });
+  }
+  const all = [...out.values()].sort((a, b) => a.e.priority - b.e.priority);
+  const room = Math.max(0, MAX_PEER_ENDPOINTS - all.filter((x) => x.kept).length);
+  const learned = new Set(all.filter((x) => !x.kept).slice(0, room));
+  return all.filter((x) => x.kept || learned.has(x)).map((x) => x.e);
 }
 
 interface SyncAddress {
@@ -60,8 +103,11 @@ interface SyncAddress {
   timeoutMs: number;
 }
 
-/** Every base URL a sync may use, in the order to try them; packet endpoints carry none. */
-function syncAddresses(p: PeerAddressing): SyncAddress[] {
+/**
+ * Every base URL a sync may use, in the order to try them; packet endpoints carry none. Corroboration asks a
+ * peer at the same addresses.
+ */
+export function syncAddresses(p: PeerAddressing): SyncAddress[] {
   const out: SyncAddress[] = [];
   for (const e of peerEndpoints(p)) {
     for (const baseUrl of endpointBaseUrls(e))

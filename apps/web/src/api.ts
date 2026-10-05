@@ -920,7 +920,9 @@ export interface FedPeer {
   /** The pinned key's fingerprint (four groups of four hex digits); null until a signed sync pins a key */
   fingerprint: string | null;
   trust: "trusted" | "unvetted" | "blocked";
-  added_via?: string | null; // manual | registry | discovered | auto-promoted
+  added_via?: string | null; // manual | admin | registry | discovered | submitted | 44net
+  /** When corroboration raised it to trusted on its own (FED_AUTO_PROMOTE); null once the sysop decides */
+  auto_promoted_at?: number | null;
   /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
   enabled: number;
   health: "ok" | "error" | "new" | "blocked";
@@ -971,6 +973,22 @@ export function addPeer(
 /** Operator: remove a peer and its pinned key. */
 export function removePeer(url: string): Promise<{ ok: boolean }> {
   return call(`/federation/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
+}
+
+/** What one peer's Sync now brought: the records per feed, or the pull's error, and its last pull times. */
+export interface PeerSyncResult {
+  ok: boolean;
+  url: string;
+  pulled?: { caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number };
+  error?: string;
+  lastSync: number | null;
+  lastOk: number | null;
+  lastError: string | null;
+}
+
+/** Sync now, one peer: pull from it at once (sysop, rate limited per peer). */
+export function syncPeerNow(url: string): Promise<PeerSyncResult> {
+  return call(`/federation/peers/sync`, { method: "POST", body: JSON.stringify({ url }) });
 }
 
 /** How pushing to the hub stands (a spoke) and when each spoke last submitted (a hub). */
@@ -1402,7 +1420,7 @@ export function getAdminSetup(): Promise<AdminSetup> {
 }
 /** One line of the callsign-identity self-check; `fix` is set on every warn and fail. */
 export interface Net44CheckLine {
-  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "dnssec" | "aaaa";
+  id: "endpoint" | "a" | "txt" | "callsign" | "target" | "operator" | "dnssec" | "aaaa";
   status: "pass" | "warn" | "fail" | "info";
   label: string;
   detail: string;

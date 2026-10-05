@@ -40,6 +40,8 @@ function rxDb(known: boolean, sinks: { endpointUpdates: unknown[][] }, hit = tru
               return null;
             },
             async all() {
+              if (sql.includes("SELECT url, endpoints FROM fed_peers") && known)
+                return { results: [{ url: "https://oe.pub", endpoints: null }] };
               return { results: [] };
             },
             async run() {
@@ -81,6 +83,26 @@ describe("beacon tier: emit + trust-gated receive", () => {
     expect(rec.body.addresses).toEqual([{ transport: "44net", address: "oe8apr.ampr.org", priority: 10 }]);
   });
 
+  it("a beacon trimmed to fit one datagram says it is partial", async () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      transport: "https",
+      address: `https://a${i}.io`,
+      priority: 10 + i,
+    }));
+    const env = {
+      DB: rxDb(false, { endpointUpdates: [] }),
+      INSTANCE: "oe.pub",
+      FED_PRIVATE_KEY: keyEnvVal,
+      FED_ENDPOINTS: JSON.stringify(many),
+    } as unknown as Env;
+    const res = await handleBeaconEmit(new Request("http://gw/federation/beacon"), env);
+    const rec = decodeFedFrame(decodeFedBeacon(new Uint8Array(await res.arrayBuffer()))!).record;
+    const sent = rec.body.addresses as unknown[];
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.length).toBeLessThan(many.length);
+    expect(rec.body.partial).toBe(true);
+  });
+
   it("a receiver that knows the origin refreshes its endpoints; RX introduces no peer", async () => {
     const emitEnv = {
       DB: rxDb(false, { endpointUpdates: [] }),
@@ -98,7 +120,10 @@ describe("beacon tier: emit + trust-gated receive", () => {
     const r1 = (await (await handleBeaconRx(rxPost(payload), known)).json()) as Record<string, number | boolean>;
     expect(r1).toMatchObject({ federation: true, applied: 1, quarantined: 0, rejected: 0 });
     expect(knownSinks.endpointUpdates).toHaveLength(1);
-    expect(String(knownSinks.endpointUpdates[0]![1])).toBe("oe.pub");
+    expect(JSON.parse(String(knownSinks.endpointUpdates[0]![0]))).toEqual([
+      { transport: "44net", address: "oe8apr.ampr.org", priority: 10 },
+    ]);
+    expect(String(knownSinks.endpointUpdates[0]![1])).toBe("https://oe.pub");
 
     // unknown origin: quarantined, and no peer row appears
     const strangeSinks = { endpointUpdates: [] as unknown[][] };

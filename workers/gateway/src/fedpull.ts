@@ -25,12 +25,13 @@ import {
   usableKeys,
   type RotationRecord,
 } from "./federation.js";
-import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
+import { mergeEndpoints, storedEndpoints, syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { decodeFedSyncPage } from "./fedsync.js";
-import { validEndpointAddress } from "@aprscaching/shared";
-import { type PeerRow, ours, seedPeers, listEnabledPeers } from "./fedpeers.js";
+import { parseEndpoints, validEndpointAddress } from "@aprscaching/shared";
+import { type PeerRow, blockedAt, ours, seedPeers, listEnabledPeers } from "./fedpeers.js";
 import { SYNC_DEFS, type SyncDef, type FrameGate, admitFrame } from "./fedapply.js";
 import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 /** Most pages one pass reads (pull) or sends (push) per feed. */
 export const MAX_PAGES = 50;
@@ -218,6 +219,7 @@ async function syncPeer(
     peers?: string[];
     capabilities?: string[];
     protocolVersions?: string[];
+    addresses?: unknown;
   }>("/.well-known/aprscaching");
   // the address that answered the descriptor carries the rest of the sync
   const base = transport.baseUrl;
@@ -241,6 +243,9 @@ async function syncPeer(
     .bind(wk.instance, p.url)
     .first<{ url: string }>();
   if (holder) throw new Error(`instance ${wk.instance} is already bound to ${holder.url} — refusing`);
+  // a block covers the instance under every address: a new address for it is not a way back in
+  const blocked = await blockedAt(env, wk.instance, p.url);
+  if (blocked) throw new Error(`instance ${wk.instance} is blocked here (at ${blocked}) — refusing`);
 
   // anti-spoof: if a signed registry binds this instance to a key, the peer's CURRENT key must be
   // that key. Unregistered peers fall back to trust-on-first-use.
@@ -261,20 +266,48 @@ async function syncPeer(
   });
   if (!keys.ok) throw new Error(`peer ${wk.instance}: ${keys.reason} — refusing (possible hijack)`);
   // A FED_PEERS entry that pins a fingerprint names the key its sysop compared: the peer's keys must
-  // include it (its rotation chain may have moved the pin on since), or this is not that peer.
+  // include it, or this is not that peer. Once a key matched, the row's pin moves on from it only along
+  // the verified rotation chain (resolvePeerKeys), so the pin keeps holding after the matched key's grace.
   const pinnedFp = p.pinned_fingerprint ?? null;
   let pinMatches = false;
+  let matchedKey = p.pin_matched_key ?? null;
   if (pinnedFp) {
-    const held = [keys.pin, p.public_key, ...usableKeys(keys.accept, nowS())].filter((k): k is string => !!k);
-    const fps = await Promise.all([...new Set(held)].map(keyFingerprint));
-    if (!fps.includes(pinnedFp))
-      throw new Error(`peer ${wk.instance}: its key does not match the fingerprint pinned in FED_PEERS — refusing`);
-    pinMatches = !!keys.pin && (await keyFingerprint(keys.pin)) === pinnedFp;
+    const anchored = !!matchedKey && !!p.public_key && (await keyFingerprint(matchedKey)) === pinnedFp;
+    if (anchored) pinMatches = true;
+    else {
+      const held = [keys.pin, p.public_key, ...usableKeys(keys.accept, nowS())].filter((k): k is string => !!k);
+      matchedKey = null;
+      for (const k of new Set(held)) if ((await keyFingerprint(k)) === pinnedFp) matchedKey ??= k;
+      if (!matchedKey)
+        throw new Error(`peer ${wk.instance}: its key does not match the fingerprint pinned in FED_PEERS — refusing`);
+      pinMatches = !!keys.pin && (await keyFingerprint(keys.pin)) === pinnedFp;
+    }
   }
+  // Identity and keys check out: the addresses the peer's descriptor lists join its endpoint set, unless DNS
+  // set it (a peer added by callsign), which the peer's own word never replaces.
+  const learnEndpoints = p.endpoints_source !== "dns";
+  const endpoints = learnEndpoints
+    ? mergeEndpoints(storedEndpoints(p.endpoints), parseEndpoints(wk.addresses), { url: p.url, replace: true })
+    : [];
   const acceptJson = JSON.stringify(keys.accept);
   try {
-    await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=?, accept_keys=? WHERE url=?")
-      .bind(wk.instance, keys.pin, acceptJson, p.url)
+    await env.DB.prepare(
+      `UPDATE fed_peers SET instance=?, public_key=?, accept_keys=?, pin_matched_key=?,
+         endpoints        = CASE WHEN ? THEN ? ELSE endpoints END,
+         endpoints_source = CASE WHEN ? THEN ? ELSE endpoints_source END
+       WHERE url=?`,
+    )
+      .bind(
+        wk.instance,
+        keys.pin,
+        acceptJson,
+        matchedKey,
+        learnEndpoints ? 1 : 0,
+        endpoints.length ? JSON.stringify(endpoints) : null,
+        learnEndpoints ? 1 : 0,
+        endpoints.length ? "descriptor" : null,
+        p.url,
+      )
       .run();
   } catch (e) {
     if (/UNIQUE/i.test((e as Error).message))
@@ -498,4 +531,51 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
   }
   const summary = await syncAllPeers(env, opts);
   return json({ ok: true, ...summary });
+}
+
+/** Per-peer Sync now: at most this many pulls of one peer per window, whoever asks. */
+const PEER_SYNC_MAX = 3;
+const PEER_SYNC_WINDOW_MS = 60_000;
+
+/**
+ * POST /federation/peers/sync — Sync now for one peer, body `{ url }`. Sysop or the operator secret, rate
+ * limited per peer. It pulls at once (sharing a pull already running for the peer) and answers with what the
+ * pull brought, or its error, and the peer's last pull times. A disabled or blocked peer is never contacted.
+ */
+export async function handlePeerSyncNow(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (gate) return gate;
+  const b = (await req.json().catch(() => null)) as { url?: unknown } | null;
+  if (typeof b?.url !== "string" || !b.url.trim()) return json({ ok: false, error: "url required" }, { status: 400 });
+  const url = trimTrailingSlashes(b.url.trim());
+  const p = await env.DB.prepare("SELECT * FROM fed_peers WHERE url = ?").bind(url).first<PeerRow>();
+  if (!p) return json({ ok: false, error: "unknown peer" }, { status: 404 });
+  if (p.trust === "blocked")
+    return json({ ok: false, error: "this peer is blocked: it is never contacted" }, { status: 409 });
+  if (!p.enabled)
+    return json({ ok: false, error: "this peer is not enabled: choose a trust level for it first" }, { status: 409 });
+  if (await rateLimitedDurable(env, `peer-sync:${url}`, Date.now(), PEER_SYNC_MAX, PEER_SYNC_WINDOW_MS))
+    return json({ ok: false, error: "this peer was just pulled: try again in a minute" }, { status: 429 });
+  let pulled: PeerSyncCounts | null = null;
+  let error: string | null = null;
+  try {
+    pulled = await syncPeerCoalesced(env, p);
+  } catch (e) {
+    error = (e as Error).message;
+    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
+      .bind(error, nowS(), url)
+      .run();
+  }
+  const row = await env.DB.prepare("SELECT last_sync, last_ok, last_error FROM fed_peers WHERE url = ?")
+    .bind(url)
+    .first<{ last_sync: number | null; last_ok: number | null; last_error: string | null }>();
+  return json({
+    ok: !error,
+    url,
+    ...(pulled && { pulled }),
+    ...(error && { error }),
+    lastSync: row?.last_sync ?? null,
+    lastOk: row?.last_ok ?? null,
+    lastError: row?.last_error ?? null,
+  });
 }

@@ -14,6 +14,11 @@
  *
  * The feed signs at serve time, exactly like the caches/finds/keys feeds (so key rotation and
  * unsigned-instance behaviour stay consistent).
+ *
+ * A tombstone suppresses every version of its target, for good, with one exception: the sysop's removal
+ * of a cache carries `upTo`, the cache's federation version at removal. A restored cache comes back at a
+ * higher version (every update raises it), which peers mirror again; nothing at or below `upTo` ever
+ * returns. An erasure (account, an owner's own delete, a released callsign) carries no `upTo`.
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
@@ -23,6 +28,8 @@ type TombstoneKind = "account" | "find" | "cache" | "key" | "move" | "bulletin";
 export interface TombstoneItem {
   kind: TombstoneKind;
   targetId: string;
+  /** The highest version of the target it suppresses; absent for every version. */
+  upTo?: number;
 }
 
 interface TombstoneRow {
@@ -31,11 +38,12 @@ interface TombstoneRow {
   target_id: string;
   origin: string;
   ts: number;
+  up_to: number | null;
 }
 
 /** The wire `data` payload — the signed, PII-free body peers verify and apply. */
-function tombstoneData(r: { kind: string; target_id: string; origin: string; ts: number }) {
-  return { kind: r.kind, targetId: r.target_id, origin: r.origin, ts: r.ts };
+function tombstoneData(r: { kind: string; target_id: string; origin: string; ts: number; up_to: number | null }) {
+  return { kind: r.kind, targetId: r.target_id, origin: r.origin, ts: r.ts, ...(r.up_to != null && { upTo: r.up_to }) };
 }
 
 /**
@@ -46,13 +54,9 @@ export async function emitTombstones(env: Env, origin: string, items: TombstoneI
   if (!items.length) return 0;
   const ts = nowS();
   const stmts = items.map((it) =>
-    env.DB.prepare("INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts) VALUES (?, ?, ?, ?, ?)").bind(
-      crypto.randomUUID(),
-      it.kind,
-      it.targetId,
-      origin,
-      ts,
-    ),
+    env.DB.prepare(
+      "INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts, up_to) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(crypto.randomUUID(), it.kind, it.targetId, origin, ts, it.upTo ?? null),
   );
   await env.DB.batch(stmts);
   return items.length;
@@ -63,7 +67,9 @@ export const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
   type: "tombstone",
   selectRows: async (env, since, limit) =>
     (
-      await env.DB.prepare("SELECT seq, kind, target_id, origin, ts FROM tombstones WHERE seq > ? ORDER BY seq LIMIT ?")
+      await env.DB.prepare(
+        "SELECT seq, kind, target_id, origin, ts, up_to FROM tombstones WHERE seq > ? ORDER BY seq LIMIT ?",
+      )
         .bind(since, limit)
         .all<TombstoneRow>()
     ).results,

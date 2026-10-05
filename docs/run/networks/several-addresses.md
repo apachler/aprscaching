@@ -140,7 +140,10 @@ email link or the sysop's [one-time link](../day-to-day/sign-in-links.md#off-gri
 
 ## Federation over several addresses
 
-Peers try the addresses of `FED_ENDPOINTS` in priority order and keep the first that answers:
+Peers that added this instance by URL, from `FED_PEERS`, the registry or discovery learn the addresses of
+`FED_ENDPOINTS` from its descriptor on every sync; a peer that added it by callsign uses the addresses its DNS
+record names. Peers try them in priority order and keep the first that answers, and the address a peer added
+this instance under stays its last resort:
 
 - a `44net` endpoint with `https://` is tried over https, then over plain http on the same name;
 - a `hamnet` endpoint is tried with a 2-second timeout: most peers have no route to HAMNET and move on to the

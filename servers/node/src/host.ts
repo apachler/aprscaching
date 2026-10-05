@@ -51,15 +51,16 @@ export function gitHead(): string | undefined {
 /**
  * The scheduled jobs. The nightly job (TTL pruning, digests) runs once at start too — a box that
  * reboots or closes more often than daily would otherwise never prune, so its database only grows; it
- * is idempotent. The frequent federation tasks (pull from peers, push to a hub, answer relay queries;
- * runFrequentSync) run every `fedSyncMs` (0 disables them) when peers or a hub
- * are configured; each no-ops unless its config is present.
+ * is idempotent. The frequent federation tasks (pull from peers, push to a hub, retry corroborations,
+ * answer relay queries; runFrequentSync) run every `fedSyncMs` (0 disables them) whatever the
+ * configuration says: a peer the sysop adds in Instance admin exists only as a row, and a tick without
+ * peers, hub or retries costs a few queries, since each task no-ops without its config or rows.
  */
 export function startSchedules(env: Env, fedSyncMs: number): void {
   const nightly = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
   nightly();
   setInterval(nightly, 24 * 3600 * 1000);
-  if ((env.FED_PEERS || env.FED_HUB_URL) && fedSyncMs > 0) {
+  if (fedSyncMs > 0) {
     // between intervals: probe an unreachable hub and catch up the moment it answers, and run again soon
     // while a backlog remains (fedcatchup.ts)
     const loop = catchUp(env);
