@@ -24,10 +24,17 @@ interface UserTxBody {
   symbol?: string;
   comment?: string;
   tocall?: string;
+  msgNo?: string;
 }
 
 /** A TOCALL a client may name: a callsign-shaped destination, 1–6 letters or digits and an optional SSID. */
 const TOCALL = /^[A-Z0-9]{1,6}(-\d{1,2})?$/;
+/** An APRS message addressee: the 9-character field, a callsign with an optional SSID. */
+const ADDRESSEE = /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/;
+/** An APRS message number. */
+const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
+/** The longest APRS message text. */
+export const APRS_MESSAGE_MAX = 67;
 
 /** User transmissions an account may queue an hour. */
 export const TX_PER_HOUR = 30;
@@ -36,9 +43,16 @@ export const TX_PER_HOUR = 30;
  * Pure: validate a user-TX request and build the outbox row fields (kind + APRS info payload). Returns an
  * error string for a bad request. No auth/DB here — the handler gates on control-verification first.
  */
-export function buildTxPayload(
-  body: UserTxBody,
-): { ok: true; kind: string; payload: string; tocall: string } | { ok: false; error: string } {
+export function buildTxPayload(body: UserTxBody):
+  | {
+      ok: true;
+      kind: string;
+      payload: string;
+      tocall: string;
+      /** For a message: what the Messages list records as sent. */
+      message?: { to: string; text: string; msgNo: string | null };
+    }
+  | { ok: false; error: string } {
   const kind = String(body.kind ?? "").toLowerCase();
   const tocall = String(body.tocall ?? "APZACG").toUpperCase(); // default self-assigned TOCALL
   if (!TOCALL.test(tocall)) return { ok: false, error: "tocall must be 1–6 letters or digits, with an optional SSID" };
@@ -48,7 +62,19 @@ export function buildTxPayload(
       .trim();
     const text = String(body.text ?? "").trim();
     if (!to || !text) return { ok: false, error: "a message needs an addressee and text" };
-    return { ok: true, kind: "message", payload: encodeAprsMessage(to, text), tocall };
+    if (!ADDRESSEE.test(to)) return { ok: false, error: "the addressee must be a callsign of up to 9 characters" };
+    if (text.length > APRS_MESSAGE_MAX)
+      return { ok: false, error: `an APRS message holds at most ${APRS_MESSAGE_MAX} characters` };
+    // a message number asks the addressee's station to acknowledge it
+    const msgNo = body.msgNo == null || body.msgNo === "" ? undefined : String(body.msgNo);
+    if (msgNo !== undefined && !MSG_NO.test(msgNo)) return { ok: false, error: "msgNo must be 1–5 letters or digits" };
+    return {
+      ok: true,
+      kind: "message",
+      payload: encodeAprsMessage(to, text, msgNo),
+      tocall,
+      message: { to, text, msgNo: msgNo ?? null },
+    };
   }
   if (kind === "beacon") {
     const lat = Number(body.lat),
@@ -86,8 +112,14 @@ export async function handleUserTx(req: Request, env: Env): Promise<Response> {
   )
     .bind(nowS(), callsign, built.tocall, built.kind, built.payload)
     .run();
-  return json(
-    { id: Number(ins.meta.last_row_id), srcCall: callsign, kind: built.kind, tocall: built.tocall, status: "queued" },
-    { status: 201 },
-  );
+  const id = Number(ins.meta.last_row_id);
+  // A message joins the sender's conversation as sent through APRS-IS; its outbox row says whether it went out,
+  // and the recipient's ack, when the instance hears it, marks it acknowledged.
+  if (built.message)
+    await env.DB.prepare(
+      "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport, outbox_id) VALUES (?,?,?,?,?, 'tx', 'aprs-is', ?)",
+    )
+      .bind(nowS(), callsign, built.message.to, built.message.text, built.message.msgNo, id)
+      .run();
+  return json({ id, srcCall: callsign, kind: built.kind, tocall: built.tocall, status: "queued" }, { status: 201 });
 }

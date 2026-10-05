@@ -470,6 +470,8 @@ const MESSAGES: MessageItem[] = [
     body: "On my way, 10 minutes.",
     direction: "tx",
     transport: "browser-rf",
+    msgNo: "12",
+    delivery: "acked",
   },
   {
     id: 3,

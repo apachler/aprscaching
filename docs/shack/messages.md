@@ -1,29 +1,67 @@
 # Messages over APRS and MeshCom
 
-This page shows you where APRS and MeshCom text messages appear in APRScaching, and how you send and
-acknowledge them. It is for operators with a radio; at the end you know which surface handles which kind of
-message.
+This page shows you how to write, read and answer APRS messages in APRScaching, and where MeshCom messages
+appear. It is for operators with a callsign; at the end you can hold a conversation with another station and
+know which surface handles which kind of message.
 
 ## Where messages appear
 
 | Surface | What it holds |
 |---|---|
-| **Messages** in the left rail, or **More → Messages** on a phone | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
+| **Messages → Conversations** (signed in) | Your own messages, one conversation per station: write, reply, and choose how each message is delivered. |
+| **Messages → On the air** | Every APRS text message the instance hears, from any station, and MeshCom direct messages. |
 | **Messages → MeshCom groups** | MeshCom group chat the instance's MeshCom nodes heard. Read only. |
 | **Settings → My radio (browser) → Local inbox** | The messages your own radio heard in this browser, with an **ACK** button for those addressed to you. |
 | **Shack → BBS** | Mail and bulletins on the instance's packet BBS, moved the F6FBB way. Never sent over APRS or MeshCom. |
-| **Messages → Mailbox** | Messages you left for a station, sent on the air when the instance hears it, and those left for you. |
 | **You → Logs sent over the air** | The commands you sent to the instance by radio, such as `FOUND`, waiting for you to confirm them. |
 
-**Messages** is radio messaging, separate from the BBS: a BBS message is never made from an APRS or MeshCom
-message, and never sent as one.
+**Messages** is in the left rail, or under **More** on a phone. It is radio messaging, separate from the BBS: a
+BBS message is never made from an APRS or MeshCom message, and never sent as one.
+
+## Write and answer messages
+
+Signed in, **Messages** opens on **Conversations**: one row per station you exchanged messages with, newest
+first, with the last message and its state. Select a row to read the conversation and **Reply** at its foot.
+
+### Before you start
+
+- A [verified callsign](../play/join.md#verify-your-callsign). Every message goes out on the air under your
+  callsign, so until it is verified the form is locked and says why.
+
+### Steps
+
+1. Select **New message**, or open a conversation to reply in it.
+2. Enter **To**: a callsign such as `OE5XYZ`, or `OE5XYZ-7` for one station. The field suggests the stations
+   you wrote with.
+3. Enter the **Message**, up to 67 characters.
+4. Choose the **Delivery**:
+    - **Now** sends it at once. With a USB or Bluetooth TNC connected in
+      [My radio](my-radio.md#connect) and transmit switched on, it goes out from your radio as your TX callsign.
+      Otherwise the instance sends it to [APRS-IS](../glossary.md#aprs-is) under your callsign, through its
+      ingest box. The line under the choice says which.
+    - **When next heard** leaves it in the [Mailbox](#leave-a-message-in-the-mailbox): the instance sends it the
+      next time it hears the station, for up to 7 days.
+5. Select **Send** (or **Leave message**).
+
+Each message carries a number, so the station's radio acknowledges it. The conversation shows its state:
+
+| State | Means |
+|---|---|
+| **queued** | Waiting for the instance's ingest box to send it to APRS-IS |
+| **sent** | Sent; no acknowledgement heard yet |
+| **acked** | The instance heard the station acknowledge it |
+| **not sent** | The instance could not send it within the hour |
+| **waiting until heard**, **sent, no ack yet**, **delivered**, **sent, never acked**, **expired** | A Mailbox message: [What happens next](#what-happens-next) |
+
+An ack counts only when the instance hears it: one your radio heard alone, without
+[forwarding](my-radio.md#send-what-you-hear-to-an-instance), leaves the message **sent**.
 
 ## Read the messages the instance hears
 
-1. Select **Messages** in the left rail. On a phone, select **More**, then **Messages**.
-2. The **On the air** view lists the newest messages first, each with sender, recipient, age and the network that carried it. A
-   message from or to your callsign (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows
-   older ones.
+1. Open **Messages** and switch the view to **On the air**.
+2. The list shows the newest messages first, each with sender, recipient, age and the network that carried it.
+   A message from or to your callsign (any [SSID](../glossary.md#ssid)) is highlighted and offers **Reply**,
+   which opens your conversation with the other station. **Load more** shows older ones.
 3. To read only your own traffic, select **Mine**: the list keeps the messages from or to any SSID of your
    callsign. **All** shows everything again.
 
@@ -91,7 +129,7 @@ number) is addressed to no one in particular and stays out of the list: it has i
 ## Read MeshCom group chat
 
 When the instance's MeshCom nodes have heard a group message, **Messages** adds a **MeshCom groups** view beside
-**On the air** and, signed in, **Mailbox**. Without one, the view is not there.
+**Conversations** and **On the air**. Without one, the view is not there.
 
 1. Open **Messages** and switch the view to **MeshCom groups**.
 2. Pick a **Group**. Each group shows how many messages the instance keeps; **All (\*)** is the group every
@@ -119,7 +157,8 @@ Mailbox message never becomes BBS mail, and the BBS never sends over APRS.
 
 ### Steps
 
-1. Open **Messages** and switch the view to **Mailbox**.
+1. Open **Messages**, select **New message** (or open the conversation with the station), and choose
+   **When next heard** under **Delivery**.
 2. Enter **To**: a callsign such as `OE5XYZ`, or `OE5XYZ-7` for one station.
 3. Enter the **Message**. It goes out as `de <your call>: <text>`, so it holds up to 67 characters with that
    prefix.
@@ -131,18 +170,19 @@ waits under **You → Logs sent over the air** until you confirm it.
 ### What happens next
 
 Mail to a base call goes to whichever of its stations the instance hears first; mail to `OE5XYZ-7` waits for
-that station. The station's radio acknowledges the numbered message. **You left** shows each message's state:
+that station. The station's radio acknowledges the numbered message. The conversation shows each message's state:
 
 | State | Means |
 |---|---|
-| **waiting** | Not heard yet |
+| **waiting until heard** | Not heard yet |
 | **sent, no ack yet** | Sent; the instance tries again when it hears the station, at most once a minute |
 | **delivered** | The station acknowledged it |
 | **sent, never acked** | Sent five times without an ack |
 | **expired** | Not heard within 7 days |
 
-**Withdraw** takes back a message that is still waiting or unacknowledged. **Waiting for you** lists the
-messages left for your own calls. A station heard on MeshCom gets its messages through the node that heard
+**Withdraw** takes back a message that is still waiting or unacknowledged. A message left for you shows in the
+conversation with its sender, **waiting until heard**, until the instance hears your station. A station heard on
+MeshCom gets its messages through the node that heard
 it. Only when that node is the sysop's own, reached over KISS, does the message come from the service call
 with a number the station acks; otherwise it goes out once, under the node's call, and shows **sent, never
 acked**.
