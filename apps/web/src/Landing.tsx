@@ -9,7 +9,8 @@ import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AF
  * The landing page — "Live on the air". The hero keeps the brand treatment in every theme and opens with the
  * product's thesis: an APRS frame heard on the air, decoding into its Radio-verified stamp. Below it the page
  * varies its rhythm: the instance's own numbers (from the read API, never invented), a full-width band of the
- * live map, the three steps beside a phone, the trust tiers as a progression, the Shack beside a desktop, and
+ * live map, the three steps beside a phone, the trust tiers as a progression, the network of instances, the Shack
+ * beside a desktop, and
  * short closing bands. One primary action (sign in with your callsign); Explore opens the read-only map.
  * Images are made from the real app by apps/web/test/visual/landing-assets.mjs.
  */
@@ -27,6 +28,7 @@ export function Landing(props: {
       <MapBand onExplore={props.onExplore} />
       <Steps />
       <Trust />
+      <Network />
       <Shack />
       <Privacy />
       <RunAnywhere />
@@ -108,6 +110,7 @@ function Hero(props: { onSignIn: () => void; onExplore: () => void }) {
           <a href="#map">The map</a>
           <a href="#how">How it works</a>
           <a href="#trust">Trust</a>
+          <a href="#network">Network</a>
           <a href="#shack">Shack</a>
           <a href="#privacy">Privacy</a>
         </span>
@@ -301,11 +304,41 @@ function Trust() {
   );
 }
 
+function Network() {
+  return (
+    <section className="landing-section" id="network" aria-labelledby="network-h">
+      <p className="landing-eyebrow">Federation</p>
+      <h2 id="network-h">One network, no central server</h2>
+      <dl className="landing-facts">
+        <div>
+          <dt>Caches cross instances</dt>
+          <dd>A cache hidden on one instance shows on the maps of the others, with its finds.</dd>
+        </div>
+        <div>
+          <dt>Other receivers confirm your find</dt>
+          <dd>Instances ask each other who heard you near the cache. Two independent yeses make it Radio-verified.</dd>
+        </div>
+        <div>
+          <dt>Signed, whatever the path</dt>
+          <dd>Every record carries its instance's signature, over the internet, 44Net or HAMNET.</dd>
+        </div>
+        <div>
+          <dt>Each sysop decides whom to trust</dt>
+          <dd>No company in the middle. A deletion travels everywhere the record went.</dd>
+        </div>
+      </dl>
+      <ManualLink className="landing-more" page="run/federation/how-it-works">
+        How federation works
+      </ManualLink>
+    </section>
+  );
+}
+
 const SHACK: [IconName, string, string][] = [
   ["radio", "Your radio, your way", "KISS TNC, Bluetooth, Meshtastic, or the sound card."],
   ["bbs", "Packet terminal and BBS", "AX.25 connected mode, FBB forwarding, a NET/ROM node."],
   ["map", "Live map", "Stations, tracks, weather and spots, with offline maps."],
-  ["server", "Federated", "Instances share signed finds, over HTTPS or over the air."],
+  ["server", "Federated", "Instances share signed caches and finds over the internet, 44Net or HAMNET."],
   ["tools", "Tools", "Signed plugins: decoders, macros, panels."],
   ["thermo", "Weather", "Your weather station, CWOP and WX beacons."],
 ];

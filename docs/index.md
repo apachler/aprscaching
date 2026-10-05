@@ -19,6 +19,9 @@ up with other instances into one open network.
 | **Build on it**: the API, the wire formats, the configuration | [HTTP API](reference/api.md) |
 | **Contribute**: run the code, test it, change it | [Contribute](contribute/index.md) |
 
+Instances form one network with no central server: caches, finds and find confirmations travel between them
+as signed records, and each sysop decides whom to trust ([How federation works](run/federation/how-it-works.md)).
+
 A term you don't know is in the [Glossary](glossary.md). What an instance keeps about you, and for how long,
 is under [Privacy by default](about.md#privacy-by-default).
 

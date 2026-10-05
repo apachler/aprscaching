@@ -150,8 +150,11 @@ nav:
           - HAMNET only: run/networks/hamnet.md
           - One instance, several addresses: run/networks/several-addresses.md
       - Federation:
+          - How federation works: run/federation/how-it-works.md
+          - Choose how to connect: run/federation/choose.md
           - Join the network: run/federation/index.md
           - Hubs, relays and the registry: run/federation/hubs-and-relays.md
+          - Federation transports: run/federation/transports.md
           - Federation over FBB: run/federation/fbb.md
       - Pocket in the field:
           - Run Pocket in the field: run/pocket/field-station.md

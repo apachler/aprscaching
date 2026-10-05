@@ -40,7 +40,9 @@ no server at all. A cloud VM may add an APRS-IS-only feed, never the RF bridge.
 
 ## Joining the network by callsign
 
-Every shape can federate with other instances ([Join the network](federation/index.md)). A licensed sysop can
+Every shape can federate with other instances. A shape peers can reach, such as Self-host with a public URL or
+behind a Cloudflare Tunnel, pulls and is pulled, and its receivers confirm finds for the whole network; Desktop
+and Pocket usually push to a hub ([Choose how to connect](federation/choose.md)). A licensed sysop can
 also let peers add the instance by callsign: on 44Net, or over the internet alone with one DNS record under
 `<call>.ampr.org` ([Identity without 44Net](networks/44net-identity.md#identity-without-44net)).
 
