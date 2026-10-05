@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The cache and log forms check their limits before sending, word a schema refusal as the field it is about, and
-// the stage editor knows which clips a save deletes.
+// the stage editor knows which clips a save deletes; a move of a found cache is measured as it is typed.
 import "fake-indexeddb/auto";
 import { describe, it, expect } from "vitest";
 import { MEDIA_LIMITS, TEXT_LIMITS } from "@aprscaching/shared";
@@ -8,6 +8,7 @@ import { ApiError } from "../src/api.js";
 import { parseTags, refusalMessage, tagProblem } from "../src/caches/formLimits.js";
 import { clipsDropped, type StageDraft } from "../src/caches/stageEdits.js";
 import { mediaUploadProblem } from "../src/media/limits.js";
+import { checkMove, moveLine } from "../src/caches/moveLimit.js";
 
 describe("cache tags", () => {
   it("are trimmed, at most as many as a cache takes, and a long one is named", () => {
@@ -66,5 +67,28 @@ describe("saving the stages", () => {
   it("deletes the clip of a stage that stops being an audio stage", () => {
     expect(clipsDropped(saved, [row("open", 0), row("geo", 1), row("audio", 2)])).toEqual([1]);
     expect(clipsDropped(saved, [row("open", 0), row("audio", 1), row("audio", 2), row("geo")])).toEqual([]);
+  });
+});
+
+describe("moving a found cache", () => {
+  const pin = { lat: 47, lon: 15 };
+  it("is measured from where it was found, as the owner types", () => {
+    expect(checkMove(100, null, { lat: 48, lon: 15 })).toBeNull();
+    expect(checkMove(100, pin, null)).toBeNull();
+    const near = checkMove(100, pin, { lat: 47.0005, lon: 15 })!;
+    expect(near.over).toBe(false);
+    expect(Math.round(near.distanceM)).toBe(56);
+    expect(checkMove(100, pin, { lat: 47.002, lon: 15 })!.over).toBe(true);
+  });
+  it("says the rule, the distance and the way out", () => {
+    expect(moveLine(100, null, null)).toMatch(/moves freely/);
+    expect(moveLine(100, pin, null)).toMatch(/at most 100 m/);
+    expect(moveLine(0, pin, null)).toMatch(/stays where it was found/);
+    expect(moveLine(100, pin, checkMove(100, pin, { lat: 47.0005, lon: 15 }))).toBe(
+      "56 m from where it was found (limit 100 m).",
+    );
+    expect(moveLine(100, pin, checkMove(100, pin, { lat: 47.002, lon: 15 }))).toMatch(
+      /^222 m .* beyond the 100 m limit\. Archive the cache/,
+    );
   });
 });

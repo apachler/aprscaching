@@ -5,6 +5,7 @@ import { getStages, setStages, uploadStageClip, type CacheStage } from "../api.j
 import { clipsDropped, type StageDraft } from "./stageEdits.js";
 import { parseCoordinates } from "../map/geo.js";
 import { Button, useToast, useConfirm } from "../ui/index.js";
+import { checkMove, moveLine, type Point } from "./moveLimit.js";
 
 type Unlock = CacheStage["unlock"];
 type Draft = StageDraft;
@@ -32,6 +33,8 @@ export function StagesEditor(props: {
   ownerCall: string;
   /** The cache's own position, where the start begins. */
   start: { lat: number; lon: number } | null;
+  /** The move rule: once the cache has a find, each stage found then stays near its pin. */
+  move?: { limitM: number; stagePins: Array<{ stageNo: number } & Point> };
 }) {
   const toast = useToast();
   const confirmDialog = useConfirm();
@@ -90,6 +93,9 @@ export function StagesEditor(props: {
     setRows((rs) => rs && f(rs));
     setDirty(true);
   };
+  /** The pin of the saved stage a row carries, if a find pinned it. */
+  const pinOf = (r: Draft) =>
+    r.prev === undefined ? undefined : props.move?.stagePins.find((p) => p.stageNo === r.prev);
   const edit = (i: number, patch: Partial<Draft>) =>
     change((rs) => rs.map((r, n) => (n === i ? { ...r, ...patch } : r)));
 
@@ -188,9 +194,14 @@ export function StagesEditor(props: {
                 <div className="row between">
                   <strong>{n === 0 ? "Start (open to everyone)" : `Stage ${n}`}</strong>
                   {n > 0 && (
-                    <Button onClick={() => change((rs) => rs.filter((_, i) => i !== n))}>Remove stage {n}</Button>
+                    <Button disabled={!!pinOf(r)} onClick={() => change((rs) => rs.filter((_, i) => i !== n))}>
+                      Remove stage {n}
+                    </Button>
                   )}
                 </div>
+                {n > 0 && pinOf(r) && (
+                  <p className="muted fine">Found already, so this stage stays part of the cache.</p>
+                )}
                 {n > 0 && (
                   <label>
                     Unlocks by
@@ -215,6 +226,7 @@ export function StagesEditor(props: {
                     onChange={(e) => edit(n, { at: e.target.value })}
                   />
                 </label>
+                {props.move && pinOf(r) && <StageMoveLine limitM={props.move.limitM} pin={pinOf(r)!} at={r.at} />}
                 <label>
                   Clue <span className="muted">(optional)</span>
                   <textarea value={r.clue} rows={2} onChange={(e) => edit(n, { clue: e.target.value })} />
@@ -291,5 +303,15 @@ export function StagesEditor(props: {
         </>
       )}
     </section>
+  );
+}
+
+/** How far a found stage's typed position is from its pin, as it is typed. */
+function StageMoveLine(props: { limitM: number; pin: Point; at: string }) {
+  const check = checkMove(props.limitM, props.pin, props.at.trim() ? parseCoordinates(props.at) : null);
+  return (
+    <p className={check?.over ? "error fine" : "muted fine"} aria-live="polite">
+      {moveLine(props.limitM, props.pin, check)}
+    </p>
   );
 }

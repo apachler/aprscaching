@@ -41,6 +41,22 @@ is listed for them under **Instance admin → Stations for members**; it then sh
 they manage it like their own. When the club call itself is on an account, as a second callsign verified there,
 that account lists the club's stations directly.
 
+## Correct a cache's place
+
+Once a cache has a find, its owner moves it at most `CACHE_MOVE_LIMIT_M` (100 m by default) from where it was
+found, so past finds keep pointing to the place their finders visited
+([Moving a found cache](../../play/hide-a-cache.md#edit-your-cache)). When the coordinates were wrong from the
+start, the sysop corrects them, with a sysop session or the operator secret:
+
+```sh
+curl -X POST https://<your-host>/api/admin/caches/<id>/place \
+  -H "x-operator-secret: $OPERATOR_SECRET" -H "content-type: application/json" \
+  -d '{"lat": 47.07355, "lon": 15.43785}'
+```
+
+Add `"stageNo": <n>` to correct one stage instead. The corrected place becomes where the owner's limit counts
+from. Finders who unlocked a corrected stage, or one after it, unlock those stages again.
+
 ## Recurring tasks
 
 | Task | Page |
@@ -53,6 +69,7 @@ that account lists the club's stations directly.
 | Send sign-in links and the digest by mail, or test that mail | [Send mail](mail.md) |
 | Verify a member's callsign by hand | [Callsign verification](callsign-verification.md) |
 | Give an abandoned cache a new owner | [Cache adoption](cache-adoption.md) |
+| Correct a found cache's coordinates | [Correct a cache's place](#correct-a-caches-place) |
 | Keep the register badge current | [Licence registers](licence-registers.md) |
 | Import summits, parks and castles as caches | [Import heritage places](import-places.md) |
 

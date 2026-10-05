@@ -30,6 +30,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_OPERATOR: "Operator label this instance publishes in /.well-known",
   FIRST_PARTY_SITES: "Receiving-site calls preset as trusted for Tier A (Instance admin adds more)",
   MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
+  CACHE_MOVE_LIMIT_M: "Metres an owner may move a cache from where it was first found (0 keeps it there)",
   FED_PEERS: "Comma-separated base URLs of federation peers to sync from",
   FED_DISCOVER: "1 learns the peers that trusted peers advertise",
   FED_CORROBORATION_QUORUM: "Distinct corroborating identities required to promote a find to Tier A",
@@ -389,6 +390,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`MIN_TRUST`",
         "The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, takes precedence",
         "`B`",
+      ],
+      [
+        "`CACHE_MOVE_LIMIT_M`",
+        "Metres an owner may move a cache once it has a find, measured from where each coordinate stood at its first find: the cache's own coordinates and each stage's. Before the first find a cache moves freely; a living cache follows its station and is exempt. A larger move is refused, and the owner archives the cache and hides a new one; the sysop corrects any coordinate with `POST /api/admin/caches/<id>/place`. `0` keeps a found cache where it was found",
+        "`100`",
       ],
       [
         "`FED_CORROBORATION_QUORUM`",

@@ -31,7 +31,11 @@ describe("the owner's view of a cache", () => {
     );
 
     const mine = (await call(env, "GET", `/api/caches/${id}`, undefined, { cookie: owner.cookie })).data.cache;
-    expect(mine.own).toEqual({ minTrust: "A", rendezvous: false });
+    expect(mine.own).toEqual({
+      minTrust: "A",
+      rendezvous: false,
+      move: { limitM: 100, pinned: null, stagePins: [] },
+    });
     const theirs = (await call(env, "GET", `/api/caches/${id}`, undefined, { cookie: other.cookie })).data.cache;
     expect(theirs.own).toBeUndefined();
 

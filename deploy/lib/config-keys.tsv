@@ -19,6 +19,7 @@ FED_REGISTRY_DNS	string	gateway			0	0	selfhost,baremetal,pocket,desktop	DNS TXT 
 FED_OPERATOR	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Operator label this instance publishes in /.well-known
 FIRST_PARTY_SITES	calls	gateway			0	0	selfhost,baremetal,pocket,desktop	Receiving-site calls preset as trusted for Tier A (Instance admin adds more)
 MIN_TRUST	enum	gateway	B	A|B	0	0	selfhost,baremetal,pocket,desktop	Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)
+CACHE_MOVE_LIMIT_M	number	gateway	100		0	0	selfhost,baremetal,pocket,desktop	Metres an owner may move a cache from where it was first found (0 keeps it there)
 FED_PEERS	list	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	Comma-separated base URLs of federation peers to sync from
 FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,baremetal,pocket,desktop	1 learns the peers that trusted peers advertise
 FED_CORROBORATION_QUORUM	int	gateway	2		0	0	selfhost,baremetal,pocket,desktop	Distinct corroborating identities required to promote a find to Tier A

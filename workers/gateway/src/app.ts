@@ -181,6 +181,7 @@ import {
   handleDeleteCacheMedia,
   handlePutMediaThumb,
 } from "./stages.js";
+import { handleAdminCachePlace } from "./cacheplace.js";
 import {
   handleAccountExport,
   handleAccountDelete,
@@ -493,6 +494,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/adoptions") return handleAdminAdoptions(req, env);
   const adminAdopt = /^\/api\/admin\/adoptions\/(\d+)(\/assign)?$/.exec(p);
   if (adminAdopt) return handleAdminAdoptions(req, env, { cacheId: Number(adminAdopt[1]), assign: !!adminAdopt[2] });
+  const adminPlace = /^\/api\/admin\/caches\/(\d+)\/place$/.exec(p);
+  if (adminPlace && m === "POST") return handleAdminCachePlace(req, env, Number(adminPlace[1]));
   const adminAdoptReq = /^\/api\/admin\/adoptions\/requests\/(\d+)\/(approve|decline)$/.exec(p);
   if (adminAdoptReq)
     return handleAdminAdoptions(req, env, {

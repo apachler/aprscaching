@@ -11,6 +11,7 @@ import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { CACHE_POINT, moveRefusal, placePins } from "./cacheplace.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import {
   MEDIA_LIMITS,
@@ -70,7 +71,7 @@ interface StageOffline {
  * (packages/shared stageseal.ts); clear it for any other stage, or when the code is too weak to stand up to
  * offline guessing. Runs whenever what a stage reveals changes.
  */
-async function resealStage(env: Env, cacheId: number, stageNo: number): Promise<StageOffline> {
+export async function resealStage(env: Env, cacheId: number, stageNo: number): Promise<StageOffline> {
   const s = await env.DB.prepare("SELECT * FROM cache_stages WHERE cache_id=? AND stage_no=?")
     .bind(cacheId, stageNo)
     .first<StageRow>();
@@ -141,6 +142,31 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   const clips = new Map(
     rows.filter((r) => r.media_key).map((r) => [r.stage_no, { ...r, media_key: r.media_key! }] as const),
   );
+  // A found cache's stages stay near where they were found: each pinned stage carries on as the stage that names
+  // it (its number, or `prevStageNo` when renumbered) within the move limit, and none is dropped. A stage added
+  // since the last find is free until a find pins it.
+  const pins = await placePins(env, cacheId);
+  const carried = new Map<number, number>(); // the old stage number → the new one carrying its pin
+  // a stage naming its old number claims that pin before one that only shares the number
+  const claims = [
+    ...b.stages.filter((s) => Number.isInteger(s.prevStageNo)).map((s) => [s.prevStageNo!, s] as const),
+    ...b.stages.filter((s) => !Number.isInteger(s.prevStageNo)).map((s) => [s.stageNo, s] as const),
+  ];
+  for (const [from, s] of claims) {
+    if (from === CACHE_POINT || !pins.has(from) || carried.has(from)) continue;
+    carried.set(from, s.stageNo);
+    const to = Number.isFinite(s.lat) && Number.isFinite(s.lon) ? { lat: s.lat!, lon: s.lon! } : null;
+    const tooFar = moveRefusal(env, `Stage ${s.stageNo}`, pins.get(from), to);
+    if (tooFar) return json({ error: tooFar }, { status: 409 });
+  }
+  const dropped = [...pins.keys()].find((n) => n !== CACHE_POINT && !carried.has(n));
+  if (dropped !== undefined)
+    return json(
+      {
+        error: `Stage ${dropped} has been found, so it stays part of the cache. Archive the cache and hide a new one to change its route.`,
+      },
+      { status: 409 },
+    );
   /** The clues kept, by the stage number they had. */
   const kept = new Map<number, { media_key: string; media_bytes: number | null }>();
   const after = new Map<number, string>();
@@ -182,6 +208,19 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
         Math.min(...changed),
       ),
     );
+  // the pins follow their stages to the numbers they have now
+  if (carried.size) {
+    const at = nowS();
+    stmts.push(env.DB.prepare("DELETE FROM cache_place_pins WHERE cache_id=? AND stage_no>=0").bind(cacheId));
+    for (const [from, to] of carried) {
+      const pin = pins.get(from)!;
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO cache_place_pins (cache_id, stage_no, lat, lon, pinned_at) VALUES (?,?,?,?,?)",
+        ).bind(cacheId, to, pin.lat, pin.lon, at),
+      );
+    }
+  }
   await env.DB.batch(stmts);
   // free the clue objects no row holds any more (best-effort; the rows are already gone)
   for (const [n, clip] of clips) if (!kept.has(n)) await dropObject(env, clip.media_key);
