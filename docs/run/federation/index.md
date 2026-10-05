@@ -6,11 +6,9 @@ instance mirrors the peers you trust, and they mirror you.
 As a player you need none of this: caches from the instances yours trusts appear on your map, and your finds
 travel to them.
 
-Federation lets independent instances share caches, finds and keys as signed records. Each record carries its
-own signature, so no instance has to trust the network in between. The same records travel over HTTPS, over
-plain HTTP on a 44Net or HAMNET name, and over packet radio. On amateur RF a signature authenticates but never
-conceals ([Automatic stations on the air](../compliance/on-air-stations.md)). Any shape can join: Self-host,
-Desktop or Pocket.
+Any shape can join: Self-host, Desktop or Pocket. What federation is and why it can be trusted is in
+[How federation works](how-it-works.md); which path suits your instance is in [Choose how to connect](choose.md).
+This page sets up the usual one: two instances that can reach each other pull from each other.
 
 ## Before you start
 
@@ -200,7 +198,7 @@ restart the gateway before you remove it.
 
 Your instance pulls from its peers on a schedule, every 5 minutes (`FED_SYNC_INTERVAL_MS`, `0` turns it off).
 The schedule covers every enabled peer, the ones you added in Instance admin as well as `FED_PEERS`. Peers also
-ask for a pull after they write, so new records arrive sooner.
+ask for a pull after they write, so new records arrive sooner ([Pull](transports.md#pull)).
 
 - **Sync one peer now.** **Sync now** on a peer's row pulls from that peer at once and shows what arrived, or
   why the pull failed; the row keeps its last pull time and error. A peer takes three of these a minute.
@@ -240,5 +238,5 @@ ask for a pull after they write, so new records arrive sooner.
 ## Next
 
 - [Hubs, relays and the registry](hubs-and-relays.md): reach peers behind a firewall.
-- [Federation over FBB](fbb.md): carry records as packet mail where no direct path exists (experimental).
+- [Federation transports](transports.md): every transport, step by step.
 - [Instance admin at a glance](../day-to-day/index.md): running it day to day.

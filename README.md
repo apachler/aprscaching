@@ -28,6 +28,16 @@ Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
   federate into one open network. Positions are pruned, nothing tracks you, and every instance links the
   exact source it runs.
 
+## One network, no central server
+
+Every instance is complete on its own, and instances link up directly, sysop to sysop. Caches hidden on one
+instance appear on the maps of the others; a find logged on one can be confirmed by radio receivers on others;
+a deletion travels everywhere the record went. Every record is signed by the instance it comes from, so it can
+travel over the internet, 44Net or HAMNET (or, experimentally, as packet mail) and no path in between can alter
+it. Each sysop decides whom to trust, and no company, registry or server sits in the middle.
+[How federation works](https://apachler.github.io/aprscaching/run/federation/how-it-works/) and
+[Choose how to connect](https://apachler.github.io/aprscaching/run/federation/choose/) explain it.
+
 ## The manual
 
 | I want to… | Start with |

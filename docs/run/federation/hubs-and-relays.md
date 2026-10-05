@@ -2,7 +2,8 @@
 
 This page shows the sysop how an instance that nobody can dial stays in the network, and how instances find
 each other through a registry. At the end a firewalled instance, such as a phone or a box behind a carrier's
-NAT, pushes its records to a hub you run.
+NAT, pushes its records to a hub you run. How push, catch-up and the relay work step by step is in
+[Federation transports](transports.md).
 
 ## Before you start
 
@@ -12,7 +13,10 @@ NAT, pushes its records to a hub you run.
 ## Reaching firewalled peers
 
 A peer that can't be dialled inbound still contributes in two ways: it pushes its records to a hub, or it
-answers queries through a relay on the hub.
+answers feed queries through a relay on the hub. Neither lets peers ask it to confirm a find: a corroboration
+question needs an address the asking instance can dial
+([How a find gets confirmed across instances](how-it-works.md#how-a-find-gets-confirmed-across-instances)). A
+Cloudflare Tunnel or a 44Net address gives a firewalled instance one ([Choose how to connect](choose.md)).
 
 ### Push to a hub
 
@@ -53,19 +57,32 @@ Restart both. What happens then:
 
 ### Rendezvous relay
 
-The relay lets a firewalled peer serve its feed through a hub, with no tunnel and no inbound port. It runs on
-the hub under `/federation/relay/*`, turned on by `FED_RELAY_SECRET`.
+The relay is a mailbox on the hub: a requester leaves a query for a firewalled spoke, the spoke collects it on its
+own outbound connection and answers with a page of its signed caches, finds or keys, and the requester collects
+the answer. The relay is transport only: the answer is verified like a pulled page
+([Rendezvous relay](transports.md#rendezvous-relay)).
 
-- A requester enqueues a query for a spoke and gets a ticket; it reads only its own results. The secret admits
-  the requester, and queries per requester are capped.
-- The spoke leases the queries addressed to it and signs each request with its own federation key. The hub
-  checks that key against the one it holds for the instance, so the hub must already know the spoke: as a
-  pulled peer, from the registry, or from a push. No spoke can act for another.
-- An unanswered lease returns to the queue after 5 minutes.
-- A relayed answer is a signed feed page, verified like a pulled one: the relay is transport only.
+On the hub, in its `.env`:
 
-The gateway serves the hub's relay endpoints. A spoke's gateway does not poll them by itself: the spoke side
-needs a client that leases and answers.
+```bash
+FED_RELAY_SECRET=<a long random secret>        # turns the relay on; requesters send it
+```
+
+On the spoke, beside its push settings:
+
+```bash
+FED_HUB_URL=https://aprs.example.net           # the hub that holds its queries
+FED_RELAY_SECRET=<any value>                   # turns collecting on; the spoke never sends it
+```
+
+Restart both. What happens then:
+
+- **The spoke collects its queries** in every scheduled cycle (`FED_SYNC_INTERVAL_MS`, 5 minutes) and answers each
+  from its own database. It signs each request with its federation key, and the hub checks that key against the
+  one it holds for the spoke: from a push, a pull or the registry. No spoke can collect or answer for another.
+- **A requester** is a script or tool holding the hub's `FED_RELAY_SECRET`. No instance asks through the relay on
+  its own. A requester reads only its own results, by the ticket it got, and may hold 50 queries at once.
+- **An unanswered query** returns to the queue 5 minutes after the spoke collected it.
 
 A spoke with no internet path at all can take its queries as packet mail instead:
 [Federation over FBB](fbb.md), experimental and off by default.

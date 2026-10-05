@@ -33,6 +33,13 @@ Your own account data is yours to take or destroy: export and erase live under *
 propagates to federation peers as signed tombstones, and owner contact fields are redacted from federated
 records. Profiles are thin and opt-in — there is no name or address directory.
 
+## One network, no central server
+
+APRScaching has no central server. Each instance is complete on its own, and sysops link their instances
+directly. Records travel signed by the instance that made them, so no hub, tunnel or radio path in between can
+alter them, and each sysop decides which peers to trust. Erasure travels the same paths as signed tombstones.
+[How federation works](run/federation/how-it-works.md) explains it.
+
 ## Licensing
 
 The monorepo is licensed **by unit** so the reusable parts stay broadly usable while the hosted service stays
