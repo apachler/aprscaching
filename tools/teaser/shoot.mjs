@@ -25,7 +25,7 @@ async function ready(page) {
 }
 async function clickCache(page, match) {
   await page.evaluate((m) => {
-    const els = [...document.querySelectorAll("button.cache-pin, img.beacon-pin")];
+    const els = [...document.querySelectorAll("button.cache-pin, button.beacon-pin")];
     (els.find((e) => (e.title || "").includes(m)) || els[0])?.click();
   }, match);
   await page.waitForSelector(".panel.right", { timeout: 8000 });
