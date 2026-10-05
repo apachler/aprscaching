@@ -119,6 +119,29 @@ export async function signRegistry(
   return { entries, authority: authorityPub, sig: bytesToB64(new Uint8Array(sig)) };
 }
 
+/**
+ * The registry entry a fetched manifest stands for: the entry with its `name` whose `entry` URL is the URL the
+ * manifest was fetched from. A copy of a listed manifest served from another URL matches no entry — its
+ * relative script `entry` resolves against that other URL, so it runs another site's script and is trusted
+ * as any other signed manifest is (trust-on-first-use), never as the listed tool.
+ */
+export function registryEntryFor(
+  entries: readonly RegistryEntry[],
+  name: string,
+  manifestUrl: string,
+): RegistryEntry | undefined {
+  const href = (u: string): string | null => {
+    try {
+      return new URL(u).href;
+    } catch {
+      return null;
+    }
+  };
+  const fetched = href(manifestUrl);
+  if (!fetched) return undefined;
+  return entries.find((e) => e.name === name && href(e.entry) === fetched);
+}
+
 /** Overall trust of a fetched manifest given signature status + registry match + a TOFU pin. */
 export type ToolTrust = "verified" | "known" | "self-signed" | "unsigned" | "invalid" | "key-changed";
 export function resolveTrust(

@@ -267,9 +267,9 @@ The app decides one of six trust labels before it shows the import prompt:
 
 | Label | When |
 |---|---|
-| **Verified · registry-listed author key** | The signature is valid and `pubkey` equals the key the registry lists for this `name`. |
-| **Signed · matches the key you trusted before** | Valid, not in the registry, and the key equals the one this browser accepted for this author before. |
-| **Signed · unknown author key (trust-on-first-use)** | Valid, and neither the registry nor this browser knows the key. |
+| **Signed · registry-listed author key** | The signature is valid, the manifest was fetched from the URL the registry lists for this `name`, and `pubkey` equals the key the registry lists for it. |
+| **Signed · matches the key you trusted before** | Valid, not registry-listed, and the key equals the one this browser accepted for this author before. |
+| **Signed · unknown author key (trust-on-first-use)** | Valid, not registry-listed, and this browser does not know the key. |
 | **Unsigned · you're trusting the URL only** | No `signature` or no `pubkey`. |
 | **Author key CHANGED since you last trusted it — refused** | Valid, but the key differs from the registry's or the accepted one. The import stops. |
 | **Signature INVALID — refused** | The signature does not verify. The import stops. |
@@ -284,8 +284,12 @@ reads it from `VITE_TOOL_REGISTRY`, `/tools/registry.json` by default. A registr
 a broken signature is ignored, and the **Registry** list stays empty.
 
 - The **verified** badge in the **Registry** list means the entry is in that signed registry.
-- The **Verified** label in the import prompt means the manifest was signed by the key the registry lists for its
-  name.
+- The **registry-listed** label in the import prompt means the manifest was fetched from the URL the registry
+  lists for its name and signed by the key the registry lists for it. A relative script `entry` resolves against
+  that URL, so the script comes from the listed site.
+- A copy of a listed manifest served from any other URL is not registry-listed, even with a valid signature by
+  the listed key: its relative `entry` resolves against the copy's site and runs that site's script. It gets
+  the trust-on-first-use labels above and the normal import prompt.
 - Neither covers the script. The signature covers the `entry` URL, not the bytes served there, so whoever
   controls that server can change the script without breaking the signature. Pinning the script's hash in the
   manifest is planned (`entryHash` in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md)).

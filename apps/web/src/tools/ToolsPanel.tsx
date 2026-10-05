@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   sanitizePanel,
   checkManifestSignature,
+  registryEntryFor,
   resolveTrust,
   verifyRegistry,
   type Capability,
@@ -236,7 +237,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     }
     // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
     const sig = await checkManifestSignature(r.raw);
-    const regEntry = registry.find((e) => e.name === r.manifest.name);
+    // Registry-listed only when fetched from the entry's own URL: the script resolves against that URL.
+    const regEntry = registryEntryFor(registry, r.manifest.name, r.base);
     const trust = resolveTrust(sig, {
       registryPubkey: regEntry?.pubkey,
       pinnedPubkey: tofuMap()[r.manifest.author.toUpperCase()],

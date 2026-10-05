@@ -7,6 +7,7 @@ import {
   signRegistry,
   verifyRegistry,
   resolveTrust,
+  registryEntryFor,
   bytesToB64,
   type RegistryEntry,
   type ToolManifest,
@@ -74,5 +75,33 @@ describe("resolveTrust", () => {
     expect(resolveTrust("valid", { pubkey: "K", pinnedPubkey: "K" })).toBe("known");
     expect(resolveTrust("valid", { pubkey: "K", pinnedPubkey: "OTHER" })).toBe("key-changed");
     expect(resolveTrust("valid", { pubkey: "K" })).toBe("self-signed");
+  });
+});
+
+describe("registryEntryFor", () => {
+  const listed: RegistryEntry = {
+    name: "cw-tool",
+    title: "CW",
+    author: "OE8APR",
+    version: "1",
+    pubkey: "K",
+    entry: "https://tools.example.org/cw-tool/tool.json",
+  };
+  const trustFor = (url: string) =>
+    resolveTrust("valid", { pubkey: "K", registryPubkey: registryEntryFor([listed], "cw-tool", url)?.pubkey });
+
+  it("matches the listed manifest fetched from the registry's URL", () => {
+    expect(registryEntryFor([listed], "cw-tool", "https://tools.example.org/cw-tool/tool.json")).toBe(listed);
+    expect(trustFor("https://tools.example.org/cw-tool/tool.json")).toBe("verified");
+  });
+  it("a copy of the signed manifest hosted elsewhere is not the listed tool: trust-on-first-use", () => {
+    expect(registryEntryFor([listed], "cw-tool", "https://copy.example.net/cw-tool/tool.json")).toBeUndefined();
+    expect(trustFor("https://copy.example.net/cw-tool/tool.json")).toBe("self-signed");
+    expect(trustFor("https://tools.example.org/other/tool.json")).toBe("self-signed");
+  });
+  it("needs the name and the URL to match", () => {
+    expect(registryEntryFor([listed], "other", "https://tools.example.org/cw-tool/tool.json")).toBeUndefined();
+    expect(registryEntryFor([listed], "cw-tool", "not a url")).toBeUndefined();
+    expect(registryEntryFor([listed], "cw-tool", "https://TOOLS.example.org/cw-tool/tool.json")).toBe(listed);
   });
 });
