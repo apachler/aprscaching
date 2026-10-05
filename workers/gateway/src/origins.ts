@@ -40,7 +40,7 @@ export function instanceOrigins(env: Env): string[] {
 }
 
 /** Is `origin` a secure context a browser offers passkeys and the other https-only features on? */
-export function secureOrigin(origin: string): boolean {
+function secureOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     return u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname));
@@ -76,7 +76,7 @@ function arrivalOrigin(req: Request): string | null {
  * The configured address this request came on — APP_URL, an EXTRA_ORIGINS entry, or the station's hotspot
  * origin (visitor.ts) — or null when it came on any other host.
  */
-export function listedRequestOrigin(req: Request, env: Env): string | null {
+function listedRequestOrigin(req: Request, env: Env): string | null {
   const o = arrivalOrigin(req);
   if (!o) return null;
   if (instanceOrigins(env).includes(o)) return o;
