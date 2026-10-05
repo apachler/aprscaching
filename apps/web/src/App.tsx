@@ -5,6 +5,7 @@ import { ToastProvider, ConfirmProvider, tourSeen } from "./ui/index.js";
 import { useSession } from "./identity/useSession.js";
 import { Landing } from "./Landing.js";
 import { SignIn } from "./identity/SignIn.js";
+import { AccountData } from "./identity/AccountData.js";
 import { ASSET } from "./brand.js";
 import { UpdateNotice } from "./shell/UpdateNotice.js";
 
@@ -49,7 +50,8 @@ export function App() {
     }
   });
   const [startTour, setStartTour] = useState(false);
-  const active = session.signedIn || explored;
+  // a data-only session stays on the landing, where its panel offers the export and the erasure
+  const active = session.signedIn || (explored && !session.accountData);
 
   const onExplore = useCallback(() => {
     try {
@@ -93,6 +95,7 @@ export function App() {
         ) : !active ? (
           <>
             <Landing onSignIn={() => setShowSignIn(true)} onExplore={onExplore} resume={prerendered} />
+            {session.accountData && !showSignIn && <AccountData onSignOut={() => void session.signOut()} />}
             {showSignIn && (
               <SignIn
                 onDone={() => {

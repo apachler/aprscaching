@@ -69,7 +69,8 @@ tells you under your alerts, and the instance emails you if your account has a c
 - Your account keeps its other callsigns. The finds and caches you logged under the lost callsign stay yours
   and now show under your active callsign.
 - If the lost callsign was your only one, your finds and caches show as `FORMER`. Sign in again with an email
-  link and the callsign you operate now: the finds and caches come with you.
+  link and the callsign you operate now: the finds and caches come with you. To export or erase your data
+  instead, see [Your data](#your-data).
 - Your device keys for the lost callsign are removed. Register a key for your active callsign again.
 
 ## The register badge
@@ -162,6 +163,14 @@ Open **Settings → Your data**.
     passkeys stop working. Other instances that copied your records erase them too.
 
 Both need you signed in. Signed out, the group shows **Sign in** instead.
+
+If your account lost its only callsign, you cannot sign in with it, but you can still get or erase your data:
+
+1. Tap **Sign in**, then **Get or erase my data**.
+2. Type the email address confirmed on your account and tap **Email me a link**.
+3. Open the link and confirm. The **Your data** panel offers **Download my data** and **Erase my account**.
+
+The link opens your data and nothing else, and the session it starts lasts an hour.
 
 ## Move to another instance
 

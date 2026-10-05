@@ -20,9 +20,11 @@
  *    favourites, watches, stage unlocks, badges, saved views and read-API keys — stays with their account and
  *    is shown under the account's remaining call, or under the `FORMER` marker when it holds no other. The
  *    licensee never inherits it, and nobody reading it learns who the previous holder is.
- *  - The previous holder's device keys and station registrations on the call go: they spoke for the call,
- *    which is no longer theirs. Each key's withdrawal reaches the federation as a signed tombstone, and so
- *    does each moved find, whose federated copy still names the call.
+ *  - The device keys, station registrations and weather keys on the call go, whichever account they are
+ *    listed under: they spoke for the call, which is no longer theirs. Each key's withdrawal reaches the
+ *    federation as a signed tombstone, and so does each moved find, whose federated copy still names the call.
+ *  - An account left with no call keeps its data: an email link to its confirmed address opens a session that
+ *    only exports or erases it (email.ts), and the notice mail says so.
  *  - What the radio sent under the call (positions, stations, APRS messages, weather) stays with the call.
  *
  * Every change of holder is written to `callsign_events`, and the previous holder is told in the app and by
@@ -48,6 +50,9 @@ import {
   isFormerMarker,
   callsignSuspension,
   suspendedCallText,
+  suspensionOf,
+  AccountSuspended,
+  suspendedResponse,
 } from "./auth.js";
 import { verificationOf, verifiedStmt, holderIdentity, type VerifyMethod } from "./callsign.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
@@ -55,6 +60,7 @@ import { instanceHost } from "./env.js";
 import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
 import { licenceFor } from "./licence.js";
+import { appBase } from "./sitemap.js";
 
 /** A claim stays open as long as the slowest method needs: an ampr.org record can take two days to publish. */
 const CLAIM_TTL_SEC = 48 * 3600;
@@ -153,6 +159,14 @@ async function claimRefusal(env: Env, cs: string, claimant: string | null): Prom
   const holder = await baseHolder(env, cs);
   const admin = isAdminCall(env, cs);
   if (holder && holder === claimant) return { status: 409, error: "you already hold this callsign", reason: "yours" };
+  // A suspended holder's call stays where it is until the sysop decides: a claim would hand a suspended person
+  // their own call on a fresh account, and the sysop's release still frees it for the licensee.
+  if (holder && (await suspensionOf(env, holder)))
+    return {
+      status: 409,
+      error: `the account that holds ${cs} is suspended — ask the sysop of this instance`,
+      reason: "holder_suspended",
+    };
   if (holder && (await verificationOf(env, cs)))
     return {
       status: 409,
@@ -216,14 +230,23 @@ export async function handleClaimStatus(req: Request, env: Env): Promise<Respons
   const status = c.status === "open" && !claimOpen(c) ? "expired" : c.status;
   const body = { status, callsign: c.callsign, method: c.status === "done" ? await claimMethod(env, c.id) : null };
   if (status !== "done" || !c.signup || !c.accountId) return json(body);
+  if (!sessionsEnabled(env)) return sessionUnavailable();
   const taken = await env.DB.prepare("UPDATE callsign_claims SET collected = 1 WHERE id = ? AND collected = 0")
     .bind(c.id)
     .run();
   if ((taken.meta?.changes ?? 0) !== 1) return json(body);
-  if (!sessionsEnabled(env)) return sessionUnavailable();
+  let cookie: string;
+  try {
+    cookie = await issueSessionCookie(req, env, c.accountId, c.callsign);
+  } catch (e) {
+    // no session went out: the token stays good for collecting it once the account may sign in
+    await env.DB.prepare("UPDATE callsign_claims SET collected = 0 WHERE id = ?").bind(c.id).run();
+    if (e instanceof AccountSuspended) return suspendedResponse(e);
+    throw e;
+  }
   return json(
     { ...body, signedIn: true, licence: await licenceFor(env, c.callsign) },
-    { headers: { "set-cookie": await issueSessionCookie(req, env, c.accountId, c.callsign) } },
+    { headers: { "set-cookie": cookie } },
   );
 }
 
@@ -433,14 +456,12 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
     ...moveRows("achievements", "callsign"),
     ...moveRows("stage_unlocks", "callsign"),
     env.DB.prepare(`UPDATE saved_views SET owner_call = ? WHERE ${ofCall("owner_call")}`).bind(shownAs, cs, like),
-    // what spoke for the call goes: device keys, stations and weather keys registered on it, pending requests
+    // what spoke for the call goes: device keys, stations and weather keys registered on it, pending requests.
+    // Stations and weather keys go whichever account lists them (the sysop may list a station on another
+    // account's call): the licensee starts with the call free of anything that beacons or reports under it.
     env.DB.prepare(`DELETE FROM callsign_keys WHERE ${ofCall("callsign")}`).bind(cs, like),
-    env.DB.prepare(`DELETE FROM account_stations WHERE account_id = ? AND ${ofCall("callsign")}`).bind(
-      holderId,
-      cs,
-      like,
-    ),
-    env.DB.prepare(`DELETE FROM wx_keys WHERE account_id = ? AND ${ofCall("callsign")}`).bind(holderId, cs, like),
+    env.DB.prepare(`DELETE FROM account_stations WHERE ${ofCall("callsign")}`).bind(cs, like),
+    env.DB.prepare(`DELETE FROM wx_keys WHERE ${ofCall("callsign")}`).bind(cs, like),
     env.DB.prepare(`DELETE FROM cache_adoption_requests WHERE account_id = ? AND ${ofCall("callsign")}`).bind(
       holderId,
       cs,
@@ -496,7 +517,9 @@ async function afterRelease(env: Env, r: Release, why: string): Promise<void> {
   const rest = shown
     ? `Your account keeps everything else. The caches and finds you logged as ${r.callsign} now show under ${shown}.`
     : "Your account keeps your caches and finds, but holds no callsign now. To sign in again, ask for an email " +
-      "link with the callsign you operate now; your caches and finds come with it.";
+      "link with the callsign you operate now; your caches and finds come with it.\n\n" +
+      `To download a copy of your data or erase it, open ${appBase(env)}, choose Sign in, then ` +
+      `"Get or erase my data", and give this email address. The link we send opens your data and nothing else.`;
   await sendEmail(
     env,
     r.email,

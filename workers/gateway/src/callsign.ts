@@ -40,7 +40,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
 import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } from "./auth.js";
-import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
 import { attestedSites } from "./attestedsites.js";
@@ -73,9 +73,12 @@ function sixDigitCode(): string {
   return String(randomInt(900_000) + 100_000);
 }
 
-/** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign. */
+/** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign (per claim, for a
+ *  claim). */
 const STARTS_PER_ACCOUNT = 10;
 const STARTS_PER_CALL = 5;
+/** On-air codes one client address may request for claims in an hour, across every claim it opened. */
+const STARTS_PER_IP = 20;
 const START_WINDOW_MS = 3_600_000;
 
 /** The message text that completes a challenge. */
@@ -120,12 +123,15 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
       { status: 409 },
     );
   const t = Date.now();
-  if (
-    (await rateLimitedDurable(env, `aprs-start:acct:${starter}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
-    // a claimant's starts and the holder's count apart, so neither can use up the other's
-    (await rateLimitedDurable(env, `aprs-start:${claim ? "claim" : "call"}:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
-  )
-    return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
+  // A claim's codes are bounded per claim and per client address, never per call: claimants on one call are
+  // strangers to each other, so a budget they shared would let any of them use it up for the licensee. The
+  // holder's own codes count apart from every claim's.
+  const limited = claim
+    ? (await rateLimitedDurable(env, `aprs-start:claim:${claim.id}`, t, STARTS_PER_CALL, START_WINDOW_MS)) ||
+      (await rateLimitedDurable(env, `aprs-start:claim-ip:${clientIp(req, env)}`, t, STARTS_PER_IP, START_WINDOW_MS))
+    : (await rateLimitedDurable(env, `aprs-start:acct:${starter}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
+      (await rateLimitedDurable(env, `aprs-start:call:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS));
+  if (limited) return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
   const code = sixDigitCode();
   const now = nowS();
   if (claim) {

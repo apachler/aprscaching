@@ -13,6 +13,7 @@ import { json } from "./app.js";
 import { sessionIdentity, ingestOrServiceBoxOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 import { handleAdminCallsign } from "./claims.js";
+import { instanceOrigins } from "./origins.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
 export function adminCalls(env: Env): Set<string> {
@@ -25,14 +26,24 @@ export function adminCalls(env: Env): Set<string> {
 }
 
 /**
- * The signed-in session when its call is listed in ADMIN_CALLSIGNS. The session resolves only while its
- * account holds the call's base call, so the listed call is held by the session's own account.
+ * May a session issued on `origin` administer this instance? Only one issued on an https address: a session
+ * issued over plain http (a HAMNET address) has crossed the network unencrypted. An instance with no https
+ * address at all is administered over http, since that is the only way in.
+ */
+function sysopOrigin(origin: string, env: Env): boolean {
+  return origin.startsWith("https:") || !instanceOrigins(env).some((o) => o.startsWith("https:"));
+}
+
+/**
+ * The signed-in session when its call is listed in ADMIN_CALLSIGNS and it was issued on an address that may
+ * administer this instance. The session resolves only while its account holds the call's base call, so the
+ * listed call is held by the session's own account.
  */
 async function adminSession(req: Request, env: Env) {
   const admins = adminCalls(env);
   if (admins.size === 0) return null;
   const me = await sessionIdentity(req, env);
-  return me && admins.has(me.callsign.toUpperCase()) ? me : null;
+  return me && admins.has(me.callsign.toUpperCase()) && sysopOrigin(me.origin, env) ? me : null;
 }
 
 /**

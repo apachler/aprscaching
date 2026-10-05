@@ -1755,7 +1755,10 @@ export function markBbsRead(id: number): Promise<{ ok: boolean }> {
 
 // ---- account data lifecycle (GDPR) ----
 type SignedAction = { key: string; sig: string; at: number };
-/** Export the account's data: authorised by the signed-in session, or by a device-key signature without one. */
+/**
+ * Export the account's data: authorised by the signed-in session, or by a device-key signature without one.
+ * `me` names the account of a data-only session, which holds no callsign to name.
+ */
 export function exportAccount(callsign: string, auth?: SignedAction): Promise<Record<string, unknown>> {
   return call(`/api/account/${encodeURIComponent(callsign)}/export`, {
     method: "POST",
@@ -2041,6 +2044,8 @@ export type Session = {
   email?: string | null;
   /** An address given at registration, waiting for its owner to open the confirmation link. */
   pendingEmail?: string | null;
+  /** The session opens only the data of an account that holds no callsign: its export and its erasure. */
+  accountData?: boolean;
 };
 export function getSession(): Promise<Session> {
   return call(`/auth/session`);
@@ -2069,6 +2074,10 @@ export function emailStart(
   callsign?: string,
 ): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, callsign }) });
+}
+/** Email a link that opens the data of an account holding no callsign, to export or erase it. */
+export function accountDataStart(email: string): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
+  return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, purpose: "account-data" }) });
 }
 /** The answer to an address change or a resend: the address waiting for confirmation, or the confirmed one
  *  when it was given again. `devLink` comes back only on an instance without mail that opts into dev tokens. */

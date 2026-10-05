@@ -24,14 +24,21 @@ none. Which network the address is on changes nothing else.
 | Sign in by email link | Yes | Yes | Yes, with a mail server reachable on HAMNET ([HAMNET only](hamnet.md)) |
 | Sign in with the sysop's one-time link | Yes | Yes | Yes |
 | Passkeys | Yes | Yes, as a related origin (see below) | No: browsers offer passkeys only on a secure page |
+| Instance admin | Yes | Yes | Only on an instance with no https address |
 | Device location (Tier B finds) | Yes | Yes | No |
 | Radio in the browser (Web Serial, Web Bluetooth) | Yes | Yes | No |
 | Web push | Yes | Yes | No: push services are on the internet |
 | Federation | `https` endpoint | `44net` endpoint, https then plain http | `hamnet` endpoint, for peers with a route to HAMNET |
 
 Each address keeps its own session: signing in on the HAMNET address does not sign you in on the internet one.
-Sign-in links, the confirm step and links into the app stay on the address you started on. The sitemap, the
-digest mail and the federation descriptor's identity always name `APP_URL`.
+The session names the address it was issued on and is honoured there alone, so a session issued over plain
+http is never accepted over https, even on the same host name. Sign-in links, the confirm step and links into
+the app stay on the address you started on. The sitemap, the digest mail and the federation descriptor's
+identity always name `APP_URL`.
+
+Instance admin needs a session issued on an https address. A sysop signed in on a plain-http address is an
+ordinary member there: an http session crosses the network unencrypted. An instance with no https address at
+all (HAMNET alone) is administered over plain http, since that is the only way in.
 
 A request on a host that is neither `APP_URL` nor listed is answered as if it came to `APP_URL`. A link built
 from a host header anyone can send would carry its sign-in token to that host.

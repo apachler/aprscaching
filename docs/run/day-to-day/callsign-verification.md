@@ -111,12 +111,21 @@ verified, and the claim shows in the call's holder changes. Nothing waits for yo
 
 A claim never displaces a verified holder, and never takes a held `ADMIN_CALLSIGNS` call. An `ADMIN_CALLSIGNS`
 call nobody holds is registered only through your sign-in link or by a claim, never by an unproven sign-up.
+Nor does a claim take a call while its holder's account is suspended: the claimant is told to ask you, and
+**Release** below still frees it.
+
+Each claim gets its own on-air codes: five an hour per claim, and twenty an hour per client address across
+its claims. Two claimants on one call never use up each other's codes.
 
 The account that loses a call keeps its other calls. What it wrote in the app under the call (caches, logs,
 ratings, favourites, watches, badges, saved views) stays on that account and shows under its remaining call,
-or as `FORMER` when it holds no other. Its device keys and stations on the call are removed. The federation
+or as `FORMER` when it holds no other. Every device key, station and weather key on the call is removed, on
+whichever account it is listed, including a station you listed on the call for another member. The federation
 learns of it from signed tombstones for those keys and the moved finds, and from the caches served again.
 Positions, stations and messages the radio sent stay with the call.
+
+An account left with no call can still export or erase its data: an email link to its confirmed address opens
+a session that does only that ([Your data](../../play/account.md#your-data)). The notice mail says how.
 
 ## Release a call from an account
 

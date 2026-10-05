@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { claim, registerPasskey, loginPasskey, emailStart, errorText, ApiError, type Licence } from "../api.js";
+import {
+  claim,
+  registerPasskey,
+  loginPasskey,
+  emailStart,
+  accountDataStart,
+  errorText,
+  ApiError,
+  type Licence,
+} from "../api.js";
 import { Button, Panel, Icon, LicenceBadge, ManualLink } from "../ui/index.js";
 import { PASSKEY_PROBLEM_TEXT, passkeyErrorText, passkeyProblem } from "./passkeySupport.js";
 import { ClaimCall } from "./ClaimCall.js";
@@ -29,6 +38,8 @@ export function SignIn(props: {
   // taking the call over by proof of control; `claimed` once it moved to this person
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
+  // asking for the link to the data of an account that holds no callsign
+  const [dataLink, setDataLink] = useState(false);
   const callsign = cs.toUpperCase().trim();
   const noPasskey = passkeyProblem();
   const canPasskey = noPasskey === null;
@@ -56,6 +67,26 @@ export function SignIn(props: {
       props.onDone();
     } catch (e) {
       setErr(passkeyErrorText(e, (x) => errorText(x).replace(/^.*?: /, "")));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function sendDataLink() {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setErr("Enter a valid email.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await accountDataStart(email.trim());
+      setSent(
+        r.devLink
+          ? { text: "This instance sends no mail.", devLink: r.devLink }
+          : { text: `Check ${email} for the link to your data.` },
+      );
+    } catch (e) {
+      setErr(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -101,6 +132,42 @@ export function SignIn(props: {
             </>
           )}
         </p>
+      ) : dataLink ? (
+        <>
+          <p className="muted">
+            Did your callsign move to its licensee, leaving your account with none? We email a link to the address on
+            your account. It opens your data to download or erase, and nothing else.
+          </p>
+          <label>
+            Email
+            <input
+              autoFocus
+              type="email"
+              autoComplete="email"
+              value={email}
+              placeholder="you@example.com"
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendDataLink();
+              }}
+            />
+          </label>
+          <div className="row end">
+            <Button variant="primary" disabled={busy} onClick={sendDataLink}>
+              Email me a link
+            </Button>
+          </div>
+          <Button
+            variant="quiet"
+            className="mt-3"
+            onClick={() => {
+              setDataLink(false);
+              setErr(null);
+            }}
+          >
+            ← sign in instead
+          </Button>
+        </>
       ) : probe && claiming ? (
         <ClaimCall
           callsign={callsign}
@@ -158,6 +225,12 @@ export function SignIn(props: {
               read how to get one
             </ManualLink>
             .
+          </p>
+          <p className="muted fine">
+            Account left without a callsign?{" "}
+            <Button variant="inline" onClick={() => setDataLink(true)}>
+              Get or erase my data
+            </Button>
           </p>
         </>
       ) : (
