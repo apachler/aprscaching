@@ -85,6 +85,9 @@
     --warn-text: color-mix(in oklch, var(--warn) var(--hue-text), var(--ink));
     --bad-text: color-mix(in oklch, var(--bad) var(--hue-text), var(--ink));
 
+    --danger-fill: oklch(0.52 0.19 27);
+    --danger-ink: oklch(1 0 0);
+
     --rail-bg: oklch(0.2 0.012 230);
     --panel-2: oklch(0.185 0.01 225);
     --hair: oklch(0.3 0.012 226);

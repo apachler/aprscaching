@@ -45,6 +45,7 @@ never kept as a second hand-made colour. Every colour has one role:
 | Selection | `--selected-bg` | The selected rail item, segment or chip, under `--heading` text |
 | Trust | `--tier-a`, `--tier-b`, `--tier-c` (fills); `--tier-a-text`, `--tier-b-text`, `--tier-c-text` | Tier A Radio-verified, Tier B Location-verified, Tier C Logged |
 | Status | `--ok`, `--warn`, `--bad` (fills); `--ok-text`, `--warn-text`, `--bad-text` | Success, warning, error and danger |
+| Destructive action | `--danger-fill` (fill), `--danger-ink` (text on the fill) | The confirm button of a delete, archive or remove |
 | Map controls | `--map-control-ink` | Glyphs on MapLibre's control stack, which is white in every theme |
 
 **The accent has two roles.** The brand green fills the primary button, with dark ink on it. As text, a link or an

@@ -85,4 +85,15 @@
   button.danger:hover {
     background: color-mix(in oklch, var(--bad) 14%, transparent);
   }
+  /* a destructive primary (a confirm's Delete / Archive): the red fill with its own ink, never the
+     red text over the accent */
+  button.primary.danger {
+    background: var(--danger-fill);
+    border-color: var(--danger-fill);
+    color: var(--danger-ink);
+  }
+  button.primary.danger:hover {
+    background: var(--danger-fill);
+    filter: brightness(1.08);
+  }
 }
