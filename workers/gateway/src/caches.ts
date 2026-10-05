@@ -498,6 +498,36 @@ function hideDailyLimit(env: Env): number {
 }
 
 /**
+ * The account's hides in the last 24 hours against the daily limit: `limit` and `remaining` are null when no limit
+ * applies (the instance lifts it, or the caller is the sysop).
+ */
+async function hideQuota(
+  req: Request,
+  env: Env,
+  accountId: string,
+): Promise<{ limit: number | null; used: number; remaining: number | null }> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM caches c
+      WHERE c.source = 'native' AND c.created_at > ?
+        AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                     AND (c.owner_call = ac.callsign OR c.owner_call LIKE ac.callsign || '-%'))`,
+  )
+    .bind(nowS() - DAY_S, accountId)
+    .first<{ n: number }>();
+  const used = row?.n ?? 0;
+  const limit = hideDailyLimit(env);
+  if (limit === 0 || !(await requireSysop(req, env))) return { limit: null, used, remaining: null };
+  return { limit, used, remaining: Math.max(0, limit - used) };
+}
+
+/** GET /api/my/hides — the signed-in account's hides in the last 24 hours and what the daily limit leaves. */
+export async function handleMyHides(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to see your hides" }, { status: 401 });
+  return json(await hideQuota(req, env, me.accountId));
+}
+
+/**
  * Why a signed-in member may not hide a cache now, or null. A cache owner answers for a place in the field and
  * for every finder's log, so hiding takes a control-verified call. Each account hides at most
  * HIDE_DAILY_LIMIT new caches in 24 hours, which keeps one account from flooding the map; the sysop is
@@ -510,17 +540,9 @@ async function hideRefusal(req: Request, env: Env, accountId: string, owner: str
       { error: `verify ${baseCall(owner)} to hide a cache — control-verification required`, verified: false },
       { status: 403 },
     );
-  const limit = hideDailyLimit(env);
-  if (limit === 0 || !(await requireSysop(req, env))) return null;
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM caches c
-      WHERE c.source = 'native' AND c.created_at > ?
-        AND EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
-                     AND (c.owner_call = ac.callsign OR c.owner_call LIKE ac.callsign || '-%'))`,
-  )
-    .bind(nowS() - DAY_S, accountId)
-    .first<{ n: number }>();
-  if ((row?.n ?? 0) < limit) return null;
+  const quota = await hideQuota(req, env, accountId);
+  if (quota.remaining == null || quota.remaining > 0) return null;
+  const limit = quota.limit!;
   return json(
     {
       error: `you have hidden ${limit} new cache${limit === 1 ? "" : "s"} in the last 24 hours, the most this instance allows a day — try again tomorrow`,

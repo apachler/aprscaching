@@ -54,7 +54,9 @@ export function refusalMessage(e: unknown): string {
       return `${field}: ${issue.message ?? "not accepted"}.`;
     }
   }
-  return errorText(e);
+  // the gateway words its refusals in lower case, as a clause; a form shows them as a sentence
+  const text = errorText(e);
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** One schema issue as the gateway sends it (zod). */

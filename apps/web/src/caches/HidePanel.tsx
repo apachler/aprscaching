@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { createCache, listMyStations, type CacheSummary } from "../api.js";
+import { createCache, getMyHides, listMyStations, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
@@ -93,7 +93,14 @@ export function HidePanel(props: {
     setTyped("");
   }
 
-  const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3 && verified;
+  // the daily hide limit, read before the form is filled in, so a hider at the limit learns it first
+  const { data: quota } = useLoad(
+    () => (callsign.length >= 3 && verified ? getMyHides() : Promise.resolve(null)),
+    [callsign, verified],
+  );
+  const atLimit = quota?.remaining === 0;
+
+  const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3 && verified && !atLimit;
 
   const tagList = parseTags(tags);
   const tagErr = tagProblem(tagList);
@@ -145,6 +152,17 @@ export function HidePanel(props: {
           Verify your callsign in Settings to hide a cache: an owner answers for the place and for every log on it.
         </p>
       )}
+      {quota?.limit != null &&
+        (atLimit ? (
+          <p className="inline-note bad" id="hide-limit-reason" role="status">
+            You have hidden {quota.limit} new {quota.limit === 1 ? "cache" : "caches"} in the last 24 hours, the most
+            this instance allows a day. Try again tomorrow.
+          </p>
+        ) : (
+          <p className="muted fine">
+            {quota.remaining} of {quota.limit} new {quota.limit === 1 ? "cache" : "caches"} left for today.
+          </p>
+        ))}
       <h4 className="set-subh">Location</h4>
       <p className="muted" role="status" aria-live="polite">
         {props.draft ? (
@@ -349,13 +367,19 @@ export function HidePanel(props: {
         />
         <p className="muted">{SCOPES.find((s) => s.v === fedScope)?.help} The hint is never federated.</p>
       </Advanced>
-      {err && <p className="error">{err}</p>}
+      {err && (
+        <p className="error" role="alert">
+          {err}
+        </p>
+      )}
       <div className="row end">
         <Button onClick={props.onCancel}>Cancel</Button>
         <Button
           variant="primary"
           disabled={!ready || busy}
-          aria-describedby={callsign.length >= 3 && !verified ? "hide-verify-reason" : undefined}
+          aria-describedby={
+            callsign.length >= 3 && !verified ? "hide-verify-reason" : atLimit ? "hide-limit-reason" : undefined
+          }
           onClick={submit}
         >
           {busy ? "Hiding…" : "Hide cache"}

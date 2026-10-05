@@ -73,7 +73,8 @@ export function TopBar(props: {
         <Icon name="search" size={16} />
       </Button>
       <span className="muted">
-        · {props.count} caches{props.filtered ? " (filtered)" : " in view"}
+        · {props.count} {props.count === 1 ? "cache" : "caches"}
+        {props.filtered ? " (filtered)" : " in view"}
       </span>
       {props.syncLine && (
         <Button

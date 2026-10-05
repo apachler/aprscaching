@@ -17,6 +17,7 @@ import {
   handleCacheLogs,
   handleUpdateCache,
   handleMyLogged,
+  handleMyHides,
 } from "./caches.js";
 import { handleSearch } from "./search.js";
 import {
@@ -611,6 +612,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
   if (p === "/api/my/profile" && m === "GET") return handleMyProfile(req, env);
   if (p === "/api/my/logged" && m === "GET") return handleMyLogged(req, env);
+  if (p === "/api/my/hides" && m === "GET") return handleMyHides(req, env);
   // weather user-origination — PWS push (Ecowitt / WU) with a weather station's own key
   // weather user-origination — PWS push (Ecowitt / WU) under <call>-13
   if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST"))

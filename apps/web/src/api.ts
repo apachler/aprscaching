@@ -293,6 +293,10 @@ export function getMyProfile(): Promise<{
 }> {
   return call(`/api/my/profile`);
 }
+/** The signed-in account's hides in the last 24 hours; `limit` and `remaining` are null when no limit applies. */
+export function getMyHides(): Promise<{ limit: number | null; used: number; remaining: number | null }> {
+  return call(`/api/my/hides`);
+}
 /** The caches the signed-in person found, logged as a did-not-find, or hid (cache ids). */
 export function getMyLogged(): Promise<{ found: number[]; dnf: number[]; owned: number[] }> {
   return call(`/api/my/logged`);
