@@ -246,6 +246,12 @@ export interface HistoryHost {
 const MARK = "acsView";
 const isOurs = (state: unknown) =>
   !!state && typeof state === "object" && (state as Record<string, unknown>)[MARK] === true;
+/**
+ * The histories with a close's back() still on its way. It is kept per history, not per instance, so a second
+ * instance on the same window (a remount, React's StrictMode running effects twice) never sends a second back(),
+ * which would step out of the app.
+ */
+const backPending = new WeakSet<object>();
 
 /**
  * Keep the browser history in step with the open view, so the back button (Android's included)
@@ -284,13 +290,17 @@ export function createViewHistory(
     if (isOurs(history.state)) {
       if (!open) {
         popping = true;
-        history.back();
+        if (!backPending.has(history)) {
+          backPending.add(history);
+          history.back();
+        }
       } else if (here() !== url) history.replaceState(history.state, "", url);
     } else if (open) push(url);
     else if (here() !== url) history.replaceState(history.state, "", url);
   };
 
   const onPopState = () => {
+    backPending.delete(history);
     const hash = currentHash?.();
     if (hash && hash !== win.location.hash)
       history.replaceState(history.state, "", win.location.pathname + win.location.search + hash);
