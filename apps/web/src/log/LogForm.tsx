@@ -74,6 +74,7 @@ export function LogForm(props: {
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [flagMaintenance, setFlagMaintenance] = useState(false);
   const loc = useLocate();
 
   async function doLog(logType: LogType, comment?: string) {
@@ -124,12 +125,21 @@ export function LogForm(props: {
       }
       const r = await logFind(
         props.cacheId,
-        { loggerCall: props.callsign, logType, comment, appGeo, author },
+        {
+          loggerCall: props.callsign,
+          logType,
+          comment,
+          appGeo,
+          author,
+          ...(flagMaintenance && (logType === "found" || logType === "dnf") && { needsMaintenance: true }),
+        },
         props.cacheCode,
       );
       setResult(r);
       setNote("");
       setNoteOpen(false);
+      setFlagMaintenance(false);
+      setFlagMaintenance(false);
       props.onLogged();
     } catch (e) {
       setErr(refusalMessage(e));
@@ -262,6 +272,22 @@ export function LogForm(props: {
           />
           <RadioLogHint code={props.cacheCode} />
         </>
+      )}
+      {!noFind && (
+        <label className="row mt-2">
+          <input
+            type="checkbox"
+            checked={flagMaintenance}
+            aria-describedby={flagMaintenance ? "log-maint-help" : undefined}
+            onChange={(e) => setFlagMaintenance(e.target.checked)}
+          />{" "}
+          The cache needs maintenance
+        </label>
+      )}
+      {!noFind && flagMaintenance && (
+        <p id="log-maint-help" className="muted fine">
+          Sent with your find or your did-not-find. The owner hears of it, and the cache shows it until they fix it.
+        </p>
       )}
       <div className="row between mt-3">
         {!noFind && (

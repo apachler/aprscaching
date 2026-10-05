@@ -288,10 +288,19 @@ export function handleWatch(req: Request, env: Env, cacheId: number): Promise<Re
 }
 
 // ---------------------------------------------------------------- helpers for cache detail
+/**
+ * Does the cache need its owner? A finder flagged it on a found or did-not-find log since the owner's last
+ * maintenance or enabled log, or the last three attempts were all did-not-finds.
+ */
 export async function cacheHealth(
   env: Env,
   cacheId: number,
-): Promise<{ needsMaintenance: boolean; dnfStreak: number; lastFound: number | null }> {
+): Promise<{
+  needsMaintenance: boolean;
+  maintenanceReason: "flagged" | "dnf_streak" | null;
+  dnfStreak: number;
+  lastFound: number | null;
+}> {
   const recent = (
     await env.DB.prepare(
       "SELECT log_type, ts, verified FROM cache_logs WHERE cache_id=? AND log_type IN ('found','dnf') ORDER BY ts DESC LIMIT 10",
@@ -307,7 +316,15 @@ export async function cacheHealth(
   const lf = await env.DB.prepare("SELECT MAX(ts) AS ts FROM cache_logs WHERE cache_id=? AND log_type='found'")
     .bind(cacheId)
     .first<{ ts: number | null }>();
-  return { needsMaintenance: dnfStreak >= 3, dnfStreak, lastFound: lf?.ts ?? null };
+  const flag = await env.DB.prepare(
+    `SELECT 1 AS x FROM cache_logs WHERE cache_id = ? AND needs_maintenance = 1
+        AND id > COALESCE((SELECT MAX(id) FROM cache_logs WHERE cache_id = ? AND log_type IN ('maintenance','enabled')), 0)
+      LIMIT 1`,
+  )
+    .bind(cacheId, cacheId)
+    .first();
+  const maintenanceReason = flag ? "flagged" : dnfStreak >= 3 ? "dnf_streak" : null;
+  return { needsMaintenance: maintenanceReason !== null, maintenanceReason, dnfStreak, lastFound: lf?.ts ?? null };
 }
 // ---------------------------------------------------------------- rating (1–5 stars, owner-gated)
 type RatingPolicy = "finders" | "all" | "off";

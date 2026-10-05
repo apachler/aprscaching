@@ -163,6 +163,8 @@ export const LogRequest = z.object({
   author: AuthorSig.optional(),
   // the log waited in the client's offline queue; only labels an unsigned log, whose time is its arrival
   offline: z.boolean().optional(),
+  // the finder says the cache needs its owner's attention (a found or did-not-find log only)
+  needsMaintenance: z.boolean().optional(),
 });
 export type LogRequest = z.infer<typeof LogRequest>;
 
@@ -249,6 +251,7 @@ export interface CacheLogEntry {
   receivedAt?: number | null; // when the instance received the log; ts is the find time (unix seconds)
   // why ts is the receive time and not the signed field time (future, too_old, before_cache, before_key, unsigned)
   fieldTimeRejected?: string | null;
+  needsMaintenance?: boolean; // the finder flagged the cache for its owner
 }
 
 export interface CacheDetail extends CacheSummary {
@@ -266,6 +269,8 @@ export interface CacheDetail extends CacheSummary {
   favorites: number;
   favorited: boolean;
   needsMaintenance: boolean;
+  /** Why it needs maintenance: a finder flagged it, or the last three attempts were did-not-finds */
+  maintenanceReason?: "flagged" | "dnf_streak" | null;
   dnfStreak: number;
   lastFound: number | null;
   // owner-gated rating

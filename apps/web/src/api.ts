@@ -1720,7 +1720,15 @@ export interface AuthorSig {
   authorSig: string;
   signedAt: number;
 }
-export type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
+export type LogBody = {
+  loggerCall: string;
+  logType: LogType;
+  comment?: string;
+  appGeo?: AppGeo;
+  author?: AuthorSig;
+  /** the finder flags the cache for its owner (a found or did-not-find log) */
+  needsMaintenance?: boolean;
+};
 /** What the offline queue holds: a log, or a stage unlocked offline (with the code that opened it). */
 export type QueueBody = Omit<LogBody, "logType"> & { logType: LogType | "unlock"; code?: string };
 

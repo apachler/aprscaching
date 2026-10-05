@@ -31,6 +31,10 @@ find counts as verified.
 
 After a find, **Add a note** on the result card adds a note to the same cache.
 
+Is the container wet, broken or gone? Tick **The cache needs maintenance** before you tap **✓ Log a find** or
+**Couldn't find it**. The flag goes with that log, the owner hears of it, and the cache page shows **needs
+maintenance** until the owner posts a maintenance log.
+
 ## Read the result
 
 | Badge                 | What placed you at the cache                                                          |
