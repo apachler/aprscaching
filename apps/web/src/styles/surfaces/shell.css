@@ -133,10 +133,14 @@
     box-shadow: 0 0 0 2px var(--topbar-bg);
   }
   /* ---- operator nav rail + 3-pane docking (≥1024px) ---- */
+  /* a rail item: the icon over its label, as wide as the rail less a small inset so the highlight holds every
+     label; a two-word label wraps to a second line and the item grows, the icon never shrinks */
   .rail button,
   .rail .rail-link {
-    width: 48px;
-    height: 48px;
+    flex: none;
+    width: calc(var(--rail-w) - 2 * var(--space-xs));
+    min-height: 48px;
+    padding: var(--space-xs) var(--space-2xs);
     border: none;
     background: none;
     border-radius: var(--radius-control);
@@ -148,8 +152,16 @@
     justify-content: center;
     gap: 3px;
     font-size: var(--text-micro);
+    line-height: 1.2;
     letter-spacing: 0.01em;
+    text-align: center;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
     text-decoration: none;
+  }
+  .rail button svg,
+  .rail .rail-link svg {
+    flex: none;
   }
   .rail button:hover,
   .rail .rail-link:hover {
@@ -160,13 +172,53 @@
     background: var(--selected-bg);
     color: var(--heading);
   }
+  /* the ring sits inside the item, so the scrolling part of the rail never clips it */
   .rail button:focus-visible,
   .rail .rail-link:focus-visible {
     outline: 2px solid var(--heading);
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
-  .rail .rail-sp {
+  /* the destinations and pinned apps scroll inside the rail; the bottom group stays in view below them */
+  .rail-scroll,
+  .rail-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    width: 100%;
+  }
+  .rail-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* a soft shade at an edge with more items beyond it: the covers scroll with the items and hide the shade
+       once the list reaches that end */
+    background:
+      linear-gradient(var(--rail-bg) 30%, transparent) top / 100% var(--space-lg) no-repeat local,
+      linear-gradient(transparent, var(--rail-bg) 70%) bottom / 100% var(--space-lg) no-repeat local,
+      radial-gradient(farthest-side at 50% 0, color-mix(in oklch, var(--ink) 30%, transparent), transparent) top / 100%
+        var(--space-sm) no-repeat scroll,
+      radial-gradient(farthest-side at 50% 100%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) bottom /
+        100% var(--space-sm) no-repeat scroll;
+  }
+  .rail-bottom {
+    flex: none;
     margin-top: auto;
+    padding-top: var(--space-xs);
+  }
+  /* a short window: tighter items, so more of the rail shows before it scrolls */
+  @media (max-height: 760px) {
+    .rail button,
+    .rail .rail-link {
+      min-height: var(--hit);
+      padding-block: var(--space-2xs);
+    }
+    .rail-scroll,
+    .rail-bottom {
+      gap: var(--space-2xs);
+    }
   }
   @media (min-width: 1024px) {
     .rail {
@@ -174,7 +226,7 @@
       flex: 0 0 var(--rail-w);
       flex-direction: column;
       align-items: center;
-      gap: var(--space-xs);
+      min-height: 0;
       padding: var(--space-md) 0;
       background: var(--rail-bg);
       border-right: 1px solid var(--hair);
@@ -370,8 +422,14 @@
     }
     /* a phone's row holds wordmark + filter + search + alerts + identity: a smaller wordmark and a tighter
      identity chip keep the chip's status whole instead of clipping it at the edge. */
+    /* the wordmark gives way first on the narrowest phones: it scales down instead of pushing the identity chip
+       off the edge */
     .topbar .logo {
       height: 21px;
+      flex: 0 1 auto;
+      min-width: 0;
+      object-fit: contain;
+      object-position: left center;
     }
     .idchip {
       padding: 0 var(--space-sm);

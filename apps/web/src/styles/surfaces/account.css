@@ -57,11 +57,9 @@
   /* the verification-method choice: wraps on a narrow sheet, labels keep their own case */
   .verify-methods {
     display: flex;
-    flex-wrap: wrap;
     margin: var(--space-xs) 0;
   }
   .seg.verify-methods button {
-    flex: 1 1 auto;
     min-height: var(--hit);
     text-transform: none;
   }

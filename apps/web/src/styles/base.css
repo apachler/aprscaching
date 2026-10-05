@@ -10,6 +10,14 @@
     height: 100%;
     margin: 0;
   }
+  /* the page never scrolls: the landing and the app shell scroll inside themselves. An absolutely positioned
+     element whose nearest positioned ancestor lies outside its scrolling panel (screen-reader text in a link, a
+     hint's fallback) is placed against #root and clipped by it, instead of growing the document below the shell */
+  #root {
+    position: relative;
+    overflow: hidden;
+    overflow: clip;
+  }
 }
 
 @layer base {
@@ -66,5 +74,32 @@
   label select,
   label textarea {
     margin-top: 3px;
+  }
+  /* a checkbox or radio keeps its own size and sits before its words on the same line; a label that wraps hangs
+     its further lines under the words, not under the box */
+  input:is([type="checkbox"], [type="radio"]) {
+    width: auto;
+    margin: 0 var(--space-sm) 0 0;
+    padding: 0;
+    inline-size: 1.1em;
+    block-size: 1.1em;
+    vertical-align: -0.15em;
+    accent-color: var(--accent);
+  }
+  label:has(> input:is([type="checkbox"], [type="radio"])):where(:not(.row, .role-check)) {
+    padding-inline-start: calc(1.1em + var(--space-sm));
+    text-indent: calc(-1.1em - var(--space-sm));
+    color: var(--ink);
+  }
+  label > input:is([type="checkbox"], [type="radio"]) {
+    text-indent: 0;
+  }
+  /* on touch the whole label is the target, so it is at least the touch-target height */
+  @media (pointer: coarse) {
+    label:has(> input:is([type="checkbox"], [type="radio"])) {
+      min-height: var(--hit);
+      margin-block: 0;
+      padding-block: calc((var(--hit) - 1.5em) / 2);
+    }
   }
 }

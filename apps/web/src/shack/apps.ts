@@ -79,7 +79,7 @@ export const SHACK_APPS: ShackApp[] = [
   },
   {
     id: "tools",
-    icon: "tools",
+    icon: "plug",
     label: "Tools",
     blurb: "Plugins and signal decoders that run sandboxed in this browser",
     title: "Tools",
