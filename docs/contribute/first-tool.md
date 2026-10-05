@@ -121,7 +121,7 @@ reloads.
 - After `/whois OE6XRR-9`, the panel's first row shows `OE6XRR-9` with its type, or `not heard`.
 
 The demo data never hears a new station, so the station table stays empty there. Against a gateway that hears
-stations (`pnpm dev:gateway` with an ingest, [Run from source](run-from-source.md)) and with **Live stations**
+stations (`pnpm dev --ingest`, [Run from source](run-from-source.md)) and with **Live stations**
 switched on, the table fills as stations are heard.
 
 ## Test it

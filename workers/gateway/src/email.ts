@@ -121,8 +121,10 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   // The sign-in token must NOT be handed back to the caller on a real instance. Returning
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
   // explicit opt-in, never merely "email isn't configured". Off ⇒ fail closed.
-  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true")
+  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
+    console.log(`dev sign-in link for ${e}: ${link}`); // the server log stands in for the mailbox
     return json({ sent: false, purpose, devToken: token, devLink: link });
+  }
   return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
 }
 
@@ -362,7 +364,10 @@ export async function sendEmailConfirmation(
     `Confirm this address for the aprscaching account of ${callsign}:\n${link}\n\nOnce confirmed, it signs you in and recovers the account. The link expires in 24 hours. If you did not create this account, ignore this email: the address is not used until it is confirmed.`,
   );
   if (sent) return { sent };
-  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") return { sent, devToken: token, devLink: link };
+  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
+    console.log(`dev confirmation link for ${email}: ${link}`);
+    return { sent, devToken: token, devLink: link };
+  }
   return { sent };
 }
 

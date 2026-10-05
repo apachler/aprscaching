@@ -1,6 +1,6 @@
 # Dev toolset — deterministic build / test / conformance
 
-Three scripts that wrap the repetitive verification loop so every change is checked the same way.
+Scripts that wrap the repetitive verification loop so every change is checked the same way, and the dev stack.
 Run from anywhere (they `cd` to the repo root). Also wired as root pnpm scripts.
 
 | Command | What it does | When |
@@ -8,6 +8,8 @@ Run from anywhere (they `cd` to the repo root). Also wired as root pnpm scripts.
 | `pnpm run check` (`tools/dev/check.sh`) | `pnpm -r build` (typecheck every unit) + `pnpm -r test` (all vitest suites) + web typecheck & production build | fast inner loop after any code change |
 | `pnpm run smoke` (`tools/dev/smoke.sh`) | spins a fresh Node/SQLite gateway on a throwaway DB + random port, waits for `/health`, runs each runtime-agnostic smoke suite on its own clean instance, tears down | prove the Worker-equivalent behaviour over a real DB |
 | `pnpm run verify` (`tools/dev/verify.sh`) | `check` then `smoke` — the full pre-commit / final gate | before committing / at the end of a change |
+| `pnpm dev` (`tools/dev/dev.mjs`) | the gateway (from source, restarting on edits) and the Vite dev server on one origin, `.env.dev` written on the first run; `--ingest`, `dev:peer`, `dev:preview`, `dev:seed`, `dev:admin` | while working on the app |
+| `pnpm dev:check` (`tools/dev/dev-stack-check.mjs`) | boots `pnpm dev` on free ports and proves sign-in, sessions, the live socket and a passkey through the one origin | after changing the dev tooling or the proxy |
 
 Flags:
 - `tools/dev/check.sh --build` or `--test` — only one half.

@@ -75,10 +75,18 @@ pnpm --filter @aprscaching/aprs exec vitest run test/foo.test.ts -t "name"   # o
 tools/dev/smoke.sh geofence                                   # one smoke suite
 tools/dev/smoke.sh federation                                 # two-instance federation e2e
 
-pnpm dev:gateway      # the gateway on Node + SQLite (migrations applied at boot)
-pnpm dev:ingest       # needs .env (copy .env.example)
-pnpm dev:web
+pnpm dev              # gateway + web on http://localhost:5173 (one origin, Vite proxies the gateway's paths);
+                      # first run writes .env.dev, data in .dev/; prints the admin call's operator sign-in link
+pnpm dev --ingest     # also apps/ingest (APRS-IS slice from .env.dev, radios from .env)
+pnpm dev:peer         # also a second, federating gateway on 127.0.0.1:8788
+pnpm dev:preview      # the production build served by the gateway (service worker, offline, landing)
+pnpm dev:seed         # demo caches/stations/messages into the running dev gateway
+pnpm dev:admin        # the admin call's sign-in link again, then its operator verification
+pnpm dev:check        # boots the dev stack on free ports and proves sign-in, sessions, WS, passkey (needs Chromium)
+pnpm dev:gateway / dev:web / dev:ingest   # the parts on their own (the gateway then needs INGEST_SECRET, APP_URL)
 ```
+`pnpm dev` runs everything from source: Vite hot-reloads the web app; `tsx watch` restarts the gateway on any
+change under `workers/gateway/src`, `servers/node/src`, `packages/*/src` or `db/migrations`.
 `apps/web`'s `test` runs three guard scripts (no emoji, tour anchors resolve, vendored MapLibre) and a vitest suite over its
 pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse check under jsdom); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of

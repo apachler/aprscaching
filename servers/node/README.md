@@ -30,7 +30,8 @@ docker build -f servers/node/Dockerfile -t aprscaching-node .
 docker run -p 8787:8787 -v aprscaching-data:/data -e INGEST_SECRET=$(openssl rand -hex 24) aprscaching-node
 ```
 
-Point the web app at it: `VITE_API_BASE=http://127.0.0.1:8787 pnpm --filter @aprscaching/web dev`.
+For development, `pnpm dev` at the repo root runs it with the web app on one origin, restarting on every edit.
+`pnpm dev:web` alone proxies the gateway's paths to it on `http://127.0.0.1:8787`.
 Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 
 ## Configuration

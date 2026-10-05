@@ -86,6 +86,12 @@ register + login (and a tampered-signature rejection) against a running gateway 
 virtual authenticator. It is not wired into CI — the WebAuthn logic is unit-tested; this validates
 the real browser ceremony before a release.
 
+`pnpm dev:check` (`tools/dev/dev-stack-check.mjs`) boots the development stack (`pnpm dev`) on free ports and
+proves that everything reaches the gateway through the dev server's one origin: an email and an operator sign-in
+with their session cookies, Instance admin, hiding a cache with a photo, logging a find, a packet on the live
+socket, Vite's hot-reload socket, and a passkey registration and sign-in with Chromium's virtual authenticator.
+CI runs it in the `dev-stack` job ([Run from source](run-from-source.md#check-the-dev-stack)).
+
 ## Design and accessibility
 
 - **Contrast** — `apps/web/test/contrast.test.ts` (part of the web unit suite) measures the WCAG contrast of every
@@ -103,7 +109,7 @@ the real browser ceremony before a release.
 - **The manual's theme** — `node tools/dev/docs-theme.mjs` writes `docs/stylesheets/tokens.gen.css` from the
   app's tokens and fonts, and copies Mermaid's browser build into `docs/assets/vendor/` for the build;
   `--check` (in `pnpm run check` and the docs workflow) fails when the committed theme no longer matches.
-- **The UI kit** — `/?demo=ui` in a running app (`pnpm dev:web`): every token, the role scales and every
+- **The UI kit** — `/?demo=ui` in a running app (`pnpm dev`): every token, the role scales and every
   primitive in every state, with a theme, density and scale switch ([Design language](design/design-language.md)).
 - **The whole app on fixtures** — `/?demo=app` serves the app from canned gateway answers
   (`apps/web/src/demo/fixtures.ts`); `&as=sysop` or `&as=out` changes who is signed in.
@@ -189,7 +195,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |

@@ -294,7 +294,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`CORS_ORIGINS`",
-        "Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (e.g. `pnpm dev:web` on `http://localhost:5173`) needs its origin listed here",
+        "Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (one built with `VITE_API_BASE` naming another host) needs its origin listed here",
         "—",
       ],
       [
@@ -735,8 +735,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`VITE_API_BASE`",
-        "Gateway base URL. Set it whenever the API lives on another host than the web app. A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost",
-        "dev server: `http://127.0.0.1:8787` · production build: same origin",
+        "Gateway base URL. Set it whenever the API lives on another host than the web app. Without it the app talks to its own origin — right wherever one host serves both the SPA and the API, the dev server included (it proxies the gateway's paths to the local gateway) — never to localhost",
+        "same origin",
       ],
       [
         "`VITE_APP_URL`",

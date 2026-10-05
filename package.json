@@ -19,6 +19,12 @@
     "e2e:offline": "node tools/e2e/offline-shell.mjs",
     "e2e:tools": "node tools/e2e/tool-sandbox.mjs",
     "verify": "tools/dev/verify.sh",
+    "dev": "node tools/dev/dev.mjs",
+    "dev:preview": "node tools/dev/dev.mjs --preview",
+    "dev:peer": "node tools/dev/dev.mjs --peer",
+    "dev:admin": "node tools/dev/dev.mjs admin",
+    "dev:seed": "node tools/dev/dev.mjs seed",
+    "dev:check": "node tools/dev/dev-stack-check.mjs",
     "dev:web": "pnpm --filter @aprscaching/web dev",
     "dev:gateway": "pnpm --filter @aprscaching/node-gateway dev",
     "dev:ingest": "pnpm --filter @aprscaching/ingest dev"
