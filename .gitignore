@@ -41,3 +41,6 @@ docs/assets/vendor/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# the development instance's data (pnpm dev); its settings are .env.dev, covered by .env.* above
+/.dev/

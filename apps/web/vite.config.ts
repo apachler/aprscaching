@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin, type ProxyOptions } from "vite";
+import { isGatewayPath } from "../../workers/gateway/src/paths.js";
 import react from "@vitejs/plugin-react";
 import { vendorMaplibrePlugin } from "./vite-vendor.js";
 import { serviceWorkerPlugin } from "./vite-sw.js";
@@ -24,6 +25,25 @@ function appOriginPlugin(origin: string): Plugin {
         : html
             .replace(/^.*(?:rel="canonical"|property="og:url").*%APP_ORIGIN%.*\n/gm, "")
             .replaceAll("%APP_ORIGIN%", ""),
+  };
+}
+
+/**
+ * The dev server and its gateway on one origin: every path the gateway serves (isGatewayPath, the same list
+ * Caddy and the desktop app route by) goes to the local gateway, the live socket included, and Vite serves
+ * the rest. The Host header stays the dev server's, so the gateway builds its links (sign-in, media, feeds)
+ * on the origin the browser opened; sessions, passkeys and the live socket then work as in production.
+ * `DEV_GATEWAY` names the gateway (`pnpm dev` sets it); the default is the one `pnpm dev:gateway` starts.
+ */
+function gatewayProxy(target: string): Record<string, ProxyOptions> {
+  return {
+    "^/": {
+      target,
+      ws: true,
+      xfwd: true,
+      // Vite answers what the gateway does not serve; returning the URL hands the request back to Vite
+      bypass: (req) => (isGatewayPath(new URL(req.url ?? "/", "http://dev").pathname) ? undefined : req.url),
+    },
   };
 }
 
@@ -51,6 +71,7 @@ export default defineConfig(({ mode }) => ({
     serviceWorkerPlugin(),
     noticesPlugin(webDir),
   ],
+  server: { proxy: gatewayProxy(process.env.DEV_GATEWAY || "http://127.0.0.1:8787") },
   build: {
     chunkSizeWarningLimit: 1100, // MapLibre's real chunk size (~1.05 MB)
     modulePreload: {

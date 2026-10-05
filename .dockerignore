@@ -14,8 +14,9 @@
 **/*.secret
 deploy/.shape
 
-# databases, media and backups (servers/*/data, a bare-metal checkout's data/, deploy/backups)
+# databases, media and backups (servers/*/data, a bare-metal checkout's data/, the dev instance's .dev/, deploy/backups)
 **/data
+.dev
 **/*.db
 **/*.db-shm
 **/*.db-wal

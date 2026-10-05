@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Portable self-host runtime: the aprscaching gateway on Node + SQLite (no Cloudflare).",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --clear-screen=false --include ../../db/migrations src/server.ts",
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

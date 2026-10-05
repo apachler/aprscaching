@@ -65,13 +65,6 @@ import { fromB64u, toB64u } from "./base64url.js";
 import { stageRefusalText } from "./log/stageUnlock.js";
 import { mediaUploadProblem } from "./media/limits.js";
 
-/**
- * Gateway base URL. A dev server talks to the local gateway on :8787. A production build without
- * `VITE_API_BASE` talks to its own origin (`""`), which is right wherever one host serves both the SPA and
- * the API (the desktop binary, a Pi, an all-in-one VM) and fails visibly anywhere else — never a silent
- * localhost that only answers on the builder's machine. A web app served from another host than its
- * gateway sets `VITE_API_BASE` at build time.
- */
 /** Drop trailing `/` from a URL without a regex (the URL can be typed by the user). */
 export function trimTrailingSlashes(url: string): string {
   let end = url.length;
@@ -79,8 +72,14 @@ export function trimTrailingSlashes(url: string): string {
   return url.slice(0, end);
 }
 
-export const API_BASE: string =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8787");
+/**
+ * Gateway base URL. Without `VITE_API_BASE` the app talks to its own origin (`""`), which is right wherever
+ * one host serves both the SPA and the API (the desktop binary, a Pi, an all-in-one VM, and the dev server,
+ * which proxies the gateway's paths to a local gateway) and fails visibly anywhere else — never a silent
+ * localhost that only answers on the builder's machine. A web app served from another host than its
+ * gateway sets `VITE_API_BASE` at build time.
+ */
+export const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 /**
  * The browser could not reach the gateway at all (offline, DNS, CORS, the server down). It stays a

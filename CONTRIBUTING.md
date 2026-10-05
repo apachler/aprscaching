@@ -36,7 +36,11 @@ good it otherwise is. They are documented in `CLAUDE.md` and `.claude/rules/`; t
 ```sh
 pnpm install
 pnpm run check     # build every unit, run every unit suite (and the web guards), typecheck and build the web app
+pnpm dev           # the instance on http://localhost:5173, reloading on every edit
 ```
+
+[Run from source](docs/contribute/run-from-source.md) covers the operator sign-in, demo data, the ingest, a
+federating peer and the production build.
 
 ## The inner loop
 
@@ -47,8 +51,8 @@ pnpm run check     # build every unit, run every unit suite (and the web guards)
 | `tools/dev/smoke.sh federation` | the two-instance federation e2e CI runs (a publisher and a subscriber) |
 | `pnpm verify` | the full pre-PR gate: `check` then `smoke` |
 | `pnpm --filter <package> exec vitest run test/foo.test.ts -t "name"` | one file or one test |
-| `pnpm --filter @aprscaching/web dev` | run the web app |
-| `pnpm --filter @aprscaching/node-gateway dev` | run the gateway on Node + SQLite |
+| `pnpm dev` | run the instance: gateway and web app on `http://localhost:5173`, reloading on every edit |
+| `pnpm dev:check` | prove the dev stack: sign-in, sessions, the live socket and a passkey through its one origin |
 
 Run **`pnpm verify` before you open a PR**, and `tools/dev/smoke.sh federation` too for federation changes.
 [Testing & verification](docs/contribute/testing.md) maps every suite and CI job.

@@ -221,15 +221,7 @@ import { handleNearRadioPrefs, pruneNearCacheMessages } from "./nearradio.js";
 import { runUpdateCheck } from "./updatecheck.js";
 export { syncAllPeers } from "./fedpull.js";
 
-/**
- * The paths the gateway serves, as distinct from the SPA's. A host that serves both from one origin
- * (the desktop app; Caddy in deploy/Caddyfile) sends these to handle() and everything else to the SPA.
- * A test reads every route in route() below and checks it is claimed here.
- */
-const GATEWAY_PATH =
-  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|tiles|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
-
-export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pathname);
+export { isGatewayPath } from "./paths.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {

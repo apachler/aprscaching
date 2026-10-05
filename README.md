@@ -51,10 +51,9 @@ For developers. To install an instance, use the Docker stack in `deploy/`
 
 ```bash
 pnpm install
-pnpm run check                                    # every unit's build + all unit suites
-pnpm --filter @aprscaching/node-gateway dev       # the gateway on Node + SQLite
-pnpm dev:web                                      # the map UI (talks to http://127.0.0.1:8787)
-pnpm dev:ingest                                   # the operator-local RF ingest (copy .env.example to .env)
+pnpm run check      # every unit's build + all unit suites
+pnpm dev            # gateway + web app on http://localhost:5173, reloading on every edit
+pnpm dev --ingest   # also the operator-local RF/APRS-IS ingest
 ```
 
 [Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the Bun desktop build
