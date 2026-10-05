@@ -91,6 +91,27 @@ docs: document the AGPL source-link obligation for self-hosters
 
 `feat` → minor bump, `fix` → patch, breaking → major. `docs`/`chore`/`test`/`ci` don't cut a release.
 
+### Operator notes
+
+A change that makes an operator act before or after updating carries an `Operator-Action:` footer that says what
+to do, in the present tense. Examples are a new required setting, a renamed or removed setting, a manual step such
+as a re-import, or behaviour an operator must know about, such as a feature that is off by default:
+
+```
+feat(ingest): the NET/ROM node needs its own call
+
+Operator-Action: set NETROM_CALL in the ingest box's .env to a call with a free SSID; the node stays off
+without it.
+```
+
+The footer does not change the version: the commit type decides that, as above. When a release is published, the
+release workflow collects every `Operator-Action:` footer since the previous release and puts them at the top of the
+release notes under **Operator actions**; the update notice in Instance admin and `doctor` link those notes. The
+pull request template has an **Operator action needed** section: end the PR description with the footer, since the
+description becomes the squash commit's body. A footer forgotten at merge time can be added before the release by
+putting the corrected commit message between `BEGIN_COMMIT_OVERRIDE` and `END_COMMIT_OVERRIDE` lines in the merged
+pull request's description.
+
 ## Branches and pull requests
 
 1. Cut a feature branch from `dev`, named after its Conventional Commit type

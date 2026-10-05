@@ -9,6 +9,13 @@ instance runs the new code, or is rolled back to the old one if the update broke
 - A backup destination, so the pre-update backup does not stay only on this disk
   ([Backups and moving](backups.md)).
 
+## Before you update: read the release's operator actions
+
+A release whose notes open with **Operator actions** asks something of you: a new required setting, a manual step,
+or a change in behaviour. Each entry says what to do. Read the notes of every release between the one you run and
+the one you update to: the [releases page](https://github.com/apachler/aprscaching/releases) lists them, and
+`update` prints the commits in between before it asks.
+
 ## Update with the helper
 
 Run these in the checkout's root directory:

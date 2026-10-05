@@ -63,8 +63,33 @@ jobs:
 
   # Each release opens a discussion in Announcements, linked to the release, so people watching the
   # repository or its discussions hear about it. It runs last, once the release carries all its assets.
-  announce:
+  # The release notes open with the operator actions of every change since the previous release: each
+  # `Operator-Action:` footer in a commit message, which is the pull request's description on a squash.
+  operator-notes:
     needs: [release-please, verify]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # edit the release notes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: put the operator actions at the top of the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          [ -n "$prev" ] || { echo "no earlier release: nothing to collect"; exit 0; }
+          notes=$(git log --format='%B%n' "$prev..$TAG" | awk '/^Operator-Action:/{on=1; sub(/^Operator-Action:[ ]*/, "- ")} /^$/{on=0} on')
+          [ -n "$notes" ] || { echo "no operator actions between $prev and $TAG"; exit 0; }
+          body=$(gh release view "$TAG" --json body --jq .body)
+          printf '## Operator actions\n\nDo these when you update from %s or earlier.\n\n%s\n\n%s\n' "$prev" "$notes" "$body" > notes.md
+          gh release edit "$TAG" --notes-file notes.md
+
+  announce:
+    needs: [release-please, verify, operator-notes]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
