@@ -41,7 +41,25 @@ Cloudflare's free plan, and neither bills by what the instance writes.
 
 ## Put the CDN in front
 
-1. In the Cloudflare dashboard, proxy your hostname's DNS record through Cloudflare.
+1. **Proxy your hostname's DNS record.** In the Cloudflare dashboard, open your domain, then **DNS → Records**.
+
+    - **With the tunnel**, the record already exists: the tunnel created a `CNAME` for your hostname that points
+      at `<tunnel id>.cfargotunnel.com`, and it is always proxied. Check that its **Proxy status** shows
+      **Proxied** and go on to step 2.
+    - **Without the tunnel**, add the record yourself, or edit the one you have: type **A** (and **AAAA** if the
+      box has a public IPv6 address), name your hostname (for example `aprs` for `aprs.example.net`), content
+      the box's public address, and switch **Proxy status** to **Proxied**, the orange cloud. **DNS only**, the
+      grey cloud, sends visitors straight to the box and bypasses the CDN.
+
+    Without the tunnel, Caddy keeps its own certificate, so set **SSL/TLS → Overview → Encryption mode** to
+    **Full (strict)**: Cloudflare then reaches the box over https and checks Caddy's certificate. Leave **SSL/TLS →
+    Edge Certificates → Always Use HTTPS** off; Caddy redirects to https itself, and Let's Encrypt's renewal
+    requests on plain http must reach Caddy. If Caddy has no certificate yet, start the stack while the record
+    is still **DNS only**, wait until `https://<hostname>` answers, then switch the record to **Proxied**.
+
+    **Check it:** `dig +short <hostname>` answers with Cloudflare's addresses, not the box's, and
+    `curl -sI https://<hostname>/` shows `server: cloudflare`.
+
 2. Create an API token that can edit the zone's cache rules, and note the zone's ID.
 3. In the repository's top directory, write the cache rules:
 
