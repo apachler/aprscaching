@@ -12,7 +12,7 @@ import { ToolPanels } from "../tools/ToolPanels.js";
  * NODES on RF run operator-local on the ingest; this surfaces the tables the gateway keeps.
  */
 export function NodePanel() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [nodes, setNodes] = useState<NodeRouteRow[] | null>(null);
   const [mheard, setMheard] = useState<MheardRow[] | null>(null);
   const [loadErr, setLoadErr] = useState(false);
@@ -30,8 +30,18 @@ export function NodePanel() {
       .catch(() => setLoadErr(true));
   }, [open, nodes]);
 
+  const latest = mheard?.reduce((t, m) => Math.max(t, m.lastHeard), 0) ?? 0;
   return (
     <div className="node-panel">
+      {nodes && mheard && (
+        <p className="muted" role="status">
+          {nodes.length || mheard.length
+            ? `${nodes.length} node${nodes.length === 1 ? "" : "s"} learned · ${mheard.length} station${
+                mheard.length === 1 ? "" : "s"
+              } heard${latest ? ` · last heard ${fmt.ago(latest)}` : ""}`
+            : "Nothing learned or heard yet: the node runs on the instance's ingest box, which reports its tables here."}
+        </p>
+      )}
       <Button
         variant="quiet"
         aria-expanded={open}

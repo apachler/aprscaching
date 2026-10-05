@@ -54,6 +54,10 @@ prompt. See [Find a cache](find-a-cache.md#the-youre-near-prompt).
 
 ## Your account
 
+**I have no amateur radio licence. Can I play?**
+You can browse the map, the caches and the leaderboard without an account. Signing in needs a callsign, which a
+licence gives you. See [No licence yet](join.md#no-licence-yet).
+
 **I can't sign in with a passkey on my club's instance.**
 Passkeys work only on an `https://` address. On a plain `http://` instance, sign in with the email link, or ask
 your sysop for a one-time sign-in link. See [Getting to your instance](your-instance.md#what-works-on-each-way-in).

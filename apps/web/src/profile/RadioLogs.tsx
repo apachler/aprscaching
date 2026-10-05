@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getRadioCommands, decideRadioCommand, type RadioCommandRow } from "../api.js";
 import { useFmt } from "../format.js";
+import { useServiceCall } from "../log/RadioLogHint.js";
 import { Button, Group, Badge, TierBadge, EmptyState, ErrorState, useConfirm, useToast } from "../ui/index.js";
 
 const STATUS_LABEL: Record<RadioCommandRow["status"], string> = {
@@ -70,7 +71,9 @@ export function RadioLogs() {
   }
 
   const pending = data?.commands.filter((c) => c.status === "pending").length ?? 0;
-  const service = data?.serviceCall ?? "APRSCG";
+  const knownCall = useServiceCall();
+  // the call is named only once the instance said it: a guessed call would send the message nowhere
+  const service = data?.serviceCall ?? knownCall;
   return (
     <Group
       // remount once loaded so the group opens by itself when something waits for confirmation
@@ -82,9 +85,10 @@ export function RadioLogs() {
       <p className="muted">
         Send <span className="mono">FOUND AC-1234</span> (or <span className="mono">DNF</span>,{" "}
         <span className="mono">NOTE</span>, <span className="mono">MAIL</span>, <span className="mono">NEAR ON</span>,{" "}
-        <span className="mono">HELP</span>) from your radio to <span className="mono">{service}</span>. A message heard
-        by a receiving station this instance trusts is logged at once; one that only came over the internet waits here
-        for you to confirm.
+        <span className="mono">HELP</span>) from your radio to{" "}
+        {service ? <span className="mono">{service}</span> : "this instance's service call"}. A message heard by a
+        receiving station this instance trusts is logged at once; one that only came over the internet waits here for
+        you to confirm.
       </p>
       {error ? (
         <ErrorState onRetry={load}>Couldn&apos;t load your radio logs.</ErrorState>

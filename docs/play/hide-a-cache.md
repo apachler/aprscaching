@@ -159,8 +159,9 @@ this up ([Cache adoption](../run/day-to-day/cache-adoption.md)).
 4. Tap **Request adoption**. The card says your request is waiting for the sysop.
 
 The sysop approves one request, and you get an alert. The cache becomes yours with all its finds, logs and
-media. If you ticked the box, the cache is active again. If not, it stays archived; ask your sysop to set it
-active. You can tap **Withdraw my request** while you wait.
+media. If you ticked the box, the cache is active again. If not, it stays archived until you check the
+container and set it **Active** yourself under **Edit** ([Edit your cache](#edit-your-cache)). You can tap
+**Withdraw my request** while you wait.
 
 **If your cache is offered.** You get an alert, and the cache page shows **Keep my cache**. Tap it and the
 offer ends. The cache cannot change hands for 14 days after the offer, so you have time to answer. A cache

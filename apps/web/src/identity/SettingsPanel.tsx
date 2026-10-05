@@ -275,14 +275,14 @@ export function SettingsPanel(props: {
       {session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (
         <Group
           title="Notifications"
-          help="Alerts when the network hears a callsign on your watchlist."
+          help="Alerts when a callsign on your watchlist is heard, someone finds one of your caches, your station corroborates a find, or a cache adoption you are part of moves on."
           defaultOpen={false}
         >
           <Row
             label="Email digest"
             help={
               prefs?.hasEmail
-                ? "Batched watchlist alerts, emailed to you"
+                ? "Your new alerts in one email, sent on a schedule"
                 : "Add an email to your account to receive a digest"
             }
           >
@@ -297,7 +297,7 @@ export function SettingsPanel(props: {
               }}
             />
           </Row>
-          <Row label="Browser push" help="A notification when a watched callsign is active">
+          <Row label="Browser push" help="A notification on this device for each new alert">
             {!prefs?.pushConfigured ? (
               <span className="muted">Not enabled on this instance</span>
             ) : pushState === "unsupported" ? (

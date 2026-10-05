@@ -100,6 +100,10 @@ export function App() {
                   setShowSignIn(false);
                 }}
                 onClose={() => setShowSignIn(false)}
+                onBrowse={() => {
+                  setShowSignIn(false);
+                  onExplore();
+                }}
               />
             )}
           </>

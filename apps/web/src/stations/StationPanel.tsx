@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { getStation, createStation, exportPath, type StationDetail } from "../api.js";
+import { getStation, createStation, exportPath, listCallsigns, type StationDetail } from "../api.js";
 import { ExportButton } from "../exports/ExportButton.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, useToast, Card, Button, Icon } from "../ui/index.js";
+import { Panel, Badge, ErrorState, useToast, useLoad, Card, Button, Icon } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 
 import { TrackReplay } from "../shack/TrackReplay.js";
@@ -38,6 +38,10 @@ export function StationPanel(props: {
   const toast = useToast();
   const [station, setStation] = useState<StationDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // the base calls the account holds: a station is added only under one of them, and only once it is verified
+  const { data: account } = useLoad(() => (callsign.length >= 3 ? listCallsigns() : Promise.resolve(null)), [callsign]);
+  const stationBase = station?.callsign.toUpperCase().split("-")[0] ?? "";
+  const held = account?.callsigns.find((c) => c.callsign.toUpperCase() === stationBase) ?? null;
   useEffect(() => {
     let live = true;
     setStation(null);
@@ -123,6 +127,14 @@ export function StationPanel(props: {
               <Badge>In your stations</Badge>
             ) : station.registered ? (
               <span className="muted">Registered by another operator</span>
+            ) : account && !held ? (
+              <span className="muted fine">
+                Not one of your callsigns: only a station under a call on your account can be added.
+              </span>
+            ) : held && !held.verified ? (
+              <span className="muted fine">
+                Verify <span className="mono">{held.callsign}</span> under Settings → Account to add its stations.
+              </span>
             ) : (
               <Button
                 onClick={async () => {

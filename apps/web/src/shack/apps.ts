@@ -100,12 +100,12 @@ export const SHACK_APPS: ShackApp[] = [
     id: "node",
     icon: "node",
     label: "NET/ROM node",
-    blurb: "This instance's NET/ROM node and digipeater, with the sysop console",
+    blurb: "Read-only view of this instance's NET/ROM node: the nodes it learned and the stations it heard",
     title: "NET/ROM node",
     wide: true,
     sysop: true,
     intro:
-      "Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal connects to it.",
+      "The NODES table this instance's node learned and its MHeard list, read-only. The node runs on the instance's ingest box and answers the node commands on the air; the packet terminal connects to it.",
     load: () => import("./NodePanel.js").then((m) => ({ default: m.NodePanel })),
   },
   {
