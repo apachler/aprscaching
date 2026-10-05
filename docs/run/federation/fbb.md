@@ -32,7 +32,7 @@ exists.
 - **Slow.** A batch moves when the forwarding schedule next connects, then waits at the far end for the next
   exchange. Expect hours to days, not minutes.
 - **No recall.** A batch already forwarded cannot be called back. A deletion travels as a signed
-  [tombstone](../../glossary.md#tombstone) in a later batch, the same way and just as late; until it arrives the
+  [tombstone](../../glossary.md#tombstone) in a later batch, the same way and as late; until it arrives the
   partner still shows the record.
 - **Kept 30 days.** A batch waiting for a partner expires after 30 days, like a bulletin. The same content is
   queued once: a second request for an unchanged batch adds nothing.

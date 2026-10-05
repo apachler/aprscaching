@@ -189,7 +189,7 @@ compression, and smaller record set; operator policy may clamp further.
 
 **Experimental**, off unless `FED_BBS` is on, and untested on real BBS networks. It is delay-tolerant delivery
 for instances with no direct path: hours to days per batch. A batch already forwarded cannot be recalled; a
-deletion follows the same path as a tombstone, just as late. The sysop's side, with the etiquette, is
+deletion follows the same path as a tombstone, and arrives as late. The sysop's side, with the etiquette, is
 [Federation over FBB](../run/federation/fbb.md).
 
 A forward link has no live handshake, so a batch of frames rides one FBB message exactly as it rides
