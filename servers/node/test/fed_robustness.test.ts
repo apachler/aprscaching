@@ -109,7 +109,7 @@ describe("records only move forward", () => {
   });
 
   it("a replayed relay query is answered once", async () => {
-    const { a, hub } = await pair();
+    const { a, hub } = await pair({ FED_BBS: "1" }); // the answer goes back over FBB
     const q = await frame(a, "relayQuery", "a.example:relay:7", nowS(), {
       id: 7,
       target: "hub.example",
@@ -284,7 +284,8 @@ describe("the Node fetch guard", () => {
 
 describe("carrier ids and body caps", () => {
   it("refuses an ACSFED bulletin whose BID does not match its content", async () => {
-    const { a, hub } = await pair();
+    const { a, hub } = await pair({ FED_BBS: "1" });
+    await hub.DB.prepare("INSERT INTO bbs_partners (call, federation) VALUES ('OE1PRT-1', 1)").run();
     const f = await frame(a, "key", "a.example:key:1", 1, { callsign: "OE8K", publicKey: "PK" });
     const batch = encodeFedBbsBatch([f]);
     expect(batch.bid.length).toBeLessThanOrEqual(12);
@@ -293,7 +294,10 @@ describe("carrier ids and body caps", () => {
         new Request("https://hub.example/api/bbs/forward/inbound", {
           method: "POST",
           headers: { "content-type": "application/json", "x-ingest-secret": "test-ingest-secret" },
-          body: JSON.stringify({ message: { bid, type: "B", from: "OE8APR", to: "ACSFED", body: batch.body } }),
+          body: JSON.stringify({
+            message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body: batch.body },
+            origin: "rf-fbb:OE1PRT-1",
+          }),
         }),
       );
     expect((await post("SQUAT1")).status).toBe(400); // a squatter's BID never claims the content

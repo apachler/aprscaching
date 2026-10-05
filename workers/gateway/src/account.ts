@@ -581,13 +581,18 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
     del("DELETE FROM rendezvous_log WHERE $CALLS OR $CALLS", "call_a", "call_b"),
     del("DELETE FROM white_pages WHERE $CALLS", "callsign"),
     del("DELETE FROM box_commands WHERE $CALLS", "callsign"),
-    del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
+    // a federation batch is kept as personal mail to ACSFED; it is handled with the bulletins below
+    del(
+      `DELETE FROM bbs_messages WHERE type='P' AND to_call != '${FED_BBS_CATEGORY}' AND ($CALLS OR $CALLS)`,
+      "from_call",
+      "to_call",
+    ),
     del("DELETE FROM mailbox_messages WHERE $CALLS OR $CALLS", "from_call", "to_call"),
     del("DELETE FROM near_cache_messages WHERE $CALLS", "call"),
     del("DELETE FROM meshcom_group_messages WHERE $CALLS", "from_call"),
     ...(accountId ? [env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=?").bind(accountId)] : []),
     // The bulletins and NTS traffic the person posted go with them; replies others posted stay in the thread.
-    // A federation carrier bulletin holds signed frames, not the person's words, so it stays to be forwarded,
+    // A federation carrier batch holds signed frames, not the person's words, so it stays to be forwarded,
     // attributed to the marker.
     env.DB.prepare(`DELETE FROM bbs_messages WHERE to_call != ? AND ${by("from_call").sql}`).bind(
       FED_BBS_CATEGORY,

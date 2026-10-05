@@ -174,6 +174,7 @@ app do not read these.
 | `FED_HUB_URL` | Spoke: a reachable hub to push signed records to. Each feed resumes where the hub's marks say it stands; after a network failure the spoke probes the hub (30 s backing off to 10 min) and pushes as soon as it answers | — |
 | `FED_SPOKE_STALE_HOURS` | Hub: hours without a submission before Instance admin shows a spoke as stale | 24 |
 | `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key | — |
+| `FED_BBS` | Experimental. `1`: federation records travel as FBB personal messages to the forwarding partners marked for federation, and records arriving that way from those partners are applied. Off, nothing is queued for FBB and such messages are dropped. See [Federation over FBB](../run/federation/fbb.md) | off |
 <!-- /config-table -->
 
 ## Gateway — read API, spots, email/push

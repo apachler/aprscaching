@@ -105,6 +105,10 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
     return json({ error: `a message lives at most ${BBS_LIFETIME_MAX_SEC / 86400} days` }, { status: 400 });
   const from = fromCall.toUpperCase(),
     to = toCall.toUpperCase();
+  // ACSFED carries signed federation batches only the instance itself writes; a post there would ride the
+  // federation partners' links in a person's name
+  if (mailboxCall(to) === FED_BBS_CATEGORY)
+    return json({ error: `${FED_BBS_CATEGORY} is reserved for federation traffic` }, { status: 400 });
   // The ingest box posts for the stations it hears, so its budget is per sender; a session's is per account.
   const me = ingestSecretOk(req, env) ? null : await sessionIdentity(req, env);
   const rateKey = me ? `bbs-post:acct:${me.accountId}` : `bbs-post:call:${baseCall(mailboxCall(from))}`;
@@ -203,8 +207,9 @@ export async function handleBbsBulletins(req: Request, env: Env): Promise<Respon
   const u = new URL(req.url);
   const cat = u.searchParams.get("category");
   const n = nowS();
-  // The reserved federation category (ACSFED) is machine carrier traffic, not human mail — it is
-  // hidden from the default listing but still reachable by asking for the category explicitly.
+  // The reserved federation recipient (ACSFED) is machine carrier traffic, not human mail. The instance stores
+  // it as personal mail, so no bulletin listing shows it; a bulletin to ACSFED mirrored from elsewhere is
+  // hidden from the default listing too, and reachable by asking for the category explicitly.
   let sql = "SELECT * FROM bbs_messages WHERE type='B' AND (expires_at IS NULL OR expires_at > ?)";
   const binds: unknown[] = [n];
   if (cat) {

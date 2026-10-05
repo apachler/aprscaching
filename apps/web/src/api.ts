@@ -1814,8 +1814,11 @@ export interface ForwardPartner {
   msgtypes: string;
   maxBlock: number;
   enabled: boolean;
+  /** Carries federation over FBB to and from this partner (the instance's FED_BBS must be on too). */
+  federation: boolean;
 }
-export function listForwardPartners(): Promise<{ partners: ForwardPartner[] }> {
+/** The partners, and whether federation over FBB (FED_BBS) is on for this instance. */
+export function listForwardPartners(): Promise<{ partners: ForwardPartner[]; federationOverFbb: boolean }> {
   return call(`/api/bbs/partners`);
 }
 export function saveForwardPartner(

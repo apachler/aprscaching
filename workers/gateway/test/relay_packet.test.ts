@@ -108,6 +108,7 @@ describe("rendezvous relay over the FBB carrier", () => {
         hubSinks,
       ),
       INSTANCE: "oe.hub",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
       OPERATOR_SECRET: SECRET,
@@ -128,6 +129,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const spokeEnv = {
       DB: makeDb({ peerKey: publicX }, spokeSinks),
       INSTANCE: "oe.spoke",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
     } as unknown as Env;
     const applied = await applyFedBbsBulletin(spokeEnv, queryBody);
@@ -148,6 +150,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const hubEnv2 = {
       DB: makeDb({ peerKey: publicX }, backSinks),
       INSTANCE: "oe.hub",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
     } as unknown as Env;
     const landed = await applyFedBbsBulletin(hubEnv2, answerBody);
@@ -164,6 +167,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const hubEnv = {
       DB: makeDb({ queued: [{ id: 9, kind: "feed", params: "{}" }], peerKey: publicX }, hubSinks),
       INSTANCE: "oe.hub",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
       OPERATOR_SECRET: SECRET,
@@ -176,6 +180,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const other = {
       DB: makeDb({ peerKey: publicX }, sinks),
       INSTANCE: "oe.other",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
     } as unknown as Env;
     const res = await applyFedBbsBulletin(other, body);
@@ -189,6 +194,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const hubEnv = {
       DB: makeDb({ queued: [{ id: 5, kind: "feed", params: "{}" }], peerKey: publicX }, hubSinks),
       INSTANCE: "oe.hub",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
       OPERATOR_SECRET: SECRET,
@@ -198,6 +204,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const spokeEnv = {
       DB: makeDb({ peerKey: publicX }, spokeSinks),
       INSTANCE: "oe.spoke",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
     } as unknown as Env;
     await applyFedBbsBulletin(spokeEnv, String(hubSinks.bbs[0]![4]));
@@ -206,6 +213,7 @@ describe("rendezvous relay over the FBB carrier", () => {
     const emptyHub = {
       DB: makeDb({ peerKey: publicX, answerHit: false }, sinks),
       INSTANCE: "oe.hub",
+      FED_BBS: "1",
       FED_PRIVATE_KEY: keyEnvVal,
     } as unknown as Env;
     const res = await applyFedBbsBulletin(emptyHub, String(spokeSinks.bbs[0]![4]));

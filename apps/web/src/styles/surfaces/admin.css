@@ -6,6 +6,10 @@
     padding-left: var(--space-sm);
     border-left: 1px solid var(--hair);
   }
+  /* a forwarding partner's federation-over-FBB switch, under its schedule line */
+  .partner-fed {
+    margin-top: var(--space-2xs);
+  }
   /* federation sync state: the hub line, the spokes, and Sync now */
   .fed-sync {
     display: grid;

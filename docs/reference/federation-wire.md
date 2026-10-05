@@ -187,9 +187,14 @@ compression, and smaller record set; operator policy may clamp further.
 
 ## Store-and-forward over FBB
 
-A forward link has no live handshake, so a batch of frames rides an FBB bulletin exactly as it rides
+**Experimental**, off unless `FED_BBS` is on, and untested on real BBS networks. It is delay-tolerant delivery
+for instances with no direct path: hours to days per batch. A batch already forwarded cannot be recalled; a
+deletion follows the same path as a tombstone, and arrives as late. The sysop's side, with the etiquette, is
+[Federation over FBB](../run/federation/fbb.md).
+
+A forward link has no live handshake, so a batch of frames rides one FBB message exactly as it rides
 an HTTP sync page — the same signed frames, a different carrier. `encodeFedBbsBatch` packs the frames
-into a text-safe bulletin body addressed to the reserved category `ACSFED`:
+into a text-safe body addressed to the reserved recipient `ACSFED`:
 
 ```
 ACSFED1 <frame-count> <BID>
@@ -198,28 +203,38 @@ ACSFED1 <frame-count> <BID>
 
 The body is 7-bit clean and whitespace-tolerant, so classic FBB line limits and CR/LF handling never
 corrupt it. The **BID is content-addressed** (a 64-bit FNV-1a over the payload): identical batches
-carry the same BID, so a bulletin flooded across the mesh dedups by BID at every relay, and
-`decodeFedBbsBatch` re-derives it to reject a truncated or forged body rather than half-apply it.
+carry the same BID, so a second copy dedups by BID, and `decodeFedBbsBatch` re-derives it to reject a
+truncated or forged body rather than half-apply it. A batch holds at most 1000 frames; the enqueue packs at most
+900 (200 unless asked).
+
+**Addressing.** A batch is never a bulletin. It travels as a personal message (`P`) to `ACSFED` at the
+partner's BBS (`ACSFED @ <partner's hierarchical address>`, or its call when it has none), offered only to the
+forwarding partners the sysop marks for federation (`bbs_partners.federation`). The forward rules never route it.
+A BBS delivers personal mail to its addressee and does not flood it on to its own partners, so a batch reaches
+the marked partner and stops there. The forward log records each partner it went to, so no partner is offered
+the same batch twice.
 
 The receiver verifies every frame's signature against the claimed origin's registered keys and
-applies each idempotently by global id — a bulletin cannot lift trust or reach outside its origin's
+applies each idempotently by global id — a batch cannot lift trust or reach outside its origin's
 namespace, and an origin the instance does not already know stays quarantined, exactly as an
 HTTP-sync peer does.
 
 Both halves ride the existing BBS machinery:
 
-- **Send** — `POST /federation/bbs/enqueue {types?, since?, limit?}` (sysop or `x-operator-secret`)
-  signs the local feed records (tombstones first) into fedwire frames — the same producer the
-  HTTP sync surface uses — packs them into one `ACSFED` bulletin, and stores it as a local BBS
-  bulletin. The forwarding rules, pool, and partner scheduler then carry it like any other bulletin;
-  the content BID lands in `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
-- **Receive** — an inbound forwarded message addressed to `ACSFED` triggers the trust-gated apply on
-  first sight (a re-flooded copy dedups on its BID before the apply). The claimed origin only selects
-  which key set to verify against — the accept set last verified for that peer plus its signed-registry
-  binding; an unknown or operator-blocked origin is quarantined, never applied.
+- **Send** — `POST /federation/bbs/enqueue {types?, since?, limit?}` (sysop or `x-operator-secret`; `409` while
+  `FED_BBS` is off) signs the local feed records (tombstones first) into fedwire frames — the same producer the
+  HTTP sync surface uses — packs them into one `ACSFED` batch, and stores it once as local personal mail to
+  `ACSFED` that expires after 30 days. Nothing on the instance calls it on its own. The content BID lands in
+  `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
+- **Receive** — an inbound forwarded message addressed to `ACSFED`, personal or bulletin, is taken only while
+  `FED_BBS` is on and only from a partner marked for federation (the forwarding session names the partner);
+  anything else is dropped unstored and never applied. A taken batch triggers the trust-gated apply on first
+  sight (a second copy dedups on its BID before the apply). The claimed origin only selects which key set to
+  verify against — the accept set last verified for that peer plus its signed-registry binding; an unknown or
+  operator-blocked origin is quarantined, never applied.
 
-`ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
-category is asked for explicitly.
+A batch is machine carrier traffic, kept as personal mail to `ACSFED`: no bulletin listing, packet BBS session
+or HTTP bulletin feed shows it, and a person cannot post to `ACSFED`.
 
 ## Push paths
 
@@ -269,9 +284,9 @@ carrier — a verified peer-announce from a KNOWN origin refreshes that peer's s
 records (tombstones) apply idempotently by gid. There is no batch envelope and no BID at this tier;
 the global id is the dedup.
 
-The rendezvous relay rides the same carrier for a packet-only spoke. `POST
+The rendezvous relay rides the same carrier for a packet-only spoke, with `FED_BBS` on at both ends. `POST
 /federation/relay/<instance>/dispatch` (sysop or `x-operator-secret`) packs the spoke's queued queries into signed
-`relayQuery` frames and marks them leased; the spoke's receive path answers each from its own DB and
+`relayQuery` frames and marks them dispatched; the spoke's receive path answers each from its own DB and
 sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
 scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.
 The frame signatures bind both directions to their instances, so no secret material ever rides the air.

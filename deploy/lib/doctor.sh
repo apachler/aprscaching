@@ -606,6 +606,11 @@ desc_key() { printf '%s' "$1" | sed -n 's/.*"publicKey":"\([A-Za-z0-9_-]*\)".*/\
 doc_federation() {
   local peers p unsafe=()
   [ -n "$DOC_BASE" ] || return 0
+  # federation over FBB is experimental and off by default; reported either way, never a warning
+  case "$(doc_get FED_BBS)" in
+    1 | true | yes) pass federation.fbb "federation over FBB is on (experimental): only partners marked for it carry it" ;;
+    *) pass federation.fbb "federation over FBB is off" ;;
+  esac
   peers="$(doc_get FED_PEERS)"
   if ! doc_public; then
     if [ -z "$peers$(doc_get FED_HUB_URL)" ]; then pass federation.off "federation is off on this LAN instance"; else

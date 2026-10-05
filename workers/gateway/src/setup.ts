@@ -10,7 +10,7 @@
  * existing sysop surfaces; the web panel links each DB-sourced item to the surface that manages it.
  */
 import { nowS } from "./util/time.js";
-import { applyDerivedDefaults, configProblems, type Env } from "./env.js";
+import { applyDerivedDefaults, configProblems, flagOn, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { setting, settingSource } from "./siteconfig.js";
@@ -369,6 +369,25 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
     source: "db",
     detail: `${partners ?? 0} enabled partner${partners === 1 ? "" : "s"} (optional — managed under Forwarding)`,
   });
+
+  // Federation over FBB is experimental and off by default; on, it travels only with the marked partners.
+  {
+    const on = flagOn(env.FED_BBS);
+    const marked = on ? await count(env, "SELECT COUNT(*) AS n FROM bbs_partners WHERE federation = 1") : 0;
+    items.push({
+      key: "FED_BBS",
+      level: "optional",
+      label: "Federation over FBB (experimental)",
+      group: "trust",
+      status: on && !marked ? "warn" : "ok",
+      source: "env",
+      detail: !on
+        ? "off — federation travels over the internet, 44Net and HAMNET only"
+        : marked
+          ? `on — ${marked} forwarding partner${marked === 1 ? "" : "s"} marked for federation`
+          : "on, but no forwarding partner is marked for federation — mark one under Forwarding, after asking its sysop",
+    });
+  }
 
   const caches = await count(env, "SELECT COUNT(*) AS n FROM caches WHERE status != 'archived'");
   items.push({

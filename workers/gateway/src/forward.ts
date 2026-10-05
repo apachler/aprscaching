@@ -13,8 +13,9 @@ import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
 import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
-import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
+import { isFedBbsCategory, decodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
+import { fedBbsOn, federationPartner } from "./fedbbsgate.js";
 import { bbsCall, bidFor, isOwnBid, BULLETIN_LIFETIME_SEC } from "./bbs.js";
 import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
@@ -149,6 +150,8 @@ export interface ForwardPartner {
   msgtypes: string;
   maxBlock: number;
   enabled: boolean;
+  /** Carries federation over FBB (`FED_BBS`) to and from this partner; null on a save that leaves it as it is. */
+  federation: boolean | null;
 }
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number): number => {
   const n = Math.floor(Number(v));
@@ -189,6 +192,8 @@ export function normalizePartner(input: unknown): ForwardPartner | null {
     msgtypes,
     maxBlock: clampInt(b.maxBlock, 1, 5, 5),
     enabled: b.enabled == null ? true : !!b.enabled,
+    // off unless the sysop turns it on: the partner's sysop agrees to carry machine data first
+    federation: b.federation == null ? null : !!b.federation,
   };
 }
 
@@ -204,7 +209,11 @@ const partnerRow = (r: any): ForwardPartner & { id: number } => ({
   msgtypes: r.msgtypes,
   maxBlock: r.max_block,
   enabled: !!r.enabled,
+  federation: !!r.federation,
 });
+
+const PARTNER_COLS =
+  "id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, federation";
 
 /** Operator partner CRUD: GET list · POST create (upsert by call). Writes take a sysop session or the
  *  operator secret; the list read is also open to the ingest box, whose FBB scheduler dials it with its
@@ -216,22 +225,20 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
       : await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   if (req.method === "GET") {
-    const rows = (
-      await env.DB.prepare(
-        "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners ORDER BY call",
-      ).all()
-    ).results;
-    return json({ partners: rows.map(partnerRow) });
+    const rows = (await env.DB.prepare(`SELECT ${PARTNER_COLS} FROM bbs_partners ORDER BY call`).all()).results;
+    return json({ partners: rows.map(partnerRow), federationOverFbb: fedBbsOn(env) });
   }
   const p = normalizePartner(await req.json().catch(() => ({})));
   if (!p) return json({ error: "valid partner call required" }, { status: 400 });
   const ts = nowS();
+  const fed = p.federation == null ? null : p.federation ? 1 : 0;
   await env.DB.prepare(
-    `INSERT INTO bbs_partners (call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    `INSERT INTO bbs_partners (call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, created_at, updated_at, federation)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?,0))
      ON CONFLICT(call) DO UPDATE SET ha=excluded.ha, connect_script=excluded.connect_script, proto=excluded.proto,
        interval_min=excluded.interval_min, timebands=excluded.timebands, request_reverse=excluded.request_reverse,
-       msgtypes=excluded.msgtypes, max_block=excluded.max_block, enabled=excluded.enabled, updated_at=excluded.updated_at`,
+       msgtypes=excluded.msgtypes, max_block=excluded.max_block, enabled=excluded.enabled, updated_at=excluded.updated_at,
+       federation=COALESCE(?, bbs_partners.federation)`,
   )
     .bind(
       p.call,
@@ -246,13 +253,11 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
       p.enabled ? 1 : 0,
       ts,
       ts,
+      fed,
+      fed,
     )
     .run();
-  const row = await env.DB.prepare(
-    "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners WHERE call=?",
-  )
-    .bind(p.call)
-    .first();
+  const row = await env.DB.prepare(`SELECT ${PARTNER_COLS} FROM bbs_partners WHERE call=?`).bind(p.call).first();
   return json({ ok: true, partner: partnerRow(row) }, { status: 201 });
 }
 
@@ -357,12 +362,22 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
 
   // Mail leaves this BBS in its sender's name only when the sender's base call is control-verified here:
   // holding a call in an account, or keying it on the packet BBS, proves no licence. Unverified senders' mail
-  // stays local. A federation bulletin carries signed frames, not a person's words, and always forwards.
+  // stays local.
   const sender = (r: PoolRow) => baseCall((r.from_call.split("@")[0] ?? "").trim().toUpperCase());
   const verified = await verificationsOf(env, rows.map(sender));
+  // A federation batch carries signed frames, not a person's words. It never follows the forward rules: it goes
+  // only to a partner the sysop marked for federation, and only while FED_BBS is on, as personal mail to ACSFED
+  // at that partner's BBS — delivered there, never flooded on by it.
+  const fed = fedBbsOn(env) ? await federationPartner(env, partner) : null;
   const out: FbbWireMsg[] = [];
   for (const r of rows) {
-    if (!isFedBbsCategory(r.to_call) && !verified.has(sender(r))) continue;
+    if (isFedBbsCategory(r.to_call)) {
+      if (!fed) continue;
+      out.push({ ...fbbFromRow(r, call, fed.ha ?? fed.call), type: "P", to: FED_BBS_CATEGORY });
+      if (out.length >= limit) break;
+      continue;
+    }
+    if (!verified.has(sender(r))) continue;
     // route the destination (White Pages expands a bare call to "CALL @ homeBBS", then the @AT hierarchy matches a rule)
     const { partner: rule } = await resolvePartner(env, r.to_call);
     if ((rule?.partner ?? "").toUpperCase() !== partner) continue;
@@ -381,10 +396,18 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   // A BID carrying this BBS's call is one only this BBS issues: a copy from elsewhere is a loop of mail it
   // already holds, or a claim on a BID it has yet to issue, which would make that message's post fail.
   if (isOwnBid(env, row.bid)) return json({ ok: true, stored: 0, deduped: true });
-  // A federation batch's BID is the hash of its content, so it is claimed only by that content: a
-  // bulletin whose BID doesn't match what it carries is refused before it can squat the BID and make
-  // the genuine batch look like a duplicate.
-  if (isFedBbsCategory(row.to)) {
+  const fedBatch = isFedBbsCategory(row.to);
+  if (fedBatch) {
+    // Federation over FBB is taken only while FED_BBS is on, and only from a partner the sysop marked for it.
+    // Anything else addressed to ACSFED is dropped unstored: it is never applied, and a copy from a marked
+    // partner can still arrive and apply later.
+    const via = /^rf-fbb:(.+)$/.exec(row.origin)?.[1] ?? "";
+    if (!fedBbsOn(env)) return json({ ok: true, stored: 0, ignored: "federation over FBB is off" });
+    if (!(await federationPartner(env, via)))
+      return json({ ok: true, stored: 0, ignored: "the partner is not marked for federation" });
+    // A federation batch's BID is the hash of its content, so it is claimed only by that content: a
+    // batch whose BID doesn't match what it carries is refused before it can squat the BID and make
+    // the genuine batch look like a duplicate.
     const batch = decodeFedBbsBatch(row.body);
     if (!batch || batch.bid !== row.bid)
       return json({ error: "federation bulletin BID does not match its content" }, { status: 400 });
@@ -395,23 +418,24 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   )
     .bind(
       row.bid,
-      row.type,
+      // a federation batch is carrier traffic, kept as personal mail to ACSFED so it never lists as a bulletin
+      fedBatch ? "P" : row.type,
       row.from,
       row.to,
       row.title || null,
       row.body,
       row.posted,
-      // a bulletin lives the default lifetime; personal mail waits for its recipient
-      row.type === "B" ? row.posted + BULLETIN_LIFETIME_SEC : null,
+      // a bulletin and a federation batch live the default lifetime; personal mail waits for its recipient
+      row.type === "B" || fedBatch ? row.posted + BULLETIN_LIFETIME_SEC : null,
       row.origin,
     )
     .run();
-  // A bulletin addressed to the reserved federation category is carrier traffic: on first sight
-  // (BID-new — a re-flooded copy dedups above) its frames go through the trust-gated
+  // A batch addressed to the reserved federation recipient is carrier traffic: on first sight
+  // (BID-new — a second copy dedups above) its frames go through the trust-gated
   // store-and-forward receive, which verifies each against its claimed origin's keys and applies
   // idempotently by gid. The arrival path never lifts trust — quarantine/verification live there.
   let federation: FedBbsApplyResult | undefined;
-  if (isFedBbsCategory(row.to) && res.meta.changes) {
+  if (fedBatch && res.meta.changes) {
     try {
       federation = await applyFedBbsBulletin(env, row.body);
     } catch (e) {
@@ -420,7 +444,7 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   }
   // FBB White Pages: a personal message's R: headers name its sender's home BBS. `origin` names the partner
   // that handed the message over, which is only the last hop, so it teaches nothing about the sender.
-  if (row.type === "P") {
+  if (row.type === "P" && !fedBatch) {
     const home = originBbs(row.body);
     if (home) await setWhitePages(env, row.from, home, "learned");
   }

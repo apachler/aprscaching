@@ -15,6 +15,7 @@ import { verifyFedFrame, signFedRecord } from "./fedcbor.js";
 import { bodyFromWire } from "./fedsync.js";
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
+import { fedBbsOn } from "./fedbbsgate.js";
 import { ours, originKeys } from "./fedpeers.js";
 import { mergeEndpoints, storedEndpoints } from "./fedtransport.js";
 import {
@@ -501,6 +502,8 @@ async function actOnRelayFrame(
   id: number,
 ): Promise<"applied" | "rejected" | "elsewhere"> {
   if (rec.kind === "relayQuery") {
+    // the answer goes back over FBB, which carries nothing while FED_BBS is off
+    if (!fedBbsOn(env)) return "rejected";
     const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
     let params: unknown;
     try {

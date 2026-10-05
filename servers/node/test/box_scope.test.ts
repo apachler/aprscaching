@@ -313,15 +313,22 @@ describe("FBB forwarding", () => {
     expect(local?.origin).toBe("local");
   });
 
-  it("carries a federation bulletin whatever call it is from", async () => {
-    const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+  it("carries a federation batch whatever call it is from, to a partner marked for federation only", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR", FED_BBS: "1" });
     await env.DB.prepare(
-      "INSERT INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin) VALUES ('FEDBID1', 'B', 'ACSFED', 'ACSFED', 's', 'b', ?, 'local')",
+      "INSERT INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin) VALUES ('FEDBID1', 'P', 'ACSFED', 'ACSFED', 's', 'b', ?, 'local')",
     )
       .bind(now())
       .run();
-    // the federation category routes to the catch-all ip-fed partner
-    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, INGEST);
-    expect((pool.data.messages as { bid: string }[]).map((m) => m.bid)).toContain("FEDBID1");
+    await env.DB.prepare(
+      "INSERT INTO bbs_partners (call, ha, federation) VALUES ('OE1FED-1', 'OE1FED.AUT.EU', 1)",
+    ).run();
+    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1FED-1", undefined, INGEST);
+    expect(pool.data.messages).toContainEqual(
+      expect.objectContaining({ bid: "FEDBID1", type: "P", to: "ACSFED", at: "OE1FED.AUT.EU" }),
+    );
+    // the catch-all route never carries it
+    const fallback = await call(env, "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, INGEST);
+    expect((fallback.data.messages as { bid: string }[]).map((m) => m.bid)).not.toContain("FEDBID1");
   });
 });
