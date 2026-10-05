@@ -240,7 +240,9 @@ try {
     consoleLines.some((l) => l.includes("[vite] connected")),
   );
   const harness = readFileSync(path.join(ROOT, "tools/webauthn/harness.html"), "utf8");
-  await tab.addScriptTag({ content: /<script>([\s\S]*)<\/script>/.exec(harness)[1] });
+  // the harness page is one inline script: its helpers then run on the dev server's origin
+  const script = harness.slice(harness.indexOf("<script>") + "<script>".length, harness.lastIndexOf("</script>"));
+  await tab.addScriptTag({ content: script });
   const passkeyCall = "OE8PKY";
   const reg = await tab.evaluate((cs) => window.acReg("", cs), passkeyCall);
   step("passkey registration completes", reg.status === 200 && reg.body?.ok, JSON.stringify(reg));
@@ -252,7 +254,7 @@ try {
   console.log("✓ dev stack check passed");
 } catch (e) {
   failed = true;
-  console.error(`✗ ${e.message}`);
+  console.error(`✗ ${String(e.message).replace(/[\r\n]+/g, " ")}`);
   console.error("--- stack log tail ---");
   console.error(log.split("\n").slice(-30).join("\n"));
 } finally {

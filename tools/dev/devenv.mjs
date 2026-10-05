@@ -116,13 +116,22 @@ DEV_PEER_PORT=8788
  * check run on its own throwaway file without asking anything.
  */
 export async function loadDevEnv({ file = path.join(ROOT, ".env.dev"), call } = {}) {
-  let created = false;
-  if (!fs.existsSync(file)) {
-    const text = await freshEnvText(call ?? process.env.DEV_CALL?.toUpperCase() ?? (await askCall()));
-    fs.writeFileSync(file, text, { mode: 0o600 });
-    created = true;
+  let text;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
   }
-  return { file, created, vars: parseEnv(fs.readFileSync(file, "utf8")) };
+  if (text !== undefined) return { file, created: false, vars: parseEnv(text) };
+  text = await freshEnvText(call ?? process.env.DEV_CALL?.toUpperCase() ?? (await askCall()));
+  // "wx": a file another start wrote meanwhile is kept, never overwritten with other secrets
+  try {
+    fs.writeFileSync(file, text, { mode: 0o600, flag: "wx" });
+  } catch (e) {
+    if (e.code !== "EEXIST") throw e;
+    return { file, created: false, vars: parseEnv(fs.readFileSync(file, "utf8")) };
+  }
+  return { file, created: true, vars: parseEnv(text) };
 }
 
 /** Settings only the dev tooling reads; they never reach a gateway or the ingest. */
