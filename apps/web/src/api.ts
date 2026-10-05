@@ -101,6 +101,12 @@ export function errorText(e: unknown): string {
   return m.replace(/^\d{3} /, "");
 }
 
+/** Why a cache did not load: the server's own reason when it answered that the cache is gone (removed, or
+ *  never there), otherwise `fallback`, which points at the connection. */
+export function cacheLoadText(e: unknown, fallback: string): string {
+  return e instanceof ApiError && (e.status === 404 || e.status === 410) ? errorText(e) : fallback;
+}
+
 /** `fetch` that throws a {@link NetworkError} when the host cannot be reached; an abort stays an abort. */
 async function reach(url: string, init?: RequestInit): Promise<Response> {
   try {

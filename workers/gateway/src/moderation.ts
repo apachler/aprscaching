@@ -6,7 +6,8 @@
  *   POST /api/reports                                   file a report (signed in, or signed out at a lower rate)
  *   GET  /api/admin/moderation/reports?status=          the report queue
  *   POST /api/admin/moderation/reports/:id              resolve or reopen a report
- *   POST /api/admin/moderation/remove                   take down one item {kind, id, reason, reportId?}
+ *   POST /api/admin/moderation/remove                   take down one item {kind, id, reason, reportId?}; a
+ *                                                       report whose person no longer holds the item is refused
  *   POST /api/admin/moderation/restore                  bring a removed cache back {kind: "cache", id, reason}
  *   GET  /api/admin/moderation/accounts?q=              find accounts by callsign or email
  *   GET  /api/admin/moderation/accounts/:call           one account: its state and its content
@@ -349,11 +350,16 @@ async function removeItem(
   const now = nowS();
   switch (loc.kind) {
     case "cache":
-      await env.DB.prepare(
-        "UPDATE caches SET status='archived', removed_at=?, removed_reason=?, updated_at=? WHERE id=?",
-      )
-        .bind(now, reason, now, id)
-        .run();
+      // a removed cache leaves the adoption flow: its offer goes and any open request on it lapses
+      await env.DB.batch([
+        env.DB.prepare(
+          "UPDATE caches SET status='archived', removed_at=?, removed_reason=?, updated_at=? WHERE id=?",
+        ).bind(now, reason, now, id),
+        env.DB.prepare("DELETE FROM cache_adoption_offers WHERE cache_id=?").bind(id),
+        env.DB.prepare(
+          "UPDATE cache_adoption_requests SET status='cancelled', decided_at=? WHERE cache_id=? AND status='pending'",
+        ).bind(now, id),
+      ]);
       return { tombstones: [{ kind: "cache", targetId: `${instance}:cache:${id}` }], mediaKeys: [] };
     case "log":
       await env.DB.batch([
@@ -449,6 +455,19 @@ async function handleRemove(req: Request, env: Env): Promise<Response> {
   if (loc.removed) return json({ error: "this cache is already removed" }, { status: 409 });
   if (loc.kind === "profile" && loc.accountId && (await accountIsSysop(env, loc.accountId)))
     return json({ error: "an operator's own profile is edited in their settings" }, { status: 409 });
+  // A removal that answers a report acts on the person reported: a call that changed hands since names someone else.
+  if (b.reportId !== undefined) {
+    const rep = await env.DB.prepare("SELECT target_kind, target_id, target_account FROM moderation_reports WHERE id=?")
+      .bind(Number(b.reportId))
+      .first<{ target_kind: string; target_id: string; target_account: string | null }>();
+    if (!rep) return json({ error: "no such report" }, { status: 404 });
+    if (rep.target_kind !== loc.kind) return json({ error: "the report names another item" }, { status: 400 });
+    if (rep.target_account && loc.accountId && rep.target_account !== loc.accountId)
+      return json(
+        { error: `${loc.label} belongs to another account since this report — resolve the report instead` },
+        { status: 409 },
+      );
+  }
   const actor = await actorOf(req, env);
   const instance = instanceOf(env, req);
   const done = await removeItem(env, instance, loc, r.reason);

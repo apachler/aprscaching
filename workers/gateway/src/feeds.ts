@@ -16,6 +16,7 @@ import { xml } from "./app.js";
 import { userFeedPath } from "@aprscaching/shared";
 import { gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
 import { requestOrigin } from "./origins.js";
+import { displayCall, isFormerMarker, isWithdrawnCall } from "./auth.js";
 
 const rfc822 = (unixSec: number) => new Date(unixSec * 1000).toUTCString();
 
@@ -66,6 +67,14 @@ function rss(opts: {
   return xml(body, { headers: { "content-type": "application/rss+xml; charset=utf-8" } });
 }
 
+/** A marker (an erased person, a call's former holder) is no one to credit: it names no author. */
+const authorOf = (call: string): string | undefined =>
+  isWithdrawnCall(call) || isFormerMarker(call) ? undefined : call;
+
+/** Logs by an erased person or a call's former holder: a person marker never ranks. */
+const NOT_A_MARKER =
+  "l.logger_call != 'WITHDRAWN' AND l.logger_call NOT LIKE 'WITHDRAWN#%' AND l.logger_call NOT LIKE 'FORMER#%'";
+
 const verb = (t: string) => (t === "found" ? "found" : t === "dnf" ? "couldn't find" : t === "note" ? "noted" : t);
 
 /** GET /feeds/activity.xml */
@@ -79,16 +88,19 @@ export async function handleActivityFeed(req: Request, env: Env): Promise<Respon
        ORDER BY l.ts DESC LIMIT 50`,
     ).all<any>()
   ).results;
-  const items: Item[] = rows.map((r) => ({
-    title: `${r.loggerCall} ${verb(r.logType)} ${r.cacheTitle} (${r.cacheCode})`,
-    link: surfaceUrl(env, "activity"),
-    description:
-      `${r.loggerCall} ${verb(r.logType)} ${r.cacheTitle}` +
-      `${r.logType === "found" ? ` · ${r.verified ? `verified Tier ${r.tier ?? "?"}` : "unverified"}` : ""}.`,
-    guid: `find:${r.id}`,
-    pubDate: r.ts,
-    author: r.loggerCall,
-  }));
+  const items: Item[] = rows.map((r) => {
+    const who = displayCall(r.loggerCall);
+    return {
+      title: `${who} ${verb(r.logType)} ${r.cacheTitle} (${r.cacheCode})`,
+      link: surfaceUrl(env, "activity"),
+      description:
+        `${who} ${verb(r.logType)} ${r.cacheTitle}` +
+        `${r.logType === "found" ? ` · ${r.verified ? `verified Tier ${r.tier ?? "?"}` : "unverified"}` : ""}.`,
+      guid: `find:${r.id}`,
+      pubDate: r.ts,
+      author: authorOf(r.loggerCall),
+    };
+  });
   return rss({
     title: "aprscaching — Activity",
     link: surfaceUrl(env, "activity"),
@@ -104,17 +116,17 @@ export async function handleCachesFeed(req: Request, env: Env): Promise<Response
   const rows = (
     await env.DB.prepare(
       `SELECT code, title, type, owner_call AS ownerCall, difficulty, terrain, created_at AS createdAt
-       FROM caches WHERE status != 'archived' AND source = 'native' AND fed_scope != 'unlisted'
+       FROM caches WHERE status != 'archived' AND removed_at IS NULL AND source = 'native' AND fed_scope != 'unlisted'
        ORDER BY created_at DESC LIMIT 50`,
     ).all<any>()
   ).results;
   const items: Item[] = rows.map((r) => ({
     title: `${r.title} (${r.code})`,
     link: `${requestOrigin(req, env)}/?cache=${encodeURIComponent(r.code)}`,
-    description: `New ${String(r.type).replace(/_/g, " ")} cache by ${r.ownerCall} · D${r.difficulty}/T${r.terrain}.`,
+    description: `New ${String(r.type).replace(/_/g, " ")} cache by ${displayCall(r.ownerCall)} · D${r.difficulty}/T${r.terrain}.`,
     guid: `cache:${r.code}`,
     pubDate: r.createdAt,
-    author: r.ownerCall,
+    author: authorOf(r.ownerCall),
   }));
   return rss({
     title: "aprscaching — New caches",
@@ -159,9 +171,10 @@ export async function handleBulletinsFeed(req: Request, env: Env): Promise<Respo
 export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
-      `SELECT logger_call AS loggerCall, COUNT(DISTINCT cache_id) AS finds
-       FROM cache_logs WHERE log_type='found' AND verified=1
-       GROUP BY logger_call ORDER BY finds DESC LIMIT 25`,
+      `SELECT l.logger_call AS loggerCall, COUNT(DISTINCT l.cache_id) AS finds
+       FROM cache_logs l JOIN caches c ON c.id = l.cache_id
+       WHERE l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL AND ${NOT_A_MARKER}
+       GROUP BY l.logger_call ORDER BY finds DESC LIMIT 25`,
     ).all<any>()
   ).results;
   const t = nowS();
@@ -206,7 +219,8 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
   const findCount =
     (
       await env.DB.prepare(
-        "SELECT COUNT(DISTINCT cache_id) AS n FROM cache_logs WHERE logger_call = ? AND log_type='found' AND verified=1",
+        `SELECT COUNT(DISTINCT l.cache_id) AS n FROM cache_logs l JOIN caches c ON c.id = l.cache_id
+          WHERE l.logger_call = ? AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL`,
       )
         .bind(cs)
         .first<{ n: number }>()

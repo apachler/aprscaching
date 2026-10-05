@@ -43,10 +43,12 @@ export function decideReport(id: number, status: "open" | "resolved", note?: str
   });
 }
 
-export function removeContent(kind: ContentKind, id: string | number, reason: string) {
+/** Remove one item; `reportId` names the report it answers, so the server can refuse when the report's target
+ *  is no longer the item's holder. */
+export function removeContent(kind: ContentKind, id: string | number, reason: string, reportId?: number) {
   return call<{ ok: true; tombstones: number }>(`/api/admin/moderation/remove`, {
     method: "POST",
-    body: JSON.stringify({ kind, id: String(id), reason }),
+    body: JSON.stringify({ kind, id: String(id), reason, ...(reportId != null && { reportId }) }),
   });
 }
 export function restoreCache(id: number, reason: string) {

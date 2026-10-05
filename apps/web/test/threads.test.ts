@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
 import type { MailboxMessage, MessageItem } from "../src/api.js";
-import { correspondents, nowRoute, sendBlocked, textMax, threadsOf, validRecipient } from "../src/messages/threads.js";
+import {
+  correspondents,
+  isPersonMarker,
+  nowRoute,
+  sendBlocked,
+  textMax,
+  threadsOf,
+  validRecipient,
+} from "../src/messages/threads.js";
 
 const msg = (id: number, ts: number, from: string, to: string | null, body: string, extra: Partial<MessageItem> = {}) =>
   ({ id, ts, fromCall: from, toCall: to, body, direction: "rx", ...extra }) as MessageItem;
@@ -111,5 +119,27 @@ describe("how a new message is delivered", () => {
     expect(validRecipient("OE5XYZ")).toBe(true);
     expect(validRecipient("OE5XYZ-123")).toBe(false);
     expect(validRecipient("")).toBe(false);
+    expect(validRecipient("FORMER")).toBe(false);
+  });
+
+  it("marks the conversation with erased people and former holders as withdrawn, never a reply target", () => {
+    const t = threadsOf(
+      [
+        msg(1, 100, "WITHDRAWN", "OE8APR", "from someone who left"),
+        msg(2, 200, "FORMER", "OE8APR", "from a call's former holder"),
+        msg(3, 300, "DL1ABC", "OE8APR", "servus"),
+      ],
+      undefined,
+      "OE8APR",
+      null,
+    );
+    expect(t.map((x) => [x.peer, x.withdrawn ?? false])).toEqual([
+      ["DL1ABC", false],
+      ["FORMER", true],
+      ["WITHDRAWN", true],
+    ]);
+    expect(correspondents(t)).toEqual(["DL1ABC"]);
+    expect(isPersonMarker("withdrawn#abc")).toBe(true);
+    expect(isPersonMarker("OE5XYZ")).toBe(false);
   });
 });

@@ -44,7 +44,7 @@ import {
 const PACK_BUILDS_PER_HOUR = 30;
 
 const NATIVE_IN_BOX =
-  "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND fed_scope != 'unlisted'";
+  "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND removed_at IS NULL AND fed_scope != 'unlisted'";
 /** A cache unfound for this long is flagged in the owner's pack. */
 const QUIET_S = 180 * 86_400;
 /** The most calls of one account the owner's pack matches (keeps the query's bound parameters under 100). */

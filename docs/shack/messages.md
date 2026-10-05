@@ -23,6 +23,9 @@ BBS message is never made from an APRS or MeshCom message, and never sent as one
 Signed in, **Messages** opens on **Conversations**: one row per station you exchanged messages with, newest
 first, with the last message and its state. Select a row to read the conversation and **Reply** at its foot.
 
+Messages from people who erased their account, or who no longer hold the call they wrote from, gather under
+**Withdrawn correspondents**. That conversation has no **Reply**: there is no station to answer.
+
 ### Before you start
 
 - A [verified callsign](../play/join.md#verify-your-callsign). Every message goes out on the air under your

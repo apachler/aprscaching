@@ -437,6 +437,26 @@ describe("hardening", () => {
     expect(logs()).toHaveLength(0);
   });
 
+  it("a cache the sysop removed answers every command as an unknown code and takes no log", async () => {
+    sqlite.prepare("UPDATE caches SET status='archived', removed_at=? WHERE code='AC-0001'").run(t);
+    await handleRadioMessage(env, onAir({ msgNo: "1", text: "NOTE AC-0001 still here?" }));
+    await handleRadioMessage(env, onAir({ msgNo: "2", text: "FOUND AC-0001" }));
+    expect(commands().map((c) => [c.status, c.reason, c.cache_id])).toEqual([
+      ["rejected", "unknown cache AC-0001", null],
+      ["rejected", "unknown cache AC-0001", null],
+    ]);
+    expect(logs()).toHaveLength(0);
+  });
+
+  it("a pending NOTE is refused on confirmation when the sysop removed the cache meanwhile", async () => {
+    await handleRadioMessage(env, overIs({ msgNo: "1", text: "NOTE AC-0001 hello" }));
+    sqlite.prepare("UPDATE caches SET status='archived', removed_at=? WHERE code='AC-0001'").run(t);
+    const r = await decideRadioCommand(env, "acct-apr", Number(commands()[0]!.id), "confirm");
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe("unknown cache AC-0001");
+    expect(logs()).toHaveLength(0);
+  });
+
   it("a pending FOUND from another SSID is refused on confirmation once the person has found the cache", async () => {
     await handleRadioMessage(env, overIs({ src: "OE8APR-9", msgNo: "1" }));
     await handleRadioMessage(env, onAir({ src: "OE8APR-7", msgNo: "2" }));

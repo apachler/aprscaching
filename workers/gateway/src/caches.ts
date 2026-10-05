@@ -311,7 +311,8 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   const listed = await listedOrOwn(req, env);
   const native = await env.DB.prepare(
     `SELECT * FROM caches
-     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND type != 'aprs_living'
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND removed_at IS NULL
+       AND type != 'aprs_living'
        AND ${listed.sql} LIMIT 1000`,
   )
     .bind(minLat, maxLat, minLon, maxLon, ...listed.binds)
@@ -320,7 +321,7 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   const living = await env.DB.prepare(
     `SELECT c.*, s.lat AS st_lat, s.lon AS st_lon FROM caches c
        LEFT JOIN stations s ON s.callsign = UPPER(c.station_call)
-      WHERE c.type = 'aprs_living' AND c.status != 'archived' AND ${listed.sql}
+      WHERE c.type = 'aprs_living' AND c.status != 'archived' AND c.removed_at IS NULL AND ${listed.sql}
         AND COALESCE(s.lat, c.lat) BETWEEN ? AND ? AND COALESCE(s.lon, c.lon) BETWEEN ? AND ? LIMIT 500`,
   )
     .bind(...listed.binds, minLat, maxLat, minLon, maxLon)
@@ -748,9 +749,15 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
       status: string;
       owner_call: string;
       source: string | null;
+      removed_at: number | null;
     }
   >();
   if (!cache) return json({ error: "no such cache" }, { status: 404 });
+  // a cache the sysop removed takes no log: its owner and the sysop hear why, anyone else that it does not exist
+  if (cache.removed_at != null)
+    return (await removedCacheResponse(req, env, cacheId))
+      ? json({ error: "no such cache" }, { status: 404 })
+      : json({ error: "the sysop removed this cache — it takes no logs" }, { status: 409 });
   const sessionAccount = sessionCall ? ((await sessionIdentity(req, env))?.accountId ?? null) : null;
   // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
   const refused = await logRefusal(env, cache, loggerCall, logType, sessionAccount);

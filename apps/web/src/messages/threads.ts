@@ -39,6 +39,8 @@ export interface ThreadItem {
 export interface Thread {
   /** The other station: the conversation's key. */
   peer: string;
+  /** The other side erased their account or gave up their call: the messages stay, there is no one to reply to. */
+  withdrawn?: boolean;
   /** Oldest first. */
   items: ThreadItem[];
   last: ThreadItem;
@@ -51,6 +53,9 @@ const MAILBOX_STATE: Record<MailboxMessage["status"], ItemState> = {
   undelivered: "undelivered",
   expired: "expired",
 };
+
+/** The marker an erased person or a call's former holder shows under: a stand-in, never a station. */
+export const isPersonMarker = (call: string): boolean => /^(WITHDRAWN|FORMER)(#|$)/i.test(call.trim());
 
 const baseOf = (call: string) => call.toUpperCase().split("-")[0] ?? "";
 const DELIVERED = /^de ([A-Z0-9]{1,6}(?:-[A-Z0-9]{1,2})?): ([\s\S]*)$/i;
@@ -138,14 +143,17 @@ export function threadsOf(
   const threads: Thread[] = [];
   for (const [peer, items] of byPeer) {
     items.sort((a, b) => a.ts - b.ts || a.key.localeCompare(b.key));
-    threads.push({ peer, items, last: items[items.length - 1]! });
+    threads.push({ peer, items, last: items[items.length - 1]!, ...(isPersonMarker(peer) && { withdrawn: true }) });
   }
   return threads.sort((a, b) => b.last.ts - a.last.ts);
 }
 
 /** The callsigns the operator wrote with most recently, for the recipient field's suggestions. */
 export function correspondents(threads: readonly Thread[], limit = 20): string[] {
-  return threads.slice(0, limit).map((t) => t.peer);
+  return threads
+    .filter((t) => !t.withdrawn)
+    .slice(0, limit)
+    .map((t) => t.peer);
 }
 
 /** How a new message travels: now, or kept in the Mailbox until the instance hears the station. */
@@ -175,4 +183,5 @@ export function textMax(delivery: Delivery, from: string): number {
 }
 
 /** A recipient the APRS addressee field holds: a callsign with an optional SSID. */
-export const validRecipient = (to: string): boolean => /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/i.test(to.trim());
+export const validRecipient = (to: string): boolean =>
+  /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/i.test(to.trim()) && !isPersonMarker(to);

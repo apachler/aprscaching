@@ -51,7 +51,7 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
   const cacheRows = (
     await env.DB.prepare(
       `SELECT id, code, owner_call, title, type, lat, lon FROM caches
-       WHERE status != 'archived' AND ${listed.sql}
+       WHERE status != 'archived' AND removed_at IS NULL AND ${listed.sql}
          AND (code LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR owner_call LIKE ? ESCAPE '\\')
        ORDER BY
          CASE WHEN code LIKE ? ESCAPE '\\' THEN 0

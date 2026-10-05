@@ -71,8 +71,11 @@ interface RequestRow {
 
 const CACHE_COLS = "c.id, c.code, c.title, c.type, c.status, c.lat, c.lon, c.owner_call, c.source";
 
+/** A cache that can still change hands: a moderator-removed cache is out of the adoption flow entirely. */
 async function loadCache(env: Env, id: number): Promise<CacheLite | null> {
-  return env.DB.prepare(`SELECT ${CACHE_COLS} FROM caches c WHERE c.id=?`).bind(id).first<CacheLite>();
+  return env.DB.prepare(`SELECT ${CACHE_COLS} FROM caches c WHERE c.id=? AND c.removed_at IS NULL`)
+    .bind(id)
+    .first<CacheLite>();
 }
 async function loadOffer(env: Env, cacheId: number): Promise<OfferRow | null> {
   return env.DB.prepare("SELECT * FROM cache_adoption_offers WHERE cache_id=?").bind(cacheId).first<OfferRow>();
@@ -155,7 +158,7 @@ async function handOver(
 ): Promise<boolean> {
   const moved = await env.DB.prepare(
     `UPDATE caches SET owner_call=?, status=CASE WHEN ?=1 THEN 'active' ELSE status END,
-       updated_at=MAX(updated_at + 1, ?) WHERE id=? AND owner_call=?`,
+       updated_at=MAX(updated_at + 1, ?) WHERE id=? AND owner_call=? AND removed_at IS NULL`,
   )
     .bind(to, activate ? 1 : 0, nowS(), c.id, c.owner_call)
     .run();
@@ -189,7 +192,7 @@ export async function handleAdoptionList(env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
       `SELECT ${CACHE_COLS}, o.note, o.offered_at FROM cache_adoption_offers o JOIN caches c ON c.id = o.cache_id
-        WHERE c.source = 'native' ORDER BY o.offered_at DESC, c.id DESC LIMIT 500`,
+        WHERE c.source = 'native' AND c.removed_at IS NULL ORDER BY o.offered_at DESC, c.id DESC LIMIT 500`,
     ).all<CacheLite & { note: string; offered_at: number }>()
   ).results;
   return json({
@@ -387,7 +390,7 @@ async function adminList(env: Env): Promise<Response> {
   const withdrawn = (
     await env.DB.prepare(
       `SELECT ${CACHE_COLS} FROM caches c
-        WHERE c.source = 'native' AND (c.owner_call = 'WITHDRAWN' OR c.owner_call LIKE 'WITHDRAWN#%')
+        WHERE c.source = 'native' AND c.removed_at IS NULL AND (c.owner_call = 'WITHDRAWN' OR c.owner_call LIKE 'WITHDRAWN#%')
           AND NOT EXISTS (SELECT 1 FROM cache_adoption_offers o WHERE o.cache_id = c.id)
         ORDER BY c.updated_at DESC, c.id DESC LIMIT 200`,
     ).all<CacheLite>()
@@ -395,7 +398,7 @@ async function adminList(env: Env): Promise<Response> {
   const offers = (
     await env.DB.prepare(
       `SELECT ${CACHE_COLS}, o.offered_by, o.note, o.offered_at FROM cache_adoption_offers o
-         JOIN caches c ON c.id = o.cache_id ORDER BY o.offered_at DESC LIMIT 200`,
+         JOIN caches c ON c.id = o.cache_id WHERE c.removed_at IS NULL ORDER BY o.offered_at DESC LIMIT 200`,
     ).all<CacheLite & OfferRow>()
   ).results;
   const requests = (
@@ -459,7 +462,9 @@ async function makeOffer(req: Request, env: Env): Promise<Response> {
     typeof b.cacheId === "number"
       ? await loadCache(env, b.cacheId)
       : typeof b.code === "string" && b.code.trim()
-        ? await env.DB.prepare(`SELECT ${CACHE_COLS} FROM caches c WHERE c.code = ? COLLATE NOCASE`)
+        ? await env.DB.prepare(
+            `SELECT ${CACHE_COLS} FROM caches c WHERE c.code = ? COLLATE NOCASE AND c.removed_at IS NULL`,
+          )
             .bind(b.code.trim())
             .first<CacheLite>()
         : null;

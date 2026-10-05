@@ -51,6 +51,14 @@ async function ownerOf(env: Env, cacheId: number): Promise<string | null> {
     .first<{ owner_call: string }>();
   return r?.owner_call?.toUpperCase() ?? null;
 }
+/** Is the cache one the sysop removed? Its stages and media stay as they are until the sysop restores it. */
+async function isRemoved(env: Env, cacheId: number): Promise<boolean> {
+  const r = await env.DB.prepare("SELECT removed_at FROM caches WHERE id=?")
+    .bind(cacheId)
+    .first<{ removed_at: number | null }>();
+  return r?.removed_at != null;
+}
+const REMOVED_REFUSAL = () => json({ error: "the sysop removed this cache — it cannot be edited" }, { status: 403 });
 async function unlockedSet(env: Env, cacheId: number, callsign: string): Promise<Set<number>> {
   const rows = (
     await env.DB.prepare("SELECT stage_no FROM stage_unlocks WHERE cache_id=? AND callsign=?")
@@ -123,6 +131,7 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   if (!(await mayActAsOwner(req, env, owner, b.ownerCall)))
     return json({ error: "only the owner may set stages" }, { status: 403 });
+  if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
   const rows = (
@@ -247,6 +256,7 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may upload media" }, { status: 403 });
+  if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
 
   // the clue hangs on a stage row: without one, a stored object would be counted by nothing and freed by nothing
   const before = await env.DB.prepare("SELECT media_key, media_bytes FROM cache_stages WHERE cache_id=? AND stage_no=?")
@@ -292,6 +302,12 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
   if (!env.MEDIA) return new Response("media not configured", { status: 501 });
   if (!SERVED_MEDIA_KEY.test(key)) return new Response("not found", { status: 404 });
   let cacheControl = "public, max-age=86400";
+  // a removed cache's media answers its owner and the sysop only, and never from a shared cache
+  const mediaCacheId = Number(key.split("/")[1]);
+  if (await isRemoved(env, mediaCacheId)) {
+    if (await removedCacheResponse(req, env, mediaCacheId)) return new Response("not found", { status: 404 });
+    cacheControl = "private, no-store";
+  }
   const stageKey = /^cache\/(\d+)\/stage\/(\d+)\//.exec(key);
   if (stageKey) {
     const cacheId = Number(stageKey[1]);
@@ -373,6 +389,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   const cs = await actor(req, env, b.callsign);
   if (!cs) return json({ error: "sign in to unlock a stage" }, { status: 401 });
   if (stageNo <= 0) return json({ error: "stage 0 is the public start" }, { status: 400 });
+  if (await isRemoved(env, cacheId)) return json({ error: "no such cache" }, { status: 404 });
 
   const stage = await env.DB.prepare("SELECT * FROM cache_stages WHERE cache_id=? AND stage_no=?")
     .bind(cacheId, stageNo)
@@ -560,6 +577,7 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may add media" }, { status: 403 });
+  if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
 
   const ct = mediaType(req.headers.get("content-type"));
   const kind = mediaKind(ct);
@@ -618,6 +636,7 @@ export async function handlePutMediaThumb(req: Request, env: Env, cacheId: numbe
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may add media" }, { status: 403 });
+  if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
   const row = await env.DB.prepare("SELECT kind, thumb_key FROM cache_media WHERE id=? AND cache_id=?")
     .bind(mediaId, cacheId)
     .first<{ kind: string; thumb_key: string | null }>();
