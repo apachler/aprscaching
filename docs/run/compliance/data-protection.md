@@ -8,6 +8,11 @@ request. The gateway serves `/privacy` from `OPERATOR_NAME`, `OPERATOR_ADDRESS` 
 Members run export and erasure themselves ([Your data](../../play/account.md#your-data) is their side). You do
 not need to act on a request by hand.
 
+A new account starts with every optional sharing setting off: the email digest, push, the public profile card,
+the APRS-IS announce and the near-cache radio message. Only the callsign's game record (finds, hides, badges)
+is public from the start. [What a new account shares](../../play/account.md#what-a-new-account-shares) lists
+each default.
+
 ## Who can act on an account
 
 Sensitive account actions are authorised by the account's own session, or by a signature from a device key

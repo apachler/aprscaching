@@ -92,7 +92,7 @@ export async function handleMyProfile(req: Request, env: Env): Promise<Response>
       bio: r.bio,
       links: Array.isArray(links) ? links : [],
       publicContact: r.publicContact,
-      profilePublic: (r.profilePublic ?? 1) === 1,
+      profilePublic: (r.profilePublic ?? 0) === 1,
     },
   });
 }
@@ -114,7 +114,7 @@ export async function handleProfileUpdate(req: Request, env: Env): Promise<Respo
   const publicContact = asStr(b.publicContact).trim() ? emailish(b.publicContact) : null;
   if (asStr(b.publicContact).trim() && !publicContact)
     return json({ error: "public contact must be a valid email" }, { status: 400 });
-  const profilePublic = b.profilePublic === false ? 0 : 1;
+  const profilePublic = b.profilePublic === true ? 1 : 0;
 
   await env.DB.prepare(
     `UPDATE accounts SET display_name=?, home_grid=?, avatar_url=?, bio=?, links=?, public_contact=?, profile_public=? WHERE account_id=?`,

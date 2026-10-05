@@ -114,7 +114,7 @@ async function ledgerSummary(env: Env): Promise<LedgerSummary> {
 async function publicSupporters(env: Env): Promise<string[]> {
   return (
     await env.DB.prepare(
-      "SELECT callsign FROM accounts WHERE tier='supporter' AND COALESCE(profile_public,1)=1 ORDER BY callsign",
+      "SELECT callsign FROM accounts WHERE tier='supporter' AND COALESCE(profile_public,0)=1 ORDER BY callsign",
     ).all<{ callsign: string }>()
   ).results.map((r) => r.callsign);
 }
