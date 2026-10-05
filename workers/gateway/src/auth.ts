@@ -852,6 +852,17 @@ async function key(env: Env): Promise<CryptoKey | null> {
     "verify",
   ]);
 }
+/**
+ * An HMAC (base64url) over `purpose` and `data` with the session secret, for a link that acts without a
+ * session (the digest's unsubscribe link). The purpose separates it from every other signature, so no such
+ * value ever passes as a session. Null when the instance has no usable session secret.
+ */
+export async function purposeMac(env: Env, purpose: string, data: string): Promise<string | null> {
+  const k = await key(env);
+  if (!k) return null;
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`${purpose}\n${data}`));
+  return bytesToB64url(new Uint8Array(sig));
+}
 interface SessionClaims {
   accountId: string;
   gen: number;
