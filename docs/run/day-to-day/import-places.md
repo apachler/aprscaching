@@ -10,8 +10,8 @@ again updates the places in place.
 
 ## Before you start
 
-- The instance's `INGEST_SECRET`: the importer is part of the ingest plane, so any machine that knows the
-  secret can run an import.
+- The instance's `OPERATOR_SECRET`: an import is a sysop action, run from a script with the operator secret.
+  The ingest secret does not run imports.
 - The licence of each source you import (see [Licences of the sources](#licences-of-the-sources)), and the
   provider's permission where its terms ask for one.
 
@@ -21,7 +21,7 @@ Send one request per source to `POST /api/import/<source>`, from any machine:
 
 ```bash
 curl -X POST https://your.instance/api/import/sota \
-  -H "x-ingest-secret: $INGEST_SECRET" -H "content-type: application/json" \
+  -H "x-operator-secret: $OPERATOR_SECRET" -H "content-type: application/json" \
   -d '{"region":"OE/ST"}'
 ```
 
@@ -55,7 +55,7 @@ Each source's own terms apply to its data on your instance. Read them before you
 | `sota`, `pota` | No stated licence; poll politely | Links each place to its programme page |
 | `bunker`, `geojson` | The provider's own terms | Links each place where the data gives a link |
 
-`GET /api/import`, with the same `x-ingest-secret` header, lists every source and whether your instance may
+`GET /api/import`, with the same `x-operator-secret` header, lists every source and whether your instance may
 import it. A source that needs permission answers `403` with what it needs; once the provider grants it, add
 the source to `IMPORT_ALLOW` (for example `IMPORT_ALLOW=wwff`) and restart the gateway.
 
@@ -66,6 +66,21 @@ provider can reach you.
 
 The answer lists how many places were fetched, imported, updated, skipped and de-duplicated. The places then
 show on the map; [Heritage places](../../play/cache-types/heritage.md) is what players see.
+
+## Remove one place
+
+A source can ask you to take a listing down. OpenCaching's terms let a cache's owner ask. Remove that one place
+and keep the rest:
+
+1. Open **Instance admin → Imported places**.
+2. Type the code, title or listing reference, for example `OC1234`, and tap **Search**.
+3. Optional: type why under **Reason for a removal**, for example who asked and when.
+4. Tap **Remove** beside the place and confirm.
+
+The place leaves your instance with its logs, ratings and media. Its source and listing reference stay under
+**Removed listings**, and every later import of that source skips it. From a script, send
+`DELETE /api/admin/imports/<id>` with the `x-operator-secret` header; `GET /api/admin/imports?q=OC1234` gives
+the id.
 
 ## Next
 

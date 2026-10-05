@@ -795,7 +795,7 @@ export function secretOk(given: string | null | undefined, expected: string | un
 /**
  * The instance's own ingest plane: does the request carry the shared INGEST_SECRET? Whoever holds it runs
  * this instance's backend and acts for any station: logging a heard find, acting as a cache owner over APRS,
- * importing, reading every mailbox. An enrolled box's key never passes this check.
+ * reading every mailbox. An enrolled box's key never passes this check.
  */
 export function ingestSecretOk(req: Request, env: Env): boolean {
   return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);

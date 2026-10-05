@@ -76,6 +76,7 @@ import {
   ManualLink,
 } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { ImportsAdmin } from "./ImportsAdmin.js";
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -158,6 +159,16 @@ export function AdminPanel(props: { onClose: () => void }) {
           defaultOpen={false}
         >
           <AdoptionAdmin />
+        </Group>
+      )}
+      {show("imports", "imported", "places", "opencaching", "heritage", "remove", "listing") && (
+        <Group
+          title="Imported places"
+          status="removal requests"
+          help="Find an imported place and remove it when its source or the listing's owner asks."
+          defaultOpen={false}
+        >
+          <ImportsAdmin />
         </Group>
       )}
       {show("federation", "peers", "trust", "44net", "sync") && (

@@ -1184,6 +1184,30 @@ export function removeTrustedStation(site: string): Promise<{ removed: boolean }
 export function getStationFinds(site: string): Promise<Omit<BoxFinds, "box" | "trust"> & { site: string }> {
   return call(`/api/admin/sites/${encodeURIComponent(site)}/finds`);
 }
+
+// ---- imported places (sysop)
+export interface ImportedPlace {
+  id: number;
+  code: string;
+  title: string;
+  source: string;
+  sourceName: string | null;
+  externalId: string | null;
+  status: string;
+}
+export interface RemovedListing {
+  source: string;
+  externalId: string;
+  code: string | null;
+  note: string | null;
+  removedAt: number;
+}
+export function listImportedPlaces(q: string): Promise<{ places: ImportedPlace[]; removed: RemovedListing[] }> {
+  return call(`/api/admin/imports?q=${encodeURIComponent(q)}`);
+}
+export function removeImportedPlace(id: number, note: string): Promise<{ removed: boolean; code: string }> {
+  return call(`/api/admin/imports/${id}`, { method: "DELETE", body: JSON.stringify({ note }) });
+}
 // ---- cache adoption ----
 /** A cache as the adoption endpoints serve it; `ownerCall` reads `WITHDRAWN` for an erased owner. */
 export interface AdoptionCache {

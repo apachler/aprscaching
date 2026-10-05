@@ -148,7 +148,7 @@ import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
-import { handleImport, handleImportSources } from "./import/engine.js";
+import { handleImport, handleImportSources, handleImportedPlaces, handleRemoveImportedPlace } from "./import/engine.js";
 import {
   handleLeaderboard,
   handleCorroborators,
@@ -768,6 +768,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/import" && m === "GET") return handleImportSources(req, env);
   const importMatch = /^\/api\/import\/([a-z]+)$/.exec(p);
   if (importMatch && m === "POST") return handleImport(req, env, importMatch[1]!);
+  if (p === "/api/admin/imports" && m === "GET") return handleImportedPlaces(req, env);
+  const importedPlace = /^\/api\/admin\/imports\/(\d+)$/.exec(p);
+  if (importedPlace && m === "DELETE") return handleRemoveImportedPlace(req, env, Number(importedPlace[1]));
 
   return new Response("not found", { status: 404 });
 }
