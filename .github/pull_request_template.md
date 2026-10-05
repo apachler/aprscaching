@@ -7,6 +7,16 @@ Title should be a Conventional Commit, e.g. "fix(ingest): reconnect only on clos
 
 <!-- What does this change and why? Link any issue: "Closes #123". -->
 
+## Operator action needed
+
+<!--
+Leave empty when an operator has nothing to do. Otherwise end this description with a footer that says what the
+operator does before or after updating: a new required setting, a manual step, behaviour they must know about.
+The release notes list it under "Operator actions".
+
+Operator-Action: <what the operator does>
+-->
+
 ## How it was verified
 
 <!-- Commands you ran, and their result. -->
