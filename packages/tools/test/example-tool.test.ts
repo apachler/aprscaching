@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: MIT
 /**
- * The example tool under examples/station-log: its manifest passes the real validator, and its script, run
- * the way the sandbox's worker runs it (the body of a function of `register` and `ipc`), contributes panels
- * the host's sanitiser keeps intact.
+ * The example tool under examples/station-log, a copy of the signed registry tool: its manifest passes the real
+ * validator and its signature, and its script, run the way the sandbox's worker runs it (the body of a function
+ * of `register` and `ipc`), contributes panels the host's sanitiser keeps intact.
  */
 import { describe, expect, it } from "vitest";
-import { checkManifestSignature, sanitizePanel, validateManifest, type PanelSpec } from "../src/index.js";
+import {
+  checkEntryHash,
+  checkManifestSignature,
+  sanitizePanel,
+  validateManifest,
+  type PanelSpec,
+} from "../src/index.js";
 import { loadExampleTool } from "./fixtures/example.mjs";
 
-const { manifest: manifestJson, script } = loadExampleTool();
+const { manifest, script } = loadExampleTool();
+/** The manifest as fetched: an object, which the signature and hash checks read before validation. */
+const manifestJson = manifest as Record<string, unknown>;
 
 interface Registered {
   commands: Record<string, (args: string) => unknown>;
@@ -54,7 +62,9 @@ function load(withIpc: boolean) {
 const keepsShape = (spec: unknown) => expect(sanitizePanel(spec)).toEqual(spec as PanelSpec);
 
 describe("example tool: station-log", () => {
-  it("its manifest passes the validator, and stays unsigned until its author signs it", async () => {
+  it("its manifest passes the validator, and carries the registry copy's signature over its script", async () => {
+    expect(await checkManifestSignature(manifestJson)).toBe("valid");
+    expect(await checkEntryHash(manifestJson, new TextEncoder().encode(script))).toBe("ok");
     const v = validateManifest(manifestJson);
     expect(v.ok).toBe(true);
     if (!v.ok) return;
@@ -62,7 +72,6 @@ describe("example tool: station-log", () => {
     expect(v.manifest.permissions).toEqual(["command", "panel", "ipc"]);
     expect(v.manifest.surfaces).toEqual(["web", "terminal"]);
     expect(v.manifest.entry).toBe("tool.js");
-    expect(await checkManifestSignature(v.manifest)).toBe("unsigned");
   });
 
   it("registers its commands and an initial panel", () => {
