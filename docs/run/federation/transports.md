@@ -19,7 +19,7 @@ against the key it pinned for the record's origin, so no transport adds or remov
 | [Rendezvous relay](#rendezvous-relay) | a firewalled spoke's caches, finds or keys feed, on request | a requester with the hub's relay secret | at most `FED_SYNC_INTERVAL_MS` for the spoke to answer | off | CI, two instances on one host |
 | [Corroboration exchange](#corroboration-exchange) | one question and its answer about a find | the instance where the find is logged | seconds; retried 1, 6 and 24 h later | on with a signing key | CI, two instances on one host |
 | [Presence beacon](#presence-beacon) | an instance's addresses, one datagram | the operator's own tooling | whenever it transmits | endpoints only | unit tests |
-| [Packet circuit](#packet-circuit) (AX.25, NET/ROM) | feed pages over a connected-mode session | the pulling station | one page of 25 records at a time | not wired in | unit tests |
+| [Packet circuit](#packet-circuit) (AX.25, NET/ROM) | caches, finds, keys, bulletins, tombstones, account moves | the pulling instance's ingest box | at most `FED_LINK_PULL_MS` (1 h) per session, one peer at a time | off (`FED_LINK_SERVE`, `FED_LINK_PULL`) | local loop over AX.25/AXUDP; not on real radios |
 | [FBB store-and-forward](#fbb-store-and-forward) | a batch of feed records as packet mail | the sysop, by hand or timer | hours to days | off (`FED_BBS`) | local loop over AX.25; not on real BBS networks |
 
 None of the transports has run between independent instances on live infrastructure: the public internet,
@@ -73,7 +73,8 @@ sync, and tries the URL it added the peer under last.
 | `https` | `https://aprs.example.net` | https on the internet | the usual address |
 | `44net` | `aprscaching.oe8apr.ampr.org` or `https://aprscaching.oe8apr.ampr.org` | plain http on the name; with `https://`, https first and then plain http | a name under `<call>.ampr.org`, never a raw 44.x address |
 | `hamnet` | `44.143.1.2`, `aprscaching.oe8xyz.hamnet.example`, optional `:port` | plain http | a peer without a route to HAMNET gives up after 2 seconds |
-| `ax25`, `netrom`, `bbs` | `OE8APR-10`, `ACSNOD`, `OE8APR@OE8XBB.#KTN.AUT.EU` | nothing dials them | a directory entry for packet operators, published with the rest |
+| `ax25`, `netrom` | `OE8APR-10`, `ACSNOD` | a [packet circuit](#packet-circuit) from the puller's ingest box | `FED_LINK_PULL` on the puller's box; an http pull never uses them |
+| `bbs` | `OE8APR@OE8XBB.#KTN.AUT.EU` | nothing dials it | a directory entry for packet operators, published with the rest |
 
 ```bash
 FED_ENDPOINTS='[{"transport":"https","address":"https://aprs.example.net","priority":10},{"transport":"44net","address":"https://aprscaching.oe8apr.ampr.org","priority":20},{"transport":"hamnet","address":"44.143.1.2","priority":30}]'
@@ -253,14 +254,17 @@ transmitting is the operator's own tooling, under the rules for
 
 ## Packet circuit
 
-**What it carries.** Feed pages, over an AX.25 or NET/ROM connected-mode session, in the record set the link
-supports: at 1200 or 9600 baud no media and small batches (25 records on a VHF port), on HF only tiny records.
+**What it carries.** Every feed, as on a [pull](#pull): tombstones, caches, finds, callsign keys, account moves
+and bulletins, each record signed by its origin. Pages are small to suit the channel: 25 records at most on a VHF
+port, fewer when a page would not fit one line of the session.
 
-**How it works.** A line protocol (`ACSL1`) rides the same session machinery as the BBS and the node. Both ends
-exchange their link capabilities and agree on the slower rate, the smaller batch and the best common
-compression. The pulling station then asks for one feed page at a time. Its ingest box hands each page to its own
-gateway's `POST /federation/frames`, where every frame is checked against its origin's key. The ingest box
-holds no keys.
+**How it works.** The pulling instance's ingest box asks its gateway which peers publish an `ax25` or `netrom`
+endpoint, and dials the one that has waited longest. The serving instance's ingest box answers the connect with
+the sync service (`ACSL1`), which reads pages from its own gateway. Both ends exchange their link capabilities and
+agree on the slower rate, the smaller batch and the best common compression. The puller then asks for one page at a
+time, feed after feed, and its box hands each page to its own gateway's `POST /federation/frames`, where every
+frame is checked against its origin's pinned key. At the end the box reports the session to its gateway, which
+keeps where each feed stopped. Neither box holds a key.
 
 ```mermaid
 sequenceDiagram
@@ -268,7 +272,9 @@ sequenceDiagram
   participant I1 as A's ingest box
   participant I2 as B's ingest box
   participant G2 as Gateway B
-  I1->>I2: connect, capabilities
+  I1->>G1: GET /federation/packet/peers
+  G1-->>I1: B at ax25 OE1BBB-9, cursors
+  I1->>I2: connect to OE1BBB-9, capabilities
   I2-->>I1: capabilities
   I1->>I2: request a page, feed and cursor
   I2->>G2: GET /federation/sync page
@@ -276,15 +282,48 @@ sequenceDiagram
   I2-->>I1: page, compressed
   I1->>G1: POST /federation/frames
   Note over G1: check every frame against B's key
+  I1->>G1: POST /federation/packet/status
 ```
 
-**When.** When the pulling station connects, one page at a time (25 records on a VHF port).
+An `ax25` endpoint is a station that answers with the sync service: the box connects to it directly. A `netrom`
+endpoint is a node alias: the box connects to the node in `FED_LINK_NODE`, which routes `C <alias>` through the
+NET/ROM network, and then gives the far node's `FED` command.
 
-**Configure.** Nothing in settings: the two protocol ends are a library (`@aprscaching/packet`
-`FedSyncApp` and `FedSyncLinkClient`, with the ingest side in `apps/ingest/src/fedsynclink.ts`), and no ingest
-setting mounts them. Dialing the circuit uses the same driver stack as FBB forwarding.
+**When.** One session per `FED_LINK_PULL_MS` at most (default 3600000, one hour; at least one minute), the first
+15 seconds after the box starts. One session at a time, one peer per session. A session pulls at most
+`FED_LINK_PAGES` pages (default 20) and the next one carries on. A peer whose session failed is skipped for 1, then
+2, 4 and up to 32 rounds. The box does not dial while its transmit switch is off (**Shack → Remote box**).
 
-**Tested.** The protocol ends and the compression have unit tests. Not over a real circuit.
+**Configure.** On the serving instance:
+
+1. A signing key (`FED_PRIVATE_KEY`) and the endpoint in `FED_ENDPOINTS`, for example
+   `{"transport":"ax25","address":"OE1BBB-9","priority":30}`.
+2. On its ingest box: a frame link (`KISS_TNC_HOST`, or `AXUDP_PORT` and `AXUDP_PEERS`), `FED_LINK_SERVE=1` and
+   `FED_LINK_CALL=OE1BBB-9`. With the NET/ROM node running (`NETROM_CALL`, `NETROM_ALIAS`), the node also answers
+   the `FED` command, which is what a `netrom` endpoint needs.
+
+On the pulling instance:
+
+1. Add the peer the usual way, by URL or by callsign, and compare its key fingerprint
+   ([Join the network](index.md)). The packet endpoint comes from the peer's descriptor, its DNS record or its
+   beacon ([Addresses](#addresses-https-44net-and-hamnet)).
+2. On its ingest box: a frame link, `FED_LINK_PULL=1` and `FED_LINK_CALL` (the call-SSID it dials as). Optional:
+   `FED_LINK_PULL_MS`, `FED_LINK_PAGES`, and `FED_LINK_NODE` for `netrom` endpoints.
+
+Both boxes transmit under `FED_LINK_CALL`, so it is a call you hold, and the rules for
+[automatic stations on the air](../compliance/on-air-stations.md) apply. **Instance admin → Federation** shows each
+peer's last packet session, the endpoint and any error; `deploy/aprscaching doctor` reports the box's settings
+(`ingest.fedlink`) and the peers' last sessions (`federation.packet`).
+
+**Limits.** An `ax25` endpoint is dialled directly, without digipeaters; a far station goes through a node, as a
+`netrom` endpoint. A peer is pulled only once its key is pinned, so adding it needs its descriptor once, over an IP
+path or its DNS record. The packet path keeps its own cursors, apart from the http pull's; a record arriving both
+ways applies once. The newest records of the caches and bulletins feeds are read again each session, as on an
+http pull, so a record changed within the same second is not missed.
+
+**Tested.** The protocol ends, the compression and the scheduler have unit tests. The interop local loop runs two
+instances whose ingest boxes are crosslinked over AXUDP: A pulls B's feed over an AX.25 circuit, and a cache
+created on B appears on A's map. Untested on real radios, and the `netrom` path only in unit tests.
 
 ## FBB store-and-forward
 

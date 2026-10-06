@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * fedsynclink.ts — the operator-local ends of the connected-mode federation sync binding. The RF
- * circuit itself (dialing an AX.25/NET-ROM path, keying the radio) rides the same driver stack as
- * FBB forwarding and is validate-at-deploy; these are the two protocol ends around it:
+ * fedsynclink.ts — the operator-local ends of the connected-mode federation sync binding. The circuit
+ * itself (dialing an AX.25/NET-ROM path, keying the radio) is fedlink.ts, over the same driver stack as FBB
+ * forwarding; these are the two protocol ends around it:
  *
- *   - serve: a `FedSyncApp` whose page source is THIS operator's gateway CBOR sync surface — mount
- *     it as a session-server service (or behind the node) and a station that connects can pull our
- *     signed feed over the air.
+ *   - serve: a `FedSyncApp` whose page source is THIS operator's gateway CBOR sync surface — mounted on
+ *     FED_LINK_CALL and as the node's `FED` command, so a station that connects can pull our signed feed.
  *   - pull:  a `FedSyncLinkClient` pump over an injected line transport — pulls a peer's pages over
  *     the circuit and delivers them to OUR gateway's /federation/frames, where the trust-gated
  *     pipeline verifies every frame. The ingest holds no keys and makes no trust decisions.
@@ -40,9 +39,10 @@ export function makeFedSyncApp(opts: {
   const f = opts.fetchFn ?? gatewayFetch;
   return new FedSyncApp(
     opts.caps ?? VHF_COMPACT_CAPS,
-    async (type, since, limit) => {
+    async (type, since, limit, sinceId) => {
+      const idParam = sinceId !== undefined ? `&sinceId=${sinceId}` : "";
       const res = await f(
-        `${opts.gatewayBase}/federation/sync/${encodeURIComponent(type)}?since=${since}&limit=${limit}`,
+        `${opts.gatewayBase}/federation/sync/${encodeURIComponent(type)}?since=${since}&limit=${limit}${idParam}`,
       );
       if (res.status === 404) return null; // unknown feed / unsigned instance — the app reports E
       if (!res.ok) throw new Error(`gateway sync ${res.status}`);
@@ -52,35 +52,56 @@ export function makeFedSyncApp(opts: {
   );
 }
 
+/** Where a feed's pull resumes: after `since`, and for a composite feed strictly after `(since, sinceId)`. */
+export interface FeedCursor {
+  since: number;
+  sinceId?: number;
+}
+
 export interface FedSyncPullResult {
   pages: number;
   frames: number;
   applied: number;
   quarantined: number;
   rejected: number;
+  /** The position to resume from next time; it moves only past pages the gateway took. */
+  cursor: FeedCursor;
+  /** The peer reported the feed complete: nothing left past `cursor`. */
+  complete: boolean;
 }
 
 /**
  * Pull one feed type over an established circuit and deliver every page to our gateway. The line
  * transport is injected: `sendLine` writes to the circuit, and the driver feeds received lines into
- * the returned client via `onLine`. Runs until the peer reports a complete page or `maxPages`.
+ * the returned client via `onLine`. Runs until the peer reports a complete page, the cursor stops moving, or
+ * `maxPages`. A composite feed (a repeating timestamp cursor) carries the page's `nextId` into the next request;
+ * after a complete page it resumes from the timestamp alone, as the HTTP pull does, so a row updated later at the
+ * same second is not skipped.
  */
 export async function pullFedSync(opts: {
-  client: FedSyncLinkClient;
+  client: Pick<FedSyncLinkClient, "pull">;
   gatewayBase: string;
   secret: string;
   type: string;
-  since?: number;
+  cursor?: FeedCursor;
   limit?: number;
   maxPages?: number;
   fetchFn?: FetchFn;
 }): Promise<FedSyncPullResult> {
   const f = opts.fetchFn ?? gatewayFetch;
-  const out: FedSyncPullResult = { pages: 0, frames: 0, applied: 0, quarantined: 0, rejected: 0 };
-  let since = opts.since ?? 0;
+  let cursor: FeedCursor = { ...(opts.cursor ?? { since: 0 }) };
+  const out: FedSyncPullResult = {
+    pages: 0,
+    frames: 0,
+    applied: 0,
+    quarantined: 0,
+    rejected: 0,
+    cursor,
+    complete: false,
+  };
   const maxPages = opts.maxPages ?? 50;
   for (let i = 0; i < maxPages; i++) {
-    const pageBytes = await opts.client.pull(opts.type, since, opts.limit ?? 25);
+    const pageBytes = await opts.client.pull(opts.type, cursor.since, opts.limit ?? 25, cursor.sinceId);
     const page = decodeFedSyncPage(pageBytes);
     out.pages++;
     out.frames += page.frames.length;
@@ -96,8 +117,18 @@ export async function pullFedSync(opts: {
       out.quarantined += r.quarantined ?? 0;
       out.rejected += r.rejected ?? 0;
     }
-    if (page.complete || page.nextCursor <= since) break;
-    since = page.nextCursor;
+    const next: FeedCursor = {
+      since: page.nextCursor,
+      ...(!page.complete && page.nextId !== undefined && { sinceId: page.nextId }),
+    };
+    const moved = next.since !== cursor.since || next.sinceId !== cursor.sinceId;
+    cursor = page.nextCursor >= cursor.since ? next : cursor;
+    out.cursor = cursor;
+    if (page.complete) {
+      out.complete = true;
+      break;
+    }
+    if (!moved) break;
   }
   return out;
 }

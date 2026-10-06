@@ -337,6 +337,23 @@ Every shape with an ingest.
 - **Fix:** update the node's firmware.
 - **See:** [MeshCom: before you start](radios/meshcom.md#before-you-start).
 
+### `ingest.fedlink`
+
+- **Tests:** whether the box serves or pulls federation over packet circuits (`FED_LINK_SERVE`,
+  `FED_LINK_PULL`), and that it can: a frame link (`KISS_TNC_HOST`, or `AXUDP_PORT` and `AXUDP_PEERS`), and
+  `FED_LINK_CALL` (serving without it works only as the NET/ROM node's FED command). It passes when both are
+  off, and says what runs.
+- **Message:** `federation over packet needs a frame link` (fail). Set `KISS_TNC_HOST`, or `AXUDP_PORT` and
+  `AXUDP_PEERS`.
+- **Message:** `federation over packet needs FED_LINK_CALL` (fail). Set `FED_LINK_CALL` to the call-SSID the
+  box answers and dials as.
+- **See:** [Packet circuit](federation/transports.md#packet-circuit).
+
+### `ingest.fedlink_pull`
+
+- **Tests:** with `FED_LINK_PULL=1`, the call the box dials as and the interval between sessions. It passes.
+- **See:** [Packet circuit](federation/transports.md#packet-circuit).
+
 ### `ingest.url`
 
 - **Tests:** on bare metal, `INGEST_URL` does not name the Docker service `gateway`.
@@ -476,6 +493,17 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 - **Fix:** check the URL, or ask the peer's operator. For a key that does not match, compare fingerprints
   with its sysop again and correct `FED_PEERS`.
 - **See:** [Join the network](federation/index.md#joining-the-network).
+
+### `federation.packet`
+
+- **Tests:** the peers the ingest box pulls over packet circuits (each publishes an `ax25` or `netrom`
+  endpoint), and how their last sessions went. It reads `GET /federation/packet/peers` with
+  `OPERATOR_SECRET`.
+- **Message:** `<n> of <total> packet peer(s) failed their last session` (warn).
+- **Fix:** read the ingest box's `[fedlink]` log lines. A connect that times out is the radio path: the peer's
+  station, the frequency, the digipeaters. A `netrom` endpoint needs `FED_LINK_NODE`. Instance admin →
+  Federation shows each peer's last packet session and its error.
+- **See:** [Packet circuit](federation/transports.md#packet-circuit).
 
 ## The 44Net tunnel and name (`net44`)
 

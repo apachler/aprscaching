@@ -428,6 +428,33 @@ doc_transports() {
     fi
   done
   doc_meshcom
+  doc_fedlink_box
+}
+
+# Federation over packet circuits on this box: what it serves and pulls, and whether the settings can work.
+doc_fedlink_box() {
+  local serve pull call link="" node="" every
+  serve="$(doc_get FED_LINK_SERVE)"
+  pull="$(doc_get FED_LINK_PULL)"
+  call="$(doc_get FED_LINK_CALL)"
+  [ -z "$(doc_get KISS_TNC_HOST)$(doc_get AXUDP_PEERS)" ] || link=1
+  [ -z "$(doc_get NETROM_CALL)" ] || [ -z "$(doc_get NETROM_ALIAS)" ] || node=1
+  if [ "$serve" != 1 ] && [ "$pull" != 1 ]; then
+    pass ingest.fedlink "federation over packet circuits is off"
+    return 0
+  fi
+  if [ -z "$link" ]; then
+    failc ingest.fedlink "federation over packet needs a frame link" "set KISS_TNC_HOST, or AXUDP_PORT and AXUDP_PEERS"
+    return 0
+  fi
+  if [ -z "$call" ] && { [ "$pull" = 1 ] || [ -z "$node" ]; }; then
+    failc ingest.fedlink "federation over packet needs FED_LINK_CALL" "set FED_LINK_CALL to the call-SSID it answers and dials as"
+    return 0
+  fi
+  every="$(doc_get FED_LINK_PULL_MS)"
+  every="$(( ${every:-3600000} / 60000 ))"
+  [ "$serve" != 1 ] || pass ingest.fedlink "serving federation sync over packet${call:+ on $call}${node:+, and as the node's FED command}"
+  [ "$pull" != 1 ] || pass ingest.fedlink_pull "pulling from packet peers as $call, a session every $every min at most"
 }
 
 # MeshCom: when each configured node was last heard, and whether its firmware is new enough for ExtUDP.
@@ -669,6 +696,29 @@ doc_federation() {
       warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator"
     fi
   done
+}
+
+# Federation over packet circuits, the gateway's view: the peers the ingest box pulls over packet and how their last
+# sessions went (GET /federation/packet/peers, read with the operator secret).
+doc_fedlink_gateway() {
+  local body total failing never
+  [ -n "$DOC_BASE" ] && [ -n "$DOC_HEALTH" ] && [ -n "$DOC_OPERATOR_SECRET" ] || return 0
+  body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 10 \
+    "$DOC_BASE/federation/packet/peers" 2>/dev/null || true)"
+  total="$(json_field "$body" total)"
+  [ -n "$total" ] || return 0
+  failing="$(json_field "$body" failing)"
+  never="$(json_field "$body" never)"
+  if [ "$total" = 0 ]; then
+    pass federation.packet "no peer publishes a packet endpoint"
+  elif [ "${failing:-0}" != 0 ]; then
+    warnc federation.packet "$failing of $total packet peer(s) failed their last session" \
+      "read the ingest box's [fedlink] log lines; check the radio path and FED_LINK_NODE"
+  elif [ "${never:-0}" != 0 ]; then
+    pass federation.packet "$total packet peer(s); $never not pulled yet"
+  else
+    pass federation.packet "$total packet peer(s); every last session completed"
+  fi
 }
 
 # ---- callsign identity -------------------------------------------------------------------------------------------
@@ -963,6 +1013,7 @@ run_doctor() {
   doc_network
   doc_origins
   doc_federation
+  doc_fedlink_gateway
   doc_identity
   doc_net44
   if declare -F shape_doctor_extra >/dev/null; then shape_doctor_extra; fi

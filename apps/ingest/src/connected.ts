@@ -2,11 +2,12 @@
 /**
  * connected.ts — the connected-mode service stack over ONE frame link. The NET/ROM node
  * (NODES broadcasts + inbound circuits + connect-through), the session server answering AX.25
- * connects to the NODE and BBS callsigns, and the FBB forwarding scheduler all share whichever pipe
+ * connects to the NODE, BBS and federation sync callsigns, the FBB forwarding scheduler and the federation
+ * packet pull all share whichever pipe
  * the operator has: a KISS TNC on RF, or an AXUDP port on the Internet leg (the interop environment
  * and BPQ/FBB crosslinks). Wiring only — every engine is the same pure code either way.
  */
-import { SessionServer, type Service } from "@aprscaching/packet";
+import { SessionServer, type LineApp, type Service } from "@aprscaching/packet";
 import { parseAddr } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { numEnv } from "./config.js";
@@ -46,6 +47,12 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
   const { link, gwBase, secret, env } = o;
   const services: Service[] = [];
   const users = new Set<string>();
+  // Federation pull-sync, served from this operator's own gateway: on its own call, and as the node's FED command.
+  let fedApp: (() => LineApp) | null = null;
+  if (env.FED_LINK_SERVE === "1") {
+    const { makeFedSyncApp } = await import("./fedsynclink.js");
+    fedApp = () => makeFedSyncApp({ gatewayBase: gwBase });
+  }
 
   if (env.NETROM_CALL && env.NETROM_ALIAS) {
     const { NetromNodeRunner } = await import("./netromnode.js");
@@ -62,14 +69,17 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
     // NODE_PERSONALITY picks the command surface (netrom | flexnet | tnn | baycom) — one routing
     // brain, the operator's preferred conversation.
     const { makeNodeSession } = await import("@aprscaching/packet");
-    const nodeApp = (r: import("@aprscaching/ax25").Ax25Address) =>
-      makeNodeSession(
+    const { withFedSyncCommand } = await import("@aprscaching/packet");
+    const nodeApp = (r: import("@aprscaching/ax25").Ax25Address) => {
+      const cli = makeNodeSession(
         env.NODE_PERSONALITY,
         r.call,
         node.nodeStore(() => [...users]),
         env.NETROM_ALIAS!,
         env.NETROM_CALL!,
       );
+      return fedApp ? withFedSyncCommand(cli, fedApp) : cli;
+    };
     services.push({
       addr: parseAddr(env.NETROM_CALL),
       name: "NODE",
@@ -110,6 +120,14 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
     });
     console.log(`[bbs] BBS answering inbound connects on ${env.BBS_NODE_CALL} (FBB forwarding gate armed)`);
   }
+
+  if (fedApp && env.FED_LINK_CALL) {
+    services.push({ addr: parseAddr(env.FED_LINK_CALL), name: "FED", app: () => fedApp() });
+    console.log(`[fedlink] federation sync answering inbound connects on ${env.FED_LINK_CALL}`);
+  }
+  if (fedApp && env.NETROM_CALL && env.NETROM_ALIAS) console.log("[fedlink] the node answers the FED command");
+  else if (fedApp && !env.FED_LINK_CALL)
+    console.error("[fedlink] FED_LINK_SERVE=1 needs FED_LINK_CALL or the NET/ROM node (NETROM_CALL, NETROM_ALIAS)");
 
   if (services.length) {
     const server = new SessionServer({

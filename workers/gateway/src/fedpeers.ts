@@ -192,23 +192,30 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
             tombstones_cursor, moves_cursor, enabled, last_sync, last_ok, last_error, sync_ok, sync_err,
             mirrored_total, last_counts,
             (SELECT MAX(m.submitted_at) FROM fed_submit_marks m WHERE m.instance = fed_peers.instance) AS last_push_in,
-            (SELECT h.last_ok_at FROM fed_hub_status h WHERE h.hub = fed_peers.url) AS last_push_out
+            (SELECT h.last_ok_at FROM fed_hub_status h WHERE h.hub = fed_peers.url) AS last_push_out,
+            (SELECT json_object('transport', k.transport, 'address', k.address, 'lastAttempt', k.last_attempt,
+                                'lastOk', k.last_ok, 'lastError', k.last_error)
+               FROM fed_packet_sync k WHERE k.instance = fed_peers.instance) AS packet_sync
        FROM fed_peers ORDER BY url`,
     ).all<Record<string, unknown> & { public_key: string | null; url: string }>()
   ).results;
   const configured = new Set(parseFedPeers(env.FED_PEERS).map((p) => p.url));
   // derive a health signal + error rate so an operator scans state without doing the math.
   const peers = await Promise.all(
-    rows.map(async ({ public_key, ...p }) => {
+    rows.map(async ({ public_key, packet_sync, ...p }) => {
       const okN = Number(p.sync_ok ?? 0),
         errN = Number(p.sync_err ?? 0);
       const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
-      const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? "new" : lastErrored ? "error" : "ok";
+      const packet = packet_sync ? (JSON.parse(packet_sync as string) as { lastError: string | null }) : null;
+      // a peer reached only over packet takes its health from its last packet session
+      const packetHealth = !packet ? "new" : packet.lastError ? "error" : "ok";
+      const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? packetHealth : lastErrored ? "error" : "ok";
       return {
         ...p,
         fingerprint: await keyFingerprint(public_key),
         configured: configured.has(p.url), // listed in FED_PEERS: removed there, not here
         lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
+        packet, // the last packet-circuit session
         errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
         health,
       };

@@ -97,6 +97,16 @@ session, and FBB MD5 link authentication is supported. Compression starts only w
 advertises the `B` flag. Against an ASCII-only partner the session falls back to plain ASCII, so the option
 is always safe to turn on.
 
+## Federation sync
+
+The box can carry federation records over the same stack. With `FED_LINK_SERVE=1` it answers pull requests on
+`FED_LINK_CALL`, and the node answers the `FED` command; the pages come from your own gateway. With
+`FED_LINK_PULL=1` it dials the peers that publish an `ax25` or `netrom` endpoint, one session per
+`FED_LINK_PULL_MS` (default one hour), and hands every page to your gateway, which checks each record's
+signature. The log shows `[fedlink] federation sync answering inbound connects on <CALL>` and
+`[fedlink] packet pull active as <CALL>`. Both sides, the timings and the limits are in
+[Packet circuit](../federation/transports.md#packet-circuit).
+
 ## Internet crosslinks
 
 A NET/ROM node and FBB forwarding can run over the internet instead of RF, or beside it, on the two-way

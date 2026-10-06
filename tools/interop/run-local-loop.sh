@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Two-stack AXUDP interop loop: gateway+ingest A <-> gateway+ingest B, then the assertions in
-# local-loop.mjs (NODES both ways + an FBB forwarding session A->B). Runs anywhere Node runs —
+# local-loop.mjs (NODES both ways, an FBB forwarding session A->B, and A pulling B's federation feed over an
+# AX.25 circuit). Runs anywhere Node runs —
 # no Docker, no kernel AX.25. CI runs this before the containerized peers.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -31,11 +32,18 @@ COMMON="APRSIS_HOST=127.0.0.1 APRSIS_PORT=1 BATCH_MS=500"
 export FED_BBS="${FED_BBS:-0}"
 FED_KEY_A=''
 if [ "$FED_BBS" = 1 ]; then FED_KEY_A="$(node "$ROOT/tools/fedkey/genkey.mjs" --raw)"; fi
+# Federation over a packet circuit: B signs its feed and publishes an ax25 endpoint, its ingest answers
+# pull-sync on OE1BBB-9; A's ingest dials it as OE1AAA-9. A never pulls over http (FED_SYNC_INTERVAL_MS=0), so
+# B's records can only reach A over the AX.25 circuit. FED_ALLOW_PRIVATE lets A look B up on loopback.
+FED_KEY_B="$(node "$ROOT/tools/fedkey/genkey.mjs" --raw)"
+FED_ENDPOINTS_B='[{"transport":"ax25","address":"OE1BBB-9","priority":10}]'
 
 setsid env DB_PATH="$DBA" PORT=9601 INSTANCE=oe.ia ADMIN_CALLSIGNS=OE1AAA INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY="$FED_KEY_A" FED_BBS="$FED_BBS" \
+  FED_SYNC_INTERVAL_MS=0 FED_ALLOW_PRIVATE=1 \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwa.log 2>&1 &
 PIDS+=($!)
-setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib ADMIN_CALLSIGNS=OE1BBB INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' FED_BBS="$FED_BBS" \
+setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib ADMIN_CALLSIGNS=OE1BBB INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY="$FED_KEY_B" FED_BBS="$FED_BBS" \
+  FED_ENDPOINTS="$FED_ENDPOINTS_B" \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwb.log 2>&1 &
 PIDS+=($!)
 for i in $(seq 1 60); do
@@ -50,12 +58,13 @@ setsid env $COMMON INGEST_URL=http://127.0.0.1:9601/ingest INGEST_SECRET="$INGES
   AXUDP_PORT=10501 AXUDP_PEERS=127.0.0.1:10502 \
   NETROM_CALL=OE1AAA-7 NETROM_ALIAS=ACSA NETROM_BROADCAST_MS=3000 NETROM_INP3=1 \
   BBS_NODE_CALL=OE1AAA-1 BBS_FORWARD=1 BBS_FORWARD_CALL=OE1AAA-1 BBS_FORWARD_POLL_MS=3000 \
+  FED_LINK_PULL=1 FED_LINK_CALL=OE1AAA-9 FED_LINK_PULL_MS=60000 \
   bash -c "exec pnpm --filter @aprscaching/ingest start" >/tmp/interop-ina.log 2>&1 &
 PIDS+=($!)
 setsid env $COMMON INGEST_URL=http://127.0.0.1:9602/ingest INGEST_SECRET="$INGEST_SECRET" \
   AXUDP_PORT=10502 AXUDP_PEERS=127.0.0.1:10501 \
   NETROM_CALL=OE1BBB-7 NETROM_ALIAS=ACSB NETROM_BROADCAST_MS=3000 NETROM_INP3=1 \
-  BBS_NODE_CALL=OE1BBB-1 \
+  BBS_NODE_CALL=OE1BBB-1 FED_LINK_SERVE=1 FED_LINK_CALL=OE1BBB-9 \
   bash -c "exec pnpm --filter @aprscaching/ingest start" >/tmp/interop-inb.log 2>&1 &
 PIDS+=($!)
 sleep 3

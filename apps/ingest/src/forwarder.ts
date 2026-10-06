@@ -292,14 +292,14 @@ export function kissForwardLink(o: {
 }
 
 /**
- * A connected-mode FBB link over a shared frame pipe (AXUDP): the same `ConnectedLink` (AX.25 v2.2)
- * as the KISS variant, but frames ride an already-running `FrameLink` instead of a per-session KISS
- * socket. The pipe is shared with the NET/ROM node and session server, so the raw subscription is
+ * A connected-mode link over a shared frame pipe (the KISS TNC or the AXUDP port): the same `ConnectedLink`
+ * (AX.25 v2.2) as the KISS variant, but frames ride an already-running `FrameLink` instead of a per-session KISS
+ * socket. FBB forwarding over AXUDP and the federation packet pull (fedlink.ts) dial through it. The pipe is shared with the NET/ROM node and session server, so the raw subscription is
  * removed when the session ends — a long-running box must not accumulate dead demux callbacks.
  */
 export function frameForwardLink(
   pipe: FrameLink,
-  o: { mycall: string; partnerCall: string; connectScript: string },
+  o: { mycall: string; partnerCall: string; connectScript: string; tag?: string },
 ): ForwardLink {
   const local = parseAddr(o.mycall);
   const steps = parseConnectScript(o.connectScript);
@@ -341,7 +341,7 @@ export function frameForwardLink(
     state: (s: LinkState) => {
       if (s === "disconnected") fireClose();
     },
-    error: (msg: string) => console.error(`[forward] ${o.partnerCall} link error: ${msg}`),
+    error: (msg: string) => console.error(`[${o.tag ?? "forward"}] ${o.partnerCall} link error: ${msg}`),
   });
   const poll = setInterval(() => link.poll(), 1000);
   const onRaw = (b: Uint8Array) => {

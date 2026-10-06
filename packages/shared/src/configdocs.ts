@@ -161,6 +161,12 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BBS_FORWARD_COMPRESS: "1 offers LZHUF-B1 compressed forwarding",
   BBS_FORWARD_BURST: "Forwarding sessions allowed at once before pacing applies",
   BBS_FORWARD_REFILL_SEC: "Seconds to regain one forwarding session",
+  FED_LINK_SERVE: "1 answers federation pull-sync over packet: on FED_LINK_CALL and as the node's FED command",
+  FED_LINK_PULL: "1 pulls federation records from peers with an ax25 or netrom endpoint, over packet",
+  FED_LINK_CALL: "Callsign-SSID the box answers and dials federation sync on",
+  FED_LINK_PULL_MS: "Milliseconds between packet pull sessions; at least 60000, default one hour",
+  FED_LINK_PAGES: "Pages one packet pull session may fetch, 25 records each at most",
+  FED_LINK_NODE: "Node the box enters through to reach a peer's netrom endpoint",
   IGATE_CALL: "Callsign of the IGate; set with IGATE_PASS to enable it",
   IGATE_PASS: "APRS-IS passcode of the IGate callsign",
   IGATE_FILTER: "APRS-IS filter for traffic the IGate may gate to RF",
@@ -718,6 +724,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "BBS (inbound + forwarding)",
         "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+      ],
+      [
+        "Federation over packet circuits",
+        "`FED_LINK_SERVE` (`1` answers pull-sync on `FED_LINK_CALL` and as the node's FED command), `FED_LINK_PULL` (`1` pulls from peers that publish an `ax25` or `netrom` endpoint), `FED_LINK_CALL` (the call-SSID it answers and dials as), `FED_LINK_PULL_MS` (`3600000`, one hour; at least one minute; one session per interval), `FED_LINK_PAGES` (`20` pages per session), `FED_LINK_NODE` (the node a `netrom` endpoint is entered through) — see [Packet circuit](../run/federation/transports.md#packet-circuit)",
       ],
       [
         "IGate",

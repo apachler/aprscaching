@@ -72,6 +72,7 @@ flowchart LR
   H["Club hub"]
   P["Pocket or NAT box"]
   Q["Second spoke"]
+  R["Instance R<br/>packet radio only"]
   F["Instance F<br/>no IP path"]
   A <-->|pull both ways| B
   A <-->|pull over 44Net| C
@@ -79,6 +80,7 @@ flowchart LR
   P -->|pushes its records| H
   P -->|pulls the hub's and the other spokes' records| H
   Q -->|pushes and pulls| H
+  A -->|pulls over an AX.25 circuit| R
   B -.->|FBB mail, experimental| F
 ```
 
@@ -88,6 +90,8 @@ An arrow starts at the instance that opens the connection.
   news asks you to fetch at once.
 - **Push** is for an instance nobody can reach, such as a phone on mobile data or a box behind a carrier's NAT:
   it sends its records to a hub it can reach.
+- **Packet circuit** is a pull over AX.25 or NET/ROM, dialled by your ingest box, for a peer you reach by radio
+  rather than IP. It is off by default.
 - **Store-and-forward** over FBB packet mail is for a peer with no IP path at all. It is experimental and off by
   default.
 

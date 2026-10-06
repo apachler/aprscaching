@@ -152,6 +152,7 @@ import { handleFedSync } from "./fedsync.js";
 import { handleTransitKeys } from "./fedtransit.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
+import { handlePacketPeers, handlePacketStatus } from "./fedpacket.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport, handleImportSources, handleImportedPlaces, handleRemoveImportedPlace } from "./import/engine.js";
@@ -542,6 +543,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/beacon" && m === "POST") return handleBeaconRx(req, env);
   // connected-mode delivery: a CBOR sync page pulled over an AX.25/NET-ROM circuit (ingest-gated)
   if (p === "/federation/frames" && m === "POST") return handleFramesRx(req, env);
+  if (p === "/federation/packet/peers" && m === "GET") return handlePacketPeers(req, env); // ingest: who to dial
+  if (p === "/federation/packet/status" && m === "POST") return handlePacketStatus(req, env); // ingest: a session
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
