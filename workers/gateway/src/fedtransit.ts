@@ -66,6 +66,7 @@ import { bboxKey, bboxWhere, bboxWithin, parseBbox, type Bbox } from "./fedregio
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 import { buildFedFrames } from "./fedsync.js";
 import { forgetGapsStatement, gapsBetween } from "./fedgaps.js";
+import { pruneBounded } from "./retention.js";
 
 /** The record kinds synced per origin, in the order a pull applies them: deletes first, keys before moves. */
 export const ORIGIN_KINDS = ["tombstone", "account-move", "cache", "find"] as const;
@@ -724,4 +725,24 @@ export async function forgetTransitPeer(env: Env, instance: string): Promise<voi
 /** The usable keys of an accept set plus its pin: what a direct binding holds. */
 export function heldKeys(pin: string | null, accept: ReturnType<typeof parseAcceptKeys>): string[] {
   return [...new Set([...(pin ? [pin] : []), ...usableKeys(accept, nowS())])];
+}
+
+/**
+ * The nightly purge of frames kept for passing on whose record is no longer held here: one its origin tombstoned
+ * (at or above the frame's version), and a cache, find or account move whose mirrored row is gone, deleted or
+ * superseded. A frame lives exactly as long as the record it carries, so the logger calls in a find frame do not
+ * outlast the find. Tombstone frames stay, like tombstones themselves: dropping one would let the erased record
+ * come back on the next path that still carries it.
+ */
+export async function purgeTransit(env: Env): Promise<void> {
+  await pruneBounded(
+    env,
+    "fed_transit",
+    `SELECT rowid FROM fed_transit t WHERE t.kind != 'tombstone' AND (
+       EXISTS (SELECT 1 FROM remote_tombstones rt WHERE rt.target_id = t.gid AND rt.origin = t.origin
+                  AND (rt.up_to IS NULL OR t.v <= rt.up_to))
+       OR (t.kind = 'cache' AND NOT EXISTS (SELECT 1 FROM remote_caches r WHERE r.global_id = t.gid))
+       OR (t.kind = 'find' AND NOT EXISTS (SELECT 1 FROM remote_finds r WHERE r.global_id = t.gid))
+       OR (t.kind = 'account-move' AND NOT EXISTS (SELECT 1 FROM remote_account_moves r WHERE r.global_id = t.gid)))`,
+  );
 }

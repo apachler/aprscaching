@@ -171,7 +171,8 @@ Open **Settings → Your data**.
 
 Both need you signed in. Signed out, the group shows **Sign in** instead.
 
-If your account lost its only callsign, you cannot sign in with it, but you can still get or erase your data:
+If your account lost its only callsign, or the sysop suspended it, you cannot sign in with it, but you can still get
+or erase your data:
 
 1. Tap **Sign in**, then **Get or erase my data**.
 2. Type the email address confirmed on your account and tap **Email me a link**.

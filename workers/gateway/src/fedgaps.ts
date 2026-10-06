@@ -13,9 +13,16 @@
  * A neighbour fills a gap with the record, or by holding the origin past it and not lacking it (the record was
  * superseded, deleted or lies outside the region). Each neighbour is asked again after a backoff that doubles from 5
  * minutes to a day. A gap nobody fills within 7 days and 5 asks is given up: it counts as refused for good, and the
- * sysop sees it listed (Instance admin → Federation, `doctor`) until marked seen. A hop-limit gap is no fault
- * anyone can fix but by a shorter path, and at the edge of the mesh every distant record is one: it holds no mark
- * back, counts toward no cap, and goes silently after 30 days.
+ * sysop sees it listed (Instance admin → Federation, `doctor`) until marked seen, for at most 90 days; a listed
+ * record marked seen goes 30 days later. A hop-limit gap is no fault anyone can fix but by a shorter path, and at
+ * the edge of the mesh every distant record is one: it holds no mark back, counts toward no cap, and goes silently
+ * after 30 days.
+ *
+ * A tombstone gap is never given up. A missing tombstone is a deletion, often an erasure, that never reached this
+ * instance: giving it up would keep the deleted record here for good. Such a gap is asked for again, once a day per
+ * neighbour once its backoff is at the longest, until one fills it. A tombstone gap past the hop limit that this
+ * instance holds itself (`hops`) still goes after 30 days, since the deletion applied here; one a neighbour holds
+ * past the hop limit (`upstream-hops`) stays, since this instance still lacks it.
  */
 import type { Env } from "./env.js";
 import { json } from "./http.js";
@@ -35,6 +42,10 @@ const GAP_GIVE_UP_S = 7 * 86400;
 const GAP_GIVE_UP_ASKS = 5;
 /** Hop-limit gaps go after this long; given-up records seen this long ago leave the table. */
 const QUIET_EXPIRY_S = 30 * 86400;
+/** Given-up records the sysop never marked seen leave the table after this long. */
+const UNSEEN_EXPIRY_S = 90 * 86400;
+/** SQL: a gap whose record is a deletion this instance does not hold, which is never given up. */
+const MISSING_DELETE = "(kind = 'tombstone' AND reason != 'hops')";
 const RETRY_FIRST_S = 300;
 const RETRY_MAX_S = 86400;
 
@@ -159,12 +170,13 @@ export function forgetGapsStatement(env: Env, origin: string) {
 /**
  * Give up the gaps nobody filled within GAP_GIVE_UP_S and GAP_GIVE_UP_ASKS asks, so they count as refused for good:
  * time alone is not enough, since a clock that jumps forward (a box without a real-time clock meeting NTP) would
- * give up every gap at once. Hop-limit gaps and seen given-up records past QUIET_EXPIRY_S go without a word.
+ * give up every gap at once. A missing tombstone is never given up. Hop-limit gaps and seen given-up records past
+ * QUIET_EXPIRY_S, and unseen ones past UNSEEN_EXPIRY_S, go without a word.
  * Returns how many gaps were given up.
  */
 export async function giveUpGaps(env: Env): Promise<number> {
   const t = nowS();
-  const due = `first_seen <= ? AND attempts >= ? AND ${NOT_HOPS}`;
+  const due = `first_seen <= ? AND attempts >= ? AND ${NOT_HOPS} AND NOT ${MISSING_DELETE}`;
   const [, gone] = await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO fed_gaps_given_up (origin, kind, v, reason, first_seen, given_up)
@@ -172,8 +184,12 @@ export async function giveUpGaps(env: Env): Promise<number> {
        ON CONFLICT(origin, kind, v) DO UPDATE SET given_up = excluded.given_up, seen_at = NULL`,
     ).bind(t, t - GAP_GIVE_UP_S, GAP_GIVE_UP_ASKS),
     env.DB.prepare(`DELETE FROM fed_origin_gaps WHERE ${due}`).bind(t - GAP_GIVE_UP_S, GAP_GIVE_UP_ASKS),
-    env.DB.prepare(`DELETE FROM fed_origin_gaps WHERE NOT (${NOT_HOPS}) AND first_seen <= ?`).bind(t - QUIET_EXPIRY_S),
-    env.DB.prepare("DELETE FROM fed_gaps_given_up WHERE seen_at IS NOT NULL AND seen_at <= ?").bind(t - QUIET_EXPIRY_S),
+    env.DB.prepare(
+      `DELETE FROM fed_origin_gaps WHERE NOT (${NOT_HOPS}) AND NOT ${MISSING_DELETE} AND first_seen <= ?`,
+    ).bind(t - QUIET_EXPIRY_S),
+    env.DB.prepare(
+      "DELETE FROM fed_gaps_given_up WHERE (seen_at IS NOT NULL AND seen_at <= ?) OR (seen_at IS NULL AND given_up <= ?)",
+    ).bind(t - QUIET_EXPIRY_S, t - UNSEEN_EXPIRY_S),
   ]);
   return gone?.meta.changes ?? 0;
 }

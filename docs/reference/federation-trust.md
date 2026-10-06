@@ -154,7 +154,8 @@ hub, a second hub and a Pocket station that carries records are the same thing h
   on, and the receiver asks its neighbours for each gap by itself, backing off from 5 minutes to a day per
   neighbour. A copy over fewer hops closes a hop gap, so the record passes on from there. A gap no neighbour fills
   within 7 days and 5 asks counts as refused for good; **Instance admin → Federation → Records given up** and
-  `doctor` list it until the sysop marks it seen. A record past the hop limit raises no alarm: at the edge of the
+  `doctor` list it until the sysop marks it seen. A missing tombstone is never given up: it is asked for daily
+  until a neighbour supplies it, so a deletion always arrives. A record past the hop limit raises no alarm: at the edge of the
   mesh every distant record is one, and its gap goes quietly after 30 days.
 - **Numbers are never reused.** Each origin numbers its records, callsign keys included, at least by the time in
   milliseconds, and a record's global id is that number, never its row id. A database restored from an older backup still numbers its

@@ -782,11 +782,6 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 }
 
 // only NATIVE caches are federated; imported third-party data stays local
-/** A native cache's current federation version, the `v` its next frame carries: its place in the caches sequence. */
-export async function cacheFedVersion(env: Env, id: number): Promise<number> {
-  const r = await env.DB.prepare("SELECT fed_rev FROM caches WHERE id = ?").bind(id).first<{ fed_rev: number }>();
-  return r?.fed_rev ?? 0;
-}
 /**
  * The global id of this instance's cache `id`: `<instance>:cache:<fed_id>`, the number the cache took from the
  * caches sequence when it was made. A database restored from an older backup hands its ids out again, never a
