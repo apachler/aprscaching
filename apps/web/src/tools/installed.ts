@@ -15,7 +15,13 @@
  * at all: its sandbox closes, and switching it on loads it again.
  */
 import { useEffect, useReducer } from "react";
-import { checkManifestSignature, toolApiProblem, type ToolManifest } from "@aprscaching/tools";
+import {
+  checkManifestSignature,
+  toolApiProblem,
+  type RemoteAnswer,
+  type Surface,
+  type ToolManifest,
+} from "@aprscaching/tools";
 import { API_BASE } from "../api.js";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 import { loadSandbox, fetchToolManifest, sandboxTool, type Sandbox } from "./sandbox.js";
@@ -89,6 +95,39 @@ export interface LoadedTool {
 const loaded = new Map<string, LoadedTool>();
 const starting = new Set<string>();
 const problems = new Map<string, string>();
+
+/**
+ * The command a running tool answers a connected station with for `word`, as the tool registered it, or null: the
+ * manifest opens the tool to remote use (approved at install), the tool holds `command`, targets `surface` when one
+ * is named, and did not keep the word for the operator (`{ remote: false }`, or a plain handler).
+ */
+export function remoteCommand(t: LoadedTool, word: string, surface?: Surface): string | null {
+  const { manifest, sandbox } = t;
+  if (!manifest.remote || !manifest.permissions.includes("command")) return null;
+  if (surface && !manifest.surfaces.includes(surface)) return null;
+  const w = word.toLowerCase();
+  const registered = sandbox.commands.find((c) => c.toLowerCase() === w);
+  return registered && !sandbox.remoteOff.includes(registered) ? registered : null;
+}
+
+/**
+ * Run the command a connected station typed on a surface: the first running tool that opened `word` to connected
+ * stations answers. Null when none does.
+ */
+export async function runRemoteCommand(word: string, args: string, surface: Surface): Promise<RemoteAnswer | null> {
+  const on = new Set(
+    toolHost
+      .list()
+      .filter((t) => t.enabled)
+      .map((t) => t.manifest.name),
+  );
+  for (const t of loaded.values()) {
+    if (!on.has(t.manifest.name)) continue;
+    const registered = remoteCommand(t, word, surface);
+    if (registered) return { tool: t.manifest.name, lines: await t.sandbox.runCommand(registered, args) };
+  }
+  return null;
+}
 
 /** Stop a running tool: its frame closes and the host forgets it (its beacon ends), so its name is free again. */
 function stop(name: string): void {

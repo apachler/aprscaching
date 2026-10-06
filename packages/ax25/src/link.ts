@@ -42,12 +42,20 @@ export interface LinkEvents {
   deliver(info: Uint8Array, pid?: number): void;
   state(s: LinkState, prev: LinkState): void;
   error?(msg: string): void; // link failure (N2 exceeded, FRMR, …)
+  /**
+   * A round-trip sample in milliseconds: `ack` times an I-frame from its first transmission to the frame that
+   * acknowledged it, `poll` times a poll (RR command, P=1) to its final response. A retransmitted I-frame or a
+   * repeated poll yields no sample, since the answer could belong to either copy (Karn's rule).
+   */
+  rtt?(ms: number, kind: "ack" | "poll"): void;
 }
 
 interface SentIFrame {
   ns: number;
   info: Uint8Array;
   pid?: number;
+  at: number; // when it was first sent
+  retx?: boolean; // sent more than once: its acknowledgement times nothing
 }
 
 export class ConnectedLink {
@@ -66,6 +74,8 @@ export class ConnectedLink {
   private t1: number | null = null; // absolute deadlines (ms); null = stopped
   private t3: number | null = null;
   private mod = 8; // active sequence modulus (8 or 128)
+  private pollAt: number | null = null; // when the outstanding poll went out, for its round-trip sample
+  private pollRepeated = false; // the outstanding poll went out more than once
 
   constructor(
     public local: Ax25Address,
@@ -124,6 +134,18 @@ export class ConnectedLink {
   send(info: Uint8Array, pid?: number): void {
     this.pending.push({ info, pid });
     if (this.state === "connected") this.sendPending();
+  }
+
+  /**
+   * Poll the peer once to time the round trip: an RR command with P=1, answered by a final response. Only on a
+   * connected link with no poll outstanding; T1 runs, so an unanswered poll enters the usual timer recovery.
+   * Returns whether the poll went out.
+   */
+  probe(): boolean {
+    if (this.state !== "connected" || this.pollAt !== null) return false;
+    this.tx("RR", true, true);
+    if (this.t1 === null) this.startT1();
+    return true;
   }
 
   // ----------------------------------------------------------------- inbound frames
@@ -242,6 +264,11 @@ export class ConnectedLink {
   }
   private onS(f: Ax25Frame): void {
     if (this.state !== "connected" && this.state !== "recovering") return;
+    if (f.pf && !f.command && this.pollAt !== null) {
+      if (!this.pollRepeated) this.ev.rtt?.(this.clock() - this.pollAt, "poll");
+      this.pollAt = null;
+      this.pollRepeated = false;
+    }
     this.peerBusy = f.type === "RNR";
     this.ackOwn(f.nr!);
     if (f.type === "REJ") this.retransmitFrom(f.nr!);
@@ -296,7 +323,7 @@ export class ConnectedLink {
     while (this.pending.length && !this.peerBusy && this.outstanding(this.va, this.vs) < this.cfg.window) {
       const { info, pid } = this.pending.shift()!;
       this.txI(this.vs, info, pid);
-      this.sent.push({ ns: this.vs, info, pid });
+      this.sent.push({ ns: this.vs, info, pid, at: this.clock() });
       this.vs = (this.vs + 1) % this.mod;
       this.stopT3();
       this.startT1();
@@ -307,10 +334,12 @@ export class ConnectedLink {
   /** Remove acked I-frames — N(R) acknowledges everything before it. */
   private ackOwn(nr: number): void {
     if (!this.inWindow(this.va, nr, this.vs)) return; // invalid N(R) — ignore
+    let acked: SentIFrame | undefined;
     while (this.va !== nr && this.sent.length) {
-      this.sent.shift();
+      acked = this.sent.shift();
       this.va = (this.va + 1) % this.mod;
     }
+    if (acked && !acked.retx) this.ev.rtt?.(this.clock() - acked.at, "ack");
     this.va = nr;
     this.rc = 0;
     if (this.va === this.vs) {
@@ -324,6 +353,7 @@ export class ConnectedLink {
     let sentAny = false;
     for (const s of this.sent)
       if (this.inWindow(nr, s.ns, last)) {
+        s.retx = true;
         this.txI(s.ns, s.info, s.pid);
         sentAny = true;
       }
@@ -333,12 +363,17 @@ export class ConnectedLink {
   private retransmitOne(nr: number): void {
     const s = this.sent.find((x) => x.ns === nr);
     if (s) {
+      s.retx = true;
       this.txI(s.ns, s.info, s.pid);
       this.startT1();
     }
   }
 
   private tx(type: FrameType, command: boolean, pf: boolean): void {
+    if (type === "RR" && command && pf) {
+      if (this.pollAt === null) this.pollAt = this.clock();
+      else this.pollRepeated = true;
+    }
     this.ev.send({ dst: this.remote, src: this.local, command, type, pf, nr: this.vr, extended: this.mod === 128 });
   }
   /** Emit a supervisory frame with an explicit N(R) (used by SREJ, which rejects a specific sequence). */
@@ -368,6 +403,8 @@ export class ConnectedLink {
     this.rejSent = false;
     this.rxbuf.clear();
     this.srejSent.clear();
+    this.pollAt = null;
+    this.pollRepeated = false;
   }
   private reestablish(): void {
     this.reset();
@@ -398,6 +435,8 @@ export class ConnectedLink {
   private stopAll(): void {
     this.stopT1();
     this.stopT3();
+    this.pollAt = null;
+    this.pollRepeated = false;
   }
   private to(s: LinkState): void {
     if (s !== this.state) {
