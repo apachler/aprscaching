@@ -243,25 +243,30 @@ a minute for each reason.
 - `SOUNDCARD_TX=1` on that port: transmit is off by default, port by port.
 - The PTT driver opened at start, and capture runs.
 - The box's transmit switch is on: a remote **TX off** stops every port.
-- The gateway confirms every callsign the box transmits under (`SOUNDCARD_CALL`, `DIGI_CALL`, `IGATE_CALL`,
-  `BOX_CALL`, `NETROM_CALL`, `BBS_NODE_CALL`, `BBS_FORWARD_CALL`, `FED_LINK_CALL`): each must be
-  control-verified and belong to whoever runs this box.
+- The gateway confirms every one of the box's callsigns the frame carries, as its source or as a via hop
+  (`SOUNDCARD_CALL`, `DIGI_CALL`, `IGATE_CALL`, `BOX_CALL`, `NETROM_CALL`, `BBS_NODE_CALL`,
+  `BBS_FORWARD_CALL`, `FED_LINK_CALL`, `MESHCOM_TX_CALL`, and the gateway's service call): each must be
+  control-verified, not suspended, and belong to whoever runs this box. A frame that carries none of them, a
+  repeat through an alias, goes out under `DIGI_CALL`. A refused call holds back only the frames that carry it.
 - The watchdog has not faulted the port.
 
 The gateway answers `GET /ingest/txgate`, asked with the box's own credential. A call belongs to the box's
-operator when the account that owns the box holds it (an enrolled box belongs to the sysop who created its
-code, or to the account it was paired with), when it is the call of a receiving site the box's credential may
-claim, or, for the shared `INGEST_SECRET`, when it is one of the instance's `ADMIN_CALLSIGNS`. A verified call
-of someone else's never opens this box's transmitter. For the shared secret, the sites are the instance's own
-(`FIRST_PARTY_SITES`); the stations a sysop trusts by call vouch for what they hear, not for this box.
+operator when the account that owns the box holds its base call, or, for the shared `INGEST_SECRET`, when an
+instance operator (`ADMIN_CALLSIGNS`) holds it. A box enrolled for a callsign belongs to whoever holds that call
+now; any other enrolled box belongs to the sysop who created its code, or to the account it was paired with
+since; a revoked box belongs to nobody. A receiving site's call is no exception: a trusted station or a
+`FIRST_PARTY_SITES` entry vouches for what it hears, not for this box's transmitter, so a site call passes only
+when the box's operator holds it. The shared secret names its box (`?box=`) only for a box paired on the secret;
+a box with its own key speaks only through its signature. A verified call of someone else's never opens this
+box's transmitter, and nothing passes while the call or the box's owner is suspended.
 
 With the shared secret the answer carries a MAC over the box's nonce. It stops an attacker who can change the
 gateway's responses but cannot read the box's requests. Over plain http the request carries the secret, so a
 reader on the path can compute the MAC too: use https for a gateway that is not on the box's loopback or LAN
 (the doctor warns, `ingest.url_http`). An enrolled box accepts the answer only over https or from `localhost`.
 
-The box asks at start and every three minutes. A "not verified" or "not this box's operator's" answer closes
-the gate at once. While the gateway cannot be reached, the last confirmation counts for `TX_GATE_GRACE`
+The box asks at start and every three minutes. A "not verified", "suspended" or "not this box's operator's"
+answer closes the gate for that call at once. While the gateway cannot be reached, the last confirmation counts for `TX_GATE_GRACE`
 (default 6 minutes, up to 24 hours), and the box asks again after 30 seconds, backing off
 ([Transmit gate](rf-ingest.md#transmit-gate)). A verification revoked while the gateway answers closes the
 gate within three minutes.

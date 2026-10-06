@@ -40,7 +40,7 @@ const db = (counts: Record<string, number>, trusted: { site: string; box: string
             return { meta: {} };
           },
           async all() {
-            return { results: verifiedRows(sql) };
+            return { results: sql.includes("FROM trusted_sites") ? trusted : verifiedRows(sql) };
           },
         };
       },

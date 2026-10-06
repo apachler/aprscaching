@@ -2,7 +2,7 @@
 // The nightly prune of the operational queues and logs: the APRS-IS outbox, box commands, bulletins and the
 // FBB forward log, unseen watch alerts, and long-silent stations — each kept only as long as it is of use.
 import { describe, it, expect } from "vitest";
-import { authEnv, call } from "./helpers/authflow.js";
+import { authEnv, call, markCallVerified } from "./helpers/authflow.js";
 import { runScheduled } from "@aprscaching/gateway/app";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -26,6 +26,7 @@ async function outboxItem(env: Env, payload: string, age: number, status = "queu
 describe("the APRS-IS outbox", () => {
   it("never hands the box an item queued more than an hour ago, and prunes queued and sent items", async () => {
     const env = authEnv({ ROOMS });
+    await markCallVerified(env, "OE8APR"); // the drain serves only a call still control-verified
     await outboxItem(env, "fresh", 60);
     await outboxItem(env, "stale", 2 * 3600);
     await outboxItem(env, "sent-recent", 2 * DAY, "sent");

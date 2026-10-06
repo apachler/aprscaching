@@ -9,6 +9,8 @@
  * server relayed arrives with an empty path, as if heard directly, so the box listens to the node over
  * ExtUDP and takes only acks to the service call from here.
  *
+ * The service call passes the box's transmit gate like any RF port's call (callverify.ts).
+ *
  * The box sends through a node only with its KISS password on (`--kiss auth on` and `--passwd`): without
  * it, anyone on the LAN could transmit under the operator's call. The node then opens with `NONCE: <hex>`
  * and takes the hex HMAC-SHA256 of the nonce, keyed with the password. A node that opens without a nonce
@@ -31,6 +33,8 @@ export interface MeshcomKissOpts {
   /** How long to wait for the node's nonce before taking it as a node without a password. */
   authWaitMs?: number;
   log?: Pick<Console, "log" | "error">;
+  /** The box's transmit gate (callverify.ts): why the gateway does not confirm a call for this box, or null. */
+  gate?: (call: string) => string | null;
 }
 
 /** The node's verdict on one frame (KISS port 15). */
@@ -83,9 +87,19 @@ export class MeshcomKiss {
     this.serviceCall = call.toUpperCase();
   }
 
-  /** Can it send from `from`? Only an authenticated link, and only a call of the node's base call. */
+  /** Is the link up and authenticated? */
+  ready(): boolean {
+    return this.state === "ready";
+  }
+
+  /**
+   * Can it send from `from`? Only an authenticated link, only a call of the node's base call, and only a call
+   * the box's transmit gate passes.
+   */
   canSend(from: string): boolean {
-    return this.state === "ready" && baseOf(from) === baseOf(this.o.nodeCall);
+    return (
+      this.state === "ready" && baseOf(from) === baseOf(this.o.nodeCall) && !this.o.gate?.(from.trim().toUpperCase())
+    );
   }
 
   /**

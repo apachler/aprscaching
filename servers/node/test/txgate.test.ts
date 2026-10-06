@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // GET /ingest/txgate over the real gateway and a migrated SQLite, asked the way the ingest box asks it
-// (apps/ingest/src/callverify.ts): a call passes only when it is control-verified AND belongs to whoever runs
-// the box (its owning account, the operator of a site its credential may claim, or for the shared secret the
-// instance's own operator calls). The shared secret's answer carries a MAC the box checks.
+// (apps/ingest/src/callverify.ts): a call passes only when it is control-verified AND its base call is held by
+// whoever runs the box (its owning account, or for the shared secret the instance's own operators). A receiving
+// site's call is no exception. The shared secret's answer carries a MAC the box checks. Ownership, release,
+// erasure and suspension are box_identity.test.ts.
 import { describe, it, expect } from "vitest";
 import { createPrivateKey } from "node:crypto";
 import type { Env } from "@aprscaching/gateway/env";
@@ -51,12 +52,13 @@ const lookup = (env: Env, o: { secret?: string; key?: BoxKey; boxId?: string }) 
   });
 
 describe("GET /ingest/txgate", () => {
-  it("for the shared secret: the instance's operator calls and its sites' operators pass; others do not", async () => {
+  it("for the shared secret: the instance's operator calls pass; another ham's, even a site's, do not", async () => {
     const { env } = await world();
     const got = await lookup(env, { secret: SECRET })(["OE8APR-10", "OE3SIT-7", "OE3OTH-1", "OE9NEW-9"]);
     expect(Object.fromEntries(got)).toEqual({
       "OE8APR-10": { ok: true, reason: undefined },
-      "OE3SIT-7": { ok: true, reason: undefined },
+      // FIRST_PARTY_SITES vouches for what OE3SIT-10 hears, not for this box's transmitter
+      "OE3SIT-7": { ok: false, reason: "not held by this box's operator" },
       "OE3OTH-1": { ok: false, reason: "not held by this box's operator" },
       "OE9NEW-9": { ok: false, reason: "not control-verified" },
     });
@@ -69,9 +71,9 @@ describe("GET /ingest/txgate", () => {
     await env.DB.prepare(
       "INSERT INTO trusted_sites (site, trusted_by, trusted_at) VALUES ('OE3TRU-10', 'operator', 0)",
     ).run();
-    const got = await lookup(env, { secret: SECRET })(["OE3TRU-1", "OE3SIT-7"]);
+    const got = await lookup(env, { secret: SECRET })(["OE3TRU-1", "OE8APR-7"]);
     expect(got.get("OE3TRU-1")).toMatchObject({ ok: false, reason: "not held by this box's operator" });
-    expect(got.get("OE3SIT-7")?.ok).toBe(true); // FIRST_PARTY_SITES: the instance's own site
+    expect(got.get("OE8APR-7")?.ok).toBe(true);
   });
 
   it("for an enrolled box: the calls of the account that owns it, and no one else's", async () => {
