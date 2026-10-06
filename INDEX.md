@@ -23,7 +23,7 @@ The APRScaching-first web app, by OE8APR. This file is a map of the repository.
 - `apps/ingest/` — the operator-local RF/APRS-IS ingest (KISS, AGWPE, host mode, MeshCom, Meshtastic, IGate,
   digipeater, NET/ROM node, AXUDP/AXIP)
 - `apps/web/` — the React + MapLibre single-page app
-- `db/migrations/` — `0001_baseline.sql` and the numbered files applied on top of it
+- `db/migrations/` — the schema, `0001_baseline.sql` (edited directly until 1.0; numbered migrations follow it after)
 
 ## Deployment — `deploy/`
 - `setup.sh` (writes a self-host `.env`), `docker-compose.yml` + `compose.home.yml` + `compose.ingest-only.yml`,
