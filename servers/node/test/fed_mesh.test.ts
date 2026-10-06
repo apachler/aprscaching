@@ -4,7 +4,7 @@
 // reaches the next one, signed by its origin. Real gateways throughout, each over its own SQLite database.
 import { createHash } from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
+import { pushToHub, syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { call } from "./helpers/authflow.js";
 import { addCache, instanceEnv, newFedKey, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
@@ -308,6 +308,36 @@ describe("per-origin sync", () => {
     await syncAllPeers(c.env);
     expect(await caches(c.env)).toEqual([`a.example:cache:${graz}`]);
     expect(await mark(c.env, "cache")).toBe(0);
+  });
+});
+
+describe("a spoke that pushes", () => {
+  it("is held by its hub as far as its pages join up, and passed on like any origin", async () => {
+    const SUBMIT = "submit-secret";
+    const [hub, b] = await Promise.all([node("hub", { FED_SUBMIT_SECRET: SUBMIT, FED_RESERVE: "all" }), node("b")]);
+    const s = await node("s", { FED_HUB_URL: hub.url, FED_SUBMIT_SECRET: SUBMIT });
+    await follow(b, hub);
+    network([hub, b]);
+    const id = await addCache(s.env, now() - 60);
+    await pushToHub(s.env);
+    expect(await mark(hub.env, "cache", "s.example")).toBe(await rev(s.env, id));
+    await syncAllPeers(b.env);
+    expect(await caches(b.env, "s.example")).toEqual([`s.example:cache:${id}`]);
+
+    // a page that does not say where it starts moves no mark
+    const later = await addCache(s.env, now() - 30);
+    const { encodeFedSyncPage, buildFedFrames } = await import("@aprscaching/gateway/fedsync");
+    const built = (await buildFedFrames(s.env, "s.example", "cache", await rev(s.env, id), 500))!;
+    const res = await serve(hub.env)(
+      new Request(`${hub.url}/federation/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/cbor", "x-fed-secret": SUBMIT },
+        body: encodeFedSyncPage("s.example", built.nextCursor, true, built.frames) as BodyInit,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await mark(hub.env, "cache", "s.example")).toBe(await rev(s.env, id));
+    expect(await rev(s.env, later)).toBeGreaterThan(await rev(s.env, id));
   });
 });
 

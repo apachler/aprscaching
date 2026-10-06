@@ -97,7 +97,8 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
   // where the spoke's page starts, so the hub knows whether it continues what it holds of the spoke
-  const since = Number(req.headers.get("x-fed-since"));
+  const sinceRaw = req.headers.get("x-fed-since");
+  const since = sinceRaw && /^\d+$/.test(sinceRaw) ? Number(sinceRaw) : NaN;
   return submitFrames(env, page.instance, submitKey, page.frames, rotations, {
     ...page,
     ...(Number.isSafeInteger(since) && since >= 0 && { since }),

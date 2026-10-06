@@ -1320,7 +1320,7 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
   ok(
     "the hub's summary lists the spoke, how far it holds its caches, and the spoke's key",
     spokeHeld?.held?.cache === spokeBody.updatedAt && spokeHeld?.publicKey === spub,
-    JSON.stringify(summary.data),
+    JSON.stringify({ updatedAt: spokeBody.updatedAt, summary: summary.data }),
   );
   const transitOf = async (query) => {
     const res = await fetch(`${SUB}/federation/sync/origin?origin=oe.spoke&kind=cache&since=0${query}`);
