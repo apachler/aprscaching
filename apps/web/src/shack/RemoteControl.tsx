@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Icon } from "../ui/index.js";
@@ -11,9 +10,10 @@ import { TERMS } from "../terms.js";
  * them over its existing outbound connection. A box answers only the account it is paired to: the box
  * prints a one-time pairing code at start, and entering it here links the box. TX is gated on callsign
  * control-verification: unverified operators get RX/status only, with the transmit controls disabled +
- * a reason.
+ * a reason. A beacon goes out at the box's own configured position (`BOX_LAT`, `BOX_LON` on the box), never at a
+ * place picked here.
  */
-export function RemoteControl(props: { callsign: string; verified: boolean; map: maplibregl.Map | null }) {
+export function RemoteControl(props: { callsign: string; verified: boolean }) {
   const fmt = useFmt();
   const toast = useToast();
   const confirmDialog = useConfirm();
@@ -101,8 +101,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
     }
   }
   function beacon() {
-    const c = props.map?.getCenter();
-    send("beacon", { lat: c?.lat, lon: c?.lng, comment: comment || undefined });
+    send("beacon", { comment: comment || undefined });
   }
   function sendMessage() {
     send("message", { to: to.trim().toUpperCase(), text: text.trim() });
@@ -163,12 +162,16 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
         <Button
           onClick={beacon}
           disabled={!canTx}
-          title={
-            canTx ? "Beacon the map centre" : unpaired ? "Pair this box first" : "Verify your callsign to transmit"
+          hint={
+            canTx
+              ? "Beacon the box's own position (BOX_LAT, BOX_LON on the box)"
+              : unpaired
+                ? "Pair this box first"
+                : "Verify your callsign to transmit"
           }
         >
           <Icon name="place" cp437="" className="lead-ic" />
-          Beacon here
+          Beacon
         </Button>
         <Button onClick={() => send("igate", { on: true })} disabled={!canTx} hint={TERMS.igate}>
           IGate on

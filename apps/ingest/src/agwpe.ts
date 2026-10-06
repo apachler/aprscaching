@@ -6,6 +6,7 @@ import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
 import { tncPacket } from "./link.js";
+import type { SentFrames } from "./echo.js";
 
 /** The largest frame payload accepted. A monitored AX.25 frame is a few hundred bytes; a header declaring
  *  more than this is not an AGW Packet Engine talking, and waiting for its data would buffer without end. */
@@ -51,6 +52,8 @@ export interface AgwpeOpts {
   radioPort?: number;
   /** Base reconnect delay (default 3000 ms); grows with backoff while the engine stays unreachable. */
   retryMs?: number;
+  /** The frames the box sent on its other ports: an echo of one heard here is dropped. */
+  sent?: SentFrames;
 }
 export interface AgwpeHandlers {
   onPacket: (p: Packet) => void;
@@ -100,6 +103,7 @@ export class AgwpeTnc {
       this.sock.write(
         Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "K", from: f.src, to: f.dst, data })),
       );
+      this.o.sent?.remember(ax);
       return true;
     } catch {
       return false;
@@ -129,6 +133,7 @@ export class AgwpeTnc {
       for (const fr of frames) {
         if (fr.kind !== "K") continue; // raw AX.25 monitor frames only
         const ax = fr.data.length > 1 ? fr.data.slice(1) : fr.data; // strip the leading radio-port byte
+        if (this.o.sent?.echoes(ax)) continue; // the box's own transmission, heard back
         const f = decodeAx25(ax);
         if (!f) continue;
         this.h.onFrame?.(f);

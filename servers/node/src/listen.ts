@@ -21,6 +21,7 @@ import { liveRegionOf } from "@aprscaching/gateway/live";
 import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { spaFile } from "./spa.js";
+import { BODY_MAX_BYTES } from "./host.js";
 
 /** The one path TLS_CA_CERT is served at. No other path ever reads a file named by configuration. */
 const CA_CERT_PATH = "/pocket-ca.crt";
@@ -196,9 +197,21 @@ async function serveRequest(
       nres.end(Buffer.from(await response.arrayBuffer()));
     }
   } catch (e) {
+    // handle() answers its own failures; this catches the bridge's (an oversized or broken body, a client gone
+    // mid-stream). The client learns the size limit and nothing else.
+    if (!(e instanceof BodyTooLarge)) console.error("%s %s:", nreq.method ?? "?", nreq.url ?? "?", e);
+    if (nres.headersSent) {
+      nres.destroy();
+      return;
+    }
     nres.statusCode = e instanceof BodyTooLarge ? 413 : 500;
     nres.setHeader("content-type", "application/json");
-    nres.end(JSON.stringify({ error: (e as Error).message }));
+    if (e instanceof BodyTooLarge) {
+      // the rest of the body is never read: answer, then close the connection under it
+      nres.setHeader("connection", "close");
+      nres.once("finish", () => nreq.socket.destroy());
+    }
+    nres.end(JSON.stringify({ error: e instanceof BodyTooLarge ? e.message : "internal error" }));
   }
 }
 
@@ -240,10 +253,8 @@ function sendSpa(nres: http.ServerResponse, f: ReturnType<typeof spaFile>, metho
     .pipe(nres);
 }
 
-/** The bridge buffers the whole body BEFORE routing/auth, so without a ceiling one
- *  multi-GB anonymous POST OOMs the Pi. 20 MB clears every legitimate payload (the largest is a
- *  cache-media upload); past it the socket is destroyed and the request answered 413. */
-const BODY_MAX_BYTES = 20 * 1024 * 1024;
+/** The bridge buffers the whole body BEFORE routing/auth, so it stops at BODY_MAX_BYTES (host.ts): past it
+ *  reading stops, the request is answered 413 and the connection closed. */
 class BodyTooLarge extends Error {
   constructor() {
     super("request body too large");
@@ -256,7 +267,8 @@ function readBody(req: http.IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {
     req.on("data", (c) => {
       total += (c as Buffer).length;
       if (total > BODY_MAX_BYTES) {
-        req.destroy();
+        req.removeAllListeners("data");
+        req.pause();
         reject(new BodyTooLarge());
         return;
       }

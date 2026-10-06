@@ -84,15 +84,40 @@ Select the pin again (**Unpin …**) to take it off. Your pins are kept in this 
 with your account, so another device shows them too. A pin shows while its tool runs, and goes when you switch the
 tool off or remove it. A link to a tool you have not installed opens **Tools** on the registry, filtered to it.
 
+## Tools on connected sessions
+
+While the [packet terminal](packet-and-bbs.md#connect-to-a-bbs-or-node) has a TNC open, tools that target the
+terminal take part in its connected sessions:
+
+- **They hear sessions open and close.** A tool with the `event` permission learns when a channel connects or
+  disconnects: the other station's callsign, yours, the channel and who opened it. **Connect bell** rings this way.
+- **They greet stations that connect to you.** On a session another station opened, such a tool may send a few
+  lines, such as **Auto-responder**'s welcome or **Away note**'s message: at most 4 lines of 256 characters, within
+  2 minutes of the connect. On a session you opened, to a BBS or a node, tools only listen; you do the typing.
+- **They answer commands from stations that connect to you.** A station connected to you types a word without the
+  slash, such as `INFO` or `NOTE back at 18z`. If a running tool opened that command to connected stations, and you
+  approved its remote use when you installed it, the tool runs it and the terminal sends up to 4 lines of its answer
+  back. A tool's other commands stay yours, and the far end of a session you opened never runs a command. Commands
+  run one after another, at most 4 waiting on a session.
+- **They time the link.** The terminal publishes the round trip of each acknowledged frame on the tool bus, and a
+  tool such as **Link ping** can ask for a ping: one poll on the channel in view, at most one every 10 seconds.
+
+Every line a tool sends leaves through the terminal, under the terminal's own gate: your verified callsign and
+your consent for this tab. Without them the tool's line is held. Each one shows in **Recent transmissions** under
+the tool's title.
+
+Tools run in this browser, so only the packet terminal's sessions reach them. The instance's connected-mode BBS and
+NET/ROM node run on its ingest box, where no tool runs.
+
 ## What each permission means
 
 | Permission | The tool may |
 |---|---|
 | `panel` | Show a small panel of text, tables and bars. It cannot draw anything else on the page. |
-| `command` | Answer `/commands` you type, here or in the terminal and BBS. |
+| `command` | Answer `/commands` you type here, and the commands it opens to stations connected to your terminal. |
 | `monitor` | Read the frames your radio hears, and colour or hide lines in the packet monitor. |
 | `decoder` | Add a decoder to the **Decode** list. |
-| `event` | React when a station connects, a frame is heard, or a minute passes. |
+| `event` | React when a station connects or disconnects, or a minute passes, and greet a station that connects to you. |
 | `map` | Put markers on the map. |
 | `ipc` | Talk to other tools you run: share what it learns and ask them questions. |
 | `network` | Reach the internet, and only the addresses the prompt lists under **connects to**. Without this permission it reaches nothing. |

@@ -18,6 +18,7 @@ import {
   ScriptRunner,
   validateSteps,
   scriptTxCost,
+  TX_CLOSED,
   type ScriptSession,
 } from "@aprscaching/tools";
 import type { Ax25Frame } from "@aprscaching/ax25";
@@ -28,9 +29,12 @@ import { holdRadio, radioBusyText } from "../rf/radioLink.js";
 import { radioLink, useRadioLink } from "../rf/RadioLinkHost.js";
 import { terminalTxNote } from "../rf/txLog.js";
 import { useFmt } from "../format.js";
-import { useToolHost, feedHeard } from "../tools/host.js";
+import { useToolHost, feedHeard, toolTitle } from "../tools/host.js";
+import { runRemoteCommand } from "../tools/installed.js";
+import { attachTerminalTools, type TerminalTools } from "./terminalTools.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 import { Button, Disclosure, EmptyState, Segmented, Tabs, tabPanelId } from "../ui/index.js";
+import { useToast } from "../ui/Toast.js";
 import { TERMS } from "../terms.js";
 
 /** The transport surface the terminal drives — a USB or Bluetooth KISS link, or an injected sim. */
@@ -118,6 +122,7 @@ export function PacketTerminal(props: {
   const namesRef = useRef(new StationRegistry());
   const runnerRef = useRef<ScriptRunner | null>(null); // GPAUTO scripted-session engine
   const disposeScriptSvc = useRef<null | (() => void)>(null); // teardown for the session.script host-service
+  const toolsRef = useRef<TerminalTools | null>(null); // session events, link.rtt and pings for the tools
 
   const linkOk: Record<TncLink, boolean> = { usb: webSerialSupported(), ble: webBluetoothSupported() };
   const [tncLink, setTncLink] = useState<TncLink>(() => (linkOk.usb || !linkOk.ble ? "usb" : "ble"));
@@ -145,6 +150,9 @@ export function PacketTerminal(props: {
   const simulated = !!props.makeTransport;
   const radio = useRadioLink();
   const txOk = props.verified && (simulated || radio.termTx);
+  const toast = useToast();
+  // what the tools' session wiring reads at the moment a line goes out, not when the TNC opened
+  const live = useRef({ verified: props.verified, activeId: null as number | null });
 
   // CTEXT: when a channel becomes connected and we haven't greeted it, send the connect-text once.
   useEffect(() => {
@@ -178,16 +186,25 @@ export function PacketTerminal(props: {
           void closePort();
         },
       );
-      // every frame that leaves a real TNC joins the session's Recent transmissions and lights the TX indicator
+      // every frame that leaves a real TNC joins the session's Recent transmissions and lights the TX indicator; a
+      // line a tool sent is listed under the tool's title
       const onAir = simulated
         ? transport
         : {
             send: (f: Ax25Frame) => {
               transport.send(f);
-              radioLink.recordTx(terminalTxNote(f));
+              radioLink.recordTx(terminalTxNote(f, toolsRef.current?.featureOf(f)));
             },
           };
-      const session = new TerminalSession(myCall, onAir, notify, namesRef.current);
+      const session = new TerminalSession(
+        myCall,
+        onAir,
+        () => {
+          toolsRef.current?.sync();
+          notify();
+        },
+        namesRef.current,
+      );
       session.allowTransmit(props.verified && (simulated || radioLink.getState().termTx));
       await transport.connect(9600);
       transportRef.current = transport;
@@ -211,6 +228,19 @@ export function PacketTerminal(props: {
             ?.lines.filter((l) => l.dir === "rx")
             .map((l) => l.text) ?? [],
       };
+      // The tools hear the channels open and close, answer stations that connect here, and time the link. A
+      // tool's line passes the same gate as the operator's: a verified callsign and this tab's consent.
+      toolsRef.current = attachTerminalTools({
+        host,
+        session,
+        myCall,
+        txBlocked: () => (live.current.verified && (simulated || radioLink.getState().termTx) ? null : TX_CLOSED),
+        activeChannel: () => live.current.activeId,
+        runRemote: runRemoteCommand,
+        notice: toast,
+        title: toolTitle,
+        log: (m) => console.log("[terminal]", m),
+      });
       const runner = new ScriptRunner(port);
       runnerRef.current = runner;
       // A session script connects and sends over the TNC, so a calling tool must hold 'tx'. The steps are checked,
@@ -266,6 +296,8 @@ export function PacketTerminal(props: {
     pollRef.current = null;
     disposeScriptSvc.current?.();
     disposeScriptSvc.current = null;
+    toolsRef.current?.dispose();
+    toolsRef.current = null;
     runnerRef.current = null;
     const transport = transportRef.current;
     transportRef.current = null;
@@ -334,6 +366,7 @@ export function PacketTerminal(props: {
   }
 
   const active = session?.channels.find((c) => c.id === activeId) ?? session?.channels[0];
+  live.current = { verified: props.verified, activeId: active?.id ?? null };
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 

@@ -133,7 +133,12 @@ async function main() {
       "--use-file-for-fake-audio-capture=" + wavPath, // feed our synthesised PSK31 as the "mic"
       "--autoplay-policy=no-user-gesture-required",
       "--no-sandbox",
+      // Chromium's output on a fake, timer-clocked sink, never the host's sound server: a desktop
+      // PipeWire/Pulse server clocks the AudioContext out of step with the fake mic and garbles the decode.
+      "--disable-audio-output",
     ],
+    // No reachable Pulse server either, so the host's sound server has no part in the run.
+    env: { ...process.env, PULSE_SERVER: "unix:/nonexistent" },
   });
   let decoded;
   try {

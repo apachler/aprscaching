@@ -30,6 +30,14 @@ Bluetooth on a computer or an Android phone. Browsers on an iPhone or iPad have 
 Every frame the terminal sends lights **TX** on the radio chip in the top bar and joins **Recent
 transmissions** in **Settings → My radio (browser)**, marked **Terminal**. **Close TNC** releases the TNC. **↓ .ans** saves the current pane as ANSI art.
 
+### Tools on the terminal's sessions
+
+A station can connect to you as well: the terminal accepts the call on a channel of its own while you may transmit.
+The tools you run can then greet it, answer the commands they open to connected stations (such as `INFO` or
+`NOTE <text>`), ring when it connects and time the link. On a session you opened, tools only listen. A tool's lines
+go out under the same gate as yours and are marked with the tool's title in **Recent transmissions**
+([Tools on connected sessions](tools.md#tools-on-connected-sessions)).
+
 ## Use the instance's BBS
 
 The **BBS** app reads and writes the instance's mail store. Bulletins are open to everyone. Your mail needs
@@ -59,7 +67,9 @@ federates with.
 When the sysop runs a [NET/ROM](../glossary.md#netrom) node or the connected-mode BBS, you reach them with the
 **Packet terminal** like any other station. Connect to the node's callsign or alias, and use `C <callsign>` at
 its prompt to go on to another station. The connected-mode BBS answers with the F6FBB command set (list, read,
-send, kill, help) over the same mail store as the **BBS** app. The node's and the BBS's callsigns come from
+send, kill, help) over the same mail store as the **BBS** app. Both run on the instance's ingest box, so your
+tools never answer on their sessions: the BBS and the node keep their own commands. The **BBS** and **NET/ROM node** apps
+show the panels of tools that target them. The node's and the BBS's callsigns come from
 the sysop; how they are set up is under [Packet: BBS & NET/ROM node](../run/radios/packet-node.md).
 
 ## Next

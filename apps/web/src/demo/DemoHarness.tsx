@@ -165,7 +165,7 @@ export function DemoHarness({ which }: { which: string }) {
           </>
         }
       >
-        <RemoteControl callsign={ME} verified map={null} />
+        <RemoteControl callsign={ME} verified />
       </AppShell>
     );
   }

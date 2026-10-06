@@ -31,7 +31,7 @@ import { fileTiles } from "./tiles.js";
 import {
   fedSyncInterval,
   gitHead,
-  guardFederationFetches,
+  guardOutboundFetches,
   logStrayErrors,
   relayPollInterval,
   roomNamespace,
@@ -100,7 +100,7 @@ const env: Env = {
   // AGPL §13 source: commit from env (an image bakes it in, possibly empty), else git (self-host-from-source)
   SOURCE_COMMIT: process.env.SOURCE_COMMIT || gitHead(),
 };
-guardFederationFetches(env);
+guardOutboundFetches(env);
 
 // ---- listeners: plain http, and https beside it when HTTPS_PORT is set ----
 const TLS_CA_CERT = process.env.TLS_CA_CERT?.trim() || undefined;

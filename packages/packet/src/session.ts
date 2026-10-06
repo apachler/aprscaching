@@ -43,8 +43,16 @@ export interface Channel {
   id: number;
   remote: Ax25Address;
   remoteCall: string;
+  /** Who opened the link: this station (`outgoing`) or the remote one (`incoming`). */
+  direction: "incoming" | "outgoing";
   state: LinkState;
   lines: TermLine[];
+}
+
+/** What the session reports beyond `notify`: each received line, and each round-trip sample a link takes. */
+export interface SessionListener {
+  line?(ch: Channel, text: string): void;
+  rtt?(ch: Channel, ms: number, kind: "ack" | "poll"): void;
 }
 
 /** Decode an info field to text 1:1 by byte (keeps CP437/ANSI bytes intact for the retro font). */
@@ -71,6 +79,8 @@ export class TerminalSession {
    * on only for a licensed, control-verified callsign.
    */
   private txAllowed = true;
+  /** Set by the host to hear received lines and round-trip samples. */
+  listener: SessionListener = {};
 
   constructor(
     myCall: string,
@@ -105,16 +115,16 @@ export class TerminalSession {
   /** Open a new connected-mode channel to a remote station; returns its id. */
   connect(remoteCall: string): number {
     if (!this.txAllowed) throw new Error("transmit is not allowed: verify your callsign to connect");
-    const id = this.makeChannel(parseAddr(remoteCall));
+    const id = this.makeChannel(parseAddr(remoteCall), "outgoing");
     this.links.get(id)!.connect();
     this.notify();
     return id;
   }
 
   /** Build a channel + its link (shared by outgoing connect() and incoming-call acceptance). */
-  private makeChannel(remote: Ax25Address): number {
+  private makeChannel(remote: Ax25Address, direction: Channel["direction"]): number {
     const id = this.nextId++;
-    const ch: Channel = { id, remote, remoteCall: addrStr(remote), state: "disconnected", lines: [] };
+    const ch: Channel = { id, remote, remoteCall: addrStr(remote), direction, state: "disconnected", lines: [] };
     const link = new ConnectedLink(
       this.local,
       remote,
@@ -124,7 +134,8 @@ export class TerminalSession {
           if (this.txAllowed) this.transport.send(f);
         },
         deliver: (info) => {
-          this.append(ch, "rx", toText(info));
+          const lines = this.append(ch, "rx", toText(info));
+          for (const l of lines) if (l) this.listener.line?.(ch, l);
           this.notify();
         },
         state: (s) => {
@@ -132,6 +143,7 @@ export class TerminalSession {
           this.sys(ch, `*** ${s}`);
           this.notify();
         },
+        rtt: (ms, kind) => this.listener.rtt?.(ch, ms, kind),
       },
       this.cfg,
       this.clock,
@@ -149,6 +161,17 @@ export class TerminalSession {
     this.append(ch, "tx", text);
     link.send(enc(text + "\r"));
     this.notify();
+  }
+
+  /**
+   * Poll a connected channel's peer once to time the round trip; the sample arrives through `listener.rtt`. False
+   * when the channel is not connected, a poll is already out, or transmitting is not allowed.
+   */
+  probe(id: number): boolean {
+    if (!this.txAllowed) return false;
+    const done = this.links.get(id)?.probe() ?? false;
+    if (done) this.notify();
+    return done;
   }
 
   /** Disconnect (graceful DISC) a channel. */
@@ -188,7 +211,7 @@ export class TerminalSession {
           this.notify();
           return; // at capacity — the peer's SABM retransmit / eventual timeout handles it
         }
-        const id = this.makeChannel(f.src);
+        const id = this.makeChannel(f.src, "incoming");
         ch = this.channels.find((c) => c.id === id);
       }
       if (ch) this.links.get(ch.id)?.onReceive(f);
@@ -207,8 +230,11 @@ export class TerminalSession {
     ch.lines.push(line);
     if (ch.lines.length > this.lineCap) ch.lines.splice(0, ch.lines.length - this.lineCap);
   }
-  private append(ch: Channel, dir: TermLine["dir"], text: string): void {
-    for (const line of text.split(/\r\n|\r|\n/)) this.pushLine(ch, { dir, text: line, at: this.clock() });
+  /** Append text as lines; returns the lines. */
+  private append(ch: Channel, dir: TermLine["dir"], text: string): string[] {
+    const lines = text.split(/\r\n|\r|\n/);
+    for (const line of lines) this.pushLine(ch, { dir, text: line, at: this.clock() });
+    return lines;
   }
   private sys(ch: Channel, text: string): void {
     this.pushLine(ch, { dir: "sys", text, at: this.clock() });

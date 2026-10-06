@@ -641,7 +641,11 @@ CREATE TABLE positions (
   -- the enrolled box that delivered the position (box_keys.box_id), from its signed request; NULL for one the
   -- shared INGEST_SECRET or any other path stored. A site trusted through a box (box_trusted_sites) attests
   -- only the positions that box delivered itself (attestedsites.ts sitesFor).
-  ingest_box TEXT
+  ingest_box TEXT,
+  -- 1 when the fix matched a beacon this instance asked an ingest box to send (box_commands, same call, inside
+  -- its time window and near the position the box reported): it says where the box is, not where its operator
+  -- is, so it is never Tier A or B evidence nor a federation corroboration (beacontag.ts).
+  commanded  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_pos_call_ts ON positions (callsign, ts DESC);
 -- the nightly firehose TTL and any source+time query range-scan this instead of the whole table
@@ -920,6 +924,8 @@ CREATE TABLE box_commands (
   acked_at   INTEGER
 );
 CREATE INDEX idx_box_commands_poll ON box_commands (box_id, status, created_at);
+-- the commanded beacons an ingest batch checks its fixes against (beacontag.ts)
+CREATE INDEX idx_box_commands_beacon ON box_commands (kind, sent_at);
 
 -- The account that controls a box, so no signed-in user can key another operator's radio. The box
 -- itself still leases and acks with the ingest secret.
@@ -1182,6 +1188,9 @@ CREATE TABLE fed_peers (
 -- address.
 CREATE UNIQUE INDEX fed_peers_instance_live ON fed_peers (instance) WHERE trust != 'blocked';
 CREATE INDEX idx_fed_peers_listed ON fed_peers (listed_at) WHERE listed_at IS NOT NULL;
+-- Every row of an instance with its trust: the blocked and trusted checks per origin that the summary and the
+-- origin pages run (fedtransit.ts policySql) read this, blocked rows included, which the unique index above leaves out.
+CREATE INDEX idx_fed_peers_instance_trust ON fed_peers (instance, trust);
 
 -- The last good signed registry per authority key: `max_at` rejects a replayed older document, and
 -- `doc` keeps enforcing its bindings while the registry is unreachable.
@@ -1491,7 +1500,9 @@ CREATE TABLE fed_transit (
   lon         REAL,
   received_at INTEGER NOT NULL
 );
-CREATE INDEX idx_fed_transit_origin ON fed_transit (origin, kind, v);
+-- The hop count rides in the index, so the newest frame that may pass on (fedtransit.ts heldFor) is found
+-- walking back from the top without reading a row.
+CREATE INDEX idx_fed_transit_origin ON fed_transit (origin, kind, v, hops);
 
 -- Push-to-hub state that survives a restart.
 --

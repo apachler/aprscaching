@@ -2,8 +2,9 @@
 /**
  * The journeys walk: the main tasks of the app, done the way a person does them (the visible controls, by
  * their names), on the demo fixtures, at phone and desktop size. Each step leaves a screenshot in
- * out/journeys/<journey>-<view>-<n>-<step>.png and a line in out/journeys/log.txt; a step that cannot find
- * its control is recorded, not fatal, because a control nobody can find is the finding.
+ * out/journeys/<journey>-<view>-<n>-<step>.png and a line in out/journeys/log.txt. A step that cannot find
+ * its control is STUCK: the walk records it and goes on, then exits non-zero, because a control nobody can find
+ * is the finding, and a name that drifted from its step must not pass unnoticed.
  *
  *   pnpm --filter @aprscaching/web build && node apps/web/test/visual/journeys.mjs [--only find,hide]
  */
@@ -21,10 +22,14 @@ const VIEWS = {
   desktop: { width: 1280, height: 800 },
 };
 
-/** Each journey: who, where it starts, and its steps — [what, how]. `how` is "click:<role>:<name>",
- *  "fill:<label>:<text>" or "key:<key>"; "a||b" tries the names in turn (the phone's tab bar says "Log" where
- *  the desktop panel says "Log a find"). Names match the way a person reads the screen. A third element lists the
- *  views a step belongs to, for a step only one layout needs (More, on a phone). */
+/** A click on the first control of `role` ("link|button" tries each) whose accessible name matches `name`. */
+const click = (role, name) => ({ role, name });
+
+/** Each journey: who, where it starts, and its steps — [what, how]. `how` is click(role, /name/),
+ *  "fill:<label>:<text>" or "key:<key>". A name is a regex over the accessible name, anchored to the words a
+ *  person reads first, so one step covers both layouts (the phone's tab bar says "Hide" where the desktop top
+ *  bar says "+ Hide a cache") and a tile whose name goes on into its blurb. A third element lists the views a
+ *  step belongs to, for a step only one layout needs (More, on a phone). */
 const JOURNEYS = [
   {
     name: "first-visit",
@@ -32,9 +37,9 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Landing", null],
-      ["Explore the map", "click:link|button:Explore the live map"],
+      ["Explore the map", click("link|button", /^Explore the live map\b/i)],
       ["The tour", null],
-      ["Skip the tour", "click:button:Skip"],
+      ["Skip the tour", click("button", /^Skip\b/i)],
     ],
   },
   {
@@ -43,7 +48,7 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Landing", null],
-      ["Sign in", "click:link|button:Sign in with your callsign"],
+      ["Sign in", click("link|button", /^Sign in with your callsign\b/i)],
       ["Enter a call", "fill:Callsign:OE8APR"],
     ],
   },
@@ -53,11 +58,11 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Map", null],
-      ["Open Nearby", "click:button:Nearby"],
-      ["Pick the nearest cache", "click:button:The Landhaus courtyard"],
-      ["Navigate", "click:button:Navigate"],
-      ["Find", "click:button:Find"],
-      ["Log a find", "click:button:Log a find||Log"],
+      ["Open Nearby", click("button", /^Nearby\b/i)],
+      ["Pick the nearest cache", click("button", /\bThe Landhaus courtyard\b/i)],
+      ["Navigate", click("button", /^Navigate\b/i)],
+      ["Find", click("button", /^Find$/i)],
+      ["Log a find", click("button", /^\W*Log( a find)?$/i)],
       ["The result", null],
     ],
   },
@@ -67,7 +72,7 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Map", null],
-      ["Hide a cache", "click:button:Hide"],
+      ["Hide a cache", click("button", /^\W*Hide( a cache)?$/i)],
       ["The form", null],
     ],
   },
@@ -86,9 +91,9 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Map", null],
-      ["More", "click:button:More", ["phone"]],
-      ["Open the Shack", "click:button:Shack"],
-      ["Launch the BBS", "click:button:BBS"],
+      ["More", click("button", /^More$/i), ["phone"]],
+      ["Open the Shack", click("button", /^Shack\b/i)],
+      ["Launch the BBS", click("button", /^BBS\b/)],
       ["Back", "key:Escape"],
     ],
   },
@@ -135,20 +140,20 @@ function serve() {
 }
 
 async function act(page, how) {
-  const [kind, a, b] = how.split(":");
-  if (kind === "key") return page.keyboard.press(a);
-  if (kind === "fill") return page.getByLabel(a, { exact: false }).first().fill(b, { timeout: 5000 });
-  const roles = a.split("|");
+  if (typeof how === "string") {
+    const [kind, a, b] = how.split(":");
+    if (kind === "key") return page.keyboard.press(a);
+    if (kind === "fill") return page.getByLabel(a, { exact: false }).first().fill(b, { timeout: 5000 });
+    throw new Error(`unknown step "${how}"`);
+  }
   // an open modal dialog is all a person can reach: look there first
   const dialog = page.locator('[role="dialog"][aria-modal="true"]').last();
   const scope = (await dialog.count()) ? dialog : page;
-  for (const name of b.split("||")) {
-    for (const role of roles) {
-      const loc = scope.getByRole(role, { name, exact: name.length <= 4 }).first();
-      if (await loc.count()) return loc.click({ timeout: 5000 });
-    }
+  for (const role of how.role.split("|")) {
+    const loc = scope.getByRole(role, { name: how.name }).first();
+    if (await loc.count()) return loc.click({ timeout: 5000 });
   }
-  throw new Error(`no ${a} named "${b}"`);
+  throw new Error(`no ${how.role} named ${how.name}`);
 }
 
 const exe = findChromium();
@@ -207,3 +212,10 @@ for (const j of JOURNEYS) {
 await browser.close();
 server.close();
 writeFileSync(path.join(OUT, "log.txt"), log.join("\n") + "\n");
+const stuck = log.filter((l) => l.split("\t")[4].startsWith("STUCK"));
+if (stuck.length) {
+  console.error(
+    `\n${stuck.length} STUCK step${stuck.length === 1 ? "" : "s"}: a control is missing or its name drifted`,
+  );
+  process.exitCode = 1;
+}

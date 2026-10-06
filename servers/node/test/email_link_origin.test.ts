@@ -48,10 +48,15 @@ describe("email sign-in link", () => {
     expect(s.devLink).toBe(`${APP}/auth/email/verify?token=${s.devToken}`);
   });
 
-  it("takes the scheme a TLS-terminating proxy reports, and never downgrades an https request", async () => {
-    const env = authEnv(SPLIT);
+  it("takes the scheme a declared TLS-terminating proxy reports, and never downgrades an https request", async () => {
+    const env = authEnv({ ...SPLIT, TRUST_PROXY: "1" });
     const proxied = await start(env, "http://api.test/auth/email/start", { "x-forwarded-proto": "https" });
     expect(proxied.devLink.startsWith("https://api.test/")).toBe(true);
+    // with no proxy declared, the header is anyone's: a plain-http request is not the https address
+    const undeclared = await start(authEnv(SPLIT), "http://api.test/auth/email/start", {
+      "x-forwarded-proto": "https",
+    });
+    expect(undeclared.devLink.startsWith(`${APP}/`)).toBe(true);
     const spoofed = await start(env, "https://api.test/auth/email/start", { "x-forwarded-proto": "http" });
     expect(spoofed.devLink.startsWith("https://api.test/")).toBe(true);
   });
