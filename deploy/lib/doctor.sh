@@ -224,7 +224,7 @@ doc_gateway() {
   schema="$(json_field "$DOC_HEALTH" schema)"
   newest="$(cd "$DEPLOY_DIR/../db/migrations" 2>/dev/null && find . -maxdepth 1 -name '*.sql' | sed 's|^\./||' | sort | tail -n 1 || true)"
   if [ -z "$schema" ] || [ "$schema" = null ]; then
-    warnc gateway.migrations "the gateway does not report its schema (an older release)" "update it"
+    warnc gateway.migrations "the gateway reports no schema (its database did not answer)" "check the data directory and the gateway's logs"
   elif [ -z "$newest" ] || [ "$schema" = "$newest" ]; then
     pass gateway.migrations "migrations are current ($schema)"
   elif [[ "$schema" < "$newest" ]]; then
