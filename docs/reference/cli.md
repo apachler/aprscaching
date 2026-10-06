@@ -8,8 +8,8 @@ callsign and support key management, signing, and verification.
 ```bash
 cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, mail, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
 deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
-deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret, net44 (see Deployment helpers)
-deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
+deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret, net44 (see below)
+deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET + R2_ENDPOINT — run nightly from cron
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
 ```
 
@@ -28,8 +28,8 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | `--shape SHAPE` | act on `selfhost`, `ingest-box`, `baremetal`, `pocket` or `desktop` instead of the recorded shape |
 | `--non-interactive` | ask nothing; a required value without a default fails and names its flag |
 | `--yes` | confirm every change without asking |
-| `--json` | machine-readable output on stdout (`status`, `doctor`, `backup`) |
-| `--help` | the command's options |
+| `--json` | machine-readable output on stdout (`status`, `doctor`, `backup`); the `pocket` shape's `status` has none |
+| `--help` | the command's options; it works on a host with nothing installed yet |
 
 | Command | Options |
 |---|---|
@@ -41,7 +41,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | `backup` | `--dest`, `--with-media`, `--no-settings` |
 | `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
 | `update` | `--ref`, `--rollback-window` |
-| `rotate-secret <name>` | none |
+| `rotate-secret <name>` | `--yes`; the name is one of `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_SUBMIT_SECRET`, `FED_RELAY_SECRET`, `FED_CORROBORATION_SECRET` |
 | `net44 setup <connect.conf>` | `--name`, `--https` (serve the name over https too: [One instance, several addresses](../run/networks/several-addresses.md)), `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |
 | `net44 status`, `net44 check [name]`, `net44 remove` | none |
 

@@ -141,6 +141,9 @@ export APRSCACHING_DATA="$TMP/no-pocket" # a Pocket .env in this user's home mus
 run() { "$H" "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
 
 check "help prints the commands" bash -c "'$H' help | grep -q 'rotate-secret'"
+for c in status doctor update backup restore rotate-secret; do
+  check "$c --help prints its usage, with nothing installed" bash -c "'$H' $c --help | grep -q '^deploy/aprscaching $c'"
+done
 check "an unknown command fails" bash -c "! '$H' frob 2>/dev/null"
 check "an unknown shape fails" bash -c "! '$H' init mainframe 2>/dev/null"
 check "a shape without a command explains it" bash -c "'$H' --shape ingest-box restore x.tar.gz 2>&1 | grep -q 'not available for the ingest-box shape'"
@@ -691,7 +694,7 @@ fi
 CLI="$DEPLOY/../docs/reference/cli.md"
 for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box --help" \
   "--shape selfhost backup --help" "--shape selfhost restore x --help" "--shape selfhost update --help" \
-  "--shape selfhost net44 setup --help"; do
+  "--shape selfhost net44 setup --help" "status --help" "doctor --help" "rotate-secret --help"; do
   missing=""
   # shellcheck disable=SC2086 # the words of the command
   for f in $("$H" $c 2>&1 | grep -oE -- "--[a-z][a-z0-9-]+" | sort -u); do grep -qF -- "\`$f" "$CLI" || missing="$missing $f"; done

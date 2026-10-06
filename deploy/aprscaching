@@ -124,6 +124,43 @@ rotate_env_secret() {
   fi
 }
 
+wants_help() {
+  local a
+  for a in "$@"; do case "$a" in -h | --help) return 0 ;; esac; done
+  return 1
+}
+
+# The options of one command. It needs no installation; update reads the loaded shape's own help when the
+# shape updates through a script of its own (Pocket).
+command_help() {
+  case "$1" in
+    status)
+      printf '%s\n' "deploy/aprscaching status [--json]" \
+        "Whether the instance runs, and the address it answers on; --json prints it for a script (not on the pocket shape)."
+      ;;
+    doctor)
+      printf '%s\n' "deploy/aprscaching doctor [--json]" \
+        "Checks the whole installation and changes nothing; every finding names its fix. --json prints the findings" \
+        "for a script. It exits non-zero when a check fails."
+      ;;
+    update)
+      if ! declare -F shape_update_apply >/dev/null && declare -F shape_update >/dev/null; then
+        shape_update --help
+      else
+        run_update --help
+      fi
+      ;;
+    backup) run_backup --help ;;
+    restore) run_restore --help ;;
+    rotate-secret)
+      printf '%s\n' "deploy/aprscaching rotate-secret <name> [--yes]" \
+        "Replaces one secret with a new random value and says what has to follow it; restart the instance to apply it." \
+        "Rotatable: INGEST_SECRET OPERATOR_SECRET SESSION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET FED_CORROBORATION_SECRET." \
+        "The federation signing key rotates with tools/fedkey/rotatekey.mjs, which keeps peers' pins valid."
+      ;;
+  esac
+}
+
 case "$CMD" in
   help | -h | --help) usage ;;
   init)
@@ -140,6 +177,13 @@ case "$CMD" in
     run_net44 "$@"
     ;;
   status | doctor | update | backup | restore | rotate-secret)
+    if wants_help "$@"; then
+      # help answers on a host with nothing installed yet, too
+      [ -n "$SHAPE" ] || SHAPE="$(shape_detect || true)"
+      [ -z "$SHAPE" ] || load_shape "$SHAPE"
+      command_help "$CMD"
+      exit 0
+    fi
     [ -n "$SHAPE" ] || SHAPE="$(shape_detect)"
     [ -n "$SHAPE" ] || die "No installation found here." "Set one up with: deploy/aprscaching init <shape>" \
       "or name it with --shape ($SHAPES)."
