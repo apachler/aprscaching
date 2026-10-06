@@ -61,11 +61,13 @@ the gateway log prints it too.
 |---|---|---|
 | `apps/web/src` (components, styles) | Vite updates the page in place | under 0.1 s |
 | `workers/gateway/src`, `servers/node/src`, `packages/*/src` | the gateway restarts from source | about 1 s |
-| `db/migrations/*.sql` | the gateway restarts and applies the new migration | about 1.5 s |
+| `db/migrations/*.sql` | the gateway restarts and applies a file it has not applied yet | about 1.5 s |
 | `apps/ingest/src` (with `--ingest`) | the ingest restarts | about 0.5 s |
 
 Every workspace package exports its TypeScript source, so nothing needs building between edits. The database
-and media survive restarts, under `.dev/` (gitignored); delete `.dev/` to start with an empty instance.
+and media survive restarts, under `.dev/` (gitignored); delete `.dev/` to start with an empty instance. The
+runner never applies a file twice, so an edit to `0001_baseline.sql` does not reach an existing `.dev/`
+database: run `rm -rf .dev` and start `pnpm dev` again to build it from the edited schema.
 
 ## Settings
 

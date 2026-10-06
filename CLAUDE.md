@@ -104,8 +104,10 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
   offline tiles, and the shared `migrate.ts` runner. Bun reuses the Node host modules, and the
   desktop launcher wraps `servers/bun/server.ts`'s `createServer()`. Fix behaviour in
   `workers/gateway`, never in one runtime's shim.
-- The schema lives once in `db/migrations/*.sql` (one `0001_baseline.sql`; changes are new numbered files);
-  the Node/Bun servers apply it at boot (`migrate.ts`).
+- The schema lives once in `db/migrations/*.sql`; the Node/Bun servers apply it at boot (`migrate.ts`). Until
+  1.0 ships nothing is deployed, so the schema is one file, `0001_baseline.sql`, edited directly: no numbered
+  migrations, data migrations, backfills or compat shims (reset a dev database with `rm -rf .dev`). Once 1.0
+  is released the baseline is frozen and every schema change is a new numbered migration.
 - CI proves parity by running the same `tools/smoke/*` suites against both runtimes.
 - Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested site,
   and writes need a shared `INGEST_SECRET` on both gateway and client.

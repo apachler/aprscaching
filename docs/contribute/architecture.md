@@ -58,9 +58,10 @@ way RF gets in.
 
 ## One schema
 
-The schema lives once, in `db/migrations/*.sql`, starting with `0001_baseline.sql`. The Node and Bun servers
-apply it at boot with the shared runner (`migrate.ts`). A schema change is a
-new file with the next number; a file that has been applied is never edited.
+The schema lives once, in `db/migrations/*.sql`. The Node and Bun servers apply it at boot with the shared
+runner (`migrate.ts`), which records each applied file by name. Until 1.0 the schema is one file,
+`0001_baseline.sql`, and a schema change edits it directly. Once 1.0 is released the baseline is frozen: each
+schema change is a new file with the next number, and a file that has been applied is never edited.
 
 ## Images
 

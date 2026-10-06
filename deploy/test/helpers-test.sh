@@ -381,7 +381,7 @@ check "  … pnpm by absolute path" bash -c "grep -qE '^ExecStart=/[^ ]*(pnpm|co
 if have python3; then
   PORT_STUB="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
   ING="ingest-0123456789abcdef0123456789" OPS="operator-0123456789abcdef01234567"
-  STUB_INGEST="$ING" STUB_OPERATOR="$OPS" STUB_SCHEMA=0001_baseline.sql \
+  STUB_INGEST="$ING" STUB_OPERATOR="$OPS" STUB_SCHEMA=0000_older.sql \
     python3 "$HERE/fixtures/stub-gateway.py" "$PORT_STUB" &
   STUB_PID=$!
   for _ in $(seq 1 50); do curl -fsS "http://127.0.0.1:$PORT_STUB/health" >/dev/null 2>&1 && break; sleep 0.1; done

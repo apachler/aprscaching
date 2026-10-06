@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,10 +25,10 @@ function tmp() {
 }
 
 /** A migrated database with awkward values: quotes, newlines, Unicode, NULLs, a large integer and a blob. */
-function seeded(dir: string, migrations = MIGRATIONS) {
+function seeded(dir: string) {
   const file = path.join(dir, "src.db");
   const db = new Database(file);
-  migrate(db, migrations);
+  migrate(db, MIGRATIONS);
   db.prepare(
     "INSERT INTO caches (code, owner_call, title, type, lat, lon, hint, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,1)",
   ).run(
@@ -115,19 +115,21 @@ describe("portable backup rows", () => {
   it("a backup from an older schema migrates forward on restore", () => {
     const dir = tmp();
     try {
-      const older = path.join(dir, "older-migrations");
-      cpSync(MIGRATIONS, older, { recursive: true });
-      rmSync(path.join(older, newest()));
-      const src = seeded(dir, older);
+      // the checkout the backup is restored into carries one migration more than the backup's schema
+      const newer = path.join(dir, "newer-migrations");
+      cpSync(MIGRATIONS, newer, { recursive: true });
+      const next = "9000_forward.sql";
+      writeFileSync(path.join(newer, next), "ALTER TABLE caches ADD COLUMN forward_note TEXT;\n");
+      const src = seeded(dir);
       const rows = tool(["dump", src]);
-      const oldSchema = readdirSync(older).sort().at(-1)!;
+      const oldSchema = newest();
       expect(rows.out.startsWith(`-- aprscaching rows/1 schema=${oldSchema}`)).toBe(true);
       const dst = path.join(dir, "dst.db");
-      const r = tool(["restore", dst, MIGRATIONS, oldSchema], rows.out);
+      const r = tool(["restore", dst, newer, oldSchema], rows.out);
       expect(r.status, r.err).toBe(0);
-      expect(JSON.parse(r.out).migratedForward).toEqual([newest()]);
-      expect(tool(["schema", dst]).out.trim()).toBe(newest());
-      // the newest migration may add columns to caches: every value the older backup held arrives unchanged
+      expect(JSON.parse(r.out).migratedForward).toEqual([next]);
+      expect(tool(["schema", dst]).out.trim()).toBe(next);
+      // the newer migration adds a column to caches: every value the older backup held arrives unchanged
       expect(snapshot(dst).caches).toMatchObject(snapshot(src).caches!);
     } finally {
       rmSync(dir, { recursive: true, force: true });
