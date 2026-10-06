@@ -200,6 +200,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
   BOX_CALL: "Callsign the box transmits remote commands as",
+  BOX_LAT: "Latitude of this box, in degrees: the position a remote beacon names",
+  BOX_LON: "Longitude of this box, in degrees: the position a remote beacon names",
   BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct",
   BOX_CMD_MAX_AGE: "Seconds after which a queued remote command is too old to run",
   BOX_POLL_MS: "Interval in milliseconds between remote-command polls",
@@ -796,7 +798,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "APRS-IS uplink (answers, announces, weather)",

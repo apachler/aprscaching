@@ -121,7 +121,7 @@ async function liftLater(
   now: number,
 ): Promise<boolean> {
   const lp = await env.DB.prepare(
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
+    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND commanded = 0 ORDER BY ts DESC LIMIT 500",
   )
     .bind(r.logger_call, q.since, (r.log_ts ?? 0) + 60)
     .all<PositionRow>();

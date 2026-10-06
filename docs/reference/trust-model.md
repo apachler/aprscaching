@@ -24,7 +24,27 @@ Every find carries exactly one tier, graded by the evidence behind it:
   `MIN_TRUST=A`. A cache's own `min_trust`, set by its hider (**Radio-verified finds only**), takes
   precedence; clearing it returns the cache to the instance's minimum.
 - A radio message carries no device reading, so a find logged by radio reaches Tier A or C, never B.
+- A living cache is wherever its station was heard. Only a station fix that is first-party attested, or that
+  the cache owner's own browser bridge signed (a `browser-rf` batch under a base call the owner's account
+  holds), places it for Tier A or B. A match against a station fix that only came over APRS-IS stays Tier C,
+  whatever placed the finder.
 - The app shows the names everywhere a find's trust appears, with the letter as a secondary label.
+
+### Evidence that is never independent
+
+Tier A demands a hearing the finder does not control. Three kinds of fix never count, whatever site they name:
+
+- **A fix gated by the finder's own call.** The receiving site is compared by base call against every call the
+  finder's account holds and every station it lists: `OE8APR-10` gating `OE8APR-9` is self-gated.
+- **A fix delivered by the finder's own ingest box.** A box paired to the finder's account, or enrolled for one
+  of their calls, is the finder's own receiver, whatever site call it stamps (`positions.ingest_box`). The same
+  rule holds when a peer answers a corroboration question: it never vouches through a box of the logger's.
+- **A commanded box beacon.** A beacon queued from **Shack → Remote box** goes out at the box's own configured
+  position (`BOX_LAT`, `BOX_LON`), and the box reports that position with its ack. Every fix ingested under the
+  beacon's call, near that position and within 15 minutes of the beacon, is stored with
+  `positions.commanded = 1`, and neither the verify engine, a peer's corroboration answer nor a later
+  corroboration attempt takes it as evidence. The box itself drops its own transmissions on all of its ports:
+  a frame one port sent and another port hears within 30 s is never reported as a hearing.
 
 The tiers grade a single find. A verified *callsign* (control of the licence) is a separate fact about the
 account and never wears a tier's name or colour ([Identity](#identity)).

@@ -5,7 +5,8 @@
  * Trust tiers (trust follows corroboration, not transport):
  *   A  RF-corroborated : position heard at a first-party-attested receiving site
  *                        (provenance.firstPartyAttested — see provenance.ts), gated by
- *                        an IGate that is NOT the logger's own, with a plausible track.
+ *                        an IGate that is NOT the logger's own and delivered by a box
+ *                        the logger's account does not own, with a plausible track.
  *                        Strongest. Gated on attestation ALONE, never on transport: a
  *                        packet that merely arrived over an RF-ish tunnel (AXIP/HAMNET)
  *                        without a site we attest stays Tier C.
@@ -15,6 +16,11 @@
  *                        own — the corroboration must come from the independent app reading.
  *   C  IS-only         : a bare APRS-IS beacon, no RF gating, no app reading. Logged but
  *                        badged unverified.
+ *
+ * Evidence for A and B is never a fix that matched a beacon this instance asked an ingest box
+ * to send (`commanded`): that says where the box is, not where its operator is. A living cache
+ * is where its station was heard by an attested site or through its owner's own signed browser
+ * bridge (`ownerSigned`); a find matched against an APRS-IS-only fix of the station is Tier C.
  *
  * Site policy sets the minimum tier that counts as "verified". Caches may override
  * (e.g. flagship/competition caches require A).
@@ -57,12 +63,25 @@ export interface PositionRow {
   igate_call?: string | null;
   /** The enrolled box that delivered the fix (positions.ingest_box), or null. */
   ingest_box?: string | null;
+  /** How the fix was stored (positions.source): `firehose` from a trusted ingest, `browser-rf` from a signed batch. */
+  source?: string | null;
   /**
    * Provenance seam: set by the boundary (see provenance.ts) when this fix was heard at a
    * site we operate + attest. Tier A is gated on THIS flag alone — never on transport. A packet that
    * merely arrived over some RF-ish transport (AXIP/HAMNET tunnel) without attestation stays Tier C.
    */
   firstPartyAttested?: boolean;
+  /**
+   * The fix matched a beacon this instance asked an ingest box to send (positions.commanded): never Tier A or B
+   * evidence, and never part of the logger's track.
+   */
+  commanded?: boolean;
+  /**
+   * A living cache's station fix that the cache owner's own browser bridge signed (a `browser-rf` batch under a
+   * base call the owner's account holds). With first-party attestation, the only station fixes that place a
+   * living cache for Tier A or B.
+   */
+  ownerSigned?: boolean;
 }
 
 export interface CacheRow {
@@ -100,6 +119,9 @@ interface VerifyDeps {
   /** BASE callsigns the logger controls (own call, held account calls, registered stations) —
    *  a fix gated by any of these can never corroborate the logger's own find */
   loggerOwnIgates?: Set<string>;
+  /** Ingest boxes the logger's account owns or that were enrolled for one of its calls — a fix one of
+   *  them delivered is the logger's own hearing, whatever site it names */
+  loggerOwnBoxes?: Set<string>;
   /** request/log time (unix s) — Tier-B app-reading freshness is checked against this */
   now?: number;
 }
@@ -113,11 +135,20 @@ function rank(t: TrustTier): number {
 }
 
 /** True when this fix was gated by an IGate independent of the logger (compared by BASE call —
- *  OE8APR-10 gating OE8APR-9 is still self-gating). No gater or a controlled gater ⇒ not independent. */
+ *  OE8APR-10 gating OE8APR-9 is still self-gating) and delivered by a box the logger does not own.
+ *  No gater, a controlled gater or the logger's own box ⇒ not independent. */
 function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
   const ig = p.igate_call ?? "";
+  if (p.ingest_box && deps.loggerOwnBoxes?.has(p.ingest_box)) return false;
   return !!ig && !deps.loggerOwnIgates?.has(baseCall(ig));
 }
+
+/** The logger's own track: their fixes, without the ones that matched a commanded box beacon. */
+const trackOf = (deps: VerifyDeps): PositionRow[] => deps.loggerPositions.filter((p) => !p.commanded);
+
+/** The station fixes that place a living cache for Tier A or B: attested or the owner's own signed ones. */
+const stationEvidence = (deps: VerifyDeps): PositionRow[] =>
+  (deps.cacheStationPositions ?? []).filter((c) => (c.firstPartyAttested || c.ownerSigned) && !c.commanded);
 
 /**
  * "plausible track": a matched Tier-A fix must be reachable from the logger's own
@@ -129,7 +160,7 @@ function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPoli
   const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
   let nearest: PositionRow | null = null,
     bestDt = Infinity;
-  for (const p of deps.loggerPositions) {
+  for (const p of trackOf(deps)) {
     if (p === match || p.id === match.id) continue;
     const dt = Math.abs(p.ts - match.ts);
     if (dt < bestDt) {
@@ -174,7 +205,7 @@ export function plausiblePresence(
 /** Tier A: heard at a first-party-attested site, independently gated, near the target. */
 function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (cache.lat == null || cache.lon == null) return null;
-  for (const p of deps.loggerPositions) {
+  for (const p of trackOf(deps)) {
     if (!p.firstPartyAttested) continue; // transport-vs-trust seam: the ONLY Tier-A gate
     if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // self-gated => not corroborated
     const d = haversineMeters(p.lat, p.lon, cache.lat, cache.lon);
@@ -188,9 +219,9 @@ function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyR
 
 /** Tier A for living caches: logger co-located with the moving cache-station. */
 function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
-  const cs = deps.cacheStationPositions ?? [];
+  const cs = stationEvidence(deps);
   if (!cs.length) return null;
-  for (const p of deps.loggerPositions) {
+  for (const p of trackOf(deps)) {
     if (!p.firstPartyAttested) continue; // Tier A demands an attested first-party fix
     if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // same rule as tryRf
     // nearest cache-station fix in time
@@ -213,21 +244,21 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
 }
 
 /**
- * Where a cache is at a moment: a fixed cache at its coordinates, a living cache at its station's fix nearest
- * in time (within livingSkewSec). A living cache whose station was not heard near that moment is nowhere, so
- * nothing matches it; its hiding place never stands in for the station.
+ * Where a cache is at a moment: a fixed cache at its coordinates, a living cache at the fix of its station
+ * (from `station`) nearest in time (within livingSkewSec). A living cache whose station was not heard near that
+ * moment is nowhere, so nothing matches it; its hiding place never stands in for the station.
  */
 function cacheAt(
   cache: CacheRow,
   ts: number,
-  deps: VerifyDeps,
+  station: PositionRow[],
   policy: VerifyPolicy,
 ): { lat: number; lon: number } | null {
   if (cache.type !== "aprs_living")
     return cache.lat == null || cache.lon == null ? null : { lat: cache.lat, lon: cache.lon };
   let best: PositionRow | null = null,
     bestSkew = Infinity;
-  for (const c of deps.cacheStationPositions ?? []) {
+  for (const c of station) {
     const skew = Math.abs(c.ts - ts);
     if (skew < bestSkew) {
       bestSkew = skew;
@@ -251,7 +282,7 @@ function tryApp(
   if (deps.now != null) {
     if (!Number.isFinite(appGeo.ts) || Math.abs(deps.now - appGeo.ts) > policy.appMaxAgeSec) return null;
   }
-  const at = cacheAt(cache, appGeo.ts, deps, policy);
+  const at = cacheAt(cache, appGeo.ts, stationEvidence(deps), policy);
   if (!at) return null;
   const d = haversineMeters(appGeo.lat, appGeo.lon, at.lat, at.lon);
   // require the reading to be near AND not absurdly imprecise (clamp a bogus/negative accuracy)
@@ -286,9 +317,10 @@ export function verifyFind(
     return { ...best, verified: meets, reason: meets ? undefined : `cache requires tier ${min}` };
   }
 
-  // No corroboration. If we at least saw an IS beacon near the cache, record tier C.
+  // No corroboration. If we at least saw an IS beacon near the cache (a living cache: near any fix of its
+  // station, an APRS-IS-only one too), record tier C.
   for (const p of deps.loggerPositions) {
-    const at = cacheAt(cache, p.ts, deps, policy);
+    const at = cacheAt(cache, p.ts, deps.cacheStationPositions ?? [], policy);
     if (at) {
       const d = haversineMeters(p.lat, p.lon, at.lat, at.lon);
       if (d <= policy.radiusM) {

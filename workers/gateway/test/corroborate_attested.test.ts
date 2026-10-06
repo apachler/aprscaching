@@ -68,3 +68,13 @@ describe("a site trusted through an enrolled box", () => {
     expect(pickLocalEvidence([{ ...near("OE8XXX"), ingest_box: "lent-1" }], Q, none, attested)).toBeNull();
   });
 });
+
+describe("a box the logger's account owns", () => {
+  const attested = { shared: parseAttestedSites("OE8XXX"), byBox: new Map([["lent-1", new Set(["OE3LND-10"])]]) };
+
+  it("never vouches for its own operator, whatever site it names", () => {
+    const viaBox = { ...near("OE3LND-10"), ingest_box: "lent-1" };
+    expect(pickLocalEvidence([viaBox], Q, none, attested, new Set(["lent-1"]))).toBeNull();
+    expect(pickLocalEvidence([viaBox], Q, none, attested, new Set(["other-1"]))?.igateCall).toBe("OE3LND-10");
+  });
+});

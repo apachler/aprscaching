@@ -35,7 +35,11 @@ Log it like any cache: **✓ Log a find**, **Couldn't find it** or **Add a note*
 | **Location-verified** | Your phone's location, taken when you log, is within 150 m of the station, plus its accuracy. The station's position counts when it was heard at most 5 minutes from that moment. |
 | **Logged** | Nothing independent placed you with the station. |
 
-Both tiers check that you met the station; the place where the cache was hidden counts for nothing. A verified
+Both tiers check that you met the station; the place where the cache was hidden counts for nothing. They also
+need to know where the station was: only a station position that a receiving station the instance trusts heard
+on the air, or one the owner's own radio sent through the app's radio bridge, places it. A meeting matched
+against a station position that reached the instance only over the internet ([APRS-IS](../../glossary.md#aprs-is))
+is **Logged**: anyone can send such a position under the station's callsign. A verified
 find on a living cache earns the **Rover hunter** badge.
 
 The map pin follows the station: it sits at the station's last heard position, and at the place where the cache
@@ -85,6 +89,8 @@ both. OE5XYZ-7 logs the find, and it is **Radio-verified**.
 - Beacon often while you close in. The game needs one of your positions within 5 minutes of one of the
   station's.
 - Your own IGate does not count. A receiving station that is not yours must hear you.
+- Hiders: let a receiving station of the instance hear the station on the air, or send its beacons through the
+  app's radio bridge. A station only seen over the internet makes every find on it **Logged**.
 - Talk to the operator. A meeting at a rest stop is easier than a chase.
 
 ## Map marker

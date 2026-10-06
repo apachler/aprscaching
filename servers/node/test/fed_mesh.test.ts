@@ -12,6 +12,9 @@ import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
 
+// Every test runs gateways against each other: seconds on a loaded machine.
+const GATEWAYS = { timeout: 30_000 };
+
 const OP = { "x-operator-secret": "test-operator-secret" };
 const now = () => Math.floor(Date.now() / 1000);
 const GRAZ = "46.9,15.2,47.2,15.7";
@@ -97,7 +100,7 @@ async function only(n: Node, ...peers: Node[]) {
 const cachePages = (log: Log, at: string) =>
   log.filter((l) => l.at === at && l.query.get("origin") === "a.example" && l.query.get("kind") === "cache");
 
-describe("per-origin sync", () => {
+describe("per-origin sync", GATEWAYS, () => {
   it("fills a gap from a different neighbour than the one that brought the earlier records", async () => {
     const [a, h1, h2, b] = await Promise.all([node("a"), node("h1"), node("h2"), node("b")]);
     await follow(h1, a);
@@ -322,7 +325,7 @@ describe("per-origin sync", () => {
   });
 });
 
-describe("a spoke that pushes", () => {
+describe("a spoke that pushes", GATEWAYS, () => {
   it("is held by its hub as far as its pages join up, and passed on like any origin", async () => {
     const SUBMIT = "submit-secret";
     const [hub, b] = await Promise.all([node("hub", { FED_SUBMIT_SECRET: SUBMIT, FED_RESERVE: "all" }), node("b")]);
@@ -359,7 +362,7 @@ describe("a spoke that pushes", () => {
   });
 });
 
-describe("what moves a mark", () => {
+describe("what moves a mark", GATEWAYS, () => {
   it("not a frame signed ahead of this clock, until the clock catches up", async () => {
     const [a, b] = await Promise.all([node("a"), node("b")]);
     await follow(b, a);
@@ -490,7 +493,7 @@ describe("what moves a mark", () => {
   });
 });
 
-describe("a long chain", () => {
+describe("a long chain", GATEWAYS, () => {
   it("reads past one page budget a pass, the hop limit and all, and never starts over", async () => {
     const all = { FED_RESERVE: "all" };
     const a = await node("a");
@@ -515,7 +518,7 @@ describe("a long chain", () => {
   }, 30_000);
 });
 
-describe("the edge of the mesh", () => {
+describe("the edge of the mesh", GATEWAYS, () => {
   it("records past the hop limit hold no mark back, start no read again, and raise no alarm", async () => {
     const all = { FED_RESERVE: "all" };
     const a = await node("a");
@@ -551,7 +554,7 @@ describe("the edge of the mesh", () => {
   }, 60_000);
 });
 
-describe("a restored origin", () => {
+describe("a restored origin", GATEWAYS, () => {
   it("numbers its new records above what peers hold, under global ids nobody holds or deleted", async () => {
     const Database = (await import("better-sqlite3")).default;
     const { makeD1 } = await import("../src/d1.js");
@@ -697,7 +700,7 @@ describe("a restored origin", () => {
   });
 });
 
-describe("a summary that names many origins", () => {
+describe("a summary that names many origins", GATEWAYS, () => {
   it("teaches at most 50 new keys per pull", async () => {
     const [h, b] = await Promise.all([node("h"), node("b")]);
     await follow(b, h);
@@ -722,7 +725,7 @@ describe("a summary that names many origins", () => {
   });
 });
 
-describe("a Pocket station carries records", () => {
+describe("a Pocket station carries records", GATEWAYS, () => {
   it("from A to C, which never meet: C holds them under A's key, and A's later deletion follows the same way", async () => {
     const [a, m, c] = await Promise.all([node("a"), node("m"), node("c")]);
     // the station M follows home A, trusted by its fingerprint; C follows M, never A

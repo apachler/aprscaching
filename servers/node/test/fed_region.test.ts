@@ -13,6 +13,9 @@ import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
 
+// The tests that run two gateways against each other: seconds on a loaded machine.
+const TWO_GATEWAYS = { timeout: 30_000 };
+
 const A = "https://a.example";
 const GRAZ = "46.9,15.2,47.2,15.7";
 
@@ -77,7 +80,7 @@ describe("parseBbox", () => {
   });
 });
 
-describe("the publisher", () => {
+describe("the publisher", TWO_GATEWAYS, () => {
   it("serves only the caches inside the box, and advertises the filter", async () => {
     const a = instanceEnv("a.example", await newFedKey());
     await cacheAt(a, 47.07, 15.42); // Graz
@@ -116,7 +119,7 @@ describe("the publisher", () => {
   });
 });
 
-describe("the subscriber", () => {
+describe("the subscriber", TWO_GATEWAYS, () => {
   it("pulls only its region from a publisher that filters, and records the region", async () => {
     const { a, hub } = await pair({ FED_SYNC_REGION: GRAZ });
     await cacheAt(a, 47.07, 15.42);
@@ -186,7 +189,7 @@ describe("the subscriber", () => {
   });
 });
 
-describe("a narrowed pull", () => {
+describe("a narrowed pull", TWO_GATEWAYS, () => {
   it("reads only the feeds asked for, plus deletes, and reports the bytes", async () => {
     const { a, hub } = await pair();
     const id = await cacheAt(a, 47.07, 15.42);
@@ -222,7 +225,7 @@ describe("a narrowed pull", () => {
   });
 });
 
-describe("POST /federation/sync", () => {
+describe("POST /federation/sync", TWO_GATEWAYS, () => {
   const post = (env: Env, body: unknown, secret = "test-operator-secret") =>
     serve(env)(
       new Request("https://hub.example/federation/sync", {

@@ -344,9 +344,10 @@ describe("the trust guard: verification is identical with downsampling on and of
         // Tier B / C: stationary APRS-IS beacons at the cache
         { src: "OE8APP-7", ts },
         { src: "OE8ISL", ts },
-        // living cache: the logger on RF beside its moving station, the station on APRS-IS
+        // living cache: the logger on RF beside its moving station, the station on APRS-IS and, now and then,
+        // heard by the attested site too (only that hearing places the cache for Tier A)
         { src: "OE5LIV-9", ts, payload: living },
-        ...(i % 6 === 0 ? [rf("OE8LVL", ts, living)] : []),
+        ...(i % 6 === 0 ? [rf("OE8LVL", ts, living), rf("OE5LIV-9", ts, living)] : []),
         // a logger with no account here, heard on RF, whom a peer may ask about
         rf("DL1PEER", ts),
         { src: "DL1PEER", ts: ts + 2 },
