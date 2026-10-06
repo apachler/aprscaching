@@ -1,4 +1,5 @@
 {
+  "format": 1,
   "entries": [
     {
       "name": "hello-tool",
@@ -13,12 +14,210 @@
       "name": "station-log",
       "title": "Station log",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/station-log/tool.json",
       "description": "Lists the stations the Station DB tool hears, with /seen and /whois commands."
+    },
+    {
+      "name": "monitor-colouriser",
+      "title": "Monitor colouriser",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/monitor-colouriser/tool.json",
+      "description": "Colours heard traffic by NAMES.GP station type."
+    },
+    {
+      "name": "ctext-macros",
+      "title": "CTEXT macro pack",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/ctext-macros/tool.json",
+      "description": "Canned /cq /73 /qth text macros."
+    },
+    {
+      "name": "auto-responder",
+      "title": "Auto-responder",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/auto-responder/tool.json",
+      "description": "Greets an incoming connect (QTEXT/PMS style)."
+    },
+    {
+      "name": "beacon-scheduler",
+      "title": "Beacon scheduler",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/beacon-scheduler/tool.json",
+      "description": "/beacon <min> <comment> — a periodic status beacon, every 10 min or more (TX-gated); /beacon off."
+    },
+    {
+      "name": "packet-decoder",
+      "title": "Packet decoder",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/packet-decoder/tool.json",
+      "description": "Paste a raw TNC2 or APRS-IS line and see every field it carries."
+    },
+    {
+      "name": "digimode-decoders",
+      "title": "PSK31 + CW decoders",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/digimode-decoders/tool.json",
+      "description": "Decode PSK31 varicode + CW (Morse) — the audio-cache decoders."
+    },
+    {
+      "name": "aprs-ssid-guide",
+      "title": "APRS SSID guide",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/aprs-ssid-guide/tool.json",
+      "description": "A quick reference of the conventional APRS -SSID assignments."
+    },
+    {
+      "name": "watch-alert",
+      "title": "Watch & alert",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/watch-alert/tool.json",
+      "description": "Highlight + log heard callsigns you /watch (any source); see hits in a panel."
+    },
+    {
+      "name": "mheard",
+      "title": "MHeard",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/mheard/tool.json",
+      "description": "Rolling recently-heard stations, aggregated across sources (RF terminal, APRS, …)."
+    },
+    {
+      "name": "auto-status",
+      "title": "Auto-status",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/auto-status/tool.json",
+      "description": "/autostatus <min> <text> — periodically transmit a status (TX-gated)."
+    },
+    {
+      "name": "grid-bearing",
+      "title": "Grid & bearing",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/grid-bearing/tool.json",
+      "description": "/grid <locA> [locB] — distance + bearing between two Maidenhead locators (GP QTH; peers may query)."
+    },
+    {
+      "name": "sevenplus",
+      "title": "7PLUS reassembler",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/sevenplus/tool.json",
+      "description": "Parse + reassemble multi-part 7plus messages (file / part / completeness)."
+    },
+    {
+      "name": "unit-convert",
+      "title": "Unit converter",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/unit-convert/tool.json",
+      "description": "/conv <value> <from> <to> — km/mi/m/ft/yd/kn/kmh/nm + c/f."
+    },
+    {
+      "name": "cw-encoder",
+      "title": "CW encoder",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/cw-encoder/tool.json",
+      "description": "/cw <text> — encode text to Morse (dot/dash)."
+    },
+    {
+      "name": "station-db",
+      "title": "Station DB (NAMES.GP)",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/station-db/tool.json",
+      "description": "Classifies heard stations (NAMES.GP) and shares them on the inter-tool bus."
+    },
+    {
+      "name": "info-responder",
+      "title": "Info / menu responder",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/info-responder/tool.json",
+      "description": "Answers a peer's INFO / MENU / WHOIS <call> (GP gpserv/gpdir)."
+    },
+    {
+      "name": "away-note",
+      "title": "Away note",
+      "author": "OE8APR",
+      "version": "1.1.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/away-note/tool.json",
+      "description": "Away-message + let a connected peer leave a short note (not a mailbox)."
+    },
+    {
+      "name": "connect-bell",
+      "title": "Connect bell",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/connect-bell/tool.json",
+      "description": "Rings (logs a notice) when a station connects."
+    },
+    {
+      "name": "link-ping",
+      "title": "Link ping (RTT)",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/link-ping/tool.json",
+      "description": "Rolling round-trip-time to the connected station (GP rtt)."
+    },
+    {
+      "name": "sched-query",
+      "title": "Scheduled query (GPAUTO)",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/sched-query/tool.json",
+      "description": "/gpauto <steps> — run/schedule a connect/waitfor/send/disconnect batch (GP GPAUTO)."
+    },
+    {
+      "name": "block-art",
+      "title": "Block art (GIP)",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/block-art/tool.json",
+      "description": "Render CP437/ANSI block art (GP GIP). /art <text>, or push render.blocks on the bus."
+    },
+    {
+      "name": "map-waypoints",
+      "title": "Map waypoints",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/map-waypoints/tool.json",
+      "description": "/wp <locator|lat,lon> [label] — drop a marker on the map; /wpclear to reset."
     }
   ],
   "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
-  "sig": "LoUnalCxaHaMq+yj63x8Zo1bRVtXPI63tV4igZOsYJwP0L9cv1xCAF3C2TTSGe88bGgeU40bBHYE1HRE+FiEBg=="
+  "sig": "jYcilu9kH7r2chud8SgmDssx17YmdSfluJzZ2haiWV0yY3rtRvMuBWBabFduV170pGW64mBj9seiBbQAdVZRAw=="
 }

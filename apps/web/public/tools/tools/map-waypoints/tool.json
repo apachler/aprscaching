@@ -1,0 +1,20 @@
+{
+  "name": "map-waypoints",
+  "title": "Map waypoints",
+  "author": "OE8APR",
+  "version": "1.0.0",
+  "api": "1.0",
+  "permissions": [
+    "command",
+    "map"
+  ],
+  "surfaces": [
+    "web",
+    "map"
+  ],
+  "description": "/wp <locator|lat,lon> [label] — drop a marker on the map; /wpclear to reset.",
+  "entry": "tool.js",
+  "entrySha256": "0u98d+WSBL0iztdA+cWpBeXuyyg1wi9whh0ZKm9AAcM=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "UNzAuApNVRKE53zLyy4Z/v+L/L9+lb+Q8+UMNSNqveP54+ys0X5OH+lzytb0rBhLdgYL3tXtAQ8rHAAmCf6IDQ=="
+}

@@ -1,0 +1,19 @@
+{
+  "name": "cw-encoder",
+  "title": "CW encoder",
+  "author": "OE8APR",
+  "version": "1.0.0",
+  "api": "1.0",
+  "permissions": [
+    "command"
+  ],
+  "surfaces": [
+    "web",
+    "terminal"
+  ],
+  "description": "/cw <text> — encode text to Morse (dot/dash).",
+  "entry": "tool.js",
+  "entrySha256": "Yd05TzpZGtW3Sx0tVkcBJRG6QGuA5j9HNK5unsG3DyE=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "0Bq9HFEZ3GcJYCNyFFnCT4C8T3kytV9k8ojau9NyV/7NA8TlhjqBxXi9gASiB+co8G4iOqo5teyMJgQ795t4Dg=="
+}

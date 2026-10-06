@@ -1,0 +1,18 @@
+{
+  "name": "monitor-colouriser",
+  "title": "Monitor colouriser",
+  "author": "OE8APR",
+  "version": "1.1.0",
+  "api": "1.0",
+  "permissions": [
+    "monitor"
+  ],
+  "surfaces": [
+    "terminal"
+  ],
+  "description": "Colours heard traffic by NAMES.GP station type.",
+  "entry": "tool.js",
+  "entrySha256": "5S5JSp3I0ax9urMzf4pZMtFF6awgTFLOaL7EvwhlePs=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "BAnl6Ann751cbu72ODJ07A+LltO6/zk7EY5XeseTTitXmbxMUMiRlbpJEaih3RA9K1Zne9aPMWIJOarfNveFDw=="
+}

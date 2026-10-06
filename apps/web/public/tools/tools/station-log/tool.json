@@ -2,7 +2,8 @@
   "name": "station-log",
   "title": "Station log",
   "author": "OE8APR",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "api": "1.0",
   "permissions": [
     "command",
     "panel",
@@ -14,7 +15,7 @@
   ],
   "description": "Lists the stations the Station DB tool hears, with /seen and /whois commands.",
   "entry": "tool.js",
-  "entrySha256": "DmC/6OzFXgSeL5GGMDjHUr/VO1e2FkWLloJ1cD3/5qc=",
+  "entrySha256": "IJjFQtRZuCWtRikFc4lez/4PJZhCXlFkVctyUmLrDq4=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "1yaP4TryCn164dIrEPk7hq5H3dZwAgdYof/oxztWQYD++wBCgWaMKsUQFaKPZTgqMY5snE4y9u8Nr/DxGfioDA=="
+  "signature": "mVniNqF0+YCRJ84p0U1En8+OzlkmG+D4p2EggLKRDl3QMfIW1puTz0gcKfQMUWA7Lvx5mi0i3Ar/2w7F/6o+AA=="
 }
