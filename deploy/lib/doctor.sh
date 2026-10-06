@@ -40,6 +40,9 @@ doc_see() {
     setup.*) a=setupitem ;;
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
+    ingest.soundcard_audio.*) a=ingestsoundcard_audioport ;;
+    ingest.soundcard_ptt.*) a=ingestsoundcard_pttport ;;
+    ingest.soundcard_tx.*) a=ingestsoundcard_txport ;;
     federation.peer.*) a=federationpeerhost ;;
     identity.*) a=identityline ;;
     *) a="${1//./}" ;;
@@ -95,6 +98,17 @@ doc_signed_check() {
 }
 
 tcp_open() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+
+# apps/ingest/src/check.ts with ARGS, where the ingest runs: the shape's own way (inside its container), else
+# from this checkout with the settings loaded. Prints nothing when neither is possible.
+doc_ingest_node() {
+  if declare -F shape_doctor_ingest_node >/dev/null; then
+    shape_doctor_ingest_node "$@"
+  elif have node && [ -n "$DOC_ENV" ]; then
+    # shellcheck disable=SC1090 # the installation's own .env
+    (set -a && . "$DOC_ENV" && set +a && cd "$DEPLOY_DIR/../apps/ingest" && node --import tsx src/check.ts "$@") 2>/dev/null
+  fi
+}
 
 # ---- config -------------------------------------------------------------------------------------------------
 doc_config() {
@@ -406,7 +420,60 @@ doc_ingest() {
     404) warnc ingest.credentials "the gateway at $url is too old to check credentials" "update the gateway" ;;
     *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" ;;
   esac
+  doc_ingest_url_http "$DOC_INGEST"
+  doc_tx_gate_grace
   doc_transports
+}
+
+# The TX gate's grace (TX_GATE_GRACE) on a box with a transmit port: how long a confirmed call keeps counting
+# while the gateway cannot be reached. The same parsing and clamp as apps/ingest/src/callverify.ts.
+doc_tx_gate_grace() {
+  local raw min
+  [ -n "$(doc_get KISS_TNC_HOST)$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)" ] || return 0
+  raw="$(doc_get TX_GATE_GRACE)"
+  raw="${raw// /}"
+  min="$(tx_gate_grace_min "$raw")" || {
+    failc ingest.tx_gate_grace "TX_GATE_GRACE=$raw is not a duration" "set minutes, such as 30, 30m or 2h"
+    return 0
+  }
+  if [ "$min" -gt 60 ]; then
+    warnc ingest.tx_gate_grace "a revoked call keeps transmitting up to $min min while the gateway is unreachable (TX_GATE_GRACE)" \
+      "lower TX_GATE_GRACE to an hour or less unless the link to the gateway drops out for longer"
+  else
+    pass ingest.tx_gate_grace "the TX gate keeps a confirmed call for $min min while the gateway is unreachable"
+  fi
+}
+
+# tx_gate_grace_min VALUE: whole minutes, clamped to 6..1440; fails on a malformed value.
+tx_gate_grace_min() {
+  local v="${1:-6}" n
+  v="${v,,}"
+  [[ "$v" =~ ^([0-9]+)(m|min|h)?$ ]] || return 1
+  n="$((10#${BASH_REMATCH[1]}))"
+  case "${BASH_REMATCH[2]}" in h) n=$((n * 60)) ;; esac
+  [ "$n" -ge 6 ] || n=6
+  [ "$n" -le 1440 ] || n=1440
+  printf '%s' "$n"
+}
+
+# doc_ingest_url_http URL: plain http to a gateway beyond this box's loopback and LAN sends the ingest secret, and
+# the gateway's answers, where a reader on the path sees them.
+doc_ingest_url_http() {
+  local url="$1" host
+  case "$url" in http://*) ;; *) return 0 ;; esac
+  host="${url#http://}"
+  host="${host%%/*}"
+  host="${host%:*}"
+  host="${host#[}"
+  host="${host%]}"
+  case "$host" in
+    localhost | 127.* | ::1 | 10.* | 192.168.* | 169.254.* | *.local | *.lan | *.home.arpa) return 0 ;;
+    172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) return 0 ;;
+    *.*) ;;
+    *) return 0 ;; # a bare name, such as the Docker service `gateway`
+  esac
+  warnc ingest.url_http "INGEST_URL is plain http to $host: the ingest secret and the gateway's answers cross the path readable" \
+    "use an https INGEST_URL for a gateway beyond this box's LAN"
 }
 
 doc_transports() {
@@ -428,7 +495,31 @@ doc_transports() {
     fi
   done
   doc_meshcom
+  doc_soundcard
   doc_fedlink_box
+}
+
+# The soundcard ports, checked by the ingest itself (check.ts --soundcard): the ALSA tools, the devices, the
+# PTT driver, the watchdog and the station calls' verification. It never keys the radio.
+doc_soundcard() {
+  local out kind port st msg fix
+  [ -n "$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)" ] || return 0
+  out="$(doc_ingest_node --soundcard || true)"
+  if [ -z "$out" ]; then
+    warnc ingest.soundcard_alsa "the soundcard checks could not run here" "run doctor where the ingest runs, with Node.js"
+    return 0
+  fi
+  while IFS=$'\t' read -r kind port st msg fix; do
+    case "$kind:$st" in
+      alsa:fail) failc ingest.soundcard_alsa "$msg" "$fix" ;;
+      audio:fail) failc "ingest.soundcard_audio.$port" "$msg" "$fix" ;;
+      ptt:fail) failc "ingest.soundcard_ptt.$port" "$msg" "$fix" ;;
+      tx:fail) failc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
+      tx:warn) warnc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
+      alsa:pass) pass ingest.soundcard_alsa "$msg" ;;
+      audio:pass | ptt:pass | tx:pass) pass "ingest.soundcard_$kind.$port" "$msg" ;;
+    esac
+  done <<<"$out"
 }
 
 # Federation over packet circuits on this box: what it serves and pulls, and whether the settings can work.
@@ -437,14 +528,14 @@ doc_fedlink_box() {
   serve="$(doc_get FED_LINK_SERVE)"
   pull="$(doc_get FED_LINK_PULL)"
   call="$(doc_get FED_LINK_CALL)"
-  [ -z "$(doc_get KISS_TNC_HOST)$(doc_get AXUDP_PEERS)" ] || link=1
+  [ -z "$(doc_get KISS_TNC_HOST)$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)$(doc_get AXUDP_PEERS)" ] || link=1
   [ -z "$(doc_get NETROM_CALL)" ] || [ -z "$(doc_get NETROM_ALIAS)" ] || node=1
   if [ "$serve" != 1 ] && [ "$pull" != 1 ]; then
     pass ingest.fedlink "federation over packet circuits is off"
     return 0
   fi
   if [ -z "$link" ]; then
-    failc ingest.fedlink "federation over packet needs a frame link" "set KISS_TNC_HOST, or AXUDP_PORT and AXUDP_PEERS"
+    failc ingest.fedlink "federation over packet needs a frame link" "set KISS_TNC_HOST or SOUNDCARD_DEVICE, or AXUDP_PORT and AXUDP_PEERS"
     return 0
   fi
   if [ -z "$call" ] && { [ "$pull" = 1 ] || [ -z "$node" ]; }; then

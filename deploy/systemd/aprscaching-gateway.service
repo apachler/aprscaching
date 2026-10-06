@@ -14,6 +14,10 @@ Environment=PORT=8080
 # The built web app (pnpm --filter @aprscaching/web build), served on the same origin as the API.
 Environment=WEB_DIST=/opt/aprscaching/apps/web/dist
 ExecStart=/usr/bin/pnpm --filter @aprscaching/node-gateway start
+# Every process of the unit gets the SIGTERM of a stop, node under pnpm included, so the ingest unkeys its PTTs
+# and the gateway closes SQLite before they exit.
+KillMode=control-group
+TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching

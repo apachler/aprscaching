@@ -10,6 +10,7 @@ import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { POSITION_RETENTION_S, pruneBounded, pruneOperational, retentionFrom } from "./retention.js";
 import { handleIngest, handleIngestCheck } from "./ingest.js";
+import { handleTxGate } from "./txgate.js";
 import {
   handleLog,
   handleCachesInBBox,
@@ -628,6 +629,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);
   if (p === "/ingest/check" && m === "GET") return handleIngestCheck(req, env);
+  if (p === "/ingest/txgate" && m === "GET") return handleTxGate(req, env);
   if (p === "/ingest/enroll" && m === "POST") return handleEnroll(req, env);
   if (p === "/api/admin/stations" && m === "POST") return handleAdminAddStation(req, env);
   if (p === "/api/admin/boxes" && m === "GET") return handleListBoxes(req, env);

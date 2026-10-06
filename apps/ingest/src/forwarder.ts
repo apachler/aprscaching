@@ -2,19 +2,18 @@
 /**
  * forwarder.ts — the ingest adapters for the FBB forwarding scheduler. The scheduler brain
  * (`BbsForwarder`) is pure and lives in `@aprscaching/packet`; here we supply its two I/O dependencies: a
- * `GatewayApi` (the forwarding-pool REST client, x-ingest-secret gated) and `kissForwardLink` (a real
- * connected-mode AX.25 link over KISS-TCP). `startForwarder` wires them together from env. The message
- * store stays in the cloud; the RF session runs here (ingest-locality).
+ * `GatewayApi` (the forwarding-pool REST client, x-ingest-secret gated) and `frameForwardLink` (a connected-mode
+ * AX.25 link over the box's frame link: its first radio, whose transmissions pass the call gate, or an AXUDP
+ * port). `startForwarder` wires them together from env. The message store stays in the cloud; the RF session
+ * runs here (ingest-locality).
  *
  * A connect script (`C NODE1` → `C 3 DB0XYZ`) connects to its first hop and sequences the rest; AXUDP partners
  * are validate-at-deploy. A session that fails to connect, at any hop, releases its link, timers and socket.
  */
-import net from "node:net";
-import { kissWrap, kissStripCrc, KissDecoder } from "@aprscaching/aprs";
 import type { FrameLink } from "./link.js";
 import { TokenBucket } from "./txlimit.js";
 import { gatewayFetch } from "./gatewayauth.js";
-import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprscaching/ax25";
+import { ConnectedLink, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprscaching/ax25";
 import {
   BbsForwarder,
   ConnectSequencer,
@@ -120,13 +119,13 @@ export function forwardAdmit(bucket: TokenBucket): (p: GwPartner) => boolean {
   };
 }
 
-/** Build + start a forwarder from env config (a KISS-TCP or shared frame link + the gateway pool). */
+/** Build + start a forwarder from env config (the shared frame link + the gateway pool). */
 export function startForwarder(o: {
   base: string;
   secret: string;
   mycall: string;
-  kiss?: { host: string; port: number };
-  link?: FrameLink; // an already-running frame pipe (AXUDP) shared with the connected stack
+  /** The frame link shared with the connected stack: the box's first radio, else an AXUDP port. */
+  link: FrameLink;
   pollMs?: number;
   sid?: string;
   compress?: boolean; // offer LZHUF-B1 compressed forwarding (engages only when the partner also does)
@@ -137,15 +136,7 @@ export function startForwarder(o: {
   const fwd = new BbsForwarder({
     api: new GatewayApi(o.base, o.secret),
     linkFactory: (p) =>
-      o.kiss
-        ? kissForwardLink({
-            host: o.kiss.host,
-            port: o.kiss.port,
-            mycall: o.mycall,
-            partnerCall: p.call,
-            connectScript: p.connectScript,
-          })
-        : frameForwardLink(o.link!, { mycall: o.mycall, partnerCall: p.call, connectScript: p.connectScript }),
+      frameForwardLink(o.link, { mycall: o.mycall, partnerCall: p.call, connectScript: p.connectScript }),
     pollMs: o.pollMs,
     sid: o.sid,
     compress: o.compress,
@@ -153,142 +144,6 @@ export function startForwarder(o: {
   });
   fwd.start();
   return fwd;
-}
-
-/**
- * A connected-mode FBB link over KISS-TCP: a raw-frame KISS socket driving a `ConnectedLink` (AX.25 v2.2)
- * to the partner. Direct single-hop connect; the multi-hop connect script is logged (validate-at-deploy).
- */
-function kissForwardLink(o: {
-  host: string;
-  port: number;
-  mycall: string;
-  partnerCall: string;
-  connectScript: string;
-}): ForwardLink {
-  const local = parseAddr(o.mycall);
-  // A connect script routes through node(s): connect the AX.25 link to the FIRST hop, then sequence the
-  // rest with ConnectSequencer. No script → connect directly to the partner.
-  const steps = parseConnectScript(o.connectScript);
-  const firstHop = steps.length ? steps[0]!.call : o.partnerCall;
-  const remote = parseAddr(firstHop);
-
-  let sock: net.Socket | null = null;
-  const rx = new KissDecoder();
-  let sequencing = false; // while true, delivered bytes drive the sequencer, not the app
-  let seq: ConnectSequencer | null = null;
-  const dataCbs: ((b: Uint8Array) => void)[] = [];
-  const closeCbs: (() => void)[] = [];
-  const fireClose = () => {
-    for (const c of closeCbs.splice(0)) c();
-  };
-  let wait: ReturnType<typeof setInterval> | undefined;
-  let deadline: ReturnType<typeof setTimeout> | undefined;
-  let released = false;
-  /**
-   * Release everything the session holds: the link's poll timer, the connect watchers and the KISS socket
-   * (Direwolf serves few clients, and a leaked socket locks out the main ingest). Runs once.
-   */
-  const release = () => {
-    if (released) return;
-    released = true;
-    clearInterval(poll);
-    clearInterval(wait);
-    clearTimeout(deadline);
-    sock?.destroy();
-  };
-  let hungUp = false;
-  /** Send DISC, then release once it has had time to leave. Runs once. */
-  const hangUp = () => {
-    if (hungUp) return;
-    hungUp = true;
-    link.disconnect();
-    setTimeout(release, 500);
-  };
-
-  const link = new ConnectedLink(local, remote, {
-    send: (f: Ax25Frame) => {
-      try {
-        sock?.write(kissWrap(encodeFrame(f)));
-      } catch {
-        /* link down */
-      }
-    },
-    deliver: (info: Uint8Array) => {
-      if (sequencing) seq?.feed(info);
-      else for (const c of dataCbs) c(info);
-    },
-    state: (s: LinkState) => {
-      if (s === "disconnected") fireClose();
-    },
-    error: (msg: string) => console.error(`[forward] ${o.partnerCall} link error: ${msg}`),
-  });
-  const poll = setInterval(() => link.poll(), 1000);
-
-  return {
-    connect: () =>
-      new Promise<void>((resolve, reject) => {
-        const s = net.connect(o.port, o.host);
-        sock = s;
-        s.on("connect", () => link.connect());
-        s.on("data", (chunk: Buffer) => {
-          for (const crcd of rx.push(chunk)) {
-            const k = kissStripCrc(crcd);
-            if (!k || k.command !== 0) continue; // a failed CRC, or a KISS command rather than a frame
-            // a modulo-128 link carries two-byte control fields
-            const f = decodeFrame(k.frame, link.extended);
-            if (f) link.onReceive(f);
-          }
-        });
-        s.on("error", (e) => {
-          release();
-          reject(e);
-        });
-        s.on("close", () => {
-          release();
-          fireClose();
-        });
-        const settle = () => {
-          // AX.25 link to the first hop is up
-          if (steps.length <= 1) return resolve(); // direct partner → ready
-          sequencing = true; // multi-hop: sequence "C <next>" through the node(s)
-          seq = new ConnectSequencer(steps, {
-            send: (line) => link.send(enc(line + "\r")),
-            onReady: () => {
-              sequencing = false;
-              resolve();
-            },
-            onFail: (why) => {
-              hangUp(); // the first hop's link is up: close it rather than leave it to the partner's timers
-              reject(new Error(`connect script failed: ${why}`));
-            },
-          });
-          seq.start();
-        };
-        wait = setInterval(() => {
-          if (link.state === "connected") {
-            clearInterval(wait);
-            clearTimeout(deadline); // the hops past the first are bounded by the scheduler's connect timeout
-            settle();
-          }
-        }, 200);
-        deadline = setTimeout(() => {
-          clearInterval(wait);
-          if (link.state !== "connected") {
-            hangUp();
-            reject(new Error("connect timeout"));
-          }
-        }, 30_000);
-      }),
-    send: (bytes: Uint8Array) => link.send(bytes),
-    onData: (cb) => {
-      dataCbs.push(cb);
-    },
-    onClose: (cb) => {
-      closeCbs.push(cb);
-    },
-    disconnect: hangUp,
-  };
 }
 
 /**

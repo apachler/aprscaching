@@ -203,7 +203,7 @@ export interface Heard {
 }
 
 /** Ports on which the box itself received the frame over a radio it can also transmit on. */
-const RF_PORTS = new Set(["kiss-tnc"]);
+const RF_PORTS = new Set(["kiss-tnc", "soundcard"]);
 
 /**
  * Send a numbered APRS message from the service call to a station, back the way it was heard: over APRS

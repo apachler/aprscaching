@@ -15,7 +15,13 @@ services:
   ingest:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
-    command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
+    # node itself, under Docker's init: a stop's SIGTERM reaches it, so it unkeys every PTT and flushes its
+    # batch before it exits (within the grace period). A `pnpm … start` here would leave the signal with pnpm,
+    # and node would be killed with the radio still keyed.
+    working_dir: /app/apps/ingest
+    command: ["node", "--import", "tsx", "src/index.ts"]
+    init: true
+    stop_grace_period: 20s
     # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESHCOM_*, …).
     env_file:
       - path: .env
@@ -28,6 +34,10 @@ services:
     # that GID with group_add.
     # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
     # group_add: ["18"]
+    # A soundcard port (SOUNDCARD_DEVICE) needs the sound devices, and its PTT device: a CM108's /dev/hidraw*, a
+    # GPIO chip (/dev/gpiochip0). The user is in `audio`, GID 29 on Debian, Ubuntu and Raspberry Pi OS; where the
+    # host's sound or GPIO group has another GID (`stat -c %g /dev/snd/controlC0`), add it with group_add.
+    # devices: ["/dev/snd:/dev/snd", "/dev/hidraw0:/dev/hidraw0"]
     # The settings come from .env alone (INGEST_URL, e.g. https://gateway.example.net/ingest; the APRS-IS
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.

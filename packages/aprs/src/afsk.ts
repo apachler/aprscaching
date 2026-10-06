@@ -4,7 +4,7 @@
  * turns an AX.25 frame into PCM (also the basis for AFSK TX, gated on callsign control-verification);
  * the demodulator turns PCM back
  * into AX.25 frames via a non-coherent mark/space correlator + DPLL bit recovery + HDLC deframing
- * with an X.25 FCS check. Pure DSP — the browser supplies the audio (Web Audio); no hardware here.
+ * with an X.25 FCS check. Pure DSP: the browser (Web Audio) or the ingest box (ALSA) supplies the audio.
  *
  * Bell 202: mark = 1200 Hz, space = 2200 Hz, 1200 baud, NRZI (a 0 toggles tone, a 1 holds), bits
  * LSB-first, HDLC flags 0x7E, bit-stuffing after five 1s, FCS = CRC-16/X.25.
@@ -126,7 +126,29 @@ class Hdlc {
   }
 }
 
-/** Streaming Bell-202 demodulator: push PCM chunks, get AX.25 frames out. */
+/** Edges remembered for carrier detect, and how many of them must fall on the bit clock to raise it. */
+const DCD_EDGES = 32,
+  DCD_ON = 24,
+  DCD_OFF = 16;
+/**
+ * An edge counts as on the bit clock when it follows the previous one by a whole number of bits, give or take
+ * this fraction of a bit. Noise flips the tone decision several times a bit, at random spacing.
+ */
+const DCD_TOLERANCE = 0.2;
+/**
+ * Bit times without a tone edge after which the carrier counts as gone. An AX.25 signal has an edge at least
+ * every seven bits (flags and bit-stuffing see to it); silence or a steady tone has none.
+ */
+const DCD_IDLE_BITS = 10;
+
+/**
+ * Streaming Bell-202 demodulator: push PCM chunks, get AX.25 frames out.
+ *
+ * {@link dcd} is its carrier detect: true while the tone edges keep falling on the recovered bit clock, as
+ * they do for any 1200-baud AFSK signal, flags included. Noise puts edges anywhere, and silence or a steady
+ * tone has none, so neither raises it. A transmitter checks it before keying, so it does not talk over a
+ * busy channel.
+ */
 export class Afsk1200Rx {
   private spb: number;
   private win: number;
@@ -141,6 +163,15 @@ export class Afsk1200Rx {
   private lastTone = 1; // per-sample detected tone (1 = mark)
   private prevBitTone = 1; // last sampled tone (for NRZI)
   private hdlc: Hdlc;
+  private edgeHist: boolean[] = []; // the last DCD_EDGES edges: on the bit clock or not
+  private onClock = 0; // how many of edgeHist are on the clock
+  private sinceEdge = 0; // samples since the last tone edge
+  private carrier = false;
+
+  /** Carrier detect: a 1200-baud AFSK signal is on the channel. */
+  get dcd(): boolean {
+    return this.carrier;
+  }
 
   constructor(
     private sampleRate: number,
@@ -183,7 +214,12 @@ export class Afsk1200Rx {
         qs += x * this.ss[n]!;
       }
       const tone = im * im + qm * qm >= is * is + qs * qs ? 1 : 0;
-      if (tone !== this.lastTone) this.phase = 0.5; // edge → resync to mid-bit
+      if (tone !== this.lastTone) {
+        const bits = this.sinceEdge / this.spb;
+        this.edge(bits > 1 - DCD_TOLERANCE && Math.abs(bits - Math.round(bits)) < DCD_TOLERANCE);
+        this.phase = 0.5; // edge → resync to mid-bit
+      } else if (this.sinceEdge > DCD_IDLE_BITS * this.spb && this.carrier) this.dropCarrier();
+      this.sinceEdge++;
       this.lastTone = tone;
       this.phase += 1 / this.spb;
       if (this.phase >= 1) {
@@ -192,5 +228,21 @@ export class Afsk1200Rx {
         this.prevBitTone = tone;
       }
     }
+  }
+
+  /** One tone edge for carrier detect: whether it fell a whole number of bits after the previous edge. */
+  private edge(aligned: boolean): void {
+    this.sinceEdge = 0;
+    this.edgeHist.push(aligned);
+    if (aligned) this.onClock++;
+    if (this.edgeHist.length > DCD_EDGES && this.edgeHist.shift()) this.onClock--;
+    if (this.onClock >= DCD_ON) this.carrier = true;
+    else if (this.onClock <= DCD_OFF) this.carrier = false;
+  }
+
+  private dropCarrier(): void {
+    this.carrier = false;
+    this.edgeHist = [];
+    this.onClock = 0;
   }
 }

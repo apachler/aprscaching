@@ -28,16 +28,18 @@ export interface IgateOpts {
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
 
 /**
- * Bidirectional APRS IGate over a KISS TNC + an APRS-IS connection.
- *   RX-IGate: RF frames heard on KISS are relayed up to APRS-IS with a qAR construct.
+ * Bidirectional APRS IGate over a radio port (a KISS TNC or a soundcard port) + an APRS-IS connection.
+ *   RX-IGate: RF frames heard on the box's radio ports are relayed up to APRS-IS with a qAR construct.
  *   TX-IGate: messages from APRS-IS addressed to a station heard locally on RF are gated to RF.
- * "Heard locally" is tracked from KISS RF receptions. Gating rules are in @aprscaching/aprs (pure).
+ * "Heard locally" is tracked from the RF receptions. Gating rules are in @aprscaching/aprs (pure).
  */
 export class Igate {
   private sock?: net.Socket;
   private ready = false;
   private lines = new LineBuffer();
   private heard = new Map<string, number>(); // base callsign -> last heard ts(ms)
+  /** The radio port each station was last heard on: a message for it goes out there. */
+  private heardOn = new Map<string, Pick<KissTnc, "send">>();
   private localTtl: number;
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
@@ -46,7 +48,7 @@ export class Igate {
   private bucket: TokenBucket;
 
   constructor(
-    private kiss: KissTnc,
+    private kiss: Pick<KissTnc, "send">,
     private o: IgateOpts,
   ) {
     this.localTtl = (o.localTtlSec ?? 1800) * 1000;
@@ -60,14 +62,19 @@ export class Igate {
     // every callsign ever heard.
     this.sweep = setInterval(() => {
       const cutoff = Date.now() - this.localTtl * 2;
-      for (const [cs, t] of this.heard) if (t < cutoff) this.heard.delete(cs);
+      for (const [cs, t] of this.heard)
+        if (t < cutoff) {
+          this.heard.delete(cs);
+          this.heardOn.delete(cs);
+        }
     }, this.localTtl);
     this.sweep.unref?.();
   }
 
-  /** Called for every RF frame heard via KISS. */
-  onRf(f: ParsedFrame): void {
+  /** Called for every RF frame heard on a radio port (`via`; absent, the IGate's own radio). */
+  onRf(f: ParsedFrame, via?: Pick<KissTnc, "send">): void {
     this.heard.set(base(f.src), Date.now());
+    if (via) this.heardOn.set(base(f.src), via);
     if (shouldRxIgate(f, this.o.call)) this.sendIs(rxIgateLine(f, this.o.call));
   }
 
@@ -90,7 +97,8 @@ export class Igate {
       console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
       return;
     }
-    if (this.kiss.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
+    const radio = this.heardOn.get(base(addr)) ?? this.kiss;
+    if (radio.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
       console.log(`[igate] TX->RF message for ${addr}`);
   }
 

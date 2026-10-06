@@ -56,7 +56,7 @@ const aprs = new AprsIs({
 let batch: Packet[] = [];
 // Frames this box received over a radio it can also transmit on carry its BOX_ID, so the gateway can
 // send an answer (an ack to a radio command) back through this box instead of over APRS-IS.
-const RX_ANSWER_PORTS = new Set(["kiss-tnc", "meshcom"]);
+const RX_ANSWER_PORTS = new Set(["kiss-tnc", "soundcard", "meshcom"]);
 const enqueue = (p: Packet) => {
   if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
   batch.push(p);
@@ -76,11 +76,14 @@ const delivery = new Delivery({
 // host shutdown loses as few heard packets as possible, then exit. Registered after the buffers
 // exist so a signal during the async transport setup below can never hit an undeclared binding.
 let shuttingDown = false;
-const onShutdown: (() => void)[] = []; // transports that release a socket before exit
+// transports that release a socket or a PTT before exit; a soundcard port's stop waits for its PTT to unkey
+const onShutdown: (() => void | Promise<void>)[] = [];
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const stop of onShutdown) stop();
+  // every port is stopped before the exit, within a deadline; the exit's synchronous release runs after
+  const stopped = Promise.allSettled(onShutdown.map(async (stop) => stop()));
+  await Promise.race([stopped, new Promise<void>((r) => setTimeout(r, 5000).unref())]);
   console.log(`[ingest] ${signal} — flushing pending packets…`);
   delivery.add(batch);
   batch = [];
@@ -95,14 +98,14 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
 // The connected-mode stack (NET/ROM node, session server, FBB forwarder) rides ONE frame link:
-// the KISS TNC when the box has RF, else a bidirectional AXUDP port (BPQ/FBB crosslinks and the
-// interop environment). Both satisfy the FrameLink seam; the engines never see the difference.
+// the box's first radio (the KISS TNC, else a soundcard port), else a bidirectional AXUDP port (BPQ/FBB
+// crosslinks and the interop environment). All satisfy the FrameLink seam; the engines never see the difference.
 import type { FrameLink } from "./link.js";
 let serviceLink: FrameLink | null = null;
 
 // Runtime switches the remote-control poller flips. `tx` is the master RF transmit switch; digi/igate
-// stay null unless that function is configured. The KISS TNC (when present) is the remote-TX radio. Each
-// transmitting function still needs its own opt-in (DIGI_CALL, IGATE_TX=1, BOX_TX=1) before `tx` matters.
+// stay null unless that function is configured. The first radio (the KISS TNC, else a soundcard port) is the
+// remote-TX radio. Each transmitting function still needs its own opt-in (DIGI_CALL, IGATE_TX=1, BOX_TX=1) before `tx` matters.
 const station: BoxState = { tx: true, digi: null, igate: null };
 let boxRadio: BoxRadio | null = null;
 
@@ -127,6 +130,34 @@ if (env.AXUDP_PORT) {
 // directly; the gateway attests it only when its sysop trusts the site.
 const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 
+// The ports this box transmits on itself: the KISS TNC and the soundcard ports. Each forwards what it hears
+// to the batch and to its subscribers (the digipeater, the IGate, the connected-mode services).
+//
+// Every one shares the call gate: the box transmits only under station calls the gateway confirms for this
+// box (control-verified, held by the box's operator; callverify.ts). RX never needs it.
+const { CallVerifier, boxTransmits, gatewayTxGateLookup, gateCheck, stationCalls, txGateGraceMs } =
+  await import("./callverify.js");
+let txGateGrace: number;
+try {
+  txGateGrace = txGateGraceMs(env.TX_GATE_GRACE);
+} catch (e) {
+  console.error(`[ingest] FATAL: ${(e as Error).message}`);
+  process.exit(1);
+}
+const callGate = new CallVerifier(
+  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
+  { log: (m) => console.error(m), graceMs: txGateGrace },
+);
+const gateCalls = new Set(stationCalls(env));
+interface TxRadio {
+  send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
+  sendFrame(f: import("@aprscaching/ax25").Ax25Frame): boolean;
+  frameSubs: ((f: ParsedFrame) => void)[];
+  rawSubs: ((b: Uint8Array) => void)[];
+  label?: () => string;
+}
+const radios: TxRadio[] = [];
+
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
   const frameSubs: ((f: ParsedFrame) => void)[] = [];
@@ -148,17 +179,104 @@ if (env.KISS_TNC_HOST) {
   );
   kiss.start();
   console.log(`[kiss] enabled${siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : ""}`);
-  boxRadio = kiss;
+  const kissOpen = gateCheck(
+    callGate,
+    [...gateCalls],
+    () => station.tx,
+    (m) => console.log(`[kiss] ${m}`),
+  );
+  radios.push({
+    send: (f) => kissOpen() && kiss.send(f),
+    sendFrame: (f) => kissOpen() && kiss.sendFrame(f),
+    frameSubs,
+    rawSubs,
+  });
+}
+
+// Soundcard ports — a 1200-baud AFSK modem in the box itself (ALSA arecord/aplay), keyed by a PTT driver.
+// Nothing between such a port and the radio can refuse a frame, so the port adds to the call gate what a TNC's
+// firmware would hold: its own opt-in, a running capture for carrier detect, and the PTT watchdog.
+let soundcardSettings: import("./soundcardconfig.js").SoundcardPortSettings[] = [];
+let soundcardRunning: { cfg: { name: string; tx: boolean }; txRefusal(): string | null }[] = [];
+if (env.SOUNDCARD_DEVICE || env.SOUNDCARD_PORTS) {
+  const { soundcardPorts } = await import("./soundcardconfig.js");
+  try {
+    soundcardSettings = soundcardPorts(env);
+  } catch (e) {
+    console.error(`[ingest] FATAL: ${(e as Error).message}`);
+    process.exit(1);
+  }
+}
+if (soundcardSettings.length) {
+  const { SoundcardPort } = await import("./soundcard.js");
+  const { installPttRelease } = await import("./ptt/release.js");
+  installPttRelease();
+  const ports: InstanceType<typeof SoundcardPort>[] = [];
+  for (const sc of soundcardSettings) {
+    const frameSubs: ((f: ParsedFrame) => void)[] = [];
+    const rawSubs: ((b: Uint8Array) => void)[] = [];
+    const calls = stationCalls(env, sc.call);
+    for (const c of calls) gateCalls.add(c);
+    const port = new SoundcardPort(
+      sc,
+      {
+        onPacket: enqueue,
+        onFrame: (f) => {
+          for (const s of frameSubs) s(f);
+        },
+        onRaw: (b) => {
+          for (const s of rawSubs) s(b);
+        },
+      },
+      { master: () => station.tx, calls, refusal: (c) => callGate.refusal(c) },
+      { siteCall },
+    );
+    await port.start();
+    onShutdown.push(() => port.stop());
+    ports.push(port);
+    radios.push({
+      send: (f) => port.send(f),
+      sendFrame: (f) => port.sendFrame(f),
+      frameSubs,
+      rawSubs,
+      label: () => port.label(),
+    });
+  }
+  soundcardRunning = ports;
+}
+// The gateway's answers for every station call, refreshed every three minutes (sooner while it cannot be
+// reached); each transmitting soundcard port says what still holds it back.
+// A receive-only box (no port or function that transmits) never asks.
+if (
+  radios.length &&
+  boxTransmits(
+    env,
+    soundcardSettings.some((s) => s.tx),
+  )
+)
+  callGate.start([...gateCalls], () => {
+    for (const p of soundcardRunning) {
+      const why = p.cfg.tx ? p.txRefusal() : null;
+      if (why) console.log(`[soundcard:${p.cfg.name}] transmit held back: ${why}`);
+    }
+  });
+
+// The first transmitting port (the KISS TNC, else the first soundcard port) carries the remote box's
+// transmissions and the connected-mode services. The digipeater repeats on the port that heard the frame, with
+// one duplicate window across ports; the IGate sends a message on the port that last heard its addressee.
+const primaryRadio = radios[0];
+if (primaryRadio) {
+  boxRadio = { send: (f) => primaryRadio.send(f), label: primaryRadio.label };
   serviceLink = {
-    sendFrame: (f) => kiss.sendFrame(f),
-    onRaw: (cb) => rawSubs.push(cb),
+    sendFrame: (f) => primaryRadio.sendFrame(f),
+    onRaw: (cb) => primaryRadio.rawSubs.push(cb),
     offRaw: (cb) => {
-      const i = rawSubs.indexOf(cb);
-      if (i >= 0) rawSubs.splice(i, 1);
+      const i = primaryRadio.rawSubs.indexOf(cb);
+      if (i >= 0) primaryRadio.rawSubs.splice(i, 1);
     },
   };
 
-  // RF digipeater (KISS TX) — repeat n-N traffic
+  // RF digipeater — repeat n-N traffic
   if (env.DIGI_CALL) {
     const aliases = new Set(
       (env.DIGI_ALIASES ?? "WIDE1,WIDE2")
@@ -166,32 +284,37 @@ if (env.KISS_TNC_HOST) {
         .map((a) => a.trim().toUpperCase())
         .filter(Boolean),
     );
-    const digi = new Digipeater(kiss, { mycall: env.DIGI_CALL, aliases });
     station.digi = true;
-    frameSubs.push((f) => {
-      if (station.tx && station.digi) digi.onFrame(f);
-    });
-    console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
-
-    // connected-mode digipeater — repeat SABM/I/… for NET/ROM + FBB relay through us
-    if (env.DIGI_CONNECTED === "1") {
-      const cdigi = new ConnectedDigipeater(kiss, {
-        mycall: env.DIGI_CALL,
-        aliases: [...aliases],
-        viscousMs: numEnv("DIGI_VISCOUS_MS", 0, { min: 0, max: 10_000 }) || undefined,
+    // one duplicate window for every port: two ports on one channel never both repeat a frame
+    const recentUi = new Map<string, number>();
+    const recentConnected = new Map<string, number>();
+    for (const radio of radios) {
+      const digi = new Digipeater(radio, { mycall: env.DIGI_CALL, aliases, recent: recentUi });
+      radio.frameSubs.push((f) => {
+        if (station.tx && station.digi) digi.onFrame(f);
       });
-      rawSubs.push((b) => {
-        if (station.tx && station.digi) cdigi.onRaw(b);
-      });
-      console.log(`[digi-c] connected-mode digipeater enabled as ${env.DIGI_CALL}`);
+      // connected-mode digipeater — repeat SABM/I/… for NET/ROM + FBB relay through us
+      if (env.DIGI_CONNECTED === "1") {
+        const cdigi = new ConnectedDigipeater(radio, {
+          mycall: env.DIGI_CALL,
+          aliases: [...aliases],
+          viscousMs: numEnv("DIGI_VISCOUS_MS", 0, { min: 0, max: 10_000 }) || undefined,
+          recent: recentConnected,
+        });
+        radio.rawSubs.push((b) => {
+          if (station.tx && station.digi) cdigi.onRaw(b);
+        });
+      }
     }
+    console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
+    if (env.DIGI_CONNECTED === "1") console.log(`[digi-c] connected-mode digipeater enabled as ${env.DIGI_CALL}`);
   }
 
   // APRS IGate (RF -> APRS-IS). Needs a real callsign + passcode. The APRS-IS -> RF direction transmits, so
   // it is a separate opt-in: IGATE_TX=1.
   if (env.IGATE_CALL && env.IGATE_PASS) {
     const igateTx = env.IGATE_TX === "1";
-    const igate = new Igate(kiss, {
+    const igate = new Igate(primaryRadio, {
       host: env.APRSIS_HOST ?? "rotate.aprs2.net",
       port: portEnv("APRSIS_PORT", 14580),
       call: env.IGATE_CALL,
@@ -206,9 +329,11 @@ if (env.KISS_TNC_HOST) {
       ...txLimitFromEnv("igate"),
     });
     station.igate = true;
-    frameSubs.push((f) => {
-      if (station.igate) igate.onRf(f);
-    });
+    // a message for a station goes out on the port that heard it last
+    for (const radio of radios)
+      radio.frameSubs.push((f) => {
+        if (station.igate) igate.onRf(f, radio);
+      });
     igate.start();
     console.log(
       `[igate] enabled as ${env.IGATE_CALL} (${igateTx ? "RF <-> APRS-IS" : "receive only; IGATE_TX=1 passes messages to RF"})`,
@@ -327,12 +452,12 @@ if (env.HOSTMODE_HOST) {
   console.log("[hostmode] enabled");
 }
 // Connected-mode services — answer inbound connects to our NET/ROM node and/or BBS SSIDs over the
-// service link (the KISS TNC when the box has RF, else the bidirectional AXUDP port). The NODE runs
+// service link (the box's first radio, else the bidirectional AXUDP port). The NODE runs
 // the NET/ROM CLI over the live routing table + broadcasts/consumes NODES; the BBS runs the FBB
 // command interpreter over a per-caller gateway mail snapshot.
 if (!serviceLink && axudpPort) serviceLink = axudpPort;
 if (env.FED_LINK_SERVE === "1" && !serviceLink)
-  console.error("[fedlink] FED_LINK_SERVE=1 needs a frame link (KISS_TNC_HOST or AXUDP_PEERS)");
+  console.error("[fedlink] FED_LINK_SERVE=1 needs a frame link (KISS_TNC_HOST, SOUNDCARD_DEVICE or AXUDP_PEERS)");
 if (serviceLink) {
   const { startConnectedServices } = await import("./connected.js");
   await startConnectedServices({
@@ -443,18 +568,18 @@ setInterval(() => void learnServiceCall(), 15 * 60_000);
 console.log(`[ingest] started -> ${INGEST_URL}`);
 
 // ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
-// Opt-in: needs a frame link (KISS TNC or AXUDP port) + a station call. Partners + routing are
+// Opt-in: needs a frame link (KISS TNC, soundcard port or AXUDP port) + a station call. Partners + routing are
 // configured in the gateway (Instance admin); this box runs the sessions (ingest-locality).
 // The BBS forwards under its own call unless another is set: one packet BBS, one call.
 const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
-if (env.BBS_FORWARD === "1" && forwardCall && (env.KISS_TNC_HOST || axudpPort)) {
+if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
     base: GATEWAY_BASE,
     secret: SECRET,
     mycall: forwardCall,
-    kiss: env.KISS_TNC_HOST ? { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) } : undefined,
-    link: env.KISS_TNC_HOST ? undefined : axudpPort!,
+    // the frame link of the box's first radio (or AXUDP): its transmissions pass the call gate like any other
+    link: serviceLink,
     pollMs: numEnv("BBS_FORWARD_POLL_MS", 60000, { min: 1000 }),
     sid: env.BBS_FORWARD_SID,
     compress: env.BBS_FORWARD_COMPRESS === "1",
@@ -468,7 +593,9 @@ if (env.BBS_FORWARD === "1" && forwardCall && (env.KISS_TNC_HOST || axudpPort)) 
 // frame link (KISS TNC or AXUDP port) and FED_LINK_CALL, the call the box dials as.
 if (env.FED_LINK_PULL === "1") {
   if (!env.FED_LINK_CALL || !serviceLink) {
-    console.error("[fedlink] FED_LINK_PULL=1 needs FED_LINK_CALL and a frame link (KISS_TNC_HOST or AXUDP_PEERS)");
+    console.error(
+      "[fedlink] FED_LINK_PULL=1 needs FED_LINK_CALL and a frame link (KISS_TNC_HOST, SOUNDCARD_DEVICE or AXUDP_PEERS)",
+    );
   } else {
     const { FedLinkPuller, gatewayPacketApi, FED_LINK_PULL_DEFAULT_MS, FED_LINK_PULL_MIN_MS, FED_LINK_PAGES_DEFAULT } =
       await import("./fedlink.js");

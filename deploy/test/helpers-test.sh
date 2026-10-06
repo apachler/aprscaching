@@ -614,6 +614,34 @@ check "MeshCom firmware 4.35u is new enough" bash -c ". '$DEPLOY/lib/doctor.sh';
 check "  … 4.40a too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.40a 4 35 u"
 check "  … 4.35t is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35t 4 35 u"
 check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 u"
+# The soundcard checks the ingest prints (check.ts --soundcard) become doctor rows under their ids and links.
+SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
+  doc_get() { [ \"\$1\" = SOUNDCARD_DEVICE ] && echo plughw:1,0; true; }
+  shape_doctor_ingest_node() { printf 'alsa\t-\tpass\tarecord and aplay are installed\t\nptt\t1\tfail\tno hidraw\tudev\ntx\t1\twarn\tnot verified\tverify\n'; }
+  doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
+check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
+  "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+grace() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; tx_gate_grace_min '$1'"; }
+check "TX_GATE_GRACE reads minutes and hours, as the ingest does" eq \
+  "$(grace ''),$(grace 30),$(grace 45m),$(grace 2H),$(grace 1),$(grace 48h)" "6,30,45,120,6,1440"
+check "  … and refuses anything else" bash -c ". '$DEPLOY/lib/doctor.sh'; ! tx_gate_grace_min soon && ! tx_gate_grace_min 2d"
+gracerow() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
+  doc_get() { case \"\$1\" in KISS_TNC_HOST) echo tnc ;; TX_GATE_GRACE) echo '$1' ;; esac; true; }
+  doc_tx_gate_grace; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,3"; }
+check "doctor shows the grace in effect" eq "$(gracerow 30m)" \
+  "$(printf 'pass\tthe TX gate keeps a confirmed call for 30 min while the gateway is unreachable')"
+check "  … and warns above an hour" eq "$(gracerow 2h)" \
+  "$(printf 'warn\ta revoked call keeps transmitting up to 120 min while the gateway is unreachable (TX_GATE_GRACE)')"
+urlhttp() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_ingest_url_http '$1'; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2"; }
+check "doctor warns on a plain-http INGEST_URL beyond the LAN" eq "$(urlhttp http://gw.example.net/ingest)" \
+  "$(printf 'warn\tingest.url_http')"
+check "  … and on a 44Net address" eq "$(urlhttp http://44.143.1.2:8080/ingest)" "$(printf 'warn\tingest.url_http')"
+check "  … not on https, loopback, a LAN address or the Docker service name" eq \
+  "$(for u in https://gw.example.net/ingest http://127.0.0.1:8787/ingest 'http://[::1]:8787/ingest' \
+    http://192.168.1.5:8787/ingest http://172.20.0.3/ingest http://gateway:8080/ingest http://pi.local/ingest; do
+    urlhttp "$u"; done)" ""
+check "  … and without a soundcard port it adds none" eq \
+  "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_get() { true; }; doc_soundcard; echo \"\${#DOC_ROWS[@]}\"")" 0
 # the same key and value as workers/gateway/test/fed_fingerprint.test.ts: doctor and Instance admin agree
 FP_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
 check "a federation key's fingerprint matches Instance admin's" eq \

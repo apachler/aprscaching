@@ -237,7 +237,7 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
 const repliesEnabled = (env: Env) => env.RADIO_REPLIES === "1";
 
 /** Ports on which the ingest box itself received the frame over a radio it can also transmit on. */
-const RF_PORTS = new Set(["kiss-tnc"]);
+const RF_PORTS = new Set(["kiss-tnc", "soundcard"]);
 
 /** An APRS addressee field: exactly nine characters, space-padded or truncated. */
 const addressee = (call: string) => call.toUpperCase().slice(0, 9).padEnd(9);

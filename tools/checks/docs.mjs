@@ -276,11 +276,13 @@ for (const f of TEXT) {
             ? "ingestmeshcom_fwcall"
             : /^ingest\.meshcom\./.test(id)
               ? "ingestmeshcomcall"
-              : /^federation\.peer\./.test(id)
-                ? "federationpeerhost"
-                : /^identity\./.test(id)
-                  ? "identityline"
-                  : id.replace(/\./g, "");
+              : /^ingest\.soundcard_(audio|ptt|tx)\./.test(id)
+                ? `${id.replace(/\.[^.]*$/, "").replace(/\./g, "")}port`
+                : /^federation\.peer\./.test(id)
+                  ? "federationpeerhost"
+                  : /^identity\./.test(id)
+                    ? "identityline"
+                    : id.replace(/\./g, "");
   for (const f of tracked.filter((f) => /^deploy\/(lib\/doctor\.sh|lib\/shapes\/[\w-]+\.sh)$/.test(f)))
     read(f)
       .split("\n")

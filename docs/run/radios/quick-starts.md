@@ -75,6 +75,8 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
 4. Restart the ingest. The log shows `[kiss] connected 127.0.0.1:8001`.
 5. The `kiss-tnc` port counts packets.
 
+Without Direwolf, the box can be the modem itself: [Soundcard port](soundcard.md).
+
 **Count it for find verification (optional).** For a TNC you operate, add `RF_SITE_CALL=OE8APR-10`. The log
 then shows `[kiss] enabled — direct hearings name site OE8APR-10`. What the receiving site does, and the
 gateway setting that attests it, are in [Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a).

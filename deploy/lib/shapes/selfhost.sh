@@ -77,6 +77,12 @@ shape_doctor_context() {
   DOC_BACKUP_SETTINGS=1
 }
 
+# doctor's ingest checks (check.ts with its arguments), inside the running ingest container, where the sound
+# card, the PTT device and the ALSA tools are
+shape_doctor_ingest_node() {
+  selfhost_compose exec -T -w /app/apps/ingest ingest node --import tsx src/check.ts "$@" 2>/dev/null
+}
+
 # selfhost_compose_supported VERSION: whether a `docker compose version --short` is 2.24 or newer.
 selfhost_compose_supported() {
   local v="${1#v}" major minor

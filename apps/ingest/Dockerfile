@@ -7,11 +7,17 @@ RUN corepack enable
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @aprscaching/ingest...
 # Runs as the unprivileged user aprscaching (UID and GID 10001), as deploy/Dockerfile does; `dialout` opens a
-# serial TNC or PTT passed in with --device.
+# serial TNC or PTT passed in with --device, `audio` a sound card. The soundcard port runs ALSA's arecord and
+# aplay (alsa-utils) and keys a GPIO PTT with gpioset (gpiod).
 ENV COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN apt-get update && apt-get install -y --no-install-recommends alsa-utils gpiod \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack install \
  && groupadd --system --gid 10001 aprscaching \
- && useradd --system --uid 10001 --gid 10001 --groups dialout --create-home --home-dir /home/aprscaching \
+ && useradd --system --uid 10001 --gid 10001 --groups dialout,audio --create-home --home-dir /home/aprscaching \
       --shell /usr/sbin/nologin aprscaching
 USER 10001
-CMD ["pnpm","--filter","@aprscaching/ingest","start"]
+# node itself, not pnpm: run it with `docker run --init`, so a stop's SIGTERM reaches node, which unkeys every
+# PTT before it exits. pnpm would keep the signal, and node would be killed with the radio keyed.
+WORKDIR /app/apps/ingest
+CMD ["node","--import","tsx","src/index.ts"]
