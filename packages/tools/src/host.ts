@@ -71,8 +71,9 @@ export const BEACON_COMMENT_MAX = 62;
 /**
  * Why an APRS information field a tool asks to transmit is refused, or null when it may go out. A tool transmits
  * an APRS status (`>text`) or an APRS message (`:ADDRESSEE:text`, an acknowledgement included) and nothing else:
- * no position, object, item, telemetry or third-party traffic (`}`), which would carry another station's callsign
- * as its source. One line of text, within the status or message length.
+ * no position (a status may not start with a grid locator), object, item, telemetry or telemetry definition,
+ * bulletin or announcement, or third-party traffic (`}`), which would carry another station's callsign as its
+ * source. One line of text, within the status or message length (a message number not counted).
  */
 export function txInfoProblem(info: unknown): string | null {
   if (typeof info !== "string") return "the frame must be text";
@@ -81,14 +82,22 @@ export function txInfoProblem(info: unknown): string | null {
   if (/[\r\n\0]/.test(info)) return "the frame must be one line";
   if (info.startsWith("}")) return "a tool may not send third-party traffic";
   if (info.startsWith(">")) {
-    if (info.length - 1 > TX_STATUS_MAX) return `a status holds at most ${TX_STATUS_MAX} characters`;
+    const text = info.slice(1);
+    if (text.length > TX_STATUS_MAX) return `a status holds at most ${TX_STATUS_MAX} characters`;
+    // a status that starts with a Maidenhead locator reports a position (APRS101 ch. 16), which a tool may not send
+    if (/^[A-R]{2}[0-9]{2}/i.test(text)) return "a status may not start with a grid locator";
     return null;
   }
-  const msg = /^:([^:]{9}):(.*)$/.exec(info);
+  // `:` + a nine-character addressee of printable ASCII (no `:`), padded with spaces, + `:` + text
+  const msg = /^:([!-9;-~][ -9;-~]{8}):(.*)$/.exec(info);
   if (msg) {
-    if (!msg[1]!.trim()) return "a message needs an addressee";
-    if (/[|~{]/.test(msg[2]!.replace(/\{[A-Za-z0-9]{1,5}\}?$/, ""))) return "a message may not hold | ~ or {";
-    if (msg[2]!.length > TX_MESSAGE_MAX + 6) return `a message holds at most ${TX_MESSAGE_MAX} characters`;
+    const to = msg[1]!.trimEnd();
+    if (/ /.test(to)) return "a message addressee is one word, padded with spaces";
+    if (/^(BLN|NWS|SKY|CWA|BOM|NTS)/i.test(to)) return "a tool may not send bulletins or announcements";
+    const text = msg[2]!.replace(/\{[A-Za-z0-9]{1,5}\}?$/, ""); // the optional message number
+    if (/^(PARM|UNIT|EQNS|BITS)\./.test(text)) return "a tool may not send telemetry definitions";
+    if (/[|~{]/.test(text)) return "a message may not hold | ~ or {";
+    if (text.length > TX_MESSAGE_MAX) return `a message holds at most ${TX_MESSAGE_MAX} characters`;
     return null;
   }
   return "a tool may transmit only an APRS status (>) or message (:ADDRESSEE:text)";
@@ -182,6 +191,31 @@ export interface ToolHostOpts {
   onChange?: () => void;
   /** The clock the transmit rate limit reads; Date.now by default. */
   now?: () => number;
+  /** Where the transmit budgets outlive the host (the browser tab's session storage), so a reload refills nothing. */
+  txBudgetStore?: TxBudgetStore;
+}
+
+/** Each tool's transmit budget: tokens left, when they were counted, and the last transmission. */
+export type TxBudgets = Record<string, { tokens: number; at: number; last?: number }>;
+export interface TxBudgetStore {
+  load(): unknown;
+  save(budgets: TxBudgets): void;
+}
+
+/** Stored budgets, checked: a malformed entry drops, and none holds more than a full bucket. */
+export function normalizeTxBudgets(raw: unknown): TxBudgets {
+  const out: TxBudgets = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 200)) {
+    const b = v as { tokens?: unknown; at?: unknown; last?: unknown };
+    if (!b || typeof b.tokens !== "number" || typeof b.at !== "number" || !Number.isFinite(b.at)) continue;
+    out[k] = {
+      tokens: Math.max(0, Math.min(TOOL_TX_PER_HOUR, b.tokens)),
+      at: b.at,
+      ...(typeof b.last === "number" && Number.isFinite(b.last) ? { last: b.last } : {}),
+    };
+  }
+  return out;
 }
 
 /** A named bus service: its provider, and the capability a caller must hold to reach it. */
@@ -233,7 +267,13 @@ export class ToolHost {
   private busSvcs = new Map<string, BusService>(); // name → provider
   private busDepth = 0; // re-entrancy guard so a topic loop can't run away
   private static readonly BUS_MAX_DEPTH = 16;
-  constructor(private opts: ToolHostOpts = {}) {}
+  constructor(private opts: ToolHostOpts = {}) {
+    try {
+      for (const [k, v] of Object.entries(normalizeTxBudgets(opts.txBudgetStore?.load()))) this.txBudget.set(k, v);
+    } catch {
+      /* no stored budgets: every tool starts with a full bucket */
+    }
+  }
 
   register(tool: Tool): void {
     if (this.tools.has(tool.manifest.name)) throw new Error(`tool ${tool.manifest.name} already registered`);
@@ -294,6 +334,12 @@ export class ToolHost {
       }
       this.clearContributions(r);
       r.enabled = false;
+      for (const fn of this.offListeners)
+        try {
+          fn(name);
+        } catch {
+          /* a listener's failure stops nothing else */
+        }
     }
     return { ok: true };
   }
@@ -539,10 +585,11 @@ export class ToolHost {
 
   /**
    * Take one transmission from a tool's budget: at most one per TOOL_TX_MIN_GAP_MS, and TOOL_TX_PER_HOUR an hour
-   * sustained (a bucket that refills over the hour). Requests, beacons and session scripts all draw on it. Null
-   * when the tool may transmit now, else why it is held.
+   * sustained (a bucket that refills over the hour). Requests, beacons and session scripts all draw on it; `count`
+   * takes several transmissions at once (a script's connects and sends). Null when the tool may transmit now, else
+   * why it is held.
    */
-  takeTx(tool: string): string | null {
+  takeTx(tool: string, count = 1): string | null {
     const now = (this.opts.now ?? Date.now)();
     const b = this.txBudget.get(tool) ?? { tokens: TOOL_TX_PER_HOUR, at: now };
     b.tokens = Math.min(TOOL_TX_PER_HOUR, b.tokens + ((now - b.at) / 3_600_000) * TOOL_TX_PER_HOUR);
@@ -550,10 +597,22 @@ export class ToolHost {
     this.txBudget.set(tool, b);
     if (b.last !== undefined && now - b.last < TOOL_TX_MIN_GAP_MS)
       return `one transmission per ${TOOL_TX_MIN_GAP_MS / 1000} s`;
-    if (b.tokens < 1) return `at most ${TOOL_TX_PER_HOUR} transmissions an hour`;
-    b.tokens -= 1;
+    if (b.tokens < count) return `at most ${TOOL_TX_PER_HOUR} transmissions an hour`;
+    b.tokens -= count;
     b.last = now;
+    try {
+      this.opts.txBudgetStore?.save(Object.fromEntries(this.txBudget));
+    } catch {
+      /* storage blocked: the budget holds for this page */
+    }
     return null;
+  }
+
+  private offListeners = new Set<(tool: string) => void>();
+  /** Call `fn` with a tool's name whenever it is switched off or removed; returns the disposer. */
+  onToolOff(fn: (tool: string) => void): () => void {
+    this.offListeners.add(fn);
+    return () => this.offListeners.delete(fn);
   }
 
   /** End a tool's beacon from the host's side (the consent or the callsign it was set under is gone). */

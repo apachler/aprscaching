@@ -11,6 +11,7 @@ import {
   normalizeBeacon,
   TOOL_TX_MIN_GAP_MS,
   TOOL_TX_PER_HOUR,
+  normalizeTxBudgets,
   BEACON_MIN_INTERVAL_SEC,
   BEACON_MAX_INTERVAL_SEC,
   TX_INFO_MAX,
@@ -178,6 +179,29 @@ describe("Transmit and beacons — gated, checked and rate-limited by the host",
     expect(await ctx.requestTx(">again")).toBe(false);
   });
 
+  it("keeps the budget in its store, so a new host (a reload) does not refill it", async () => {
+    let now = 5_000_000;
+    let saved: unknown = null;
+    const store = { load: () => saved, save: (b: unknown) => void (saved = JSON.parse(JSON.stringify(b))) };
+    const run = async () => {
+      let ctx!: ToolContext;
+      const host = new ToolHost({ txGate: () => true, transmit: () => true, now: () => now, txBudgetStore: store });
+      host.register(txTool((c) => (ctx = c)));
+      host.setEnabled("tx-tool", true);
+      return ctx;
+    };
+    let ctx = await run();
+    for (let i = 0; i < TOOL_TX_PER_HOUR; i++) {
+      expect(await ctx.requestTx(">spend")).toBe(true);
+      now += TOOL_TX_MIN_GAP_MS;
+    }
+    ctx = await run(); // the page reloads in the same tab
+    expect(await ctx.requestTx(">after the reload")).toBe(false);
+    expect(normalizeTxBudgets({ "tx-tool": { tokens: 99, at: 1 }, bad: { tokens: "x" } })).toEqual({
+      "tx-tool": { tokens: TOOL_TX_PER_HOUR, at: 1 },
+    });
+  });
+
   it("transmits only an APRS status or message", async () => {
     const transmit = vi.fn();
     let ctx!: ToolContext;
@@ -198,11 +222,29 @@ describe("Transmit and beacons — gated, checked and rate-limited by the host",
       "T#001,1,2,3,4,5,00000000",
       ":         :no addressee",
       ":OE1XYZ   :pipe | inside",
+      ">JN76jx/- position in disguise",
+      ">IO91 here",
+      ":BLN1     :a bulletin",
+      ":NWS-WARN :an announcement",
+      ":OE1XYZ   :PARM.Volt,Temp",
+      ":OE1XYZ   :UNIT.V,C",
+      ":OE1XYZ   :EQNS.0,1,0",
+      ":OE1XYZ   :BITS.11111111,Tool",
+      ":OE1 XYZ  :space inside",
+      ":OE1XYZé  :not ascii",
+      ":OE1XYZ   :" + "x".repeat(68),
       42 as never,
     ])
       expect(await ctx.requestTx(bad)).toBe(false);
     expect(transmit).not.toHaveBeenCalled();
-    for (const good of [">QRV on 2m", ":OE1XYZ   :hello there{12", ":OE1XYZ   :ack12"])
+    for (const good of [
+      ">QRV on 2m",
+      ":OE1XYZ   :hello there{12",
+      ":OE1XYZ   :ack12",
+      ":OE1XYZ   :" + "x".repeat(67) + "{12345}",
+      ":OE1XYZ   :" + "x".repeat(67),
+      ":OE1XYZ-15:rej3",
+    ])
       expect(txInfoProblem(good)).toBeNull();
     expect(await ctx.requestTx(":OE1XYZ   :ack12")).toBe(true);
   });
@@ -285,6 +327,30 @@ describe("The host ends a beacon and guards its own services", () => {
     // the provider may replace its own service, and once it is off the name is free again
     host.setEnabled("owner", false);
     expect(host.setEnabled("thief", true).ok).toBe(true);
+  });
+
+  it("onToolOff names a tool switched off or removed", () => {
+    const host = new ToolHost();
+    const off: string[] = [];
+    const dispose = host.onToolOff((t) => off.push(t));
+    host.register(mk("a1", ["command"], () => undefined));
+    host.setEnabled("a1", true);
+    host.setEnabled("a1", false);
+    host.setEnabled("a1", true);
+    host.unregister("a1");
+    dispose();
+    host.register(mk("b2", ["command"], () => undefined));
+    host.setEnabled("b2", true);
+    host.setEnabled("b2", false);
+    expect(off).toEqual(["a1", "a1"]);
+  });
+
+  it("takeTx takes several transmissions at once, within the hourly budget", () => {
+    const now = 1_000_000;
+    const host = new ToolHost({ now: () => now });
+    expect(host.takeTx("script", TOOL_TX_PER_HOUR + 1)).toMatch(/at most 6 transmissions an hour/);
+    expect(host.takeTx("script", 4)).toBeNull();
+    expect(host.takeTx("other", 3)).toBeNull(); // each tool has its own
   });
 
   it("a host service learns which tool calls it", () => {

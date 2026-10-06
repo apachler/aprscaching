@@ -4,6 +4,7 @@ import {
   parseScript,
   ScriptRunner,
   SCRIPT_MAX_STEPS,
+  scriptTxCost,
   validateSteps,
   type ScriptSession,
 } from "../src/session-script.js";
@@ -135,5 +136,24 @@ describe("ScriptRunner.load", () => {
     expect(r.busy()).toBe(true);
     r.load(parseScript("connect B2B"), 2);
     expect(chans.get(1)!.state).toBe("disconnected");
+  });
+});
+
+describe("a script's transmit cost and its cancellation", () => {
+  it("counts each connect and every five sends", () => {
+    expect(scriptTxCost(parseScript("connect A1A; send 1; disconnect"))).toBe(2);
+    expect(scriptTxCost(parseScript("connect A1A; send 1; send 2; send 3; send 4; send 5; send 6; connect B2B"))).toBe(
+      4,
+    );
+  });
+  it("cancel closes the open channel and ends the script", () => {
+    const { session, chans } = fakeSession();
+    const r = new ScriptRunner(session);
+    r.load(parseScript("connect A1A; send x"), 0);
+    r.tick(1);
+    r.cancel("cancelled: sched-query was switched off");
+    expect(chans.get(1)!.state).toBe("disconnected");
+    expect(r.busy()).toBe(false);
+    expect(r.state()).toMatchObject({ status: "error", note: "cancelled: sched-query was switched off" });
   });
 });

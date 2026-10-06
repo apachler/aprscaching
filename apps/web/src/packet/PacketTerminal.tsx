@@ -12,7 +12,14 @@ import {
   type Transport,
   type AnsiLine,
 } from "@aprscaching/packet";
-import { expand as expandMacros, withNow, ScriptRunner, validateSteps, type ScriptSession } from "@aprscaching/tools";
+import {
+  expand as expandMacros,
+  withNow,
+  ScriptRunner,
+  validateSteps,
+  scriptTxCost,
+  type ScriptSession,
+} from "@aprscaching/tools";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { BleKissTransport } from "./bleKiss.js";
@@ -209,19 +216,30 @@ export function PacketTerminal(props: {
       // A session script connects and sends over the TNC, so a calling tool must hold 'tx'. The steps are checked,
       // one script runs at a time, and each load draws on the calling tool's transmit budget (one a minute, six an
       // hour), like any other transmission of that tool. A new script closes the channel the last one held.
-      disposeScriptSvc.current = host.registerHostService(
+      // Each connect counts as one transmission and every five sends as one more; the tool that loaded the script
+      // owns it, and switching that tool off or removing it cancels the script and closes its channel.
+      let scriptCaller: string | null = null;
+      const disposeService = host.registerHostService(
         "session.script",
         (a, caller) => {
           const steps = validateSteps((a as { steps?: unknown } | null)?.steps);
           if (typeof steps === "string") throw new Error(steps);
           if (runner.busy()) throw new Error("a session script is already running");
-          const held = host.takeTx(caller);
+          const held = host.takeTx(caller, scriptTxCost(steps));
           if (held) throw new Error(`session script held: ${held}`);
+          scriptCaller = caller;
           runner.load(steps, Date.now());
           return { ok: true };
         },
         { requires: "tx" },
       );
+      const disposeOff = host.onToolOff((tool) => {
+        if (tool === scriptCaller && runner.busy()) runner.cancel(`cancelled: ${tool} was switched off`);
+      });
+      disposeScriptSvc.current = () => {
+        disposeService();
+        disposeOff();
+      };
 
       pollRef.current = setInterval(() => {
         session.poll();

@@ -82,6 +82,13 @@ export function parseScript(text: string): SessionStep[] {
   return steps;
 }
 
+/**
+ * The transmit budget a script draws on: each `connect` counts as one transmission, and every five `send` steps as
+ * one more.
+ */
+export const scriptTxCost = (steps: readonly SessionStep[]): number =>
+  steps.filter((s) => s.op === "connect").length + Math.ceil(steps.filter((s) => s.op === "send").length / 5);
+
 /** The most steps one script holds, and the bounds of each step a tool hands the `session.script` service. */
 export const SCRIPT_MAX_STEPS = 20;
 const SCRIPT_TEXT_MAX = 256;
@@ -169,6 +176,15 @@ export class ScriptRunner {
     this.note = undefined;
     this.status = this.steps.length ? "running" : "idle";
     this.stepStart = now;
+  }
+
+  /** Stop the running script: its open channel closes, and the state says it was cancelled. */
+  cancel(note = "cancelled"): void {
+    if (this.status !== "running") return;
+    if (this.chan != null) this.session.close(this.chan);
+    this.chan = null;
+    this.status = "error";
+    this.note = note;
   }
 
   /** A script is running. */

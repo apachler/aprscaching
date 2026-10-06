@@ -306,7 +306,7 @@ export type FrameMessage =
   | { type: "emit"; topic: string; data: unknown }
   | { type: "subscribe"; topic: string }
   | { type: "provide"; name: string }
-  | { type: "call"; id: number; name: string; args: unknown }
+  | { type: "call"; id: number; name: string; args: unknown; bad?: true }
   | { type: "svcResult"; id: number; result?: unknown; error?: string };
 
 const isStr = (x: unknown): x is string => typeof x === "string";
@@ -344,6 +344,20 @@ function listOf<T>(x: unknown, f: (v: unknown) => T | null, max = MAX_LIST): T[]
     if (r !== null) out.push(r);
   }
   return out;
+}
+
+/**
+ * What a tool hands another tool or the app on the bus, as plain JSON data: a value structured clone carries but
+ * JSON does not (a Map, a typed array, a Date) reaches the other side as its JSON form, never as an object of a
+ * class the receiver might trust. `ok: false` for a value JSON cannot hold (a cycle, a BigInt).
+ */
+export function plainData(x: unknown): { ok: true; value: unknown } | { ok: false } {
+  try {
+    const t = JSON.stringify(x);
+    return { ok: true, value: t === undefined ? undefined : JSON.parse(t) };
+  } catch {
+    return { ok: false };
+  }
 }
 
 /** Check the shape of a message from the frame; `null` for anything that is not one of the known kinds. */
@@ -388,18 +402,27 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
       return isId(m.id) ? { type: "beacon", id: m.id, spec: m.spec ?? null } : null;
     case "reply":
       return isId(m.replyId) && isStr(m.text) ? { type: "reply", replyId: m.replyId, text: m.text } : null;
-    case "emit":
-      return isStr(m.topic) ? { type: "emit", topic: m.topic, data: m.data } : null;
+    case "emit": {
+      const data = plainData(m.data);
+      return isStr(m.topic) && data.ok ? { type: "emit", topic: m.topic, data: data.value } : null;
+    }
     case "subscribe":
       return isStr(m.topic) ? { type: "subscribe", topic: m.topic } : null;
     case "provide":
       return isStr(m.name) ? { type: "provide", name: m.name } : null;
-    case "call":
-      return isId(m.id) && isStr(m.name) ? { type: "call", id: m.id, name: m.name, args: m.args } : null;
-    case "svcResult":
-      return isId(m.id)
-        ? { type: "svcResult", id: m.id, result: m.result, ...(isStr(m.error) ? { error: m.error.slice(0, 500) } : {}) }
-        : null;
+    case "call": {
+      if (!isId(m.id) || !isStr(m.name)) return null;
+      const args = plainData(m.args);
+      return args.ok
+        ? { type: "call", id: m.id, name: m.name, args: args.value }
+        : { type: "call", id: m.id, name: m.name, args: undefined, bad: true };
+    }
+    case "svcResult": {
+      if (!isId(m.id)) return null;
+      const result = plainData(m.result);
+      const error = isStr(m.error) ? m.error.slice(0, 500) : result.ok ? undefined : "the answer is not plain data";
+      return { type: "svcResult", id: m.id, result: result.ok ? result.value : undefined, ...(error ? { error } : {}) };
+    }
     default:
       return null;
   }
@@ -524,6 +547,31 @@ export class SandboxBridge {
     return false;
   }
 
+  private dirty = new Set<"panel" | "map">();
+  private applyTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Apply the latest panel and map layer, at most once per 100 ms however often the tool replaces them. */
+  private scheduleApply(): void {
+    if (this.applyTimer) return;
+    this.applyTimer = setTimeout(() => {
+      this.applyTimer = null;
+      this.applyNow();
+    }, 100);
+  }
+  private applyNow(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    for (const what of this.dirty) {
+      try {
+        if (what === "panel") ctx.setPanel(sanitizePanel(this.panel));
+        else ctx.setMapLayer(sanitizeMapLayer(this.map));
+      } catch (e) {
+        ctx.log(`${what}: ${(e as Error).message}`);
+      }
+    }
+    this.dirty.clear();
+  }
+
   /** Tell the host's surfaces to re-read, at most once per 100 ms. */
   private changed(): void {
     if (this.changeTimer) return;
@@ -584,11 +632,13 @@ export class SandboxBridge {
         return;
       case "panel":
         this.panel = m.spec;
-        if (ctx) guard("panel", () => ctx.setPanel(sanitizePanel(m.spec)));
+        this.dirty.add("panel");
+        if (ctx) this.scheduleApply();
         return;
       case "map":
         this.map = m.spec;
-        if (ctx) guard("map", () => ctx.setMapLayer(sanitizeMapLayer(m.spec)));
+        this.dirty.add("map");
+        if (ctx) this.scheduleApply();
         return;
       case "colours":
         if (!this.granted.includes("monitor")) return ctx?.log("colours: permission 'monitor' not granted");
@@ -631,7 +681,10 @@ export class SandboxBridge {
         });
         return;
       case "call":
-        this.answer(m.id, () => ctx!.callService(m.name, m.args));
+        this.answer(m.id, () => {
+          if (m.bad) throw new Error("the arguments are not plain data");
+          return ctx!.callService(m.name, m.args);
+        });
         return;
     }
   }

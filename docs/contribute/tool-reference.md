@@ -171,18 +171,20 @@ A tool transmits only through the app's browser radio link, the way the app's ow
   that consent itself; without it, the transmission is held and the app says so. The packet terminal's own TNC
   port is not a tool's to use, except through the `session.script` service.
 
-A tool transmits APRS status and messages, and nothing else: `info` is a status (`>text`, at most 62 characters)
-or a message (`:ADDRESSEE:text`, an addressee of nine characters padded with spaces, at most 67 characters of text
-and an optional `{id}`, acknowledgements included). The app refuses positions, objects, items, telemetry,
-third-party traffic (`}`) and anything else, as well as an empty field or more than one line. The install prompt
+A tool transmits APRS status and messages, and nothing else: `info` is a status (`>text`, at most 62 characters,
+not starting with a grid locator) or a message (`:ADDRESSEE:text`, an addressee of one word of printable ASCII
+padded with spaces to nine characters, at most 67 characters of text plus an optional `{id}`, acknowledgements
+included). The app refuses positions, objects, items, telemetry and telemetry definitions (`PARM.`, `UNIT.`,
+`EQNS.`, `BITS.`), bulletins and announcements (`BLN…`, `NWS…` and similar addressees), third-party traffic (`}`)
+and anything else, as well as an empty field or more than one line. The install prompt
 says so: **May transmit status and messages under your callsign**.
 
 Every frame goes out from the callsign the consent covers, to `APZACG` via `WIDE1-1`, shows in **Recent
 transmissions** under the tool's title and flashes the transmit indicator. `requestTx()` resolves once the radio
 sent it, `false` when anything held it. Each tool has a transmit budget: one transmission a minute
 (`TOOL_TX_MIN_GAP_MS`) and six an hour sustained (`TOOL_TX_PER_HOUR`, a bucket that refills over the hour). Its
-requests, its beacon and its session scripts all draw on it, and switching the tool off and on, or installing it
-again, does not refill it.
+requests, its beacon and its session scripts all draw on it; the budget lives in the tab's session storage, so
+switching the tool off and on, installing it again or reloading the page does not refill it.
 
 A beacon transmits its comment as an APRS status (`>comment`), at once and then every `intervalSec` seconds while
 the gate is open. The app clamps the interval to 10 minutes through one day and the comment to one line of 62
@@ -218,8 +220,9 @@ The bus methods need `ipc`. They exist on `tool`, and on `ipc`, which is `undefi
 | `provide(name, fn)` | Offer the service `name`: `fn(args)` returns the answer or a `Promise` of it. |
 | `ipc.setPanel(spec)` | Replace the tool's panel. Needs `panel` as well. |
 
-Topic and service names are cut to 64 characters, and an empty one is refused. Every payload is copied with the
-structured-clone algorithm, so it carries data, never functions. The app's bus stops a chain of messages that
+Topic and service names are cut to 64 characters, and an empty one is refused. Every payload a tool sends on the
+bus (`emit` data, `call` arguments, a service's answer) travels as plain JSON: a value JSON cannot hold refuses the
+message, and one JSON writes differently (a `Date`, a `Map`) arrives in its JSON form. The app's bus stops a chain of messages that
 nests deeper than 16.
 
 The sender name a subscriber receives is the emitting tool's manifest `name`; the app itself sends as `(host)`. A
@@ -242,7 +245,7 @@ The app and the project's tools use these names:
 | `station.type` | service | the **Station DB (NAMES.GP)** tool, while it is on | `ipc` | Takes a callsign; answers its station type, or `""` when it has not heard it |
 | `render.blocks` | topic | listened to by the **Block art (GIP)** tool | `ipc` | `{ text }`, or `{ cols, cells }` as in a `blocks` node, shown in its panel |
 | `session.progress` | topic | the packet terminal, while a TNC is open | `ipc` | The state of a running session script: `{ status, step, total, captured, note }` |
-| `session.script` | service | the packet terminal, while a TNC is open | `ipc` and `tx` | Takes `{ steps }`, a connected-mode script of at most 20 steps (`connect` first, then `send`, `waitfor`, `wait`, `disconnect`, each one line); one script runs at a time, each draws on the calling tool's transmit budget, and a new one closes the channel the last one held. Answers `{ ok: true }` |
+| `session.script` | service | the packet terminal, while a TNC is open | `ipc` and `tx` | Takes `{ steps }`, a connected-mode script of at most 20 steps (`connect` first, then `send`, `waitfor`, `wait`, `disconnect`, each one line); one script runs at a time, and each draws on the calling tool's transmit budget (one transmission per `connect`, one more per five `send` steps). A new script closes the channel the last one held, and switching the calling tool off or removing it cancels its script. Answers `{ ok: true }` |
 | `link.ping.request` | topic | the **Link ping (RTT)** tool's `/ping` | `ipc` | `{}` |
 | `link.rtt` | topic | listened to by the **Link ping (RTT)** tool | `ipc` | `{ ms }` |
 

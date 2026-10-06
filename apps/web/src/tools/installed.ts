@@ -30,7 +30,7 @@ import {
   withRecord,
   type InstalledRecord,
 } from "./installedRecords.js";
-import { OWNER_KEY, onToolOwnerChange, toolOwner } from "./toolOwner.js";
+import { OWNER_KEY, mayWriteInstalls, onToolOwnerChange, storageAction, toolOwner } from "./toolOwner.js";
 import { notifyToolsChanged, onToolsChanged, setToolEnabled, toolHost } from "./host.js";
 
 /** The stored installs, when they belong to this page's identity. */
@@ -52,7 +52,12 @@ export function readInstalled(): InstalledRecord[] {
   return [...stored, ...[...ephemeral.values()].filter((e) => !stored.some((s) => s.name === e.name))];
 }
 
-function writeStored(list: InstalledRecord[]): void {
+/** Write the stored installs, only while they belong to this page's identity. False when refused. */
+function writeStored(list: InstalledRecord[]): boolean {
+  if (!mayWriteInstalls()) {
+    stopAll(); // another tab changed the identity: nothing here belongs to anyone in this page now
+    return false;
+  }
   try {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(list));
   } catch {
@@ -60,6 +65,7 @@ function writeStored(list: InstalledRecord[]): void {
   }
   notePrefChange(); // mirror to the account (if signed in)
   notifyToolsChanged();
+  return true;
 }
 
 /** Change one install's record, wherever it is kept. */
@@ -102,6 +108,16 @@ function stopAll(): void {
   notifyToolsChanged();
 }
 onToolOwnerChange(stopAll);
+
+// Another tab of this browser changed the installs: a sign-out or another account there stops this page's tools; a
+// change by the same identity there brings this page in line with it.
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (ev) => {
+    if (ev.storageArea !== localStorage) return;
+    const action = storageAction(ev.key, ev.newValue);
+    if (action === "stop") stopAll();
+    else if (action === "sync") void syncInstalled();
+  });
 
 /** Run a checked manifest: fetch its script (refused unless it matches the signed hash), sandbox it, register it. */
 async function run(manifest: ToolManifest, base: string, carrier: Carrier): Promise<string | null> {
@@ -207,10 +223,20 @@ export async function installTool(opts: {
   if (persist && !fitsBudget(next)) return "your installed tools fill the space your settings have; remove one first";
   stop(manifest.name); // installing again replaces the running copy (a new key or a wider reach approved)
   problems.delete(manifest.name);
+  const owner = toolOwner();
   const why = await run(manifest, base, carrier);
   if (why) return why;
-  if (persist) writeStored(withRecord(readStored(), rec));
-  else {
+  // the identity changed while the tool loaded (up to 15 s): it belongs to nobody here now, and nothing is written
+  if (toolOwner() !== owner) {
+    stop(manifest.name);
+    return "the session changed while the tool loaded";
+  }
+  if (persist) {
+    if (!writeStored(withRecord(readStored(), rec))) {
+      stop(manifest.name);
+      return "another tab changed who is signed in; reload the page";
+    }
+  } else {
     ephemeral.set(rec.name, rec);
     notifyToolsChanged();
   }

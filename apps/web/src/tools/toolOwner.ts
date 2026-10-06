@@ -46,6 +46,32 @@ export function claimTools(callsign: string): boolean {
   return true;
 }
 
+/**
+ * This page may write the stored installs: its identity is known and is the one the browser's installs belong to. A
+ * second tab still holding an earlier identity must never overwrite the new owner's list.
+ */
+export function mayWriteInstalls(): boolean {
+  if (current === null) return false;
+  try {
+    return localStorage.getItem(OWNER_KEY) === current;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What another tab's change to the stored installs means here: `stop` when the browser's installs now belong to
+ * another identity than this page's (a sign-out or another account in that tab), `sync` when this identity's own
+ * list changed (an install, a removal, a switch), nothing for any other key.
+ */
+export function storageAction(key: string | null, newValue: string | null): "stop" | "sync" | null {
+  if (current === null) return null;
+  if (key === null) return "stop"; // the whole storage was cleared
+  if (key === OWNER_KEY) return newValue === current ? "sync" : "stop";
+  if (key === INSTALLED_KEY) return mayWriteInstalls() ? "sync" : "stop";
+  return null;
+}
+
 /** The stored installs belong to `callsign` (the account the settings sync is about to write into). */
 export function toolsOwnedBy(callsign: string): boolean {
   try {

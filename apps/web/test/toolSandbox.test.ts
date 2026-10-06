@@ -17,6 +17,7 @@ import {
   REPLY_TEXT_MAX,
   REPLY_TTL_MS,
   SandboxBridge,
+  plainData,
   sandboxTool,
   workerPayload,
 } from "../src/tools/sandbox.js";
@@ -306,6 +307,8 @@ describe("SandboxBridge — every request goes through the tool's own context", 
         ],
       },
     });
+    expect(host.mapLayers()).toEqual([]); // applied coalesced, not per message
+    await new Promise((r) => setTimeout(r, 150));
     expect(host.mapLayers()[0]!.spec.points).toEqual([
       { lat: 47, lon: 15, label: "home", glyph: undefined, tone: undefined },
     ]);
@@ -407,5 +410,48 @@ describe("SandboxBridge — a tool's budget", () => {
     bridge.receive({ type: "provide", name: "session.script" });
     expect(host.ipcServices()).toEqual([]);
     expect(onLog).toHaveBeenCalledWith("sb", expect.stringMatching(/reserved for the app/));
+  });
+});
+
+describe("bus data is plain JSON", () => {
+  it("round-trips through JSON, and refuses what JSON cannot hold", () => {
+    expect(plainData({ a: 1, d: new Date(0), m: new Map([[1, 2]]) })).toEqual({
+      ok: true,
+      value: { a: 1, d: "1970-01-01T00:00:00.000Z", m: {} },
+    });
+    expect(plainData(undefined)).toEqual({ ok: true, value: undefined });
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(plainData(cyclic).ok).toBe(false);
+    expect(plainData(10n).ok).toBe(false);
+  });
+
+  it("drops an emit of data JSON cannot hold, and answers such a call with an error", async () => {
+    expect(parseFrameMessage({ type: "emit", topic: "t", data: 10n })).toBeNull();
+    expect(parseFrameMessage({ type: "emit", topic: "t", data: { when: new Date(0) } })).toEqual({
+      type: "emit",
+      topic: "t",
+      data: { when: "1970-01-01T00:00:00.000Z" },
+    });
+    expect(parseFrameMessage({ type: "svcResult", id: 1, result: 10n })).toEqual({
+      type: "svcResult",
+      id: 1,
+      result: undefined,
+      error: "the answer is not plain data",
+    });
+    const { bridge, sent } = sandboxed(["ipc"]);
+    bridge.receive(parseFrameMessage({ type: "call", id: 4, name: "x", args: 10n })!);
+    await flush();
+    expect(last(sent, "callResult")).toEqual({ type: "callResult", id: 4, error: "the arguments are not plain data" });
+  });
+
+  it("applies a burst of panel updates once, with the latest", async () => {
+    const onChange = vi.fn();
+    const { host, bridge } = sandboxed(["panel"], { onChange });
+    onChange.mockClear();
+    for (let i = 0; i < 50; i++) bridge.receive({ type: "panel", spec: { title: `P${i}`, nodes: [] } });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(host.panels("web")[0]!.spec.title).toBe("P49");
+    expect(onChange).toHaveBeenCalledOnce();
   });
 });

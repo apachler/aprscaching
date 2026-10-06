@@ -13,7 +13,7 @@
  * an hour, beacons and session scripts included) and clamps its beacon interval.
  */
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { ToolHost, type BeaconSpec } from "@aprscaching/tools";
+import { ToolHost, type BeaconSpec, type TxBudgets } from "@aprscaching/tools";
 import { TOAST_EVENT } from "../ui/Toast.js";
 import { radioLink } from "../rf/RadioLinkHost.js";
 
@@ -102,8 +102,31 @@ if (typeof window !== "undefined") radioLink.subscribe(checkToolBeacons);
 
 let changePending = false;
 
+/**
+ * The tools' transmit budgets live in this tab's session storage: a reload keeps them, so it refills nothing; they
+ * are per tab, as the transmit consent is.
+ */
+const TX_BUDGET_KEY = "acs.tools.txBudget";
+const txBudgetStore = {
+  load: () => {
+    try {
+      return JSON.parse(sessionStorage.getItem(TX_BUDGET_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  },
+  save: (b: TxBudgets) => {
+    try {
+      sessionStorage.setItem(TX_BUDGET_KEY, JSON.stringify(b));
+    } catch {
+      /* storage blocked */
+    }
+  },
+};
+
 /** The single shared host; empty until the player's installed tools start. */
 export const toolHost = new ToolHost({
+  txBudgetStore,
   txGate: toolTxOpen,
   onLog: (t, m) => console.log(`[tool:${t}]`, m),
   onBeacon: setBeacon,
