@@ -31,7 +31,7 @@ import {
 } from "./registries.js";
 
 /** A key's fingerprint, computed in the browser. */
-export function useFingerprint(key: string): string | null {
+function useFingerprint(key: string): string | null {
   const [fp, setFp] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -43,7 +43,7 @@ export function useFingerprint(key: string): string | null {
   return fp;
 }
 
-export function Fingerprint(props: { value: string | null; label?: string }) {
+function Fingerprint(props: { value: string | null; label?: string }) {
   return (
     <span className="reg-fp">
       {props.label ?? "Key"} <span className="mono">{props.value ?? "…"}</span>
@@ -115,7 +115,7 @@ const scopeBadge = (reg: ToolRegistryEntry) =>
   );
 
 /** A listing matches the filter when its name, title or description contains every word of it. */
-export function listingMatches(l: Listing, filter: string): boolean {
+function listingMatches(l: Listing, filter: string): boolean {
   const hay = `${l.entry.name} ${l.entry.title} ${l.entry.description ?? ""}`.toLowerCase();
   return filter
     .toLowerCase()

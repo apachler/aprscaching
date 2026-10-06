@@ -4,7 +4,7 @@ import type * as maplibregl from "maplibre-gl";
 import type { SessionState } from "../identity/useSession.js";
 
 /** What every surface of the platform shares: the signed-in session and the live map. */
-export interface PlatformValue {
+interface PlatformValue {
   session: SessionState;
   /** The MapLibre map, or null until its container mounts. */
   map: maplibregl.Map | null;

@@ -5,7 +5,7 @@
  * there. Either way the one-time sign-in link by email (or one the sysop mints) still works, and the sign-in
  * panel says so. An instance reached over plain http on HAMNET may also have an https address that takes them.
  */
-export type PasskeyProblem = "insecure" | "unsupported";
+type PasskeyProblem = "insecure" | "unsupported";
 
 /** One line each: why there is no passkey button, and what to use instead. */
 export const PASSKEY_PROBLEM_TEXT: Record<PasskeyProblem, string> = {

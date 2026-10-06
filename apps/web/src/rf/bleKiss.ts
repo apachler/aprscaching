@@ -17,7 +17,7 @@
  */
 
 /** One GATT service that carries KISS: notifications bring device → host bytes, writes carry host → device. */
-export interface BleKissProfile {
+interface BleKissProfile {
   name: string;
   service: string;
   /** device → host, notify */
@@ -41,10 +41,10 @@ export const NORDIC_UART: BleKissProfile = {
 };
 
 /** Every profile, in order of preference when a device offers more than one. */
-export const BLE_KISS_PROFILES: readonly BleKissProfile[] = [BLE_KISS_API, NORDIC_UART];
+const BLE_KISS_PROFILES: readonly BleKissProfile[] = [BLE_KISS_API, NORDIC_UART];
 
 /** A write fits the default ATT MTU (23 bytes less the 3-byte header); Web Bluetooth does not report a larger one. */
-export const BLE_CHUNK = 20;
+const BLE_CHUNK = 20;
 
 /** Is a Bluetooth TNC reachable here? (Web Bluetooth — Chromium on desktop or Android, secure context.) */
 export const webBluetoothSupported = (): boolean =>

@@ -12,7 +12,7 @@ import type { MailboxMessage, MessageItem } from "../api.js";
 import type { LinkKind } from "../rf/radioLink.js";
 
 /** The longest APRS message text. */
-export const APRS_TEXT_MAX = 67;
+const APRS_TEXT_MAX = 67;
 
 /** Why a Mailbox message already sent offers no Withdraw. */
 export const MAILBOX_SENT_NOTE = "Already sent on the air, so it can no longer be withdrawn.";
@@ -182,7 +182,7 @@ export function correspondents(threads: readonly Thread[], limit = 20): string[]
 /** How a new message travels: now, or kept in the Mailbox until the instance hears the station. */
 export type Delivery = "now" | "heard";
 /** How "now" goes out: from the operator's own radio in this browser, or through the instance to APRS-IS. */
-export type NowRoute = "radio" | "instance";
+type NowRoute = "radio" | "instance";
 
 /**
  * Pure: the route a message sent now takes. The operator's own radio when it is connected with a TNC that can

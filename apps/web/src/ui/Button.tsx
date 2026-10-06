@@ -21,8 +21,7 @@ import { isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react
 import { Hint } from "./Hint.js";
 import { hasWords } from "./hintController.js";
 
-export type ButtonVariant =
-  "primary" | "secondary" | "danger" | "quiet" | "inline" | "inline-danger" | "icon" | "icon-subtle";
+type ButtonVariant = "primary" | "secondary" | "danger" | "quiet" | "inline" | "inline-danger" | "icon" | "icon-subtle";
 
 const CLASS: Record<ButtonVariant, string> = {
   primary: "primary",

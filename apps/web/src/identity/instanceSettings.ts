@@ -8,7 +8,7 @@
 import { checkSiteValue, isSiteSettingKey } from "@aprscaching/shared";
 import type { SiteSettingView } from "../api.js";
 
-export type ControlKind = "switch" | "choice" | "number" | "text" | "options" | "contacts" | "links" | "retention";
+type ControlKind = "switch" | "choice" | "number" | "text" | "options" | "contacts" | "links" | "retention";
 
 export function controlKind(s: SiteSettingView): ControlKind {
   if (s.control === "switch") return "switch";

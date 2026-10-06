@@ -175,7 +175,7 @@ export interface PinnedItem {
 }
 
 /** A destination outside the app, opened in a new tab. */
-export interface NavLink {
+interface NavLink {
   key: string;
   label: string;
   icon: IconName;
@@ -246,7 +246,7 @@ export function viewFromQuery(search: string): View | null {
 }
 
 /** The slice of `window` the history sync uses. */
-export interface HistoryHost {
+interface HistoryHost {
   history: {
     readonly state: unknown;
     pushState(state: unknown, title: string, url: string): void;

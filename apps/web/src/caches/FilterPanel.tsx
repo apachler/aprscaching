@@ -10,7 +10,7 @@ import type { CacheType } from "@aprscaching/shared";
 import { NO_FILTERS, type CacheFilters } from "./filters.js";
 import { countryLabel } from "./CountrySelect.js";
 
-export interface SpotFilters {
+interface SpotFilters {
   bands: string[];
   modes: string[];
   sources: string[];

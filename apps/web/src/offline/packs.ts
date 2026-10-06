@@ -10,7 +10,7 @@
 import type { MapCache, PackCache, SearchHitCache } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
 
-export const AUTO_PACK_ID = "auto";
+const AUTO_PACK_ID = "auto";
 /** The automatic area keeps at most this many caches. */
 const AUTO_MAX = 2000;
 

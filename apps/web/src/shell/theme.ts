@@ -10,7 +10,7 @@ import { resolveCrt, resolveTheme, type LocaleSettings, type ResolvedTheme } fro
 import { tokenHex } from "./tokenColor.js";
 
 /** The slice of `window.matchMedia` the watcher uses (a test passes its own). */
-export type MatchMedia = (query: string) => {
+type MatchMedia = (query: string) => {
   matches: boolean;
   addEventListener(type: "change", fn: () => void): void;
   removeEventListener(type: "change", fn: () => void): void;

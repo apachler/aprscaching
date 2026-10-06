@@ -7,7 +7,7 @@
 
 /** The longest side of a cache photo as stored, and of its thumbnail, in pixels. */
 export const PHOTO_PX = 1600;
-export const THUMB_PX = 320;
+const THUMB_PX = 320;
 
 /**
  * The image scaled down so its longest side is at most `maxPx`, as a JPEG; null when the browser cannot

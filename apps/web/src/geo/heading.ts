@@ -12,7 +12,7 @@
 import { bearingDeg, haversine } from "../map/geo.js";
 
 /** The fields of an orientation event this module reads. */
-export interface OrientationReading {
+interface OrientationReading {
   alpha: number | null;
   absolute?: boolean;
   webkitCompassHeading?: number;
@@ -20,7 +20,7 @@ export interface OrientationReading {
 }
 
 /** A compass heading in degrees clockwise from north, and its accuracy in degrees when the browser gives one. */
-export interface Heading {
+interface Heading {
   deg: number;
   /** Plus or minus this many degrees; negative or absent when the browser cannot say. */
   accuracyDeg: number | null;
@@ -49,7 +49,7 @@ export function smoothAngle(prev: number | null, next: number, k = 0.3): number 
 }
 
 /** A compass is badly calibrated when the browser says it is off by more than this, or cannot say. */
-export const CALIBRATE_ABOVE_DEG = 25;
+const CALIBRATE_ABOVE_DEG = 25;
 export const needsCalibration = (h: Heading): boolean =>
   h.accuracyDeg != null && (h.accuracyDeg < 0 || h.accuracyDeg > CALIBRATE_ABOVE_DEG);
 
@@ -79,7 +79,7 @@ export function courseTracker(minM = 8) {
  * Within this distance of the pin, or of the reading's own accuracy if larger, the needle hands over to the eye —
  * but only for a reading fine enough to lead there: a fix worse than PIN_ACCURACY_M is never "at the pin".
  */
-export const SEARCH_HERE_M = 10;
+const SEARCH_HERE_M = 10;
 export const PIN_ACCURACY_M = 30;
 export const atThePin = (distM: number, accuracyM: number): boolean =>
   accuracyM <= PIN_ACCURACY_M && distM <= Math.max(SEARCH_HERE_M, accuracyM);

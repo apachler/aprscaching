@@ -13,11 +13,11 @@
  */
 import { makeStreamDecoder, type DecodeMode } from "@aprscaching/tools";
 
-export type AudioMode = DecodeMode;
+type AudioMode = DecodeMode;
 export interface AudioCapture {
   stop(): Promise<string>;
 }
-export interface ListenOpts {
+interface ListenOpts {
   pitchHz?: number;
   carrierHz?: number;
   baud?: number;

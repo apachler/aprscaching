@@ -57,8 +57,8 @@ export interface QueueStore {
 /** What a failed send was: the network, a server error to retry, or a refusal. */
 export type SendFailure = { kind: "offline" } | { kind: "retry" } | { kind: "refused"; status: number; reason: string };
 
-export const QUEUE_KEY = "acs.logqueue";
-export const ATTENTION_KEY = "acs.logqueue.attention";
+const QUEUE_KEY = "acs.logqueue";
+const ATTENTION_KEY = "acs.logqueue.attention";
 
 const BACKOFF_FIRST_MS = 30_000;
 const BACKOFF_MAX_MS = 30 * 60_000;

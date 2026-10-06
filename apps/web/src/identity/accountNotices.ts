@@ -6,7 +6,7 @@
 import type { SessionEnded } from "../api.js";
 
 /** The notice for a session that ended: its title, its text, and the next step it offers. */
-export interface EndedNotice {
+interface EndedNotice {
   title: string;
   body: string;
   /** `data`: get or erase the data of an account that holds no callsign; `signin`: sign in again. */

@@ -12,7 +12,7 @@ export interface Point {
 }
 
 /** How a typed place measures against a pin: the distance, and whether it is beyond the limit. */
-export interface MoveCheck {
+interface MoveCheck {
   distanceM: number;
   over: boolean;
 }

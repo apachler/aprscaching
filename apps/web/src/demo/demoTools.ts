@@ -9,7 +9,7 @@
  */
 
 /** Demo installs run without a prompt, so only where no person is asked: a development build or a driven browser. */
-export const demoToolsAllowed = (): boolean => import.meta.env.DEV || navigator.webdriver === true;
+const demoToolsAllowed = (): boolean => import.meta.env.DEV || navigator.webdriver === true;
 import { BUILTIN_TOOL_REGISTRY } from "@aprscaching/shared";
 import { checkPinnedRegistry, type SignedRegistry } from "@aprscaching/tools";
 import { installTool } from "../tools/installed.js";

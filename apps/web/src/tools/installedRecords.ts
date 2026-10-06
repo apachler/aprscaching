@@ -30,7 +30,7 @@ export interface InstalledRecord {
 export const INSTALLED_KEY = "acs.tools";
 export const MAX_INSTALLED = 30;
 /** The installed tools must fit in this many bytes of the account's settings (the gateway keeps 16 KB in all). */
-export const INSTALLED_BUDGET = 10_000;
+const INSTALLED_BUDGET = 10_000;
 const NAME = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const PUBKEY = /^[A-Za-z0-9_-]{43}$/;
 

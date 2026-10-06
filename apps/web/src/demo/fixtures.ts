@@ -60,7 +60,7 @@ import {
 } from "@aprscaching/shared";
 import { CONFIG_HINTS, RETENTION_FIELD_LABELS, SITE_GROUP_TITLES, SITE_TEXT } from "@aprscaching/shared/configdocs";
 
-export type Persona = "user" | "sysop" | "out" | "fresh" | "ended";
+type Persona = "user" | "sysop" | "out" | "fresh" | "ended";
 
 const NOW = Math.floor(Date.UTC(2026, 9, 1, 14, 30) / 1000); // fixed, so screenshots are stable
 const MIN = 60;
@@ -110,7 +110,7 @@ const WATCH_ALERTS = [
 ];
 
 /** The region: around Graz (47.07 N, 15.42 E). */
-export const MAP_CACHES: MapCache[] = [
+const MAP_CACHES: MapCache[] = [
   {
     ...base,
     globalId: `${INSTANCE}:cache:1`,
@@ -358,7 +358,7 @@ const STAGES: CacheStage[] = [
   { stageNo: 3, unlock: "audio", clue: null, mediaUrl: null, radiusM: 60, unlocked: false, lat: null, lon: null },
 ];
 
-export const STATIONS: StationSummary[] = [
+const STATIONS: StationSummary[] = [
   {
     callsign: "OE6XRR-9",
     lat: 47.0602,
@@ -1166,7 +1166,7 @@ const ROUTES: Route[] = [
 ];
 
 /** The fixture answer for METHOD PATH, or undefined when the fixtures have none. */
-export function fixtureAnswer(method: string, path: string, persona: Persona): unknown {
+function fixtureAnswer(method: string, path: string, persona: Persona): unknown {
   for (const [m, re, answer] of ROUTES) {
     if (m !== method) continue;
     const hit = path.match(re);

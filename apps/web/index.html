@@ -12,7 +12,6 @@
       (function () {
         try {
           var t = (JSON.parse(localStorage.getItem("acs.locale") || "{}") || {}).theme;
-          if (t === "cogmind") t = "phosphor";
           if (t !== "auto" && t !== "light" && t !== "phosphor") t = "dark";
           if (t === "auto") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
           document.documentElement.dataset.theme = t;

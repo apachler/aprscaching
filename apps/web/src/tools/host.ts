@@ -40,7 +40,7 @@ const toast = (msg: string) => {
 };
 
 /** The gate a tool's transmission passes: a verified callsign and a live transmit grant for this tab's radio. */
-export const toolTxOpen = (): boolean => txVerified && radioLink.canTransmit();
+const toolTxOpen = (): boolean => txVerified && radioLink.canTransmit();
 
 /**
  * Send one APRS information field for a tool over the radio link, under the callsign the grant covers. The host
@@ -89,7 +89,7 @@ function setBeacon(tool: string, spec: BeaconSpec | null): void {
 }
 
 /** End every tool beacon whose consent or callsign is gone. */
-export function checkToolBeacons(): void {
+function checkToolBeacons(): void {
   const open = toolTxOpen();
   const call = radioLink.txCall();
   for (const [tool, b] of [...beacons]) {
@@ -187,7 +187,7 @@ export function useToolHost(): ToolHost {
 }
 
 /** What the rail needs to draw a pinned tool: its name and title. */
-export interface ToolEntry {
+interface ToolEntry {
   name: string;
   title: string;
 }

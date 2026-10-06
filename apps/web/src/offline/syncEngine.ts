@@ -14,7 +14,7 @@ import type { PackMeta } from "./store.js";
 /** A pack older than this is refreshed by an automatic sync. */
 export const AUTO_REFRESH_AFTER_MS = 24 * 3_600_000;
 /** A pack older than this shows in the status line. */
-export const SHOW_AGE_AFTER_MS = 24 * 3_600_000;
+const SHOW_AGE_AFTER_MS = 24 * 3_600_000;
 
 /** Is the connection unmetered? null when the browser does not say (no Network Information API). */
 export function unmetered(conn?: { type?: string; saveData?: boolean } | null): boolean | null {

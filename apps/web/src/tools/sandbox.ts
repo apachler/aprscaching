@@ -216,7 +216,7 @@ function workerSource(): string {
 /** How long the frame may take to start the worker and load the tool before the import fails. */
 const LOAD_TIMEOUT_MS = 15_000;
 /** How long a command, a decode or a service call may take before it answers with an error. */
-export const ANSWER_TIMEOUT_MS = 10_000;
+const ANSWER_TIMEOUT_MS = 10_000;
 /** How long a tool may answer a connected session after the event that offered the reply, and how often. */
 export const REPLY_TTL_MS = 120_000;
 export const REPLY_MAX = 4;
@@ -282,7 +282,7 @@ parent.postMessage({ type: "ready" }, "*");
 }
 
 /** One message from the frame, after its shape is checked. Anything else is dropped. */
-export type FrameMessage =
+type FrameMessage =
   | { type: "ready" }
   | { type: "error"; error: string }
   | {
@@ -806,7 +806,7 @@ export interface Sandbox {
   destroy(): void;
 }
 
-export interface SandboxOptions {
+interface SandboxOptions {
   /** The manifest's `connect` origins; reachable only with the 'network' grant. */
   connect?: string[];
   /** The app's own origins (page and API), which the frame never connects to. */

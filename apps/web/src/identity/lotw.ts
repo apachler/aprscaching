@@ -7,7 +7,7 @@
  * message, and is dropped; only the certificates and the signature leave the browser.
  */
 
-export interface LotwProof {
+interface LotwProof {
   /** The certificates in the file (the callsign certificate and its CA chain), base64 DER. */
   certificates: string[];
   /** RSASSA-PKCS1-v1_5 / SHA-256 signature over the challenge message, base64. */

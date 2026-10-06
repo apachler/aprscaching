@@ -179,7 +179,7 @@ async function startRecorded(rec: InstalledRecord): Promise<void> {
  * each running tool that is no longer recorded or is switched off (changed on another device). Runs at start-up and
  * after an account sync.
  */
-export function syncInstalled(): Promise<void> {
+function syncInstalled(): Promise<void> {
   const recs = readInstalled();
   for (const name of [...loaded.keys()]) if (!recs.some((r) => r.name === name && r.on)) stop(name);
   return Promise.all(recs.filter((r) => !problems.has(r.name)).map(startRecorded)).then(() => undefined);

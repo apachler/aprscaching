@@ -13,7 +13,7 @@ maplibregl.setWorkerUrl(workerUrl);
 /** How long a remote style may take to load before the map falls back to the self-contained one. */
 const STYLE_WAIT_MS = 10_000;
 
-export interface MapHandlers {
+interface MapHandlers {
   /** The style finished loading for the first time. */
   onLoad: (m: maplibregl.Map) => void;
   /** The view settled after a pan/zoom. */

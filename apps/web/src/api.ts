@@ -27,7 +27,6 @@ import type {
   Profile,
   StationSummary,
   StationDetail,
-  DecodedPacket,
   PortStat,
   MessageItem,
   MeshcomGroup,
@@ -38,8 +37,6 @@ import type {
 export type {
   CacheSummary,
   CacheDetail,
-  CacheLogEntry,
-  CreateCacheRequest,
   UpdateCacheRequest,
   MapCache,
   LogType,
@@ -49,7 +46,6 @@ export type {
   Profile,
   StationSummary,
   StationDetail,
-  DecodedPacket,
   PortStat,
   MessageItem,
   MeshcomGroup,
@@ -257,7 +253,6 @@ export function badgeUrl(callsign: string): string {
   return new URL(`/badge/${encodeURIComponent(callsign)}.svg`, API_BASE || location.origin).href;
 }
 import type { Corroborator } from "@aprscaching/shared";
-export type { Corroborator };
 /** Top receiving stations by the finds they made Radio-verified — running infrastructure as a visible contribution. */
 export function getCorroborators(
   bbox?: BBox,
@@ -305,7 +300,7 @@ export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }
 import type { SearchResults } from "@aprscaching/shared";
-export type { SearchResults, SearchHitCache, SearchHitStation } from "@aprscaching/shared";
+export type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
 /** Enriched as-you-type suggestions across caches + stations; without a connection, the offline packs' caches. */
 export async function searchSuggest(q: string, signal?: AbortSignal, limit = 8): Promise<SearchResults> {
   try {
@@ -316,7 +311,6 @@ export async function searchSuggest(q: string, signal?: AbortSignal, limit = 8):
   }
 }
 import type { ActivityItem, PageInfo } from "@aprscaching/shared";
-export type { ActivityItem };
 /** Keyset-paginated recent finds. Pass nextCursor back as `cursor` for older pages. */
 export function getActivity(
   bbox?: BBox,
@@ -478,7 +472,7 @@ export function getStationPackets(
 }
 import type { StationTrackPoint } from "@aprscaching/shared";
 export type { StationTrackPoint };
-export interface StationTrack {
+interface StationTrack {
   callsign: string;
   from: number;
   until: number;
@@ -527,9 +521,6 @@ export async function downloadExport(path: string, filename: string): Promise<vo
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-export function decodePacket(raw: string): Promise<DecodedPacket> {
-  return call(`/api/decode`, { method: "POST", body: JSON.stringify({ raw }) });
 }
 export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
   return call(`/api/ports`);
@@ -660,7 +651,7 @@ export interface WatchEntry {
   callsign: string;
   addedAt: number;
 }
-export interface WatchAlert {
+interface WatchAlert {
   id: number;
   callsign: string;
   /** The alert kind (shack/alertKinds.ts): a watched station, or a notice about the account. */
@@ -766,7 +757,7 @@ export function submitWxReading(
   });
 }
 
-export interface WxTxState {
+interface WxTxState {
   txIs: boolean;
   txCwop: boolean;
   verified: boolean;
@@ -778,7 +769,7 @@ export function setWxTx(body: { stationId: number; txIs: boolean; txCwop: boolea
 
 // ---- operated-stations registry: manage your own stations ----
 import type { OperatedStation, StationRole, StationWxKey } from "@aprscaching/shared";
-export type { OperatedStation, StationRole, StationWxKey };
+export type { OperatedStation, StationRole };
 export interface StationInput {
   callsign?: string;
   lat?: number | null;
@@ -880,7 +871,6 @@ export const supportUrl = `${API_BASE}/support`;
 // ---- browser-direct RF ingest — forward Web Serial KISS frames to a gateway ----
 import type { Packet } from "@aprscaching/shared";
 import { signIngest } from "./crypto.js";
-export type { Packet };
 /**
  * Forward decoded RF packets to a gateway's /ingest. Authenticated by the ingest secret, so this is
  * the operator-local / self-host path (the rule's blessed single-operator case): the operator points
@@ -1053,7 +1043,7 @@ export function removePeer(url: string): Promise<{ ok: boolean }> {
 }
 
 /** What one peer's Sync now brought: the records per feed, or the pull's error, and its last pull times. */
-export interface PeerSyncResult {
+interface PeerSyncResult {
   ok: boolean;
   url: string;
   pulled?: {
@@ -1294,7 +1284,7 @@ export interface BoxFinds {
   count: number;
   recent: { code: string; loggerCall: string; ts: number; site: string }[];
 }
-export interface OpenBoxCode {
+interface OpenBoxCode {
   label: string | null;
   callsign: string | null;
   createdAt: number;
@@ -1367,7 +1357,7 @@ export interface ImportedPlace {
   externalId: string | null;
   status: string;
 }
-export interface RemovedListing {
+interface RemovedListing {
   source: string;
   externalId: string;
   code: string | null;
@@ -1563,7 +1553,7 @@ export function listToolRegistries(): Promise<ToolRegistryList> {
   return call(`/api/tools/registries`);
 }
 /** The instance's registries, with disabled ones (sysop). `source` is "env" while TOOL_REGISTRIES sets them. */
-export interface AdminToolRegistries {
+interface AdminToolRegistries {
   source: "env" | "site";
   registries: ToolRegistryEntry[];
   envError?: string;
@@ -2023,7 +2013,7 @@ export interface LogResult {
   duplicate?: boolean; // this callsign had already logged the cache; the first find stands unchanged
 }
 
-export interface AuthorSig {
+interface AuthorSig {
   authorKey: string;
   authorSig: string;
   signedAt: number;
@@ -2222,7 +2212,7 @@ export function checkAmprVerify(callsign: string, claim?: string): Promise<{ ver
 }
 
 /** A LoTW challenge: the exact `message` to sign with the callsign certificate's key. */
-export interface LotwChallenge {
+interface LotwChallenge {
   challenge: string;
   message: string;
   expiresAt: number;
@@ -2242,7 +2232,7 @@ export function completeLotwVerify(
  * A claim on a call an account holds without having proven control of it: the licensee proves control with
  * any verification method, passing the claim token in place of a session, and the call moves to them.
  */
-export interface CallClaim {
+interface CallClaim {
   /** The bearer token the verification methods take as `claim`; given once. */
   claim: string;
   callsign: string;

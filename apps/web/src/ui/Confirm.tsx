@@ -9,7 +9,7 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useModalDialog } from "./useModalDialog.js";
 
-export interface ConfirmOpts {
+interface ConfirmOpts {
   title?: string;
   message: ReactNode;
   confirmLabel?: string;
@@ -17,7 +17,7 @@ export interface ConfirmOpts {
   /** Style the primary as destructive (red). */
   danger?: boolean;
 }
-export interface ChoiceOpts {
+interface ChoiceOpts {
   title?: string;
   message: ReactNode;
   choices: { label: string; value: string; primary?: boolean; danger?: boolean }[];
@@ -25,7 +25,7 @@ export interface ChoiceOpts {
 }
 
 /** A decision that needs words: a required reason, optionally with one pick from a set (a category). */
-export interface PromptOpts {
+interface PromptOpts {
   title: string;
   message?: ReactNode;
   /** The label of the text field. */
@@ -43,7 +43,7 @@ export interface PromptOpts {
   confirmLabel?: string;
   danger?: boolean;
 }
-export interface PromptAnswer {
+interface PromptAnswer {
   text: string;
   choice: string | null;
   choice2: string | null;

@@ -8,7 +8,7 @@ import { graticulePalette } from "./map/mapPaint.js";
 /** The graticule's close-up grid source, filled for the view by {@link fineGridLines}. */
 export const FINE_GRID_SOURCE = "grid_fine";
 /** From this zoom the 0.1° grid leaves the view between its lines, so the close-up grid takes over. */
-export const FINE_GRID_MINZOOM = 11;
+const FINE_GRID_MINZOOM = 11;
 
 /**
  * The close-up grid for a view: lines every 0.01° from zoom 11 and every 0.001° from zoom 15, only across the view
