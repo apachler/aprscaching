@@ -85,7 +85,15 @@ What an instance that pulls the hub does with them:
 - **A record travels a bounded way.** It crosses at most four instances, never goes back to its home or to the
   instance it came from, and two hubs that follow each other pass it on once.
 
-A home the hub trusts later has its earlier records passed on at the receivers' next pull.
+A record the hub held back goes out once it qualifies, at the receivers' next pull:
+
+- **A home the hub trusts later** has its earlier records passed on, whether you trusted it, its `FED_PEERS`
+  fingerprint pin matched, or corroboration promoted it (`FED_AUTO_PROMOTE`).
+- **A wider setting** (`off` to `trusted`, `trusted` to `all`) passes on the records it newly lets out, once.
+  The hub notices the change when you save the setting, and at the next start when the environment sets
+  `FED_RESERVE`. A narrower setting needs nothing: the hub stops serving what it no longer passes on.
+
+A receiver applies each record by its global id and version, so a record it already holds changes nothing.
 
 ### Rendezvous relay
 

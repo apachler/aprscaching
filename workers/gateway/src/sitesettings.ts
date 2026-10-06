@@ -33,6 +33,7 @@ import { actorOf, audit } from "./moderation.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { nowS } from "./util/time.js";
 import { envSetting, loadSiteSettings, setting, settingSource } from "./siteconfig.js";
+import { applyReservePolicy } from "./fedtransit.js";
 
 /** Changes one sysop may make in an hour. */
 const WRITES_PER_HOUR = 120;
@@ -142,6 +143,8 @@ async function handleWrite(req: Request, env: Env, key: SiteSettingKey, reset: b
     );
   await env.DB.batch(statements);
   await loadSiteSettings(env, true);
+  // a wider FED_RESERVE lets out records followers' cursors already passed: they go out again, once
+  if (key === "FED_RESERVE") await applyReservePolicy(env);
   const rows = await storedRows(env);
   return json({ setting: view(env, key, rows.get(key)) });
 }

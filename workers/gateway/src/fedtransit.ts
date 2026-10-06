@@ -11,7 +11,9 @@
  * against its ORIGIN's key and applies its own trust in that origin, so a hub lends a record nothing, neither
  * trust nor a voice in the corroboration quorum. What a hub passes on is a site setting (FED_RESERVE):
  * `trusted` (the default) the records of origins it trusts, `all` those of every origin it has not blocked,
- * `off` none.
+ * `off` none. A record the policy held back goes out once it qualifies: when its origin becomes trusted (the
+ * sysop, a FED_PEERS fingerprint pin, corroboration's auto-promotion) and when FED_RESERVE widens, the newly
+ * eligible records move to the end of the feed, past every follower's cursor.
  *
  * Keys. A receiver verifies an origin it has never peered with under the key the hub hands on
  * (`/federation/transit/keys`: the origin's pinned key, its accept set and its rotation records). The first
@@ -119,17 +121,65 @@ export async function keepForTransit(
 }
 
 /**
- * Move an origin's kept records to the end of the transit feed, so followers whose cursor passed them while
- * the policy held them back receive them now (the origin was just trusted or unblocked here).
+ * Move the kept records the appended `WHERE` clause selects to the end of the transit feed, keeping their
+ * order. Every new seq lies above the current maximum, so no two rows ever share one mid-update.
  */
-export async function requeueOrigin(env: Env, instance: string | null | undefined): Promise<void> {
-  if (!instance) return;
-  // every new seq lies above the current maximum, so no two rows ever share one mid-update
+const REQUEUE = "UPDATE fed_transit SET seq = seq + (SELECT COALESCE(MAX(seq), 0) FROM fed_transit) WHERE ";
+
+/**
+ * A peer was just trusted or unblocked here, by the sysop, by a FED_PEERS fingerprint pin or by corroboration's
+ * auto-promotion: the records of the origin it is bound to move to the end of the transit feed, so followers
+ * whose cursor passed them while the policy held them back receive them now. Every path that lifts an origin
+ * calls this once, when the level actually changes; a receiver applies by global id and version, so a record
+ * it already holds changes nothing.
+ */
+export async function requeuePeer(env: Env, url: string): Promise<void> {
   await env.DB.prepare(
-    "UPDATE fed_transit SET seq = seq + (SELECT COALESCE(MAX(seq), 0) FROM fed_transit) WHERE origin = ?",
+    `${REQUEUE}origin = (SELECT instance FROM fed_peers WHERE url = ? AND instance IS NOT NULL AND trust != 'blocked')`,
   )
-    .bind(instance)
+    .bind(url)
     .run();
+}
+
+const RESERVE_RANK: Record<ReservePolicy, number> = { off: 0, trusted: 1, all: 2 };
+const isPolicy = (v: unknown): v is ReservePolicy => typeof v === "string" && Object.hasOwn(RESERVE_RANK, v);
+
+/**
+ * Follow a change of FED_RESERVE (a site setting, or the environment at restart). When the effective policy is
+ * wider than the one last applied (`fed_transit_state`), the records it newly lets out move to the end of the
+ * feed, once: the move and the new applied value commit together, and only while the stored value is still the
+ * one read, so two processes on one database move them once between them. A narrower policy moves nothing,
+ * since serving filters by the policy in force. Returns how many records moved.
+ */
+export async function applyReservePolicy(env: Env): Promise<number> {
+  const now = reservePolicy(env);
+  const row = await env.DB.prepare("SELECT reserve_applied FROM fed_transit_state WHERE id = 1").first<{
+    reserve_applied: string;
+  }>();
+  const was = row?.reserve_applied;
+  if (was === now) return 0;
+  if (!isPolicy(was)) {
+    await env.DB.prepare("INSERT OR REPLACE INTO fed_transit_state (id, reserve_applied) VALUES (1, ?)")
+      .bind(now)
+      .run();
+    return 0;
+  }
+  const claim = env.DB.prepare(
+    "UPDATE fed_transit_state SET reserve_applied = ? WHERE id = 1 AND reserve_applied = ?",
+  ).bind(now, was);
+  if (RESERVE_RANK[now] <= RESERVE_RANK[was]) {
+    await claim.run();
+    return 0;
+  }
+  const newly = was === "off" ? policySql(now) : `${policySql(now)} AND NOT (${policySql(was)})`;
+  const [moved] = await env.DB.batch([
+    env.DB.prepare(
+      `${REQUEUE}gid IN (SELECT t.gid FROM fed_transit t WHERE ${newly})
+         AND EXISTS (SELECT 1 FROM fed_transit_state WHERE id = 1 AND reserve_applied = ?)`,
+    ).bind(was),
+    claim,
+  ]);
+  return moved?.meta.changes ?? 0;
 }
 
 interface TransitRow {

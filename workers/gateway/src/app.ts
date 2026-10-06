@@ -149,7 +149,7 @@ import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
-import { handleTransitKeys } from "./fedtransit.js";
+import { applyReservePolicy, handleTransitKeys } from "./fedtransit.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
 import { handlePacketPeers, handlePacketStatus } from "./fedpacket.js";
@@ -361,6 +361,12 @@ export async function runScheduled(env: Env): Promise<void> {
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await purgeRelayQueue(env);
+  // FED_RESERVE set wider in the environment since the last run: the newly eligible records go out once
+  try {
+    await applyReservePolicy(env);
+  } catch (e) {
+    console.error("transit policy:", (e as Error).message);
+  }
   await runFrequentSync(env);
   // the daily look for a newer release (off with UPDATE_CHECK=0); it never throws
   await runUpdateCheck(env);
