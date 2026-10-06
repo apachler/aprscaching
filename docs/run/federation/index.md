@@ -131,14 +131,37 @@ when it is unsafe. A LAN instance starts with federation off.
 
 | Flag | Asks for | Writes |
 |---|---|---|
-| `--fed-peers URL[#FINGERPRINT],…` | the https peers you know, each with its key fingerprint; a 44Net or HAMNET peer is refused here | `FED_PEERS` |
+| `--fed-peers URL[#FINGERPRINT],…` | the peers you know, each with its key fingerprint: `https://` peers, and `http://` HAMNET or LAN peers; an https peer on 44Net is refused here | `FED_PEERS` |
 | `--fed-submit-instances ID,…` | on a hub (`FED_SUBMIT_SECRET` set), the spokes allowed to push; required | `FED_SUBMIT_INSTANCES` |
 | `--fed-registry-key KEY` | with `FED_REGISTRY` or `FED_REGISTRY_DNS`, the registry authority's key; required | `FED_REGISTRY_KEY` |
 | `--net44-name NAME` | this instance's 44Net name, such as `aprscaching.oe8apr.ampr.org` | `FED_ENDPOINTS` (https and 44net) |
 
-A 44Net peer (a name under `ampr.org` or an address in `44.0.0.0/9`) never goes into `FED_PEERS`. Admit it from
-**Instance admin → Federation**, which binds it to its callsign and holds it `unvetted`. A HAMNET peer (an
-address in `44.128.0.0/10`) is refused there too: add it by its `http://` address under **Add peer**.
+An https peer on 44Net (a name under `ampr.org`, or an address in 44Net: `44.0.0.0/9` or `44.128.0.0/10`)
+never goes into `FED_PEERS`. Admit it from **Instance admin → Federation**, which binds it to its callsign and
+holds it `unvetted`.
+
+### HAMNET peers in FED_PEERS
+
+A HAMNET peer goes into `FED_PEERS` as `http://<name or address>[:port]`, optionally followed by
+`#<fingerprint>`:
+
+```ini
+FED_PEERS=https://peer.example.org#3f2a9c01bb7e4d10,http://44.143.1.2:8080#9c013f2abb7e4d10
+```
+
+- **The scheme declares the network.** An `http://` entry is a HAMNET peer: no address range tells a HAMNET
+  host from an internet-reachable 44Net one, so the gateway reads what you wrote. It is dialled like a
+  `hamnet` endpoint: plain http, with a 2-second timeout, so a sync moves on quickly when this host has no
+  route to HAMNET. A peer added at an `http://` address under **Add peer** is dialled the same way.
+- **A LAN peer is the exception.** An `http://` entry at a loopback, private or CGNAT address is a LAN peer
+  and keeps the normal timeout.
+- **Trust is unchanged.** The peer starts `unvetted`, and only a key that matches its `#<fingerprint>` makes it
+  `trusted`, as for an https peer. Its records are signed, so plain http carries nothing a middlebox could
+  forge.
+- **The fetch guard allows it.** Every `FED_PEERS` origin is allowed whatever it resolves to;
+  `FED_ALLOW_PRIVATE` is only for addresses a peer advertises, not for the ones you list.
+- **Name or address, no path.** An `http://` entry with a path, or a scheme other than `https://` and
+  `http://`, is refused by `setup.sh`, and `deploy/aprscaching doctor` warns about it.
 
 ## Running federation safely
 
@@ -146,7 +169,7 @@ The defaults are safe. These settings decide how much a stranger can do.
 
 | Setting | Safe choice | Secure by default |
 |---|---|---|
-| `FED_PEERS` | List the peers you know, each with its key fingerprint. Only a matching key starts `trusted`. | yes |
+| `FED_PEERS` | List the peers you know, each with its key fingerprint: `https://`, or `http://` for a [HAMNET peer](#hamnet-peers-in-fed_peers). Only a matching key starts `trusted`. | yes |
 | `FED_DISCOVER` | Leave at `0`, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
 | `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |

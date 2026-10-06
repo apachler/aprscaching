@@ -2,7 +2,7 @@
 // The sync transport tries a peer's addresses in priority order and keeps the first that answers: a 44Net name
 // with a certificate over https and then plain http, a HAMNET host with a short timeout, then the next endpoint.
 import { describe, it, expect } from "vitest";
-import { mergeEndpoints, syncAddresses, syncTransportFor } from "../src/fedtransport.js";
+import { mergeEndpoints, syncAddresses, syncTransportFor, urlTransport } from "../src/fedtransport.js";
 import type { FedEndpoint } from "@aprscaching/shared";
 
 /** A fetch that answers the listed bases and fails every other connection, recording what was tried. */
@@ -86,6 +86,28 @@ describe("syncTransportFor", () => {
     const t = syncTransportFor({ url: "https://peer.example/" }, fetchFn)!;
     await t.get("/x");
     expect(t.baseUrl).toBe("https://peer.example");
+  });
+
+  it("dials a plain-http url as a HAMNET peer, with the short timeout, whatever its address", () => {
+    for (const url of ["http://44.143.1.2", "http://44.27.132.9:8080", "http://gw.oe8xyz.hamnet.example"]) {
+      expect(urlTransport(url)).toBe("hamnet");
+      expect(syncAddresses({ url })).toEqual([{ kind: "hamnet", baseUrl: url, timeoutMs: 2000 }]);
+    }
+  });
+
+  it("keeps the full timeout for https, a LAN or loopback http url, and an http url with a path", () => {
+    for (const url of [
+      "https://peer.example",
+      "https://44.143.1.2",
+      "http://10.0.0.5:8787",
+      "http://192.168.1.20",
+      "http://127.0.0.1:8788",
+      "http://localhost:8787",
+      "http://peer.example/aprs",
+    ]) {
+      expect(urlTransport(url)).toBe("https");
+      expect(syncAddresses({ url })[0]).toMatchObject({ baseUrl: url, timeoutMs: 5000 });
+    }
   });
 
   it("tries the row's url after its endpoint set, unless the set lists it", () => {

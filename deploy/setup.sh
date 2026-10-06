@@ -23,9 +23,10 @@
 #          Tunnel: the installer has no compose stack to run one) · --no-next-steps (the caller prints its
 #          own) · --extra-origins ORIGIN,… (further addresses of this instance: https://<name> for a name Caddy
 #          fetches a certificate for, such as the 44Net name; http://<name or address> for a HAMNET host
-#          (44.128.0.0/10) or a LAN, served as plain http; "-" clears them) · --help
-# Federation (public instances): --fed-peers URL[#FINGERPRINT],… (https peers you know; trusted once a pinned
-#          fingerprint matches, unvetted otherwise) ·
+#          or a LAN, served as plain http; "-" clears them) · --help
+# Federation (public instances): --fed-peers URL[#FINGERPRINT],… (peers you know: https://<name>, or
+#          http://<name or address>[:port] for a HAMNET or LAN peer; trusted once a pinned fingerprint matches,
+#          unvetted otherwise) ·
 #          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
 #          --fed-registry-key KEY (required with FED_REGISTRY/FED_REGISTRY_DNS) ·
 #          --net44-name NAME (this instance's 44Net name, e.g. aprscaching.oe8apr.ampr.org)
@@ -268,7 +269,7 @@ norm_origins() {
   for o in ${1//,/ }; do
     o="$(printf '%s' "${o%/}" | tr '[:upper:]' '[:lower:]')"
     if ! printf '%s' "$o" | grep -Eq '^https?://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$'; then
-      echo "'$o' is not an origin: https://<name> or http://<name or 44.x address>, an optional port, no path." >&2
+      echo "'$o' is not an origin: https://<name> or http://<name or address>, an optional port, no path." >&2
       return 1
     fi
     [ "$o" != "$app" ] || continue
@@ -279,7 +280,7 @@ norm_origins() {
 }
 if [ "$EXTRA_SET" -eq 0 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "Further addresses of this instance, beside $APP_URL: https://<name> for a name with a certificate (the"
-  echo "44Net name), http://<name or address> for a HAMNET host (44.128.0.0/10) or a LAN, served as plain http."
+  echo "44Net name), http://<name or address> for a HAMNET host or a LAN, served as plain http."
   ask EXTRA_IN "Comma-separated (blank = none, - = remove them)" "$(unquoted EXTRA_ORIGINS)"
   EXTRA_SET=1
 fi
@@ -291,33 +292,43 @@ if [ "$MODE" = tunnel ] && printf '%s' "$EXTRA_IN" | grep -q 'https://'; then
 fi
 
 # ---- federation (public instances only) -------------------------------------------------------------------
-# A peer listed in FED_PEERS with its key fingerprint starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
-# admin (admitted unvetted) instead, and so is a HAMNET peer. A name under ampr.org or an address in
-# 44.0.0.0/9 is a 44Net peer; an address in 44.128.0.0/10 is a HAMNET peer, on a separate network that the
-# internet does not reach. amateur_net_of prints 44Net or HAMNET for such a peer, and nothing otherwise.
-amateur_net_of() {
+# A peer listed in FED_PEERS with its key fingerprint starts trusted once its key matches. An https peer on 44Net
+# (a name under ampr.org, or an address in 44Net: 44.0.0.0/9 or 44.128.0.0/10) is onboarded from Instance admin
+# by callsign instead, where DNS attests its name. A plain http:// entry is a HAMNET or LAN peer: the gateway dials
+# it like a hamnet endpoint. Its scheme decides, since no address range tells a HAMNET host from one on the internet.
+is_44net_peer() {
   local host="${1#*://}" b
   host="${host%%[/:#]*}"
-  case "$host" in *.ampr.org | ampr.org) echo 44Net; return 0 ;; 44.*) ;; *) return 0 ;; esac
+  case "$host" in *.ampr.org | ampr.org) return 0 ;; 44.*) ;; *) return 1 ;; esac
   IFS=. read -r _ b _ _ <<<"$host"
-  case "$b" in '' | *[!0-9]*) return 0 ;; esac
-  if [ "$b" -lt 128 ]; then echo 44Net; elif [ "$b" -lt 192 ]; then echo HAMNET; fi
+  case "$b" in '' | *[!0-9]*) return 1 ;; esac
+  [ "$b" -lt 192 ] # 44.192.0.0/10 was sold in 2019 and is not 44Net
 }
 check_peers() {
-  local p net
+  local p
   for p in ${1//,/ }; do
-    case "$p" in https://*) ;; *) echo "Peer '$p' is not an https URL." >&2; return 1 ;; esac
-    net="$(amateur_net_of "$p")"
-    if [ -n "$net" ]; then
-      echo "Peer '$p' is on $net: onboard it from Instance admin, which admits it unvetted, not FED_PEERS." >&2
-      return 1
-    fi
+    case "$p" in
+      https://*)
+        if is_44net_peer "$p"; then
+          echo "Peer '$p' is on 44Net: onboard it from Instance admin, which admits it unvetted, not FED_PEERS." >&2
+          return 1
+        fi
+        ;;
+      http://*)
+        if ! printf '%s' "${p%%#*}" | grep -Eq '^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?/?$'; then
+          echo "Peer '$p' is not a HAMNET or LAN peer: http://<name or address>, an optional port, no path." >&2
+          return 1
+        fi
+        ;;
+      *) echo "Peer '$p' is neither an https URL nor an http:// HAMNET or LAN peer." >&2; return 1 ;;
+    esac
   done
 }
 if [ "$MODE" != lan ]; then
   if [ "$FED_PEERS_SET" -eq 0 ]; then
     echo "Federation: instances you know and trust can mirror caches and corroborate finds with this one."
-    ask FED_PEERS_IN "Their https URLs, comma-separated (blank = none for now)" "$(current FED_PEERS)"
+    echo "Give each as https://<name>, or http://<name or address>[:port] for a HAMNET or LAN peer."
+    ask FED_PEERS_IN "Their URLs, comma-separated (blank = none for now)" "$(current FED_PEERS)"
   fi
   FED_PEERS_IN="$(printf '%s' "$FED_PEERS_IN" | tr -d ' ')"
   [ -z "$FED_PEERS_IN" ] || check_peers "$FED_PEERS_IN" || exit 2
@@ -466,7 +477,7 @@ else
   case "$(current FED_AUTO_PROMOTE)" in 0 | "") ;; *) echo "  WARN: FED_AUTO_PROMOTE is not 0: peers can become trusted without you." ;; esac
   case "$(current FED_CORROBORATION_QUORUM)" in 0 | 1) echo "  WARN: FED_CORROBORATION_QUORUM below 2 lets one peer lift a find to Tier A." ;; esac
   if [ -n "$(current FED_PEERS)" ] && ! check_peers "$(current FED_PEERS)" 2>/dev/null; then
-    echo "  WARN: FED_PEERS holds a 44Net or non-https peer. Onboard 44Net peers from Instance admin."
+    echo "  WARN: FED_PEERS holds an https peer on 44Net or a malformed entry. Onboard 44Net peers from Instance admin."
   fi
 fi
 case "$MAIL" in

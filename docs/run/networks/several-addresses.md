@@ -16,9 +16,11 @@ network they have a route to.
 ## How the addresses differ
 
 The scheme of each address decides what it can do: an `https://` address has a certificate, an `http://` one has
-none. The network decides who reaches it: the internet and 44Net addresses are reachable from the internet, the
-HAMNET address only from HAMNET hosts, over RF links. A 44Net address is not on HAMNET, and a HAMNET address is
-not on 44Net.
+none. The network decides who reaches it: the internet name and the 44Net name from the internet, the HAMNET
+address only from HAMNET hosts, over RF links or HAMNET VPN access. A 44Net address is not on HAMNET, and a
+HAMNET address is not on the internet. An address does not say which network it is on, since European HAMNET
+and internet-announced 44Net subnets share `44.128.0.0/10`: the scheme you list it with does. Doctor checks that
+each address answers from where it runs, which tests the route it has, not the one it lacks.
 
 | | Internet, https (`APP_URL`) | 44Net name, https | HAMNET, plain http |
 |---|---|---|---|

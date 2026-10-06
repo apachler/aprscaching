@@ -60,6 +60,15 @@ function blockedAddress(ip: string): string | null {
 }
 
 /**
+ * Whether a URL's host is a loopback, private (a LAN, CGNAT) or link-local address, or `localhost`. A name is
+ * not resolved here.
+ */
+export function isLocalHost(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h.endsWith(".localhost") || blockedAddress(h) !== null;
+}
+
+/**
  * A guard over `resolve`. `allowedOrigins` are the operator-configured origins exempt from the check;
  * `allowPrivate` lifts it entirely.
  */

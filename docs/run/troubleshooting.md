@@ -434,9 +434,13 @@ Each address in `EXTRA_ORIGINS`: the instance's 44Net name, a HAMNET address and
 
 ### `origins.http`
 
-- **Tests:** an `http://` address is on HAMNET (44.128.0.0/10) or a LAN, not on the internet.
+- **Tests:** an `http://` address is not on a public internet address. A LAN address passes. A 44Net address
+  passes as the HAMNET address you declared, with a note: the range cannot tell a HAMNET address from a 44Net
+  subnet the internet reaches.
 - **Message:** `<origin> is plain http on an internet address` (warn). Sign-ins and sessions cross the internet
   unencrypted.
+- **Message:** `<origin> is plain http on a 44Net address` (pass). Right for HAMNET; if the subnet is announced
+  on the internet, the same applies as for an internet address.
 - **Fix:** list it as `https://<name>` instead, so Caddy gets a certificate for it.
 - **See:** [One instance, several addresses](networks/several-addresses.md#how-the-addresses-differ).
 
@@ -477,20 +481,29 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 | `FED_DISCOVER is on` | set it to `0`, or accept that learned peers arrive disabled until you enable them |
 | `FED_AUTO_PROMOTE is not 0` | set it to `0`, so only you promote a peer to `trusted` |
 | `FED_CORROBORATION_QUORUM is below 2` | set it to `2` or more, so no single peer lifts a find to Tier A |
-| `peer <url> is not https` | use the peer's `https://` address |
-| `peer <url> is on 44Net: admit it from Instance admin` | remove it from `FED_PEERS`: a 44Net peer is admitted `unvetted`, and you promote it yourself |
-| `peer <url> is on HAMNET (44.128.0.0/10), not on the internet: admit it from Instance admin` | remove it from `FED_PEERS` and add it by its `http://` address under **Add peer** |
+| `peer <url> is neither https nor a plain-http HAMNET peer` | use the peer's `https://` address, or `http://<name or address>[:port]` for a HAMNET or LAN peer |
+| `peer <url> is plain http with a path` | a HAMNET or LAN peer is `http://<name or address>[:port]`, with no path |
+| `peer <url> is on 44Net: admit it from Instance admin` | an `https://` peer under `ampr.org` or at a 44Net address: remove it from `FED_PEERS`; a 44Net peer is admitted `unvetted`, and you promote it yourself |
 | `a hub without FED_SUBMIT_INSTANCES` | list the spokes that may push to this hub |
 | `a registry without FED_REGISTRY_KEY` | pin the registry's authority key |
 
 - **See:** [Running federation safely](federation/index.md#running-federation-safely).
+
+### `federation.hamnet.<host>`
+
+- **Tests:** an `http://` entry in `FED_PEERS` has the form of a HAMNET or LAN peer,
+  `http://<name or address>[:port]`. The gateway dials it like a `hamnet` endpoint, with a 2-second timeout,
+  unless the address is on a LAN.
+- **Message:** `peer <url> is a HAMNET or LAN peer over plain http` (pass).
+- **See:** [HAMNET peers in FED_PEERS](federation/index.md#hamnet-peers-in-fed_peers).
 
 ### `federation.peer.<host>`
 
 - **Tests:** each peer in `FED_PEERS` answers at `/.well-known/aprscaching`, and signs with the key whose
   fingerprint the entry pins after `#`, if it pins one.
 - **Message:** `peer <url> does not answer` (warn), or `peer <url> signs with key <fingerprint>, not the
-  fingerprint FED_PEERS pins` (warn).
+  fingerprint FED_PEERS pins` (warn). For an `http://` peer the first reads `does not answer from here`: a
+  HAMNET peer answers only where this host has a route to HAMNET.
 - **Fix:** check the URL, or ask the peer's operator. For a key that does not match, compare fingerprints
   with its sysop again and correct `FED_PEERS`.
 - **See:** [Join the network](federation/index.md#joining-the-network).
@@ -538,14 +551,15 @@ the DNS records only.
 
 ### `net44.dns`
 
-- **Tests:** the 44Net name has an A record on 44Net (`44.0.0.0/9`), and it matches the tunnel's address.
+- **Tests:** the 44Net name has an A record in 44Net (`44.0.0.0/9` or `44.128.0.0/10`), and it matches the
+  tunnel's address. A pass says the name points into 44Net; whether the internet reaches the address depends
+  on how its subnet is routed (BGP, 44Net Connect, the IPIP mesh).
 - **Message:** `<name> has no A record` (fail).
 - **Message:** `<name> points at <address>, but the tunnel is <address>` (fail).
-- **Message:** `<name> points at <address>, a HAMNET address (44.128.0.0/10) that peers on the internet and on
-  44Net cannot reach` (warn). HAMNET is a separate network: publish that address as a `hamnet` endpoint instead.
-- **Message:** `<name> points at <address>, outside 44Net (44.0.0.0/9)` (warn).
-- **Fix:** add or correct the A record in the 44Net Portal, pointing at your 44Net Connect address. Changes
-  publish within about an hour.
+- **Message:** `<name> points at <address>, in 44.192.0.0/10, which ARDC sold in 2019 and is not 44Net` (warn).
+- **Message:** `<name> points at <address>, outside 44Net (44.0.0.0/9 and 44.128.0.0/10)` (warn).
+- **Fix:** add or correct the A record in the 44Net Portal, pointing at your 44Net address. Changes publish
+  within about an hour.
 - **See:** [Name and identity](networks/44net-identity.md#3-name-and-identity).
 
 ### `net44.txt`
@@ -575,7 +589,7 @@ One check per line of the gateway's callsign-identity self-check, read with `OPE
 gateway's fix, with the exact record to publish and its name in the Portal.
 
 - **Tests:** the records that let peers add this instance by callsign: the `44net` endpoint is a name under
-  `<call>.ampr.org` and not the base name, its A record is on 44Net (`44.0.0.0/9`, not a HAMNET address), the
+  `<call>.ampr.org` and not the base name, its A record is in 44Net (`44.0.0.0/9` or `44.128.0.0/10`), the
   `_aprscaching` TXT record names this instance and its current key, and the record sends peers where this
   instance is.
 - **Fix:** publish or correct the records **Instance admin → Federation → Publish your callsign identity**

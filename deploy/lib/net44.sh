@@ -615,12 +615,12 @@ net44_check() {
     44.*) if [ -n "$v4" ] && [ "$a" != "$v4" ]; then info "FAIL A record: $a, but the tunnel is $v4"; bad=1
       else
         case "$(ampr_scope "$a")" in
-          44net) info "ok   A record: $a" ;;
-          hamnet) info "WARN A record: $a is a HAMNET address (44.128.0.0/10): peers on the internet and on 44Net cannot reach it" ;;
-          *) info "WARN A record: $a is outside 44Net (44.0.0.0/9)" ;;
+          44net) info "ok   A record: $a, a 44Net address; reachability from the internet depends on how the subnet is routed (BGP, Connect, IPIP)" ;;
+          sold) info "WARN A record: $a is in 44.192.0.0/10, which ARDC sold in 2019 and is not 44Net" ;;
+          *) info "WARN A record: $a is outside 44Net (44.0.0.0/9 and 44.128.0.0/10)" ;;
         esac
       fi ;;
-    *) info "WARN A record: $a is outside 44Net (44.0.0.0/9)" ;;
+    *) info "WARN A record: $a is outside 44Net (44.0.0.0/9 and 44.128.0.0/10)" ;;
   esac
   txt="$(n44_identity_txt "$name")"
   if [ -n "$txt" ]; then info "ok   _aprscaching TXT: $txt"; else

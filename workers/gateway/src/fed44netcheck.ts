@@ -17,8 +17,9 @@
  *
  * The check's lines, each pass / warn / fail / info, with a one-sentence fix on the non-passing ones:
  * - the 44net endpoint is a name under `<call>.ampr.org`, never the base name itself;
- * - the 44Net host peers contact has an A record on 44Net, inside 44.0.0.0/9: an address in 44.128.0.0/10 is
- *   on HAMNET, which the internet cannot reach, and 44.192.0.0/10 is not amateur space;
+ * - the 44Net host peers contact has an A record in 44Net (44.0.0.0/9 or 44.128.0.0/10; 44.192.0.0/10 is not
+ *   44Net). The range says nothing about reachability: whether the internet reaches the address depends on how
+ *   its subnet is routed (BGP, 44Net Connect, the IPIP mesh), and this check does not probe it;
  * - the identity record carries this instance's id and current key (a `verify=` record is a callsign
  *   verification and belongs at `_aprscaching-verify.<call>.ampr.org`); for an instance under its own
  *   name, whether the callsign's record sends peers to it with another binding;
@@ -106,15 +107,15 @@ const KEY_FIX = "Set FED_PRIVATE_KEY (node tools/fedkey/genkey.mjs) and restart,
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/;
 
 /**
- * Where an A record's address lies: `44net` (44.0.0.0/9, routed on the internet through 44Net Connect or
- * BGP), `hamnet` (44.128.0.0/10, reached over RF links only, never from the internet) or `other`. A HAMNET
- * address gives a `44net` endpoint no internet path, so only `44net` passes.
+ * Where an A record's address lies: `44net` (44Net, ARDC's amateur space: 44.0.0.0/9 and 44.128.0.0/10),
+ * `sold` (44.192.0.0/10, sold to Amazon in 2019 and not amateur space) or `other`. Whether the internet reaches
+ * a 44Net address is decided per subnet, by how it is routed, so the range never tells an internet-reachable
+ * 44Net address from a HAMNET one.
  */
-export function amprScope(ip: string): "44net" | "hamnet" | "other" {
+export function amprScope(ip: string): "44net" | "sold" | "other" {
   const m = IPV4.exec(ip);
   if (!m || m[1] !== "44") return "other";
-  const b = Number(m[2]);
-  return b < 128 ? "44net" : b < 192 ? "hamnet" : "other";
+  return Number(m[2]) < 192 ? "44net" : "sold";
 }
 
 /** The 44net endpoint the descriptor lists first, lowercased. */
@@ -452,24 +453,29 @@ export async function check44net(
         detail: `${host} has no A record, so peers cannot reach it`,
         fix: `Add the record A ${host} pointing at your 44Net address (44.x.x.x) ${PORTAL}; the Portal name is ${host.slice(0, -(zone.length + 1))}.`,
       };
-    } else if (aAns.data.some((ip) => amprScope(ip) === "hamnet")) {
+    } else if (aAns.data.some((ip) => amprScope(ip) === "sold")) {
       a = {
         id: "a",
         status: "warn",
         label: "Address record",
-        detail: `${host} → ${aAns.data.join(", ")}, a HAMNET address (44.128.0.0/10) that peers on the internet and on 44Net cannot reach`,
-        fix: `Point ${host} at your 44Net Connect address (44.x.x.x), and publish the HAMNET address as a hamnet endpoint in FED_ENDPOINTS instead.`,
+        detail: `${host} → ${aAns.data.join(", ")}, in 44.192.0.0/10, which ARDC sold in 2019 and is not 44Net`,
+        fix: `Point ${host} at your 44Net address (44.x.x.x) ${PORTAL}.`,
       };
     } else if (!aAns.data.every((ip) => amprScope(ip) === "44net")) {
       a = {
         id: "a",
         status: "warn",
         label: "Address record",
-        detail: `${host} → ${aAns.data.join(", ")}, outside 44Net (44.0.0.0/9)`,
-        fix: `Point ${host} at your 44Net Connect address (44.x.x.x) so 44Net peers reach you over 44Net.`,
+        detail: `${host} → ${aAns.data.join(", ")}, outside 44Net (44.0.0.0/9 and 44.128.0.0/10)`,
+        fix: `Point ${host} at your 44Net address (44.x.x.x) so 44Net peers reach you over 44Net.`,
       };
     } else {
-      a = { id: "a", status: "pass", label: "Address record", detail: `${host} → ${aAns.data.join(", ")}` };
+      a = {
+        id: "a",
+        status: "pass",
+        label: "Address record",
+        detail: `${host} → ${aAns.data.join(", ")}: the name points into 44Net; reachability from the internet depends on how the subnet is routed (BGP, 44Net Connect, IPIP)`,
+      };
     }
   }
 

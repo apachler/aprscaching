@@ -262,6 +262,35 @@ describe("FED_PEERS seeding", () => {
     expect(await peerRow(hub, A)).toMatchObject({ trust: "unvetted", pinned_fingerprint: null });
   });
 
+  it("takes a HAMNET peer at a plain http address, trusted only once its key matches the pin", async () => {
+    const H = "http://44.143.1.2:8080";
+    const key = await newFedKey();
+    const h = instanceEnv("hamnet.example", key);
+    await addCache(h);
+    const dialled: { url: string; signal: boolean }[] = [];
+    const route = serve(h);
+    stubFetch({
+      [H]: (r: Request) => {
+        dialled.push({ url: r.url, signal: !!r.signal });
+        return route(r);
+      },
+    });
+    const pinned = instanceEnv("hub.example", await newFedKey(), { FED_PEERS: `${H}#${fp(key).replace(/ /g, "")}` });
+    expect((await syncAllPeers(pinned)).errors).toEqual([]);
+    expect(await peerRow(pinned, H)).toMatchObject({ trust: "trusted", public_key: key.pub, added_via: "manual" });
+    expect(await remoteCacheCount(pinned, "hamnet.example")).toBe(1);
+    expect(dialled.length).toBeGreaterThan(0);
+    expect(dialled.every((d) => d.url.startsWith(`${H}/`) && d.signal)).toBe(true);
+
+    const unpinned = instanceEnv("hub2.example", await newFedKey(), { FED_PEERS: H });
+    expect((await syncAllPeers(unpinned)).errors).toEqual([]);
+    expect(await peerRow(unpinned, H)).toMatchObject({ trust: "unvetted", instance: "hamnet.example" });
+
+    const wrong = instanceEnv("hub3.example", await newFedKey(), { FED_PEERS: `${H}#${"ab".repeat(8)}` });
+    expect((await syncAllPeers(wrong)).errors.join()).toMatch(/fingerprint pinned in FED_PEERS/);
+    expect(await peerRow(wrong, H)).toMatchObject({ trust: "unvetted", public_key: null });
+  });
+
   it("publishes the FED_PEERS URLs in the descriptor without their fingerprints", async () => {
     const hub = instanceEnv("hub.example", await newFedKey(), { FED_PEERS: `${A}#${"ab".repeat(8)}` });
     const wk = await req(hub, "GET", "/.well-known/aprscaching");

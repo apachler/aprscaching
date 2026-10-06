@@ -66,7 +66,9 @@ the next. Each address gets 5 seconds to answer, a `hamnet` address 2.
 A pull, a notify and a corroboration question go to the same addresses. A peer publishes its own in
 `FED_ENDPOINTS`; your instance learns them from its descriptor on every sync, from its callsign's DNS record, or
 from its beacon. It tries them in priority order (lower first), keeps the first that answers for the rest of the
-sync, and tries the URL it added the peer under last.
+sync, and tries the URL it added the peer under last. A peer added at a plain `http://` URL, in `FED_PEERS` or
+under **Add peer**, is tried like a `hamnet` address, unless the URL names a loopback, private or CGNAT address
+([HAMNET peers in FED_PEERS](index.md#hamnet-peers-in-fed_peers)).
 
 | `transport` | `address` | Reached over | Notes |
 |---|---|---|---|

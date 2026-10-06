@@ -5,10 +5,16 @@ licensed sysop; at the end the box answers at its 44.x address from the whole in
 forwarding. [44Net name and identity](44net-identity.md) continues with steps 3 to 5: the name, the records
 and the self-check.
 
-**44Net** (AMPRNet) is amateur IPv4 space administered by [ARDC](https://www.ardc.net/) and reachable from the
-internet, through 44Net Connect or BGP: on these pages, `44.0.0.0/9`. **HAMNET** is a separate network, reached
-only over RF links, in `44.128.0.0/10` ([HAMNET only](hamnet.md)). A 44Net address is not on HAMNET, and a
-HAMNET address has no 44Net or internet path. `44.192.0.0/10` is not amateur space.
+**44Net** (AMPRNet) is amateur IPv4 space administered by [ARDC](https://www.ardc.net/): `44.0.0.0/9` and
+`44.128.0.0/10`. ARDC sold `44.192.0.0/10` in 2019, so it is not amateur space. Whether the internet reaches a
+44Net address is decided per subnet: it is reachable when its subnet is announced in BGP through the ARDC
+Portal, served through 44Net Connect, or reached over the IPIP mesh. Most of 44Net is not on the internet. A
+Connect address is, and that is the address this page sets up.
+
+**HAMNET** is a separate amateur IP network, not on the internet ([HAMNET only](hamnet.md)). European HAMNET
+uses addresses from `44.128.0.0/10`, which also holds internet-announced subnets, so no address range tells a
+HAMNET address from an internet-reachable 44Net one. Which network an address is on is what you declare: a
+`44net` or a `hamnet` endpoint. A 44Net address says nothing about a path to HAMNET, and the other way round.
 
 !!! note "What 44Net gives you, and what it doesn't"
     - **Reachability.** *44Net Connect* gives one machine a static 44.x address over a WireGuard tunnel, so
@@ -161,8 +167,8 @@ address quickly, so the firewall on the tunnel is yours to set:
   or tunnel address, never to all addresses.
 - Never expose SSH, the gateway's port 8080 or an ingest port on the tunnel.
 
-HAMNET is a separate network, reached only over RF links: a Connect address is not on HAMNET, and HAMNET
-stations do not reach it because of their address ([HAMNET only](hamnet.md#hamnet-and-44net-connect)).
+HAMNET is a separate network, not on the internet: a Connect address is not on HAMNET, and a HAMNET address
+gives a station no path to it ([HAMNET only](hamnet.md#hamnet-and-44net-connect)).
 
 ## Check that it worked
 

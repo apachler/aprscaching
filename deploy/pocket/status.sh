@@ -191,10 +191,9 @@ elif grep -q 44net <<<"$(env_get FED_ENDPOINTS)"; then
 else
   info "not connected (the WireGuard app with 44Net Connect gives the phone a 44.x address)"
 fi
-# HAMNET is a separate network, reached over RF links only: its address gives no 44Net or internet path.
-if hn="$(hamnet_address)"; then
-  read -r hn_if hn_ip <<<"$hn"
-  info "HAMNET: $hn_ip on $hn_if, reachable from HAMNET hosts only, not from the internet or 44Net"
+# HAMNET is what the sysop declares (a hamnet endpoint): an address does not say it is on HAMNET.
+if hn="$(hamnet_endpoint)" && [ -n "$hn" ]; then
+  info "the HAMNET endpoint: $hn, for HAMNET hosts over RF links or HAMNET VPN access, not the internet"
 fi
 
 # ---- federation --------------------------------------------------------------------------------------

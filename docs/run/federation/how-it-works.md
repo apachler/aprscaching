@@ -90,7 +90,7 @@ flowchart LR
 An arrow starts at the instance that opens the connection.
 
 - **Pull** is the usual path: your instance fetches each peer's new records on a schedule, and a peer that has
-  news asks you to fetch at once. A 44Net instance is on the internet and pulls like any internet instance; a
+  news asks you to fetch at once. A 44Net instance the internet reaches pulls like any internet instance; a
   HAMNET instance reaches only other HAMNET hosts.
 - **Push** is for an instance nobody can reach, such as a phone on mobile data or a box behind a carrier's NAT:
   it sends its records to a hub it can reach, a few seconds after each write, and collects the questions the
