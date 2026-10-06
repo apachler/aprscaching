@@ -320,12 +320,15 @@ export function PacketTerminal(props: {
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 
-  // Feed every newly-heard frame to the tool host as a heard-frame source — so
-  // mheard/watch-alert record RF traffic even when the Monitor pane isn't the active view.
+  // Feed every newly-heard frame to the tool host as a heard-frame source, with its destination and text, so tools
+  // record RF traffic and classify it even when the Monitor pane isn't the active view.
   const fedMon = useRef(0);
   useEffect(() => {
     if (monitor.length < fedMon.current) fedMon.current = 0; // TNC closed/reopened → monitor reset
-    for (let i = fedMon.current; i < monitor.length; i++) feedHeard(monitor[i]!.src, "RF");
+    for (let i = fedMon.current; i < monitor.length; i++) {
+      const m = monitor[i]!;
+      feedHeard(m.src, "RF", { dst: m.dst, text: m.text });
+    }
     fedMon.current = monitor.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- append-only scan keyed on length; monitor[i] by index is intentional
   }, [monitor.length]);

@@ -17,7 +17,7 @@ import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
 import { installSerialSim } from "./simSerial.js";
-import { setToolEnabled } from "../tools/host.js";
+import { installDemoTools } from "./demoTools.js";
 import "../styles/index.css";
 
 const ME = "OE8APR-7";
@@ -105,11 +105,7 @@ export function DemoHarness({ which }: { which: string }) {
         /* ignore */
       }
     }
-    if (which === "app-packet-tools") {
-      setToolEnabled("mheard", true);
-      setToolEnabled("watch-alert", true);
-      setToolEnabled("block-art", true);
-    }
+    if (which === "app-packet-tools") void installDemoTools(["mheard", "watch-alert", "block-art"]);
     return null;
   });
   useEffect(() => {

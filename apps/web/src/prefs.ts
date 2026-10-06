@@ -4,7 +4,7 @@
  * device restores them. The prefs themselves live in localStorage (single source of truth
  * for the app); this layer mirrors a known subset to the account on change, and pulls them back on
  * sign-in. Guests are unaffected — the server endpoint is session-gated, so a 401 just leaves the
- * localStorage values in place. Synced keys: locale/units/theme, pinned apps, basemap.
+ * localStorage values in place. Synced keys: locale/units/theme, pinned apps, basemap, installed tools.
  */
 import { getPrefs, putPrefs, type AccountPrefs } from "./api.js";
 
@@ -13,6 +13,7 @@ const SYNCED: Record<string, string> = {
   locale: "acs.locale", // format.ts LocaleSettings (theme, units, locale, timeZone)
   pins: "acs.pins", // pinned shack app ids
   basemap: "acs.basemap", // basemap choice
+  tools: "acs.tools", // installed tools (tools/installed.ts)
 };
 
 /** Set true once a session-authenticated GET succeeds; gates pushes so guests never call the API. */

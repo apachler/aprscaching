@@ -541,8 +541,14 @@ for (const v of VIEWS) {
     await shot(page, v.id, "tools", "Tools — sandboxed plugins");
   });
   await step("decoder", async () => {
-    // the packet decoder is a built-in tool: Tools opens on it the way its rail pin does
-    await openView(page, "tools&tool=packet-decoder", ".tools-panel textarea");
+    // the packet decoder is a project tool: Tools opens on it the way its rail pin does, and installs it from the
+    // registry the first time, as a player does
+    await openView(page, "tools&tool=packet-decoder", ".tools-panel");
+    if (await clickAny(page, [".tool-row:has-text('Packet decoder') button:has-text('Install')"])) {
+      await page.waitForSelector("button:has-text('Approve and install')", { timeout: 8000 }).catch(() => {});
+      await clickAny(page, ["button:has-text('Approve and install')"]);
+    }
+    await page.waitForSelector(".tools-panel textarea", { timeout: 15000 }).catch(() => {});
     await clickAny(page, [".tool-sub button:has-text('Use a sample')"]);
     await clickAny(page, [".tool-sub button:has-text('Decode')"]);
     await page.waitForTimeout(500);

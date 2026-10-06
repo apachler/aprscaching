@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * prefs.ts — account-level UI preferences. A person's device-independent UI settings —
- * theme, locale/units, pinned shack apps, basemap — follow the ACCOUNT so a second device
+ * theme, locale/units, pinned shack apps, basemap, installed tools — follow the ACCOUNT so a second device
  * restores them on sign-in. One small validated JSON blob per account; guests keep the same in
  * localStorage only. Keyed by account_id (person). Inside the GDPR export/erase.
  *
@@ -18,7 +18,38 @@ const UNITS = new Set(["metric", "imperial"]);
 // "cogmind" (the phosphor theme's former id — the client folds it to phosphor) and
 // dark/light/auto (folded to modern).
 const THEMES = new Set(["modern", "phosphor", "cogmind", "dark", "light", "auto"]);
-const MAX_BYTES = 4096;
+const MAX_BYTES = 16_384;
+/** Installed tools kept per account, and the shape of one record (apps/web/src/tools/installed.ts). */
+const MAX_TOOLS = 40;
+const TOOL_NAME = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const CAPABILITIES = new Set([
+  "command",
+  "monitor",
+  "event",
+  "decoder",
+  "panel",
+  "map",
+  "ipc",
+  "beacon",
+  "network",
+  "tx",
+  "geo",
+]);
+
+/** One installed tool: its manifest address, the author key and grants approved, and whether it is switched on. */
+function sanitizeTool(x: unknown): Record<string, unknown> | null {
+  if (!x || typeof x !== "object") return null;
+  const t = x as Record<string, unknown>;
+  if (typeof t.name !== "string" || !TOOL_NAME.test(t.name)) return null;
+  if (typeof t.url !== "string" || !/^https?:\/\//.test(t.url) || t.url.length > 500) return null;
+  if (typeof t.pubkey !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(t.pubkey)) return null;
+  const grants = Array.isArray(t.grants) ? t.grants.filter((g): g is string => CAPABILITIES.has(String(g))) : [];
+  const out: Record<string, unknown> = { name: t.name, url: t.url, pubkey: t.pubkey, grants, on: t.on === true };
+  const via = t.via as Record<string, unknown> | undefined;
+  if (via && typeof via === "object" && typeof via.id === "string" && via.id.length <= 64)
+    out.via = { id: via.id, account: via.account === true };
+  return out;
+}
 
 /**
  * Keep only the known UI-pref keys, coercing each to a safe shape — the client owns the exact
@@ -38,12 +69,20 @@ export function sanitizePrefs(raw: unknown): Record<string, unknown> {
     if (THEMES.has(String(l.theme))) loc.theme = l.theme;
     out.locale = loc;
   }
-  // pinned shack apps (ids only, capped)
+  // pinned shack apps and tools (ids only, capped; a tool pin is `tool:` and a name of up to 40 characters)
   if (Array.isArray(b.pins))
     out.pins = b.pins
       .filter((x): x is string => typeof x === "string")
       .slice(0, 20)
-      .map((s) => s.slice(0, 24));
+      .map((s) => s.slice(0, 45));
+  // installed tools, one record per tool name
+  if (Array.isArray(b.tools)) {
+    const seen = new Set<string>();
+    out.tools = b.tools
+      .map(sanitizeTool)
+      .filter((t): t is Record<string, unknown> => !!t && !seen.has(t.name as string) && !!seen.add(t.name as string))
+      .slice(0, MAX_TOOLS);
+  }
   // basemap choice
   if (typeof b.basemap === "string") out.basemap = b.basemap.slice(0, 24);
 

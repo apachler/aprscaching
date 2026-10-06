@@ -8,7 +8,7 @@
  *
  * INVARIANT: the host ROUTES, it never interprets. Every method here is a generic verb
  * (register / on / emit / subscribe / store / panel / tx-gate) — none is named after a domain function.
- * All tool BEHAVIOUR lives in builtins/ or imported tools; cross-tool cooperation happens only over the
+ * All tool BEHAVIOUR lives in the tools themselves; cross-tool cooperation happens only over the
  * IPC bus below, whose payloads are opaque to the host. Never add a `getMheard()`/`getWeather()`-style
  * method — that would pull a tool's function into the platform.
  */
@@ -20,6 +20,17 @@ import type { MapLayerSpec } from "./maplayer.js";
 
 /** Lifecycle/monitor events a tool can hook. on_frame carries a heard frame; on_tick is periodic. */
 export type ToolEvent = "on_frame" | "on_connect" | "on_disconnect" | "on_beacon" | "on_find" | "on_spot" | "on_tick";
+export const TOOL_EVENTS: readonly ToolEvent[] = [
+  "on_frame",
+  "on_connect",
+  "on_disconnect",
+  "on_beacon",
+  "on_find",
+  "on_spot",
+  "on_tick",
+];
+export const isToolEvent = (x: unknown): x is ToolEvent =>
+  typeof x === "string" && TOOL_EVENTS.includes(x as ToolEvent);
 
 export interface MonitorColour {
   colorVar?: string;
@@ -35,6 +46,46 @@ export interface Decoder {
 export interface BeaconSpec {
   comment: string;
   intervalSec: number;
+}
+
+/** The shortest gap between two transmissions one tool asks for with `requestTx`. */
+export const TOOL_TX_MIN_GAP_MS = 60_000;
+/** The shortest beacon interval a tool may schedule: ten minutes, the usual floor for a fixed APRS station. */
+export const BEACON_MIN_INTERVAL_SEC = 600;
+/** The longest beacon interval: one day. */
+export const BEACON_MAX_INTERVAL_SEC = 86_400;
+/** The longest APRS information field a tool may transmit. */
+export const TX_INFO_MAX = 256;
+/** The longest beacon comment: an APRS status text holds 62 characters. */
+export const BEACON_COMMENT_MAX = 62;
+
+/**
+ * Why an APRS information field a tool asks to transmit is refused, or null when it may go out. One line of text,
+ * not empty, at most TX_INFO_MAX characters, and never third-party traffic (`}`), which would carry another
+ * station's callsign as its source.
+ */
+export function txInfoProblem(info: unknown): string | null {
+  if (typeof info !== "string") return "the frame must be text";
+  if (!info.trim()) return "the frame is empty";
+  if (info.length > TX_INFO_MAX) return `the frame is longer than ${TX_INFO_MAX} characters`;
+  if (/[\r\n\0]/.test(info)) return "the frame must be one line";
+  if (info.startsWith("}")) return "a tool may not send third-party traffic";
+  return null;
+}
+
+/** Bring an untrusted beacon request into bounds: one-line comment, interval clamped. An error string if unusable. */
+export function normalizeBeacon(spec: unknown): BeaconSpec | string {
+  const o = spec && typeof spec === "object" ? (spec as Record<string, unknown>) : null;
+  if (!o) return "a beacon needs { comment, intervalSec }";
+  const comment = typeof o.comment === "string" ? o.comment.replace(/[\r\n\0]+/g, " ").trim() : "";
+  if (!comment) return "a beacon needs a comment";
+  if (comment.startsWith("}")) return "a tool may not send third-party traffic";
+  const sec = Number(o.intervalSec);
+  if (!Number.isFinite(sec)) return "a beacon needs an interval in seconds";
+  return {
+    comment: comment.slice(0, BEACON_COMMENT_MAX),
+    intervalSec: Math.round(Math.min(BEACON_MAX_INTERVAL_SEC, Math.max(BEACON_MIN_INTERVAL_SEC, sec))),
+  };
 }
 
 /**
@@ -74,8 +125,12 @@ export interface ToolContext {
   addDecoder(d: Decoder): void; // 'decoder'
   setPanel(spec: PanelSpec | null): void; // 'panel' — declarative UI region
   setMapLayer(spec: MapLayerSpec | null): void; // 'map' — declarative marker layer
-  scheduleBeacon(spec: BeaconSpec): void; // 'beacon' + TX gate
-  requestTx(info: string): boolean; // 'tx' + TX gate; false if denied
+  /** 'beacon' + TX gate. Replaces this tool's schedule; `null` ends it. Throws when the gate is closed. The host
+   *  clamps the interval to BEACON_MIN_INTERVAL_SEC…BEACON_MAX_INTERVAL_SEC. */
+  scheduleBeacon(spec: BeaconSpec | null): void;
+  /** 'tx' + TX gate: transmit one APRS information field. False when refused, when the gate is closed, or when the
+   *  tool transmitted less than TOOL_TX_MIN_GAP_MS ago. */
+  requestTx(info: string): boolean;
   // ---- inter-tool IPC ('ipc'): the host ROUTES, it never interprets the payload ----
   emit(topic: string, data?: unknown): void; // publish to every subscriber of `topic`
   subscribe(topic: string, handler: IpcHandler): void; // receive opaque payloads on `topic`
@@ -92,15 +147,17 @@ export interface Tool {
 }
 
 export interface ToolHostOpts {
-  /** Returns true when transmitting is currently allowed (verified callsign + opt-in). */
+  /** Returns true when transmitting is currently allowed (a control-verified callsign and the operator's consent). */
   txGate?: () => boolean;
   onLog?: (tool: string, msg: string) => void;
-  /** Actually transmit an info string (wired to the RF/announce path); gated by the host already. */
+  /** Actually transmit an info string (wired to the radio link); checked, gated and rate-limited by the host. */
   transmit?: (tool: string, info: string) => void;
-  /** Register a beacon schedule (wired to the beacon scheduler); gated by the host already. */
-  onBeacon?: (tool: string, spec: BeaconSpec) => void;
+  /** Set (a spec) or end (null) a tool's beacon schedule; checked and gated by the host. A tool switched off ends it. */
+  onBeacon?: (tool: string, spec: BeaconSpec | null) => void;
   /** A tool replaced its panel or map layer: a UI showing contributions re-reads them. */
   onChange?: () => void;
+  /** The clock the transmit rate limit reads; Date.now by default. */
+  now?: () => number;
 }
 
 /** A named bus service: its provider, and the capability a caller must hold to reach it. */
@@ -135,7 +192,12 @@ interface Registered {
   mapLayer: MapLayerSpec | null;
   subs: string[]; // IPC topics this tool subscribed (for teardown)
   svcs: string[]; // IPC service names this tool provided (for teardown)
+  beacon: boolean; // a beacon schedule is set (ended on teardown)
+  lastTx?: number; // when the tool last transmitted (the rate limit)
 }
+
+/** Why the TX gate refuses a tool. */
+export const TX_CLOSED = "transmit needs a control-verified callsign and this tab's transmit consent";
 
 export class ToolHost {
   private tools = new Map<string, Registered>();
@@ -160,6 +222,7 @@ export class ToolHost {
       mapLayer: null,
       subs: [],
       svcs: [],
+      beacon: false,
     });
   }
 
@@ -230,6 +293,10 @@ export class ToolHost {
     }
     r.subs = [];
     r.svcs = [];
+    if (r.beacon) {
+      r.beacon = false;
+      this.opts.onBeacon?.(r.tool.manifest.name, null);
+    }
   }
 
   /** Dispatch an event to every enabled tool hooking it (optionally only those on `surface`). */
@@ -339,12 +406,33 @@ export class ToolHost {
       },
       scheduleBeacon: (spec) => {
         need("beacon");
-        if (!(this.opts.txGate?.() ?? false)) throw new Error("TX gate closed (verify callsign + opt-in)");
-        this.opts.onBeacon?.(name, spec);
+        if (spec === null) {
+          if (r.beacon) {
+            r.beacon = false;
+            this.opts.onBeacon?.(name, null);
+          }
+          return;
+        }
+        const b = normalizeBeacon(spec);
+        if (typeof b === "string") throw new Error(b);
+        if (!(this.opts.txGate?.() ?? false)) throw new Error(TX_CLOSED);
+        r.beacon = true;
+        this.opts.onBeacon?.(name, b);
       },
       requestTx: (info) => {
         need("tx");
+        const why = txInfoProblem(info);
+        if (why) {
+          this.opts.onLog?.(name, `transmit refused: ${why}`);
+          return false;
+        }
         if (!(this.opts.txGate?.() ?? false)) return false;
+        const now = (this.opts.now ?? Date.now)();
+        if (r.lastTx !== undefined && now - r.lastTx < TOOL_TX_MIN_GAP_MS) {
+          this.opts.onLog?.(name, `transmit held: one transmission per ${TOOL_TX_MIN_GAP_MS / 1000} s`);
+          return false;
+        }
+        r.lastTx = now;
         this.opts.transmit?.(name, info);
         return true;
       },
@@ -451,7 +539,7 @@ export class ToolHost {
   /**
    * The bus for a tool that runs outside the host (a sandboxed import), under the tool's manifest name:
    * subscribers see that name as the sender, never the app's `(host)`, and a service checks `permissions`
-   * (the tool's granted capabilities) exactly as it does for a built-in tool.
+   * (the tool's granted capabilities) exactly as it does for an in-process tool.
    */
   toolBus(name: string, permissions: readonly Capability[]): ToolBus {
     const caller: BusCaller = { name, has: (c) => permissions.includes(c) };

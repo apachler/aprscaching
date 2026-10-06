@@ -9,10 +9,6 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@aprscaching/aprs": "workspace:*",
-    "@aprscaching/packet": "workspace:*"
-  },
   "devDependencies": {
     "vitest": "^5.0.2"
   },

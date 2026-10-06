@@ -208,6 +208,21 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     setToolTxVerified(verified);
   }, [verified]);
+  // The player's installed tools start once per page, and again when an account sync brings new ones. The sandbox
+  // code loads only when there is a tool to run.
+  useEffect(() => {
+    const boot = () => {
+      try {
+        if (!localStorage.getItem("acs.tools")?.startsWith("[{")) return;
+      } catch {
+        return;
+      }
+      void import("./tools/installed.js").then((m) => m.startInstalledTools());
+    };
+    boot();
+    window.addEventListener(PREFS_EVENT, boot);
+    return () => window.removeEventListener(PREFS_EVENT, boot);
+  }, []);
   const [view, setView] = useState<View>(MAP);
   const isPanel = (key: PanelKey) => view.kind === "panel" && view.key === key;
   const attention = useAttention({
@@ -760,7 +775,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [stationsOn, refresh]);
 
   // ---- feed heard callsigns from the live APRS layer into the tool host ----
-  // mheard/watch-alert are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
+  // Tools that record heard stations are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
   // per-callsign lastSeen cursor avoids re-dispatching the same beacon on every refresh.
   const fedStations = useRef(new Map<string, number>());
   useEffect(() => {

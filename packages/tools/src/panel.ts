@@ -57,7 +57,7 @@ const str = (x: unknown, cap = 240): string =>
 
 /**
  * Coerce an untrusted panel (from an imported tool) into a safe PanelSpec — bounds strings/rows, drops
- * unknown node kinds. Trusted built-ins can build a PanelSpec directly; this guards the imported path.
+ * unknown node kinds. An in-process tool may build a PanelSpec directly; this guards the sandboxed path.
  */
 export function sanitizePanel(input: unknown): PanelSpec {
   const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};

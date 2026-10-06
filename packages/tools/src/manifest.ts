@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
  * manifest.ts — a Tool's signed descriptor (`tool.json`). Kept dependency-free (no zod) so the package
- * stays MIT-clean + embeddable. A built-in tool has no `entry`; an imported tool points `entry` at a
- * JS module URL/file the sandbox loads.
+ * stays MIT-clean + embeddable. A tool in process (a test, an embedding host) has no `entry`; a sandboxed tool
+ * points `entry` at the script URL/file the sandbox loads.
  */
 import { isCapability, type Capability } from "./capabilities.js";
 import { isSurface, type Surface } from "./surfaces.js";
@@ -16,7 +16,7 @@ export interface ToolManifest {
   surfaces: Surface[]; // the tool's TYPE — which host surface(s) it plugs into (defaults to ["web"])
   remote?: boolean; // its /commands may be invoked by a REMOTE connected peer (PMS; D)
   description?: string;
-  entry?: string; // imported tools: the script URL/path the sandbox runs (built-ins omit it)
+  entry?: string; // the script URL/path the sandbox runs (a tool in process omits it)
   /** Imported tools: SHA-256 of the exact bytes `entry` serves, base64. Signed with the manifest, so a swapped
    *  script fails the check even though the manifest's signature still verifies. Required to import. */
   entrySha256?: string;

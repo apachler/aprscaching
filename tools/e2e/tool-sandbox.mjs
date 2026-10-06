@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * tool-sandbox.mjs — a headless Chromium end-to-end test for the imported-tool sandbox
- * (`apps/web/src/tools/sandbox.ts`). It bundles the real module, loads tools into it from a page that holds a
- * session cookie and an IndexedDB database, and asserts what a tool reaches:
+ * tool-sandbox.mjs — a headless Chromium end-to-end test for the tool sandbox (`apps/web/src/tools/sandbox.ts`).
+ * It bundles the real module with the ToolHost, loads tools into it from a page that holds a session cookie and an
+ * IndexedDB database, and asserts what a tool reaches:
  *
  *   1. the example hello tool loads, answers its command and runs its decoder, and the station-log example
- *      (packages/tools/examples/station-log) talks to the bus through the ipc bridge;
- *   2. a tool without the network grant reaches no network (fetch, XHR, nested Worker, EventSource) and no
+ *      (packages/tools/examples/station-log) talks to the bus through its context;
+ *   2. a tool using the whole API reaches the host only through its grants: events with a session reply, async
+ *      commands, transmit and beacons behind the gate and the rate limit, a map layer, colour rules, and a
+ *      service it provides on the bus; a tool without a grant is refused;
+ *   3. a tool without the network grant reaches no network (fetch, XHR, nested Worker, EventSource) and no
  *      app storage (IndexedDB, Cache Storage, localStorage, cookies);
- *   3. a tool with the network grant reaches its `connect` origin, without the page's cookie, and not the
+ *   4. a tool with the network grant reaches its `connect` origin, without the page's cookie, and not the
  *      app's own origin.
  *
  * If no Chromium is found it prints SKIP and exits 0, like the other e2e scripts.
@@ -65,6 +68,29 @@ const probeTool = (appUrl, peerUrl) => `
   done;
 `;
 
+// A tool that uses every part of the API its grants allow.
+const apiTool = `
+  tool.on("on_frame", (p) => tool.setPanel({ title: "Heard", nodes: [{ kind: "text", text: p.peerCall + " " + (p.text || "") }] }));
+  tool.on("on_connect", (p) => { if (p.reply) p.reply("Welcome " + p.peerCall); });
+  tool.provide("echo.upper", async (a) => String(a).toUpperCase());
+  register({ commands: {
+    later: async (a) => { await new Promise((r) => setTimeout(r, 20)); return ["later " + a]; },
+    tx: async () => [String(await tool.requestTx(">from a tool"))],
+    beacon: async () => { try { return [String(await tool.scheduleBeacon({ comment: "QRV", intervalSec: 60 }))]; } catch (e) { return ["refused: " + e.message]; } },
+    wp: () => { tool.setMapLayer({ id: "wp", points: [{ lat: 47, lon: 15, label: "home" }] }); return ["ok"]; },
+    colours: () => { tool.setColourRules([{ src: "OE8APR", colorVar: "--warn" }]); return ["ok"]; },
+    ask: async () => [String(await tool.call("echo.upper", "abc"))],
+    op: { run: () => ["operator only"], remote: false },
+  } });
+`;
+// A tool that reaches for what it was not granted.
+const greedyTool = `
+  const tryIt = (fn) => { try { fn(); return "allowed"; } catch (e) { return "refused"; } };
+  register({ commands: {
+    reach: () => [tryIt(() => tool.setMapLayer({ id: "x", points: [] })), tryIt(() => tool.on("on_frame", () => {})), tryIt(() => tool.requestTx(">x"))],
+  } });
+`;
+
 async function main() {
   const exe = findChromium();
   if (!exe) {
@@ -73,7 +99,12 @@ async function main() {
   }
 
   const bundled = await build({
-    entryPoints: [path.join(ROOT, "apps/web/src/tools/sandbox.ts")],
+    stdin: {
+      contents: `export { loadSandbox, sandboxTool } from "./apps/web/src/tools/sandbox.ts";
+        export { ToolHost } from "./packages/tools/src/index.ts";`,
+      resolveDir: ROOT,
+      loader: "ts",
+    },
     bundle: true,
     format: "iife",
     globalName: "ToolSandbox",
@@ -108,6 +139,12 @@ async function main() {
     } else if (req.url === "/station-log.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(stationLogJs);
+    } else if (req.url === "/api-tool.js") {
+      res.setHeader("content-type", "application/javascript");
+      res.end(apiTool);
+    } else if (req.url === "/greedy.js") {
+      res.setHeader("content-type", "application/javascript");
+      res.end(greedyTool);
     } else if (req.url === "/probe.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(probeTool(appUrl, peerUrl));
@@ -177,50 +214,141 @@ async function main() {
 
     // The station-log example: it subscribes on the bus, calls a service and pushes panel updates.
     const stationLog = await page.evaluate(async () => {
-      const subs = {};
+      const { loadSandbox, sandboxTool, ToolHost } = window.ToolSandbox;
+      const host = new ToolHost();
       const calls = [];
-      const bridge = {
-        emit: () => {},
-        subscribe: (topic, cb) => {
-          subs[topic] = cb;
-          return () => {};
-        },
-        call: (name, args) => {
-          calls.push([name, args]);
-          return "digi";
-        },
+      host.registerHostService("station.type", (a) => {
+        calls.push(a);
+        return "digi";
+      });
+      const perms = ["command", "panel", "ipc"];
+      const sb = await loadSandbox(await (await fetch("/station-log.js")).text(), perms);
+      const manifest = {
+        name: "station-log",
+        title: "Station log",
+        author: "X",
+        version: "1",
+        permissions: perms,
+        surfaces: ["web"],
       };
-      const sb = await window.ToolSandbox.loadSandbox(
-        await (await fetch("/station-log.js")).text(),
-        ["command", "panel", "ipc"],
-        bridge,
-      );
-      const panels = [];
-      sb.onPanel((spec) => panels.push(spec));
-      subs["station.seen"]?.({ call: "OE6XRR-9", type: "digi", source: "APRS" }, "station-db");
+      host.register(sandboxTool(manifest, sb));
+      host.setEnabled("station-log", true);
+      const settle = () => new Promise((r) => setTimeout(r, 50));
+      await settle();
+      const subscribed = host.ipcTopics();
+      host.hostEmit("station.seen", { call: "OE6XRR-9", type: "digi", source: "APRS" });
+      await settle();
       const seen = await sb.runCommand("seen", "");
       await sb.runCommand("whois", "oe6xrr-9");
-      for (let i = 0; i < 50 && panels.length < 2; i++) await new Promise((r) => setTimeout(r, 20));
+      let panel = null;
+      for (let i = 0; i < 50; i++) {
+        panel = host.panels("web")[0]?.spec;
+        if (panel?.nodes[0]?.value === "digi") break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
       sb.destroy();
-      return { commands: sb.commands, subscribed: Object.keys(subs), seen, calls, panels };
+      return { commands: sb.commands, subscribed, seen, calls, panel };
     });
     console.log("station-log example");
     expect(stationLog.commands.join(",") === "seen,whois", "registers /seen and /whois");
     expect(stationLog.subscribed.join(",") === "station.seen", "subscribes to station.seen");
     expect(stationLog.seen[0] === "OE6XRR-9  digi  APRS", "lists a station it heard on the bus");
-    expect(
-      stationLog.calls[0]?.[0] === "station.type" && stationLog.calls[0]?.[1] === "OE6XRR-9",
-      "calls station.type",
-    );
-    expect(
-      stationLog.panels.length === 2 && stationLog.panels[1].nodes[0].value === "digi",
-      "pushes panel updates with the service's answer",
-    );
+    expect(stationLog.calls[0] === "OE6XRR-9", "calls station.type");
+    expect(stationLog.panel?.nodes[0]?.value === "digi", "pushes panel updates with the service's answer");
+
+    // 2. The whole API, through the host.
+    const api = await page.evaluate(async () => {
+      const { loadSandbox, sandboxTool, ToolHost } = window.ToolSandbox;
+      let open = false;
+      const sent = [];
+      const beacons = [];
+      const host = new ToolHost({
+        txGate: () => open,
+        transmit: (t, info) => sent.push([t, info]),
+        onBeacon: (t, spec) => beacons.push([t, spec]),
+      });
+      const perms = ["command", "monitor", "event", "panel", "map", "ipc", "tx", "beacon"];
+      const sb = await loadSandbox(await (await fetch("/api-tool.js")).text(), perms);
+      const manifest = {
+        name: "api",
+        title: "API",
+        author: "X",
+        version: "1",
+        permissions: perms,
+        surfaces: ["web", "terminal", "map"],
+      };
+      host.register(sandboxTool(manifest, sb));
+      host.setEnabled("api", true);
+      const wait = async (cond) => {
+        for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 20));
+        return cond();
+      };
+      const r = { remoteOff: sb.remoteOff };
+      await wait(() => host.ipcServices().includes("echo.upper"));
+      host.dispatch("on_frame", { peerCall: "OE8XBM-7", text: ">hi", source: "RF" });
+      r.heard = (await wait(() => host.panels("web")[0])) && host.panels("web")[0].spec.nodes[0].text;
+      const replies = [];
+      host.dispatch("on_connect", { peerCall: "OE3ABC", reply: (t) => replies.push(t) });
+      await wait(() => replies.length > 0);
+      r.replies = replies;
+      r.later = await sb.runCommand("later", "x");
+      r.txClosed = await sb.runCommand("tx", "");
+      open = true;
+      r.txOpen = await sb.runCommand("tx", "");
+      r.txAgain = await sb.runCommand("tx", "");
+      r.sent = sent;
+      r.beacon = await sb.runCommand("beacon", "");
+      r.beacons = beacons.slice();
+      await sb.runCommand("wp", "");
+      await wait(() => host.mapLayers().length > 0);
+      r.layer = host.mapLayers()[0]?.spec;
+      await sb.runCommand("colours", "");
+      await wait(() => host.colourisers("terminal")[0]?.({ src: "OE8APR", dst: "", text: "" }));
+      r.colour = host.colourisers("terminal")[0]?.({ src: "OE8APR", dst: "", text: "" })?.colorVar;
+      r.ask = await sb.runCommand("ask", "");
+      host.setEnabled("api", false);
+      r.beaconsAfterOff = beacons.slice(-1);
+      r.offTx = await sb.runCommand("tx", "");
+      sb.destroy();
+
+      const greedy = await loadSandbox(await (await fetch("/greedy.js")).text(), ["command"]);
+      const gm = {
+        name: "greedy",
+        title: "Greedy",
+        author: "X",
+        version: "1",
+        permissions: ["command"],
+        surfaces: ["web", "map"],
+      };
+      host.register(sandboxTool(gm, greedy));
+      host.setEnabled("greedy", true);
+      r.greedy = await greedy.runCommand("reach", "");
+      r.greedyLayers = host.mapLayers().length;
+      greedy.destroy();
+      return r;
+    });
+    console.log("the whole API", JSON.stringify(api));
+    expect(api.remoteOff.join(",") === "op", "lists the commands it keeps from remote peers");
+    expect(api.heard === "OE8XBM-7 >hi", "hears frames with their text and sets its panel");
+    expect(api.replies[0] === "Welcome OE3ABC", "answers a connected session through its reply");
+    expect(api.later[0] === "later x", "awaits an async command");
+    expect(api.txClosed[0] === "false", "cannot transmit while the gate is closed");
+    expect(api.txOpen[0] === "true" && api.sent.length === 1, "transmits once the gate opens");
+    expect(api.txAgain[0] === "false", "is rate-limited right after a transmission");
+    expect(api.sent[0]?.[0] === "api" && api.sent[0]?.[1] === ">from a tool", "transmits under its own name");
+    expect(api.beacon[0] === "true" && api.beacons[0]?.[1]?.intervalSec === 600, "schedules a clamped beacon");
+    expect(api.layer?.points?.[0]?.label === "home", "draws a map layer");
+    expect(api.colour === "--warn", "colours the monitor by callsign");
+    expect(api.ask[0] === "ABC", "calls a service it provides over the bus");
+    expect(api.beaconsAfterOff[0]?.[1] === null, "switching it off ends its beacon");
+    expect(/switched off/.test(api.offTx[0] ?? ""), "a switched-off tool cannot transmit");
+    expect(api.greedy.join(",") === "refused,refused,refused", "a tool without the grants is refused in the worker");
+    expect(api.greedyLayers === 0, "and contributes nothing to the host");
 
     const probe = (granted, connect) =>
       page.evaluate(
         async ([granted, connect, appOrigin]) => {
-          const sb = await window.ToolSandbox.loadSandbox(await (await fetch("/probe.js")).text(), granted, undefined, {
+          const sb = await window.ToolSandbox.loadSandbox(await (await fetch("/probe.js")).text(), granted, {
             connect,
             appOrigins: [appOrigin],
           });
@@ -235,13 +363,13 @@ async function main() {
         [granted, connect, appUrl],
       );
 
-    // 2. Without the network grant.
+    // 3. Without the network grant.
     const closed = await probe(["command"], [peerUrl]);
     console.log("tool without the network grant", JSON.stringify(closed));
     for (const k of Object.keys(closed)) expect(closed[k] === "blocked", `${k} is blocked`);
     expect(peerHits.length === 0, "the peer saw no request");
 
-    // 3. With the network grant and the peer listed in connect (the app's origin listed too, and dropped).
+    // 4. With the network grant and the peer listed in connect (the app's origin listed too, and dropped).
     const open = await probe(["command", "network"], [peerUrl, appUrl]);
     console.log("tool with the network grant", JSON.stringify(open));
     expect(open.fetchPeer === "reached: peer-ok", "reaches its connect origin");
@@ -263,7 +391,9 @@ async function main() {
     console.error(`FAIL: ${failures.length} check(s) failed`);
     process.exit(1);
   }
-  console.log("PASS: imported tools run apart from the app's origin, storage and session");
+  console.log(
+    "PASS: tools run apart from the app's origin, storage and session, and reach the host only through their grants",
+  );
 }
 
 main().catch((e) => {

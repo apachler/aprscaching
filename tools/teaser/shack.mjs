@@ -27,12 +27,22 @@ await page.waitForSelector(".panel.right h2", { timeout: 8000 });
 await page.click(".panel.right input[type=checkbox]");
 await page.waitForSelector(".station-pin", { timeout: 8000 });
 await page.waitForTimeout(800);
-// decode a sample packet in the packet decoder, a built-in tool that Tools opens on
+// decode a sample packet in the packet decoder, a project tool that Tools opens on: the first time, it is installed
+// from the registry the way a player does it
 await page.goto(`${BASE}/?view=tools&tool=packet-decoder#12/47.07/15.44`, { waitUntil: "load" });
+await page.waitForSelector(".tools-panel", { timeout: 15000 });
+await page
+  .locator(".tool-row:has-text('Packet decoder') button:has-text('Install')")
+  .click({ timeout: 8000 })
+  .catch(() => {});
+await page
+  .locator("button:has-text('Approve and install')")
+  .click({ timeout: 8000 })
+  .catch(() => {});
 await page.waitForSelector(".tools-panel textarea", { timeout: 15000 });
 await page.click(".tool-sub button:has-text('Use a sample')");
 await page.click(".tool-sub button:has-text('Decode')");
-await page.waitForSelector(".decoded", { timeout: 8000 });
+await page.waitForSelector(".tool-out", { timeout: 8000 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: OUT + "07-shack.png" });
 console.log("07-shack");
