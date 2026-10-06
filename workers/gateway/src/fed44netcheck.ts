@@ -17,7 +17,8 @@
  *
  * The check's lines, each pass / warn / fail / info, with a one-sentence fix on the non-passing ones:
  * - the 44net endpoint is a name under `<call>.ampr.org`, never the base name itself;
- * - the 44Net host peers contact has an A record, inside 44.0.0.0/8;
+ * - the 44Net host peers contact has an A record on 44Net, inside 44.0.0.0/9: an address in 44.128.0.0/10 is
+ *   on HAMNET, which the internet cannot reach, and 44.192.0.0/10 is not amateur space;
  * - the identity record carries this instance's id and current key (a `verify=` record is a callsign
  *   verification and belongs at `_aprscaching-verify.<call>.ampr.org`); for an instance under its own
  *   name, whether the callsign's record sends peers to it with another binding;
@@ -102,7 +103,19 @@ export interface IdentityContext {
 const PORTAL = "in the 44Net Portal (changes there publish within about an hour)";
 const DOH_FIX = "Check that DOH_URL reaches a DNS-over-HTTPS resolver, then run the check again.";
 const KEY_FIX = "Set FED_PRIVATE_KEY (node tools/fedkey/genkey.mjs) and restart, then run the check again.";
-const IN_44_NET = /^44\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/;
+
+/**
+ * Where an A record's address lies: `44net` (44.0.0.0/9, routed on the internet through 44Net Connect or
+ * BGP), `hamnet` (44.128.0.0/10, reached over RF links only, never from the internet) or `other`. A HAMNET
+ * address gives a `44net` endpoint no internet path, so only `44net` passes.
+ */
+export function amprScope(ip: string): "44net" | "hamnet" | "other" {
+  const m = IPV4.exec(ip);
+  if (!m || m[1] !== "44") return "other";
+  const b = Number(m[2]);
+  return b < 128 ? "44net" : b < 192 ? "hamnet" : "other";
+}
 
 /** The 44net endpoint the descriptor lists first, lowercased. */
 const endpointOf = (desc: OwnDescriptor) =>
@@ -439,12 +452,20 @@ export async function check44net(
         detail: `${host} has no A record, so peers cannot reach it`,
         fix: `Add the record A ${host} pointing at your 44Net address (44.x.x.x) ${PORTAL}; the Portal name is ${host.slice(0, -(zone.length + 1))}.`,
       };
-    } else if (!aAns.data.every((ip) => IN_44_NET.test(ip))) {
+    } else if (aAns.data.some((ip) => amprScope(ip) === "hamnet")) {
       a = {
         id: "a",
         status: "warn",
         label: "Address record",
-        detail: `${host} → ${aAns.data.join(", ")}, outside 44.0.0.0/8`,
+        detail: `${host} → ${aAns.data.join(", ")}, a HAMNET address (44.128.0.0/10) that peers on the internet and on 44Net cannot reach`,
+        fix: `Point ${host} at your 44Net Connect address (44.x.x.x), and publish the HAMNET address as a hamnet endpoint in FED_ENDPOINTS instead.`,
+      };
+    } else if (!aAns.data.every((ip) => amprScope(ip) === "44net")) {
+      a = {
+        id: "a",
+        status: "warn",
+        label: "Address record",
+        detail: `${host} → ${aAns.data.join(", ")}, outside 44Net (44.0.0.0/9)`,
         fix: `Point ${host} at your 44Net Connect address (44.x.x.x) so 44Net peers reach you over 44Net.`,
       };
     } else {

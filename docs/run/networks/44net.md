@@ -5,8 +5,10 @@ licensed sysop; at the end the box answers at its 44.x address from the whole in
 forwarding. [44Net name and identity](44net-identity.md) continues with steps 3 to 5: the name, the records
 and the self-check.
 
-**44Net** (AMPRNet) is the amateur-radio IPv4 space `44.0.0.0/8`, administered by
-[ARDC](https://www.ardc.net/).
+**44Net** (AMPRNet) is amateur IPv4 space administered by [ARDC](https://www.ardc.net/) and reachable from the
+internet, through 44Net Connect or BGP: on these pages, `44.0.0.0/9`. **HAMNET** is a separate network, reached
+only over RF links, in `44.128.0.0/10` ([HAMNET only](hamnet.md)). A 44Net address is not on HAMNET, and a
+HAMNET address has no 44Net or internet path. `44.192.0.0/10` is not amateur space.
 
 !!! note "What 44Net gives you, and what it doesn't"
     - **Reachability.** *44Net Connect* gives one machine a static 44.x address over a WireGuard tunnel, so
@@ -88,7 +90,7 @@ beside it as `wg44.issued.conf`) and changes four things about the issued config
   all the box's traffic through ARDC and cut the SSH session that brought it up. The helper turns such a
   tunnel into policy routing (`Table = off`): only traffic from the 44.x address, and replies to connections
   that came in on the tunnel, take it; everything else stays on the internet link. A split configuration
-  (`AllowedIPs` covering 44Net only) stays as issued. It carries 44Net traffic only, so hosts outside 44/8
+  (`AllowedIPs` covering 44Net only) stays as issued. It carries 44Net traffic only, so hosts outside 44Net
   cannot reach the 44.x address; for reachability from the whole internet, use a full-tunnel configuration.
 - **A firewall** on `wg44` that lets only TCP 80 and 443 in ([Who can reach you](#who-can-reach-you)).
   `--no-firewall` leaves it out.
@@ -159,8 +161,8 @@ address quickly, so the firewall on the tunnel is yours to set:
   or tunnel address, never to all addresses.
 - Never expose SSH, the gateway's port 8080 or an ingest port on the tunnel.
 
-HAMNET is a separate amateur IP backbone; whether its stations reach a Connect address is in
-[HAMNET only](hamnet.md#hamnet-and-44net-connect).
+HAMNET is a separate network, reached only over RF links: a Connect address is not on HAMNET, and HAMNET
+stations do not reach it because of their address ([HAMNET only](hamnet.md#hamnet-and-44net-connect)).
 
 ## Check that it worked
 

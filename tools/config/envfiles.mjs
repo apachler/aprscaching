@@ -213,7 +213,7 @@ export const ENV_FILES = [
       { key: "INSTANCE", value: "aprs.example.net", off: true },
       { key: "RP_ID", value: "example.net", off: true },
       "# Further addresses of the same instance, comma-separated: https://<name> gets a certificate like DOMAIN",
-      "# (the 44Net name), http://<name or 44.x address> is served as plain http (HAMNET).",
+      "# (the 44Net name), http://<name or address> is served as plain http (a HAMNET host in 44.128.0.0/10, or a LAN).",
       { key: "EXTRA_ORIGINS", value: "https://aprscaching.n0call.ampr.org,http://44.143.1.2", off: true },
       '# Basemap of the embeddable map widget (/embed): a MapLibre style URL, or "offline" for the self-contained',
       "# grid that loads nothing from outside the instance (HAMNET, off-grid). Unset: OpenFreeMap liberty. Extra",

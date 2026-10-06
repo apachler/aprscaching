@@ -68,7 +68,9 @@ other's caches and finds, and so does every instance that follows the hub.
 flowchart LR
   A["Instance A<br/>internet"]
   B["Instance B<br/>internet"]
-  C["Instance C<br/>44Net or HAMNET"]
+  C["Instance C<br/>44Net"]
+  D["Instance D<br/>HAMNET"]
+  E["Instance E<br/>HAMNET"]
   H["Club hub"]
   P["Pocket or NAT box"]
   Q["Second spoke"]
@@ -76,6 +78,7 @@ flowchart LR
   F["Instance F<br/>no IP path"]
   A <-->|pull both ways| B
   A <-->|pull over 44Net| C
+  D <-->|pull over HAMNET| E
   B -->|pulls, gets the spokes' records too| H
   P -->|pushes its records| H
   P -->|pulls the hub's and the other spokes' records| H
@@ -87,7 +90,8 @@ flowchart LR
 An arrow starts at the instance that opens the connection.
 
 - **Pull** is the usual path: your instance fetches each peer's new records on a schedule, and a peer that has
-  news asks you to fetch at once.
+  news asks you to fetch at once. A 44Net instance is on the internet and pulls like any internet instance; a
+  HAMNET instance reaches only other HAMNET hosts.
 - **Push** is for an instance nobody can reach, such as a phone on mobile data or a box behind a carrier's NAT:
   it sends its records to a hub it can reach.
 - **Packet circuit** is a pull over AX.25 or NET/ROM, dialled by your ingest box, for a peer you reach by radio

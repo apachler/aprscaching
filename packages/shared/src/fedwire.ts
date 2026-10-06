@@ -254,8 +254,8 @@ export function fromE7(e7: number): number {
 /**
  * `https`: an https URL on the internet. `44net`: a name under `<call>.ampr.org`, reached over plain http, or
  * `https://<name>` when the name has a certificate (tried over https first, then plain http). `hamnet`: a host
- * on HAMNET, a name or a 44.x address with an optional port, reached over plain http only by a peer that can
- * route to it. Packet kinds carry forward-mode frames.
+ * on HAMNET, a name or an address in 44.128.0.0/10 with an optional port, reached over plain http only by a peer
+ * on HAMNET; 44Net and the internet do not reach it. Packet kinds carry forward-mode frames.
  */
 export const FedTransportKind = z.enum(["https", "44net", "hamnet", "ax25", "netrom", "bbs"]);
 export type FedTransportKind = z.infer<typeof FedTransportKind>;

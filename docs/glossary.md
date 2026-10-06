@@ -82,9 +82,11 @@ explains it in full.
 :   A LoRa mesh system; APRScaching shows only nodes in licensed mode, which carry a callsign.
 
 <span id="44net"></span><span id="amprnet"></span><span id="hamnet"></span>44Net, AMPRNet and HAMNET
-:   **44Net** (AMPRNet) is the amateur-radio IPv4 space in `44.x`, administered by ARDC; `<call>.ampr.org`
-    names live in it. **HAMNET** is the amateur microwave IP network ([Run an instance on
-    44Net](run/networks/44net.md)).
+:   **44Net** (AMPRNet) is amateur IPv4 space administered by ARDC and reachable from the internet, through
+    44Net Connect or BGP; `<call>.ampr.org` names live in it ([44Net address](run/networks/44net.md)).
+    **HAMNET** is an amateur IP network reached only over RF links, in `44.128.0.0/10`
+    ([HAMNET only](run/networks/hamnet.md)). The two are separate: a 44Net instance is not on HAMNET, and a
+    HAMNET instance has no 44Net or internet path because of its address.
 
 <span id="lotw"></span>LoTW
 :   Logbook of The World, ARRL's contest and award log. Its callsign certificate can prove you hold a call

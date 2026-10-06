@@ -22,8 +22,8 @@
 #          gateway answers on its own port rather than through Caddy) · --no-tunnel (offer no Cloudflare
 #          Tunnel: the installer has no compose stack to run one) · --no-next-steps (the caller prints its
 #          own) · --extra-origins ORIGIN,… (further addresses of this instance: https://<name> for a name Caddy
-#          fetches a certificate for, such as the 44Net name; http://<name or 44.x address> for HAMNET, served as
-#          plain http; "-" clears them) · --help
+#          fetches a certificate for, such as the 44Net name; http://<name or address> for a HAMNET host
+#          (44.128.0.0/10) or a LAN, served as plain http; "-" clears them) · --help
 # Federation (public instances): --fed-peers URL[#FINGERPRINT],… (https peers you know; trusted once a pinned
 #          fingerprint matches, unvetted otherwise) ·
 #          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
@@ -279,7 +279,7 @@ norm_origins() {
 }
 if [ "$EXTRA_SET" -eq 0 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "Further addresses of this instance, beside $APP_URL: https://<name> for a name with a certificate (the"
-  echo "44Net name), http://<name or 44.x address> for HAMNET, which serves plain http."
+  echo "44Net name), http://<name or address> for a HAMNET host (44.128.0.0/10) or a LAN, served as plain http."
   ask EXTRA_IN "Comma-separated (blank = none, - = remove them)" "$(unquoted EXTRA_ORIGINS)"
   EXTRA_SET=1
 fi
@@ -292,19 +292,24 @@ fi
 
 # ---- federation (public instances only) -------------------------------------------------------------------
 # A peer listed in FED_PEERS with its key fingerprint starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
-# admin (admitted unvetted) instead. A name under ampr.org or an address in 44/8 is a 44Net peer.
-is_44net_peer() {
-  local host="${1#*://}"
-  host="${host%%/*}"
-  host="${host%%:*}"
-  case "$host" in *.ampr.org | ampr.org | 44.*) return 0 ;; *) return 1 ;; esac
+# admin (admitted unvetted) instead, and so is a HAMNET peer. A name under ampr.org or an address in
+# 44.0.0.0/9 is a 44Net peer; an address in 44.128.0.0/10 is a HAMNET peer, on a separate network that the
+# internet does not reach. amateur_net_of prints 44Net or HAMNET for such a peer, and nothing otherwise.
+amateur_net_of() {
+  local host="${1#*://}" b
+  host="${host%%[/:#]*}"
+  case "$host" in *.ampr.org | ampr.org) echo 44Net; return 0 ;; 44.*) ;; *) return 0 ;; esac
+  IFS=. read -r _ b _ _ <<<"$host"
+  case "$b" in '' | *[!0-9]*) return 0 ;; esac
+  if [ "$b" -lt 128 ]; then echo 44Net; elif [ "$b" -lt 192 ]; then echo HAMNET; fi
 }
 check_peers() {
-  local p
+  local p net
   for p in ${1//,/ }; do
     case "$p" in https://*) ;; *) echo "Peer '$p' is not an https URL." >&2; return 1 ;; esac
-    if is_44net_peer "$p"; then
-      echo "Peer '$p' is on 44Net: onboard it from Instance admin, which admits it unvetted, not FED_PEERS." >&2
+    net="$(amateur_net_of "$p")"
+    if [ -n "$net" ]; then
+      echo "Peer '$p' is on $net: onboard it from Instance admin, which admits it unvetted, not FED_PEERS." >&2
       return 1
     fi
   done
