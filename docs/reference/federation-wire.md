@@ -399,7 +399,9 @@ Both halves ride the existing BBS machinery:
   `FED_BBS` is off) signs the local feed records (tombstones first) into fedwire frames — the same producer the
   HTTP sync surface uses — packs them into one `ACSFED` batch, and stores it once as local personal mail to
   `ACSFED` that expires after 30 days. Nothing on the instance calls it on its own. The content BID lands in
-  `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
+  `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts. `since` is a number that starts
+  every feed there, or the previous answer's `cursors` object (`{<feed>: {cursor, id?}}`), which resumes each
+  feed from its own position: a bulletin's cursor is a time in seconds, the other feeds' a `fed_seq` value.
 - **Receive** — an inbound forwarded message addressed to `ACSFED`, personal or bulletin, is taken only while
   `FED_BBS` is on and only from a partner marked for federation (the forwarding session names the partner);
   anything else is dropped unstored and never applied. A taken batch triggers the trust-gated apply on first

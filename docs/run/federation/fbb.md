@@ -69,9 +69,10 @@ exists.
       -d '{"since": 0, "limit": 50}'
     ```
 
-    The answer names the batch's BID, the number of records in it, and a `cursors` value per feed. Pass the
-    oldest cursor as `since` next time. Nothing queues a batch on its own: run this when you want one sent, or
-    from your own timer.
+    The answer names the batch's BID, the number of records in it, and `cursors`, where each feed stopped.
+    Pass that `cursors` object back as `since` next time, and each feed resumes from its own position; the
+    feeds count in different units, so a single number resumes only the first batch. Nothing queues a batch
+    on its own: run this when you want one sent, or from your own timer.
 
 A hub dispatches a packet-only spoke's [relay](hubs-and-relays.md#rendezvous-relay) queries the same way, with
 `POST /federation/relay/<instance>/dispatch` ([API reference](../../reference/api.md)), and the spoke answers

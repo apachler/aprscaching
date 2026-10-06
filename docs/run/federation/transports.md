@@ -377,7 +377,7 @@ sequenceDiagram
   participant SA as Sysop A
   participant A as Instance A
   participant B as Partner instance B
-  SA->>A: POST /federation/bbs/enqueue, since cursor
+  SA->>A: POST /federation/bbs/enqueue, since the last cursors
   Note over A: pack signed records into one ACSFED message
   A->>B: FBB forwarding session, personal mail to ACSFED
   Note over B: marked partner only, check every frame

@@ -118,6 +118,34 @@ describe("partners only, never flooded", () => {
     expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
   });
 
+  it("resumes each feed from its own cursor when the answer's cursors come back as since", async () => {
+    const env = await station({ FED_BBS: "1" });
+    // a bulletin counts in seconds, a cache in fed_seq values: one shared number cannot resume both
+    await env.DB.prepare(
+      `INSERT INTO bbs_messages (type, from_call, to_call, subject, body, posted_at, origin)
+       VALUES ('B', 'OE8APR', 'ALL', 'Net tonight', 'QRV 20:00', ?, 'local')`,
+    )
+      .bind(Math.floor(Date.now() / 1000))
+      .run();
+    const enqueue = (body: unknown) => call(env, "POST", "/federation/bbs/enqueue", body, OPERATOR);
+
+    // a limit of one sends the cache and leaves the bulletin feed where it started
+    const first = await enqueue({ types: ["cache", "bulletin"], limit: 1 });
+    expect(first.data).toMatchObject({ frames: 1, cursors: { bulletin: { cursor: 0 } } });
+    const second = await enqueue({ types: ["cache", "bulletin"], since: first.data.cursors });
+    expect(second.data.frames).toBe(1);
+    expect(second.data.cursors.cache).toEqual(first.data.cursors.cache);
+
+    // nothing new: the cursors send nothing again
+    const idle = await enqueue({ types: ["cache", "bulletin"], since: second.data.cursors });
+    expect(idle.data).toMatchObject({ frames: 0, enqueued: 0 });
+
+    // a new cache goes alone
+    await addCache(env, 2000);
+    const next = await enqueue({ types: ["cache", "bulletin"], since: idle.data.cursors });
+    expect(next.data).toMatchObject({ frames: 1, enqueued: 1 });
+  });
+
   it("refuses a person's post to ACSFED", async () => {
     const env = await station({ FED_BBS: "1" });
     const r = await call(
