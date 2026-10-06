@@ -130,7 +130,7 @@ export function registryFormatProblem(doc: unknown): string | null {
   const f = doc && typeof doc === "object" ? (doc as { format?: unknown }).format : undefined;
   if (f === REGISTRY_FORMAT) return null;
   if (f === undefined) return `the registry names no format; this app reads registry format ${REGISTRY_FORMAT}`;
-  return `the registry uses format ${String(f).slice(0, 12)}; this app reads registry format ${REGISTRY_FORMAT}`;
+  return `the registry uses format ${JSON.stringify(f)?.slice(0, 12)}; this app reads registry format ${REGISTRY_FORMAT}`;
 }
 
 /** Verify a registry against a PINNED authority key (base64url). Rejects a forged/unsigned/mismatched doc. */

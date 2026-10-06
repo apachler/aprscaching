@@ -102,7 +102,7 @@ export function validateSteps(input: unknown): SessionStep[] | string {
   const out: SessionStep[] = [];
   for (const [i, raw] of input.entries()) {
     const s = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-    const bad = `step ${i + 1} is not a valid ${String(s.op ?? "step")}`;
+    const bad = `step ${i + 1} is not a valid ${typeof s.op === "string" ? s.op.slice(0, 20) : "step"}`;
     switch (s.op) {
       case "connect": {
         const call = typeof s.call === "string" ? s.call.toUpperCase() : "";
