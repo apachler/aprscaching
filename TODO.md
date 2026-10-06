@@ -3,7 +3,7 @@
 What ships is described in the product manual under [`docs/`](docs/); [`CHANGELOG.md`](CHANGELOG.md) records
 each release from 1.0.0 on. This file holds two lists: the short **launch list** of what remains before the
 1.0.0 tag, and below it the honest list of what is _intentionally_ left for after it — and **why**
-each piece waits. It's a live checklist: boxes get ticked as items land. Nothing here is a known defect — defects
+each piece waits. It's a live checklist: an item leaves it when it lands. Nothing here is a known defect — defects
 are fixed, not listed.
 
 Each item carries a rough **priority · size** where useful — `P1`–`P3` (higher = sooner) and
@@ -66,47 +66,18 @@ start order: the first ones wait on replies from outside, so they start first, a
 - [ ] **Sign-in mail deliverable** _(S)_ — the `EMAIL_FROM` domain has SPF, DKIM (the provider's selector) and a
       DMARC record (`p=quarantine` once the reports are clean); a sign-in link reaches Gmail, Outlook and GMX
       inboxes, not spam. The three records are documented in Sign-in links or Your first hour.
-- [x] **Protect `main`** — the `main` ruleset blocks deletion and force pushes and requires a pull request (no
-      approvals; squash and merge allowed), so only the release PR and `dev` → `main` merges reach it.
 - [ ] **aprscaching.net live** _(M)_ — DNS points at the public instance; `INSTANCE`, `APP_URL` and `RP_ID` are
       `aprscaching.net` and the gateway answers on the same origin; `aprscaching.com` (and `www.`) answer `301`
       to `.net` at the edge, before any sign-in; TLS and HSTS checked; a passkey registered and used on `.net`;
       `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
 - [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
       rehearsed onto a scratch instance; `resources.backup` passes in the doctor.
-- [x] **Docs current with the code** — the manual, this file and the changelog match what `dev` ships: trusted
-      receiving stations, media limits and offline tiles in the API reference, every migration in the data
-      model, the player pages.
-- [x] **CHANGELOG starts at 1.0.0** — `CHANGELOG.md` holds no pre-release history: release-please reads only
-      the commits after `bootstrap-sha` in `release-please-config.json`, and a commit after it carries the
-      `Release-As: 1.0.0` footer.
 - [ ] **Release pipeline proven** _(S — last)_ — _Allow GitHub Actions to create and approve pull requests_ is
       on, so release-please can open the release PR with `GITHUB_TOKEN`. Merge `dev` → `main`; check that the
       release PR proposes 1.0.0 and that its `CHANGELOG.md` entry lists only the commits after `bootstrap-sha`;
       merge it. Confirm the release carries the OCI stack zip, the
       desktop binaries, `SHA256SUMS` and the attestations, and that the README's "Deploy to Oracle Cloud" button
       resolves. Then merge `main` back into `dev`, so the version bump lands there.
-- [x] **Privacy-first APRS-map positioning** — the four invariants that differentiate us from incumbent
-      APRS maps are stated where a visitor and an operator each meet them: a _What we do with your beacons_
-      section on the landing (`apps/web/src/Landing.tsx`), and _Privacy by default_ in
-      [`docs/about.md`](docs/about.md), which names the code behind each claim. TTL'd positions (firehose and
-      browser-RF pruned nightly, corroborating fixes kept as a find's evidence), no analytics/advertising/
-      third-party trackers, the AGPL §13 source link, and self-hosting on your own hardware.
-- [x] **Coach-mark tour content** — the find flow, map → cache detail → log a find, in
-      `apps/web/src/ui/tourSteps.ts`, with a closing step that differs for a visitor and a signed-in cacher.
-      Steps anchor on `data-tour` hooks rather than style classes, so restyling the chrome cannot silently
-      unanchor the tour, and `apps/web/test/tour-anchors.mjs` fails the build if a step and its hook part
-      company. `Tour.tsx` rings the anchored element and places the card against it with CSS anchor
-      positioning, falling back to its centred dialog wherever the element is absent (a first run has no cache
-      open) or anchor positioning is unsupported.
-- [x] **Hosted OCI one-click stack** — `scripts/build-oci-stack.sh` packages `deploy/oci/` flat (Resource
-      Manager reads `main.tf` and `schema.yaml` from the zip root) and `.github/workflows/oci-stack.yml`
-      attaches it to every release (release-please calls it), so the "Deploy to Oracle Cloud" button resolves
-      `releases/latest/download/aprscaching-oci-stack.zip` with nothing to upload by hand. Each release's zip
-      pins its own tag into `repo_ref`. The stack builds its own VCN/subnet/gateway and resolves the Ubuntu
-      aarch64 image itself, so it never asks for an OCID; `schema.yaml` drives the console prompts and
-      `tools/checks/oci-stack.mjs` fails CI if the variables, schema, cloud-init placeholders and packaging
-      script drift apart.
 
 ## Needs hardware or a live partner (can't be validated headlessly)
 
@@ -131,15 +102,6 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
       ([`docs/run/networks/44net.md`](docs/run/networks/44net.md)); an own 44Net PoP, the IPIP mesh and BGP are
       [decided, not planned](#44net-decided-not-planned).
       See [`docs/run/federation/index.md`](docs/run/federation/index.md) · [`docs/run/radios/rf-ingest.md`](docs/run/radios/rf-ingest.md).
-- [x] **FBB LZHUF (B0/B1) compressed forwarding + MD5 link auth** — the codec is built and **byte-exact
-      against a real F6FBB oracle** (`packages/packet/src/lzhuf.ts`: N=2048 window, F=60, classic 6+6 position
-      tables, B0 `[LE32 size]` framing, B1 `[LE16 CRC][LE32 size]` framing over the TransIt CRC-16). The
-      **binary-block session transport** is built (`fbb-binary.ts`: SOH/STX/EOT blocks + additive checksum,
-      `FA` proposals, `FS !offset` resume) and wired into the FBB session — compression is offered via
-      `BBS_FORWARD_COMPRESS` and engages only when the partner's SID also advertises `B` (else it negotiates
-      back to ASCII). FBB MD5 link auth (`fbb-auth.ts`) is built and tested. Byte-level round-trips,
-      negotiation, and resume are unit-tested. Wire facts pinned in
-      [`tools/interop/LZHUF-SPEC.md`](tools/interop/LZHUF-SPEC.md).
 - [ ] **Compressed FBB session against F6FBB** _(P2 · S)_ — run `fbb-forward.mjs` with `BBS_FORWARD_COMPRESS`
       against the interop F6FBB (`fbbcomp = OK 3`) and assert B1 negotiation and a compressed delivery.
 - [ ] **Live-radio behaviour** — the pure codecs (KISS/AX.25, Meshtastic protobuf, CW/PSK31, CAT/`rigctld`,
@@ -216,8 +178,6 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS on the box (KISS over TCP is
       `apps/ingest/src/kiss.ts`, SMACK framing is in `packages/aprs/src/ax25.ts`; the browser reaches a USB TNC
       over Web Serial).
-- [x] **KISS-TCP + AGW client** _(P1 · S)_ — attach Direwolf/QtSoundModem/other hubs as modems: the ingest box's
-      `kiss.ts` and `agwpe.ts` (`KISS_TNC_HOST`, `AGWPE_HOST`).
 - [ ] **Supervised Direwolf** _(P1 · M)_ — the hub launches and manages a Direwolf instance
       (config generation, ALSA/pulse device pick, restart-on-crash) for soundcard AFSK/IL2P.
 - [ ] **WA8DED hostmode TNC driver on serial** _(P2 · S)_ — TNC3/SCS-class firmware TNCs in hostmode on a
@@ -234,9 +194,8 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
       zero-dependency setups — the codec is `packages/aprs/src/cat.ts`; the hub driver is what's left.
 - [ ] **rigctld-compatible re-export server** _(P2 · M)_ — the hub serves the rigctld wire
       protocol so logging/digimode apps share the rig through us — same bridge idea as packet.
-- [ ] **PTT/keying paths** _(P2 · M)_ — CAT PTT, CM108 GPIO, Raspberry Pi GPIO beside the serial RTS/DTR
-      keying the box has (`apps/ingest/src/ptt.ts`); one PTT abstraction with per-port assignment and
-      TX-watchdog. This keys the hub's own transmit ports, gated on callsign control-verification; the Shack's
+- [ ] **PTT/keying paths** _(P2 · M)_ — serial RTS/DTR, CAT PTT, CM108 GPIO and Raspberry Pi GPIO behind one PTT
+      abstraction with per-port assignment and a TX watchdog. This keys the hub's own transmit ports, gated on callsign control-verification; the Shack's
       rig control through the box below never keys.
 - [ ] **GPS/position sources** _(P2 · S)_ — gpsd client + raw NMEA serial feeding station
       position, beaconing, and the shack map.
@@ -252,18 +211,6 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 ## Native packaging
 
-- [x] **Pocket: a station on an Android phone** — the gateway and the ingest in Termux, without root:
-      one-command install, supervised processes, https for hotspot visitors, a MeshCom node on the hotspot or a
-      router, backup, and a monthly install check in `termux/termux-docker`
-      ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)). A field-day and demo station, not a server.
-- [x] **Pocket extras** — the setup questions, a status notification, home-screen shortcuts, a battery saver,
-      field alerts, a scheduled backup, a USB KISS TNC through `termux-usb`, 44Net status and https on the ampr.org
-      name, a pre-trip sync with a region filter, and the home-instance hub
-      ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)). Phone tests of each are recorded in its "Tested on" table.
-- [x] **Per-host 44Net records** — `_aprscaching.<host>` records so one callsign publishes several instances
-      (a home station and a Pocket), added by host; an ambiguous name lists its candidates. The ARDC-verified
-      callsign is recorded on 44net peers and counts as the operator, so the corroboration quorum hears one voice
-      per callsign ([`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#3-name-and-identity)).
 - [ ] **Watch: Bun on Android** — no official Android build (oven-sh/bun#28924), so Pocket runs the Node
       gateway rather than the desktop binary. Once Bun ships one, the desktop binary could run on a phone.
 - [ ] **Watch: Android background limits** — Pocket relies on a wake lock, Termux battery "Unrestricted",
@@ -276,9 +223,9 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
       when librtlsdr opens by file descriptor and Direwolf builds in Termux (or is packaged); then measure CPU,
       battery and heat over 30 minutes before offering it ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)).
 - [ ] **A later-corroborated find on mirrors** — a find lifted to Tier A by the later corroboration attempt
-      keeps its first tier on instances that already mirrored it: the finds feed pages by log id and carries each
-      log once. Re-serving a changed find needs a revision on the finds feed, like the caches feed's
-      (updated-at cursor, versioned records).
+      keeps its first tier on instances that already mirrored it: a find takes its place in the origin's `find`
+      sequence once, when it is logged, so a later change never reaches a peer. Re-serving a changed find needs a
+      new sequence number on each change, as a cache takes on every edit (`fed_rev`).
 - [ ] **Watch: DNS-PERSIST-01** — Let's Encrypt's standing DNS authorisation (one TXT record per name and
       ACME account, no new record per renewal) is not in production: it waits on an open point in the IETF
       draft. Once it ships, the ampr.org certificate ([`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#tls-on-the-44net-name))
@@ -359,8 +306,7 @@ The dashboard is the app release and it is scoped to one thing: a ham puts it on
 shack, with no account and no first-party server. The bucket is a separate repo on its own timeline —
 only its in-package prerequisites touch a shipped build. Ordering that matters: the `ToolSurface`
 rename lands before any new surface work and before the package becomes a contract third parties
-compile against; `entryHash` lands before anyone lists, because it changes what a signature covers;
-the dashboard surface lands before built-ins can declare it.
+compile against; the dashboard surface lands before the project's registry tools can declare it.
 
 A bucket repo rather than a code monorepo or a publish service, because the binding constraints are
 liability, bus factor, and running cost: entries are metadata pointing at author-hosted artifacts, so
@@ -406,7 +352,7 @@ Tool API gaps an author meets (each is described as it stands in [The sandbox AP
 
 - [ ] **Tool commands and session events on the connected surfaces** _(P2 · M)_ — a tool's `/commands` run from
       the Tools console only, not from the packet terminal's, the BBS's or the node's command line, and no
-      surface raises `on_connect` or `on_disconnect` or publishes `link.rtt` yet, so the session tools
+      surface raises `on_connect` or `on_disconnect` or publishes `link.rtt`, so the session tools
       (auto-responder, away note, connect bell, info responder, link ping) have no live session to answer.
       `geo` has no API.
 
@@ -420,7 +366,7 @@ Tool registry gaps a sysop meets ([How registries work](https://apachler.github.
 Marketplace track (the `apachler/aprscaching-tools` repo on its own timeline; none gates the release):
 
 - [ ] **Multi-pin registry authority** _(P1 · S)_ — a registry entry pins one authority key, so a
-      rotation shows "key changed" to every instance and player until each confirms the new key. Let an
+      rotation shows "key changed" on every instance and to every player until each confirms the new key. Let an
       entry pin a small allowlist (three or fewer), so a publisher announces the next key ahead of the
       rotation and confirmed pins keep verifying through the overlap. Cover the forged-authority rejection
       path — the whole registry trust model rests on `checkPinnedRegistry`.
@@ -435,7 +381,8 @@ Marketplace track (the `apachler/aprscaching-tools` repo on its own timeline; no
       minification. Merge builds and signs `registry.json` from the bucket and deploys it to GitHub Pages from a
       reviewer-protected environment; an offline root key designates the online CI signing key, and its
       custody and rotation ship documented with the repo. Listings state a license. Wire
-      `tools/toolkey/bundle-registry.mjs` into the release workflow once the repo publishes tags.
+      `tools/toolkey/bundle-registry.mjs` into this repo's release workflow, so each release bundles the
+      registry's latest tag rather than one copied by hand.
 
 Backlog (P3 unless noted) — the first three are what a second dashboard release picks up:
 
@@ -478,9 +425,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **Tool update flow** _(P2 · S)_ — the Tools console diffs the installed version against the
       registry entry and offers a one-click re-import; a scheduled bucket workflow opens an auto-pull-
       request when an author's hosted manifest is ahead of their entry.
-- [ ] **Community buckets (multi-registry)** _(M)_ — user-added registry URLs, each with its own
-      pinned or trust-on-first-use authority key, bucket name shown in the trust label. First-party
-      entries stay `verified`. Keeps the main bucket's review bar high without gatekeeping the ecosystem.
 - [ ] **Satellite passes widget** _(M)_ — TLE-based; a marketplace candidate first. If it lands
       first-party, the TLE feed is signed and provenance-labelled: a cache-poisoning incident in a
       comparable project is exactly why data gets signed, not only code.
@@ -504,15 +448,20 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 ## Future ideas
 
 - [ ] **Visiting finds: log another instance's cache from your home instance** _(P1 · L)_ — a mirrored cache
-      is read-only (`docs/play/find-a-cache.md`, *Caches from other instances*), so a player needs an account on
-      every instance whose caches they hunt. The player logs the mirrored cache at home; the find, signed on the
-      device as every find is, travels to the cache's home instance with the player's published key and the home
-      instance's statement of callsign verification. The cache's instance accepts it only from a trusted peer,
+      is read-only (`docs/play/find-a-cache.md`, *Caches from other instances*): only the cache's home instance
+      holds the rules that score a find (its minimum tier, its receiving stations, stage coordinates and NFC
+      unlocks) and keeps the one logbook, so a player needs an account on every instance whose caches they hunt.
+      The player logs the mirrored cache at home; the find travels to the cache's home instance as a signed
+      federation frame: the authorship signature the app already makes per find, the device reading as
+      evidence, the player's published callsign key and the home instance's statement of callsign verification.
+      The cache's instance accepts it only from a trusted peer (a find from an unvetted peer is quarantined),
       checks the signature against the key feed, applies its own find rules and grades it from its own evidence
       (Tier A only from its own attested receivers; the home instance's verification counts as far as the peer
       tier allows). It shows as a visitor's find, falls under the cache instance's moderation, and federates back
-      like any find. Open: how visitors rank on each instance's leaderboard, rate limits per peer, and the app
-      flow (Log on a mirrored cache, delivery state while the peer is unreachable).
+      like any find. Needs: a frame kind and its `admitFrame()` rules, a queue on the sending instance while the
+      cache's instance is unreachable, and the sheet saying the find is on its way. Open: how visitors rank on
+      each instance's leaderboard, and rate limits per peer. Transport never lifts trust: the tier is the cache
+      instance's.
 - [ ] **Guided move to another instance** _(P2 · M)_ — moving an account exists only as API calls
       (`/api/account/<call>/bundle`, `/move`, `POST /api/account/import`, `workers/gateway/src/account.ts`), with no
       UI. Add **Settings → Your data → Move to another instance** (enter the new instance, build and sign the bundle
@@ -525,17 +474,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       via" line and a badge (APRS-IS, RF on a TNC, MeshCom) and let the Nearby list filter by it. The gateway
       stores the transport per position; the stations query, `StationSummary`, the live `StationDelta` and
       `envelopeForPosition` do not carry it. Display only: no tier changes.
-
-- [ ] **Log a mirrored cache here, delivered to its home** _(P2 · L)_ — a cache mirrored from a peer is read-only:
-      finds point at a local `caches` row, and only the home instance holds the rules that score a find (its
-      minimum tier, its receiving stations, stage coordinates and NFC unlocks) and keeps the one
-      logbook (one find per callsign, the finds feed peers mirror). A find logged on a
-      mirror would travel home as a signed federation frame: the authorship signature the app already makes per
-      find, the device reading as evidence, and the logger's callsign key. The home scores it under its own rules
-      and publishes it like any find, and the mirror shows it from the finds feed. Needs: a frame kind and its
-      `admitFrame()` rules, the home's acceptance of a peer's account by the federated callsign key (a find from
-      an unvetted peer quarantined), a queue on the sending instance while the home is unreachable, and the
-      mirror's sheet saying the find is on its way. Transport never lifts trust: the tier is the home's.
 
 - [ ] **Rig control through the ingest box (Hamlib)** _(P2 · M)_ — the Shack tunes only the three CAT families it
       speaks over Web Serial; Hamlib's `rigctld` covers 200+ radios, but a web page cannot open its TCP port (4532).
@@ -668,11 +606,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       enrollment code, and a box whose 44net-verified hostname passes the DoH/DNSSEC binding check gets its
       sites trusted automatically. Enrolled boxes and sysop-approved lent receivers (Instance admin → Ingest
       boxes) already cover the manual path. Tier A stays gated on attestation, never on transport.
-- [ ] **Load the map's data when the base style hangs** _(P3 · S)_ — the first cache fetch runs on MapLibre's
-      `load` event (`apps/web/src/platform/useMapInstance.ts`), which fires only once the base style has loaded.
-      A style request that fails switches to the grid style (on the style's `error`); one that hangs instead
-      leaves the map waiting, and the fallback never triggers. Natural shape: a short timeout after the map is
-      created that switches to the fallback style.
 
 - [ ] **Station packs for offline use** _(P3 · M)_ — an offline pack also carries the digipeaters, IGates, MeshCom
   nodes and BBS contacts of its square, for EmComm exercises and for knowing where to beacon with no data. Builds
@@ -684,23 +617,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Legal & attribution
 
-- [x] **Satellite-layer license** — the shipped satellite layer is EOxCloudless **2016** from EOX's hosted
-      tiles, free for non-commercial use under CC BY-NC-SA 4.0, with EOX's own year-matched attribution; a
-      commercial instance needs EOX's paid licence or another provider, an instance override via
-      `VITE_SAT_TILES` + `VITE_SAT_ATTRIBUTION`. EOX publishes no separate terms for the hosted tiles; ask EOX
-      if an instance's use grows past occasional viewing.
-- [x] **Production vector basemap** — the default vector style is OpenFreeMap `liberty` (keyless,
-      no usage caps, OSM attribution from the style); `VITE_BASEMAP_STYLE` points an instance at any
-      MapLibre style URL and `VITE_BASEMAP=offline` keeps the self-contained graticule.
-- [x] **Bundle font licenses + user-visible credits** — the OFL-1.1 texts ship under
-      `/fonts/` alongside Fredoka/IBM Plex Mono; the CP437 webfont credit (The Ultimate Oldschool PC
-      Font Pack, VileR, CC BY-SA 4.0) and the OpenTopoMap/EOX attributions render in
-      Settings → Help & credits.
-- [x] **Third-party notices surface** — `/third-party-notices.txt` reproduces the copyright notices and
-      license texts of every library compiled into the bundle (react, maplibre-gl, uplot, zod, pmtiles, fflate,
-      node-forge, …; `@mapbox/jsonlint-lines-primitives` takes the upstream jsonlint notice), linked
-      from Help & credits; `apps/web/vite-notices.ts` fails the build when a bundled package has no entry.
-      Minified bundles strip headers, so the notices file is the durable surface.
 - [ ] **APRS mark re-check** _(S)_ — the credits name the APRS® mark by its USPTO registration (U.S. Reg.
       No. 2058846) and no holder, and say APRScaching is not affiliated with or endorsed by whoever holds it. The
       registration's renewal is due on 6 May 2027: re-check the record after that date, and drop the ® from the
@@ -742,15 +658,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Engineering-quality follow-ups (opportunistic, not defects)
 
-- [x] **Platform overlay state** — the map platform's "single-overlay" invariant (at most one top-level
-      surface open) is modelled as one `View` value (`apps/web/src/nav.ts`), so opening one surface cannot leave another
-      stuck open.
-
-- [x] **Type-aware ESLint** — a separate, slower `lint:types` job runs `@typescript-eslint`
-      type-checked rules over `workers/` + `packages/` (the trust-critical surface), gating the real
-      promise/assertion bug-catchers while the by-design `any` boundaries stay off. See `eslint.config.types.mjs`.
-- [x] **Burn down the lint warnings** — the fast `pnpm lint` is at **0 warnings**; keep it there (clear
-      opportunistically when touching neighbouring code, never let the count grow).
 - [ ] **Run the live mic decode e2e for real** _(P2 · S)_ — the `e2e-audio` CI job installs Chromium with
       `playwright@1.61.1`, whose revision the repo's `playwright-core` 1.63 does not look for, so
       `tools/e2e/audio-mic.mjs` prints SKIP and passes without running. Run against a real Chromium, its PSK31
@@ -762,7 +669,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       as the code is cleaned. **Errors:** `require-await`, `unbound-method`, `no-base-to-string`, and
       `restrict-template-expressions` are **errors** (the legitimate exception — a data property named
       `apply` — is a per-file override in `eslint.config.types.mjs`).
-      Untrusted request-body fields are coerced through `asStr()` (gateway `app.ts`) / a local equivalent
+      Untrusted request-body fields are coerced through `asStr()` (gateway `http.ts`) / a local equivalent
       (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
       **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
       `.json()`/`unknown` returns under `projectService` (auto-fixing it would strip load-bearing casts).
@@ -771,17 +678,17 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       build and maintenance effort (image builds per release, updates of the base system), so it waits until the
       helpers have settled on real installations.
 - [ ] **One audit trail for sysop actions** _(P2 · S)_ — a claim or release of a callsign is written to
-      `callsign_events`, beside `account_events` (manual verifications) and `cache_adoptions` (hand-overs). Fold
-      them into the moderation audit log once it lands, keeping each table's erasure rule (the person's account
-      and the sysop's note go, the row stays).
+      `callsign_events`, beside `account_events` (manual verifications) and `cache_adoptions` (hand-overs), apart
+      from the moderation audit log (`moderation_log`, Instance admin → Moderation). Fold them into it, keeping
+      each table's erasure rule (the person's account and the sysop's note go, the row stays).
 - [ ] **Sign back in after losing a passkey-only account's last call** _(P2 · S)_ — an account whose only
       callsign its licensee took over signs in again with an email link and the call it operates now. A
       passkey-only account has no such path: passkey sign-in starts from a callsign. Discoverable-credential
       sign-in (no callsign typed) would let it in to add a call; until then the sysop helps.
 - [ ] **Re-serve moved finds to peers** _(P3 · M)_ — finds that move off a claimed call with their account are
-      tombstoned on peers, because the finds feed is append-only by id and never re-serves a row. Peers then lose
-      those finds instead of showing them under the account's remaining call. A revision-versioned finds feed,
-      like the caches feed, would carry them across.
+      tombstoned on peers, because a find takes its `find` sequence number once and is never served again. Peers
+      then lose those finds instead of showing them under the account's remaining call. Finds numbered anew on
+      each change, as caches are, would carry them across (the same change as the later-corroborated find above).
 - [ ] **Move the gateway app out of `workers/`** _(P3 · M)_ — `workers/gateway` (`@aprscaching/gateway`) holds the
       runtime-neutral gateway app the Node and Bun servers share, not a Worker. Rename it to `packages/gateway` or
       `core/gateway` — the directory, the package name, every import, the CI paths, the Dockerfiles and the manual —
@@ -794,43 +701,12 @@ Each finding and its status is tracked in
 [`docs/reviews/federation-validation-2026-09.md`](docs/reviews/federation-validation-2026-09.md); every fix
 lands with a regression test that fails without it.
 
-- [x] **Identity binding** — instance ids bound to one live peer row, key pins that move only along
-      verified rotations, rotated-away keys that expire on every carrier, a submit path that can't
-      impersonate, and a registry pinned to its authority key that fails closed.
-- [x] **Corroboration as a signed exchange** — signed questions and answers bound to a nonce and the
-      question hash, forwarded IGate exclusions, whitelisted evidence, a quorum of distinct verified
-      identities, the local track check on peer-corroborated finds, and a bounded, per-asker answerer.
-- [x] **Privacy and data correctness** — finds on local-only caches kept home, a composite
-      pagination cursor, per-frame fault isolation, and bulletin mirroring.
-- [x] **Replay and robustness** — monotonic record versions and bounded signing times, per-type
-      sync pages, a rate-limited notify endpoint, SSRF-guarded capped discovery, squat-proof ACSFED ids,
-      body caps on pull pages, and relay spokes isolated by their own keys.
-- [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
-      key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
-      signatures, and a "Running federation safely" guide.
 - [ ] **Hide one mirrored cache or find from a peer** _(P2 · M, after 1.0)_ — the sysop's **Remove…** reaches
       this instance's own records and bulletins mirrored from peers, but not a single cache or find mirrored from
-      a peer: today the sysop asks the peer's operator or blocks the whole peer under **Federation**. Add a
+      a peer: the sysop asks the peer's operator or blocks the whole peer under **Federation**. Add a
       local suppression keyed to the record's global id (the way a removed mirrored bulletin is suppressed), so
       the item leaves the map, search and offline packs here, a later sync skips it, and the audit log records
       it; the peer keeps its copy.
-- [x] **Federation safe-mode defaults in `setup.sh` and the one-click stacks** — the wizard writes
-      auto-promotion off and a quorum of 2, leaves discovery unset, takes only https non-44Net peers for
-      `FED_PEERS`, requires the spoke list on a hub and the pinned key with a registry, and keeps a LAN instance
-      unfederated; `deploy/.env.example`, which the OCI stack copies, carries the same posture.
-- [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/run/networks/44net.md`](docs/run/networks/44net.md):
-      a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
-      signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
-      without the internet. The `<call>.ampr.org` identity binding is in
-      [`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#peers-by-callsign).
-- [x] **Peers added and removed in Instance admin** — a sysop adds a peer by its URL (the look-up shows its
-      instance id and key fingerprint, and the peer is added `unvetted`), raises it to `trusted` in a separate
-      step that repeats the fingerprint, and removes it with its pinned key. A `FED_PEERS` entry starts
-      `unvetted` unless it pins the fingerprint its key then matches (`<url>#<fingerprint>`).
-- [ ] **A peer directory** _(P3 · M)_ — a browsable list of instances that want peers, to pick from in Instance
-      admin instead of exchanging URLs by hand. _Why:_ the signed registry already binds names to keys, and a
-      directory adds discovery, not trust; joining today takes one exchange of URLs and fingerprints between
-      two sysops, which a young network can afford.
 - [ ] **Registry DNS lookup through `DOH_URL`** _(P3 · S)_ — `FED_REGISTRY_DNS` always asks Cloudflare's
       resolver (`federation.ts` `registryFromDns`), unlike 44net onboarding and `ampr.org` verification,
       which use `DOH_URL`. _Why:_ an instance on HAMNET without the internet cannot locate its registry by DNS;
@@ -842,70 +718,7 @@ The CBOR signed wire format, typed peer endpoints, the two-tier transport seam (
 store-and-forward), and ARDC-verified 44net onboarding are built — see
 [`docs/reference/federation-wire.md`](docs/reference/federation-wire.md). What rides on them next:
 
-- [x] **Serve/consume CBOR frames on the sync surface** — `GET /federation/sync/<type>` serves signed
-      fedwire frames; consumers pull it exclusively (the JSON feeds are an unsigned transparency/browse
-      surface), and the 2-instance conformance suite asserts the CBOR path.
-- [x] **Advertise our own endpoint set** — the `/.well-known/aprscaching` descriptor publishes the
-      instance's typed endpoints (`FED_ENDPOINTS` → `addresses`).
-- [x] **Endpoint sets in the signed registry** — a registry entry carries the instance's typed
-      endpoints (`addresses`), re-validated on load so a malformed address never rides in; the self-entry
-      publishes them from `FED_ENDPOINTS`, and the signing tooling documents the field. The registry is a
-      tamper-proof directory of who-is-reachable-where (addressing only, never a trust uplift).
-- [x] **CBOR frames are the only signed record encoding** — the CBOR fedwire frame is the only signed record
-      encoding: sync consumes `/federation/sync/<type>` exclusively, `/federation/submit` accepts only
-      `application/cbor` (415 otherwise), relay feed answers always carry a CBOR page, and the JSON feeds
-      serve unsigned browse items. The stableStringify signing base is used only for standalone signed
-      documents (registry, key rotation, account operations, find-log device signatures).
-- [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
-      callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
-      explicit trust-on-first-use pin) and shows this instance's own records (an instance name under the call,
-      by default `aprscaching.<call>.ampr.org`, and the `_aprscaching` TXT, or a `web=` TXT without 44Net) to copy
-      into the ARDC portal, with a self-check.
-- [x] **Connected-mode sync binding** — the `ACSL1` line protocol (HELLO caps negotiation → one CBOR
-      sync page per request, `deflateDict1`-compressed when negotiated) rides the existing session
-      machinery; `FedSyncApp` mounts as a node service sourcing pages from the local gateway, the pull
-      side delivers pages to `POST /federation/frames` into the shared trust-gated pipeline, and the
-      session driver runs async commands in order, so I/O-backed apps work. Dialing the RF
-      circuit is validate-at-deploy, like FBB forwarding.
-- [x] **Store-and-forward carrier over FBB forwarding** — experimental and off unless `FED_BBS` is on, including
-      the relay's packet leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED`
-      batch with a content-addressed BID for dedup (`packages/shared`); `POST /federation/bbs/enqueue`
-      signs local feed records (tombstones first, same producer as the HTTP sync surface) into one such
-      batch, which the forwarding pool offers only to partners marked for federation, as personal mail to
-      `ACSFED` at the partner's BBS (never routed by the forward rules, never a bulletin); the
-      forward-inbound hook takes an arriving `ACSFED` batch only from a marked partner and routes it through
-      `applyFedBbsBulletin`, which
-      verifies each frame against its claimed origin's keys (last-pinned peer key + signed-registry
-      binding), applies idempotently by gid, and quarantines unknown or blocked origins — receiving a
-      frame lifts no trust and introduces no peer. The rendezvous relay rides the same carrier: `POST
-      /federation/relay/<instance>/dispatch` packs a packet-only spoke's queued queries into signed
-      `relayQuery` frames, the spoke answers off its receive path with signed `relayAnswer` frames, and
-      the hub lands them scoped to the answering instance's own queue — signatures bind both directions,
-      so no relay secret ever rides the air.
-- [x] **Beacon tier** — one signed frame in one UI datagram (`ACSB1`). `GET /federation/beacon`
-      serves the instance's signed presence record (identity + typed endpoints, trimmed to the
-      single-frame fit) for the ingest box to transmit; `POST /federation/beacon` feeds a heard datagram
-      into the shared trust-gated pipeline — a known origin's peer-announce refreshes its endpoints
-      (update-only; a beacon never introduces a peer), tombstones apply by gid, unknown origins are
-      quarantined.
-- [x] **Node personalities beyond NET/ROM+BPQ** — `NODE_PERSONALITY` selects the node's command
-      surface (`netrom` | `flexnet` | `tnn` | `baycom`): FlexNet-style destinations-with-RTT (a
-      presentation mapping from NET/ROM quality — routing stays on the native metric), the TheNetNode
-      command set with German-flavoured labels, and a terse BayCom-style box — one routing brain, the
-      operator's preferred conversation.
-- [x] **INP3 (Improved NET/ROM) routing** — triggered, point-to-point Routing Information Frames ranked
-      by measured round-trip `tt` instead of NODES quality (`packages/packet/src/inp3.ts` + `inp3-table.ts`:
-      RIF codec with ALIAS/IP options, L3RTT probe, RTT smoothing, best-tt table with horizon + withdrawal).
-      Opt in via `NETROM_INP3=1`, alongside classic NODES so plain NET/ROM neighbours still interoperate. The
-      live node bootstraps off NODES discovery — it adopts each broadcaster as a neighbour, seeds it with a
-      self-RIP + an RTT probe, and advertises with split horizon, so two nodes converge with no static config
-      (verified live over the AXUDP wire in the interop loop).
-- [x] **Shared compression dictionary** — the `deflateDict1` preset dictionary ships in
-      `packages/shared` (immutable wire contract, versioned by capability id); the zlib codec around it
-      lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb
-      bound and an integrity-checked container so corrupt input fails decode instead of yielding wrong
-      bytes.
-- [ ] **Per-origin sync over packet circuits** _(P2 · M)_ — a circuit pulls only the peer's own feeds today
+- [ ] **Per-origin sync over packet circuits** _(P2 · M)_ — a circuit pulls only the peer's own feeds
       (each starting at the gateway's per-origin mark when that is further). Asking for "origin Y after N" over
       `ACSL1` needs a summary request on the circuit (a new line type beside `R`, `origin` in the request map)
       and a gateway endpoint that takes an ordered origin page from the ingest box as the answer to one request,
@@ -945,7 +758,6 @@ the reason given:
 
 ## Deferred by design (reserved seams, opened on demand)
 
-- [ ] **CI depth & deployment shapes** (next release) — boot the `deploy/` compose stacks in CI
+- [ ] **CI depth & deployment shapes** _(P2 · M)_ — boot the `deploy/` compose stacks in CI
       (full stack + ingest-only: `docker compose up`, wait for the gateway healthcheck, smoke `/health`
-      and the SPA) beyond the runtime conformance (Node / Bun), and exercise the federation
-      push-to-hub **rendezvous relay's** corroboration path.
+      and the SPA) beyond the runtime conformance (Node / Bun).
