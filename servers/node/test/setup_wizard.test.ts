@@ -32,7 +32,8 @@ beforeEach(() => {
   envFile = path.join(mkdtempSync(path.join(tmpdir(), "setup-")), ".env");
 });
 
-describe("deploy/setup.sh --non-interactive", () => {
+// Each test runs the bash script, which shells out to node for the secrets: seconds on a loaded machine.
+describe("deploy/setup.sh --non-interactive", { timeout: 60_000 }, () => {
   it("writes the operator, public URL, feed, site call and generated secrets for a public domain", () => {
     const out = run(
       "--call",

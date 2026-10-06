@@ -554,7 +554,14 @@ async function keyboardWalk(exe, origin) {
   });
   const out = [];
   for (const w of walks) {
-    const ctx = await browser.newContext({ viewport: VIEWS[w.view], locale: "en-US", serviceWorkers: "block" });
+    // Reduced motion: each stop is measured right after its Tab, and a smooth scroll (the landing's) would still
+    // be moving the focused element into view, so it would read as off screen.
+    const ctx = await browser.newContext({
+      viewport: VIEWS[w.view],
+      locale: "en-US",
+      serviceWorkers: "block",
+      reducedMotion: "reduce",
+    });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
     await ctx.addInitScript(() => localStorage.setItem("acs.tour.seen", "1"));
     const page = await ctx.newPage();
