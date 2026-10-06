@@ -4,11 +4,12 @@
  * hub hears from every spoke; through it each spoke hears from the others as well, and a phone that met one
  * instance carries its records to the next.
  *
- *   GET /federation/sync/summary?for=&after=                             what this instance holds, per origin (JSON)
+ *   GET /federation/sync/summary?for=&bbox=&after=                       what this instance holds, per origin (JSON)
  *   GET /federation/sync/origin?origin=&kind=&since=&limit=&bbox=&for=   one origin's records after a sequence (CBOR)
  *
  * Sequences. Each origin numbers its records per kind, and the number is the record's signed version `v`: a
- * find's log id, a tombstone's and an account move's seq, a cache's fed_rev (federation.ts). A mark
+ * cache's fed_rev and a find's, tombstone's and account move's fed_seq, never below the time in milliseconds, so a
+ * database restored from an older backup still numbers above what it handed out before. A mark
  * (`fed_origin_marks`) says "every record of origin Y and this kind up to N is here, or was superseded or
  * deleted". A puller compares a neighbour's summary with its own marks and asks for "origin Y after N"; any
  * neighbour can fill the gap, and switching paths never reads again what is already held.
@@ -22,11 +23,13 @@
  * policy lets out now, so an origin trusted later, or a wider policy, reaches every puller at its next pass.
  *
  * Marks move only on what is sure. A page names `held`, the sequence up to which its server holds the origin
- * whole, and the puller's mark moves to `min(held, nextCursor)`: when the server is the origin itself, or when
- * the puller trusts the server and every frame of the page verified. Pages from a neighbour nobody vetted still
- * apply, and this process remembers how far it read them, but they never move a mark, so a neighbour that skips
- * a record cannot hide it from the paths that carry it. A server holds a record it cannot pass on (the hop limit)
- * as a gap: `held` stops before it, and the puller fills it from another neighbour.
+ * whole, and the puller's mark moves to `min(held, nextCursor)` when the server is the origin itself or a
+ * neighbour the puller trusts, and never past the first frame that did not settle (fedapply.ts). Pages from a
+ * neighbour nobody vetted still apply but move no mark, so a neighbour that skips a record cannot hide it from the
+ * paths that carry it. Beside the mark, a read position per neighbour (`fed_read_positions`) keeps a puller from
+ * reading the same pages again. A record kept past the hop limit is a gap: the mark stays below it, so the
+ * instance asks its other neighbours for it, and `held` in its own summary stops there too; `top` still sends
+ * pullers on to the records after it.
  *
  * Keys. A receiver verifies an origin it has never peered with under the key a neighbour hands on in its summary
  * (the origin's pinned key, its accept set and its rotation records). The first neighbour to name an origin's key
@@ -37,7 +40,7 @@
  *
  * Loops. A record crosses at most MAX_TRANSIT_HOPS instances; an origin page carries each frame's hop count beside
  * it. Apply is idempotent by global id and version, so a record coming back around a ring of hubs changes nothing.
- * A record never goes back to its origin nor to the instance it came from (`for`).
+ * A record never goes back to its origin (`for`).
  *
  * Scope. A local-only cache and imported data never leave their origin: the origin's feeds leave them out,
  * every receiver refuses them (fedapply.ts), and no origin page serves them.
@@ -61,6 +64,7 @@ import {
 } from "./federation.js";
 import { bboxKey, bboxWhere, bboxWithin, parseBbox, type Bbox } from "./fedregion.js";
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
+import { buildFedFrames } from "./fedsync.js";
 
 /** The record kinds synced per origin, in the order a pull applies them: deletes first, keys before moves. */
 export const ORIGIN_KINDS = ["tombstone", "account-move", "cache", "find"] as const;
@@ -164,64 +168,159 @@ export async function markOf(env: Env, origin: string, kind: OriginKind, region 
 }
 
 /**
- * Record that every record of `origin` and `kind` up to `seq` is here, read under `region` ('' = whole). A mark
- * that already holds for that region never moves back.
+ * The generation of what this instance holds of `origin`: it counts up whenever those marks are forgotten
+ * (resetMarks), so a pull that read it before moves no mark after.
  */
-export async function setMark(env: Env, origin: string, kind: OriginKind, seq: number, region = ""): Promise<void> {
-  const r = kind === "cache" ? region : "";
-  const m = await markRow(env, origin, kind);
-  if (m && covers(m.region, r) && m.seq >= seq) return;
+export async function markGen(env: Env, origin: string): Promise<number> {
+  return (
+    (await env.DB.prepare("SELECT gen FROM fed_mark_gen WHERE origin = ?").bind(origin).first<{ gen: number }>())
+      ?.gen ?? 0
+  );
+}
+
+/**
+ * Record that every record of `origin` and `kind` up to `seq` is here, read under `region` ('' = whole), as long
+ * as the marks of the origin are still of generation `gen`. One statement: a mark that already holds for that
+ * region never moves back, whatever runs beside it.
+ */
+export async function setMark(
+  env: Env,
+  origin: string,
+  kind: OriginKind,
+  seq: number,
+  gen: number,
+  region = "",
+): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO fed_origin_marks (origin, kind, seq, region, updated_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO fed_origin_marks (origin, kind, seq, region, updated_at)
+       SELECT ?, ?, ?, ?, ? WHERE COALESCE((SELECT gen FROM fed_mark_gen WHERE origin = ?), 0) = ?
      ON CONFLICT(origin, kind) DO UPDATE SET seq = excluded.seq, region = excluded.region,
-       updated_at = excluded.updated_at`,
+       updated_at = excluded.updated_at
+     WHERE excluded.seq > fed_origin_marks.seq
+        OR (fed_origin_marks.region != '' AND fed_origin_marks.region != excluded.region)`,
   )
-    .bind(origin, kind, seq, r, nowS())
+    .bind(origin, kind, seq, kind === "cache" ? region : "", nowS(), origin, gen)
     .run();
 }
 
-/** This instance's own records: the highest sequence each kind has handed out. */
+/** How far this instance has read `via`'s pages of `origin` and `kind`, held or not. */
+export async function readPosOf(env: Env, via: string, origin: string, kind: OriginKind, region: string) {
+  return (
+    (
+      await env.DB.prepare(
+        "SELECT seq FROM fed_read_positions WHERE via = ? AND origin = ? AND kind = ? AND region = ?",
+      )
+        .bind(via, origin, kind, kind === "cache" ? region : "")
+        .first<{ seq: number }>()
+    )?.seq ?? 0
+  );
+}
+
+/** Move the read position forward (never back), for the same generation of the origin's marks. */
+export async function setReadPos(
+  env: Env,
+  via: string,
+  origin: string,
+  kind: OriginKind,
+  region: string,
+  seq: number,
+  gen: number,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO fed_read_positions (via, origin, kind, region, seq)
+       SELECT ?, ?, ?, ?, ? WHERE COALESCE((SELECT gen FROM fed_mark_gen WHERE origin = ?), 0) = ?
+     ON CONFLICT(via, origin, kind, region) DO UPDATE SET seq = excluded.seq
+     WHERE excluded.seq > fed_read_positions.seq`,
+  )
+    .bind(via, origin, kind, kind === "cache" ? region : "", seq, origin, gen)
+    .run();
+}
+
+/**
+ * The first record of `origin` and `kind` above `above` that this instance keeps but may not pass on (it crossed
+ * the hop limit), or null. A mark stays below it, so this instance asks other neighbours for that record again,
+ * and a copy of the same version over a shorter path replaces it.
+ */
+export async function hopGap(env: Env, origin: string, kind: OriginKind, above: number): Promise<number | null> {
+  return (
+    (
+      await env.DB.prepare("SELECT MIN(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops >= ? AND v > ?")
+        .bind(origin, kind, MAX_TRANSIT_HOPS, above)
+        .first<{ v: number | null }>()
+    )?.v ?? null
+  );
+}
+
+/** This instance's own records: the top of each kind's sequence. */
 async function nativeHeld(env: Env, kind: OriginKind): Promise<number> {
-  const sql: Record<OriginKind, string> = {
-    cache: "SELECT n AS n FROM fed_cache_rev WHERE id = 1",
-    find: "SELECT COALESCE(MAX(id), 0) AS n FROM cache_logs",
-    tombstone: "SELECT COALESCE(MAX(seq), 0) AS n FROM tombstones",
-    "account-move": "SELECT COALESCE(MAX(seq), 0) AS n FROM account_moves",
-  };
-  return (await env.DB.prepare(sql[kind]).first<{ n: number }>())?.n ?? 0;
+  return (await env.DB.prepare("SELECT n FROM fed_seq WHERE kind = ?").bind(kind).first<{ n: number }>())?.n ?? 0;
+}
+
+/**
+ * Raise this instance's own sequences to at least what a neighbour holds of them, never further than a day
+ * ahead of this clock: a database restored from an older backup then numbers its next records above what the
+ * network already holds, even with a clock that is behind.
+ */
+export async function raiseOwnSequences(env: Env, held: Partial<Record<OriginKind, number>>): Promise<void> {
+  const limit = Date.now() + 86_400_000;
+  for (const kind of ORIGIN_KINDS) {
+    const v = held[kind];
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0 || v > limit) continue;
+    await env.DB.prepare("UPDATE fed_seq SET n = ? WHERE kind = ? AND n < ?").bind(v, kind, v).run();
+  }
 }
 
 /**
  * How far this instance holds another origin whole, for a reader of `region`: its mark, stopped before the first
- * record it holds but may not pass on (the hop limit). `whole` is false when the caches mark was read under a
- * region the reader's does not lie inside, so the records serve but promise nothing.
+ * record it keeps but may not pass on. `whole` is false when the caches mark was read under a region the reader's
+ * does not lie inside, so the records serve but promise nothing. `top` is the highest record it can pass on.
  */
 async function heldFor(
   env: Env,
   origin: string,
   kind: OriginKind,
   region: string,
-): Promise<{ held: number; whole: boolean }> {
+): Promise<{ held: number; whole: boolean; top: number }> {
   const m = await markRow(env, origin, kind);
   let held = m?.seq ?? 0;
-  const gap = await env.DB.prepare("SELECT MIN(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops >= ?")
-    .bind(origin, kind, MAX_TRANSIT_HOPS)
-    .first<{ v: number | null }>();
-  if (gap?.v != null) held = Math.min(held, gap.v - 1);
-  return { held, whole: !m || covers(m.region, kind === "cache" ? region : "") };
+  const gap = await hopGap(env, origin, kind, 0);
+  if (gap != null) held = Math.min(held, gap - 1);
+  const top =
+    (
+      await env.DB.prepare("SELECT MAX(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops < ?")
+        .bind(origin, kind, MAX_TRANSIT_HOPS)
+        .first<{ v: number | null }>()
+    )?.v ?? 0;
+  const whole = !m || covers(m.region, kind === "cache" ? region : "");
+  // past the records it keeps, a reader is sent on to `held` only where it holds the origin whole for that reader
+  return { held, whole, top: Math.max(top, whole ? held : 0) };
 }
 
-/** Forget what this instance held of `origin`: its records come again, from whichever path has them. */
+/**
+ * Forget what this instance held of `origin` and how far it read it: its records come again, from whichever path
+ * has them. The generation moves on in the same batch, so a pull already under way moves nothing back.
+ */
 async function resetMarks(env: Env, origin: string): Promise<void> {
-  await env.DB.prepare("DELETE FROM fed_origin_marks WHERE origin = ?").bind(origin).run();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO fed_mark_gen (origin, gen) VALUES (?, 1) ON CONFLICT(origin) DO UPDATE SET gen = gen + 1`,
+    ).bind(origin),
+    env.DB.prepare("DELETE FROM fed_origin_marks WHERE origin = ?").bind(origin),
+    env.DB.prepare("DELETE FROM fed_read_positions WHERE origin = ?").bind(origin),
+  ]);
 }
 
 // ---- serving ----
 
-/** One origin in a summary: how far each kind is held, and, for another instance, the key it verifies under. */
+/**
+ * One origin in a summary: per kind, how far the server holds it whole (`held`, only where the asker's region
+ * lies inside what was read) and the highest record it can pass on (`top`); for another instance, the key it
+ * verifies under.
+ */
 export interface SummaryEntry {
   origin: string;
   held: Partial<Record<OriginKind, number>>;
+  top: Partial<Record<OriginKind, number>>;
   publicKey?: string;
   publicKeys?: FedPublicKey[];
   rotations?: RotationRecord[];
@@ -249,15 +348,19 @@ const tooMany = (req: Request, env: Env, what: string, max: number) =>
 
 /**
  * GET /federation/sync/summary — every origin this instance serves, in instance-id order: itself, and the
- * origins whose records the FED_RESERVE policy passes on, other than the asker (`for`). Each lists, per kind, the
- * sequence up to which it holds that origin whole, and another origin's key as this instance holds it. At most
- * SUMMARY_PAGE origins a page; `next` continues it (`after`). 404 while the instance is unsigned.
+ * origins whose records the FED_RESERVE policy passes on, other than the asker (`for`). Each lists, per kind, how
+ * far it holds that origin whole for the asker's region (`bbox`) and the highest record it can pass on, and
+ * another origin's key as this instance holds it. `asker` tells the asker how far this instance holds the asker's
+ * own records. At most SUMMARY_PAGE origins a page; `next` continues it (`after`). 404 while the instance is
+ * unsigned.
  */
 export async function handleSyncSummary(req: Request, env: Env): Promise<Response> {
   if (!(await loadKey(env))) return json({ error: "instance is unsigned" }, { status: 404 });
   if (tooMany(req, env, "fed-summary", SUMMARY_PER_MIN))
     return json({ error: "too many summary requests: try again in a minute" }, { status: 429 });
-  const { u, asker } = syncQuery(req);
+  const { u, asker, bbox, badBbox } = syncQuery(req);
+  if (badBbox) return json({ error: "bbox must be S,W,N,E in decimal degrees" }, { status: 400 });
+  const region = bbox ? bboxKey(bbox) : "";
   const after = u.searchParams.get("after") ?? "";
   const self = instanceOf(req, env);
   const policy = reservePolicy(env);
@@ -269,7 +372,8 @@ export async function handleSyncSummary(req: Request, env: Env): Promise<Respons
             `SELECT fp.instance, fp.public_key, fp.accept_keys, fp.rotations FROM fed_peers fp
               WHERE fp.trust != 'blocked' AND fp.public_key IS NOT NULL AND fp.instance > ?
                 AND fp.instance != ? AND fp.instance != ? AND ${policySql(policy, "fp.instance")}
-                AND EXISTS (SELECT 1 FROM fed_origin_marks m WHERE m.origin = fp.instance)
+                AND (EXISTS (SELECT 1 FROM fed_origin_marks m WHERE m.origin = fp.instance)
+                     OR EXISTS (SELECT 1 FROM fed_transit t WHERE t.origin = fp.instance))
               ORDER BY fp.instance LIMIT ?`,
           )
             .bind(after, self, asker, SUMMARY_PAGE)
@@ -278,13 +382,16 @@ export async function handleSyncSummary(req: Request, env: Env): Promise<Respons
   const origins: SummaryEntry[] = [];
   for (const r of rows) {
     const held: SummaryEntry["held"] = {};
+    const top: SummaryEntry["top"] = {};
     for (const kind of ORIGIN_KINDS) {
-      const h = (await heldFor(env, r.instance, kind, "")).held;
-      if (h > 0) held[kind] = h;
+      const h = await heldFor(env, r.instance, kind, region);
+      if (h.whole && h.held > 0) held[kind] = h.held;
+      if (h.top > 0) top[kind] = h.top;
     }
     origins.push({
       origin: r.instance,
       held,
+      top,
       publicKey: r.public_key,
       publicKeys: parseAcceptKeys(r.accept_keys).map((k) => ({ x: k.x, ...(k.until != null && { until: k.until }) })),
       rotations: parseRotations(r.rotations),
@@ -295,14 +402,24 @@ export async function handleSyncSummary(req: Request, env: Env): Promise<Respons
   if (self > after && self !== asker && (complete || self < rows[rows.length - 1]!.instance)) {
     const held: SummaryEntry["held"] = {};
     for (const kind of ORIGIN_KINDS) held[kind] = await nativeHeld(env, kind);
-    origins.push({ origin: self, held });
+    origins.push({ origin: self, held, top: held });
     origins.sort((a, b) => (a.origin < b.origin ? -1 : 1));
+  }
+  // what this instance holds of the asker's own records, so an asker restored from an older backup numbers on
+  let askerHeld: SummaryEntry["held"] | undefined;
+  if (after === "" && isInstanceId(asker) && asker !== self) {
+    askerHeld = {};
+    for (const kind of ORIGIN_KINDS) {
+      const h = await markOf(env, asker, kind);
+      if (h > 0) askerHeld[kind] = h;
+    }
   }
   return json({
     instance: self,
     origins,
     complete,
     ...(!complete && { next: rows[rows.length - 1]!.instance }),
+    ...(askerHeld && Object.keys(askerHeld).length > 0 && { asker: { held: askerHeld } }),
   });
 }
 
@@ -310,7 +427,6 @@ interface TransitRow {
   v: number;
   frame: Uint8Array | ArrayBuffer;
   hops: number;
-  via: string;
   scope: string | null;
   present: number;
   inside: number;
@@ -320,9 +436,9 @@ interface TransitRow {
  * GET /federation/sync/origin — one page of `origin`'s records of `kind` after the sequence `since`, as their
  * origin signed them, each with its hop count, ordered by sequence. Asked for its own records, the instance
  * serves its native feed; for another origin, the frames it keeps, while FED_RESERVE lets that origin out. A
- * record goes neither back to its origin nor to the instance it came from (`for`), nor past the hop limit, and
- * `bbox` narrows the caches. `nextCursor` is how far the page read; `held` how far the server holds the origin
- * whole. 404 for an origin this instance does not pass on, or while it is unsigned.
+ * record never goes back to its origin (`for`) nor past the hop limit, and `bbox` narrows the caches. `nextCursor`
+ * is how far the page read; `held` how far the server holds the origin whole. 404 for an origin this instance does
+ * not pass on, or while it is unsigned.
  */
 export async function handleOriginSync(req: Request, env: Env): Promise<Response> {
   if (!(await loadKey(env))) return json({ error: "instance is unsigned" }, { status: 404 });
@@ -345,9 +461,6 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   if (origin === self) {
     // the top of the sequence is read before the rows, so a record written meanwhile lies above it
     const top = await nativeHeld(env, kind);
-    // loaded on use: the feeds and this module reach each other through app.ts, and a static import would
-    // read the feeds before they exist
-    const { buildFedFrames } = await import("./fedsync.js");
     const built = await buildFedFrames(env, self, kind, since, limit, undefined, region ? { bbox: region } : undefined);
     if (!built) return json({ error: "instance is unsigned" }, { status: 404 });
     const complete = built.frames.length < limit;
@@ -373,7 +486,7 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   const where = region ? bboxWhere(region) : null;
   const rows = (
     await env.DB.prepare(
-      `SELECT t.v, t.frame, t.hops, t.via, t.scope,
+      `SELECT t.v, t.frame, t.hops, t.scope,
               CASE t.kind WHEN 'cache' THEN EXISTS (SELECT 1 FROM remote_caches rc WHERE rc.global_id = t.gid)
                           WHEN 'find' THEN EXISTS (SELECT 1 FROM remote_finds rf WHERE rf.global_id = t.gid)
                           ELSE 1 END AS present,
@@ -383,13 +496,10 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
       .bind(...(where?.params ?? []), origin, kind, since, limit)
       .all<TransitRow>()
   ).results;
+  // apply is idempotent, so a record goes back to the neighbour that brought it as well: what it dropped since
+  // (a key a hub handed on, replaced) comes back with the rest
   const out = rows.filter(
-    (r) =>
-      r.hops < MAX_TRANSIT_HOPS &&
-      r.via !== asker &&
-      (r.scope ?? "public") !== "local-only" &&
-      r.present === 1 &&
-      r.inside === 1,
+    (r) => r.hops < MAX_TRANSIT_HOPS && (r.scope ?? "public") !== "local-only" && r.present === 1 && r.inside === 1,
   );
   const complete = rows.length < limit;
   const read = rows.length ? rows[rows.length - 1]!.v : since;
@@ -408,10 +518,16 @@ export function rotationsJson(rotations: unknown): string | null {
   return Array.isArray(rotations) && rotations.length ? JSON.stringify(rotations.slice(-MAX_ROTATIONS)) : null;
 }
 
+/** Origins one neighbour's summary may name new to this instance per pull, and entries looked at per pull. */
+const MAX_LEARNED_PER_PULL = 50;
+const MAX_KEY_ENTRIES_PER_PULL = 1000;
+
 /**
  * Pin the keys a neighbour's summary hands on for origins this instance does not know yet, and follow the
  * rotations of those it learned that way. An origin known any other way (pulled, added, submitted, 44Net, the
  * registry's peer list) keeps its own binding, and a blocked one stays blocked: no neighbour can move either.
+ * One pull learns at most MAX_LEARNED_PER_PULL new origins, and the table's cap is checked before any key is
+ * resolved, so a long summary costs a bounded amount of work.
  */
 export async function learnTransitKeys(
   env: Env,
@@ -420,7 +536,15 @@ export async function learnTransitKeys(
   registry: Map<string, RegistryEntry>,
 ): Promise<void> {
   const us = env.INSTANCE ?? null;
-  for (const b of entries) {
+  let learned = 0;
+  let room =
+    MAX_TRANSIT_PEERS -
+    ((
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'transit'").first<{
+        n: number;
+      }>()
+    )?.n ?? 0);
+  for (const b of entries.slice(0, MAX_KEY_ENTRIES_PER_PULL)) {
     if (!isInstanceId(b.origin) || b.origin === us || b.origin === hub) continue;
     if (typeof b.publicKey !== "string" || !b.publicKey) continue;
     const row = await env.DB.prepare(
@@ -438,6 +562,10 @@ export async function learnTransitKeys(
     // an origin only discovery listed takes the hub's key on the same row, which becomes its `transit:` row
     const listed = !!row && row.url.startsWith("discovered:");
     if (row && ((row.added_via !== "transit" && !listed) || row.trust === "blocked")) continue;
+    // an origin already pinned to this key: nothing to resolve
+    if (row && !listed && row.public_key === b.publicKey) continue;
+    // a new origin past the per-pull or the table's cap is left for a later pull, before any key work
+    if (!row && (learned >= MAX_LEARNED_PER_PULL || room <= 0)) continue;
     if (!registryKeyAllowed(registry.get(b.origin), b.publicKey)) continue;
     const rotations = Array.isArray(b.rotations) ? b.rotations.slice(-MAX_ROTATIONS) : [];
     const keys = await resolvePeerKeys({
@@ -465,19 +593,16 @@ export async function learnTransitKeys(
         .run();
       continue;
     }
-    const n =
-      (
-        await env.DB.prepare("SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'transit'").first<{
-          n: number;
-        }>()
-      )?.n ?? 0;
-    if (n >= MAX_TRANSIT_PEERS) continue;
-    await env.DB.prepare(
+    const r = await env.DB.prepare(
       `INSERT OR IGNORE INTO fed_peers (url, instance, public_key, accept_keys, rotations, trust, added_via, enabled)
        VALUES (?, ?, ?, ?, ?, 'unvetted', 'transit', 0)`,
     )
       .bind(`transit:${b.origin}`, b.origin, keys.pin, JSON.stringify(keys.accept), rotationsJson(rotations))
       .run();
+    if (r.meta.changes) {
+      learned++;
+      room--;
+    }
   }
 }
 

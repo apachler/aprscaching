@@ -216,32 +216,32 @@ describe("per-origin sync", () => {
     expect([await kept(h1), await kept(h2), await kept(b)]).toEqual(before);
   });
 
-  it("stops a record at the hop limit, and passes it on once a shorter path brings it", async () => {
+  it("stops a record at the hop limit, and fills the gap once a shorter path brings it, marks untouched", async () => {
     const all = { FED_RESERVE: "all" };
     const a = await node("a");
     const hubs = await Promise.all([1, 2, 3, 4].map((i) => node(`h${i}`, all)));
+    const [h1, , , h4] = hubs as [Node, Node, Node, Node];
     const z = await node("z");
-    await follow(hubs[0]!, a);
+    await follow(h1, a);
     for (let i = 1; i < 4; i++) await follow(hubs[i]!, hubs[i - 1]!);
-    await follow(z, hubs[3]!);
+    await follow(z, h4);
     network([a, ...hubs, z]);
-    const id = await addCache(a.env, now() - 60);
+    const c1 = await addCache(a.env, now() - 60);
     for (const n of [...hubs, z]) await syncAllPeers(n.env);
-    expect((await rows(hubs[3]!.env, "SELECT hops FROM fed_transit")).map((r) => r.hops)).toEqual([4]);
+    expect((await rows(h4.env, "SELECT hops FROM fed_transit")).map((r) => r.hops)).toEqual([4]);
     expect(await caches(z.env)).toEqual([]); // four instances crossed: h4 keeps it and passes it on to nobody
-    // h4 holds a only up to before the record it may not pass on, so a puller fills the gap elsewhere
-    const summary = await call(hubs[3]!.env, "GET", "/federation/sync/summary");
-    expect(summary.data.origins.find((o: { origin: string }) => o.origin === "a.example")?.held.cache ?? 0).toBe(
-      (await rev(a.env, id)) - 1,
-    );
+    // h4 holds a only up to before the record it may not pass on: its own mark stays below it
+    expect(await mark(h4.env, "cache")).toBeLessThan(await rev(a.env, c1));
 
-    // h4 follows h1 as well: the same version over two hops replaces the four-hop copy, and z gets it
-    await follow(hubs[3]!, hubs[0]!);
-    await hubs[3]!.env.DB.prepare("DELETE FROM fed_origin_marks").run();
-    await syncAllPeers(hubs[3]!.env);
-    expect((await rows(hubs[3]!.env, "SELECT hops FROM fed_transit")).map((r) => r.hops)).toEqual([2]);
-    await syncAllPeers(z.env);
-    expect(await caches(z.env)).toEqual([`a.example:cache:${id}`]);
+    // h4 follows h1 as well, and a writes a second cache: h4 asks h1 from its mark, the first cache comes over two
+    // hops and replaces the four-hop copy, and z gets both
+    await follow(h4, h1);
+    const c2 = await addCache(a.env, now() - 30);
+    for (const n of [h1, ...hubs.slice(1), z]) await syncAllPeers(n.env);
+    expect((await rows(h4.env, "SELECT gid, hops FROM fed_transit ORDER BY gid")).map((r) => r.hops)).toEqual([2, 2]);
+    expect(await mark(h4.env, "cache")).toBe(await rev(a.env, c2));
+    expect(await caches(z.env)).toEqual([`a.example:cache:${c1}`, `a.example:cache:${c2}`].sort());
+    expect(await mark(z.env, "cache")).toBe(await rev(a.env, c2));
   });
 
   it("never asks for a blocked origin, and a hub never serves one it blocked", async () => {
@@ -303,11 +303,15 @@ describe("per-origin sync", () => {
     const [h2, c] = await Promise.all([node("h2", { FED_SYNC_REGION: GRAZ }), node("c")]);
     await follow(h2, a);
     await follow(c, h2);
-    network([a, h2, c]);
+    const log = network([a, h2, c]);
     await syncAllPeers(h2.env);
     await syncAllPeers(c.env);
     expect(await caches(c.env)).toEqual([`a.example:cache:${graz}`]);
     expect(await mark(c.env, "cache")).toBe(0);
+    // and c does not read them again at every pass: it asks past where it read, and h2 has nothing there
+    log.length = 0;
+    await syncAllPeers(c.env);
+    expect(cachePages(log, "h2.example")).toEqual([]);
   });
 });
 
@@ -338,6 +342,158 @@ describe("a spoke that pushes", () => {
     expect(res.status).toBe(200);
     expect(await mark(hub.env, "cache", "s.example")).toBe(await rev(s.env, id));
     expect(await rev(s.env, later)).toBeGreaterThan(await rev(s.env, id));
+
+    // the hub forgets what it held of the spoke: the spoke's next page does not join up, the hub answers how far
+    // it holds the spoke, and the spoke sends again from there
+    await hub.env.DB.prepare("DELETE FROM fed_origin_marks WHERE origin = 's.example'").run();
+    const third = await addCache(s.env, now() - 10);
+    await pushToHub(s.env);
+    expect(await mark(hub.env, "cache", "s.example")).toBe(await rev(s.env, third));
+  });
+});
+
+describe("what moves a mark", () => {
+  it("not a frame signed ahead of this clock, until the clock catches up", async () => {
+    const [a, b] = await Promise.all([node("a"), node("b")]);
+    await follow(b, a);
+    const id = await addCache(a.env, now() - 60);
+    // a page a signed now, read by b while b's clock is an hour behind
+    const real = Date.now();
+    const page = await (
+      await serve(a.env)(new Request(`${a.url}/federation/sync/origin?origin=a.example&kind=cache&since=0`))
+    ).arrayBuffer();
+    const log: Log = [];
+    stubFetch({
+      [a.url]: async (req) => {
+        const u = new URL(req.url);
+        if (u.pathname === "/federation/sync/origin" && u.searchParams.get("kind") === "cache") {
+          log.push({ at: a.name, path: u.pathname, query: u.searchParams });
+          return new Response(page, { headers: { "content-type": "application/cbor" } });
+        }
+        return serve(a.env)(req);
+      },
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(real - 3_600_000);
+    await syncAllPeers(b.env);
+    expect(await caches(b.env)).toEqual([]);
+    expect(await mark(b.env, "cache")).toBeLessThan(await rev(a.env, id));
+    clock.mockRestore();
+    log.length = 0;
+    await syncAllPeers(b.env);
+    // asked again from its mark, which stopped just below the record that did not settle
+    expect(log.map((l) => l.query.get("since"))).toEqual([String((await rev(a.env, id)) - 1)]);
+    expect(await caches(b.env)).toEqual([`a.example:cache:${id}`]);
+    expect(await mark(b.env, "cache")).toBe(await rev(a.env, id));
+  });
+
+  it("not a record the database refused for now, which the next pass applies", async () => {
+    const [a, b] = await Promise.all([node("a"), node("b")]);
+    await follow(b, a);
+    network([a, b]);
+    const id = await addCache(a.env, now() - 60);
+    const db = b.env.DB as unknown as { prepare: (sql: string) => unknown };
+    const prepare = db.prepare.bind(db);
+    let busy = true;
+    db.prepare = (sql: string) => {
+      if (busy && sql.includes("INSERT INTO remote_caches")) throw new Error("SQLITE_BUSY: database is locked");
+      return prepare(sql);
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await syncAllPeers(b.env);
+    expect(await caches(b.env)).toEqual([]);
+    expect(await mark(b.env, "cache")).toBeLessThan(await rev(a.env, id));
+    busy = false;
+    await syncAllPeers(b.env);
+    warn.mockRestore();
+    expect(await caches(b.env)).toEqual([`a.example:cache:${id}`]);
+    expect(await mark(b.env, "cache")).toBe(await rev(a.env, id));
+  });
+
+  it("only forward, and never for a generation of the origin's marks that was forgotten", async () => {
+    const { markGen, setMark } = await import("@aprscaching/gateway/fedtransit");
+    const b = await node("b");
+    const gen = await markGen(b.env, "a.example");
+    await setMark(b.env, "a.example", "cache", 10, gen);
+    await setMark(b.env, "a.example", "cache", 5, gen);
+    expect(await mark(b.env, "cache")).toBe(10);
+    // forgotten meanwhile (a key a hub handed on replaced): a pull that read the old generation moves nothing
+    await b.env.DB.prepare("INSERT INTO fed_mark_gen (origin, gen) VALUES ('a.example', 1)").run();
+    await b.env.DB.prepare("DELETE FROM fed_origin_marks").run();
+    await setMark(b.env, "a.example", "cache", 20, gen);
+    expect(await mark(b.env, "cache")).toBe(0);
+  });
+});
+
+describe("a restored origin", () => {
+  it("numbers its new records above what peers hold, so they and its deletions still arrive", async () => {
+    const Database = (await import("better-sqlite3")).default;
+    const { makeD1 } = await import("../src/d1.js");
+    const { freshDb } = await import("./helpers/fedpeer.js");
+    const key = await newFedKey();
+    const { sqlite } = (() => {
+      const d = freshDb();
+      return d;
+    })();
+    const aEnv = instanceEnv("a.example", key, {}, makeD1(sqlite));
+    const a: Node = { name: "a.example", url: "https://a.example", env: aEnv, key };
+    const b = await node("b");
+    await follow(b, a);
+    network([a, b]);
+    const first = await addCache(a.env, now() - 60);
+    const backup = sqlite.serialize(); // the backup, taken now
+    await addCache(a.env, now() - 50);
+    await addCache(a.env, now() - 40);
+    await syncAllPeers(b.env);
+    expect((await caches(b.env)).length).toBe(3);
+    const held = await mark(b.env, "cache");
+
+    // a is restored from the backup: its counters go back with it
+    await new Promise((r) => setTimeout(r, 5));
+    const restored = instanceEnv("a.example", key, {}, makeD1(new Database(backup)));
+    const a2: Node = { ...a, env: restored };
+    network([a2, b]);
+    const fresh = await addCache(restored, now() - 10);
+    expect(await rev(restored, fresh)).toBeGreaterThan(held);
+    await restored.DB.prepare(
+      "INSERT INTO tombstones (id, kind, target_id, origin, ts) VALUES ('t-restored', 'cache', ?, 'a.example', ?)",
+    )
+      .bind(`a.example:cache:${first}`, now())
+      .run();
+    await syncAllPeers(b.env);
+    expect(await caches(b.env)).toContain(`a.example:cache:${fresh}`);
+    expect(await caches(b.env)).not.toContain(`a.example:cache:${first}`);
+
+    // and a peer that holds more of a than a itself does raises a's counters when a pulls it
+    await follow(a2, b);
+    await restored.DB.prepare("UPDATE fed_seq SET n = 1 WHERE kind = 'cache'").run();
+    await syncAllPeers(restored);
+    const n = (await one(restored, "SELECT n FROM fed_seq WHERE kind = 'cache'"))!.n as number;
+    expect(n).toBeGreaterThanOrEqual(await mark(b.env, "cache"));
+  });
+});
+
+describe("a summary that names many origins", () => {
+  it("teaches at most 50 new keys per pull", async () => {
+    const [h, b] = await Promise.all([node("h"), node("b")]);
+    await follow(b, h);
+    const origins = await Promise.all(
+      Array.from({ length: 120 }, async (_, i) => ({
+        origin: `o${String(i).padStart(3, "0")}.example`,
+        held: { cache: 1 },
+        top: { cache: 1 },
+        publicKey: (await newFedKey()).pub,
+      })),
+    );
+    stubFetch({
+      [h.url]: async (req) =>
+        new URL(req.url).pathname === "/federation/sync/summary"
+          ? Response.json({ instance: h.name, origins, complete: true })
+          : serve(h.env)(req),
+    });
+    await syncAllPeers(b.env);
+    expect((await one(b.env, "SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'transit'"))!.n).toBe(50);
+    await syncAllPeers(b.env);
+    expect((await one(b.env, "SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'transit'"))!.n).toBe(100);
   });
 });
 

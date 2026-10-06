@@ -25,6 +25,7 @@
     "./relay": "./src/relay.ts",
     "./fedcatchup": "./src/fedcatchup.ts",
     "./fedpush": "./src/fedpush.ts",
+    "./fedtransit": "./src/fedtransit.ts",
     "./fetchguard": "./src/fetchguard.ts",
     "./feddiscover": "./src/feddiscover.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",

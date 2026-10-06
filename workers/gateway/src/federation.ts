@@ -9,7 +9,7 @@
  *
  *   GET /.well-known/aprscaching        instance descriptor + public key + addresses
  *   GET /federation/caches?since=<rev>  cache records (cursor = the caches sequence, fed_rev)
- *   GET /federation/finds?since=<id>    find records  (cursor = append-only log id)
+ *   GET /federation/finds?since=<seq>   find records  (cursor = the finds sequence, fed_seq)
  *
  * Cursors are high-water marks of a sequence that only this instance assigns, so a mirror can say "I hold
  * this origin's caches up to N" whichever path brought them (fedtransit.ts). Records are idempotent by `id`.
@@ -59,6 +59,7 @@ interface CacheRow {
 }
 interface FindRow {
   id: number;
+  fed_seq: number;
   cache_id: number;
   cache_code: string | null;
   logger_call: string;
@@ -810,12 +811,13 @@ export const FIND_FEED: FeedServeDef<FindRow> = {
         // finds federate only with their cache: never on a local-only or imported cache
         `SELECT l.*, c.code AS cache_code FROM cache_logs l
        JOIN caches c ON c.id = l.cache_id
-      WHERE l.id > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.id LIMIT ?`,
+      WHERE l.fed_seq > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.fed_seq LIMIT ?`,
       )
         .bind(since, limit)
         .all<FindRow>()
     ).results,
-  recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.id, data: findData(r, instance) }),
+  // the cursor and version is the finds sequence (fed_seq), the gid the log id
+  recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.fed_seq, data: findData(r, instance) }),
 };
 export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",

@@ -791,6 +791,7 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
 // ----------------------------------------------------- federation: account-move feed
 interface MoveRow {
   seq: number;
+  fed_seq: number;
   callsign: string;
   from_instance: string | null;
   to_instance: string;
@@ -804,14 +805,14 @@ export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
   selectRows: async (env, since, limit) =>
     (
       await env.DB.prepare(
-        "SELECT seq, callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at FROM account_moves WHERE seq > ? ORDER BY seq LIMIT ?",
+        "SELECT seq, fed_seq, callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at FROM account_moves WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
       )
         .bind(since, limit)
         .all<MoveRow>()
     ).results,
   recordOf: (r, instance) => ({
     id: `${instance}:move:${r.seq}`,
-    cursor: r.seq,
+    cursor: r.fed_seq,
     data: {
       callsign: r.callsign,
       fromInstance: r.from_instance,

@@ -14,7 +14,7 @@ function head(major, arg) {
   if (arg < 0x100000000)
     return [(major << 5) | 26, (arg >>> 24) & 0xff, (arg >>> 16) & 0xff, (arg >>> 8) & 0xff, arg & 0xff];
   if (Number.isSafeInteger(arg)) {
-    // 8-byte argument (cache versions sit above 2^32)
+    // 8-byte argument (sequences are milliseconds since 1970, above 2^32)
     const out = [(major << 5) | 27];
     let big = BigInt(arg);
     const bytes = [];

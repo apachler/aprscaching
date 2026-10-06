@@ -113,7 +113,7 @@ A hub passes on the records of the instances it trusts
 nothing of them and lends them none of its trust: your instance checks each record against its home instance's
 key and shows it with your own trust in that home. A home you never vetted stays hidden however many hubs it
 crossed, and one you block stays blocked. A record crosses at most four instances, and never travels back to
-where it came from.
+its home instance.
 
 ## How records travel through the mesh
 
@@ -144,8 +144,10 @@ flowchart LR
   keeps tombstones for good, so a stale copy that arrives later over another path is refused.
 - **Gaps get filled.** A neighbour you trust moves your position for a home; a neighbour nobody vetted still
   delivers records, but your instance does not take its word for what it holds, so a neighbour that skips a
-  record cannot hide it. A record that reached a hub over four instances stops there, and your instance asks
-  another neighbour for it.
+  record cannot hide it. A record that reached an instance over four others stops there; that instance holds the
+  home only up to below it and asks its other neighbours, and once one brings it over a shorter path it passes on
+  from there. A record your instance could not apply at the time (its clock behind, its database busy) is asked for
+  again at the next pass.
 - **A phone carries records.** A Pocket station that syncs at home and later meets an instance with no path home
   is an ordinary neighbour: it passes on what it holds, each record signed by its home
   ([Carry records between instances](../pocket/carry-records.md)).

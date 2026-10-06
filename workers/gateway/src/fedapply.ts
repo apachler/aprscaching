@@ -50,12 +50,12 @@ const TIME_VERSIONED = new Set(["bulletin"]);
  * not in the future (a far-future version would freeze the mirror). Equal versions never overwrite,
  * so a replayed or forged record at a version already applied changes nothing.
  */
-async function versionAdmits(env: Env, rec: FeedRecord): Promise<"newer" | "same" | "refused"> {
+async function versionAdmits(env: Env, rec: FeedRecord): Promise<"newer" | "same" | "older" | "future"> {
   const t = nowS();
-  if (rec.at != null && rec.at > t + MAX_FUTURE_S) return "refused";
-  if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return "refused";
+  if (rec.at != null && rec.at > t + MAX_FUTURE_S) return "future";
+  if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return "future";
   const row = await env.DB.prepare("SELECT v FROM fed_versions WHERE gid = ?").bind(rec.id).first<{ v: number }>();
-  return !row || rec.cursor > row.v ? "newer" : rec.cursor === row.v ? "same" : "refused";
+  return !row || rec.cursor > row.v ? "newer" : rec.cursor === row.v ? "same" : "older";
 }
 
 /** Record the version just applied for a gid (never moving it backwards). */
@@ -334,17 +334,18 @@ export type FrameVerdict = "applied" | "rejected" | "quarantined" | "ignored";
  * key independently bound to that origin); then the signature, the origin, our own namespace, the
  * record's namespace and self-attestation, its origin's tombstones, the cache's scope and the
  * replay/version gate are checked, in that order, before the idempotent-by-gid applier runs. `hops` is how
- * many instances the frame crossed to arrive (1 straight from its origin), kept for passing it on. `verified`
- * says the frame is a genuine mirror record of its origin, applied or not (an older version, a deleted record):
- * a per-origin pull counts on it before it records how far it holds that origin. An applier failure is returned
- * as `error` so a malformed record never aborts the frames after it.
+ * many instances the frame crossed to arrive (1 straight from its origin), kept for passing it on. `settled`
+ * says this instance now holds the record, or never will: applied and kept, or refused for good (outside its
+ * origin's namespace, local-only, deleted, a version already held or older). A per-origin pull records how far it
+ * holds an origin only up to the first frame that did not settle. An applier failure is returned as `error` so a
+ * malformed record never aborts the frames after it.
  */
 export async function admitFrame(
   env: Env,
   fb: Uint8Array,
   gate: FrameGate,
   hops = 1,
-): Promise<{ verdict: FrameVerdict; verified?: boolean; error?: unknown }> {
+): Promise<{ verdict: FrameVerdict; settled?: boolean; error?: unknown }> {
   const rejected = { verdict: "rejected" as const };
   let origin: string;
   try {
@@ -376,30 +377,34 @@ export async function admitFrame(
     signer: f.record.signer,
     at: f.record.at,
   };
-  // past this point the frame is its origin's own: a refusal below is about the record, never the signature
-  const refused = { verdict: "rejected" as const, verified: true };
+  // past this point the frame is its origin's own: these refusals are about the record and hold for good
+  const refused = { verdict: "rejected" as const, settled: true };
   // gid outside origin's namespace / not self-attested / tombstoned
   if (!(await passesNamespaceChecks(env, rec, origin))) return refused;
   // a local-only or imported cache never leaves its origin, whoever passes it on
   if (def.type === "cache" && !leavesOrigin(rec.data)) return refused;
-  // the mirror holds the record either way; failing to keep it for passing on loses only the onward hop
+  // kept for passing on; the mirror holds the record either way, but one not kept is not held whole here
   const keep = () =>
-    keepForTransit(env, fb, f, def.type, rec.data, gate.via ?? origin, hops).catch((e: unknown) =>
-      console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`),
+    keepForTransit(env, fb, f, def.type, rec.data, gate.via ?? origin, hops).then(
+      () => true,
+      (e: unknown) => {
+        console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`);
+        return false;
+      },
     );
-  // a replay, a record at a version already applied, or future-dated. The version already held, over a shorter
-  // path, is kept for passing on.
+  // a replay or a record at a version already applied is settled; the version already held, over a shorter path,
+  // is kept for passing on. A frame signed ahead of this clock may apply later, so it settles nothing.
   const version = await versionAdmits(env, rec);
-  if (version !== "newer") {
-    if (version === "same") await keep();
-    return refused;
-  }
+  if (version === "future") return { verdict: "rejected" };
+  if (version === "older") return refused;
+  if (version === "same") return (await keep()) ? refused : { verdict: "rejected" };
   try {
     await applyVersioned(env, def, rec, origin);
-    await keep();
-    return { verdict: "applied", verified: true };
+    return { verdict: "applied", settled: await keep() };
   } catch (error) {
-    return { verdict: "rejected", verified: true, error };
+    // a database that was busy, or a record that cannot apply yet (an account move whose proof key is not known
+    // here): another pass may apply it
+    return { verdict: "rejected", error };
   }
 }
 

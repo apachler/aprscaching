@@ -30,7 +30,7 @@ import {
 } from "./federation.js";
 import { mergeEndpoints, storedEndpoints, syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { decodeFedSyncPage } from "./fedsync.js";
-import { parseEndpoints } from "@aprscaching/shared";
+import { decodeFedFrame, parseEndpoints } from "@aprscaching/shared";
 import {
   type PeerRow,
   absorbDiscovered,
@@ -46,10 +46,15 @@ import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import {
   heldKeys,
+  hopGap,
   learnTransitKeys,
+  markGen,
   markOf,
+  raiseOwnSequences,
+  readPosOf,
   rotationsJson,
   setMark,
+  setReadPos,
   supersedeTransitPeer,
   MAX_TRANSIT_HOPS,
   ORIGIN_KINDS,
@@ -473,55 +478,81 @@ const seqOf = (v: unknown): number | undefined =>
 
 /**
  * The peer's summary: the origins it serves, its own first. Without one (a peer that serves none, or an error)
- * the peer's own records are still pulled, from this instance's marks.
+ * the peer's own records are still pulled, from this instance's marks. Where the peer says how far it holds this
+ * instance's own records, this instance's sequences rise to at least that (raiseOwnSequences).
  */
 async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntry[]> {
   const out: SummaryEntry[] = [];
   const us = ours(ctx.env);
   let after = "";
   for (let i = 0; served && i < MAX_SUMMARY_PAGES; i++) {
-    const q = `${us ? `for=${encodeURIComponent(us)}` : ""}${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+    const q = [
+      us ? `for=${encodeURIComponent(us)}` : "",
+      ctx.region ? `bbox=${ctx.region}` : "",
+      after ? `after=${encodeURIComponent(after)}` : "",
+    ]
+      .filter(Boolean)
+      .join("&");
     const res = await ctx.transport.get(`/federation/sync/summary?${q}`);
     if (!res.ok) break; // what was read stands; the peer's own records come regardless
     const body = await readCappedBody(res, MAX_SUMMARY_BYTES);
-    let page: { origins?: unknown; complete?: unknown; next?: unknown };
+    let page: { origins?: unknown; complete?: unknown; next?: unknown; asker?: { held?: unknown } };
     try {
       page = body ? (JSON.parse(new TextDecoder().decode(body)) as typeof page) : {};
     } catch {
       break;
     }
+    if (i === 0 && page.asker?.held && typeof page.asker.held === "object") {
+      const mine: SummaryEntry["held"] = {};
+      for (const kind of ORIGIN_KINDS) {
+        const v = seqOf((page.asker.held as Record<string, unknown>)[kind]);
+        if (v !== undefined) mine[kind] = v;
+      }
+      await raiseOwnSequences(ctx.env, mine);
+    }
     for (const raw of Array.isArray(page.origins) ? page.origins : []) {
       const e = raw as Partial<SummaryEntry> | null;
       if (!e || !isInstanceId(e.origin) || out.some((o) => o.origin === e.origin)) continue;
-      // a kind the summary leaves out is one the peer holds none of
+      // a kind the summary leaves out is one the peer holds none of, whole or at all
       const held: SummaryEntry["held"] = {};
-      for (const kind of ORIGIN_KINDS) held[kind] = seqOf((e.held as Record<string, unknown> | undefined)?.[kind]) ?? 0;
-      out.push({ ...e, origin: e.origin, held });
+      const top: SummaryEntry["top"] = {};
+      for (const kind of ORIGIN_KINDS) {
+        held[kind] = seqOf((e.held as Record<string, unknown> | undefined)?.[kind]) ?? 0;
+        top[kind] = Math.max(seqOf((e.top as Record<string, unknown> | undefined)?.[kind]) ?? 0, held[kind]);
+      }
+      out.push({ ...e, origin: e.origin, held, top });
     }
     if (page.complete !== false || typeof page.next !== "string" || page.next <= after) break;
     after = page.next;
   }
   const own = out.find((e) => e.origin === ctx.neighbour);
-  // a peer that did not list itself is asked for its own records regardless: no `held` means "ask"
-  return [own ?? { origin: ctx.neighbour, held: {} }, ...out.filter((e) => e !== own)];
+  // a peer that did not list itself is asked for its own records regardless: no `held` or `top` means "ask"
+  return [own ?? { origin: ctx.neighbour, held: {}, top: {} }, ...out.filter((e) => e !== own)];
 }
 
-/** How far this process read the pages of peers whose word moves no mark, per env: each is read once a process. */
-const readPositions = new WeakMap<object, Map<string, number>>();
-function positionsOf(env: Env): Map<string, number> {
-  let m = readPositions.get(env);
-  if (!m) readPositions.set(env, (m = new Map()));
-  return m;
+/** The sequence a frame claims, before any check: where a page stops being held when that frame did not settle. */
+function claimedSeq(fb: Uint8Array): number {
+  try {
+    return decodeFedFrame(fb).record.v;
+  } catch {
+    return 0;
+  }
 }
 
 /**
- * Pull one origin's records of one kind from the peer: "origin after N", N being how far this instance holds
- * that origin, whichever path brought it. Skipped when the peer's summary holds nothing past N. Every frame
- * verifies under ITS ORIGIN's keys — the peer's own when the peer is the origin, otherwise the peer row this
- * instance holds for the origin, the key a neighbour handed on (`transit:` rows, learnTransitKeys) or the
- * registry's binding — and lands under that origin, with this instance's trust in it: an origin unknown or
- * blocked here is not asked for. The mark moves to the page's `min(held, nextCursor)`: from the origin itself
- * always, from a trusted peer when every frame of the page verified, from any other peer never.
+ * Pull one origin's records of one kind from the peer: "origin after N". Every frame verifies under ITS ORIGIN's
+ * keys — the peer's own when the peer is the origin, otherwise the peer row this instance holds for the origin,
+ * the key a neighbour handed on (`transit:` rows, learnTransitKeys) or the registry's binding — and lands under
+ * that origin, with this instance's trust in it: an origin unknown or blocked here is not asked for.
+ *
+ * Two positions. The mark says how far this instance holds the origin, whichever path brought it; the read
+ * position how far it has read this peer's pages of it. A peer whose word moves the mark (the origin itself, or a
+ * peer this instance trusts) and that holds the origin whole past the mark is asked from the mark, so it fills a
+ * gap below what was read; otherwise the peer is asked only past both, and only when it has records there.
+ *
+ * The mark moves to the page's `min(held, nextCursor)`, never past the first frame that did not settle (a
+ * temporary refusal) nor past a record this instance keeps but may not pass on (the hop limit), which another
+ * neighbour then fills.
  */
 async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): Promise<number> {
   const { env } = ctx;
@@ -535,13 +566,17 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
     keys = k;
   }
   const region = kind === "cache" ? ctx.region : "";
+  const gen = await markGen(env, e.origin);
   let mark = await markOf(env, e.origin, kind, region);
+  const read = await readPosOf(env, ctx.neighbour, e.origin, kind, region);
   const advances = own || ctx.trusted;
-  const posKey = `${ctx.neighbour} ${e.origin} ${kind} ${region}`;
-  const positions = positionsOf(env);
-  let cursor = advances ? mark : Math.max(mark, positions.get(posKey) ?? 0);
   const held = e.held[kind];
-  if (held !== undefined && held <= cursor) return 0; // nothing new there
+  const top = e.top[kind];
+  let cursor: number;
+  if (held === undefined && top === undefined) cursor = advances ? mark : Math.max(mark, read);
+  else if (advances && (held ?? 0) > mark) cursor = mark;
+  else if ((top ?? 0) > Math.max(mark, read)) cursor = Math.max(mark, read);
+  else return 0; // nothing new there
   const budget = own ? { pages: ctx.maxPages } : ctx.relayed;
   const gate: FrameGate = {
     origin: e.origin,
@@ -567,7 +602,7 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
     const pg = decodeFedSyncPage(body);
     if (pg.frames.length > PAGE_LIMIT)
       throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
-    let whole = true;
+    let unsettled: number | null = null;
     for (const [i, fb] of pg.frames.entries()) {
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
       const skipped = (err: unknown) =>
@@ -576,22 +611,29 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
         );
       // a frame without its hop count is taken as having travelled as far as a record may
       const hops = (pg.hops?.[i] ?? MAX_TRANSIT_HOPS) + 1;
+      let settled = false;
       try {
         const r = await admitFrame(env, fb, gate, hops);
         if (r.verdict === "applied") applied++;
         else if (r.error) skipped(r.error);
-        if (!r.verified) whole = false;
+        settled = r.settled === true;
       } catch (err) {
-        whole = false;
         skipped(err);
       }
+      if (!settled) unsettled = Math.min(unsettled ?? Infinity, claimedSeq(fb));
     }
     const next = pg.nextCursor;
-    if (advances && (own || whole) && pg.held !== undefined && Math.min(pg.held, next) > mark) {
-      mark = Math.min(pg.held, next);
-      await setMark(env, e.origin, kind, mark, region);
+    if (advances && pg.held !== undefined) {
+      let upTo = Math.min(pg.held, next);
+      if (unsettled !== null) upTo = Math.min(upTo, unsettled - 1);
+      const gap = await hopGap(env, e.origin, kind, mark);
+      if (gap !== null) upTo = Math.min(upTo, gap - 1);
+      if (upTo > mark) {
+        await setMark(env, e.origin, kind, upTo, gen, region);
+        mark = upTo;
+      }
     }
-    if (!advances && next > (positions.get(posKey) ?? 0)) positions.set(posKey, next);
+    await setReadPos(env, ctx.neighbour, e.origin, kind, region, next, gen);
     if (pg.complete || next <= cursor) break;
     cursor = next;
   }

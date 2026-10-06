@@ -145,12 +145,19 @@ hub, a second hub and a Pocket station that carries records are the same thing h
   keeps its tombstones for good, so a stale copy that reaches it later over another path is refused. A bounded
   tombstone (`upTo`) passes on too, so a restored cache follows it at its higher version.
 - **Marks move only on what is sure.** A receiver records how far it holds each origin from the origin's own
-  pages, and from a neighbour's only when it trusts that neighbour and every frame of the page verified. Pages
-  from any other neighbour still apply, but never move the mark, so a neighbour that skips a record cannot keep it
-  from a path that carries it. A record a hub holds at the hop limit is a gap in what it says it holds, which a
-  receiver fills elsewhere.
+  pages, and from a neighbour's only when it trusts that neighbour. The mark stops below the first record that
+  did not settle: a frame signed ahead of the receiver's clock, one its database could not take at that moment, one that did
+  not verify. Pages from any other neighbour still apply but never move the mark, so a neighbour that skips a
+  record cannot keep it from a path that carries it.
+- **A record at the hop limit is a gap.** An instance that keeps a record which crossed four instances holds the
+  origin only up to below it, says so in its summary, and asks its other neighbours for that record. When one of
+  them has it over fewer hops, the same version replaces the kept one, the gap closes, and the record passes on
+  from there with every later one. Records after the gap pass on all along.
+- **Numbers are never reused.** Each origin numbers its records at least by the time in milliseconds, so a
+  database restored from an older backup still numbers its new records, deletions included, above what its peers
+  hold, and a peer that holds more of an origin than the origin does tells it so in its summary.
 - **Bounded travel.** The page carries each frame's hop count beside it; a record crosses at most four instances.
-  A hub never sends a record back to its origin or to the instance it came from. Apply is idempotent by global id
+  A hub never sends a record back to its origin. Apply is idempotent by global id
   and version, so a record that comes round a ring of hubs again changes nothing and is not passed on twice; the
   same version over a shorter path replaces the hop count kept.
 - **Regions apply.** A pull narrowed by `FED_SYNC_REGION` narrows the passed-on caches too; deletes travel whole.

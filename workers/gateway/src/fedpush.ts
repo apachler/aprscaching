@@ -32,7 +32,7 @@ import { type TrustLevel, absorbDiscovered, ours } from "./fedpeers.js";
 import { admitFrame, type FrameGate } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
-import { markOf, rotationsJson, setMark, ORIGIN_KINDS, type OriginKind } from "./fedtransit.js";
+import { markGen, markOf, rotationsJson, setMark, ORIGIN_KINDS, type OriginKind } from "./fedtransit.js";
 
 /**
  * The feeds a spoke pushes: every feed the pull serves, in the pull's order (fedapply.ts `SYNC_DEFS`) —
@@ -125,6 +125,15 @@ function pageFeed(frames: Uint8Array[]): string | null {
     }
   }
   return null;
+}
+
+/** The sequence a frame claims, before any check: where a page stops being held when that frame did not settle. */
+function claimedSeq(fb: Uint8Array): number {
+  try {
+    return decodeFedFrame(fb).record.v;
+  } catch {
+    return 0;
+  }
 }
 
 async function recordMark(env: Env, instance: string, type: string, mark: PushMark): Promise<void> {
@@ -245,30 +254,36 @@ async function submitFrames(
   const gate: FrameGate = { origin: instance, keysFor: () => Promise.resolve([publicKey]), mirrorOnly: true };
   let applied = 0,
     rejected = 0,
-    verified = 0;
+    unsettled = Infinity;
   for (const fb of frames) {
     const r = await admitFrame(env, fb, gate);
     if (r.verdict === "applied") applied++;
     else if (r.verdict === "rejected") rejected++;
-    if (r.verified) verified++;
+    if (!r.settled) unsettled = Math.min(unsettled, claimedSeq(fb));
   }
   // How far this spoke's feed now stands here, returned so the spoke resumes from what the hub holds.
   const type = page ? pageFeed(frames) : null;
   let mark: (PushMark & { type: string }) | undefined;
+  let held: number | undefined;
   if (page && type) {
     mark = { type, cursor: page.nextCursor, ...(page.nextId !== undefined && { id: page.nextId }) };
     await recordMark(env, instance, type, mark);
-    // a whole page that continues what the hub holds of the spoke: the hub now holds it up to the page's end,
-    // and passes that on in its summary like any origin it pulled
-    if (
-      (ORIGIN_KINDS as readonly string[]).includes(type) &&
-      verified === frames.length &&
-      page.since !== undefined &&
-      page.since <= (await markOf(env, instance, type as OriginKind))
-    )
-      await setMark(env, instance, type as OriginKind, page.nextCursor);
+    // a page that continues what the hub holds of the spoke: the hub now holds it up to the page's end, or up to
+    // the first record that did not settle, and passes that on in its summary like any origin it pulled
+    if ((ORIGIN_KINDS as readonly string[]).includes(type)) {
+      const kind = type as OriginKind;
+      const gen = await markGen(env, instance);
+      held = await markOf(env, instance, kind);
+      const upTo = Math.min(page.nextCursor, unsettled - 1);
+      if (page.since !== undefined && page.since <= held && upTo > held) {
+        await setMark(env, instance, kind, upTo, gen);
+        held = await markOf(env, instance, kind);
+      }
+    }
   }
-  return json({ ok: true, applied, rejected, ...(mark && { mark }) });
+  // `held`: how far the hub holds this feed of the spoke whole, so a spoke whose pages stopped joining up (the
+  // hub forgot what it held, or a page did not settle) sends again from there
+  return json({ ok: true, applied, rejected, ...(mark && { mark }), ...(held !== undefined && { held }) });
 }
 
 /** How one push cycle ended: what it sent, whether more waits, and why it stopped early. */
@@ -398,6 +413,7 @@ async function pushCycle(
   let backlog = false;
   for (const def of PUSH_FEEDS) {
     let { cursor, id } = await loadCursor(env, hub, def.type);
+    let rewound = false;
     for (let page = 0; ; page++) {
       if (page === MAX_PAGES) {
         backlog = true;
@@ -436,13 +452,26 @@ async function pushCycle(
         cursor: built.nextCursor,
         ...(!complete && built.nextId !== undefined && { id: built.nextId }),
       };
-      const answer = (await res.json().catch(() => null)) as { mark?: PushMark & { type?: string } } | null;
+      const answer = (await res.json().catch(() => null)) as {
+        mark?: PushMark & { type?: string };
+        held?: unknown;
+      } | null;
       const mark = answer?.mark?.type === def.type && Number.isFinite(answer.mark.cursor) ? answer.mark : null;
-      const next: PushMark = mark
-        ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) }
-        : sent;
+      let next: PushMark = mark ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) } : sent;
+      // the hub holds this feed of ours whole only up to below where this page started: send again from there,
+      // so the pages join up and the hub passes our records on
+      const held = answer?.held;
+      const rewind = !rewound && typeof held === "number" && Number.isSafeInteger(held) && held >= 0 && held < cursor;
+      if (rewind) next = { cursor: held };
       await saveCursor(env, hub, def.type, next);
       pushed += built.frames.length;
+      // once per feed and cycle, so a hub that cannot take the pages whole never keeps a cycle going
+      if (rewind) {
+        rewound = true;
+        cursor = next.cursor;
+        id = undefined;
+        continue;
+      }
       if (complete || (built.nextCursor === cursor && built.nextId === id)) break;
       cursor = next.cursor;
       id = next.id;

@@ -150,12 +150,13 @@ describe("the subscriber", () => {
     stubFetch({ [A]: serve(a) });
     await syncAllPeers(hub);
     expect(await remoteCacheCount(hub, "a.example")).toBe(2);
-    expect(await markOf(hub, "cache")).toEqual({ seq: 3, region: GRAZ });
+    const top = (await a.DB.prepare("SELECT n FROM fed_seq WHERE kind = 'cache'").first<{ n: number }>())!.n;
+    expect(await markOf(hub, "cache")).toEqual({ seq: top, region: GRAZ });
 
     (hub as { FED_SYNC_REGION?: string }).FED_SYNC_REGION = undefined; // back to the whole feed
     await syncAllPeers(hub);
     expect(await remoteCacheCount(hub, "a.example")).toBe(3);
-    expect(await markOf(hub, "cache")).toEqual({ seq: 3, region: "" });
+    expect(await markOf(hub, "cache")).toEqual({ seq: top, region: "" });
   });
 
   it("still receives the delete of a cache outside its region", async () => {
@@ -204,7 +205,8 @@ describe("a narrowed pull", () => {
     expect(r.finds).toBe(0);
     expect(r.bytes).toBeGreaterThan(0);
     expect(await markOf(hub, "find")).toBeNull();
-    expect(await markOf(hub, "tombstone")).toEqual({ seq: 1, region: "" });
+    const tomb = (await a.DB.prepare("SELECT fed_seq FROM tombstones").first<{ fed_seq: number }>())!.fed_seq;
+    expect(await markOf(hub, "tombstone")).toEqual({ seq: tomb, region: "" });
   });
 
   it("stops after the page cap, and the next pass carries on", async () => {

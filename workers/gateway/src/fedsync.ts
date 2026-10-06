@@ -35,14 +35,22 @@ const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
   bulletin: "bulletin",
 };
 
-const FEED_FOR_TYPE: Record<string, FeedServeDef> = {
-  cache: CACHE_FEED,
-  find: FIND_FEED,
-  key: KEY_FEED,
-  tombstone: TOMBSTONE_FEED,
-  "account-move": ACCOUNT_MOVE_FEED,
-  bulletin: BULLETIN_FEED,
-};
+/**
+ * Feed type → its serve definition, built on first use: the feeds live in modules that reach this one again
+ * through app.ts, so a table built at load time could read them before they exist.
+ */
+let feeds: Record<string, FeedServeDef> | null = null;
+function feedFor(type: string): FeedServeDef | undefined {
+  feeds ??= {
+    cache: CACHE_FEED,
+    find: FIND_FEED,
+    key: KEY_FEED,
+    tombstone: TOMBSTONE_FEED,
+    "account-move": ACCOUNT_MOVE_FEED,
+    bulletin: BULLETIN_FEED,
+  };
+  return Object.hasOwn(feeds, type) ? feeds[type] : undefined;
+}
 
 // ---- fractional fields ↔ integer wire twins (the deterministic codec refuses floats) ----
 
@@ -98,7 +106,7 @@ export async function buildFedFrames(
   sinceId?: number,
   filter?: FeedFilter,
 ): Promise<{ frames: Uint8Array[]; nextCursor: number; nextId?: number } | null> {
-  const def = FEED_FOR_TYPE[feedType];
+  const def = feedFor(feedType);
   const kind = KIND_FOR_TYPE[feedType];
   if (!def || !kind) return { frames: [], nextCursor: since };
   const at = nowS();
@@ -139,7 +147,7 @@ export async function buildFedFrames(
  * and the per-origin pages, which serve these records and those this instance passes on, are fedtransit.ts.
  */
 export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
-  if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
+  if (!feedFor(feedType) || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
   const u = new URL(req.url);
   const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
   const sinceIdRaw = u.searchParams.get("sinceId");

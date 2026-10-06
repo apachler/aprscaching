@@ -10,7 +10,7 @@
  * what makes a delete converge across the network: the caches/finds feeds are append-only by cursor,
  * so they can't carry a removal — only a tombstone can.
  *
- *   GET /federation/tombstones?since=<seq>   signed tombstone records (cursor = monotonic seq)
+ *   GET /federation/tombstones?since=<seq>   tombstone records (cursor = the tombstones sequence, fed_seq)
  *
  * The feed signs at serve time, exactly like the caches/finds/keys feeds (so key rotation and
  * unsigned-instance behaviour stay consistent).
@@ -34,6 +34,7 @@ export interface TombstoneItem {
 
 interface TombstoneRow {
   seq: number;
+  fed_seq: number;
   kind: string;
   target_id: string;
   origin: string;
@@ -62,18 +63,18 @@ export async function emitTombstones(env: Env, origin: string, items: TombstoneI
   return items.length;
 }
 
-/** Tombstone feed via the generalized envelope — cursor = monotonic seq, signed at serve time. */
+/** Tombstone feed via the generalized envelope — cursor = the tombstones sequence (fed_seq), signed at serve time. */
 export const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
   type: "tombstone",
   selectRows: async (env, since, limit) =>
     (
       await env.DB.prepare(
-        "SELECT seq, kind, target_id, origin, ts, up_to FROM tombstones WHERE seq > ? ORDER BY seq LIMIT ?",
+        "SELECT seq, fed_seq, kind, target_id, origin, ts, up_to FROM tombstones WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
       )
         .bind(since, limit)
         .all<TombstoneRow>()
     ).results,
-  recordOf: (r, instance) => ({ id: `${instance}:tombstone:${r.seq}`, cursor: r.seq, data: tombstoneData(r) }),
+  recordOf: (r, instance) => ({ id: `${instance}:tombstone:${r.seq}`, cursor: r.fed_seq, data: tombstoneData(r) }),
 };
 
 export const handleFederationTombstones = (req: Request, env: Env): Promise<Response> =>

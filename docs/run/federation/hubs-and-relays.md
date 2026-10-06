@@ -89,11 +89,12 @@ What an instance that pulls the hub does with them:
   player includes unvetted peers; a home you block stays blocked on every path.
 - **Deletions travel the same way**, a sysop's removal and restore of a cache included, and arrive before the
   records they remove.
-- **A record travels a bounded way.** It crosses at most four instances, never goes back to its home or to the
-  instance it came from, and two hubs that follow each other pass it on once.
-- **Trust the hub to save traffic.** What a hub you trust passes on counts as held. What an unvetted hub passes on
-  applies all the same, but the next start of your gateway reads it again, so a hub nobody vetted cannot keep a
-  record from you by skipping it.
+- **A record travels a bounded way.** It crosses at most four instances, never goes back to its home, and two hubs
+  that follow each other apply it once: a copy that comes round again changes nothing.
+- **Trust the hub to save traffic.** What a hub you trust passes on counts as held, so another path never brings
+  it again. What an unvetted hub passes on applies all the same, and your instance remembers how far it read that
+  hub, but takes no hub's word it did not vet for what it holds, so a hub nobody vetted cannot keep a record from
+  you by skipping it.
 
 ### Rendezvous relay
 

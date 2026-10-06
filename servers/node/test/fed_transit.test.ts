@@ -131,12 +131,17 @@ describe("a hub passes its spokes' records on", () => {
     expect(summary.data.origins).toEqual([
       {
         origin: "a.example",
-        held: { cache: expect.any(Number), find: w.findId },
+        held: { cache: expect.any(Number), find: expect.any(Number) },
+        top: { cache: expect.any(Number), find: expect.any(Number) },
         publicKey: w.ka.pub,
         publicKeys: [{ x: w.ka.pub }],
         rotations: [],
       },
-      { origin: "hub.example", held: { tombstone: 0, "account-move": 0, cache: 0, find: 0 } },
+      {
+        origin: "hub.example",
+        held: { tombstone: 0, "account-move": 0, cache: 0, find: 0 },
+        top: { tombstone: 0, "account-move": 0, cache: 0, find: 0 },
+      },
     ]);
     // and B holds A as far as the hub does, which it trusts
     expect(await rows(w.b, "SELECT kind, seq FROM fed_origin_marks WHERE origin = 'a.example' ORDER BY kind")).toEqual(
@@ -381,8 +386,9 @@ describe("a hub passes its spokes' records on", () => {
       [2, "hub.example"],
       [2, "hub.example"],
     ]);
-    // hub2 offers the hub nothing it got from the hub
-    expect((await originPage(hub2, "cache", "&for=hub.example"))!.frames).toHaveLength(0);
+    // what hub2 offers back changes nothing at the hub: apply is idempotent by global id and version
+    const offered = (await originPage(hub2, "cache", "&for=hub.example"))!.frames;
+    expect((await applyFedFrames(w.hub, offered)).applied).toBe(0);
   });
 
   it("stops passing a record on after the hop limit", async () => {
@@ -392,7 +398,8 @@ describe("a hub passes its spokes' records on", () => {
     const page = (await originPage(w.hub, "cache"))!;
     expect(page.frames).toHaveLength(0);
     // the hub holds A whole only up to before it, so a puller fills the gap from another neighbour
-    expect(page.held).toBe(0);
+    const kept = await one(w.hub, "SELECT v FROM fed_transit WHERE kind = 'cache'");
+    expect(page.held).toBe((kept!.v as number) - 1);
   });
 
   it("a local-only or imported cache never leaves its origin, whoever signs it on", async () => {
