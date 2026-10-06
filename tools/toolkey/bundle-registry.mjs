@@ -89,8 +89,9 @@ const fail = (m) => {
 async function verifyRegistry(doc) {
   if (!doc || !Array.isArray(doc.entries) || typeof doc.sig !== "string")
     fail("registry.json is not a signed registry");
+  if (doc.format !== 1) fail(`registry.json is in format ${doc.format ?? "(none)"}; this app reads registry format 1`);
   if (doc.authority !== authority) fail(`registry.json is signed by ${doc.authority}, not the pinned ${authority}`);
-  if (!(await ed25519Verify(authority, doc.sig, enc(stable(doc.entries)))))
+  if (!(await ed25519Verify(authority, doc.sig, enc(stable({ format: doc.format, entries: doc.entries })))))
     fail("registry.json: the signature does not verify");
 }
 

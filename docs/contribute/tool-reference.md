@@ -52,7 +52,16 @@ app's releases. A change that only adds (a new capability, method, event or fiel
 breaks a tool written for the old API raises the major. The app installs and starts a tool whose `api` has the
 app's major and a minor no higher than the app's. Any other tool is refused, with the reason: `it needs tool API
 1.1; this instance implements 1.0`. The Tools app shows the version it implements, and the instance descriptor
-(`/.well-known/aprscaching`) names it as `toolApi`.
+(`/.well-known/aprscaching`) names it as `toolApi`. In the sandbox, `tool.api` gives the instance's version and
+`tool.has(name)` tells whether it offers a capability or a feature, so a tool can use a newer optional feature
+without raising the minimum it declares.
+
+Within a major, the API changes only by adding, and each addition raises the minor. A breaking change raises the
+major, after the feature it removes or changes was marked deprecated in a minor of the old major. The app keeps the
+previous major running through a compatibility layer for at least one app minor release or 12 months, whichever is
+longer. A change that narrows what a tool may do for safety may come within a major; it shows as a new permission
+prompt or a refusal, and the changelog names it. The contract fixtures in `tools/e2e/fixtures/` use every 1.0
+feature, and every 1.x release keeps them passing.
 
 ## Capabilities
 
@@ -120,6 +129,8 @@ granted` without it; the app checks again on its side.
 | Member | Needs | Content |
 |---|---|---|
 | `tool.permissions` | | The capabilities the player granted, as a string array |
+| `tool.api` | | The tool API the instance implements, `{ major, minor }` |
+| `tool.has(name)` | | Whether the instance offers a capability (`"tx"`, `"map"`, …) or a named feature (`"events.reply"`, `"bus.provide"`, `"decoders.sample"`, …) |
 | `tool.log(message)` | | A line in the app's tool log (cut to 300 characters) |
 | `tool.setPanel(spec)` | `panel` | Replace the tool's panel |
 | `tool.setMapLayer(spec)` | `map` | Replace the tool's map layer: `{ id, points: { lat, lon, label?, glyph?, tone? }[] }`, at most 2000 points, a label of 40 characters and a glyph of 2. The map draws it when the tool targets the `map` surface. |

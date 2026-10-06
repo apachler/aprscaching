@@ -69,7 +69,6 @@ describe("signed registry (marketplace index)", () => {
         title: "T",
         author: "OE8APR",
         version: "1",
-        api: "1.0",
         pubkey: "AAAA",
         entry: "https://x/tool.json",
       },
@@ -101,7 +100,6 @@ describe("registryEntryFor", () => {
     title: "CW",
     author: "OE8APR",
     version: "1",
-    api: "1.0",
     pubkey: "K",
     entry: "https://tools.example.org/cw-tool/tool.json",
   };

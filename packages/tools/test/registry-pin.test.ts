@@ -11,6 +11,9 @@ import {
   validateManifest,
   bytesToB64,
   checkPinnedRegistry,
+  registryFormatProblem,
+  REGISTRY_FORMAT,
+  verifyRegistry,
   previewRegistry,
   signRegistry,
   type RegistryEntry,
@@ -76,6 +79,22 @@ describe("checkPinnedRegistry", () => {
     const forged = { ...(await signRegistry(entries, b.pub, b.priv)), authority: a.pub };
     expect(await checkPinnedRegistry(forged, a.pub)).toBe("invalid");
     expect(await checkPinnedRegistry({ nope: true }, a.pub)).toBe("invalid");
+  });
+  it("reads only registry format 1, which the signature covers", async () => {
+    const a = await genKeys();
+    const reg = await signRegistry(entries, a.pub, a.priv);
+    expect(reg.format).toBe(REGISTRY_FORMAT);
+    expect(await checkPinnedRegistry({ ...reg, format: 2 }, a.pub)).toBe("format");
+    expect(registryFormatProblem({ ...reg, format: 2 })).toBe(
+      "the registry uses format 2; this app reads registry format 1",
+    );
+    const { format: _f, ...old } = reg;
+    expect(await checkPinnedRegistry(old, a.pub)).toBe("format");
+    expect(registryFormatProblem(old)).toMatch(/names no format/);
+    // the format is signed: the same entries signed without it do not verify as format 1
+    const bare = await crypto.subtle.sign("Ed25519", a.priv, new TextEncoder().encode(JSON.stringify(entries)));
+    expect(await verifyRegistry({ ...reg, sig: bytesToB64(new Uint8Array(bare)) }, a.pub)).toBe(false);
+    expect((await previewRegistry({ ...reg, format: 3 })).ok).toBe(false);
   });
 });
 

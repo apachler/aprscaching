@@ -26,3 +26,26 @@ export function toolApiProblem(api: unknown, impl: { major: number; minor: numbe
     return `it needs tool API ${v.major}.${v.minor}; this instance implements ${impl.major}.${impl.minor}`;
   return null;
 }
+
+/**
+ * What the host offers a tool, which `tool.has(name)` answers in the sandbox: every capability with an API, and
+ * the API's named features. A tool checks a feature before it uses one newer than the minor it declared.
+ */
+export const TOOL_FEATURES: readonly string[] = [
+  "command",
+  "monitor",
+  "event",
+  "decoder",
+  "panel",
+  "map",
+  "ipc",
+  "beacon",
+  "network",
+  "tx",
+  "commands.async",
+  "commands.remote",
+  "decoders.sample",
+  "events.reply",
+  "colours.src",
+  "bus.provide",
+];

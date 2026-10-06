@@ -14,6 +14,7 @@ import {
   authorityFingerprint,
   checkEntryHash,
   checkPinnedRegistry,
+  registryFormatProblem,
   previewRegistry,
   registryEntryFor,
   type RegistryEntry,
@@ -68,6 +69,7 @@ export type RegistryState =
   | { kind: "none" }
   | { kind: "failed"; error: string }
   | { kind: "invalid" }
+  | { kind: "format"; error: string }
   | { kind: "key-changed"; authority: string; fingerprint: string | null };
 
 export interface LoadedRegistry {
@@ -108,6 +110,7 @@ export async function loadRegistry(
     return { kind: "key-changed", authority, fingerprint: await authorityFingerprint(authority) };
   }
   if (state === "invalid") return { kind: "invalid" };
+  if (state === "format") return { kind: "format", error: registryFormatProblem(doc) ?? "unknown registry format" };
   return {
     kind: "ok",
     entries: (doc as SignedRegistry).entries,

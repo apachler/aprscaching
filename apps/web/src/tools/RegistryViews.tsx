@@ -192,6 +192,12 @@ function RegistryBody(props: {
           Couldn&apos;t load {l.reg.label}: {l.state.error}. The other registries are not affected.
         </ErrorState>
       );
+    case "format":
+      return (
+        <ErrorState onRetry={props.onRetry}>
+          {l.reg.label} can&apos;t be read: {l.state.error}. Its tools are not listed until this instance is updated.
+        </ErrorState>
+      );
     case "invalid":
       return (
         <ErrorState onRetry={props.onRetry}>

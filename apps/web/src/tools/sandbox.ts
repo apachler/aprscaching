@@ -14,6 +14,8 @@
  */
 import {
   isToolEvent,
+  TOOL_API,
+  TOOL_FEATURES,
   sanitizeMapLayer,
   sanitizePanel,
   validateManifest,
@@ -105,7 +107,7 @@ export function compileRules(rules: readonly ColourRule[]): Colouriser {
 /** The worker bootstrap (stringified): locks down globals, runs the tool, and bridges its API over postMessage. */
 function workerSource(): string {
   return `
-    let commands = {}, colourRules = [], panel = null, decoderFns = {}, decoderMeta = [], granted = [];
+    let commands = {}, colourRules = [], panel = null, decoderFns = {}, decoderMeta = [], granted = [], features = [];
     const subs = {}, handlers = {}, services = {}, pending = {};
     let seq = 0;
     const msg = (e) => String((e && e.message) || e);
@@ -134,6 +136,8 @@ function workerSource(): string {
     };
     const tool = {
       permissions: [],
+      api: { major: 0, minor: 0 },
+      has: (name) => features.indexOf(String(name)) >= 0,
       log: (m) => post({ type: "log", msg: String(m) }),
       setPanel: (spec) => { need("panel"); setPanel(spec); },
       setMapLayer: (spec) => { need("map"); post({ type: "map", spec }); },
@@ -174,6 +178,8 @@ function workerSource(): string {
       if (m.type === "load") {
         granted = Array.isArray(m.permissions) ? m.permissions.map(String) : [];
         tool.permissions = granted.slice();
+        tool.api = Object.freeze({ major: Number(m.api && m.api.major), minor: Number(m.api && m.api.minor) });
+        features = Array.isArray(m.features) ? m.features.map(String) : [];
         if (!m.network) { for (const g of ["fetch","XMLHttpRequest","WebSocket","WebTransport","EventSource","importScripts","Worker","SharedWorker"]) { try { self[g] = undefined; } catch (e) {} } }
         try {
           new Function("register", "ipc", "tool", m.script)(register, m.ipc ? ipc : undefined, tool);
@@ -799,7 +805,15 @@ export async function loadSandbox(script: string, granted: Capability[], opts: S
       const timer = setTimeout(() => reject(new Error("the tool did not start in time")), LOAD_TIMEOUT_MS);
       onLoad = (m) => {
         if (m.type === "ready") {
-          post({ type: "load", script, network, ipc: granted.includes("ipc"), permissions: granted });
+          post({
+            type: "load",
+            script,
+            network,
+            ipc: granted.includes("ipc"),
+            permissions: granted,
+            api: TOOL_API,
+            features: TOOL_FEATURES,
+          });
           return;
         }
         clearTimeout(timer);

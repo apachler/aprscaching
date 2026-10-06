@@ -68,29 +68,9 @@ const probeTool = (appUrl, peerUrl) => `
   done;
 `;
 
-// A tool that uses every part of the API its grants allow.
-const apiTool = `
-  tool.on("on_frame", (p) => tool.setPanel({ title: "Heard", nodes: [{ kind: "text", text: p.peerCall + " " + (p.text || "") }] }));
-  tool.on("on_connect", (p) => { if (p.reply) p.reply("Welcome " + p.peerCall); });
-  tool.provide("echo.upper", async (a) => String(a).toUpperCase());
-  register({ commands: {
-    later: async (a) => { await new Promise((r) => setTimeout(r, 20)); return ["later " + a]; },
-    tx: async () => [String(await tool.requestTx(">from a tool"))],
-    beacon: async () => { try { return [String(await tool.scheduleBeacon({ comment: "QRV", intervalSec: 60 }))]; } catch (e) { return ["refused: " + e.message]; } },
-    wp: () => { tool.setMapLayer({ id: "wp", points: [{ lat: 47, lon: 15, label: "home" }] }); return ["ok"]; },
-    colours: () => { tool.setColourRules([{ src: "OE8APR", colorVar: "--warn" }]); return ["ok"]; },
-    ask: async () => [String(await tool.call("echo.upper", "abc"))],
-    op: () => ["operator only"],
-    ping: { run: () => ["pong"], remote: true },
-  } });
-`;
-// A tool that reaches for what it was not granted.
-const greedyTool = `
-  const tryIt = (fn) => { try { fn(); return "allowed"; } catch (e) { return "refused"; } };
-  register({ commands: {
-    reach: () => [tryIt(() => tool.setMapLayer({ id: "x", points: [] })), tryIt(() => tool.on("on_frame", () => {})), tryIt(() => tool.requestTx(">x"))],
-  } });
-`;
+// The tool API 1.0 contract fixtures: a tool using every 1.0 feature, and one refused what it was not granted.
+const apiTool = readFileSync(path.join(ROOT, "tools/e2e/fixtures/tool-api-1.0.js"), "utf8");
+const greedyTool = readFileSync(path.join(ROOT, "tools/e2e/fixtures/tool-api-1.0-denied.js"), "utf8");
 
 async function main() {
   const exe = findChromium();
@@ -284,10 +264,15 @@ async function main() {
         for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 20));
         return cond();
       };
-      const r = { remoteOff: sb.remoteOff };
+      const r = { remoteOff: sb.remoteOff, decoders: sb.decoders };
       await wait(() => host.ipcServices().includes("echo.upper"));
+      r.firstPanel = host.panels("web")[0]?.spec.title;
+      r.firstColour = host.colourisers("terminal")[0]?.({ src: "DL1ABC", dst: "", text: "" })?.colorVar;
+      r.meta = await sb.runCommand("meta", "");
+      r.decoded = await sb.decode("upper", "xyz");
       host.dispatch("on_frame", { peerCall: "OE8XBM-7", text: ">hi", source: "RF" });
-      r.heard = (await wait(() => host.panels("web")[0])) && host.panels("web")[0].spec.nodes[0].text;
+      r.heard =
+        (await wait(() => host.panels("web")[0]?.spec.title === "Heard")) && host.panels("web")[0].spec.nodes[0].text;
       const replies = [];
       host.dispatch("on_connect", { peerCall: "OE3ABC", reply: (t) => replies.push(t) });
       await wait(() => replies.length > 0);
@@ -332,6 +317,15 @@ async function main() {
     expect(
       api.remoteOff.includes("op") && !api.remoteOff.includes("ping"),
       "keeps a command from remote peers unless it opts in",
+    );
+    expect(api.firstPanel === "Contract" && api.firstColour === "--st-user", "registers a panel and colour rules");
+    expect(
+      api.meta[0] === '{"major":1,"minor":0}' && api.meta[1] === "true" && api.meta[2] === "false",
+      "reads tool.api and asks tool.has() for features",
+    );
+    expect(
+      api.decoded === "XYZ" && api.decoders[0]?.sample === "abc" && api.decoders[0]?.placeholder === "text",
+      "runs an async decoder that declares a sample and a placeholder",
     );
     expect(api.heard === "OE8XBM-7 >hi", "hears frames with their text and sets its panel");
     expect(api.replies[0] === "Welcome OE3ABC", "answers a connected session through its reply");

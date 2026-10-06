@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Sign a tool.json manifest OR a tool registry with a TOOL_PRIVATE_KEY (from genkey.mjs). The canonical
 // bytes match packages/tools/src/registry.ts EXACTLY (stableStringify; manifest omits `signature`, registry
-// signs its `entries`) so the app verifies what this signs. Signing a manifest first sets `entrySha256`, the
+// signs `{ format, entries }`) so the app verifies what this signs. Signing a manifest first sets `entrySha256`, the
 // SHA-256 of its entry script: the file `entry` names next to the manifest (default `tool.js`), or the file given
 // as the third argument when `entry` is an absolute URL or path. The app refuses a script whose bytes differ.
 //
@@ -52,7 +52,9 @@ if (kind === "manifest") {
     console.error("registry file must be an entries[] array or { entries }");
     process.exit(2);
   }
-  out = { entries, authority: pub, sig: await signB64(enc(stable(entries))) };
+  // the authority signs the registry format with the entries (packages/tools registrySigningBytes)
+  const format = 1;
+  out = { format, entries, authority: pub, sig: await signB64(enc(stable({ format, entries }))) };
 } else {
   console.error("kind must be 'manifest' or 'registry'");
   process.exit(2);

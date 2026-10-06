@@ -69,6 +69,7 @@ its manifest's hash. With the setting off, the browser fetches each registry fro
 
 ```json
 {
+  "format": 1,
   "entries": [
     {
       "name": "hello-tool",
@@ -87,15 +88,16 @@ its manifest's hash. With the setting off, the browser fetches each registry fro
 
 | Field | Content |
 |---|---|
+| `format` | The registry file's format, `1`. The app refuses a file of a format it does not read, and says so |
 | `entries` | The listed tools, in the order **Registry** shows them |
 | `entries[].name` | The tool's manifest `name`. One entry per name |
 | `entries[].title`, `author`, `version`, `description` | What the **Registry** list shows; keep them equal to the manifest |
 | `entries[].pubkey` | The author's Ed25519 public key, base64url, exactly as in the signed manifest |
 | `entries[].entry` | The `tool.json` address. A relative address resolves against the registry's own URL |
 | `authority` | The public key that signed the file. It must equal the key pinned for the registry |
-| `sig` | An Ed25519 signature, base64, over the `entries` array serialised with object keys sorted |
+| `sig` | An Ed25519 signature, base64, over `{ "format": 1, "entries": [...] }` serialised with object keys sorted |
 
-The signature covers `entries` only: any change to an entry, its order included, needs a new signature.
+The signature covers `format` and `entries`: any change to an entry, its order included, needs a new signature.
 `authority` and `sig` sit outside what is signed. Use relative entries: they resolve the same wherever the
 registry is served, and a manifest's relative `entry` script resolves against the manifest's own URL.
 
