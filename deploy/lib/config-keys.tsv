@@ -5,7 +5,7 @@ OPERATOR_SECRET	string	gateway,server,desktop,pocket,licence			1	0	selfhost,bare
 SESSION_SECRET	string	gateway,server,desktop			1	1	selfhost,baremetal,pocket,desktop	Key that signs sign-in sessions; must differ from the ingest and operator secrets	
 SESSION_TTL_DAYS	int	gateway	30		0	0	selfhost,baremetal,pocket,desktop	Days a sign-in session lasts	
 SESSION_EPOCH	int	gateway	0		0	0	selfhost,baremetal,pocket,desktop	Unix seconds: sessions minted before this time are refused	
-TRUST_PROXY	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when a reverse proxy fronts the instance, so x-forwarded-for is trusted	
+TRUST_PROXY	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when a reverse proxy fronts the instance, so x-forwarded-for and x-forwarded-proto are trusted	
 TRUST_CF	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept	
 ADMIN_CALLSIGNS	calls	gateway,pocket			0	1	selfhost,baremetal,pocket,desktop	Comma-separated licensed calls that may administer this instance	
 INSTANCE	string	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	Federation instance id (domain); defaults to the host of APP_URL	
@@ -188,6 +188,8 @@ BOX_ID	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Remote-control I
 BOX_KEY	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	This box's private signing key, written by enrollment; it replaces INGEST_SECRET	
 BOX_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows transmitting on remote command	
 BOX_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box transmits remote commands as	
+BOX_LAT	number	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Latitude of this box, in degrees: the position a remote beacon names	
+BOX_LON	number	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Longitude of this box, in degrees: the position a remote beacon names	
 BOX_TX_PATH	list	ingest	WIDE1-1,WIDE2-1		0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for remote transmits; blank sends direct	
 BOX_CMD_MAX_AGE	int	ingest	900		0	0	selfhost,baremetal,ingest-box,pocket	Seconds after which a queued remote command is too old to run	
 BOX_POLL_MS	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between remote-command polls	

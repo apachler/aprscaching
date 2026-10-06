@@ -33,7 +33,7 @@ code moves the box to whoever enters it, so only someone who can see the box's o
 |---|---|---|
 | **Status** | the paired account | `BOX_ID` |
 | **IGate off**, **TX off** | a verified callsign on the paired account | `BOX_ID` |
-| **Beacon here** (the map centre, with an optional comment), **Message**, **IGate on**, **Digi on** | a verified callsign on the paired account | `BOX_TX=1`, and the conditions below |
+| **Beacon** (the box's own position, with an optional comment), **Message**, **IGate on**, **Digi on** | a verified callsign on the paired account | `BOX_TX=1`, and the conditions below |
 
 A command that switches a function **on** runs on the box only when `BOX_TX=1` is set there and the
 command's callsign has the same base call as the box's station call (`BOX_CALL`, else `IGATE_CALL`, else
@@ -43,6 +43,13 @@ command's callsign has the same base call as the box's station call (`BOX_CALL`,
   never sends a stale beacon or message;
 - find transmit switched on, and a KISS TNC on the box;
 - fit the box's rate limit: three in a burst, then one per minute.
+
+A beacon goes out at the position set on the box, `BOX_LAT` and `BOX_LON` in degrees; a box without them
+refuses to beacon. The command carries no position, so a beacon queued from anywhere places the station where
+the box stands. The box reports that position with its ack, and the gateway tags every fix it hears of the
+beacon, under the same call, near that position and within 15 minutes. A tagged fix never counts as
+evidence for a find, nor as a corroboration a peer instance asks for
+([Verification](../../play/verification.md)): it says where the box is, not where its operator is.
 
 The app asks you to confirm each of these commands before it queues it. A refused command shows in the
 command log with the reason. A message carries a message number, so the recipient's station acknowledges it,

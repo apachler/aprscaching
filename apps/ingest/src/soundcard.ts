@@ -8,8 +8,8 @@
  * transport, stamped with the receiving site when heard directly), and handed to the digipeater, the IGate
  * and the connected-mode services the same way. The port's own transmissions never come back as hearings:
  * frames decoded while it transmits, or within the capture latency after it unkeys, are dropped, the
- * demodulator starts afresh at every unkey, and a frame byte-identical to one the port sent in the last 30 s
- * is dropped too. An attested site must not attest its own signal.
+ * demodulator starts afresh at every unkey, and a frame byte-identical to one the box sent on any of its ports in
+ * the last 30 s is dropped too (echo.ts). An attested site must not attest its own signal.
  *
  * Transmit: the box's functions (digipeater, IGate, remote box, node, BBS) keep their own opt-ins and token
  * buckets and call `send` / `sendFrame`, as they do on the KISS TNC; every RF transmit port shares the box's
@@ -28,6 +28,7 @@ import { Afsk1200Rx, decodeAx25, encodeAx25, modulateAfsk1200 } from "@aprscachi
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
+import { SentFrames } from "./echo.js";
 import {
   alsaArgs,
   alsaHint,
@@ -97,6 +98,8 @@ export interface SoundcardDeps {
   siteCall?: string;
   /** No PCM for this long restarts capture (default 5 s). */
   stallMs?: number;
+  /** The frames the box sent on any port, shared by all of them; the port keeps its own when none is given. */
+  sent?: SentFrames;
 }
 
 /** Frames waiting to go out; past this a new one is refused instead of piling up behind a busy channel. */
@@ -112,8 +115,6 @@ const REFUSAL_LOG_MS = 60_000;
  * half a second, and the pipe and the demodulator's window add a little.
  */
 export const RX_GUARD_MS = 600;
-/** How long a sent frame's bytes are remembered, to drop its echo. */
-const ECHO_MS = 30_000;
 /** How long stop() waits for a transmission in progress before it releases the PTT anyway. */
 const STOP_WAIT_MS = 3000;
 /** A playback may overrun its airtime by this much before it is killed. */
@@ -122,7 +123,6 @@ const PLAY_SLACK_MS = 2000;
 /** HDLC flags for a TXDELAY: one flag is 8 bits at 1200 baud. */
 export const txDelayFlags = (ms: number) => Math.max(1, Math.ceil((ms * 1200) / 8000));
 
-const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 const tail4k = (s: string) => (s.length > 4096 ? s.slice(-4096) : s);
 
 export class SoundcardPort {
@@ -138,7 +138,7 @@ export class SoundcardPort {
   private draining: Promise<void> | null = null;
   private transmitting = false;
   private unkeyedAt = -Infinity;
-  private sent = new Map<string, number>();
+  private sent: SentFrames;
   private airtime: { at: number; ms: number }[] = [];
   private stopped = false;
   private faultReason: string | null = null;
@@ -160,6 +160,7 @@ export class SoundcardPort {
     this.log = deps.log ?? ((m) => console.log(m));
     this.error = deps.error ?? ((m) => console.error(m));
     this.rx = this.newDemodulator();
+    this.sent = deps.sent ?? new SentFrames(() => this.now());
   }
 
   private now(): number {
@@ -349,7 +350,7 @@ export class SoundcardPort {
   private async transmit(frame: Uint8Array, pcm: Float32Array, airMs: number): Promise<void> {
     const ptt = this.ptt!;
     this.transmitting = true;
-    this.remember(frame);
+    this.sent.remember(frame);
     const startedAt = this.now();
     try {
       await ptt.key();
@@ -363,12 +364,6 @@ export class SoundcardPort {
       this.rx = this.newDemodulator(); // nothing of the port's own signal stays in the demodulator
       this.transmitting = false;
     }
-  }
-
-  private remember(frame: Uint8Array): void {
-    const now = this.now();
-    for (const [k, t] of this.sent) if (now - t > ECHO_MS) this.sent.delete(k);
-    this.sent.set(hex(frame), now);
   }
 
   /** Play S16 audio to the end: aplay exits once its buffer has drained. Killed when it overruns `limitMs`. */
@@ -464,8 +459,7 @@ export class SoundcardPort {
   private onRxFrame(raw: Uint8Array): void {
     // half duplex: what the card hears while, or shortly after, the port transmits is its own signal
     if (this.transmitting || this.now() - this.unkeyedAt < RX_GUARD_MS) return;
-    const seen = this.sent.get(hex(raw));
-    if (seen !== undefined && this.now() - seen < ECHO_MS) return;
+    if (this.sent.echoes(raw)) return;
     this.h.onRaw?.(raw);
     const f = decodeAx25(raw);
     if (!f) return;

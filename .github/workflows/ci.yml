@@ -45,7 +45,7 @@ jobs:
                 deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
               esac
               case "$f" in
-                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/oci/test/* | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
+                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/*.sh | deploy/desktop/*.sh | deploy/cloudflare/*.sh | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/oci/test/* | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
                 docs/* | mkdocs.yml | overrides/* | *.md | deploy/pocket/*) ;;
@@ -105,8 +105,9 @@ jobs:
       # Node.js 22+ for the bare-metal checks and the federation key setup.sh generates
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24 }
-      # deploy/aprscaching, its library and shape modules: bash, checked like the Pocket scripts
-      - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh deploy/oci/*.sh deploy/oci/test/*.sh
+      # Every deploy/ shell file outside Pocket (deploy/aprscaching, its library and shape modules, the backup,
+      # setup, desktop-build and Cloudflare scripts): bash, checked like the Pocket scripts
+      - run: shellcheck -x -S warning deploy/aprscaching deploy/*.sh deploy/desktop/*.sh deploy/cloudflare/*.sh deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh deploy/oci/*.sh deploy/oci/test/*.sh
       - run: bash deploy/test/helpers-test.sh
       # deploy/aprscaching net44, against mocked WireGuard, ip, systemd, nft and iptables
       - run: bash deploy/test/net44-test.sh
@@ -242,6 +243,8 @@ jobs:
       # The MeshCom core is bundled once and run on Node and Bun; both must agree.
       - run: pnpm run conformance:meshcom
         env: { CONFORMANCE_REQUIRE_BUN: "1" }
+      # The Bun server's own limits: body cap, generic 500, refused https settings, the tool-registry guard.
+      - run: bun test servers/bun/test
       - name: start bun-gateway + smoke
         env:
           INGEST_SECRET: ci-conformance-ingest-secret

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The host glue both self-host runtimes (this Node server and servers/bun, which imports it) wrap
- * around the runtime-neutral gateway: the live-room binding, the federation fetch guard, the running
+ * around the runtime-neutral gateway: the live-room binding, the outbound fetch guards, the running
  * commit, and the scheduled jobs.
  */
 import { execSync } from "node:child_process";
@@ -18,6 +18,13 @@ import { serveRoom, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { makeFetchGuard } from "./fetchguard.js";
 import { mdnsMode, startMdns } from "./mdns.js";
 
+/**
+ * The largest request body either server accepts. Both buffer a body before routing and authentication, so
+ * without a ceiling one multi-GB anonymous POST exhausts a Pi's memory; 20 MB clears every legitimate payload
+ * (the largest is a cache-media upload). Past it the request is answered 413.
+ */
+export const BODY_MAX_BYTES = 20 * 1024 * 1024;
+
 /** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
   return {
@@ -28,16 +35,18 @@ export function roomNamespace(rooms: RoomsCore): RoomNamespace {
 }
 
 /**
- * Federation fetches never reach this host's private networks, except the peers the operator
- * configured by hand (FED_PEERS, FED_HUB_URL), an instance mDNS found at the address that announced it,
- * or everything with FED_ALLOW_PRIVATE=1.
+ * Outbound fetches never reach this host's private networks. Federation fetches make exceptions for the
+ * peers the operator configured by hand (FED_PEERS, FED_HUB_URL), an instance mDNS found at the address
+ * that announced it, and everything with FED_ALLOW_PRIVATE=1. Tool-registry fetches, whose addresses
+ * players type in, make none.
  */
-export function guardFederationFetches(env: Env): void {
+export function guardOutboundFetches(env: Env): void {
   env.FED_FETCH_GUARD = makeFetchGuard({
     allowedOrigins: operatorOrigins(env),
     allowPrivate: env.FED_ALLOW_PRIVATE === "1",
     allowLocalOrigin: (origin) => lanOriginAllowed(env, origin),
   });
+  env.TOOL_FETCH_GUARD = makeFetchGuard();
 }
 
 /**

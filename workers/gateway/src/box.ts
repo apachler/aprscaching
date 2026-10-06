@@ -18,6 +18,9 @@
  * Gating (non-negotiable): every TX-capable command requires a callsign gated on control-verification;
  * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
  * from the federation/APRS service identity.
+ *
+ * A beacon names no position: the box beacons its own configured position and reports it with its ack, and
+ * every fix heard of that beacon is tagged so it never counts as find evidence (beacontag.ts).
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
@@ -125,6 +128,12 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   const kind = String(body.kind ?? "").toLowerCase();
   if (!ALL_KINDS.has(kind))
     return json({ error: `unknown command kind; one of ${[...ALL_KINDS].join(", ")}` }, { status: 400 });
+  const named = (body.payload ?? {}) as { lat?: unknown; lon?: unknown };
+  if (kind === "beacon" && (named.lat != null || named.lon != null))
+    return json(
+      { error: "a box beacons its own configured position (BOX_LAT, BOX_LON): leave lat and lon out" },
+      { status: 400 },
+    );
   // authorize: a signed-in operator session that OWNS this box, or the box secret (trusted
   // backend / the operator's own box). Read commands need no callsign; TX commands require a verified one.
   const me = await sessionIdentity(req, env);
@@ -252,13 +261,23 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
   });
 }
 
+function parsePayload(raw: string | null): Record<string, unknown> {
+  try {
+    const v: unknown = raw ? JSON.parse(raw) : {};
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** POST /api/box/:id/commands/ack — the box reports execution. */
 export async function handleBoxAck(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
-  const { id, status, result } = (await req.json().catch(() => ({}))) as {
+  const { id, status, result, position } = (await req.json().catch(() => ({}))) as {
     id?: number;
     status?: string;
     result?: string;
+    position?: { lat?: unknown; lon?: unknown };
   };
   if (!id || (status !== "done" && status !== "failed"))
     return json({ error: "id and status (done|failed) required" }, { status: 400 });
@@ -273,6 +292,19 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
     const cmd = await env.DB.prepare("SELECT callsign, kind, payload FROM box_commands WHERE id=?")
       .bind(id)
       .first<{ callsign: string | null; kind: string; payload: string | null }>();
+    // A beacon's ack names where the box sent it from: its hearings are told from the station's travels by it.
+    const lat = position?.lat,
+      lon = position?.lon;
+    if (
+      cmd?.kind === "beacon" &&
+      typeof lat === "number" &&
+      typeof lon === "number" &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lon) <= 180
+    )
+      await env.DB.prepare("UPDATE box_commands SET payload = ? WHERE id = ?")
+        .bind(JSON.stringify({ ...parsePayload(cmd.payload), lat, lon }), id)
+        .run();
     const p =
       cmd?.kind === "message" && cmd.payload ? (JSON.parse(cmd.payload) as { to?: string; text?: string }) : null;
     if (cmd?.callsign && p?.to && p.text)

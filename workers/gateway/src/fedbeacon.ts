@@ -10,6 +10,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
+import { readCappedBody } from "./fetchguard.js";
 import { requireIngestOrOperator } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
@@ -71,8 +72,8 @@ export async function handleBeaconEmit(req: Request, env: Env): Promise<Response
 export async function handleBeaconRx(req: Request, env: Env): Promise<Response> {
   const denied = await requireIngestOrOperator(req, env);
   if (denied) return denied;
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (bytes.length > MAX_RX_BYTES) return json({ error: "payload too large for a datagram" }, { status: 413 });
+  const bytes = await readCappedBody(req, MAX_RX_BYTES);
+  if (!bytes) return json({ error: "payload too large for a datagram" }, { status: 413 });
   const frame = decodeFedBeacon(bytes);
   if (!frame) return json({ federation: false, applied: 0, quarantined: 0, rejected: 0 });
   const r = await applyFedFrames(env, [frame]);
@@ -90,8 +91,8 @@ const MAX_PAGE_BYTES = 4 * 1024 * 1024; // a sync page is bounded server-side; r
 export async function handleFramesRx(req: Request, env: Env): Promise<Response> {
   const denied = await requireIngestOrOperator(req, env);
   if (denied) return denied;
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (bytes.length > MAX_PAGE_BYTES) return json({ error: "page too large" }, { status: 413 });
+  const bytes = await readCappedBody(req, MAX_PAGE_BYTES);
+  if (!bytes) return json({ error: "page too large" }, { status: 413 });
   let frames: Uint8Array[];
   try {
     frames = decodeFedSyncPage(bytes).frames;

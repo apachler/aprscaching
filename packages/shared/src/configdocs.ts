@@ -17,7 +17,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SESSION_SECRET: "Key that signs sign-in sessions; must differ from the ingest and operator secrets",
   SESSION_TTL_DAYS: "Days a sign-in session lasts",
   SESSION_EPOCH: "Unix seconds: sessions minted before this time are refused",
-  TRUST_PROXY: "1 when a reverse proxy fronts the instance, so x-forwarded-for is trusted",
+  TRUST_PROXY: "1 when a reverse proxy fronts the instance, so x-forwarded-for and x-forwarded-proto are trusted",
   TRUST_CF: "1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept",
   ADMIN_CALLSIGNS: "Comma-separated licensed calls that may administer this instance",
   INSTANCE: "Federation instance id (domain); defaults to the host of APP_URL",
@@ -200,6 +200,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
   BOX_CALL: "Callsign the box transmits remote commands as",
+  BOX_LAT: "Latitude of this box, in degrees: the position a remote beacon names",
+  BOX_LON: "Longitude of this box, in degrees: the position a remote beacon names",
   BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct",
   BOX_CMD_MAX_AGE: "Seconds after which a queued remote command is too old to run",
   BOX_POLL_MS: "Interval in milliseconds between remote-command polls",
@@ -319,7 +321,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TRUST_PROXY`",
-        "Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in)",
+        "Trust the proxy's `x-forwarded-for` for rate-limit client identity and its `x-forwarded-proto` for the scheme a request came on (the address its cookie and links name). Set it only behind your own proxy; the Docker stack sets it, since Caddy is the only way in. Without it both headers are ignored",
         "off",
       ],
       [
@@ -329,7 +331,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`CORS_ORIGINS`",
-        "Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (one built with `VITE_API_BASE` naming another host) needs its origin listed here",
+        "Extra origins allowed for credentialed CORS (comma-separated). Only an `https` or loopback origin gets credentials, here or from `APP_URL` and `EXTRA_ORIGINS`; a plain-http one is read without cookies. With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (one built with `VITE_API_BASE` naming another host) needs its origin listed here",
         "—",
       ],
       [
@@ -361,7 +363,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TOOL_REGISTRIES_PROXY`",
-        "The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. The browser still checks every signature. `0` lets browsers fetch registries directly",
+        "The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. The browser still checks every signature. The gateway fetches over https on every redirect hop and never from a loopback, private or LAN address, whatever `FED_ALLOW_PRIVATE`, `FED_PEERS` or mDNS discovery allow federation. `0` lets browsers fetch registries directly",
         "on",
       ],
       [
@@ -430,7 +432,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`HTTPS_PORT`",
-        "Port of the https listener. It runs the same gateway, web app and live socket as the plain port, and the links it builds from a request say `https`. With it set, the plain port answers a page load from another device (a `GET` that accepts HTML, for a web-app route) with a `302` to the same host on `HTTPS_PORT`; loopback requests, the API, `/auth`, `/ingest`, `/federation`, `/ws`, a request a declared proxy (`TRUST_PROXY=1`) carried over https, and `/pocket-ca.crt` are served where they arrive. An operator sign-in link may then name `https://<private IPv4 address>:<HTTPS_PORT>` (see `OPERATOR_LINKS_FOR_ANY_CALL`). The server refuses to boot when it is set without `TLS_CERT` and `TLS_KEY`",
+        "Port of the https listener. It runs the same gateway, web app and live socket as the plain port, and the links it builds from a request say `https`. With it set, the plain port answers a page load from another device (a `GET` that accepts HTML, for a web-app route) with a `302` to the same host on `HTTPS_PORT`; loopback requests, the API, `/auth`, `/ingest`, `/federation`, `/ws`, a request a declared proxy (`TRUST_PROXY=1`) carried over https, and `/pocket-ca.crt` are served where they arrive. An operator sign-in link may then name `https://<private IPv4 address>:<HTTPS_PORT>` (see `OPERATOR_LINKS_FOR_ANY_CALL`). The server refuses to boot when it is set without `TLS_CERT` and `TLS_KEY`; the Bun server and the desktop app refuse to boot while it, `TLS_CERT`, `TLS_KEY` or `TLS_CA_CERT` is set",
         "off",
       ],
       [
@@ -604,7 +606,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_ALLOW_PRIVATE`",
-        "`1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed)",
+        "`1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed). Tool-registry fetches never may, whatever this says",
         "off",
       ],
       [
@@ -796,7 +798,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "APRS-IS uplink (answers, announces, weather)",

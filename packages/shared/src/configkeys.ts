@@ -335,6 +335,8 @@ export const CONFIG_KEYS = {
   BOX_KEY: { type: "string", units: ["ingest"], secret: true },
   BOX_TX: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
   BOX_CALL: { type: "call", units: ["ingest"] },
+  BOX_LAT: { type: "number", units: ["ingest"] },
+  BOX_LON: { type: "number", units: ["ingest"] },
   BOX_TX_PATH: { type: "list", units: ["ingest"], default: "WIDE1-1,WIDE2-1" },
   BOX_CMD_MAX_AGE: { type: "int", units: ["ingest"], default: "900" },
   BOX_POLL_MS: { type: "int", units: ["ingest"], default: "5000" },

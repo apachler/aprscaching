@@ -9,7 +9,7 @@
     "start": "bun run server.ts",
     "dev": "bun --watch server.ts",
     "build": "echo 'bun runtime — no tsc build (bun:sqlite + Bun globals are runtime-resolved)'",
-    "test": "echo 'no unit tests — Bun conformance runs the tools/smoke suites in CI'"
+    "test": "echo 'needs Bun: bun test servers/bun/test (the CI Bun conformance runs it with the tools/smoke suites)'"
   },
   "dependencies": {
     "@aprscaching/gateway": "workspace:*",

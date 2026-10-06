@@ -81,6 +81,38 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
 
 // A Tier-A match must be reachable from the logger's own neighbouring fixes at a sane
 // speed — a single forged beacon dropped at the cache while the real track is 111 km away is a teleport.
+// A box the logger owns is the logger's own receiver, whatever site call it stamps; a beacon the logger asked
+// a box to send says where the box is, not where the logger is.
+describe("verifyFind — tier A independence of the logger's own boxes and beacons", () => {
+  it("does NOT grant tier A to a fix delivered by a box the logger's account owns", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ingest_box: "pi-home" })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+      loggerOwnBoxes: new Set(["pi-home"]),
+    });
+    expect(r.tier).toBe("C");
+    expect(r.verified).toBe(false);
+  });
+
+  it("grants tier A to the same fix delivered by another operator's box", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ingest_box: "club-box" })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+      loggerOwnBoxes: new Set(["pi-home"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A" });
+  });
+
+  it("does NOT grant tier A to a fix that matched a commanded box beacon", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", commanded: true })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).toBe("C");
+    expect(r.verified).toBe(false);
+  });
+});
+
 describe("verifyFind — tier A plausible track", () => {
   it("rejects a matched fix a neighbouring fix cannot reach in the elapsed time (teleport)", () => {
     const r = verifyFind(CACHE, undefined, {
@@ -227,7 +259,7 @@ describe("verifyFind — living (moving) cache", () => {
   it("verifies co-location with the cache-station within the time skew", () => {
     const r = verifyFind(living, undefined, {
       loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 7 })],
-      cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", ts: 1100 })],
+      cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 1100 })],
     });
     expect(r).toMatchObject({ verified: true, tier: "A", method: "aprs_rf", matchedPositionId: 7 });
   });
@@ -250,10 +282,53 @@ describe("verifyFind — living (moving) cache", () => {
       { ...NEAR, accuracyM: 10, ts: 1000 },
       {
         loggerPositions: [],
-        cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "aprs_is", ts: 1060 })],
+        cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 1060 })],
       },
     );
     expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
+  });
+
+  it("verifies a phone reading next to the owner's own signed browser-RF station fix, at tier B", () => {
+    const r = verifyFind(
+      hidden,
+      { ...NEAR, accuracyM: 10, ts: 1000 },
+      {
+        loggerPositions: [],
+        cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", ts: 1060, ownerSigned: true })],
+      },
+    );
+    expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
+  });
+
+  it("caps a phone reading next to an APRS-IS-only station fix at tier C", () => {
+    const r = verifyFind(
+      hidden,
+      { ...NEAR, accuracyM: 10, ts: 1000 },
+      {
+        loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is", ts: 1000 })],
+        cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "aprs_is", ts: 1060 })],
+      },
+    );
+    expect(r).toMatchObject({ verified: false, tier: "C", method: "aprs_is" });
+  });
+
+  it("caps an attested logger fix next to an APRS-IS-only station fix at tier C", () => {
+    const r = verifyFind(living, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 7 })],
+      cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "aprs_is", ts: 1100 })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: false, tier: "C", method: "aprs_is" });
+  });
+
+  it("never takes a commanded beacon of the station as where the cache is", () => {
+    const r = verifyFind(living, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 7 })],
+      cacheStationPositions: [
+        pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 1100, commanded: true }),
+      ],
+    });
+    expect(r.tier).toBe("C");
   });
 
   it("does not verify a phone reading at the hiding place while the station is away", () => {

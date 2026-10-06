@@ -2,7 +2,14 @@
 // The box-side remote-control poller: lease → execute → ack, and the box's own transmit gates
 // (opt-in, own station call, command age, rate limit) that hold even when the gateway let a command through.
 import { describe, it, expect } from "vitest";
-import { BoxPoller, parseBoxPath, type BoxCommand, type BoxPollerOpts, type BoxState } from "../src/boxpoll.js";
+import {
+  BoxPoller,
+  parseBoxPath,
+  parseBoxPosition,
+  type BoxCommand,
+  type BoxPollerOpts,
+  type BoxState,
+} from "../src/boxpoll.js";
 
 type Sent = { src: string; dst: string; path?: string[]; payload: string };
 
@@ -22,6 +29,7 @@ function setup(over: Partial<BoxPollerOpts> = {}) {
         return true;
       },
     },
+    position: { lat: 47.07, lon: 15.42 },
     state,
     now: () => t,
     log: () => {},
@@ -37,20 +45,36 @@ function setup(over: Partial<BoxPollerOpts> = {}) {
 const cmd = (c: Partial<BoxCommand>): BoxCommand => ({ id: 1, kind: "status", callsign: "OE8APR", ...c });
 
 describe("remote transmit", () => {
-  it("beacons a position as the command's callsign through the radio", async () => {
+  it("beacons the box's configured position as the command's callsign, whatever position the command names", async () => {
     const { poller, sent, nowSec } = setup();
     const r = await poller.execute(
       cmd({
         kind: "beacon",
         callsign: "OE8APR-7",
         createdAt: nowSec(),
-        payload: { lat: 47.07, lon: 15.42, comment: "hi" },
+        payload: { lat: 48.2, lon: 16.37, comment: "hi" },
       }),
     );
-    expect(r.status).toBe("done");
+    expect(r).toMatchObject({ status: "done", position: { lat: 47.07, lon: 15.42 } });
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ src: "OE8APR-7", dst: "APZACG", path: ["WIDE1-1", "WIDE2-1"] });
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
+  });
+
+  it("refuses a beacon when the box has no configured position", async () => {
+    const { poller, sent, nowSec } = setup({ position: undefined });
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 47.07, lon: 15.42 } }));
+    expect(r).toMatchObject({ status: "failed" });
+    expect(r.result).toMatch(/BOX_LAT/);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("reads the configured position from BOX_LAT and BOX_LON, both or neither", () => {
+    expect(parseBoxPosition(undefined, undefined)).toBeUndefined();
+    expect(parseBoxPosition("47.07", "15.42")).toEqual({ lat: 47.07, lon: 15.42 });
+    expect(() => parseBoxPosition("47.07", undefined)).toThrow(/BOX_LAT and BOX_LON/);
+    expect(() => parseBoxPosition("91", "0")).toThrow(/BOX_LAT/);
+    expect(() => parseBoxPosition("47", "east")).toThrow(/BOX_LON/);
   });
 
   it("sends an APRS message to the addressee, numbered so it is acknowledged", async () => {
@@ -132,9 +156,6 @@ describe("remote transmit", () => {
 
   it("rejects malformed payloads", async () => {
     const { poller, nowSec } = setup();
-    expect(
-      (await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 91, lon: 0 } }))).status,
-    ).toBe("failed");
     expect(
       (await poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "OE3ABC", text: " " } })))
         .status,

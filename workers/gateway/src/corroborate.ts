@@ -136,13 +136,15 @@ interface RfPositionRow {
  * heard by a receiving site this instance attests (FIRST_PARTY_SITES or a trusted station) through that site's own on-air
  * ingest. An empty list vouches for nothing, and an APRS-IS copy naming an attested site never vouches. A peer's corroboration can lift
  * a find to Tier A there, so answering from a site nobody here stands behind would let transport
- * masquerade as trust. A site the logger controls, or one the asker excludes, never counts.
+ * masquerade as trust. A site the logger controls, one the asker excludes, or a position a box of the logger's
+ * own delivered (`selfBoxes`) never counts.
  */
 export function pickLocalEvidence(
   rows: RfPositionRow[],
   q: Pick<CorroborationQuery, "callsign" | "lat" | "lon" | "radiusM">,
   excludeIgates: Set<string>,
   attested: Attestation | Set<string>,
+  selfBoxes: Set<string> = new Set(),
 ): Omit<Evidence, "instance"> | null {
   const a: Attestation = attested instanceof Set ? { shared: attested, byBox: new Map() } : attested;
   if (a.shared.size === 0 && a.byBox.size === 0) return null;
@@ -150,6 +152,7 @@ export function pickLocalEvidence(
   const callBase = baseCall(q.callsign);
   for (const r of rows) {
     if (!provenanceOf(r, sitesFor(a, r.ingest_box)).firstPartyAttested) continue; // not heard by a site this instance attests
+    if (r.ingest_box && selfBoxes.has(r.ingest_box)) continue; // the logger's own receiver
     const ig = r.igate_call ?? "";
     const igBase = baseCall(ig);
     if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
@@ -157,6 +160,33 @@ export function pickLocalEvidence(
     if (d <= radius) return { igateCall: ig, distanceM: d, ts: r.ts };
   }
   return null;
+}
+
+/**
+ * The ingest boxes that belong to the holder of any of `calls` (base calls): paired to that holder's account,
+ * or enrolled for one of those calls. A position such a box delivered is its operator's own hearing.
+ */
+export async function boxesOfCalls(env: Env, calls: Iterable<string>): Promise<Set<string>> {
+  const bases = [...new Set([...calls].map((c) => baseCall(c)).filter(Boolean))];
+  if (!bases.length) return new Set();
+  const marks = bases.map(() => "?").join(",");
+  const rows = (
+    await env.DB.prepare(
+      `SELECT b.box_id FROM boxes b JOIN account_callsigns a ON a.account_id = b.account_id WHERE a.callsign IN (${marks})`,
+    )
+      .bind(...bases)
+      .all<{ box_id: string }>()
+  ).results;
+  const boxes = new Set(rows.map((r) => r.box_id));
+  // a box enrolled for one of the calls, by any SSID (box_keys.callsign keeps it)
+  const keyed = (
+    await env.DB.prepare("SELECT box_id, callsign FROM box_keys WHERE callsign IS NOT NULL").all<{
+      box_id: string;
+      callsign: string;
+    }>()
+  ).results;
+  for (const k of keyed) if (bases.includes(baseCall(k.callsign))) boxes.add(k.box_id);
+  return boxes;
 }
 
 /** Search THIS instance's RF positions for an independent corroboration. Returns evidence or null. */
@@ -167,16 +197,19 @@ async function localCorroboration(
 ): Promise<Omit<Evidence, "instance"> | null> {
   const attested = await attestation(env);
   if (attested.shared.size === 0 && attested.byBox.size === 0) return null;
+  // a fix that matched a box beacon this instance commanded says where the box is, not the logger
   const rows = (
     await env.DB.prepare(
       `SELECT lat, lon, ts, heard_via, igate_call, path, transport, ingest_box FROM positions
-      WHERE callsign = ? AND heard_via = 'rf' AND source != 'service' AND ts BETWEEN ? AND ?
+      WHERE callsign = ? AND heard_via = 'rf' AND commanded = 0 AND ts BETWEEN ? AND ?
       ORDER BY ts DESC LIMIT 500`,
     )
       .bind(q.callsign.toUpperCase(), q.since, q.until)
       .all<RfPositionRow>()
   ).results;
-  return pickLocalEvidence(rows, q, excludeIgates, attested);
+  if (!rows.length) return null;
+  const selfBoxes = await boxesOfCalls(env, [q.callsign, ...excludeIgates]);
+  return pickLocalEvidence(rows, q, excludeIgates, attested, selfBoxes);
 }
 
 /** The negative-memo key: who asked, the callsign, the coarsened cell and window, the radius and the
