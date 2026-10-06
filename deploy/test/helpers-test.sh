@@ -194,7 +194,6 @@ check "a public instance is set up" setup --env-file "$P" --call OE8APR --domain
 check "  … in an owner-only .env" eq "$(file_mode "$P")" 600
 check "  … with auto-promotion off" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "0"
 check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORROBORATION_QUORUM)" "2"
-check "  … with discovery off" eq "$(env_file_get "$P" FED_DISCOVER)" "0"
 check "  … with the peers it was given" eq "$(env_file_get "$P" FED_PEERS)" "https://peer.example.org"
 check "  … with its 44Net endpoint beside https" bash -c "grep -q '\"44net\",\"address\":\"aprscaching.oe8apr.ampr.org\"' '$P'"
 if setup --env-file "$TMP/b44.env" --call OE8APR --domain a.example.net --net44-name oe8apr.ampr.org; then

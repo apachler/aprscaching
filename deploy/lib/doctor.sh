@@ -656,7 +656,6 @@ doc_federation() {
     warnc federation.key "no FED_PRIVATE_KEY: feeds go out unsigned and peers cannot verify them" \
       "node tools/fedkey/genkey.mjs --raw, into FED_PRIVATE_KEY"
   fi
-  case "$(doc_get FED_DISCOVER)" in 1 | true | yes) unsafe+=("FED_DISCOVER is on") ;; esac
   case "$(doc_get FED_AUTO_PROMOTE)" in 0 | "") ;; *) unsafe+=("FED_AUTO_PROMOTE is not 0") ;; esac
   case "$(doc_get FED_CORROBORATION_QUORUM)" in 0 | 1) unsafe+=("FED_CORROBORATION_QUORUM is below 2") ;; esac
   for p in ${peers//,/ }; do

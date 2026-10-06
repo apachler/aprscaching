@@ -8,8 +8,8 @@
  * by address it starts `unvetted` with its key pinned, and raising it to `trusted` is a separate step; a
  * FED_PEERS entry starts `trusted` only when it pins the fingerprint its key then matches.
  */
-import { flagOn, type Env } from "./env.js";
-import { peerExchangeOn } from "./feddiscover.js";
+import type { Env } from "./env.js";
+import { discoverOn, peerExchangeOn } from "./feddiscover.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
@@ -276,7 +276,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       instance: ours(env),
       fingerprint: await ownKeyFingerprint(env),
       // how this instance discovers others, for the Discovered group's empty state
-      discovery: { learn: flagOn(env.FED_DISCOVER), lists: peerExchangeOn(env), mdns: env.FED_MDNS ?? "off" },
+      discovery: { learn: discoverOn(env), lists: peerExchangeOn(env), mdns: env.FED_MDNS ?? "off" },
     },
     peers,
   });

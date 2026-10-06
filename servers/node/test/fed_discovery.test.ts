@@ -60,7 +60,7 @@ async function world(opts: { bEnv?: Record<string, unknown>; hubEnv?: Record<str
     kb = await newFedKey();
   const a = instanceEnv("a.example", ka);
   const hub = instanceEnv("hub.example", kh, opts.hubEnv);
-  const b = instanceEnv("b.example", kb, { FED_DISCOVER: "1", ...opts.bEnv });
+  const b = instanceEnv("b.example", kb, { ...opts.bEnv });
   await follow(hub, A, "a.example", ka);
   await follow(b, HUB, "hub.example", kh);
   await addCache(a, now() - 60);

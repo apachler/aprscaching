@@ -2228,7 +2228,7 @@ function DiscoveredPeers(props: {
     return (
       <EmptyState>
         {d && !d.learn && d.mdns === "off"
-          ? "Discovery is off: FED_DISCOVER=1 lists the instances your trusted peers trust, and FED_MDNS=listen finds instances on your local network."
+          ? "Discovery is off: remove FED_DISCOVER=0 to list the instances your trusted peers trust, and set FED_MDNS=listen to find instances on your local network."
           : "No instance discovered yet. Trusted peers' lists are read once an hour; instances on your network appear when they announce themselves."}
       </EmptyState>
     );

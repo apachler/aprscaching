@@ -31,7 +31,6 @@
  * compared the fingerprint and asked for it.
  */
 import type { Env } from "./env.js";
-import { flagOn } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
@@ -92,6 +91,11 @@ const MDNS_RECORD_EVERY_MS = 60_000;
 const MAX_EXCHANGE_BYTES = 512 * 1024;
 
 /** FED_PEER_EXCHANGE: on unless set to 0, false or no. */
+/** FED_DISCOVER: on unless set to 0/false/no, since a learned instance waits switched off until the sysop follows it. */
+export function discoverOn(env: Env): boolean {
+  return !/^(0|false|no)$/i.test((env.FED_DISCOVER ?? "").trim());
+}
+
 export function peerExchangeOn(env: Env): boolean {
   return !/^(0|false|no)$/i.test((setting(env, "FED_PEER_EXCHANGE") ?? "").trim());
 }
@@ -239,7 +243,7 @@ export async function learnFromPeer(
   p: Pick<PeerRow, "url" | "trust">,
   wk: { instance: string; capabilities?: string[] },
 ): Promise<void> {
-  if (!flagOn(env.FED_DISCOVER) || p.trust !== "trusted") return;
+  if (!discoverOn(env) || p.trust !== "trusted") return;
   if (!(wk.capabilities ?? []).includes(PEER_EXCHANGE_CAPABILITY)) return;
   let seen = lastExchange.get(env);
   if (!seen) lastExchange.set(env, (seen = new Map()));

@@ -49,7 +49,7 @@ changes no trust, since every record is signed by its home instance.
 ## Discovery over HAMNET
 
 - **Peer exchange works on HAMNET.** A trusted HAMNET peer lists the instances it trusts with their `hamnet`
-  addresses. With `FED_DISCOVER=1` your instance lists them under **Instance admin → Federation →
+  addresses. Your instance lists them under **Instance admin → Federation →
   Discovered**, switched off and unvetted; **Follow** dials their HAMNET address
   ([Discovery](index.md#discovery)).
 - **mDNS does not cross HAMNET.** An announcement stays on its own network segment, so it finds a station on your

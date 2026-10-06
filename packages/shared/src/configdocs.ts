@@ -33,7 +33,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
   CACHE_MOVE_LIMIT_M: "Metres an owner may move a cache from where it was first found (0 keeps it there)",
   FED_PEERS: "Comma-separated base URLs of federation peers to sync from; <url>#<fingerprint> pins a peer's key",
-  FED_DISCOVER: "1 lists the instances trusted peers trust, switched off until you follow one",
+  FED_DISCOVER: "lists the instances trusted peers trust, switched off until you follow one; 0 stops it",
   FED_PEER_EXCHANGE: "0 stops serving peers the list of instances this one trusts",
   FED_MDNS: "Find instances on the local network by mDNS: off, listen, or announce (listens too)",
   FED_CORROBORATION_QUORUM: "Distinct corroborating identities required to promote a find to Tier A",
@@ -558,8 +558,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_DISCOVER`",
-        "Read each trusted peer's list of the instances it trusts (peer exchange), at most hourly, and list them in Instance admin → Federation → **Discovered**: switched off, unvetted and never pulled until you follow one (at most 200; a listing expires 14 days after no trusted peer names it) ([Discovery](../run/federation/index.md#discovery))",
-        "off",
+        "Read each trusted peer's list of the instances it trusts (peer exchange), at most hourly, and list them in Instance admin → Federation → **Discovered**: switched off, unvetted and never pulled until you follow one (at most 200; a listing expires 14 days after no trusted peer names it). `0` stops it ([Discovery](../run/federation/index.md#discovery))",
+        "on",
       ],
       [
         "`FED_PEER_EXCHANGE`",
