@@ -15,7 +15,13 @@ export interface SerialLike {
   on(event: string, cb: (...args: any[]) => void): void;
 }
 
-export type SerialPortCtor = new (o: { path: string; baudRate: number; autoOpen: boolean }) => SerialLike;
+export type SerialPortCtor = new (o: {
+  path: string;
+  baudRate: number;
+  autoOpen: boolean;
+  /** Drop RTS and DTR when the last descriptor closes (the default; it is what unkeys a serial PTT on exit). */
+  hupcl?: boolean;
+}) => SerialLike;
 
 /** The SerialPort constructor, or an error that says how to install the package. */
 export async function loadSerialPort(): Promise<SerialPortCtor> {
@@ -40,7 +46,7 @@ export async function openSerial(
   baudRate: number,
   tag: string,
 ): Promise<SerialLike> {
-  const port = new ctor({ path, baudRate, autoOpen: false });
+  const port = new ctor({ path, baudRate, autoOpen: false, hupcl: true });
   // without an `error` listener a USB unplug emits an unhandled 'error' that would stop the whole ingest
   port.on("error", (e: Error) => console.error(`[${tag}] serial error on ${path}: ${e.message}`));
   port.on("close", () => console.warn(`[${tag}] serial port ${path} closed (radio unplugged?)`));

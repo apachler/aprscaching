@@ -1,51 +1,171 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Which of this box's station calls the gateway knows as control-verified. A port that keys a transmitter
- * itself (the soundcard port) transmits only while every station call the box transmits under is verified,
- * the same rule the gateway applies to every transmission it queues. The answer comes from the gateway's
- * public `GET /verify/aprs/status?callsign=`, which reports the base call, so every SSID shares it.
+ * The transmit gate every RF transmit port of the box shares (the KISS TNC and the soundcard ports): the box
+ * transmits only under station calls the gateway confirms for this box — control-verified, and held by the
+ * box's own operator (`GET /ingest/txgate`, workers/gateway/src/txgate.ts). Receiving never needs it.
  *
- * The box asks at start and again on a timer. A gateway that cannot be reached leaves the last answer in
- * place; until a first answer arrives, nothing counts as verified.
+ * The answer is authenticated: with the shared INGEST_SECRET the gateway MACs the box's nonce and the body;
+ * an enrolled box (its own key, no shared secret) accepts the answer only over https or loopback.
+ *
+ * Every answer is fresh for two refresh intervals (three minutes each), so a revoked verification closes the
+ * gate within minutes. Without a fresh answer a call counts as unconfirmed, and the box asks again after 30 s,
+ * backing off to the interval while the gateway stays unreachable.
  */
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { gatewayFetch } from "./gatewayauth.js";
 
-const base = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
+export interface GateAnswer {
+  ok: boolean;
+  reason?: string;
+}
+export type TxGateLookup = (calls: string[]) => Promise<Map<string, GateAnswer>>;
+
+export interface CallVerifierOpts {
+  /** Between refreshes while the gateway answers (default 3 min); an answer is fresh for two of them. */
+  intervalMs?: number;
+  /** The first retry after a failed refresh (default 30 s), doubling up to the interval. */
+  retryMs?: number;
+  now?: () => number;
+  log?: (msg: string) => void;
+}
 
 export class CallVerifier {
-  private verified = new Map<string, boolean>();
+  private answers = new Map<string, { answer: GateAnswer; at: number }>();
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private failures = 0;
+  private lastError: string | null = null;
+  private interval: number;
+  private retry: number;
 
-  constructor(private lookup: (call: string) => Promise<boolean>) {}
+  constructor(
+    private lookup: TxGateLookup,
+    private o: CallVerifierOpts = {},
+  ) {
+    this.interval = o.intervalMs ?? 180_000;
+    this.retry = o.retryMs ?? 30_000;
+  }
 
-  /** Ask the gateway about each call's base call. A failed lookup keeps the previous answer. */
-  async refresh(calls: readonly string[]): Promise<void> {
-    for (const b of new Set(calls.map(base).filter(Boolean))) {
-      try {
-        this.verified.set(b, await this.lookup(b));
-      } catch {
-        /* unreachable gateway: keep what it said last */
-      }
+  private now(): number {
+    return this.o.now?.() ?? Date.now();
+  }
+
+  /** Ask the gateway about `calls`; false when it could not be asked (the old answers age out). */
+  async refresh(calls: readonly string[]): Promise<boolean> {
+    const list = [...new Set(calls.map((c) => c.trim().toUpperCase()).filter(Boolean))];
+    if (!list.length) return true;
+    try {
+      const got = await this.lookup(list);
+      const at = this.now();
+      for (const c of list) this.answers.set(c, { answer: got.get(c) ?? { ok: false, reason: "no answer" }, at });
+      this.failures = 0;
+      this.lastError = null;
+      return true;
+    } catch (e) {
+      this.failures++;
+      this.lastError = (e as Error).message;
+      return false;
     }
   }
 
-  /** The first call whose base call is not known as verified, or null when all are. */
-  unverified(calls: readonly string[]): string | null {
-    return calls.find((c) => this.verified.get(base(c)) !== true) ?? null;
+  /** Refresh now and keep refreshing: every interval while the gateway answers, sooner while it does not. */
+  start(calls: readonly string[], after?: () => void): void {
+    const tick = async () => {
+      const ok = await this.refresh(calls);
+      after?.();
+      const wait = ok ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
+      if (!ok)
+        this.o.log?.(
+          `[txgate] the gateway did not answer (${this.lastError}); asking again in ${Math.round(wait / 1000)} s`,
+        );
+      this.timer = setTimeout(() => void tick(), wait);
+      this.timer.unref?.();
+    };
+    void tick();
+  }
+
+  stop(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  /** Why the box may not transmit under `calls` now, or null when every one is confirmed and fresh. */
+  refusal(calls: readonly string[]): string | null {
+    if (!calls.length) return "no station call is set (BOX_CALL, DIGI_CALL, IGATE_CALL or SOUNDCARD_CALL)";
+    const now = this.now();
+    for (const raw of calls) {
+      const c = raw.toUpperCase();
+      const a = this.answers.get(c);
+      if (!a || now - a.at > 2 * this.interval)
+        return `the gateway has not confirmed ${c} recently${this.lastError ? ` (${this.lastError})` : ""}`;
+      if (a.answer.ok) continue;
+      return a.answer.reason === "not control-verified"
+        ? `verify ${c} to transmit — control-verification required`
+        : `${c} cannot transmit from this box: ${a.answer.reason ?? "refused"}`;
+    }
+    return null;
   }
 }
 
-/** The lookup against a gateway at `gatewayBase` (the ingest URL without `/ingest`). */
-export function gatewayVerifyLookup(gatewayBase: string, fetchFn: typeof gatewayFetch = gatewayFetch) {
-  return async (call: string): Promise<boolean> => {
-    const r = await fetchFn(`${gatewayBase}/verify/aprs/status?callsign=${encodeURIComponent(call)}`, {});
+/**
+ * A transmit check for a port that holds no gate of its own (the KISS TNC): true when the box's switch is on
+ * and the gateway confirms `calls`; a refusal is logged once per change of reason.
+ */
+export function gateCheck(
+  verifier: Pick<CallVerifier, "refusal">,
+  calls: readonly string[],
+  master: () => boolean,
+  log: (msg: string) => void,
+): () => boolean {
+  let logged: string | null = null;
+  return () => {
+    const why = master() ? verifier.refusal(calls) : "transmit is switched off on this box";
+    if (why && why !== logged) log(`transmit refused: ${why}`);
+    logged = why;
+    return !why;
+  };
+}
+
+const isLoopback = (host: string) => /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/i.test(host);
+
+/**
+ * The lookup against the gateway (`ingestUrl` is INGEST_URL, `…/ingest`). `boxKey` says the box signs with its
+ * own key (gatewayFetch does it), else it sends the shared secret and checks the answer's MAC.
+ */
+export function gatewayTxGateLookup(o: {
+  ingestUrl: string;
+  secret: string;
+  boxKey: boolean;
+  boxId?: string;
+  fetch?: typeof fetch;
+}): TxGateLookup {
+  const f = o.fetch ?? gatewayFetch;
+  return async (calls) => {
+    const url = new URL(`${o.ingestUrl.replace(/\/+$/, "")}/txgate`);
+    if (o.boxKey && url.protocol !== "https:" && !isLoopback(url.hostname))
+      throw new Error("an enrolled box takes the gateway's transmit answer only over https: set an https INGEST_URL");
+    const nonce = randomBytes(18).toString("base64url");
+    url.searchParams.set("calls", calls.join(","));
+    url.searchParams.set("nonce", nonce);
+    if (o.boxId) url.searchParams.set("box", o.boxId);
+    const r = await f(url.toString(), { headers: { "x-ingest-secret": o.secret } });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return ((await r.json()) as { verified?: unknown }).verified === true;
+    const body = await r.text();
+    if (!o.boxKey) {
+      const mac = Buffer.from(r.headers.get("x-txgate-mac") ?? "", "hex");
+      const want = createHmac("sha256", o.secret).update(`${nonce}\n${body}`).digest();
+      if (mac.length !== want.length || !timingSafeEqual(mac, want))
+        throw new Error("the gateway's answer does not carry a valid MAC");
+    }
+    const parsed = JSON.parse(body) as { calls?: Record<string, GateAnswer> };
+    return new Map(
+      Object.entries(parsed.calls ?? {}).map(([k, v]) => [k.toUpperCase(), { ok: v.ok === true, reason: v.reason }]),
+    );
   };
 }
 
 /**
- * The station calls a box transmits under, from its settings: every frame a soundcard port sends carries
- * one of them as its source or as the digipeater's own hop.
+ * The station calls a box transmits under, from its settings: every frame it sends carries one of them as its
+ * source or as the digipeater's own hop.
  */
 export function stationCalls(env: Record<string, string | undefined>, portCall?: string): string[] {
   const keys = [

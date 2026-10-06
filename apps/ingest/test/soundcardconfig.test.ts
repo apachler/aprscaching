@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The soundcard settings, the station-call verification the transmit gate reads, and the doctor's checks and
-// PTT test, all against fakes.
-import { describe, it, expect } from "vitest";
+// The soundcard settings, the call gate every transmit port shares (fresh answers, fail-closed, the gateway's
+// MAC), and the doctor's checks and PTT test, all against fakes.
+import { describe, it, expect, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { encodeAx25, modulateAfsk1200 } from "@aprscaching/aprs";
 import { validateConfig } from "@aprscaching/shared";
 import { soundcardPorts } from "../src/soundcardconfig.js";
-import { CallVerifier, gatewayVerifyLookup, stationCalls } from "../src/callverify.js";
+import { CallVerifier, gateCheck, gatewayTxGateLookup, stationCalls, type TxGateLookup } from "../src/callverify.js";
 import { soundcardChecks, pttTest, type CheckDeps } from "../src/soundcardcheck.js";
 import { recordingPtt } from "./fakeaudio.js";
 
@@ -29,6 +31,7 @@ describe("soundcardPorts", () => {
         slotTimeMs: 100,
         pttMaxMs: 10_000,
         txLevel: 0.5,
+        dutyPct: 20,
       },
     ]);
   });
@@ -99,39 +102,175 @@ describe("soundcardPorts", () => {
   });
 });
 
-describe("station-call verification", () => {
+describe("the call gate", () => {
+  const answers = (m: Record<string, { ok: boolean; reason?: string }>) => new Map(Object.entries(m));
+
   it("lists every call the box transmits under, once", () => {
     expect(
       stationCalls({ DIGI_CALL: "oe8apr-10", IGATE_CALL: "OE8APR-10", NETROM_CALL: "OE8APR-5" }, "OE8APR-11"),
     ).toEqual(["OE8APR-11", "OE8APR-10", "OE8APR-5"]);
   });
 
-  it("knows a call verified once the gateway said so, keeps the answer through an outage", async () => {
-    let up = true;
-    const asked: string[] = [];
-    const v = new CallVerifier(async (c) => {
-      asked.push(c);
-      if (!up) throw new Error("unreachable");
-      return c === "OE8APR";
-    });
-    expect(v.unverified(["OE8APR-10"])).toBe("OE8APR-10"); // nothing known yet
-    await v.refresh(["OE8APR-10", "OE8APR-5", "DL1ABC"]);
-    expect(asked).toEqual(["OE8APR", "DL1ABC"]); // one question per base call
-    expect(v.unverified(["OE8APR-10", "OE8APR-5"])).toBeNull();
-    expect(v.unverified(["OE8APR-10", "DL1ABC-1"])).toBe("DL1ABC-1");
-    up = false;
-    await v.refresh(["OE8APR-10"]);
-    expect(v.unverified(["OE8APR-10"])).toBeNull();
+  it("opens only for calls the gateway confirmed, says why otherwise", async () => {
+    const v = new CallVerifier(async () =>
+      answers({
+        "OE8APR-10": { ok: true },
+        "DL1ABC-1": { ok: false, reason: "not control-verified" },
+        "OE3OTH-1": { ok: false, reason: "not held by this box's operator" },
+      }),
+    );
+    expect(v.refusal(["OE8APR-10"])).toMatch(/has not confirmed OE8APR-10/); // nothing asked yet
+    await v.refresh(["OE8APR-10", "DL1ABC-1", "OE3OTH-1"]);
+    expect(v.refusal(["OE8APR-10"])).toBeNull();
+    expect(v.refusal(["OE8APR-10", "DL1ABC-1"])).toBe("verify DL1ABC-1 to transmit — control-verification required");
+    expect(v.refusal(["OE3OTH-1"])).toBe("OE3OTH-1 cannot transmit from this box: not held by this box's operator");
+    expect(v.refusal([])).toMatch(/no station call is set/);
   });
 
-  it("asks the gateway's public verification status", async () => {
-    const urls: string[] = [];
-    const lookup = gatewayVerifyLookup("http://gw.example", (async (u: string) => {
-      urls.push(u);
-      return new Response(JSON.stringify({ verified: true }));
-    }) as typeof fetch);
-    expect(await lookup("OE8APR-10")).toBe(true);
-    expect(urls).toEqual(["http://gw.example/verify/aprs/status?callsign=OE8APR-10"]);
+  it("a stale answer fails closed: two intervals without a fresh answer close the gate", async () => {
+    let clock = 0;
+    let up = true;
+    const v = new CallVerifier(
+      async () => {
+        if (!up) throw new Error("unreachable");
+        return answers({ "OE8APR-10": { ok: true } });
+      },
+      { intervalMs: 180_000, now: () => clock },
+    );
+    await v.refresh(["OE8APR-10"]);
+    up = false;
+    clock += 300_000;
+    await v.refresh(["OE8APR-10"]); // the gateway is down: the old answer is kept, but ages
+    expect(v.refusal(["OE8APR-10"])).toBeNull();
+    clock += 61_000; // past two intervals since the last answer
+    expect(v.refusal(["OE8APR-10"])).toBe("the gateway has not confirmed OE8APR-10 recently (unreachable)");
+  });
+
+  it("a revoked verification closes the gate at the next refresh", async () => {
+    let verified = true;
+    const v = new CallVerifier(async () =>
+      answers({ "OE8APR-10": verified ? { ok: true } : { ok: false, reason: "not control-verified" } }),
+    );
+    await v.refresh(["OE8APR-10"]);
+    expect(v.refusal(["OE8APR-10"])).toBeNull();
+    verified = false;
+    await v.refresh(["OE8APR-10"]);
+    expect(v.refusal(["OE8APR-10"])).toMatch(/^verify OE8APR-10/);
+  });
+
+  it("refreshes every interval, and retries from 30 s with backoff while the gateway is down", async () => {
+    vi.useFakeTimers();
+    try {
+      let up = false;
+      const asked: number[] = [];
+      const v = new CallVerifier(
+        async () => {
+          asked.push(Date.now());
+          if (!up) throw new Error("down");
+          return answers({ "OE8APR-10": { ok: true } });
+        },
+        { intervalMs: 180_000, retryMs: 30_000 },
+      );
+      const t0 = Date.now();
+      v.start(["OE8APR-10"]);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(60_000);
+      up = true;
+      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(180_000);
+      v.stop();
+      expect(asked.map((t) => t - t0)).toEqual([0, 30_000, 90_000, 210_000, 390_000]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the KISS check refuses with the switch off or a refused call, and logs each reason once", async () => {
+    const v = new CallVerifier(async () => answers({ "OE8APR-10": { ok: true } }));
+    const logged: string[] = [];
+    let master = true;
+    const open = gateCheck(
+      v,
+      ["OE8APR-10"],
+      () => master,
+      (m) => logged.push(m),
+    );
+    expect(open()).toBe(false);
+    expect(open()).toBe(false);
+    await v.refresh(["OE8APR-10"]);
+    expect(open()).toBe(true);
+    master = false;
+    expect(open()).toBe(false);
+    expect(logged).toEqual([
+      "transmit refused: the gateway has not confirmed OE8APR-10 recently",
+      "transmit refused: transmit is switched off on this box",
+    ]);
+  });
+});
+
+describe("the gateway lookup", () => {
+  const SECRET = "the-ingest-secret-123";
+  /** A gateway stand-in: answers `body`, with the MAC over the box's nonce unless `mac` replaces it. */
+  const gateway = (body: string, o: { mac?: string } = {}) => {
+    const urls: URL[] = [];
+    const f = (async (u: string) => {
+      const url = new URL(u);
+      urls.push(url);
+      const nonce = url.searchParams.get("nonce")!;
+      const mac = o.mac ?? createHmac("sha256", SECRET).update(`${nonce}\n${body}`).digest("hex");
+      return new Response(body, { headers: { "x-txgate-mac": mac } });
+    }) as typeof fetch;
+    return { f, urls };
+  };
+  const body = JSON.stringify({
+    calls: { "OE8APR-10": { ok: true }, DL1ABC: { ok: false, reason: "not control-verified" } },
+  });
+
+  it("asks /ingest/txgate with the calls, a fresh nonce and the box id, and checks the MAC", async () => {
+    const g = gateway(body);
+    const lookup = gatewayTxGateLookup({
+      ingestUrl: "http://gw:8080/ingest",
+      secret: SECRET,
+      boxKey: false,
+      boxId: "shack-1",
+      fetch: g.f,
+    });
+    const got = await lookup(["OE8APR-10", "DL1ABC"]);
+    expect(got.get("OE8APR-10")).toEqual({ ok: true, reason: undefined });
+    expect(got.get("DL1ABC")?.ok).toBe(false);
+    const u = g.urls[0]!;
+    expect(u.pathname).toBe("/ingest/txgate");
+    expect(u.searchParams.get("calls")).toBe("OE8APR-10,DL1ABC");
+    expect(u.searchParams.get("box")).toBe("shack-1");
+    expect(u.searchParams.get("nonce")!.length).toBeGreaterThanOrEqual(16);
+    await lookup(["OE8APR-10"]);
+    expect(g.urls[1]!.searchParams.get("nonce")).not.toBe(u.searchParams.get("nonce"));
+  });
+
+  it("refuses an answer without a valid MAC: a forged 'ok' on a plain-http hop does not open the gate", async () => {
+    const forged = gateway(JSON.stringify({ calls: { "OE8APR-10": { ok: true } } }), { mac: "00".repeat(32) });
+    const lookup = gatewayTxGateLookup({
+      ingestUrl: "http://gw/ingest",
+      secret: SECRET,
+      boxKey: false,
+      fetch: forged.f,
+    });
+    await expect(lookup(["OE8APR-10"])).rejects.toThrow(/valid MAC/);
+    const v = new CallVerifier(lookup);
+    await v.refresh(["OE8APR-10"]);
+    expect(v.refusal(["OE8APR-10"])).toMatch(/has not confirmed/);
+  });
+
+  it("an enrolled box takes the answer only over https or loopback", async () => {
+    const g = gateway(body);
+    const remote = gatewayTxGateLookup({ ingestUrl: "http://gw.example/ingest", secret: "", boxKey: true, fetch: g.f });
+    await expect(remote(["OE8APR-10"])).rejects.toThrow(/only over https/);
+    expect(g.urls).toHaveLength(0);
+    for (const ingestUrl of ["https://gw.example/ingest", "http://127.0.0.1:8787/ingest"]) {
+      const ok = gatewayTxGateLookup({ ingestUrl, secret: "", boxKey: true, fetch: g.f });
+      expect((await ok(["OE8APR-10"])).get("OE8APR-10")?.ok).toBe(true);
+    }
   });
 });
 
@@ -145,7 +284,8 @@ describe("soundcard doctor checks", () => {
       if (cmd === "arecord" && o.captureErr) return { status: 1, stderr: o.captureErr };
       return { status: 0, stderr: "" };
     };
-  const deps = (o: Partial<CheckDeps> = {}): CheckDeps => ({ verified: async () => true, spawnSync: alsa(), ...o });
+  const allOk: TxGateLookup = async (calls) => new Map(calls.map((c) => [c, { ok: true }]));
+  const deps = (o: Partial<CheckDeps> = {}): CheckDeps => ({ gate: allOk, spawnSync: alsa(), ...o });
   const env = { SOUNDCARD_DEVICE: "plughw:1,0", SOUNDCARD_TX: "1", SOUNDCARD_PTT: "none", BOX_CALL: "OE8APR-10" };
 
   it("reports nothing without a soundcard port", async () => {
@@ -162,6 +302,7 @@ describe("soundcard doctor checks", () => {
       "tx:pass",
     ]);
     expect(rows[3]!.message).toMatch(/watchdog releases the transmitter after 10000 ms/);
+    expect(rows[4]!.message).toMatch(/the gateway confirms OE8APR-10 for this box/);
   });
 
   it("fails on missing ALSA tools and on a capture device that does not open", async () => {
@@ -187,17 +328,20 @@ describe("soundcard doctor checks", () => {
     expect(rows[1]!.message).toMatch(/in use by the running ingest/);
   });
 
-  it("warns about an unverified call and a long watchdog, and fails an unreachable rigctld", async () => {
+  it("warns about a refused call and a long watchdog, and fails an unreachable rigctld", async () => {
     const rows = await soundcardChecks(
       { ...env, SOUNDCARD_PTT: "rigctld", SOUNDCARD_PTT_MAX_MS: "30000" },
-      deps({ verified: async () => false, tcpOpen: async () => false }),
+      deps({
+        gate: async (calls) => new Map(calls.map((c) => [c, { ok: false, reason: "not held by this box's operator" }])),
+        tcpOpen: async () => false,
+      }),
     );
     expect(rows.filter((r) => r.status !== "pass").map((r) => `${r.kind}:${r.status}`)).toEqual([
       "ptt:fail",
       "tx:warn",
       "tx:warn",
     ]);
-    expect(rows.find((r) => r.kind === "tx" && /not control-verified/.test(r.message))).toBeTruthy();
+    expect(rows.find((r) => r.kind === "tx" && /not held by this box's operator/.test(r.message))).toBeTruthy();
   });
 
   it("checks a CM108 PTT without opening it", async () => {
@@ -211,23 +355,32 @@ describe("soundcard doctor checks", () => {
 
 describe("PTT test", () => {
   const env = { SOUNDCARD_DEVICE: "plughw:1,0", SOUNDCARD_TX: "1", SOUNDCARD_PTT: "cm108", BOX_CALL: "OE8APR-10" };
+  const allOk: TxGateLookup = async (calls) => new Map(calls.map((c) => [c, { ok: true }]));
+  /** A second of capture: silence, another station transmitting, or a card the running ingest holds. */
+  const listen = (what: "silence" | "busy-channel" | "card-in-use") => (_d: string, rate: number) => {
+    if (what === "card-in-use")
+      return { status: 1, stdout: Buffer.alloc(0), stderr: "arecord: audio open error: Device or resource busy" };
+    if (what === "silence") return { status: 0, stdout: Buffer.alloc(rate * 2), stderr: "" };
+    const pcm = modulateAfsk1200(encodeAx25({ src: "OE3XYZ", dst: "APRS", payload: ">talking" }), rate, { flags: 100 });
+    return { status: 0, stdout: Buffer.from(new Int16Array(pcm.map((v) => Math.round(v * 16000))).buffer), stderr: "" };
+  };
 
   it("is refused with transmit off", async () => {
     const ptt = recordingPtt();
-    const r = await pttTest({ ...env, SOUNDCARD_TX: "" }, undefined, {
-      verified: async () => true,
-      openPtt: async () => ptt,
-    });
+    const r = await pttTest({ ...env, SOUNDCARD_TX: "" }, undefined, { gate: allOk, openPtt: async () => ptt });
     expect(r).toEqual({ ok: false, message: "refused: transmit is off on port 1 (set SOUNDCARD_TX=1)" });
     expect(ptt.events).toEqual([]);
   });
 
-  it("is refused while the call is not verified, or the gateway cannot say", async () => {
+  it("is refused while a call is not confirmed, or the gateway cannot say", async () => {
     const ptt = recordingPtt();
-    const no = await pttTest(env, "1", { verified: async () => false, openPtt: async () => ptt });
+    const no = await pttTest(env, "1", {
+      gate: async () => new Map([["OE8APR-10", { ok: false, reason: "not control-verified" }]]),
+      openPtt: async () => ptt,
+    });
     expect(no.message).toBe("refused: verify OE8APR-10 to transmit — control-verification required");
     const down = await pttTest(env, "1", {
-      verified: async () => {
+      gate: async () => {
         throw new Error("down");
       },
       openPtt: async () => ptt,
@@ -236,25 +389,30 @@ describe("PTT test", () => {
     expect(ptt.events).toEqual([]);
   });
 
-  it("keys under a second and always releases", async () => {
+  it("is refused while the running ingest holds the card, and on a busy channel", async () => {
+    const ptt = recordingPtt();
+    const held = await pttTest(env, "1", { gate: allOk, openPtt: async () => ptt, listen: listen("card-in-use") });
+    expect(held.message).toMatch(/stop the ingest first/);
+    const busy = await pttTest(env, "1", { gate: allOk, openPtt: async () => ptt, listen: listen("busy-channel") });
+    expect(busy.message).toMatch(/the channel is busy/);
+    expect(ptt.events).toEqual([]);
+  });
+
+  it("keys under a second on a clear channel and always releases", async () => {
     const ptt = recordingPtt();
     const slept: number[] = [];
     const r = await pttTest(
       env,
       undefined,
-      {
-        verified: async () => true,
-        openPtt: async () => ptt,
-        sleep: async (ms) => void slept.push(ms),
-      },
+      { gate: allOk, openPtt: async () => ptt, listen: listen("silence"), sleep: async (ms) => void slept.push(ms) },
       5000,
     );
     expect(r.ok).toBe(true);
     expect(slept).toEqual([900]);
-    expect(ptt.events).toEqual(["key", "unkey", "close"]);
+    expect(ptt.events).toEqual(["key", "unkey", "unkey", "close"]);
   });
 
   it("names a port that does not exist", async () => {
-    expect((await pttTest(env, "uhf", { verified: async () => true })).message).toBe("no soundcard port named uhf");
+    expect((await pttTest(env, "uhf", { gate: allOk })).message).toBe("no soundcard port named uhf");
   });
 });

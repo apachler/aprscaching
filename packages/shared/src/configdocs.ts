@@ -128,8 +128,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
   SOUNDCARD_RATE: "Sample rate of the soundcard port's audio",
-  SOUNDCARD_TX: "1 allows the soundcard port to transmit (with a PTT and a control-verified call)",
-  SOUNDCARD_CALL: "Call the soundcard port transmits under (default BOX_CALL, IGATE_CALL, DIGI_CALL)",
+  SOUNDCARD_TX: "1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)",
+  SOUNDCARD_CALL: "Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)",
   SOUNDCARD_PTT: "How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:",
   SOUNDCARD_TXDELAY_MS: "Preamble of flags before each frame, in ms",
   SOUNDCARD_TXTAIL_MS: "Time the PTT stays keyed after the audio ends, in ms",
@@ -137,6 +137,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SOUNDCARD_SLOTTIME_MS: "CSMA slot time, in ms",
   SOUNDCARD_PTT_MAX_MS: "PTT watchdog: longest key time before the PTT is released and the port faults",
   SOUNDCARD_TX_LEVEL: "Transmit audio level, 0.01-1 of full scale",
+  SOUNDCARD_DUTY_PCT: "Most of any minute the soundcard port may transmit, in percent (1-100)",
   SOUNDCARD_PORTS: "Further soundcard ports, a JSON array of objects with the same fields",
   MESHTASTIC_HOST: "Host of a Meshtastic node's TCP API (licensed nodes only)",
   MESHTASTIC_PORT: "TCP port of the Meshtastic node API",
@@ -752,7 +753,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ["WA8DED hostmode", "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT`"],
       [
         "Soundcard port (1200-baud AFSK in the box; carries digi/node/BBS/IGate without a TNC)",
-        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs every station call control-verified at the gateway), `SOUNDCARD_CALL` (default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts`, `dtr`, `-rts`, `-dtr`), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
+        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
       ],
       [
         "Meshtastic (licensed nodes only)",

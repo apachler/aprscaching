@@ -272,6 +272,7 @@ export const CONFIG_KEYS = {
   SOUNDCARD_SLOTTIME_MS: { type: "int", units: ["ingest"], default: "100" },
   SOUNDCARD_PTT_MAX_MS: { type: "int", units: ["ingest"], default: "10000" },
   SOUNDCARD_TX_LEVEL: { type: "number", units: ["ingest"], default: "0.5" },
+  SOUNDCARD_DUTY_PCT: { type: "int", units: ["ingest"], default: "20" },
   SOUNDCARD_PORTS: { type: "json", units: ["ingest"] },
   MESHTASTIC_HOST: { type: "string", units: ["ingest"] },
   MESHTASTIC_PORT: { type: "int", units: ["ingest"], default: "4403" },

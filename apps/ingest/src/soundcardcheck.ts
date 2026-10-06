@@ -9,14 +9,15 @@
  * setting and ask the gateway whether the station calls are control-verified. A device the running ingest
  * holds reports as busy, which passes.
  *
- * The PTT test keys the transmitter for half a second, with no audio, and only when the port's transmit is on
- * and every station call it transmits under is verified. The watchdog bounds it, and the PTT is released on
- * every way out.
+ * The PTT test keys the transmitter for half a second, with no audio, and only when the port's transmit is on,
+ * the gateway confirms every station call for this box, and a second of listening heard a clear channel. The
+ * watchdog bounds it, and the PTT is released on every way out.
  */
 import net from "node:net";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
-import { alsaArgs, alsaHint, alsaToolsProblem } from "./alsa.js";
-import { stationCalls } from "./callverify.js";
+import { Afsk1200Rx } from "@aprscaching/aprs";
+import { alsaArgs, alsaHint, alsaToolsProblem, s16Reader } from "./alsa.js";
+import { stationCalls, type TxGateLookup } from "./callverify.js";
 import { describePtt, openPtt, pttProblem, type Ptt, type PttDeps, type PttSpec } from "./ptt/index.js";
 import { installPttRelease, trackPtt, untrackPtt } from "./ptt/release.js";
 import { PttWatchdog } from "./ptt/watchdog.js";
@@ -38,10 +39,18 @@ type SpawnSyncFn = (
   opts: { input?: Buffer; timeout: number },
 ) => { status: number | null; stderr?: string | Buffer | null; error?: Error };
 
+/** Capture `seconds` of audio, as raw S16_LE bytes. */
+type ListenFn = (
+  device: string,
+  rate: number,
+  seconds: number,
+) => { status: number | null; stdout: Buffer; stderr: string; error?: Error };
+
 export interface CheckDeps {
   spawnSync?: SpawnSyncFn;
-  /** Whether the gateway knows a call as control-verified; throws when it cannot be asked. */
-  verified: (call: string) => Promise<boolean>;
+  /** The gateway's transmit gate for the box (callverify.ts); throws when it cannot be asked. */
+  gate: TxGateLookup;
+  listen?: ListenFn;
   pttDeps?: PttDeps;
   tcpOpen?: (host: string, port: number) => Promise<boolean>;
   openPtt?: (s: PttSpec) => Promise<Ptt>;
@@ -53,6 +62,14 @@ const busy = (stderr: string) => /busy/i.test(stderr);
 
 const defaultSpawnSync: SpawnSyncFn = (cmd, args, opts) =>
   nodeSpawnSync(cmd, args, { input: opts.input, timeout: opts.timeout, encoding: "utf8" });
+
+const defaultListen: ListenFn = (device, rate, seconds) => {
+  const r = nodeSpawnSync("arecord", [...alsaArgs(device, rate), "-d", String(seconds)], {
+    timeout: (seconds + 4) * 1000,
+    maxBuffer: rate * 2 * (seconds + 1),
+  });
+  return { status: r.status, stdout: r.stdout ?? Buffer.alloc(0), stderr: String(r.stderr ?? ""), error: r.error };
+};
 
 const defaultTcpOpen = (host: string, port: number) =>
   new Promise<boolean>((res) => {
@@ -180,45 +197,54 @@ async function txRows(
     out.push(row("fail", `port ${p.name}: no station call is set`, "set SOUNDCARD_CALL (or BOX_CALL) to your call"));
     return out;
   }
-  const unverified = await firstUnverified(calls, deps.verified);
-  if (unverified === undefined)
+  const g = await gateProblem(calls, deps.gate);
+  if (g?.down)
     out.push(
       row(
         "warn",
-        `port ${p.name}: the gateway did not say whether the station calls (${calls.join(", ")}) are verified`,
-        "check INGEST_URL",
+        `port ${p.name}: the gateway did not confirm the station calls (${calls.join(", ")}): ${g.down}`,
+        "check INGEST_URL (https for an enrolled box) and the box's credential",
       ),
     );
-  else if (unverified)
+  else if (g)
     out.push(
       row(
         "warn",
-        `port ${p.name}: ${unverified} is not control-verified, so the port does not transmit`,
-        `verify ${unverified} in the app: You → Verify callsign`,
+        `port ${p.name}: ${g.call} ${g.reason}, so the port does not transmit`,
+        g.reason === "not control-verified"
+          ? `verify ${g.call} in the app: You → Verify callsign`
+          : "transmit under calls of the account that owns this box",
       ),
     );
-  else out.push(row("pass", `port ${p.name}: ${calls.join(", ")} control-verified; transmit allowed`));
+  else out.push(row("pass", `port ${p.name}: the gateway confirms ${calls.join(", ")} for this box; transmit allowed`));
   return out;
 }
 
-/** The first unverified call, null when all are verified, undefined when the gateway could not be asked. */
-async function firstUnverified(
+/** What keeps `calls` from transmitting: the gateway is down, or a call is refused; null when all pass. */
+async function gateProblem(
   calls: string[],
-  verified: (c: string) => Promise<boolean>,
-): Promise<string | null | undefined> {
+  gate: TxGateLookup,
+): Promise<
+  { down: string; call?: undefined; reason?: undefined } | { down?: undefined; call: string; reason: string } | null
+> {
+  let got: Map<string, { ok: boolean; reason?: string }>;
+  try {
+    got = await gate(calls);
+  } catch (e) {
+    return { down: (e as Error).message };
+  }
   for (const c of calls) {
-    try {
-      if (!(await verified(c))) return c;
-    } catch {
-      return undefined;
-    }
+    const a = got.get(c.toUpperCase());
+    if (!a?.ok) return { call: c, reason: a?.reason ?? "not confirmed" };
   }
   return null;
 }
 
 /**
- * Key one port's PTT for `ms` (at most 900), with no audio. Refused unless the port's transmit is on and
- * every station call is verified. Returns the line to print.
+ * Key one port's PTT for `ms` (at most 900), with no audio. Refused unless the port's transmit is on, the
+ * gateway confirms every station call for this box, and the channel is clear: the test first listens for a
+ * second with the port's own carrier detect. That needs the sound card, so the test runs with the ingest
+ * stopped; the running box owns the card, the PTT and its transmit switch. Returns the line to print.
  */
 export async function pttTest(
   env: Record<string, string | undefined>,
@@ -236,11 +262,33 @@ export async function pttTest(
   if (!p.tx) return { ok: false, message: `refused: transmit is off on port ${p.name} (set SOUNDCARD_TX=1)` };
   const calls = stationCalls(env, p.call);
   if (!calls.length) return { ok: false, message: "refused: no station call is set (SOUNDCARD_CALL or BOX_CALL)" };
-  const unverified = await firstUnverified(calls, deps.verified);
-  if (unverified === undefined)
-    return { ok: false, message: "refused: the gateway could not confirm the call's verification" };
-  if (unverified)
-    return { ok: false, message: `refused: verify ${unverified} to transmit — control-verification required` };
+  const g = await gateProblem(calls, deps.gate);
+  if (g?.down) return { ok: false, message: `refused: the gateway did not confirm the station calls (${g.down})` };
+  if (g)
+    return {
+      ok: false,
+      message:
+        g.reason === "not control-verified"
+          ? `refused: verify ${g.call} to transmit — control-verification required`
+          : `refused: ${g.call} ${g.reason}`,
+    };
+  // listen before keying: a busy channel, or a sound card the running ingest holds, refuses the test
+  const heard = (deps.listen ?? defaultListen)(p.device, p.rate, 1);
+  if (heard.status !== 0)
+    return {
+      ok: false,
+      message: busy(heard.stderr)
+        ? "refused: the sound card is in use; stop the ingest first (it owns the card, the PTT and the transmit switch)"
+        : `refused: cannot listen on ${p.device}: ${alsaHint("arecord", heard.error ?? null, heard.stderr)}`,
+    };
+  const rx = new Afsk1200Rx(p.rate, () => {});
+  const pcm = s16Reader()(heard.stdout);
+  let busyChannel = false;
+  for (let i = 0; i < pcm.length; i += 480) {
+    rx.push(pcm.subarray(i, i + 480));
+    busyChannel ||= rx.dcd;
+  }
+  if (busyChannel) return { ok: false, message: "refused: the channel is busy (carrier detected); try again later" };
   const keyMs = Math.min(900, Math.max(50, ms));
   installPttRelease();
   let fault: string | null = null;
@@ -252,7 +300,7 @@ export async function pttTest(
     await (deps.sleep ?? ((t) => new Promise((r) => setTimeout(r, t))))(keyMs);
   } finally {
     await ptt.unkey().catch(() => {});
-    await ptt.close().catch(() => {});
+    await ptt.close().catch(() => ptt.releaseSync());
     untrackPtt(ptt);
   }
   return fault

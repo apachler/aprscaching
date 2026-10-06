@@ -1,12 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The soundcard port with fake arecord/aplay processes and a recording PTT: a frame one port transmits is
-// heard by another, the transmit gate refuses what it must, CSMA holds back on a busy channel, and the PTT
-// watchdog releases a stuck transmitter and faults the port.
+// The soundcard port with fake arecord/aplay processes and a recording PTT (or the real GPIO driver over a fake
+// gpioset): a frame one port transmits is heard by another but never by the port itself, the transmit gate
+// refuses what it must, CSMA, the frame age limit and the duty cycle hold back, the PTT watchdog releases a stuck
+// transmitter, a stop or a SIGTERM during a transmission ends at the unkeyed level, and capture failures stop
+// transmit until capture runs again.
 import { describe, it, expect, afterEach } from "vitest";
+import { EventEmitter } from "node:events";
 import { modulateAfsk1200, encodeAx25 } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
-import { SoundcardPort, txDelayFlags, type SoundcardConfig, type SoundcardGate } from "../src/soundcard.js";
-import { fakeSpawner, recordingPtt } from "./fakeaudio.js";
+import {
+  SoundcardPort,
+  txDelayFlags,
+  RX_GUARD_MS,
+  type SoundcardConfig,
+  type SoundcardDeps,
+  type SoundcardGate,
+} from "../src/soundcard.js";
+import { openGpioPtt } from "../src/ptt/gpio.js";
+import { forgetPtt, installPttRelease } from "../src/ptt/release.js";
+import type { Ptt } from "../src/ptt/index.js";
+import { fakeSpawner, gpiosetSpy, recordingPtt } from "./fakeaudio.js";
 
 const cfg = (o: Partial<SoundcardConfig> = {}): SoundcardConfig => ({
   name: "1",
@@ -21,45 +34,66 @@ const cfg = (o: Partial<SoundcardConfig> = {}): SoundcardConfig => ({
   slotTimeMs: 10,
   pttMaxMs: 10_000,
   txLevel: 0.5,
+  dutyPct: 100,
   ...o,
 });
 const openGate = (o: Partial<SoundcardGate> = {}): SoundcardGate => ({
   master: () => true,
   calls: ["OE8APR-10"],
-  unverified: () => null,
+  refusal: () => null,
   ...o,
 });
 const until = async (cond: () => boolean, ms = 3000) => {
   const t0 = Date.now();
   while (!cond() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 5));
 };
+const tick = () => new Promise((r) => setTimeout(r, 30));
 const quiet = { log: () => {}, error: () => {} };
 
 const ports: SoundcardPort[] = [];
+const ptts: Ptt[] = [];
 afterEach(async () => {
   for (const p of ports.splice(0)) await p.stop();
+  for (const p of ptts.splice(0)) forgetPtt(p);
 });
 
+type Audio = ReturnType<typeof fakeSpawner>;
 async function makePort(
-  o: { cfg?: Partial<SoundcardConfig>; gate?: Partial<SoundcardGate>; aplayHangs?: boolean; siteCall?: string } = {},
-  extra: { random?: () => number; sleep?: (ms: number) => Promise<void>; error?: (m: string) => void } = {},
+  o: {
+    cfg?: Partial<SoundcardConfig>;
+    gate?: Partial<SoundcardGate>;
+    audio?: Audio;
+    ptt?: Ptt;
+    openPtt?: () => Promise<Ptt>;
+    siteCall?: string;
+    captureUp?: boolean;
+  } = {},
+  extra: Partial<SoundcardDeps> = {},
 ) {
-  const audio = fakeSpawner({ aplayHangs: o.aplayHangs });
-  const ptt = recordingPtt();
+  const audio = o.audio ?? fakeSpawner();
+  const ptt = (o.ptt ?? recordingPtt()) as Ptt & { events: string[] };
   const packets: Packet[] = [];
   const port = new SoundcardPort(cfg(o.cfg), { onPacket: (p) => packets.push(p) }, openGate(o.gate), {
     ...quiet,
     spawn: audio.spawn,
-    openPtt: async () => ptt,
+    openPtt: o.openPtt ?? (async () => ptt),
     siteCall: o.siteCall,
+    stallMs: 1e12, // the fake clocks jump; only the stall test watches for a silent capture
     ...extra,
   });
   ports.push(port);
   await port.start();
+  // capture delivers audio: carrier detect works, and the port may transmit
+  if (o.captureUp !== false) audio.arecord()[0]!.feed(Buffer.alloc(960));
   return { port, audio, ptt, packets };
 }
 
 const frame = { src: "OE8APR-10", dst: "APZACG", path: ["WIDE1-1"], payload: ">soundcard loopback" };
+/** Feed `audio` to a capture in odd-sized chunks, as a pipe delivers it, then a little silence. */
+const feed = (cap: ReturnType<Audio["arecord"]>[number], audio: Buffer) => {
+  for (let i = 0; i < audio.length; i += 4097) cap.feed(audio.subarray(i, i + 4097));
+  cap.feed(Buffer.alloc(9600));
+};
 
 describe("SoundcardPort", () => {
   it("runs arecord and aplay with raw S16_LE mono at the configured rate and devices", async () => {
@@ -88,11 +122,7 @@ describe("SoundcardPort", () => {
     expect(tx.port.send(frame)).toBe(true);
     await until(() => tx.ptt.events.includes("unkey"));
     expect(tx.ptt.events).toEqual(["key", "unkey"]);
-    const audio = Buffer.concat(tx.audio.aplay()[0]!.written);
-    // the captured stream arrives in odd-sized chunks, as a pipe delivers it
-    const cap = rx.audio.arecord()[0]!;
-    for (let i = 0; i < audio.length; i += 4097) cap.feed(audio.subarray(i, i + 4097));
-    cap.feed(Buffer.alloc(9600)); // a little silence after it
+    feed(rx.audio.arecord()[0]!, Buffer.concat(tx.audio.aplay()[0]!.written));
     expect(rx.packets).toHaveLength(1);
     expect(rx.packets[0]).toMatchObject({
       src: "OE8APR-10",
@@ -102,6 +132,28 @@ describe("SoundcardPort", () => {
       port: "soundcard",
       igateCall: "OE8APR-10",
     });
+  });
+
+  it("never hears its own transmission: not 150 ms after the unkey, nor its echo within 30 s", async () => {
+    let clock = 1_000_000;
+    const tx = await makePort({ siteCall: "OE8APR-10" }, { now: () => clock });
+    expect(tx.port.send(frame)).toBe(true);
+    await until(() => tx.ptt.events.includes("unkey"));
+    const own = Buffer.concat(tx.audio.aplay()[0]!.written);
+    const cap = tx.audio.arecord()[0]!;
+    clock += 150; // the capture buffer delivers the port's own signal after the unkey
+    feed(cap, own);
+    expect(tx.packets).toHaveLength(0);
+    clock += RX_GUARD_MS + 1000; // past the guard, the bytes it sent still mark the echo
+    feed(cap, own);
+    expect(tx.packets).toHaveLength(0);
+    // another station's frame is heard as ever
+    const other = modulateAfsk1200(encodeAx25({ ...frame, src: "OE3XYZ-9" }), 48000, { flags: 40 });
+    feed(cap, Buffer.from(new Int16Array(other.map((v) => Math.round(v * 16000))).buffer));
+    expect(tx.packets.map((p) => p.src)).toEqual(["OE3XYZ-9"]);
+    clock += 31_000; // after the echo window the same bytes count as a hearing again
+    feed(cap, own);
+    expect(tx.packets.map((p) => p.src)).toEqual(["OE3XYZ-9", "OE8APR-10"]);
   });
 
   it("leads each frame with its TXDELAY of flags", () => {
@@ -115,53 +167,51 @@ describe("SoundcardPort", () => {
   describe("transmit gate", () => {
     it("refuses with transmit off and never opens or keys a PTT", async () => {
       let opened = false;
-      const audio = fakeSpawner();
-      const port = new SoundcardPort(cfg({ tx: false }), { onPacket: () => {} }, openGate(), {
-        ...quiet,
-        spawn: audio.spawn,
+      const { port, audio } = await makePort({
+        cfg: { tx: false },
         openPtt: async () => {
           opened = true;
           return recordingPtt();
         },
       });
-      ports.push(port);
-      await port.start();
       expect(opened).toBe(false);
       expect(port.txRefusal()).toMatch(/SOUNDCARD_TX=1/);
       expect(port.send(frame)).toBe(false);
       expect(audio.aplay()).toHaveLength(0);
     });
 
-    it("refuses while a station call is not control-verified", async () => {
-      const { port, ptt, audio } = await makePort({ gate: { unverified: (c) => c[0]! } });
+    it("refuses what the call gate refuses", async () => {
+      const { port, ptt, audio } = await makePort({
+        gate: { refusal: (c) => `verify ${c[0]} to transmit — control-verification required` },
+      });
       expect(port.txRefusal()).toBe("verify OE8APR-10 to transmit — control-verification required");
       expect(port.send(frame)).toBe(false);
-      await new Promise((r) => setTimeout(r, 20));
+      await tick();
       expect(ptt.events).toEqual([]);
       expect(audio.aplay()).toHaveLength(0);
     });
 
-    it("refuses with no station call, and when the box's transmit switch is off", async () => {
-      expect((await makePort({ gate: { calls: [] } })).port.send(frame)).toBe(false);
+    it("refuses when the box's transmit switch is off", async () => {
       const { port } = await makePort({ gate: { master: () => false } });
       expect(port.txRefusal()).toBe("transmit is switched off on this box");
       expect(port.send(frame)).toBe(false);
     });
 
     it("refuses when the PTT cannot open, and keeps receiving", async () => {
-      const audio = fakeSpawner();
-      const port = new SoundcardPort(cfg(), { onPacket: () => {} }, openGate(), {
-        ...quiet,
-        spawn: audio.spawn,
+      const { port, audio } = await makePort({
         openPtt: async () => {
           throw new Error("no write access to /dev/hidraw0");
         },
       });
-      ports.push(port);
-      await port.start();
       expect(port.txRefusal()).toMatch(/PTT none \(VOX\) unavailable: no write access/);
       expect(port.send(frame)).toBe(false);
       expect(audio.arecord()).toHaveLength(1);
+    });
+
+    it("refuses while capture has delivered no audio: carrier detect would be blind", async () => {
+      const { port } = await makePort({ captureUp: false });
+      expect(port.txRefusal()).toMatch(/capture is down/);
+      expect(port.send(frame)).toBe(false);
     });
 
     it("re-checks the gate at the moment of keying", async () => {
@@ -177,7 +227,7 @@ describe("SoundcardPort", () => {
         },
       );
       expect(port.send(frame)).toBe(true);
-      await new Promise((r) => setTimeout(r, 30));
+      await tick();
       expect(ptt.events).toEqual([]);
     });
   });
@@ -186,7 +236,9 @@ describe("SoundcardPort", () => {
     it("holds a frame back while the channel is busy, then sends once it clears", async () => {
       let slots = 0;
       const ref: { port?: SoundcardPort } = {};
-      const signal = modulateAfsk1200(encodeAx25({ ...frame, payload: ">someone else talking" }), 48000, { flags: 60 });
+      const signal = modulateAfsk1200(encodeAx25({ ...frame, payload: ">someone else talking" }), 48000, {
+        flags: 60,
+      });
       const made = await makePort(
         {},
         {
@@ -211,14 +263,57 @@ describe("SoundcardPort", () => {
       let slots = 0;
       const { port, ptt } = await makePort(
         { cfg: { persist: 63 } },
-        {
-          random: () => draws.shift() ?? 0,
-          sleep: async (ms) => void (ms === 10 && slots++),
-        },
+        { random: () => draws.shift() ?? 0, sleep: async (ms) => void (ms === 10 && slots++) },
       );
       expect(port.send(frame)).toBe(true);
       await until(() => ptt.events.includes("unkey"));
       expect(slots).toBe(2);
+    });
+
+    it("drops a frame that waited 30 s for a busy channel", async () => {
+      let clock = 5_000_000;
+      const errors: string[] = [];
+      const made = await makePort(
+        {},
+        { now: () => clock, sleep: async () => void (clock += 1000), error: (m) => errors.push(m) },
+      );
+      const signal = modulateAfsk1200(encodeAx25({ ...frame, payload: ">a long one" }), 48000, { flags: 60 });
+      made.port.pushPcm(signal.subarray(0, Math.floor(signal.length * 0.6))); // busy, and it stays busy
+      expect(made.port.send(frame)).toBe(true);
+      await until(() => errors.length > 0);
+      expect(errors[0]).toMatch(/waited over 30 s/);
+      expect(made.ptt.events).toEqual([]);
+    });
+
+    it("keeps to the duty cycle: a frame past the minute's budget waits, and goes once airtime ages out", async () => {
+      let clock = 9_000_000;
+      const keyedAt: number[] = [];
+      const errors: string[] = [];
+      const ptt = recordingPtt();
+      const key = ptt.key;
+      ptt.key = async () => {
+        keyedAt.push(clock);
+        await key();
+      };
+      const made = await makePort(
+        { cfg: { dutyPct: 1 }, ptt }, // 600 ms of every minute; a frame here takes about 330 ms
+        {
+          now: () => clock,
+          sleep: async (ms) => void (clock += ms === 10 ? 5000 : 0),
+          error: (m) => errors.push(m),
+        },
+      );
+      expect(made.port.send(frame)).toBe(true);
+      expect(made.port.send({ ...frame, payload: ">second" })).toBe(true);
+      // the second waits for the budget past its 30 s age limit, and is dropped
+      await until(() => errors.length > 0);
+      expect(keyedAt).toHaveLength(1);
+      expect(errors[0]).toMatch(/waited over 30 s \(busy channel or duty cycle\)/);
+      // a minute after the first, the budget is back
+      clock = keyedAt[0]! + 60_001;
+      expect(made.port.send({ ...frame, payload: ">third" })).toBe(true);
+      await until(() => keyedAt.length === 2);
+      expect(keyedAt).toHaveLength(2);
     });
   });
 
@@ -226,18 +321,18 @@ describe("SoundcardPort", () => {
     it("releases a stuck transmitter, kills the playback and faults the port", async () => {
       const errors: string[] = [];
       const { port, ptt, audio } = await makePort(
-        { aplayHangs: true, cfg: { pttMaxMs: 1200 } },
+        { audio: fakeSpawner({ aplay: "hang" }), cfg: { pttMaxMs: 1200 } },
         { error: (m) => errors.push(m) },
       );
       expect(port.send(frame)).toBe(true);
       await until(() => port.fault !== null, 4000);
       expect(port.fault).toMatch(/keyed longer than 1200 ms/);
-      await until(() => ptt.events.filter((e) => e === "unkey").length >= 1);
+      await until(() => ptt.events.includes("unkey"));
       expect(ptt.events.slice(0, 3)).toEqual(["key", "releaseSync", "unkey"]);
+      await until(() => audio.aplay()[0]!.killed.length > 0);
       expect(audio.aplay()[0]!.killed).toContain("SIGKILL");
       expect(errors.some((e) => /FAULT/.test(e))).toBe(true);
       expect(port.label()).toBe("soundcard 1 (fault: PTT watchdog)");
-      // the port stays off the air
       expect(port.send(frame)).toBe(false);
       expect(port.txRefusal()).toMatch(/faulted/);
     });
@@ -255,12 +350,81 @@ describe("SoundcardPort", () => {
     });
   });
 
-  it("names a missing arecord with the package to install", async () => {
-    const errors: string[] = [];
-    const { audio } = await makePort({}, { error: (m) => errors.push(m) });
-    const cap = audio.arecord()[0]!;
-    cap.emit("error", Object.assign(new Error("spawn arecord ENOENT"), { code: "ENOENT" }));
-    cap.exit(-2);
-    expect(errors[0]).toMatch(/arecord not found: install ALSA's tools \(apt install alsa-utils\)/);
+  describe("stopping while keyed (the real GPIO driver, a fake gpioset)", () => {
+    const gpioPort = async () => {
+      const g = gpiosetSpy("v2.1");
+      const made = await makePort({
+        audio: fakeSpawner({ aplay: "hang" }),
+        openPtt: async () => {
+          const p = await openGpioPtt({ chip: "gpiochip0", line: 17, invert: false }, { ...g, settleMs: 1 });
+          ptts.push(p);
+          return p;
+        },
+      });
+      expect(made.port.send(frame)).toBe(true);
+      await until(() => g.level() === "1");
+      expect(g.level()).toBe("1");
+      return { ...made, g };
+    };
+
+    it("stop() during a transmission ends at the unkeyed level with no keyed holder left", async () => {
+      const { port, g } = await gpioPort();
+      await port.stop();
+      expect(g.level()).toBe("0");
+      expect(g.live()).toHaveLength(0);
+      expect(g.kids.filter((k) => k.value === "1").every((k) => k.killedWith)).toBe(true);
+      // the keyed holder was ended before the line was set unkeyed, and nothing keyed it again
+      const keyedKill = g.log.indexOf("kill 1 SIGTERM");
+      expect(keyedKill).toBeGreaterThan(-1);
+      expect(g.log.slice(keyedKill).some((e) => e === "hold 1")).toBe(false);
+      expect(g.log.at(-1)).toBe("once 0");
+    });
+
+    it("SIGTERM while keyed unkeys, and the exit release sets the unkeyed level", async () => {
+      const proc = new EventEmitter();
+      installPttRelease(proc as unknown as NodeJS.Process);
+      const { g } = await gpioPort();
+      proc.emit("SIGTERM");
+      await until(() => g.level() === "0");
+      expect(g.level()).toBe("0");
+      proc.emit("exit");
+      expect(g.live()).toHaveLength(0);
+      expect(g.log.at(-1)).toBe("once 0");
+    });
+  });
+
+  describe("audio process failures", () => {
+    it("a playback that fails to spawn ends the transmission and unkeys", async () => {
+      const errors: string[] = [];
+      const { port, ptt } = await makePort(
+        { audio: fakeSpawner({ aplay: "spawn-error" }) },
+        { error: (m) => errors.push(m) },
+      );
+      expect(port.send(frame)).toBe(true);
+      await until(() => ptt.events.includes("unkey"));
+      expect(ptt.events).toEqual(["key", "unkey"]);
+      expect(errors.some((e) => /aplay not found: install ALSA's tools/.test(e))).toBe(true);
+    });
+
+    it("a capture that fails to spawn names its package, refuses transmit and restarts", async () => {
+      const errors: string[] = [];
+      const audio = fakeSpawner({ arecord: "spawn-error" });
+      const { port } = await makePort({ audio, captureUp: false }, { error: (m) => errors.push(m) });
+      await until(() => errors.length > 0);
+      expect(errors[0]).toMatch(/arecord not found: install ALSA's tools \(apt install alsa-utils\)/);
+      expect(errors[0]).toMatch(/restarting in \d+ s \(no transmit meanwhile\)/);
+      expect(port.txRefusal()).toMatch(/capture is down/);
+      await until(() => audio.arecord().length > 1, 4000);
+      expect(audio.arecord().length).toBeGreaterThan(1);
+    });
+
+    it("a capture that stops delivering audio is restarted, and transmit waits for it", async () => {
+      const errors: string[] = [];
+      const { port, audio } = await makePort({}, { stallMs: 200, error: (m) => errors.push(m) });
+      expect(port.txRefusal()).toBeNull();
+      await until(() => errors.some((e) => /no audio/.test(e)), 2000);
+      expect(audio.arecord()[0]!.killed).toContain("SIGKILL");
+      expect(port.txRefusal()).toMatch(/capture is down/);
+    });
   });
 });

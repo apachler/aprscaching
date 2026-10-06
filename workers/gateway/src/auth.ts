@@ -959,7 +959,7 @@ export function ingestSecretOk(req: Request, env: Env): boolean {
 /**
  * An ingest box delivering what it hears: the shared INGEST_SECRET, or a request an enrolled box signed with
  * its own key (verified by route() before any handler runs; boxkeys.ts). Only the delivery endpoints take it:
- * /ingest, /ingest/check and the box's own /api/box/:id endpoints. A box may be a receiver a ham lends to an
+ * /ingest, /ingest/check, /ingest/txgate and the box's own /api/box/:id endpoints. A box may be a receiver a ham lends to an
  * instance they do not run, so its key acts for no station and no owner.
  */
 export function ingestOrBoxOk(req: Request, env: Env): boolean {

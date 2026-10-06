@@ -22,11 +22,19 @@ type FrameRadio = Pick<KissTnc, "sendFrame">;
  * twice in a window.
  */
 export class Digipeater {
-  private recent = new Map<string, number>(); // dedupe key -> ts(ms)
+  private recent: Map<string, number>; // dedupe key -> ts(ms)
   constructor(
     private kiss: UiRadio,
-    private opts: { mycall: string; aliases?: Set<string>; dedupeMs?: number },
-  ) {}
+    private opts: {
+      mycall: string;
+      aliases?: Set<string>;
+      dedupeMs?: number;
+      /** Shared by the digipeaters of every port, so two ports on one channel do not both repeat a frame. */
+      recent?: Map<string, number>;
+    },
+  ) {
+    this.recent = opts.recent ?? new Map();
+  }
 
   onFrame(f: ParsedFrame): void {
     const out = digipeat(f, this.opts);
@@ -49,12 +57,20 @@ export class Digipeater {
  */
 export class ConnectedDigipeater {
   private ours: Ax25Address[];
-  private recent = new Map<string, number>(); // dedupe key -> ts(ms)
+  private recent: Map<string, number>; // dedupe key -> ts(ms)
   private viscous = new ViscousDigi<ReturnType<typeof setTimeout>>();
   constructor(
     private kiss: FrameRadio,
-    private opts: { mycall: string; aliases?: string[]; dedupeMs?: number; viscousMs?: number },
+    private opts: {
+      mycall: string;
+      aliases?: string[];
+      dedupeMs?: number;
+      viscousMs?: number;
+      /** Shared across ports, as for the UI digipeater. */
+      recent?: Map<string, number>;
+    },
   ) {
+    this.recent = opts.recent ?? new Map();
     this.ours = [opts.mycall, ...(opts.aliases ?? [])].map((c) => parseAddr(c));
   }
 

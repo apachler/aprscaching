@@ -17,4 +17,7 @@ RUN corepack install \
  && useradd --system --uid 10001 --gid 10001 --groups dialout,audio --create-home --home-dir /home/aprscaching \
       --shell /usr/sbin/nologin aprscaching
 USER 10001
-CMD ["pnpm","--filter","@aprscaching/ingest","start"]
+# node itself, not pnpm: run it with `docker run --init`, so a stop's SIGTERM reaches node, which unkeys every
+# PTT before it exits. pnpm would keep the signal, and node would be killed with the radio keyed.
+WORKDIR /app/apps/ingest
+CMD ["node","--import","tsx","src/index.ts"]

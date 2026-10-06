@@ -15,7 +15,10 @@ services:
     # `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose …` (deploy/aprscaching does it itself)
     build: { context: .., dockerfile: deploy/Dockerfile, args: { SOURCE_COMMIT: "${SOURCE_COMMIT:-}" } }
     image: aprscaching:local
-    command: ["pnpm", "--filter", "@aprscaching/node-gateway", "start"]
+    # node runs as the shell's exec, under Docker's init, so a stop's SIGTERM reaches it and it closes SQLite
+    # cleanly; a `pnpm … start` here would leave the signal with pnpm and the shell, and node would be killed.
+    command: ["sh", "-c", "cd /app/servers/node && exec node --import tsx src/server.ts"]
+    init: true
     # Every setting in .env reaches the gateway (ADMIN_CALLSIGNS, RP_ID, FIRST_PARTY_SITES, OPERATOR_*,
     # SOURCE_REPO, FED_*, …); the `environment:` entries below take precedence over it.
     env_file:
@@ -58,7 +61,13 @@ services:
 
   ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
     image: aprscaching:local
-    command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
+    # node itself, under Docker's init: a stop's SIGTERM reaches it, so it unkeys every PTT and flushes its
+    # batch before it exits (within the grace period). A `pnpm … start` here would leave the signal with pnpm,
+    # and node would be killed with the radio still keyed.
+    working_dir: /app/apps/ingest
+    command: ["node", "--import", "tsx", "src/index.ts"]
+    init: true
+    stop_grace_period: 20s
     # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESHCOM_*, …).
     env_file:
       - path: .env
@@ -72,7 +81,8 @@ services:
     # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
     # group_add: ["18"]
     # A soundcard port (SOUNDCARD_DEVICE) needs the sound devices, and its PTT device: a CM108's /dev/hidraw*, a
-    # GPIO chip (/dev/gpiochip0). The user is in `audio` (GID 29); add the GPIO chip's group (`stat -c %g`) too.
+    # GPIO chip (/dev/gpiochip0). The user is in `audio`, GID 29 on Debian, Ubuntu and Raspberry Pi OS; where the
+    # host's sound or GPIO group has another GID (`stat -c %g /dev/snd/controlC0`), add it with group_add.
     # devices: ["/dev/snd:/dev/snd", "/dev/hidraw0:/dev/hidraw0"]
     # The APRS-IS login, filter and INGEST_SECRET come from .env alone: a key .env leaves out stays unset
     # here, so the ingest's own default applies; an interpolated one would arrive empty.

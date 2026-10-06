@@ -3,7 +3,7 @@
  * The PTT drivers behind one interface ({@link Ptt}), chosen per soundcard port by a `SOUNDCARD_PTT` value:
  *
  *   none | vox                        no keying line: the interface keys on audio (VOX)
- *   serial:/dev/ttyUSB0[:rts|:dtr]    a serial control line; `-rts` / `-dtr` keys on the line going low
+ *   serial:/dev/ttyUSB0[:rts|:dtr]    a serial control line, asserted to key (an inverted line is refused)
  *   cat:/dev/ttyUSB0:<rig>[:baud[:civ]]  a CAT command; rig `kenwood`, `icom` (CI-V address, default 0x94) or `yaesu-bin`
  *   rigctld[:host[:port]]             Hamlib rigctld (default 127.0.0.1:4532)
  *   cm108[:/dev/hidraw0[:gpio]]       a CM108/CM119 GPIO pin (default /dev/hidraw0, GPIO3)
@@ -42,9 +42,14 @@ export function parsePttSpec(raw: string | undefined): PttSpec {
     case "serial": {
       const [path, lineRaw = "rts"] = rest;
       if (!path) bad("name the serial device, as in serial:/dev/ttyUSB0:rts");
-      const m = /^(-?)(rts|dtr)$/i.exec(lineRaw);
-      if (!m) bad("the line is rts, dtr, -rts or -dtr");
-      return { kind: "serial", path: path!, line: m![2]!.toLowerCase() as "rts" | "dtr", invert: m![1] === "-" };
+      // A line that keys when dropped keys the radio whenever no program holds the port: at boot, after a
+      // crash, while the cable is unplugged from the computer. Such wiring is refused.
+      if (/^-(rts|dtr)$/i.test(lineRaw))
+        bad(
+          "an inverted serial line keys the radio whenever no program holds the port; wire the interface to key on the line asserted",
+        );
+      if (!/^(rts|dtr)$/i.test(lineRaw)) bad("the line is rts or dtr");
+      return { kind: "serial", path: path!, line: lineRaw.toLowerCase() as "rts" | "dtr" };
     }
     case "cat": {
       const [path, rigRaw, baud, civ] = rest;
@@ -92,7 +97,7 @@ export function describePtt(s: PttSpec): string {
     case "none":
       return "none (VOX)";
     case "serial":
-      return `serial ${s.path} ${s.invert ? "-" : ""}${s.line.toUpperCase()}`;
+      return `serial ${s.path} ${s.line.toUpperCase()}`;
     case "cat":
       return `CAT ${s.rig} ${s.path} ${s.baud} Bd`;
     case "rigctld":

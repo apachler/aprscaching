@@ -38,6 +38,8 @@ export class Igate {
   private ready = false;
   private lines = new LineBuffer();
   private heard = new Map<string, number>(); // base callsign -> last heard ts(ms)
+  /** The radio port each station was last heard on: a message for it goes out there. */
+  private heardOn = new Map<string, Pick<KissTnc, "send">>();
   private localTtl: number;
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
@@ -60,14 +62,19 @@ export class Igate {
     // every callsign ever heard.
     this.sweep = setInterval(() => {
       const cutoff = Date.now() - this.localTtl * 2;
-      for (const [cs, t] of this.heard) if (t < cutoff) this.heard.delete(cs);
+      for (const [cs, t] of this.heard)
+        if (t < cutoff) {
+          this.heard.delete(cs);
+          this.heardOn.delete(cs);
+        }
     }, this.localTtl);
     this.sweep.unref?.();
   }
 
-  /** Called for every RF frame heard via KISS. */
-  onRf(f: ParsedFrame): void {
+  /** Called for every RF frame heard on a radio port (`via`; absent, the IGate's own radio). */
+  onRf(f: ParsedFrame, via?: Pick<KissTnc, "send">): void {
     this.heard.set(base(f.src), Date.now());
+    if (via) this.heardOn.set(base(f.src), via);
     if (shouldRxIgate(f, this.o.call)) this.sendIs(rxIgateLine(f, this.o.call));
   }
 
@@ -90,7 +97,8 @@ export class Igate {
       console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
       return;
     }
-    if (this.kiss.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
+    const radio = this.heardOn.get(base(addr)) ?? this.kiss;
+    if (radio.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
       console.log(`[igate] TX->RF message for ${addr}`);
   }
 

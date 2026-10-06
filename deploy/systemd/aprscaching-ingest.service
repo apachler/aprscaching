@@ -9,6 +9,10 @@ EnvironmentFile=/opt/aprscaching/deploy/.env
 # packages/shared/src/configkeys.ts and not read by the ingest).
 UnsetEnvironment=OPERATOR_SECRET SESSION_SECRET FED_PRIVATE_KEY FED_CORROBORATION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET OKAPI_KEY GMA_API_KEY EMAIL_API_KEY SMTP_PASS VAPID_PRIVATE TUNNEL_TOKEN CF_API_TOKEN
 ExecStart=/usr/bin/pnpm --filter @aprscaching/ingest start
+# Every process of the unit gets the SIGTERM of a stop, node under pnpm included, so the ingest unkeys its PTTs
+# and the gateway closes SQLite before they exit.
+KillMode=control-group
+TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching

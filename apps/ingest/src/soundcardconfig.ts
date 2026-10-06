@@ -25,6 +25,7 @@ const RANGES = {
   slotTimeMs: { key: "SOUNDCARD_SLOTTIME_MS", def: 100, min: 10, max: 1000 },
   pttMaxMs: { key: "SOUNDCARD_PTT_MAX_MS", def: 10_000, min: 1000, max: 60_000 },
   txLevel: { key: "SOUNDCARD_TX_LEVEL", def: 0.5, min: 0.01, max: 1 },
+  dutyPct: { key: "SOUNDCARD_DUTY_PCT", def: 20, min: 1, max: 100 },
 } as const;
 type RangedField = keyof typeof RANGES;
 

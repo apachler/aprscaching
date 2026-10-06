@@ -116,8 +116,8 @@ HOSTMODE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	Host-
 SOUNDCARD_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port	
 SOUNDCARD_PLAYBACK	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA playback device of the soundcard port (blank: the capture device)	
 SOUNDCARD_RATE	enum	ingest	48000	44100|48000	0	0	selfhost,baremetal,ingest-box,pocket	Sample rate of the soundcard port's audio	
-SOUNDCARD_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows the soundcard port to transmit (with a PTT and a control-verified call)	
-SOUNDCARD_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Call the soundcard port transmits under (default BOX_CALL, IGATE_CALL, DIGI_CALL)	
+SOUNDCARD_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)	
+SOUNDCARD_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)	
 SOUNDCARD_PTT	string	ingest	none		0	0	selfhost,baremetal,ingest-box,pocket	How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:	
 SOUNDCARD_TXDELAY_MS	int	ingest	300		0	0	selfhost,baremetal,ingest-box,pocket	Preamble of flags before each frame, in ms	
 SOUNDCARD_TXTAIL_MS	int	ingest	50		0	0	selfhost,baremetal,ingest-box,pocket	Time the PTT stays keyed after the audio ends, in ms	
@@ -125,6 +125,7 @@ SOUNDCARD_PERSIST	int	ingest	63		0	0	selfhost,baremetal,ingest-box,pocket	CSMA p
 SOUNDCARD_SLOTTIME_MS	int	ingest	100		0	0	selfhost,baremetal,ingest-box,pocket	CSMA slot time, in ms	
 SOUNDCARD_PTT_MAX_MS	int	ingest	10000		0	0	selfhost,baremetal,ingest-box,pocket	PTT watchdog: longest key time before the PTT is released and the port faults	
 SOUNDCARD_TX_LEVEL	number	ingest	0.5		0	0	selfhost,baremetal,ingest-box,pocket	Transmit audio level, 0.01-1 of full scale	
+SOUNDCARD_DUTY_PCT	int	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	Most of any minute the soundcard port may transmit, in percent (1-100)	
 SOUNDCARD_PORTS	json	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Further soundcard ports, a JSON array of objects with the same fields	
 MESHTASTIC_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of a Meshtastic node's TCP API (licensed nodes only)	
 MESHTASTIC_PORT	int	ingest	4403		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the Meshtastic node API	

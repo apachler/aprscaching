@@ -16,8 +16,11 @@ stations**. National rules restrict where and how these run: permitted band segm
 and a control operator who can be reached. APRScaching's part:
 
 - Automatic transmit (digipeat, beacon, forward, relay) is **opt-in per port**, never implicit.
-- A port that keys the radio itself, the ingest box's [soundcard port](../radios/soundcard.md), transmits only
-  under control-verified calls, and a watchdog releases its PTT after `SOUNDCARD_PTT_MAX_MS` (10 s by default).
+- Every RF transmit port of the ingest box (a KISS TNC, a [soundcard port](../radios/soundcard.md)) transmits
+  only under calls the gateway confirms for that box: control-verified, and held by the box's operator.
+- A port that keys the radio itself, the soundcard port, caps its airtime (`SOUNDCARD_DUTY_PCT`, 20 % of any
+  minute by default), and a watchdog releases its PTT after `SOUNDCARD_PTT_MAX_MS` (10 s by default). Keep the
+  radio's own transmit time-out on as well: it is the only release when the box is killed outright.
 - Every unattended transmit path is **paced by a token bucket** with a hard ceiling
   ([Transmit pacing](#transmit-pacing)).
 - The digipeater drops a duplicate frame for 30 s, and `DIGI_VISCOUS_MS` holds a repeat back so a better-placed

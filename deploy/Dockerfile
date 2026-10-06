@@ -42,4 +42,5 @@ EXPOSE 8080
 # a SOURCE_COMMIT in .env still overrides it at runtime.
 ARG SOURCE_COMMIT=""
 ENV SOURCE_COMMIT=${SOURCE_COMMIT}
-CMD ["pnpm","--filter","@aprscaching/node-gateway","start"]
+# node itself (the shell execs it), so `docker run --init` delivers a stop's SIGTERM to it.
+CMD ["sh","-c","cd /app/servers/node && exec node --import tsx src/server.ts"]

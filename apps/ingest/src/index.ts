@@ -76,11 +76,14 @@ const delivery = new Delivery({
 // host shutdown loses as few heard packets as possible, then exit. Registered after the buffers
 // exist so a signal during the async transport setup below can never hit an undeclared binding.
 let shuttingDown = false;
-const onShutdown: (() => void)[] = []; // transports that release a socket before exit
+// transports that release a socket or a PTT before exit; a soundcard port's stop waits for its PTT to unkey
+const onShutdown: (() => void | Promise<void>)[] = [];
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const stop of onShutdown) stop();
+  // every port is stopped before the exit, within a deadline; the exit's synchronous release runs after
+  const stopped = Promise.allSettled(onShutdown.map(async (stop) => stop()));
+  await Promise.race([stopped, new Promise<void>((r) => setTimeout(r, 5000).unref())]);
   console.log(`[ingest] ${signal} — flushing pending packets…`);
   delivery.add(batch);
   batch = [];
@@ -129,6 +132,15 @@ const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 
 // The ports this box transmits on itself: the KISS TNC and the soundcard ports. Each forwards what it hears
 // to the batch and to its subscribers (the digipeater, the IGate, the connected-mode services).
+//
+// Every one shares the call gate: the box transmits only under station calls the gateway confirms for this
+// box (control-verified, held by the box's operator; callverify.ts). RX never needs it.
+const { CallVerifier, gatewayTxGateLookup, gateCheck, stationCalls } = await import("./callverify.js");
+const callGate = new CallVerifier(
+  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
+  { log: (m) => console.error(m) },
+);
+const gateCalls = new Set(stationCalls(env));
 interface TxRadio {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
   sendFrame(f: import("@aprscaching/ax25").Ax25Frame): boolean;
@@ -159,13 +171,25 @@ if (env.KISS_TNC_HOST) {
   );
   kiss.start();
   console.log(`[kiss] enabled${siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : ""}`);
-  radios.push({ send: (f) => kiss.send(f), sendFrame: (f) => kiss.sendFrame(f), frameSubs, rawSubs });
+  const kissOpen = gateCheck(
+    callGate,
+    [...gateCalls],
+    () => station.tx,
+    (m) => console.log(`[kiss] ${m}`),
+  );
+  radios.push({
+    send: (f) => kissOpen() && kiss.send(f),
+    sendFrame: (f) => kissOpen() && kiss.sendFrame(f),
+    frameSubs,
+    rawSubs,
+  });
 }
 
 // Soundcard ports — a 1200-baud AFSK modem in the box itself (ALSA arecord/aplay), keyed by a PTT driver.
-// Nothing between such a port and the radio can refuse a frame, so the port holds a gate of its own: its
-// opt-in, the master switch, and the gateway's control-verification of every station call the box uses.
+// Nothing between such a port and the radio can refuse a frame, so the port adds to the call gate what a TNC's
+// firmware would hold: its own opt-in, a running capture for carrier detect, and the PTT watchdog.
 let soundcardSettings: import("./soundcardconfig.js").SoundcardPortSettings[] = [];
+let soundcardRunning: { cfg: { name: string; tx: boolean }; txRefusal(): string | null }[] = [];
 if (env.SOUNDCARD_DEVICE || env.SOUNDCARD_PORTS) {
   const { soundcardPorts } = await import("./soundcardconfig.js");
   try {
@@ -177,17 +201,14 @@ if (env.SOUNDCARD_DEVICE || env.SOUNDCARD_PORTS) {
 }
 if (soundcardSettings.length) {
   const { SoundcardPort } = await import("./soundcard.js");
-  const { CallVerifier, gatewayVerifyLookup, stationCalls } = await import("./callverify.js");
   const { installPttRelease } = await import("./ptt/release.js");
   installPttRelease();
-  const verifier = new CallVerifier(gatewayVerifyLookup(GATEWAY_BASE));
-  const allCalls = new Set<string>();
   const ports: InstanceType<typeof SoundcardPort>[] = [];
   for (const sc of soundcardSettings) {
     const frameSubs: ((f: ParsedFrame) => void)[] = [];
     const rawSubs: ((b: Uint8Array) => void)[] = [];
     const calls = stationCalls(env, sc.call);
-    for (const c of calls) allCalls.add(c);
+    for (const c of calls) gateCalls.add(c);
     const port = new SoundcardPort(
       sc,
       {
@@ -199,11 +220,11 @@ if (soundcardSettings.length) {
           for (const s of rawSubs) s(b);
         },
       },
-      { master: () => station.tx, calls, unverified: (c) => verifier.unverified(c) },
+      { master: () => station.tx, calls, refusal: (c) => callGate.refusal(c) },
       { siteCall },
     );
     await port.start();
-    onShutdown.push(() => void port.stop());
+    onShutdown.push(() => port.stop());
     ports.push(port);
     radios.push({
       send: (f) => port.send(f),
@@ -213,20 +234,21 @@ if (soundcardSettings.length) {
       label: () => port.label(),
     });
   }
-  // Learn which calls the gateway knows as verified, then say what still holds each transmitting port back.
-  const refresh = async () => {
-    await verifier.refresh([...allCalls]);
-    for (const p of ports) {
+  soundcardRunning = ports;
+}
+// The gateway's answers for every station call, refreshed every three minutes (sooner while it cannot be
+// reached); each transmitting soundcard port says what still holds it back.
+if (radios.length)
+  callGate.start([...gateCalls], () => {
+    for (const p of soundcardRunning) {
       const why = p.cfg.tx ? p.txRefusal() : null;
       if (why) console.log(`[soundcard:${p.cfg.name}] transmit held back: ${why}`);
     }
-  };
-  void refresh();
-  setInterval(() => void refresh(), 15 * 60_000).unref();
-}
+  });
 
-// The first transmitting port (the KISS TNC, else the first soundcard port) carries the IGate, the remote box
-// and the connected-mode services; the digipeater repeats on every port, on the port that heard the frame.
+// The first transmitting port (the KISS TNC, else the first soundcard port) carries the remote box's
+// transmissions and the connected-mode services. The digipeater repeats on the port that heard the frame, with
+// one duplicate window across ports; the IGate sends a message on the port that last heard its addressee.
 const primaryRadio = radios[0];
 if (primaryRadio) {
   boxRadio = { send: (f) => primaryRadio.send(f), label: primaryRadio.label };
@@ -248,8 +270,11 @@ if (primaryRadio) {
         .filter(Boolean),
     );
     station.digi = true;
+    // one duplicate window for every port: two ports on one channel never both repeat a frame
+    const recentUi = new Map<string, number>();
+    const recentConnected = new Map<string, number>();
     for (const radio of radios) {
-      const digi = new Digipeater(radio, { mycall: env.DIGI_CALL, aliases });
+      const digi = new Digipeater(radio, { mycall: env.DIGI_CALL, aliases, recent: recentUi });
       radio.frameSubs.push((f) => {
         if (station.tx && station.digi) digi.onFrame(f);
       });
@@ -259,6 +284,7 @@ if (primaryRadio) {
           mycall: env.DIGI_CALL,
           aliases: [...aliases],
           viscousMs: numEnv("DIGI_VISCOUS_MS", 0, { min: 0, max: 10_000 }) || undefined,
+          recent: recentConnected,
         });
         radio.rawSubs.push((b) => {
           if (station.tx && station.digi) cdigi.onRaw(b);
@@ -288,9 +314,10 @@ if (primaryRadio) {
       ...txLimitFromEnv("igate"),
     });
     station.igate = true;
+    // a message for a station goes out on the port that heard it last
     for (const radio of radios)
       radio.frameSubs.push((f) => {
-        if (station.igate) igate.onRf(f);
+        if (station.igate) igate.onRf(f, radio);
       });
     igate.start();
     console.log(
@@ -536,8 +563,8 @@ if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
     base: GATEWAY_BASE,
     secret: SECRET,
     mycall: forwardCall,
-    kiss: env.KISS_TNC_HOST ? { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) } : undefined,
-    link: env.KISS_TNC_HOST ? undefined : serviceLink,
+    // the frame link of the box's first radio (or AXUDP): its transmissions pass the call gate like any other
+    link: serviceLink,
     pollMs: numEnv("BBS_FORWARD_POLL_MS", 60000, { min: 1000 }),
     sid: env.BBS_FORWARD_SID,
     compress: env.BBS_FORWARD_COMPRESS === "1",

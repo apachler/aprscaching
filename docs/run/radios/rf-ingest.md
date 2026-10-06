@@ -155,6 +155,14 @@ container that is only the container's own interface, and the published port exp
 alone. To receive AXUDP in a container, publish its UDP port the same way, on one address only. See
 [MeshCom](meshcom.md).
 
+## Transmit gate
+
+Every port the box transmits on, the KISS TNC and the [soundcard ports](soundcard.md), sends only while the
+box's transmit switch is on and the gateway confirms each station call the box transmits under: control-verified,
+and held by whoever runs the box ([The transmit gate](soundcard.md#the-transmit-gate)). Until the gateway
+answers, and whenever its last answer is more than six minutes old, the box does not transmit; receiving goes
+on. The log says why: `[kiss] transmit refused: verify OE8APR-10 to transmit — control-verification required`.
+
 ## On-air legality
 
 Every transmit path above (digipeater, IGate, node, BBS forwarding, answers to radio commands) makes your

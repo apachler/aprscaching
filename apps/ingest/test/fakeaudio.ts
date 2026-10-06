@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Fake arecord / aplay processes and a recording PTT, for the soundcard port's tests: no sound card, no radio.
+// Fakes for the soundcard port's tests: arecord / aplay processes, a recording PTT and a gpioset spy. No sound
+// card, no radio.
 import { EventEmitter } from "node:events";
 import type { AudioChild, AudioSpawn } from "../src/alsa.js";
 import type { Ptt } from "../src/ptt/index.js";
+
+/** How a fake aplay behaves: exit 0 once stdin ends, hang until killed, or fail to spawn (`error`, no exit). */
+type AplayMode = "ok" | "hang" | "spawn-error";
 
 export class FakeChild extends EventEmitter implements AudioChild {
   exitCode: number | null = null;
@@ -15,8 +19,7 @@ export class FakeChild extends EventEmitter implements AudioChild {
   constructor(
     readonly cmd: string,
     readonly args: string[],
-    /** aplay: exit 0 once stdin ends (false: hang until killed, as a stuck playback would). */
-    exitOnEnd = true,
+    mode: AplayMode = "ok",
   ) {
     super();
     const stdinEvents = new EventEmitter();
@@ -26,10 +29,12 @@ export class FakeChild extends EventEmitter implements AudioChild {
         return true;
       },
       end: () => {
-        if (exitOnEnd) setImmediate(() => this.exit(0));
+        if (mode === "ok") setImmediate(() => this.exit(0));
       },
       on: (event: "error", cb: (e: Error) => void) => stdinEvents.on(event, cb),
     };
+    if (mode === "spawn-error")
+      setImmediate(() => this.emit("error", Object.assign(new Error(`spawn ${cmd} ENOENT`), { code: "ENOENT" })));
   }
 
   exit(code: number | null, signal: NodeJS.Signals | null = null): void {
@@ -50,11 +55,11 @@ export class FakeChild extends EventEmitter implements AudioChild {
   }
 }
 
-/** A spawner that records every child; `aplayHangs` makes playback never end. */
-export function fakeSpawner(o: { aplayHangs?: boolean } = {}) {
+/** A spawner that records every child. */
+export function fakeSpawner(o: { aplay?: AplayMode; arecord?: "ok" | "spawn-error" } = {}) {
   const children: FakeChild[] = [];
   const spawn: AudioSpawn = (cmd, args) => {
-    const c = new FakeChild(cmd, args, !o.aplayHangs);
+    const c = new FakeChild(cmd, args, cmd === "aplay" ? (o.aplay ?? "ok") : (o.arecord ?? "ok"));
     children.push(c);
     return c;
   };
@@ -76,4 +81,78 @@ export function recordingPtt(events: string[] = []): Ptt & { events: string[] } 
     close: async () => void events.push("close"),
     releaseSync: () => void events.push("releaseSync"),
   };
+}
+
+/**
+ * A fake `gpioset`: each held spawn is a child until killed, `--version` names the libgpiod version, and a
+ * one-shot set is recorded. `log` keeps the order of events; `level()` is the level the line is driven at (the
+ * live holder's, else the last one-shot's). `onceBusy` / `holdBusy` make that many requests fail as busy.
+ */
+export function gpiosetSpy(version: string, o: { onceBusy?: number; holdBusy?: number; onceFails?: boolean } = {}) {
+  type Kid = EventEmitter & {
+    exitCode: number | null;
+    stderr: EventEmitter;
+    value: string;
+    killedWith?: string;
+    kill(sig?: string): boolean;
+  };
+  const calls: string[][] = [];
+  const once: string[][] = [];
+  const kids: Kid[] = [];
+  const log: string[] = [];
+  let onceBusy = o.onceBusy ?? 0;
+  let holdBusy = o.holdBusy ?? 0;
+  let lastOnce: string | null = null;
+  const valueOf = (args: string[]) => args[args.length - 1]!.split("=")[1]!;
+  const spawn = (_cmd: string, args: string[]) => {
+    calls.push(args);
+    const k = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      stderr: new EventEmitter(),
+      value: valueOf(args),
+      kill(sig?: string) {
+        if (k.exitCode !== null) return false;
+        k.killedWith ??= sig;
+        log.push(`kill ${k.value} ${sig}`);
+        setImmediate(() => {
+          if (k.exitCode !== null) return;
+          k.exitCode = 0;
+          k.emit("exit", null);
+        });
+        return true;
+      },
+    }) as Kid;
+    kids.push(k);
+    log.push(`hold ${k.value}`);
+    const busy = holdBusy > 0;
+    if (busy) holdBusy--;
+    setImmediate(() => {
+      k.emit("spawn");
+      if (busy) {
+        k.stderr.emit("data", Buffer.from("gpioset: unable to request lines: Device or resource busy"));
+        k.exitCode = 1;
+        k.emit("exit", 1);
+      }
+    });
+    return k;
+  };
+  const spawnSync = (_cmd: string, args: string[]) => {
+    if (args[0] === "--version") return { status: 0, stdout: `gpioset (libgpiod) ${version}\n` };
+    once.push(args);
+    if (o.onceFails) {
+      log.push("once failed");
+      return { status: 1, stderr: "gpioset: unable to find chip" };
+    }
+    if (onceBusy > 0) {
+      onceBusy--;
+      log.push("once busy");
+      return { status: 1, stderr: "gpioset: unable to request lines: Device or resource busy" };
+    }
+    lastOnce = valueOf(args);
+    log.push(`once ${lastOnce}`);
+    return { status: 0 };
+  };
+  const live = () => kids.filter((k) => k.exitCode === null && k.killedWith === undefined);
+  const level = () => live().at(-1)?.value ?? lastOnce;
+  return { calls, once, kids, log, live, level, spawn, spawnSync };
 }

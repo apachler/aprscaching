@@ -366,7 +366,8 @@ Every shape with an ingest.
   that receives only, or keys by VOX, passes.
 - **Message:** `port <port>: PTT <driver>: <device> does not exist` or `no write access to <device>` (fail).
   Pass the device into the container, and give the ingest's user access: `dialout` for serial, a udev rule
-  for a CM108, `gpio` for a GPIO chip.
+  for a CM108, `gpio` for a GPIO chip. An inverted serial line (`-rts`, `-dtr`) is refused when the settings
+  are read.
 - **Message:** `port <port>: PTT rigctld <host>:<port> does not answer` (fail). Start rigctld, or correct
   `SOUNDCARD_PTT`.
 - **See:** [Choose how the radio is keyed](radios/soundcard.md#choose-how-the-radio-is-keyed).
@@ -374,14 +375,17 @@ Every shape with an ingest.
 ### `ingest.soundcard_tx.<port>`
 
 - **Tests:** on a port with `SOUNDCARD_TX=1`, the PTT watchdog (`SOUNDCARD_PTT_MAX_MS`), and that the gateway
-  knows every station call the box transmits under as control-verified. A port that receives only passes.
+  confirms every station call the box transmits under for this box (`GET /ingest/txgate`): control-verified,
+  and held by the box's operator. A port that receives only passes.
 - **Message:** `port <port>: the PTT watchdog allows <ms> ms of key time` (warn). Lower
   `SOUNDCARD_PTT_MAX_MS`: an APRS frame needs well under ten seconds.
-- **Message:** `port <port>: <call> is not control-verified, so the port does not transmit` (warn). Verify
+- **Message:** `port <port>: <call> not control-verified, so the port does not transmit` (warn). Verify
   the call: **You → Verify callsign**.
+- **Message:** `port <port>: <call> not held by this box's operator, so the port does not transmit` (warn).
+  Transmit under calls of the account that owns the box.
 - **Message:** `port <port>: no station call is set` (fail). Set `SOUNDCARD_CALL` or `BOX_CALL`.
-- **Message:** `port <port>: the gateway did not say whether the station calls (…) are verified` (warn).
-  Check `INGEST_URL`.
+- **Message:** `port <port>: the gateway did not confirm the station calls (…): …` (warn). Check `INGEST_URL`
+  (an enrolled box needs https) and the box's credential.
 - **See:** [The transmit gate](radios/soundcard.md#the-transmit-gate) and
   [Callsign verification](day-to-day/callsign-verification.md).
 
