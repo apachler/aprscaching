@@ -336,7 +336,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TOOL_REGISTRIES`",
-        'The tool registries the **Tools** app lists, as a JSON array; set, it replaces the list kept in **Instance settings**, which then shows it read-only. An item is `"builtin"` (the project registry bundled with the app) or `{"url", "authority", "label", "enabled"}`: `url` is an `https://` address, `github:owner/repo[/path][@ref]`, or a path on this instance; `authority` is the registry\'s pinned Ed25519 public key in base64url ([Tool registries](../run/day-to-day/instance-settings.md#tool-registries))',
+        'The tool registries the **Tools** app lists, as a JSON array; the app ships no tools of its own, so players install theirs from these. Set, it replaces the list kept in **Instance settings**, which then shows it read-only. An item is `"builtin"` (the project registry bundled with the app) or `{"url", "authority", "label", "enabled"}`: `url` is an `https://` address, `github:owner/repo[/path][@ref]`, or a path on this instance; `authority` is the registry\'s pinned Ed25519 public key in base64url ([Tool registries](../run/day-to-day/instance-settings.md#tool-registries))',
         "the project registry",
       ],
       [

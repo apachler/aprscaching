@@ -105,23 +105,46 @@ export interface RegistryEntry {
   entry: string; // the tool.json's URL; a relative one resolves against the registry's own URL
   description?: string;
 }
-/** An authority-signed registry: `sig` (base64) covers the canonical `entries`; `authority` is its pubkey. */
+/**
+ * An authority-signed registry: `sig` (base64) covers the canonical `{ format, entries }`; `authority` is its
+ * pubkey. `format` is the registry file's own version, so a reader can tell a file it does not understand from a
+ * forged one.
+ */
 export interface SignedRegistry {
+  format: number;
   entries: RegistryEntry[];
   authority: string;
   sig: string;
 }
 
-export function registrySigningBytes(entries: RegistryEntry[]): Uint8Array {
-  return new TextEncoder().encode(stableStringify(entries));
+/** The registry format this package reads and writes. */
+export const REGISTRY_FORMAT = 1;
+
+/** The bytes a registry's authority signs: the format and the entries, canonical (keys sorted). */
+export function registrySigningBytes(entries: RegistryEntry[], format: number = REGISTRY_FORMAT): Uint8Array {
+  return new TextEncoder().encode(stableStringify({ format, entries }));
+}
+
+/** Why a registry file's format cannot be read here, or null when it is this package's format. */
+export function registryFormatProblem(doc: unknown): string | null {
+  const f = doc && typeof doc === "object" ? (doc as { format?: unknown }).format : undefined;
+  if (f === REGISTRY_FORMAT) return null;
+  if (f === undefined) return `the registry names no format; this app reads registry format ${REGISTRY_FORMAT}`;
+  return `the registry uses format ${JSON.stringify(f)?.slice(0, 12)}; this app reads registry format ${REGISTRY_FORMAT}`;
 }
 
 /** Verify a registry against a PINNED authority key (base64url). Rejects a forged/unsigned/mismatched doc. */
 export async function verifyRegistry(reg: SignedRegistry, pinnedAuthorityB64url: string): Promise<boolean> {
   if (!reg || !Array.isArray(reg.entries) || reg.authority !== pinnedAuthorityB64url || !reg.sig) return false;
+  if (reg.format !== REGISTRY_FORMAT) return false;
   try {
     const key = await importVerifyKey(reg.authority);
-    return await crypto.subtle.verify("Ed25519", key, buf(b64ToBytes(reg.sig)), buf(registrySigningBytes(reg.entries)));
+    return await crypto.subtle.verify(
+      "Ed25519",
+      key,
+      buf(b64ToBytes(reg.sig)),
+      buf(registrySigningBytes(reg.entries, reg.format)),
+    );
   } catch {
     return false;
   }
@@ -165,6 +188,8 @@ export async function previewRegistry(
   const reg = doc as SignedRegistry;
   if (!reg || typeof reg !== "object" || !Array.isArray(reg.entries) || typeof reg.authority !== "string")
     return { ok: false, error: "not a tool registry: it needs entries, authority and sig" };
+  const format = registryFormatProblem(reg);
+  if (format) return { ok: false, error: format };
   const fingerprint = await authorityFingerprint(reg.authority);
   if (!fingerprint) return { ok: false, error: "the registry's authority is not an Ed25519 public key" };
   if (!(await verifyRegistry(reg, reg.authority)))
@@ -181,14 +206,16 @@ export async function previewRegistry(
 }
 
 /**
- * A fetched registry checked against its pinned key: `ok` when the pinned key signed it, `key-changed` when the
- * file names another key (refused until the person confirms the new one), `invalid` when the file names the
- * pinned key but its signature fails, or is not a registry.
+ * A fetched registry checked against its pinned key: `ok` when the pinned key signed it, `format` when the file is
+ * in a registry format this package does not read (registryFormatProblem says which), `key-changed` when the file
+ * names another key (refused until the person confirms the new one), `invalid` when the file names the pinned key
+ * but its signature fails, or is not a registry.
  */
-export type PinnedRegistryState = "ok" | "key-changed" | "invalid";
+export type PinnedRegistryState = "ok" | "format" | "key-changed" | "invalid";
 export async function checkPinnedRegistry(doc: unknown, pinned: string): Promise<PinnedRegistryState> {
   const reg = doc as SignedRegistry;
   if (!reg || typeof reg !== "object" || !Array.isArray(reg.entries)) return "invalid";
+  if (registryFormatProblem(reg)) return "format";
   if (typeof reg.authority === "string" && reg.authority !== pinned) return "key-changed";
   return (await verifyRegistry(reg, pinned)) ? "ok" : "invalid";
 }
@@ -200,7 +227,7 @@ export async function signRegistry(
   priv: CryptoKey,
 ): Promise<SignedRegistry> {
   const sig = await crypto.subtle.sign("Ed25519", priv, buf(registrySigningBytes(entries)));
-  return { entries, authority: authorityPub, sig: bytesToB64(new Uint8Array(sig)) };
+  return { format: REGISTRY_FORMAT, entries, authority: authorityPub, sig: bytesToB64(new Uint8Array(sig)) };
 }
 
 /**

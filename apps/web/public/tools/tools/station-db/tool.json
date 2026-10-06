@@ -1,0 +1,21 @@
+{
+  "name": "station-db",
+  "title": "Station DB (NAMES.GP)",
+  "author": "OE8APR",
+  "version": "1.1.0",
+  "api": "1.0",
+  "permissions": [
+    "monitor",
+    "ipc"
+  ],
+  "surfaces": [
+    "terminal",
+    "bbs",
+    "node"
+  ],
+  "description": "Classifies heard stations (NAMES.GP) and shares them on the inter-tool bus.",
+  "entry": "tool.js",
+  "entrySha256": "QflofvTeqCknbc1jlsBqY2MSfeNrh/5qe8IF+qoBcJA=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "HWDsiUuo9meSyisIxmmMyHOyPGzJhcAPEpFbW/AUFgoJVuZt6CEAHcU8dJ5i2+QmzQFgDsYIMHJuZIYH8IHuAg=="
+}

@@ -83,6 +83,71 @@ export function parseScript(text: string): SessionStep[] {
 }
 
 /**
+ * The transmit budget a script draws on: each `connect` counts as one transmission, and every five `send` steps as
+ * one more.
+ */
+export const scriptTxCost = (steps: readonly SessionStep[]): number =>
+  steps.filter((s) => s.op === "connect").length + Math.ceil(steps.filter((s) => s.op === "send").length / 5);
+
+/** The most steps one script holds, and the bounds of each step a tool hands the `session.script` service. */
+export const SCRIPT_MAX_STEPS = 20;
+const SCRIPT_TEXT_MAX = 256;
+const SCRIPT_MATCH_MAX = 80;
+const SCRIPT_SECONDS_MAX = 600;
+const SCRIPT_CALL = /^[A-Z0-9]{1,6}(-([0-9]|1[0-5]))?$/;
+
+/**
+ * Check the steps a tool hands the `session.script` service: an array of at most SCRIPT_MAX_STEPS known steps,
+ * starting with a `connect` to a callsign, each line one line long and within its bounds. The checked steps, or
+ * why they are refused.
+ */
+export function validateSteps(input: unknown): SessionStep[] | string {
+  if (!Array.isArray(input) || input.length === 0) return "a script is a list of steps";
+  if (input.length > SCRIPT_MAX_STEPS) return `a script holds at most ${SCRIPT_MAX_STEPS} steps`;
+  const line = (x: unknown, max: number) =>
+    typeof x === "string" && x.length <= max && !/[\r\n\0]/.test(x) ? x : null;
+  const out: SessionStep[] = [];
+  for (const [i, raw] of input.entries()) {
+    const s = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const bad = `step ${i + 1} is not a valid ${typeof s.op === "string" ? s.op.slice(0, 20) : "step"}`;
+    switch (s.op) {
+      case "connect": {
+        const call = typeof s.call === "string" ? s.call.toUpperCase() : "";
+        if (!SCRIPT_CALL.test(call)) return bad;
+        out.push({ op: "connect", call });
+        break;
+      }
+      case "send": {
+        const text = line(s.text, SCRIPT_TEXT_MAX);
+        if (text === null) return bad;
+        out.push({ op: "send", text });
+        break;
+      }
+      case "waitfor": {
+        const text = line(s.text, SCRIPT_MATCH_MAX);
+        const t = s.timeoutSec;
+        if (!text || (t !== undefined && !(typeof t === "number" && t >= 1 && t <= SCRIPT_SECONDS_MAX))) return bad;
+        out.push({ op: "waitfor", text, ...(t !== undefined ? { timeoutSec: t } : {}) });
+        break;
+      }
+      case "wait": {
+        const sec = s.sec;
+        if (!(typeof sec === "number" && sec >= 0 && sec <= SCRIPT_SECONDS_MAX)) return bad;
+        out.push({ op: "wait", sec });
+        break;
+      }
+      case "disconnect":
+        out.push({ op: "disconnect" });
+        break;
+      default:
+        return bad;
+    }
+  }
+  if (out[0]!.op !== "connect") return "a script starts with a connect";
+  return out;
+}
+
+/**
  * The engine. `tick(now)` is called on the surface's existing poll cadence (~1 Hz in the terminal); it
  * advances at most one waiting condition per tick and returns the current state when it changed (else null,
  * so the caller can cheaply skip re-emitting). `now` is injected (ms) — no Date.now() here (testable).
@@ -100,8 +165,9 @@ export class ScriptRunner {
 
   constructor(private session: ScriptSession) {}
 
-  /** Load + start a script (replaces any running one). */
+  /** Load + start a script. It replaces any running one, whose open channel is closed first. */
   load(steps: SessionStep[], now: number): void {
+    if (this.chan != null) this.session.close(this.chan);
     this.steps = steps.slice(0, 64);
     this.i = 0;
     this.chan = null;
@@ -110,6 +176,20 @@ export class ScriptRunner {
     this.note = undefined;
     this.status = this.steps.length ? "running" : "idle";
     this.stepStart = now;
+  }
+
+  /** Stop the running script: its open channel closes, and the state says it was cancelled. */
+  cancel(note = "cancelled"): void {
+    if (this.status !== "running") return;
+    if (this.chan != null) this.session.close(this.chan);
+    this.chan = null;
+    this.status = "error";
+    this.note = note;
+  }
+
+  /** A script is running. */
+  busy(): boolean {
+    return this.status === "running";
   }
 
   state(): ScriptState {

@@ -8,7 +8,8 @@
 //
 // Before anything is written, every file is checked the way the app checks it: the registry's signature against
 // the pinned authority key, each listed manifest's signature against the author key its entry lists, and each
-// script's bytes against the SHA-256 its signed manifest pins (`entrySha256`). An entry outside the repository
+// script's bytes against the SHA-256 its signed manifest pins (`entrySha256`); the registry must be format 1 and each
+// manifest must need a tool API this app runs (`api`). An entry outside the repository
 // is not bundled; the app then fetches it from its own address. After writing, the bundled registry is read back
 // from disk and verified again. Any failure exits 1 and leaves the output folder as it was.
 //
@@ -44,6 +45,13 @@ const pinnedFromSource = () => {
   return m[1];
 };
 const authority = opt("authority") ?? pinnedFromSource();
+// the tool API this app implements, read from packages/tools/src/api.ts
+const TOOL_API = (() => {
+  const ts = fs.readFileSync(path.join(root, "packages/tools/src/api.ts"), "utf8");
+  const m = /TOOL_API = \{ major: (\d+), minor: (\d+) \}/.exec(ts);
+  if (!m) throw new Error("no TOOL_API found in packages/tools/src/api.ts");
+  return { major: Number(m[1]), minor: Number(m[2]) };
+})();
 const base = source ? "https://bundle.invalid/" : `https://raw.githubusercontent.com/${repo}/${tag}/`;
 
 // ---- the canonical bytes and Ed25519, as packages/tools/src/registry.ts ----
@@ -89,8 +97,9 @@ const fail = (m) => {
 async function verifyRegistry(doc) {
   if (!doc || !Array.isArray(doc.entries) || typeof doc.sig !== "string")
     fail("registry.json is not a signed registry");
+  if (doc.format !== 1) fail(`registry.json is in format ${doc.format ?? "(none)"}; this app reads registry format 1`);
   if (doc.authority !== authority) fail(`registry.json is signed by ${doc.authority}, not the pinned ${authority}`);
-  if (!(await ed25519Verify(authority, doc.sig, enc(stable(doc.entries)))))
+  if (!(await ed25519Verify(authority, doc.sig, enc(stable({ format: doc.format, entries: doc.entries })))))
     fail("registry.json: the signature does not verify");
 }
 
@@ -112,6 +121,11 @@ for (const e of reg.entries) {
   const m = JSON.parse(mBytes.toString("utf8"));
   if (m.name !== e.name) fail(`${mPath}: names ${m.name}, the entry ${e.name}`);
   if (m.pubkey !== e.pubkey) fail(`${mPath}: signed by ${m.pubkey}, the entry lists ${e.pubkey}`);
+  // the tool API it needs must be one this app runs: the same major, a minor no higher (packages/tools api.ts)
+  const api = /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})$/.exec(typeof m.api === "string" ? m.api : "");
+  if (!api) fail(`${mPath}: names no tool API version ("api": "MAJOR.MINOR")`);
+  if (Number(api[1]) !== TOOL_API.major || Number(api[2]) > TOOL_API.minor)
+    fail(`${mPath}: needs tool API ${m.api}; this app implements ${TOOL_API.major}.${TOOL_API.minor}`);
   const rest = { ...m };
   delete rest.signature;
   if (typeof m.signature !== "string" || !(await ed25519Verify(m.pubkey, m.signature, enc(stable(rest)))))

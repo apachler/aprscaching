@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /* global register, ipc */
-// Station log: an example imported tool. The sandbox runs this file as the body of a function whose two
-// parameters are `register` and `ipc`; `ipc` is undefined unless the user granted the 'ipc' permission.
-// It lists the stations the built-in Station DB tool announces on the bus, and answers /seen and /whois.
+// Station log: an example tool. The sandbox runs this file as the body of a function of `register`, `ipc` and
+// `tool`; this script uses the first two, and `ipc` is undefined unless the user granted the 'ipc' permission.
+// It lists the stations the Station DB tool announces on the bus, and answers /seen and /whois.
 
 const MAX = 10;
 const seen = []; // newest first: { call, type, source }

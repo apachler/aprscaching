@@ -114,17 +114,35 @@ const scopeBadge = (reg: ToolRegistryEntry) =>
     <Badge title="Configured by this instance's sysop">instance</Badge>
   );
 
+/** A listing matches the filter when its name, title or description contains every word of it. */
+export function listingMatches(l: Listing, filter: string): boolean {
+  const hay = `${l.entry.name} ${l.entry.title} ${l.entry.description ?? ""}`.toLowerCase();
+  return filter
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((w) => hay.includes(w));
+}
+
 /** The tools of every registry, grouped by registry, each group with its own state. */
 export function RegistryGroups(props: {
   loaded: LoadedRegistry[];
-  onImport: (l: Listing) => void;
+  /** The names of the tools this player installed: their listings say so instead of offering an install. */
+  installed: ReadonlySet<string>;
+  /** Only listings matching these words show. */
+  filter?: string;
+  onInstall: (l: Listing) => void;
   onRetry: (reg: EffectiveToolRegistry) => void;
   onReconfirm: (reg: EffectiveToolRegistry, authority: string, fingerprint: string | null) => void;
 }) {
-  const groups = groupListings(props.loaded, location.href);
+  const filter = props.filter?.trim() ?? "";
+  const groups = groupListings(props.loaded, location.href).map((g) => ({
+    ...g,
+    shown: filter ? g.listings.filter((l) => listingMatches(l, filter)) : g.listings,
+  }));
   return (
     <>
-      {groups.map(({ reg: l, listings }) => (
+      {groups.map(({ reg: l, listings, shown }) => (
         <section key={l.reg.id} className="tool-sub reg-group" aria-busy={l.state.kind === "loading"}>
           <header className="reg-head">
             <strong>{l.reg.label}</strong> {scopeBadge(l.reg)}
@@ -134,7 +152,10 @@ export function RegistryGroups(props: {
           <RegistryBody
             l={l}
             listings={listings}
-            onImport={props.onImport}
+            shown={shown}
+            filter={filter}
+            installed={props.installed}
+            onInstall={props.onInstall}
             onRetry={() => props.onRetry(l.reg)}
             onReconfirm={props.onReconfirm}
           />
@@ -147,7 +168,10 @@ export function RegistryGroups(props: {
 function RegistryBody(props: {
   l: LoadedRegistry;
   listings: Listing[];
-  onImport: (l: Listing) => void;
+  shown: Listing[];
+  filter: string;
+  installed: ReadonlySet<string>;
+  onInstall: (l: Listing) => void;
   onRetry: () => void;
   onReconfirm: (reg: EffectiveToolRegistry, authority: string, fingerprint: string | null) => void;
 }) {
@@ -166,6 +190,12 @@ function RegistryBody(props: {
       return (
         <ErrorState onRetry={props.onRetry}>
           Couldn&apos;t load {l.reg.label}: {l.state.error}. The other registries are not affected.
+        </ErrorState>
+      );
+    case "format":
+      return (
+        <ErrorState onRetry={props.onRetry}>
+          {l.reg.label} can&apos;t be read: {l.state.error}. Its tools are not listed until this instance is updated.
         </ErrorState>
       );
     case "invalid":
@@ -202,7 +232,10 @@ function RegistryBody(props: {
             </p>
           )}
           {props.listings.length === 0 && <p className="muted fine">Every tool it lists is shown above.</p>}
-          {props.listings.map((x) => (
+          {props.listings.length > 0 && props.shown.length === 0 && (
+            <p className="muted fine">No tool here matches &ldquo;{props.filter}&rdquo;.</p>
+          )}
+          {props.shown.map((x) => (
             <div key={`${x.entry.name}:${x.manifestUrl}`} className="tool-row">
               <div className="tool-meta">
                 <strong>{x.entry.title}</strong>{" "}
@@ -212,7 +245,15 @@ function RegistryBody(props: {
                 {x.entry.description && <div className="muted fine">{x.entry.description}</div>}
                 {x.sources.length > 1 && <div className="muted fine">Listed by {x.sources.join(", ")}</div>}
               </div>
-              <Button onClick={() => props.onImport(x)}>Import…</Button>
+              {props.installed.has(x.entry.name) ? (
+                <Badge kind="found" title="This tool is in your tools above">
+                  Installed
+                </Badge>
+              ) : (
+                <Button onClick={() => props.onInstall(x)} hint={`Check ${x.entry.title} and approve its permissions`}>
+                  Install…
+                </Button>
+              )}
             </div>
           ))}
         </>

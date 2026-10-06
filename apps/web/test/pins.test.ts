@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { PACKET_DECODER } from "@aprscaching/tools";
 import { normalizePins, pinnedTool, toolPin, togglePinIn, SHACK_APPS } from "../src/shack/apps.js";
 import { toolIcon } from "../src/tools/toolIcons.js";
 
@@ -26,7 +25,7 @@ describe("the rail's pins", () => {
   });
 
   it("name the tool a tool pin stands for", () => {
-    expect(pinnedTool(toolPin(PACKET_DECODER.tool))).toBe("packet-decoder");
+    expect(pinnedTool(toolPin("packet-decoder"))).toBe("packet-decoder");
     expect(pinnedTool("terminal")).toBeNull();
   });
 
@@ -35,9 +34,8 @@ describe("the rail's pins", () => {
     expect(normalizePins(["decoder"])).toEqual([]);
   });
 
-  it("draw a built-in tool with its icon and an imported one with the plug", () => {
-    expect(toolIcon(PACKET_DECODER.tool, false)).toBe("decode");
-    expect(toolIcon(PACKET_DECODER.tool, true)).toBe("plug");
-    expect(toolIcon("someone-elses-tool", false)).toBe("plug");
+  it("draw a project registry tool with its icon and any other tool with the plug", () => {
+    expect(toolIcon("packet-decoder")).toBe("decode");
+    expect(toolIcon("someone-elses-tool")).toBe("plug");
   });
 });

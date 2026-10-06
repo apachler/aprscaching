@@ -221,17 +221,20 @@ const SURFACES = [
   { name: "terminal", as: "user", query: "?view=terminal" },
   { name: "bbs", as: "user", query: "?view=bbs" },
   { name: "tools", as: "user", query: "?view=tools" },
-  // the packet decoder, a built-in tool, opened the way its rail pin opens it, with a sample decoded
+  // the packet decoder, a project tool installed from the bundled registry, opened the way its rail pin opens it,
+  // with a sample decoded
   {
     name: "tools-decoder",
     as: "user",
     query: "?view=tools&tool=packet-decoder",
+    tools: ["packet-decoder"],
     wait: ".tools-panel textarea",
+    // pressed, not clicked: on the phone sheet a click's scroll-into-view never settles under the fixed clock
     steps: [
-      ["click", "button:has-text('Use a sample')"],
-      ["click", ".tool-sub button:has-text('Decode')"],
+      ["press", "button:has-text('Use a sample')"],
+      ["press", "button:text-is('Decode')"],
     ],
-    after: ".decoded",
+    after: ".tool-out",
   },
   { name: "rig", as: "user", query: "?view=rig" },
   { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
@@ -268,6 +271,7 @@ const SURFACES = [
     query: "?view=messages",
     views: ["desktop"],
     pins: ["terminal", "bbs", "tools", "rig", "node", "remote", "tool:packet-decoder", "tool:mheard"],
+    tools: ["packet-decoder", "mheard"],
     wait: ".rail",
   },
   { name: "node", as: "sysop", query: "?view=node" },
@@ -338,7 +342,7 @@ async function open(page, origin, s, theme) {
   // the map opens on the fixtures' region (MapLibre keeps its position in the hash)
   const url = s.url
     ? `${origin}${s.url}&theme=${theme}`
-    : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}${s.pins ? `&pins=${s.pins.join(",")}` : ""}#14/47.0725/15.4380`;
+    : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}${s.pins ? `&pins=${s.pins.join(",")}` : ""}${s.tools ? `&tools=${s.tools.join(",")}` : ""}#14/47.0725/15.4380`;
   // a fresh document for every surface: going to the URL the page already shows would keep the last surface's
   // state (an open sheet, a filled field) instead of loading it again
   await page.goto("about:blank");
@@ -348,6 +352,7 @@ async function open(page, origin, s, theme) {
   if (s.wait) await page.waitForSelector(s.wait, { timeout: 15000 });
   for (const [kind, sel, value] of s.steps ?? []) {
     if (kind === "click") await page.click(sel, { timeout: 8000 });
+    if (kind === "press") await page.locator(sel).first().press("Enter", { timeout: 8000 });
     if (kind === "fill") await page.fill(sel, value, { timeout: 8000 });
     if (kind === "scroll") await page.locator(sel).first().scrollIntoViewIfNeeded({ timeout: 8000 });
     await page.waitForTimeout(400);

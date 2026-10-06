@@ -7,8 +7,8 @@ import { appById, pinnedTool, type PinId, type ShackAppId } from "./apps.js";
 
 /**
  * The pins as rail items, in the user's order. An app pin draws the app (an operator-only app only for the
- * operator); a tool pin draws the tool while it is registered, so an imported tool's pin shows only while that
- * tool is loaded in this page, with the plug icon and its title as its name.
+ * operator); a tool pin draws the tool while it runs in this page (an installed tool that did not start, or one
+ * removed, leaves no dead rail item), with its icon and its title as its name.
  */
 export function usePinnedItems(pins: readonly PinId[], sysop: boolean): PinnedItem[] {
   const tools = useToolCatalog();
@@ -32,9 +32,9 @@ export function usePinnedItems(pins: readonly PinId[], sysop: boolean): PinnedIt
       if (!t) continue;
       out.push({
         key: pin,
-        icon: toolIcon(t.name, t.imported),
+        icon: toolIcon(t.name),
         label: t.title,
-        hint: t.imported ? `${t.title}, an imported tool, in Tools` : `${t.title}, in Tools`,
+        hint: `${t.title}, in Tools`,
         view: { kind: "app", id: "tools", tool: t.name },
       });
     }

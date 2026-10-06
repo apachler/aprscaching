@@ -21,7 +21,7 @@ const params = new URLSearchParams(location.search);
 const demo = params.get("demo");
 if (demo === "app") {
   // the whole app against canned gateway answers (demo/fixtures.ts): the design review's and the visual
-  // harness's bench. `&as=user|sysop|out` picks who is signed in.
+  // harness's bench. `&as=user|sysop|out` picks who is signed in, `&tools=` the project tools installed.
   import("./demo/fixtures.js").then(({ installAppFixtures }) => {
     // `&theme=dark|light|phosphor` holds the token attribute on the theme asked for (the UI kit's frames)
     const theme = params.get("theme");
@@ -37,6 +37,9 @@ if (demo === "app") {
     const personas = ["sysop", "out", "fresh", "ended"] as const;
     const persona = personas.find((p) => p === as) ?? "user";
     installAppFixtures(persona, params.get("net") === "1");
+    // `&tools=a,b` installs those project tools from the bundled registry, as a player would
+    const tools = params.get("tools");
+    if (tools) void import("./demo/demoTools.js").then((m) => m.installDemoTools(tools.split(","), true));
     root.render(
       <React.StrictMode>
         <ErrorBoundary>

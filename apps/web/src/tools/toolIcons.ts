@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * toolIcons.ts — the icon a tool shows where it is pinned (the rail, the More sheet) and on its row in Tools. A
- * built-in tool has its own; an imported tool, and any tool without one here, shows the plug.
+ * toolIcons.ts — the icon a tool shows where it is pinned (the rail, the More sheet) and on its row in Tools. The
+ * project registry's tools have their own, by name; any other tool shows the plug.
  */
 import type { IconName } from "../ui/Icon.js";
 
-const BUILTIN_ICONS: Readonly<Record<string, IconName>> = {
+const PROJECT_ICONS: Readonly<Record<string, IconName>> = {
   "packet-decoder": "decode",
   "digimode-decoders": "signal",
   sevenplus: "attach",
@@ -30,5 +30,5 @@ const BUILTIN_ICONS: Readonly<Record<string, IconName>> = {
   "map-waypoints": "place",
 };
 
-/** The icon for a tool: its built-in icon, else the plug (every imported tool). */
-export const toolIcon = (name: string, imported: boolean): IconName => (!imported && BUILTIN_ICONS[name]) || "plug";
+/** The icon for a tool: the project tool's own icon, else the plug. */
+export const toolIcon = (name: string): IconName => PROJECT_ICONS[name] ?? "plug";

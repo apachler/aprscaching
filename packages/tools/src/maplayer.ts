@@ -25,7 +25,7 @@ const TONES = new Set<PanelTone>(["default", "muted", "accent", "ok", "warn", "b
 const num = (x: unknown): number | null => (typeof x === "number" && isFinite(x) ? x : null);
 const str = (x: unknown, cap: number): string | undefined => (typeof x === "string" ? x.slice(0, cap) : undefined);
 
-/** Coerce an untrusted map layer (from an imported tool) into a safe spec — bounds points + fields. */
+/** Coerce an untrusted map layer (from a sandboxed tool) into a safe spec — bounds points + fields. */
 export function sanitizeMapLayer(input: unknown): MapLayerSpec {
   const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   const id = (typeof o.id === "string" ? o.id : "layer").slice(0, 64) || "layer";

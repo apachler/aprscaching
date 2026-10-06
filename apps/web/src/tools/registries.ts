@@ -14,6 +14,7 @@ import {
   authorityFingerprint,
   checkEntryHash,
   checkPinnedRegistry,
+  registryFormatProblem,
   previewRegistry,
   registryEntryFor,
   type RegistryEntry,
@@ -33,7 +34,7 @@ export interface Carrier {
 export const DIRECT: Carrier = { fetchUrl: (u) => u, init: { credentials: "omit" } };
 
 /** The carrier for a registry: through this instance when the gateway carries it, else direct. */
-export function carrierFor(reg: EffectiveToolRegistry, apiBase: string): Carrier {
+export function carrierFor(reg: Pick<EffectiveToolRegistry, "id" | "proxied" | "scope">, apiBase: string): Carrier {
   if (!reg.proxied) return DIRECT;
   return {
     fetchUrl: (u) => `${apiBase}/api/tools/registries/${encodeURIComponent(reg.id)}/file?url=${encodeURIComponent(u)}`,
@@ -41,6 +42,21 @@ export function carrierFor(reg: EffectiveToolRegistry, apiBase: string): Carrier
     init: { credentials: reg.scope === "account" ? "include" : "omit" },
   };
 }
+
+/** How an installed tool is fetched again: through the registry this instance carried it from, else direct. */
+export interface RegistryVia {
+  id: string;
+  /** The registry is the player's own, so the session goes along. */
+  account: boolean;
+}
+
+/** The registry a carrier fetches through, as an installed tool records it; none for a direct fetch. */
+export const viaFor = (reg: Pick<EffectiveToolRegistry, "id" | "proxied" | "scope">): RegistryVia | undefined =>
+  reg.proxied ? { id: reg.id, account: reg.scope === "account" } : undefined;
+
+/** The carrier an installed tool fetches through again. */
+export const carrierVia = (via: RegistryVia | undefined, apiBase: string): Carrier =>
+  via ? carrierFor({ id: via.id, proxied: true, scope: via.account ? "account" : "instance" }, apiBase) : DIRECT;
 
 /** A registry's own address, absolute: a path on this instance resolves against the page. */
 export const registryUrl = (reg: Pick<ToolRegistryEntry, "url">, pageHref: string): string =>
@@ -53,6 +69,7 @@ export type RegistryState =
   | { kind: "none" }
   | { kind: "failed"; error: string }
   | { kind: "invalid" }
+  | { kind: "format"; error: string }
   | { kind: "key-changed"; authority: string; fingerprint: string | null };
 
 export interface LoadedRegistry {
@@ -93,6 +110,7 @@ export async function loadRegistry(
     return { kind: "key-changed", authority, fingerprint: await authorityFingerprint(authority) };
   }
   if (state === "invalid") return { kind: "invalid" };
+  if (state === "format") return { kind: "format", error: registryFormatProblem(doc) ?? "unknown registry format" };
   return {
     kind: "ok",
     entries: (doc as SignedRegistry).entries,

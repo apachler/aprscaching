@@ -1,0 +1,21 @@
+{
+  "name": "mheard",
+  "title": "MHeard",
+  "author": "OE8APR",
+  "version": "1.0.0",
+  "api": "1.0",
+  "permissions": [
+    "monitor",
+    "event",
+    "panel"
+  ],
+  "surfaces": [
+    "terminal",
+    "web"
+  ],
+  "description": "Rolling recently-heard stations, aggregated across sources (RF terminal, APRS, …).",
+  "entry": "tool.js",
+  "entrySha256": "yEQTdC2saeAnwuPo8CHwFYllFyStG+MvuhXJgLFsVEI=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "y1NbQwTs/o0UvX1ig5mz7PztfqbD4/VVCTPyJqzOI0RR3rqx0ZVUyr1JGXdv+OLg13ZSIXET8l8q/HQFaQJtAw=="
+}

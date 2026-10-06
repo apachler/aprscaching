@@ -18,8 +18,8 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `permissions` | yes | The capabilities the tool asks for (below) |
 | `surfaces` | no | Where the tool appears (below); `["web"]` when left out |
 | `remote` | no | `true` lets a remote connected station invoke the tool's commands |
-| `description` | no | One line for the registry and the import prompt |
-| `entry` | for an imported tool | The URL or path of the script the sandbox runs, relative to the manifest; `tool.js` when left out |
+| `description` | no | One line for the registry and the install prompt |
+| `entry` | no | The URL or path of the script the sandbox runs, relative to the manifest; `tool.js` when left out |
 | `connect` | with `network` | The `https://` or `wss://` origins the tool reaches, at most 8, without a path |
 | `pubkey` | to sign | The author's raw Ed25519 public key, base64url |
 | `signature` | to sign | A detached Ed25519 signature over the canonical manifest (every field but `signature`) |
@@ -40,13 +40,13 @@ A tool ships a manifest, `tool.json`, which `@aprscaching/tools` validates:
 | `tx` | Transmit a frame. Gated, and passes the transmit gate |
 | `geo` | Read the device's location. Gated |
 
-The import prompt lists every permission a tool asks for, and the user approves them together. The transmit gate
-checks that the user's callsign is control-verified each time the tool transmits. No capability lets a tool change
-how finds are verified.
+The install prompt lists every permission a tool asks for, and the user approves them together. The transmit gate
+checks that the user's callsign is control-verified and that the tab holds the user's transmit consent each time
+the tool transmits. No capability lets a tool change how finds are verified.
 
-The table says what each capability means for the built-in tools. An imported tool reaches a narrower set
-through its sandbox: commands, colour rules, panels, decoders, the bus and the network. The
-[capability table in the Tool reference](tool-reference.md#capabilities) says which.
+Every tool runs in the sandbox, the project's own tools included, and reaches each capability through its script
+API; the [capability table in the Tool reference](tool-reference.md#capabilities) names the call. `geo` has no API
+yet.
 
 ## Surfaces
 
@@ -60,16 +60,16 @@ through its sandbox: commands, colour rules, panels, decoders, the bus and the n
 
 ## Where a tool runs
 
-An imported tool's script runs in a Web Worker inside a hidden, sandboxed frame with an opaque origin. From
-there the tool:
+A tool's script runs in a Web Worker inside a hidden, sandboxed frame with an opaque origin. From there the tool:
 
 - reaches nothing of the app's: its cookies, session, local storage, IndexedDB (where the device key lives),
   Cache Storage and service worker belong to another origin;
 - reaches the network only with the `network` grant, and then only the origins in `connect`. The frame's
   Content-Security-Policy blocks every other request, the app's own origin and API included. A request carries
   no cookies of the user's;
-- talks to the app only through the host's messages: its commands, decoders, panel and colour rules, and the
-  bus between tools when it holds `ipc`.
+- talks to the app only through the host's messages: its commands, decoders, panel, colour rules and map layer,
+  the events it hooks, its transmit requests, and the bus between tools when it holds `ipc`. The app checks the
+  tool's grants on every message.
 
 Removing a tool removes its frame, which ends the worker.
 

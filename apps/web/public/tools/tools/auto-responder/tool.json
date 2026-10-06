@@ -1,0 +1,20 @@
+{
+  "name": "auto-responder",
+  "title": "Auto-responder",
+  "author": "OE8APR",
+  "version": "1.0.0",
+  "api": "1.0",
+  "permissions": [
+    "event"
+  ],
+  "surfaces": [
+    "terminal",
+    "bbs",
+    "node"
+  ],
+  "description": "Greets an incoming connect (QTEXT/PMS style).",
+  "entry": "tool.js",
+  "entrySha256": "PH3Aw3dRQS7mNwqgc9D3PaLP3Yi5d1PElSRjgjoBikg=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "A/PRNKHwpPKvfSknjeYBrPuPaXvT6oiefwC8RZVEaZr76SfT0ODoi5iXfssYrCzMMTasza3v+GpjTZlTftZkDA=="
+}

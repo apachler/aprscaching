@@ -1,0 +1,22 @@
+{
+  "name": "block-art",
+  "title": "Block art (GIP)",
+  "author": "OE8APR",
+  "version": "1.0.0",
+  "api": "1.0",
+  "permissions": [
+    "command",
+    "panel",
+    "ipc"
+  ],
+  "surfaces": [
+    "web",
+    "terminal",
+    "bbs"
+  ],
+  "description": "Render CP437/ANSI block art (GP GIP). /art <text>, or push render.blocks on the bus.",
+  "entry": "tool.js",
+  "entrySha256": "UcD3mzws03LRDCoDVAGq7SPtvu2L8OXgca6Fih0Vrmk=",
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "akUKU4EnQddnmYDV1GN9H+pi+rKDTBWl8iPl3wsKJep6Bsb3bHPpILFChufmaMGuF4bqzpmyo48tLBhK5AgUBQ=="
+}

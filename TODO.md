@@ -387,7 +387,7 @@ Next release:
 - [ ] **First-party widget set v1 (feed-free)** _(next release · P1 · S each, four of them)_ — the
       widgets that need no backend at all: UTC/local clocks with sun and moon rise-set, the greyline
       terminator (deterministic solar math, host-side, and the emotional anchor of the whole surface),
-      live cache spots, award progress. Two existing built-ins join for the cost of a manifest line by
+      live cache spots, award progress. Two project registry tools join for the cost of a manifest line by
       declaring the new surface rather than being rewritten: `mheard` (recently-heard sparkline) and
       `watch-alert` (watchlist). The caching widgets are the differentiator — clocks and greyline are
       table stakes. Four times S is the real cost here; adding a fifth widget is a release decision, not
@@ -402,24 +402,14 @@ Next release:
       about OpenHamClock being complementary with a different centre of gravity. Ships with the dashboard
       or it misses the window.
 
-Imported-tool API gaps an outside author meets (each is described as it stands in
+Tool API gaps an author meets (each is described as it stands in
 [`docs/contribute/tool-reference.md`](docs/contribute/tool-reference.md)):
 
-- [ ] **Imported tools across reloads** _(P2 · S)_ — imported tools live beside the shared host with a
-      switch and a **Remove** action, but only for the page's session: a reload drops them and hides
-      their rail pins until they are imported again. Remember the approved manifests (URL, grants, trust
-      label) and offer to restart them on load, re-checking the signature each time.
-- [ ] **Imported tools reach events, map layers and transmit** _(P2 · M)_ — the sandbox bridges commands,
-      colour rules, panels, decoders and the bus, but not `on()` events, `setMapLayer()`, `scheduleBeacon()`
-      or `requestTx()`, so `event`, `map`, `beacon` and `tx` grant an imported tool nothing; `geo` has no API
-      at all. Imported commands and decoders answer only in the Tools console, not on the terminal, BBS or
-      node, and ignore the console's "as a remote peer" switch.
-- [ ] **Async command and decoder handlers** _(P3 · S)_ — a handler that returns a `Promise` prints
-      `[object Promise]`; await it in the worker bootstrap so a tool that fetches can answer a command.
-- [ ] **A tool's transmit reaches the radio** _(P2 · M)_ — `requestTx()` and `scheduleBeacon()` pass the
-      verified-callsign gate and then only show a notice (`apps/web/src/tools/host.ts`); only the
-      scheduled query keys the radio, through the packet terminal's session. Route both to the browser
-      radio link under the tab's transmit consent, rate-limited and listed in the transmit log.
+- [ ] **Tool commands and session events on the connected surfaces** _(P2 · M)_ — a tool's `/commands` run from
+      the Tools console only, not from the packet terminal's, the BBS's or the node's command line, and no
+      surface raises `on_connect` or `on_disconnect` or publishes `link.rtt` yet, so the session tools
+      (auto-responder, away note, connect bell, info responder, link ping) have no live session to answer.
+      `geo` has no API.
 
 Tool registry gaps a sysop meets ([The tool registry](docs/contribute/tool-registry.md)):
 
@@ -447,16 +437,6 @@ Marketplace track (the `apachler/aprscaching-tools` repo on its own timeline; no
       reviewer-protected environment; an offline root key designates the online CI signing key, and its
       custody and rotation ship documented with the repo. Listings state a license. Wire
       `tools/toolkey/bundle-registry.mjs` into the release workflow once the repo publishes tags.
-- [ ] **Built-in extraction to the bucket** _(P2 · S/M)_ — dogfood the marketplace and produce the
-      authoring walkthrough by moving the self-contained built-ins out as first-party signed listings: the
-      SSID reference, CTEXT macros, auto-responder, 7plus, the beacon scheduler (which also exercises a
-      gated capability end to end), then unit convert, CW encode, grid/bearing, block art, and map
-      waypoints. Staying in-process, deliberately: the monitor colouriser and the PSK31/CW decoders (the
-      sandbox decode bridge is an async request/response, the wrong shape for a continuous audio loop, and
-      a field station must decode on first run with no network to fetch an import); the station database
-      and link ping, which feed the inter-tool bus other tools read; and the peer-facing session tools —
-      auto-status, scheduled query, info responder, away note, connect bell. Needs the `dashboard` surface
-      and the bucket both live, so it is the last domino, never a release blocker.
 
 Backlog (P3 unless noted) — the first three are what a second dashboard release picks up:
 

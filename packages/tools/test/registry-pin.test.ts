@@ -11,6 +11,9 @@ import {
   validateManifest,
   bytesToB64,
   checkPinnedRegistry,
+  registryFormatProblem,
+  REGISTRY_FORMAT,
+  verifyRegistry,
   previewRegistry,
   signRegistry,
   type RegistryEntry,
@@ -26,6 +29,7 @@ const entries: RegistryEntry[] = Array.from({ length: 7 }, (_, i) => ({
   title: `Tool ${i}`,
   author: "OE8APR",
   version: "1.0.0",
+  api: "1.0",
   pubkey: "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
   entry: `tool-${i}/tool.json`,
 }));
@@ -76,6 +80,22 @@ describe("checkPinnedRegistry", () => {
     expect(await checkPinnedRegistry(forged, a.pub)).toBe("invalid");
     expect(await checkPinnedRegistry({ nope: true }, a.pub)).toBe("invalid");
   });
+  it("reads only registry format 1, which the signature covers", async () => {
+    const a = await genKeys();
+    const reg = await signRegistry(entries, a.pub, a.priv);
+    expect(reg.format).toBe(REGISTRY_FORMAT);
+    expect(await checkPinnedRegistry({ ...reg, format: 2 }, a.pub)).toBe("format");
+    expect(registryFormatProblem({ ...reg, format: 2 })).toBe(
+      "the registry uses format 2; this app reads registry format 1",
+    );
+    const { format: _f, ...old } = reg;
+    expect(await checkPinnedRegistry(old, a.pub)).toBe("format");
+    expect(registryFormatProblem(old)).toMatch(/names no format/);
+    // the format is signed: the same entries signed without it do not verify as format 1
+    const bare = await crypto.subtle.sign("Ed25519", a.priv, new TextEncoder().encode(JSON.stringify(entries)));
+    expect(await verifyRegistry({ ...reg, sig: bytesToB64(new Uint8Array(bare)) }, a.pub)).toBe(false);
+    expect((await previewRegistry({ ...reg, format: 3 })).ok).toBe(false);
+  });
 });
 
 describe("checkEntryHash", () => {
@@ -87,6 +107,7 @@ describe("checkEntryHash", () => {
       title: "Hash",
       author: "OE8APR",
       version: "1.0.0",
+      api: "1.0",
       permissions: ["command"],
       entry: "tool.js",
       entrySha256: await sha256B64(script),
@@ -106,7 +127,7 @@ describe("checkEntryHash", () => {
   });
 
   it("is validated as 32 bytes of base64", () => {
-    const m = { name: "x-tool", title: "X", author: "OE8APR", version: "1", permissions: [] };
+    const m = { name: "x-tool", title: "X", author: "OE8APR", version: "1", api: "1.0", permissions: [] };
     expect(validateManifest({ ...m, entrySha256: "abc" }).ok).toBe(false);
     expect(validateManifest({ ...m, entrySha256: 42 }).ok).toBe(false);
   });

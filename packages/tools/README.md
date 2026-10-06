@@ -1,8 +1,8 @@
 # @aprscaching/tools
 
 The plugin platform behind the Shack's **Tools** app: the tool manifest and its validator, the capability and
-surface model, the declarative panel and map-layer formats, the tool host, manifest and registry signing, the
-signal decoders, and the built-in tools. It has no runtime dependency outside the workspace and runs the same in
+surface model, the declarative panel and map-layer formats, the tool host, manifest and registry signing, and the
+signal decoders the app's audio front-end runs. It has no runtime dependency and runs the same in
 the browser, a Worker, Node and Bun. MIT-licensed, so other projects can embed it.
 
 ## What is in it
@@ -14,12 +14,13 @@ the browser, a Worker, Node and Bun. MIT-licensed, so other projects can embed i
 | `panel.ts`, `maplayer.ts` | `PanelSpec`, `MapLayerSpec`, and `sanitizePanel()` / `sanitizeMapLayer()` for untrusted input |
 | `host.ts` | `ToolHost`: registers tools, enforces their capabilities, routes events and the bus between tools |
 | `registry.ts` | Ed25519 manifest and registry signatures, `verifyRegistry()`, `resolveTrust()` |
-| `decoders/` | CW, PSK31 and 7PLUS decoders, and the streaming audio decoders |
-| `builtins/` | The first-party tools the app ships, all off until the user turns them on |
+| `decoders/` | CW and PSK31 decoders, and the streaming audio decoders |
 | `macros.ts`, `session-script.ts` | CTEXT macros and the connected-mode session scripts |
 
-The sandbox that runs an imported tool lives in the web app (`apps/web/src/tools/sandbox.ts`); this package is
-what it and the app share.
+The app has no tools of its own: every tool, the project's first-party ones included, is a signed script from a
+registry that the app runs in a sandbox (`apps/web/src/tools/sandbox.ts`). This package is what the sandbox and
+the app share. The project's tools live in [`apachler/aprscaching-tools`](https://github.com/apachler/aprscaching-tools),
+which bundles the MIT modules here into each tool's script.
 
 ## Use it
 

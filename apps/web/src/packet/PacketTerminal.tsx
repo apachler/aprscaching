@@ -16,8 +16,9 @@ import {
   expand as expandMacros,
   withNow,
   ScriptRunner,
+  validateSteps,
+  scriptTxCost,
   type ScriptSession,
-  type SessionStep,
 } from "@aprscaching/tools";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
@@ -212,17 +213,33 @@ export function PacketTerminal(props: {
       };
       const runner = new ScriptRunner(port);
       runnerRef.current = runner;
-      // A session script connects and sends over the TNC, so a calling tool must hold 'tx'.
-      disposeScriptSvc.current = host.registerHostService(
+      // A session script connects and sends over the TNC, so a calling tool must hold 'tx'. The steps are checked,
+      // one script runs at a time, and each load draws on the calling tool's transmit budget (one a minute, six an
+      // hour), like any other transmission of that tool. A new script closes the channel the last one held.
+      // Each connect counts as one transmission and every five sends as one more; the tool that loaded the script
+      // owns it, and switching that tool off or removing it cancels the script and closes its channel.
+      let scriptCaller: string | null = null;
+      const disposeService = host.registerHostService(
         "session.script",
-        (a) => {
-          const steps = (a as { steps?: unknown }).steps;
-          if (!Array.isArray(steps)) return null;
-          runner.load(steps as SessionStep[], Date.now());
+        (a, caller) => {
+          const steps = validateSteps((a as { steps?: unknown } | null)?.steps);
+          if (typeof steps === "string") throw new Error(steps);
+          if (runner.busy()) throw new Error("a session script is already running");
+          const held = host.takeTx(caller, scriptTxCost(steps));
+          if (held) throw new Error(`session script held: ${held}`);
+          scriptCaller = caller;
+          runner.load(steps, Date.now());
           return { ok: true };
         },
         { requires: "tx" },
       );
+      const disposeOff = host.onToolOff((tool) => {
+        if (tool === scriptCaller && runner.busy()) runner.cancel(`cancelled: ${tool} was switched off`);
+      });
+      disposeScriptSvc.current = () => {
+        disposeService();
+        disposeOff();
+      };
 
       pollRef.current = setInterval(() => {
         session.poll();
@@ -320,12 +337,15 @@ export function PacketTerminal(props: {
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 
-  // Feed every newly-heard frame to the tool host as a heard-frame source — so
-  // mheard/watch-alert record RF traffic even when the Monitor pane isn't the active view.
+  // Feed every newly-heard frame to the tool host as a heard-frame source, with its destination and text, so tools
+  // record RF traffic and classify it even when the Monitor pane isn't the active view.
   const fedMon = useRef(0);
   useEffect(() => {
     if (monitor.length < fedMon.current) fedMon.current = 0; // TNC closed/reopened → monitor reset
-    for (let i = fedMon.current; i < monitor.length; i++) feedHeard(monitor[i]!.src, "RF");
+    for (let i = fedMon.current; i < monitor.length; i++) {
+      const m = monitor[i]!;
+      feedHeard(m.src, "RF", { dst: m.dst, text: m.text });
+    }
     fedMon.current = monitor.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- append-only scan keyed on length; monitor[i] by index is intentional
   }, [monitor.length]);

@@ -11,6 +11,7 @@ describe("a manifest signed with tools/toolkey verifies in the app", () => {
       title: "Hello",
       author: "n0call",
       version: "1.0.0",
+      api: "1.0",
       permissions: ["panel"],
       entry: "https://example.net/hello/1.0.0/tool.js",
     });
@@ -23,7 +24,7 @@ describe("a manifest signed with tools/toolkey verifies in the app", () => {
   it("pins the entry script's bytes in the signed manifest", async () => {
     const script = "register({ commands: { hi: () => 'hi' } });";
     const raw = await signWithToolkey(
-      { name: "hello-tool", title: "Hello", author: "n0call", version: "1.0.0", permissions: [] },
+      { name: "hello-tool", title: "Hello", author: "n0call", version: "1.0.0", api: "1.0", permissions: [] },
       script,
     );
     expect(typeof raw.entrySha256).toBe("string");

@@ -17,7 +17,7 @@ export interface ShackAppProps {
   verified: boolean;
   map: maplibregl.Map | null;
   onClose: () => void;
-  /** A built-in tool to open on launch (the Tools app reads it; `?view=tools&tool=…`). */
+  /** A tool to open on launch (the Tools app reads it; `?view=tools&tool=…`). */
   tool?: string;
 }
 
@@ -74,7 +74,7 @@ export const SHACK_APPS: ShackApp[] = [
     id: "tools",
     icon: "plug",
     label: "Tools",
-    blurb: "Built-in tools and plugins: the packet decoder, CW and PSK31 by ear, macros and more",
+    blurb: "Install signed plugins from a registry: the packet decoder, CW and PSK31 by ear, macros and more",
     title: "Tools",
     wide: true,
     load: () => import("../tools/ToolsPanel.js").then((m) => ({ default: m.ToolsPanel })),
@@ -115,7 +115,7 @@ export const SHACK_APPS: ShackApp[] = [
 export const appById = (id: ShackAppId): ShackApp | undefined => SHACK_APPS.find((a) => a.id === id);
 
 /**
- * A pin on the nav rail: a Shack app by its id, or a tool (built-in or imported) as `tool:<name>`. A pinned tool
+ * A pin on the nav rail: a Shack app by its id, or an installed tool as `tool:<name>`. A pinned tool
  * opens the Tools app with that tool open.
  */
 export type ToolPin = `tool:${string}`;
@@ -172,7 +172,7 @@ function writePins(next: PinId[]): void {
   }
 }
 
-/** Take a pin off the rail (a removed or switched-off imported tool); a no-op when it is not pinned. */
+/** Take a pin off the rail (a removed or switched-off tool); a no-op when it is not pinned. */
 export function unpin(id: PinId): void {
   const pins = readPins();
   if (pins.includes(id)) writePins(pins.filter((x) => x !== id));

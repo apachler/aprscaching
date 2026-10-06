@@ -3,6 +3,7 @@
   "title": "Hello tool",
   "author": "OE8APR",
   "version": "1.0.0",
+  "api": "1.0",
   "permissions": [
     "command",
     "monitor",
@@ -17,5 +18,5 @@
   "entry": "tool.js",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
   "entrySha256": "4xcCgM1xtiDA+EAh1U9E2WSjE9uSZjaelkNXDTEAqvw=",
-  "signature": "K/QRCeduDg+GqjLVvtKETG1PavTNXgwN697p/GENWDy/7nBflx655/4mhBOViqiAg5x+V/OdPuOXgKK4WOCiDg=="
+  "signature": "b5sZBanWDnSQwMv58w7yG9oJdrPyVhc1ZSJ0pMlFzN+CKjKQ5FZaky9UkLyetdBplHbd1bceOlTwnALsVoGPAg=="
 }

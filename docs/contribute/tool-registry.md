@@ -9,8 +9,9 @@ listing does and does not promise.
 
 A registry is one signed JSON file: a list of tools, each with the author key that signs it and the address of
 its `tool.json`. The **Tools** app lists the tools of every registry the instance and the player switched on. A
-tool imported from an entry's address and signed by the key the entry lists shows as **Signed · registry-listed
-author key** in the import prompt.
+tool installed from an entry's address and signed by the key the entry lists shows as **Signed · registry-listed
+author key** in the install prompt. The app ships no tools of its own; the project registry, bundled with every
+instance, lists the project's first-party tools.
 
 ```mermaid
 flowchart LR
@@ -55,7 +56,7 @@ address:
 
 - A player's address never reaches the registry's host.
 - The gateway keeps each file for an hour and serves the last good copy while the host is unreachable, so tools
-  keep importing without internet.
+  keep installing and starting without internet.
 - It fetches without cookies, refuses private and LAN addresses unless the federation policy allows them
   (`FED_ALLOW_PRIVATE`), and fetches only files the registry leads to. A registry file may hold 256 KB, a manifest
   64 KB, a script 512 KB, and one registry's files 4 MB together.
@@ -68,6 +69,7 @@ its manifest's hash. With the setting off, the browser fetches each registry fro
 
 ```json
 {
+  "format": 1,
   "entries": [
     {
       "name": "hello-tool",
@@ -86,15 +88,16 @@ its manifest's hash. With the setting off, the browser fetches each registry fro
 
 | Field | Content |
 |---|---|
+| `format` | The registry file's format, `1`. The app refuses a file of a format it does not read, and says so |
 | `entries` | The listed tools, in the order **Registry** shows them |
 | `entries[].name` | The tool's manifest `name`. One entry per name |
 | `entries[].title`, `author`, `version`, `description` | What the **Registry** list shows; keep them equal to the manifest |
 | `entries[].pubkey` | The author's Ed25519 public key, base64url, exactly as in the signed manifest |
 | `entries[].entry` | The `tool.json` address. A relative address resolves against the registry's own URL |
 | `authority` | The public key that signed the file. It must equal the key pinned for the registry |
-| `sig` | An Ed25519 signature, base64, over the `entries` array serialised with object keys sorted |
+| `sig` | An Ed25519 signature, base64, over `{ "format": 1, "entries": [...] }` serialised with object keys sorted |
 
-The signature covers `entries` only: any change to an entry, its order included, needs a new signature.
+The signature covers `format` and `entries`: any change to an entry, its order included, needs a new signature.
 `authority` and `sig` sit outside what is signed. Use relative entries: they resolve the same wherever the
 registry is served, and a manifest's relative `entry` script resolves against the manifest's own URL.
 
@@ -144,8 +147,10 @@ without a new manifest signature fails its hash.
 ## The project registry
 
 The project registry lives in its own repository,
-[apachler/aprscaching-tools](https://github.com/apachler/aprscaching-tools). Its `CONTRIBUTING.md` covers
-submitting a tool, and its `MAINTAINERS.md` covers signing and releases.
+[apachler/aprscaching-tools](https://github.com/apachler/aprscaching-tools). It holds the project's first-party
+tools (the packet decoder, the CW and PSK31 decoders, MHeard, the macros and the rest), each built from source
+with the aprscaching MIT libraries and signed by the project's author key. Its `CONTRIBUTING.md` covers submitting
+a tool, and its `MAINTAINERS.md` covers building, signing and releases.
 
 ### Bundled with each release
 
@@ -155,7 +160,7 @@ instance serves it from its own address and it works offline. The snapshot keeps
 the files is rewritten. To take a new release into the app:
 
 ```bash
-node tools/toolkey/bundle-registry.mjs v1.0.0
+node tools/toolkey/bundle-registry.mjs v1.1.0
 ```
 
 The script fetches the tag from GitHub and checks the registry's signature against the project key pinned in
@@ -169,11 +174,11 @@ To follow the project registry between releases, add it as a GitHub registry as 
 ## What "registry-listed" covers
 
 - A tool counts as registry-listed only when its manifest was fetched from the exact address its entry names (a
-  relative entry resolved against the registry's URL) and signed by the key the entry lists. The **Import…** button
-  beside an entry uses that address. The import prompt names the registry that lists it.
+  relative entry resolved against the registry's URL) and signed by the key the entry lists. The **Install…** button
+  beside an entry uses that address. The install prompt names the registry that lists it.
 - A copy of a listed manifest served from any other address is not registry-listed, even when the listed key signed
   it: its script would come from the other site. It gets the trust-on-first-use labels.
-- If the manifest at the listed address is signed by another key than the entry's, the import is refused as
+- If the manifest at the listed address is signed by another key than the entry's, the install is refused as
   **Author key CHANGED**.
 - The manifest's signature covers `entrySha256`, the hash of the script's bytes, and the app runs a script only
   when its bytes match. A listing vouches for the signer, and the hash ties the code to that signature.
@@ -188,7 +193,7 @@ To follow the project registry between releases, add it as a GitHub registry as 
   signature, and each script against its signed hash. Nothing the instance or a registry's host serves can widen
   that.
 - **Gated abilities need the player's grant.** A tool gets `tx`, `beacon`, `network` and `geo` only when the player
-  approves them in the import prompt.
+  approves them in the install prompt.
 - **Transmitting needs more.** A tool that asks to transmit also needs the player's verified callsign and their
   transmit consent for the tab.
 
@@ -196,9 +201,9 @@ To follow the project registry between releases, add it as a GitHub registry as 
 
 | Event | What happens |
 |---|---|
-| An author changes their key | The author signs the manifest with the new key; the registry's publisher updates the entry's `pubkey` and signs the registry again. Imports from the listed address show as registry-listed again. A copy elsewhere shows **Author key CHANGED** to players who accepted the old key. |
+| An author changes their key | The author signs the manifest with the new key; the registry's publisher updates the entry's `pubkey` and signs the registry again. Installs from the listed address show as registry-listed again. A tool a player installed under the old key stops starting, with the reason, until the player installs it again. A copy elsewhere shows **Author key CHANGED** to players who accepted the old key. |
 | An author's key leaks | The publisher removes the entry, or lists the new key, and signs again. There is no revocation list: a browser that accepted the leaked key still shows **Signed · matches the key you trusted before** for a manifest it signs from an address no registry lists. |
-| A tool must go | Remove its entry and sign again. Players who imported it keep it until they reload the page. |
+| A tool must go | Remove its entry and sign again. The registry stops offering it; players who installed it keep it, signed by its author's key, until they remove it. |
 | A registry's authority key changes | Sign the registry with the new key and publish the new fingerprint. Every instance and player that pinned the old key sees **key changed** until they compare and confirm the new one. |
 | A registry's authority key leaks | As above, and tell everyone who pinned it: until they confirm a new key, the leaked key still signs what they see. |
 
