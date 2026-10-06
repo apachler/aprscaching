@@ -25,7 +25,7 @@ Two settings, both read when the web app is built, decide which registry an inst
 | Setting | Meaning | Default |
 |---|---|---|
 | `VITE_TOOL_REGISTRY` | The registry's URL, absolute or relative to the app | `/tools/registry.json`, served with the app |
-| `VITE_TOOL_REGISTRY_AUTHORITY` | The authority's Ed25519 public key, base64url, that must have signed the registry | The project's key, `J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink` |
+| `VITE_TOOL_REGISTRY_AUTHORITY` | The authority's Ed25519 public key, base64url, that must have signed the registry | The project's key, `22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0` |
 
 The app fetches the registry without cookies each time **Tools** opens. It shows nothing under **Registry** when
 the URL answers 404, an error with **Retry** when it cannot load it, and "failed its signature check" when the
@@ -41,13 +41,13 @@ file's `authority` is not the pinned key or the signature does not verify.
       "title": "Hello tool",
       "author": "OE8APR",
       "version": "1.0.0",
-      "pubkey": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "/tools/hello/tool.json",
       "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
     }
   ],
-  "authority": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
-  "sig": "r6BYLYK/doOytPnyUly48TrtwvThRLhwZsAQKTOA+RNnHlqqY/4ih/ATNHh8XQwsYhivpBJInIPYDqwg5y1BBQ=="
+  "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
+  "sig": "OdLlbf1LW0GOI2NGXjQrJOFCR+PGjZGZJrfnSfBnDdvONrKhsOTEDE/QuT3yhRdhgbA1Fi2i6skgy+nAewanDw=="
 }
 ```
 

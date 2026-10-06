@@ -322,7 +322,7 @@ export const CONFIG_KEYS = {
   VITE_TOOL_REGISTRY_AUTHORITY: {
     type: "string",
     units: ["web"],
-    default: "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
+    default: "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
   },
   DOMAIN: { type: "string", units: ["deploy"], default: ":80", shapes: ["selfhost"] },
   TUNNEL_TOKEN: { type: "string", units: ["deploy"], secret: true, shapes: ["selfhost"] },
