@@ -15,9 +15,10 @@
  * The carrier. With TOOL_REGISTRIES_PROXY on, the browser fetches an added registry, the manifests its entries
  * name and the scripts those name through this instance, so a player's address never reaches the registry's
  * host, and the last good copy keeps serving while the internet is down. The gateway fetches without
- * credentials, through the federation fetch guard (no private or LAN addresses unless policy allows), keeps
- * each file for an hour, caps each file and each registry's total, and fetches only files the registry itself
- * leads to. It decides no trust: the browser verifies every signature against the pinned key.
+ * credentials, over https on every hop and never to a private or LAN address whatever the federation settings
+ * allow (fetchguard.ts toolFetch), keeps each file for an hour, caps each file and each registry's total, and
+ * fetches only files the registry itself leads to. It decides no trust: the browser verifies every signature
+ * against the pinned key.
  *
  *   GET    /api/tools/registries                     the effective list for this visitor
  *   GET    /api/tools/registries/preview?spec=…      a registry file before it is added, to compare its key
@@ -47,8 +48,8 @@ import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { sessionIdentity } from "./auth.js";
 import { actorOf, audit } from "./moderation.js";
-import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { fedFetch, readCappedBody } from "./fetchguard.js";
+import { clientIp, rateLimited, rateLimitedDurable } from "./corroborate_privacy.js";
+import { readCappedBody, toolFetch, ToolFetchRefused } from "./fetchguard.js";
 import { loadSiteSettings, setting } from "./siteconfig.js";
 import { nowS } from "./util/time.js";
 
@@ -64,6 +65,11 @@ const REGISTRY_TOTAL_CAP = 4 * 1024 * 1024;
 const REGISTRY_ENTRIES_MAX = 200;
 /** Upstream fetches one player's registries may cause in an hour. */
 export const PLAYER_FETCHES_PER_HOUR = 60;
+/**
+ * Carried-file requests one client address may make in a minute: browsing a registry of REGISTRY_ENTRIES_MAX
+ * tools reads its file, each manifest and each script once.
+ */
+export const FILE_REQUESTS_PER_MIN = 600;
 /** Changes one person may make to a registry list in an hour. */
 const WRITES_PER_HOUR = 60;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -395,12 +401,32 @@ function scriptUrl(manifestUrl: string, doc: unknown): string | null {
 }
 
 /**
- * What `url` is to the registry, judged from the copies this instance holds: the registry file itself, a manifest
- * its entries name, or a script one of those manifests names. Null for anything else: the carrier fetches only
- * what the registry leads to.
+ * What each registry leads to (url → kind), derived from the copies this instance holds, per database. Every
+ * carried file asks it, and deriving it parses the registry file and every manifest; a new registry or manifest copy
+ * drops the registry's entry (forgetLeads), and the generation keeps a derivation that raced such a write from
+ * being kept.
  */
-async function kindOf(env: Env, reg: ToolRegistryEntry, url: string): Promise<FileKind | null> {
-  if (url === reg.url) return "registry";
+const leadsCache = new WeakMap<object, { gen: number; byRegistry: Map<string, Map<string, FileKind>> }>();
+const LEADS_CACHED_MAX = 256;
+
+function leadsStore(env: Env) {
+  let store = leadsCache.get(env.DB);
+  if (!store) leadsCache.set(env.DB, (store = { gen: 0, byRegistry: new Map() }));
+  return store;
+}
+
+function forgetLeads(env: Env, registryId: string): void {
+  const store = leadsStore(env);
+  store.gen++;
+  for (const k of store.byRegistry.keys()) if (k.startsWith(`${registryId} `)) store.byRegistry.delete(k);
+}
+
+async function leadsOf(env: Env, reg: ToolRegistryEntry): Promise<Map<string, FileKind>> {
+  const store = leadsStore(env);
+  const key = `${reg.id} ${reg.url}`;
+  const hit = store.byRegistry.get(key);
+  if (hit) return hit;
+  const gen = store.gen;
   const rows = (
     await env.DB.prepare("SELECT url, body FROM tool_registry_files WHERE registry_id=?").bind(reg.id).all<{
       url: string;
@@ -409,9 +435,28 @@ async function kindOf(env: Env, reg: ToolRegistryEntry, url: string): Promise<Fi
   ).results;
   const bodies = new Map(rows.map((r) => [r.url, r.body]));
   const manifests = manifestUrls(reg.url, parseJson(bodies.get(reg.url)));
-  if (manifests.includes(url)) return "manifest";
-  for (const m of manifests) if (scriptUrl(m, parseJson(bodies.get(m))) === url) return "script";
-  return null;
+  const leads = new Map<string, FileKind>();
+  for (const m of manifests) {
+    const s = scriptUrl(m, parseJson(bodies.get(m)));
+    if (s) leads.set(s, "script");
+  }
+  for (const m of manifests) leads.set(m, "manifest");
+  leads.set(reg.url, "registry");
+  if (store.gen === gen) {
+    if (store.byRegistry.size >= LEADS_CACHED_MAX) store.byRegistry.delete(store.byRegistry.keys().next().value!);
+    store.byRegistry.set(key, leads);
+  }
+  return leads;
+}
+
+/**
+ * What `url` is to the registry, judged from the copies this instance holds: the registry file itself, a manifest
+ * its entries name, or a script one of those manifests names. Null for anything else: the carrier fetches only
+ * what the registry leads to.
+ */
+async function kindOf(env: Env, reg: ToolRegistryEntry, url: string): Promise<FileKind | null> {
+  if (url === reg.url) return "registry";
+  return (await leadsOf(env, reg)).get(url) ?? null;
 }
 
 /** Drop the copies a refreshed registry no longer leads to, so they stop counting against its total. */
@@ -469,13 +514,13 @@ async function fetchUpstream(
 ): Promise<{ text: string } | { error: string }> {
   let res: Response;
   try {
-    res = await fedFetch(env, url, {
+    res = await toolFetch(env, url, {
       credentials: "omit",
       headers: { accept: kind === "script" ? "text/javascript, text/plain, */*" : "application/json" },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (e) {
-    return { error: `could not fetch it: ${(e as Error).message}` };
+    return { error: e instanceof ToolFetchRefused ? e.message : "its host is unreachable from this instance" };
   }
   if (!res.ok) return { error: `its host answered ${res.status}` };
   const cap = REGISTRY_FILE_CAP[kind];
@@ -502,6 +547,8 @@ async function fetchUpstream(
 async function handleFile(req: Request, env: Env, id: string): Promise<Response> {
   if (!proxyOn(env))
     return unavailable("this instance does not fetch tool registries; fetch the registry directly", 404);
+  if (rateLimited(`toolreg-file:${env.INSTANCE ?? ""}:${clientIp(req, env)}`, Date.now(), FILE_REQUESTS_PER_MIN))
+    return json({ error: "too many registry file requests: try again in a minute" }, { status: 429 });
   const target = httpsUrl(new URL(req.url).searchParams.get("url") ?? "");
   if (!target) return json({ error: "url must be an https address" }, { status: 400 });
   // find the registry: the instance's, or the signed-in player's own while players may add registries
@@ -529,7 +576,7 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
     return serveCopy(row, kind, reg, false);
   // a recent failure waits before the next attempt
   if (row && row.error && now - row.tried_at < RETRY_AFTER_FAIL_S)
-    return hasCopy ? serveCopy(row, kind, reg, true) : unavailable(`the registry's host is unreachable: ${row.error}`);
+    return hasCopy ? serveCopy(row, kind, reg, true) : unavailable(`couldn't fetch the file: ${row.error}`);
   if (
     accountId &&
     (await rateLimitedDurable(env, `toolreg-fetch:${accountId}`, Date.now(), PLAYER_FETCHES_PER_HOUR, 3600_000))
@@ -557,6 +604,8 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
   )
     .bind(reg.id, target, got.text, CONTENT_TYPE[kind], bytes, now, now)
     .run();
+  // a registry or manifest body decides what the registry leads to; a script body does not
+  if (kind !== "script") forgetLeads(env, reg.id);
   if (kind === "registry") await pruneCopies(env, reg, got.text);
   return serveCopy(
     {

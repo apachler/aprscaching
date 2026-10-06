@@ -9,6 +9,7 @@ export * from "./api.js";
 export * from "./manifest.js";
 export * from "./registry.js";
 export * from "./host.js";
+export * from "./sessions.js";
 export * from "./decoders/morse.js";
 export * from "./decoders/cwdsp.js";
 export * from "./decoders/psk31.js";

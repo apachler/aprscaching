@@ -113,3 +113,37 @@ describe("a station that may not transmit only listens", () => {
     expect(h.B.channels[0]!.lines.some((l) => l.text.includes("hello"))).toBe(false);
   });
 });
+
+describe("terminal session events for the host", () => {
+  it("marks who opened each channel", () => {
+    const h = harness();
+    h.A.connect("OE8XBM-7");
+    h.pump();
+    expect(h.A.channels[0]!.direction).toBe("outgoing");
+    expect(h.B.channels[0]!.direction).toBe("incoming");
+  });
+
+  it("hands each received line to the listener", () => {
+    const h = harness();
+    const lines: string[] = [];
+    h.B.listener = { line: (ch, text) => lines.push(`${ch.remoteCall}: ${text}`) };
+    const id = h.A.connect("OE8XBM-7");
+    h.pump();
+    h.A.send(id, "info");
+    h.pump();
+    expect(lines).toEqual(["OE8APR-1: info"]);
+  });
+
+  it("probes a connected channel and reports the round trip", () => {
+    const h = harness();
+    const samples: string[] = [];
+    h.A.listener = { rtt: (ch, ms, kind) => samples.push(`${ch.remoteCall} ${kind} ${ms}`) };
+    const id = h.A.connect("OE8XBM-7");
+    h.pump();
+    expect(h.A.probe(id)).toBe(true);
+    h.pump();
+    expect(samples).toEqual(["OE8XBM-7 poll 0"]);
+    h.A.allowTransmit(false);
+    expect(h.A.probe(id)).toBe(false);
+  });
+});

@@ -598,7 +598,8 @@ export async function sessionIdentity(req: Request, env: Env): Promise<SessionId
 /**
  * The session of scope `scope` the request's cookie carries, while its account exists at the session's
  * generation and is not suspended: a suspended account acts as nobody, with no write and no transmission
- * through this instance while the suspension holds.
+ * through this instance while the suspension holds. A `data` session is the exception: it reaches only the
+ * account's data export and erasure, which a suspension never closes.
  */
 async function currentSession(req: Request, env: Env, scope: SessionScope): Promise<SessionClaims | null> {
   const cookie = req.headers.get("cookie") ?? "";
@@ -610,15 +611,16 @@ async function currentSession(req: Request, env: Env, scope: SessionScope): Prom
     .bind(claims.accountId)
     .first<{ session_gen: number }>();
   if (!row || Number(row.session_gen) !== claims.gen) return null;
-  if (await suspensionOf(env, claims.accountId)) return null;
+  if (scope !== "data" && (await suspensionOf(env, claims.accountId))) return null;
   return claims;
 }
 
 /**
- * The account a data-only session serves, with the marker its content shows under, or null. Such a session is
- * issued by email link to an account that holds no call (its last call moved to the call's licensee,
- * claims.ts). It lets its owner export or erase the account's data and nothing else: it never passes
- * {@link sessionIdentity}, and it ends once the account takes a call on again.
+ * The account a data-only session serves, with the call or marker its content shows under, or null. Such a session
+ * is issued by email link to an account that holds no call (its last call moved to the call's licensee, claims.ts),
+ * or to a suspended account, which signs in nowhere else. It lets its owner export or erase the account's data and
+ * nothing else: it never passes {@link sessionIdentity}, and it ends once the account takes a call on again or its
+ * suspension is lifted.
  */
 export async function accountDataSession(
   req: Request,
@@ -629,7 +631,8 @@ export async function accountDataSession(
   const row = await env.DB.prepare("SELECT callsign FROM accounts WHERE account_id=?")
     .bind(claims.accountId)
     .first<{ callsign: string }>();
-  if (!row || !isFormerMarker(row.callsign) || row.callsign.toUpperCase() !== claims.callsign) return null;
+  if (!row || row.callsign.toUpperCase() !== claims.callsign) return null;
+  if (!isFormerMarker(row.callsign) && !(await suspensionOf(env, claims.accountId))) return null;
   return { accountId: claims.accountId, marker: row.callsign };
 }
 
@@ -813,7 +816,8 @@ export function suspendedResponse(e: AccountSuspended): Response {
  * Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`, on
  * the address of this instance the request came on. Every sign-in path mints its session here, so a suspended
  * account is refused in one place. A `data` session serves only the account's data export and erasure
- * ({@link accountDataSession}) and lasts an hour.
+ * ({@link accountDataSession}) and lasts an hour; a suspended account gets one, since a suspension never closes
+ * the person's access to their data.
  */
 export async function issueSessionCookie(
   req: Request,
@@ -826,7 +830,7 @@ export async function issueSessionCookie(
     .bind(accountId)
     .first<{ session_gen: number }>();
   if (!row) throw new Error("no such account");
-  const suspended = await suspensionOf(env, accountId);
+  const suspended = scope === "data" ? null : await suspensionOf(env, accountId);
   if (suspended) throw new AccountSuspended(suspended);
   const token = await signSession(env, {
     accountId,

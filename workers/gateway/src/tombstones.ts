@@ -30,6 +30,8 @@ export interface TombstoneItem {
   targetId: string;
   /** The highest version of the target it suppresses; absent for every version. */
   upTo?: number;
+  /** A cache whose federation version, read when the tombstone is written, is `upTo`. */
+  upToCache?: number;
 }
 
 interface TombstoneRow {
@@ -53,14 +55,47 @@ function tombstoneData(r: { kind: string; target_id: string; origin: string; ts:
  */
 export async function emitTombstones(env: Env, origin: string, items: TombstoneItem[]): Promise<number> {
   if (!items.length) return 0;
-  const ts = nowS();
-  const stmts = items.map((it) =>
-    env.DB.prepare(
-      "INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts, up_to) VALUES (?, ?, ?, ?, ?, ?)",
-    ).bind(crypto.randomUUID(), it.kind, it.targetId, origin, ts, it.upTo ?? null),
-  );
-  await env.DB.batch(stmts);
+  await env.DB.batch(tombstoneStatements(env, origin, items));
   return items.length;
+}
+
+/**
+ * The statements that write `items` as tombstones, for a caller to run in the same batch as the removal itself:
+ * the removal and its tombstones then commit together or not at all, so a crash between them never leaves a
+ * record gone here while peers keep their copy. Run after the removal, an `upToCache` bound reads the version the
+ * removal gave the cache.
+ */
+export function tombstoneStatements(env: Env, origin: string, items: TombstoneItem[]) {
+  const ts = nowS();
+  return items.map((it) =>
+    it.upToCache != null
+      ? env.DB.prepare(
+          `INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts, up_to)
+           VALUES (?, ?, ?, ?, ?, (SELECT fed_rev FROM caches WHERE id = ?))`,
+        ).bind(crypto.randomUUID(), it.kind, it.targetId, origin, ts, it.upToCache)
+      : env.DB.prepare(
+          "INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts, up_to) VALUES (?, ?, ?, ?, ?, ?)",
+        ).bind(crypto.randomUUID(), it.kind, it.targetId, origin, ts, it.upTo ?? null),
+  );
+}
+
+/**
+ * A statement that tombstones every row `fromWhere` selects (`FROM … WHERE …`, binding `binds`), its global id
+ * being `<origin>:<kind>:<idExpr>`. It reads the rows inside the batch that removes them, so a row written between
+ * an earlier read and the removal is tombstoned too.
+ */
+export function tombstoneSelect(
+  env: Env,
+  origin: string,
+  kind: TombstoneKind,
+  idExpr: string,
+  fromWhere: string,
+  ...binds: unknown[]
+) {
+  return env.DB.prepare(
+    `INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts)
+     SELECT lower(hex(randomblob(16))), ?, ? || ${idExpr}, ?, ? ${fromWhere}`,
+  ).bind(kind, `${origin}:${kind}:`, origin, nowS(), ...binds);
 }
 
 /** Tombstone feed via the generalized envelope — cursor = the tombstones sequence (fed_seq), signed at serve time. */

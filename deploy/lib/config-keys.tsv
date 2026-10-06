@@ -5,7 +5,7 @@ OPERATOR_SECRET	string	gateway,server,desktop,pocket,licence			1	0	selfhost,bare
 SESSION_SECRET	string	gateway,server,desktop			1	1	selfhost,baremetal,pocket,desktop	Key that signs sign-in sessions; must differ from the ingest and operator secrets	
 SESSION_TTL_DAYS	int	gateway	30		0	0	selfhost,baremetal,pocket,desktop	Days a sign-in session lasts	
 SESSION_EPOCH	int	gateway	0		0	0	selfhost,baremetal,pocket,desktop	Unix seconds: sessions minted before this time are refused	
-TRUST_PROXY	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when a reverse proxy fronts the instance, so x-forwarded-for is trusted	
+TRUST_PROXY	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when a reverse proxy fronts the instance, so x-forwarded-for and x-forwarded-proto are trusted	
 TRUST_CF	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept	
 ADMIN_CALLSIGNS	calls	gateway,pocket			0	1	selfhost,baremetal,pocket,desktop	Comma-separated licensed calls that may administer this instance	
 INSTANCE	string	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	Federation instance id (domain); defaults to the host of APP_URL	

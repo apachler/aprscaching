@@ -66,6 +66,7 @@ import { bboxKey, bboxWhere, bboxWithin, parseBbox, type Bbox } from "./fedregio
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 import { buildFedFrames } from "./fedsync.js";
 import { forgetGapsStatement, gapsBetween } from "./fedgaps.js";
+import { pruneBounded } from "./retention.js";
 
 /** The record kinds synced per origin, in the order a pull applies them: deletes first, keys before moves. */
 export const ORIGIN_KINDS = ["tombstone", "account-move", "cache", "find"] as const;
@@ -78,8 +79,11 @@ export type OwnSeqKind = (typeof OWN_SEQ_KINDS)[number];
 export const MAX_TRANSIT_HOPS = 4;
 /** Origins learned through neighbours: the peer table never grows past this many `transit:` rows. */
 const MAX_TRANSIT_PEERS = 500;
-/** Origins one summary page lists. */
-const SUMMARY_PAGE = 500;
+/**
+ * Origins one summary page lists. Each costs a few indexed lookups per kind, and the summary answers anyone, so a
+ * page stays small enough that one request is cheap; a puller follows `next` (fedpull.ts reads up to 20 pages).
+ */
+const SUMMARY_PAGE = 100;
 /** Rotation records kept per origin. */
 const MAX_ROTATIONS = 32;
 /** Gaps one page names. */
@@ -296,11 +300,15 @@ async function heldFor(
 ): Promise<{ held: number; whole: boolean; top: number }> {
   const m = await markRow(env, origin, kind);
   const held = m?.seq ?? 0;
+  // the newest frame first along idx_fed_transit_origin, which carries the hop count: one index step for the
+  // usual case, never a scan of the origin's records
   const top =
     (
-      await env.DB.prepare("SELECT MAX(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops < ?")
+      await env.DB.prepare(
+        "SELECT v FROM fed_transit WHERE origin = ? AND kind = ? AND hops < ? ORDER BY v DESC LIMIT 1",
+      )
         .bind(origin, kind, MAX_TRANSIT_HOPS)
-        .first<{ v: number | null }>()
+        .first<{ v: number }>()
     )?.v ?? 0;
   const whole = !m || covers(m.region, kind === "cache" ? region : "");
   // past the records it keeps, a reader is sent on to `held` only where it holds the origin whole for that reader
@@ -347,6 +355,21 @@ const parseRotations = (s: string | null | undefined): RotationRecord[] => {
   }
 };
 
+/**
+ * Is `instance` one this instance knows as a peer and has not blocked? Only for such an asker does a summary
+ * honour `for`; anyone may send the parameter, and naming an unknown instance must learn nothing about it.
+ */
+async function knownAsker(env: Env, instance: string): Promise<boolean> {
+  if (!isInstanceId(instance)) return false;
+  const row = await env.DB.prepare(
+    `SELECT 1 AS ok FROM fed_peers WHERE instance = ? AND trust != 'blocked'
+       AND NOT EXISTS (SELECT 1 FROM fed_peers b WHERE b.instance = ? AND b.trust = 'blocked') LIMIT 1`,
+  )
+    .bind(instance, instance)
+    .first<{ ok: number }>();
+  return !!row;
+}
+
 /** The query parameters every origin-sync request shares: the asker and the caches region. */
 function syncQuery(req: Request): { u: URL; asker: string; bbox: Bbox | null; badBbox: boolean } {
   const u = new URL(req.url);
@@ -363,15 +386,17 @@ const tooMany = (req: Request, env: Env, what: string, max: number) =>
  * origins whose records the FED_RESERVE policy passes on, other than the asker (`for`). Each lists, per kind, how
  * far it holds that origin whole for the asker's region (`bbox`) and the highest record it can pass on, and
  * another origin's key as this instance holds it. `asker` tells the asker how far this instance holds the asker's
- * own records. At most SUMMARY_PAGE origins a page; `next` continues it (`after`). 404 while the instance is
- * unsigned.
+ * own records. `for` counts only when it names a peer this instance knows and has not blocked (knownAsker); any
+ * other value is ignored and the summary answers as it does without one. At most SUMMARY_PAGE origins a page;
+ * `next` continues it (`after`). 404 while the instance is unsigned.
  */
 export async function handleSyncSummary(req: Request, env: Env): Promise<Response> {
   if (!(await loadKey(env))) return json({ error: "instance is unsigned" }, { status: 404 });
   if (tooMany(req, env, "fed-summary", SUMMARY_PER_MIN))
     return json({ error: "too many summary requests: try again in a minute" }, { status: 429 });
-  const { u, asker, bbox, badBbox } = syncQuery(req);
+  const { u, asker: named, bbox, badBbox } = syncQuery(req);
   if (badBbox) return json({ error: "bbox must be S,W,N,E in decimal degrees" }, { status: 400 });
+  const asker = named && (await knownAsker(env, named)) ? named : "";
   const region = bbox ? bboxKey(bbox) : "";
   const after = u.searchParams.get("after") ?? "";
   const self = instanceOf(req, env);
@@ -700,4 +725,24 @@ export async function forgetTransitPeer(env: Env, instance: string): Promise<voi
 /** The usable keys of an accept set plus its pin: what a direct binding holds. */
 export function heldKeys(pin: string | null, accept: ReturnType<typeof parseAcceptKeys>): string[] {
   return [...new Set([...(pin ? [pin] : []), ...usableKeys(accept, nowS())])];
+}
+
+/**
+ * The nightly purge of frames kept for passing on whose record is no longer held here: one its origin tombstoned
+ * (at or above the frame's version), and a cache, find or account move whose mirrored row is gone, deleted or
+ * superseded. A frame lives exactly as long as the record it carries, so the logger calls in a find frame do not
+ * outlast the find. Tombstone frames stay, like tombstones themselves: dropping one would let the erased record
+ * come back on the next path that still carries it.
+ */
+export async function purgeTransit(env: Env): Promise<void> {
+  await pruneBounded(
+    env,
+    "fed_transit",
+    `SELECT rowid FROM fed_transit t WHERE t.kind != 'tombstone' AND (
+       EXISTS (SELECT 1 FROM remote_tombstones rt WHERE rt.target_id = t.gid AND rt.origin = t.origin
+                  AND (rt.up_to IS NULL OR t.v <= rt.up_to))
+       OR (t.kind = 'cache' AND NOT EXISTS (SELECT 1 FROM remote_caches r WHERE r.global_id = t.gid))
+       OR (t.kind = 'find' AND NOT EXISTS (SELECT 1 FROM remote_finds r WHERE r.global_id = t.gid))
+       OR (t.kind = 'account-move' AND NOT EXISTS (SELECT 1 FROM remote_account_moves r WHERE r.global_id = t.gid)))`,
+  );
 }

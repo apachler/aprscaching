@@ -142,7 +142,10 @@ export const toolHost = new ToolHost({
   },
 });
 
-const titleOf = (name: string) => toolHost.list().find((t) => t.manifest.name === name)?.manifest.title ?? name;
+/** A tool's title, or its name when no running tool has that name. */
+export const toolTitle = (name: string): string =>
+  toolHost.list().find((t) => t.manifest.name === name)?.manifest.title ?? name;
+const titleOf = toolTitle;
 
 // Drive the periodic on_tick event so timer tools (auto-status, watchdogs) fire. Cheap:
 // dispatch is a no-op unless a tool hooked on_tick. Once per module load.

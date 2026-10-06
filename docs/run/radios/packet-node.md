@@ -27,6 +27,10 @@ The node and the BBS run on the ingest box's own AX.25 stack, over its KISS TNC 
 from the peer on an incoming one, and SREJ is opt-in per link. How the stack works is in
 [The AX.25 stack](../../contribute/ax25-stack.md).
 
+Players' tools run in their browsers, never on the ingest box, so they take no part in the node's or the BBS's
+sessions: those answer with their own commands only. Tools answer on a player's own packet terminal
+([Tools on connected sessions](../../shack/tools.md#tools-on-connected-sessions)).
+
 ## NET/ROM node
 
 Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over a

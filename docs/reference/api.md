@@ -4,6 +4,10 @@ The gateway exposes one HTTP surface across all runtimes. Every response is CORS
 path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1` (see
 [the read API](#public-read-api)); the other routes power the web app and federation.
 
+A request body stops at 20 MB on both the Node and the Bun server (`413` past it), and a route with a smaller
+cap of its own reads no further than that cap. A failure inside the gateway answers `500` with the JSON body
+`{"error":"internal error"}` and nothing else; the error itself goes to the server's log.
+
 ## Authentication
 
 | Gate                                       | Meaning                                                                                                                                                                                                                            |
@@ -19,12 +23,14 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | **x-relay-secret / x-fed-secret / wx-key** | Federation relay / federation submit-corroborate / weather-station keys.                                                                                                                                                           |
 | **spoke-signed**                           | `x-relay-instance`, `x-relay-at` and `x-relay-sig`: the request signed with the spoke instance's federation key, which the hub already holds; the signing time must sit within 120 s of the hub's clock.                           |
 
-Cross-origin requests carry credentials only from `APP_URL`, `EXTRA_ORIGINS` and `CORS_ORIGINS`; with none set
-the gateway answers `Access-Control-Allow-Origin: *` without credentials.
+Cross-origin requests carry credentials only from `APP_URL`, `EXTRA_ORIGINS` and `CORS_ORIGINS`, and of those only
+from an `https` or loopback origin: a plain-http origin is answered without credentials. With none set the gateway
+answers `Access-Control-Allow-Origin: *` without credentials.
 
 An instance with several addresses (`EXTRA_ORIGINS`) answers each request for the address it came on, when that
 address is `APP_URL` or listed: the session cookie (host-only, `Secure` only on https), sign-in links and links
-into the app name it. A request on any other host is answered as if it came to `APP_URL`. Passkeys keep one
+into the app name it. The scheme is the listener's, raised to https by `x-forwarded-proto` only behind a declared
+proxy (`TRUST_PROXY=1`). A request on any other host is answered as if it came to `APP_URL`. Passkeys keep one
 relying party, `RP_ID`; `GET /.well-known/webauthn` lists every https address as a related origin, so a browser
 on one of them accepts that relying party ([One instance, several addresses](../run/networks/several-addresses.md)).
 
@@ -136,8 +142,8 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | GET/POST | `/api/wx/submit`, `/updateweatherstation`                                 | PWS push (Ecowitt / WU-Rapidfire)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | wx-key                      |
 | POST | `/api/wx/tx` | Toggle a weather station's APRS-IS beacon / CWOP relay: `{ stationId, txIs, txCwop }`; enabling needs the station's callsign verified (403) | session |
 | GET | `/api/tools/registries` | The tool registries the Tools app lists for this visitor: the instance's switched-on ones, and the signed-in player's own while players may add them → `{ registries: [{ id, scope, spec, url, authority, label, enabled, builtin?, proxied }], players: { allowed, signedIn, stored }, proxy }` ([How registries work](https://apachler.github.io/aprscaching-tools/publish/)) | none; session for your own |
-| GET | `/api/tools/registries/preview?spec=` | A registry file before it is added, fetched once and kept nowhere, to compare its key's fingerprint. `400` for an address that is not https or `github:`; counts against the 60 fetches an hour | sysop, or session while players may add registries |
-| GET | `/api/tools/registries/:id/file?url=` | One file of a registry this instance carries, by its upstream address: the registry file, a manifest it lists or a script one of those names. Served from a copy kept an hour, the last good copy while the host fails (`x-tool-registry-copy: stale`); `404` for any other file or while `TOOL_REGISTRIES_PROXY` is off, `502` when no copy can be had. A player's own registry answers only that player, `429` past 60 fetches an hour | none; session for your own |
+| GET | `/api/tools/registries/preview?spec=` | A registry file before it is added, fetched once and kept nowhere, to compare its key's fingerprint. `400` for an address that is not https or `github:`; counts against the 60 fetches an hour. The gateway fetches over https on every hop (at most 3 redirects) and never from a loopback, private or LAN address, whatever the federation settings allow; a refused, unresolvable or silent host all answer `502` "its host is unreachable from this instance" | sysop, or session while players may add registries |
+| GET | `/api/tools/registries/:id/file?url=` | One file of a registry this instance carries, by its upstream address: the registry file, a manifest it lists or a script one of those names. Served from a copy kept an hour, the last good copy while the host fails (`x-tool-registry-copy: stale`); `404` for any other file or while `TOOL_REGISTRIES_PROXY` is off, `502` when no copy can be had. A player's own registry answers only that player, `429` past 60 fetches an hour, and every client address `429` past 600 requests a minute | none; session for your own |
 | GET · POST · PATCH · DELETE | `/api/my/tool-registries` · `/:id` · `/:id/confirm` | Your own registries: list `{ allowed, registries, max }`; add `{ spec, authority, label? }` (https or `github:owner/repo[/path][@ref]`, no credentials, at most 500 characters and 10 registries); switch on or off or relabel `{ enabled?, label? }`; pin a new key `{ authority }`; remove. `403` while players may not add registries, except to remove | session |
 
 ## Live
@@ -169,10 +175,10 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | POST       | `/federation/notify`                                                                                | Gossip "come pull" ping                                                                                                                                                   | public                                               |
 | POST       | `/federation/submit`                                                                                | Hub accepts a spoke's signed records; the answer's `mark` (`{type, cursor, id?}`) is where that feed of the spoke now stands here                                         | x-fed-secret (`FED_SUBMIT_SECRET`)                   |
 | GET        | `/federation/submit/marks`                                                                          | Where each of the calling spoke's feeds stands here, `{marks: {type: {cursor, id?}}}`: the spoke resumes from it after a restart or an outage                             | x-fed-secret and spoke-signed                        |
-| POST       | `/federation/frames`                                                                                | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding); frames are signature-verified                                                                        | x-ingest-secret, a service box, sysop or x-operator-secret          |
+| POST       | `/federation/frames`                                                                                | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding); frames are signature-verified; `413` past 4 MB                                                                        | x-ingest-secret, a service box, sysop or x-operator-secret          |
 | GET        | `/federation/packet/peers`                                                                          | The peers the ingest box pulls over packet circuits (an `ax25` or `netrom` endpoint), longest-waiting first, with their packet cursors; `total`, `failing`, `never` counts | x-ingest-secret, a service box, sysop or x-operator-secret          |
 | POST       | `/federation/packet/status`                                                                         | The ingest box reports one packet session: endpoint, outcome, counts and the feeds' new cursors (`404` for an instance that is not an unblocked peer)                    | x-ingest-secret, a service box, sysop or x-operator-secret          |
-| GET · POST | `/federation/beacon`                                                                                | Beacon-tier presence: serve our signed single-frame record · apply a heard one (trust-gated)                                                                              | public · x-ingest-secret, a service box, sysop or x-operator-secret |
+| GET · POST | `/federation/beacon`                                                                                | Beacon-tier presence: serve our signed single-frame record · apply a heard one (trust-gated; `413` past 4 KB)                                                                              | public · x-ingest-secret, a service box, sysop or x-operator-secret |
 | POST       | `/federation/bbs/enqueue`                                                                           | Queue federation records for the FBB store-and-forward carrier (experimental; `409` unless `FED_BBS` is on)                                                              | sysop or x-operator-secret                           |
 | POST       | `/federation/relay/:instance/query`                                                                 | Queue a query for a spoke behind NAT; answers `201 { id, ticket }`                                                                                                        | x-relay-secret                                       |
 | GET        | `/federation/relay/lease`                                                                           | The spoke leases its next queued query                                                                                                                                    | spoke-signed                                         |
@@ -291,7 +297,8 @@ secret; the others need a signed-in sysop.
 A suspended account signs in nowhere: the passkey finishes, the email link and the operator link answer `403`
 `{ error, suspended: { reason, until } }` and issue no session. Its existing sessions end when the sysop
 suspends it, and a request carrying one acts as signed out. Export and erasure stay open to it through a
-signed-body request. Once a suspended account is erased, registering, adding, switching to or claiming any of
+signed-body request, or through a data link: `POST /auth/email/start` with `purpose: "account-data"` mails a link
+whose session reaches `/api/account/me/export` and `/delete` and nothing else. Once a suspended account is erased, registering, adding, switching to or claiming any of
 its base calls answers `403` with `reason: "suspended"` and
 `this callsign is suspended on this instance[ until <date>]: <category>` until the suspension ends.
 

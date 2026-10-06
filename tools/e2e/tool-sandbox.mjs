@@ -8,7 +8,10 @@
  *      (packages/tools/examples/station-log) talks to the bus through its context;
  *   2. a tool using the whole API reaches the host only through its grants: events with a session reply, async
  *      commands, transmit and beacons behind the gate and the rate limit, a map layer, colour rules, and a
- *      service it provides on the bus; a tool without a grant is refused;
+ *      service it provides on the bus, connected sessions (on_connect/on_disconnect, the reply through the surface's
+ *      gate, remote commands on incoming sessions) and the link topics; a tool without a grant is refused; the
+ *      signed tools of the bundled registry (auto-responder, connect-bell, away-note, info-responder, link-ping)
+ *      work unchanged on a connected session;
  *   3. a tool without the network grant reaches no network (fetch, XHR, nested Worker, EventSource) and no
  *      app storage (IndexedDB, Cache Storage, localStorage, cookies);
  *   4. a tool with the network grant reaches its `connect` origin, without the page's cookie, and not the
@@ -82,7 +85,7 @@ async function main() {
   const bundled = await build({
     stdin: {
       contents: `export { loadSandbox, sandboxTool } from "./apps/web/src/tools/sandbox.ts";
-        export { ToolHost } from "./packages/tools/src/index.ts";`,
+        export { ToolHost, SessionEvents } from "./packages/tools/src/index.ts";`,
       resolveDir: ROOT,
       loader: "ts",
     },
@@ -109,7 +112,18 @@ async function main() {
 
   const appHits = [];
   let appUrl = "";
-  const HTML = `<!doctype html><meta charset=utf-8><title>tool-sandbox-e2e</title><script src="/bundle.js"></script>`;
+  // The app's remote-command lookup (apps/web installed.ts remoteCommand): a remote tool holding 'command' on the
+  // surface, the word not kept for the operator.
+  const runnerJs = `window.remoteRunner = (tools) => async (word, args, surface) => {
+    for (const { manifest, sb } of tools) {
+      if (!manifest.remote || !manifest.permissions.includes("command") || !manifest.surfaces.includes(surface)) continue;
+      const reg = sb.commands.find((c) => c.toLowerCase() === word);
+      if (reg && !sb.remoteOff.includes(reg)) return { tool: manifest.name, lines: await sb.runCommand(reg, args) };
+    }
+    return null;
+  };`;
+  const HTML = `<!doctype html><meta charset=utf-8><title>tool-sandbox-e2e</title><script src="/bundle.js"></script><script>${runnerJs}</script>`;
+  const BUNDLED = path.join(ROOT, "apps/web/public/tools/tools");
   const app = createServer((req, res) => {
     if (req.url === "/bundle.js") {
       res.setHeader("content-type", "application/javascript");
@@ -126,6 +140,9 @@ async function main() {
     } else if (req.url === "/greedy.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(greedyTool);
+    } else if (/^\/bundled\/[a-z0-9-]+\/tool\.(js|json)$/.test(req.url ?? "")) {
+      res.setHeader("content-type", req.url.endsWith(".js") ? "application/javascript" : "application/json");
+      res.end(readFileSync(path.join(BUNDLED, req.url.slice("/bundled/".length))));
     } else if (req.url === "/probe.js") {
       res.setHeader("content-type", "application/javascript");
       res.end(probeTool(appUrl, peerUrl));
@@ -257,6 +274,7 @@ async function main() {
         version: "1",
         permissions: perms,
         surfaces: ["web", "terminal", "map"],
+        remote: true,
       };
       host.register(sandboxTool(manifest, sb));
       host.setEnabled("api", true);
@@ -277,6 +295,56 @@ async function main() {
       host.dispatch("on_connect", { peerCall: "OE3ABC", reply: (t) => replies.push(t) });
       await wait(() => replies.length > 0);
       r.replies = replies;
+
+      // A surface's connected sessions: on_connect/on_disconnect, the reply through the surface's gate, remote
+      // commands only on incoming sessions, and the link topics.
+      const lines = [];
+      const logs = [];
+      let sessionGate = null;
+      const ev = new window.ToolSandbox.SessionEvents({
+        host,
+        surface: "terminal",
+        send: (ch, text, tool) => lines.push([ch, text, tool].join("|")),
+        txBlocked: () => sessionGate,
+        runRemote: window.remoteRunner([{ manifest, sb }]),
+        log: (m) => logs.push(m),
+      });
+      const sess = (channel, direction, open = true) => ({
+        channel,
+        peerCall: "OE3ABC",
+        myCall: "OE8APR",
+        direction,
+        open,
+      });
+      ev.sync([sess(1, "incoming")]);
+      await wait(() => lines.length > 0);
+      ev.line(1, "PING");
+      ev.line(1, "op");
+      await wait(() => lines.length > 1);
+      await new Promise((res) => setTimeout(res, 100));
+      ev.sync([sess(1, "incoming"), sess(2, "outgoing")]);
+      ev.line(2, "ping");
+      sessionGate = "closed for the test";
+      ev.sync([sess(1, "incoming"), sess(2, "outgoing"), sess(3, "incoming")]);
+      await new Promise((res) => setTimeout(res, 100));
+      ev.closeAll();
+      await new Promise((res) => setTimeout(res, 50));
+      r.sessionLines = lines;
+      r.sessions = await sb.runCommand("sessions", "");
+      const pings = [];
+      const stopPings = host.hostSubscribe("link.ping.request", (d, from) => pings.push(from));
+      const rttSeen = [];
+      const stopRtt = host.hostSubscribe("link.rtt", (d) => rttSeen.push(d.ms));
+      host.hostEmit("link.rtt", { ms: 420 });
+      await wait(() => rttSeen.length > 0);
+      await new Promise((res) => setTimeout(res, 50));
+      r.rtt = await sb.runCommand("rtt", "");
+      await sb.runCommand("pingreq", "");
+      await wait(() => pings.length > 0);
+      r.pings = pings;
+      r.rttSeen = rttSeen;
+      stopPings();
+      stopRtt();
       r.later = await sb.runCommand("later", "x");
       r.txClosed = await sb.runCommand("tx", "");
       open = true;
@@ -330,6 +398,27 @@ async function main() {
     expect(api.heard === "OE8XBM-7 >hi", "hears frames with their text and sets its panel");
     expect(api.replies[0] === "Welcome OE3ABC", "answers a connected session through its reply");
     expect(api.later[0] === "later x", "awaits an async command");
+    expect(
+      api.sessions.slice(1).join(";") ===
+        [
+          "connect terminal 1 OE3ABC OE8APR incoming function",
+          "connect terminal 2 OE3ABC OE8APR outgoing undefined",
+          "connect terminal 3 OE3ABC OE8APR incoming function",
+          "disconnect 1 OE3ABC undefined",
+          "disconnect 2 OE3ABC undefined",
+          "disconnect 3 OE3ABC undefined",
+        ].join(";"),
+      "hears on_connect and on_disconnect with the session's calls, channel, surface and direction",
+    );
+    expect(
+      api.sessionLines.join(";") === "1|Welcome OE3ABC|api;1|pong|api",
+      "replies and answers a remote command on an incoming session, never on an outgoing one or with the gate closed",
+    );
+    expect(api.rtt[0] === "420 (host)", "hears link.rtt from the app");
+    expect(
+      api.pings.join(",") === "api" && api.rttSeen.join(",") === "420",
+      "publishes link.ping.request, and may not publish link.rtt",
+    );
     expect(api.txClosed[0] === "false", "cannot transmit while the gate is closed");
     expect(api.txOpen[0] === "true" && api.sent.length === 1, "transmits once the gate opens");
     expect(api.txAgain[0] === "false", "is rate-limited right after a transmission");
@@ -342,6 +431,75 @@ async function main() {
     expect(/switched off/.test(api.offTx[0] ?? ""), "a switched-off tool cannot transmit");
     expect(api.greedy.join(",") === "refused,refused,refused", "a tool without the grants is refused in the worker");
     expect(api.greedyLayers === 0, "and contributes nothing to the host");
+
+    // 2b. The signed tools from the bundled registry, unchanged, on a connected session of the terminal.
+    const signed = await page.evaluate(async () => {
+      const { loadSandbox, sandboxTool, ToolHost, SessionEvents } = window.ToolSandbox;
+      const host = new ToolHost();
+      const tools = [];
+      for (const name of ["auto-responder", "connect-bell", "away-note", "info-responder", "link-ping"]) {
+        const manifest = await (await fetch(`/bundled/${name}/tool.json`)).json();
+        const sb = await loadSandbox(await (await fetch(`/bundled/${name}/tool.js`)).text(), manifest.permissions);
+        host.register(sandboxTool(manifest, sb));
+        host.setEnabled(name, true);
+        tools.push({ manifest, sb });
+      }
+      const sbOf = (n) => tools.find((t) => t.manifest.name === n).sb;
+      const wait = async (cond) => {
+        for (let i = 0; i < 100 && !cond(); i++) await new Promise((res) => setTimeout(res, 20));
+        return cond();
+      };
+      const settle = () => new Promise((res) => setTimeout(res, 150));
+      await settle();
+      const r = {};
+      r.away = await sbOf("away-note").runCommand("away", "back at 18z");
+      const lines = [];
+      const ev = new SessionEvents({
+        host,
+        surface: "terminal",
+        send: (ch, text, tool) => lines.push(`${tool}: ${text}`),
+        txBlocked: () => null,
+        runRemote: window.remoteRunner(tools),
+      });
+      ev.sync([{ channel: 1, peerCall: "OE3ABC", myCall: "OE8APR", direction: "incoming", open: true }]);
+      await wait(() => lines.length >= 2);
+      for (const l of ["INFO", "NOTE see you at 18z", "notes", "setinfo hijack"]) ev.line(1, l);
+      await settle();
+      await settle();
+      r.lines = lines.slice();
+      r.notes = await sbOf("away-note").runCommand("notes", "");
+      const bellPanel = () => host.panels("terminal").find((p) => p.tool === "connect-bell")?.spec.nodes[0];
+      await wait(() => bellPanel()?.kind === "kv");
+      r.bell = bellPanel()?.value ?? "";
+      const pings = [];
+      host.hostSubscribe("link.ping.request", (d, from) => pings.push(from));
+      r.ping = await sbOf("link-ping").runCommand("ping", "");
+      await wait(() => pings.length > 0);
+      r.pings = pings;
+      host.hostEmit("link.rtt", { ms: 420, kind: "poll", peerCall: "OE3ABC", channel: 1, surface: "terminal" });
+      const pingPanel = () => host.panels("terminal").find((p) => p.tool === "link-ping")?.spec.nodes[0];
+      await wait(() => pingPanel()?.value === "420 ms");
+      r.rtt = pingPanel()?.value;
+      ev.closeAll();
+      for (const t of tools) t.sb.destroy();
+      return r;
+    });
+    console.log("the signed tools", JSON.stringify(signed));
+    expect(
+      signed.lines.slice(0, 2).sort().join(";") ===
+        "auto-responder: Welcome OE3ABC - this is OE8APR auto-responder. Type H for help.;" +
+          "away-note: back at 18z Leave a note with:  NOTE <text>",
+      "auto-responder and away-note greet a station that connects",
+    );
+    expect(
+      signed.lines.slice(2).join(";") ===
+        "info-responder: APRScaching shack station. Type MENU for commands. 73!;away-note: Note saved - 73!",
+      "a connected station runs INFO and NOTE, and not the operator's notes or setinfo",
+    );
+    expect(signed.notes.join(";") === "see you at 18z", "the note a station left reaches the operator");
+    expect(/^OE3ABC/.test(signed.bell), "connect-bell rings for the station that connected");
+    expect(signed.pings.join(",") === "link-ping", "link-ping's /ping asks the app for a ping");
+    expect(signed.rtt === "420 ms", "link-ping shows the round trip the app publishes");
 
     const probe = (granted, connect) =>
       page.evaluate(

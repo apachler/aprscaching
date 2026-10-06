@@ -12,8 +12,9 @@ const NET44 = "https://aprscaching.oe8apr.ampr.org";
 const HAMNET = "http://aprscaching.oe8xyz.hamnet.example";
 const HAMNET_IP = "http://44.143.1.2";
 
+// Caddy fronts these addresses, so the gateway believes the scheme it reports (TRUST_PROXY)
 const multi = (extra: Record<string, unknown> = {}) =>
-  authEnv({ EXTRA_ORIGINS: `${NET44}, ${HAMNET},${HAMNET_IP}`, ...extra });
+  authEnv({ EXTRA_ORIGINS: `${NET44}, ${HAMNET},${HAMNET_IP}`, TRUST_PROXY: "1", ...extra });
 
 /** Email sign-up started and confirmed on `origin`: the start's link, and the confirm's cookie and redirect. */
 async function signUpOn(env: Env, origin: string, callsign: string, headers: Record<string, string> = {}) {
@@ -96,13 +97,18 @@ describe("one instance, several addresses", () => {
     expect(r.cookie).toMatch(/; Secure;/);
   });
 
-  it("allows credentialed CORS from every address, never from another origin", async () => {
-    const env = multi();
+  it("allows credentialed CORS from every https address, never from a plain-http one or another origin", async () => {
+    const env = multi({ CORS_ORIGINS: "http://localhost:5173,http://app.lan.example" });
     const preflight = (origin: string) =>
       serve(env)(new Request(`${MAIN}/auth/session`, { method: "OPTIONS", headers: { origin } }));
-    for (const o of [MAIN, NET44, HAMNET, HAMNET_IP])
+    for (const o of [MAIN, NET44, "http://localhost:5173"])
       expect((await preflight(o)).headers.get("access-control-allow-credentials"), o).toBe("true");
-    expect((await preflight("https://evil.test")).headers.get("access-control-allow-credentials")).toBeNull();
+    // a page on plain http can be rewritten on its way to the browser: readable, never with the cookie
+    for (const o of [HAMNET, HAMNET_IP, "http://app.lan.example", "https://evil.test"]) {
+      const res = await preflight(o);
+      expect(res.headers.get("access-control-allow-credentials"), o).toBeNull();
+      expect(res.headers.get("access-control-allow-origin"), o).toBe(o);
+    }
   });
 
   it("lists the https addresses as WebAuthn related origins, and no plain-http one", async () => {
@@ -156,6 +162,7 @@ describe("every combination of internet, 44Net and HAMNET, each address as APP_U
         RP_ID: "",
         INSTANCE: "",
         EXTRA_ORIGINS: extra.map((k) => NETWORKS[k]).join(","),
+        TRUST_PROXY: "1",
       });
       const secure = addresses.filter((a) => a.startsWith("https://"));
 
@@ -262,6 +269,7 @@ describe("a session is honoured only on the address it was issued on", () => {
         RP_ID: "",
         INSTANCE: "",
         EXTRA_ORIGINS: extra.map((k) => NETWORKS[k]).join(","),
+        TRUST_PROXY: "1",
       });
       const addresses = [main, ...extra].map((k) => NETWORKS[k]);
       for (const [i, address] of addresses.entries()) {
@@ -278,7 +286,7 @@ describe("a session is honoured only on the address it was issued on", () => {
   }
 
   it("refuses a session issued over plain http on the https address of the same host, and the reverse", async () => {
-    const env = authEnv({ APP_URL: "https://gw.test", EXTRA_ORIGINS: "http://gw.test" });
+    const env = authEnv({ APP_URL: "https://gw.test", EXTRA_ORIGINS: "http://gw.test", TRUST_PROXY: "1" });
     const plain = await signUpOn(env, "http://gw.test", "OE7PLN", { "x-forwarded-proto": "http" });
     expect(plain.cookie).not.toMatch(/Secure/);
     expect(await whoOn(env, "http://gw.test", plain.cookie)).toBe("OE7PLN");

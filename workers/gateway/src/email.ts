@@ -161,8 +161,9 @@ function linkSent(env: Env, e: string, purpose: string, token: string, link: str
 }
 
 /**
- * Mail the link that opens an account's data: only to the confirmed address of an account that holds no call.
- * An account with a call signs in as usual and finds export and erasure in Settings.
+ * Mail the link that opens an account's data: only to the confirmed address of an account that holds no call, or of
+ * a suspended account, which signs in nowhere else. Any other account with a call signs in as usual and finds export
+ * and erasure in Settings.
  */
 async function startAccountData(
   req: Request,
@@ -171,7 +172,7 @@ async function startAccountData(
   acct: { account_id: string; callsign: string } | null,
 ): Promise<Response> {
   if (!acct) return json({ error: "no account uses this email address" }, { status: 404 });
-  if (!isFormerMarker(acct.callsign))
+  if (!isFormerMarker(acct.callsign) && !(await suspensionOf(env, acct.account_id)))
     return json(
       {
         error: "your account holds a callsign — sign in with it, then get or erase your data in Settings",
@@ -482,12 +483,12 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
 
 type Acct = { account_id: string; callsign: string };
 
-/** The account a data link opens: the mailbox's account, while it still holds no call. */
+/** The account a data link opens: the mailbox's account, while it holds no call or is suspended. */
 async function accountDataAccount(env: Env, email: string): Promise<Acct | LinkProblem> {
   const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(email)
     .first<Acct>();
-  if (!acct || !isFormerMarker(acct.callsign))
+  if (!acct || (!isFormerMarker(acct.callsign) && !(await suspensionOf(env, acct.account_id))))
     return problem(409, "data", "this link no longer applies — sign in with your callsign instead");
   return acct;
 }

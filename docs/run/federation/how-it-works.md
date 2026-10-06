@@ -146,7 +146,8 @@ flowchart LR
   delivers records, but your instance does not take its word for what it holds, so a neighbour that skips a
   record cannot hide it. A record your instance could not take (its clock behind, its database busy), one that
   reached it over four other instances, and one a neighbour lacked, are asked for one by one while sync moves on.
-  One that no neighbour delivers within a week is given up and listed for the sysop.
+  One that no neighbour delivers within a week is given up and listed for the sysop; a missing deletion
+  (tombstone) is never given up, and is asked for daily until it arrives.
 - **A phone carries records.** A Pocket station that syncs at home and later meets an instance with no path home
   is an ordinary neighbour: it passes on what it holds, each record signed by its home
   ([Carry records between instances](../pocket/carry-records.md)).

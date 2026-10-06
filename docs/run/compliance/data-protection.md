@@ -20,14 +20,34 @@ registered to the callsign. There is no central password. A device key is regist
 holder of the call; no machine secret registers one, and neither the sysop nor the operator secret can export
 or erase someone else's account.
 
+A suspension never closes a member's access to their own data. A suspended member signs in nowhere, but can ask
+for a data link by email (`POST /auth/email/start` with `purpose: "account-data"`). The link opens a session
+that reaches export and erasure (`/api/account/me/export`, `/api/account/me/delete`) and nothing else.
+
 ## Export
 
 `POST /api/account/<call>/export` returns a full, machine-readable copy of the account's data, whichever held
-call names it. It covers every base call the account holds and every SSID of them: the email address (and one
-waiting for confirmation), the profile and preferences, caches, finds, positions, the APRS messages the person
-sent or was sent with their delivery state, keys, stations, mail, the tool registries they added and the rest of
-the account-scoped rows.
+call names it. It covers every base call the account holds and every SSID of them. The service call is the
+instance's, so a sysop's export leaves out its traffic and keys, which carry other people's Mailbox texts.
 Secrets such as passkey public keys and push keys stay out of it.
+
+| Field | What it holds |
+|---|---|
+| `account`, `uiPrefs` | The email address (and one waiting for confirmation), the profile, settings and preferences |
+| `callsigns`, `callsignHistory`, `callsignClaims`, `callsignChanges`, `verifications`, `verificationChallenges` | The held calls, their control-verification, claims and holder changes |
+| `accountEvents` | What the instance recorded about the calls: a move to another instance, a sysop's verification |
+| `caches`, `cacheStages`, `cacheMedia` | Every detail of the caches the person owns, their stages (with each stage's unlock code) and uploaded media |
+| `logs`, `ratings`, `favorites`, `watches`, `achievements`, `stageUnlocks` | Finds and notes, ratings, favourites, watched caches, badges, unlocked stages |
+| `positions`, `stations`, `stationsOperated`, `rendezvous` | Positions, the person's stations, rendezvous |
+| `messages` | The APRS messages the person sent or was sent, with their delivery state |
+| `aprsOutbox`, `radioCommands`, `nearCacheMessages`, `boxCommands` | Radio traffic queued from or to the calls, radio commands, near-cache messages, commands sent to the person's boxes |
+| `bbsMessages`, `mailbox`, `meshcomGroupMessages`, `whitePages` | BBS mail and bulletins, Mailbox mail, MeshCom group messages, the white-pages entry |
+| `weatherKeys`, `weatherReadings` | Weather station keys and the readings stored under the person's calls |
+| `keys`, `passkeys`, `apiKeys`, `pushSubscriptions`, `emailTokens` | Device keys, passkeys (no public key), API key prefixes, push endpoints, email links |
+| `boxes`, `enrolledBoxes`, `boxEnrollmentCodes` | Boxes the account owns or enrolled, and enrolment codes |
+| `watchCalls`, `watchAlerts`, `savedViews`, `entitlements`, `toolRegistries` | Watchlist, its alerts, saved map views, supporter recognition, the tool registries the person added |
+| `adoptionRequests`, `adoptionLog` | Adoption requests and the adoption trail rows naming the person |
+| `moderationActions`, `suspension`, `reportsFiled` | Moderation records, below |
 
 It also carries what moderation holds about the person: the sysop's actions on their account and content
 (`moderationActions`), a suspension in force with its category (`suspension`), and the reports the person
@@ -56,14 +76,25 @@ Reports other people filed about the person stay out, because they would name th
   and call removed.
 - **Kept while it holds:** a suspension in force leaves one record per base callsign the account held: the
   callsign, the category and the end date, with no account and no reason text
-  ([Moderation records](#moderation-records)).
+  ([Moderation records](#moderation-records)). A callsign that already carries a longer suspension keeps it.
 - **Kept as a record:** the audit log rows about the person's account and content
   ([Moderation records](#moderation-records)).
-- **Kept:** the Shack raw-packet ring and NET/ROM MHeard rows, which record what the instance heard on the air;
-  they age out on their retention below.
+- **Cleared:** the call and its SSIDs as the IGate of other people's finds, positions, stations and radio commands
+  (the IGate ranking and profile counts follow), as the receiver of MeshCom rows, and as the member who added an
+  instance-wide tool registry.
+- **Deleted from what the instance heard:** the raw-packet ring rows from the call or naming it in their digipeater
+  path, weather readings, MeshCom nodes and links, and NET/ROM MHeard rows. Other members' watchlist entries and
+  watch alerts naming the call go too.
+- **Untouched:** the service call's keys, stations and traffic, which are the instance's.
 - **Freed:** the base calls, for a new registration.
-- **Propagated:** a PII-free tombstone tells federation peers to purge their mirrored copies
-  ([Erasure across the network](#erasure-across-the-network)).
+- **Propagated:** a PII-free tombstone tells federation peers to purge their mirrored finds, keys, moves and
+  bulletins ([Erasure across the network](#erasure-across-the-network)). A bulletin of the person's that the
+  instance mirrored from a peer is suppressed here, so a later sync does not bring it back.
+
+The erasure is one database transaction: the rewrites, the deletions and the tombstones commit together or not at
+all. An erasure that fails changes nothing, so the member can ask again. Uploaded media objects leave the object
+store right after; one the store refuses stays queued, and the nightly job deletes it.
+A sysop's removal of content works the same way: the removal and its tombstone commit together.
 
 ## Move to another instance
 
@@ -84,8 +115,11 @@ signed account-move record points attribution at the new instance across the net
 | Watch alerts the member has seen | 30 days | `RETENTION` (`alertsDays`) |
 | NET/ROM MHeard rows | 7 days | `RETENTION` (`mheardDays`) |
 | Delete tombstones | permanently | — |
+| Signed records kept to pass on to other instances | as long as the record they carry; a tombstone's permanently | — |
+| Federation records no neighbour supplied, listed for the sysop | 90 days unseen, 30 days after marked seen; a missing tombstone is never given up | fixed |
+| Media objects queued for deletion | until the object store deletes them, retried nightly | — |
 | Open moderation reports | until the sysop resolves them | — |
-| Resolved reports and the audit log | 730 days, pruned nightly; the log rows of a suspension in force stay while it holds | `MODERATION_RETENTION_DAYS` |
+| Resolved reports and the audit log | 730 days, pruned nightly; the log rows of a suspension in force stay while it holds, also on an erased account's callsigns | `MODERATION_RETENTION_DAYS` |
 | Callsign claims and the holder-change trail | 1 year after the claim ends or the change | fixed |
 | Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
@@ -115,7 +149,8 @@ They never federate.
   person concerned erases their account.
 - **Retention:** the nightly job deletes a resolved report and an audit log row after `MODERATION_RETENTION_DAYS`
   (730 by default). An open report stays until you resolve it, and the log rows of a suspension in force stay
-  while it holds, since they record why.
+  while it holds, since they record why. That holds also after the account is erased, as long as the suspension
+  lasts on its callsigns.
 - **A suspension** holds the account, the reason, the category and the end. When the account is erased while
   it is suspended, only the callsign, the category and the end date stay, so the person cannot come back under
   the same callsign before the suspension ends. That record is deleted at the end date, or when the sysop lifts
@@ -136,6 +171,10 @@ deleted data never comes back through a cursor reset, a new hub or a replayed fe
 the sysop's removal of a cache: it covers the cache up to that removal, so a cache the sysop restores reaches the
 peers again, while every copy from before the removal stays suppressed
 ([Moderation](../day-to-day/moderation.md#what-the-peers-see)).
+
+A tombstone this instance knows it lacks (a gap in an origin's sequence) is never given up: the instance keeps
+asking its neighbours, once a day each, until one supplies it. The signed records it keeps to pass on go when the
+record they carry is deleted or tombstoned, so a find's logger call does not outlive the find.
 [How federation stays honest](../../reference/federation-trust.md) covers the signed feeds that carry them.
 
 ## Next

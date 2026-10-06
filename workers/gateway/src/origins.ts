@@ -6,8 +6,8 @@
  * address, so a member on HAMNET stays on HAMNET. APP_URL stays the canonical address for what is
  * not tied to a request (the sitemap, the digest mail, the federation descriptor's identity).
  *
- * The request's address is read from its Host and the scheme a TLS-terminating proxy reports, and is believed
- * only when it is one of the configured addresses: a sign-in link built from a Host header anyone can send
+ * The request's address is read from its Host and, behind a declared proxy (TRUST_PROXY=1), the scheme the
+ * TLS-terminating proxy reports, and is believed only when it is one of the configured addresses: a sign-in link built from a Host header anyone can send
  * would carry its token to that host. Any other host is answered as if the request came to APP_URL.
  */
 import type { Env } from "./env.js";
@@ -40,7 +40,7 @@ export function instanceOrigins(env: Env): string[] {
 }
 
 /** Is `origin` a secure context a browser offers passkeys and the other https-only features on? */
-function secureOrigin(origin: string): boolean {
+export function secureOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     return u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname));
@@ -59,12 +59,15 @@ export function passkeyOrigins(env: Env): string[] {
 
 /**
  * The origin the request arrived on as the browser saw it: the listener's scheme, raised to https when a
- * TLS-terminating proxy says so (a header never lowers an https request), and the Host.
+ * TLS-terminating proxy says so (a header never lowers an https request), and the Host. The proxy's header
+ * counts only with TRUST_PROXY=1: without a declared proxy anyone can send it, and a plain-http request
+ * claiming https would get the https address's cookie and links.
  */
-function arrivalOrigin(req: Request): string | null {
+function arrivalOrigin(req: Request, env: Env): string | null {
   try {
     const u = new URL(req.url);
-    const fwd = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+    const fwd =
+      env.TRUST_PROXY === "1" ? req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase() : undefined;
     const scheme = u.protocol === "https:" || fwd === "https" ? "https:" : "http:";
     return new URL(`${scheme}//${u.host}`).origin;
   } catch {
@@ -77,7 +80,7 @@ function arrivalOrigin(req: Request): string | null {
  * origin (visitor.ts) — or null when it came on any other host.
  */
 function listedRequestOrigin(req: Request, env: Env): string | null {
-  const o = arrivalOrigin(req);
+  const o = arrivalOrigin(req, env);
   if (!o) return null;
   if (instanceOrigins(env).includes(o)) return o;
   return hotspotOrigin(o, env);
@@ -92,7 +95,7 @@ export function requestOrigin(req: Request, env: Env): string {
   if (listed) return listed;
   const main = mainOrigin(env);
   if (main) return main;
-  return arrivalOrigin(req) ?? "http://localhost";
+  return arrivalOrigin(req, env) ?? "http://localhost";
 }
 
 /** Is `origin` an address of this instance a sign-in may return to (APP_URL or an EXTRA_ORIGINS entry)? */

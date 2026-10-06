@@ -78,7 +78,7 @@ import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleImprintPage, handlePrivacyPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
-import { extraOrigins, handleWebauthnOrigins } from "./origins.js";
+import { extraOrigins, handleWebauthnOrigins, secureOrigin } from "./origins.js";
 import {
   handleActivityFeed,
   handleCachesFeed,
@@ -152,7 +152,8 @@ import { expireDiscovered, handlePeerExchange, handlePeerFollow } from "./feddis
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
-import { handleOriginSync, handleSyncSummary } from "./fedtransit.js";
+import { handleOriginSync, handleSyncSummary, purgeTransit } from "./fedtransit.js";
+import { finishMediaDeletes } from "./mediadeletions.js";
 import { handleGapsSeen } from "./fedgaps.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
@@ -235,8 +236,34 @@ export { syncAllPeers } from "./fedpull.js";
 
 export { isGatewayPath } from "./paths.js";
 
-/** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
+/**
+ * OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. It never throws: a failure
+ * is logged here and answered with a generic JSON 500, so no runtime renders its own error page, stack trace or
+ * error message to the client.
+ */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
+  try {
+    return await handleRequest(req, env, ctx);
+  } catch (e) {
+    let path = "?";
+    try {
+      path = new URL(req.url).pathname;
+    } catch {
+      /* an unparsable URL: the path stays unknown */
+    }
+    console.error(`${req.method} ${path}:`, e);
+    try {
+      return withCors(internalError(), req, env);
+    } catch {
+      return internalError();
+    }
+  }
+}
+
+/** The answer to a request that failed inside the gateway: nothing about the failure leaves the server. */
+const internalError = (): Response => json({ error: "internal error" }, { status: 500 });
+
+async function handleRequest(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   applyDerivedDefaults(env);
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   await loadSiteSettings(env);
@@ -365,6 +392,9 @@ export async function runScheduled(env: Env): Promise<void> {
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await purgeRelayQueue(env);
+  // frames kept for passing on go with the records they carry; uploads an erasure or a removal left queued go
+  await purgeTransit(env);
+  await finishMediaDeletes(env);
   // discovered instances no trusted peer and no announcement names any more
   try {
     await expireDiscovered(env);
@@ -864,15 +894,19 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 }
 
 /** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
- *  APP_URL, the instance's other addresses (EXTRA_ORIGINS) and any CORS_ORIGINS. An empty list allows none: an unconfigured instance serves only
- *  non-credentialed CORS, so no third-party page can ride a signed-in user's cookie. */
+ *  APP_URL, the instance's other addresses (EXTRA_ORIGINS) and any CORS_ORIGINS, each only when it is https
+ *  or loopback: a page on a plain-http origin can be rewritten by anyone on its network path, so it never
+ *  rides a member's cookie across origins (the app on that origin is same-origin and needs no CORS). An empty
+ *  list allows none: an unconfigured instance serves only non-credentialed CORS, so no third-party page can
+ *  ride a signed-in user's cookie. */
 export function corsAllowlist(env: Env): Set<string> {
   const list = new Set<string>();
   const add = (u?: string) => {
     const s = u?.trim();
     if (!s) return;
     try {
-      list.add(new URL(s).origin);
+      const origin = new URL(s).origin;
+      if (secureOrigin(origin)) list.add(origin);
     } catch {
       /* ignore a malformed entry */
     }

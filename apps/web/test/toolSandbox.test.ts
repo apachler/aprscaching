@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it, vi } from "vitest";
-import { BEACON_MIN_INTERVAL_SEC, ToolHost, TX_CLOSED, type Capability } from "@aprscaching/tools";
+import {
+  BEACON_MIN_INTERVAL_SEC,
+  REPLY_MAX,
+  REPLY_TEXT_MAX,
+  REPLY_TTL_MS,
+  ToolHost,
+  TX_CLOSED,
+  type Capability,
+} from "@aprscaching/tools";
 import {
   compileRules,
   connectSources,
@@ -13,9 +21,6 @@ import {
   MAX_TOPICS,
   MSG_MAX_BYTES,
   MSG_PER_SEC,
-  REPLY_MAX,
-  REPLY_TEXT_MAX,
-  REPLY_TTL_MS,
   SandboxBridge,
   plainData,
   sandboxTool,
@@ -145,6 +150,7 @@ describe("workerPayload", () => {
     const p = workerPayload({
       surface: "terminal",
       peerCall: "OE3ABC",
+      direction: "incoming",
       text: "x".repeat(600),
       channel: 2,
       station: { roles: ["bbs"] },
@@ -154,6 +160,7 @@ describe("workerPayload", () => {
     expect(p).toEqual({
       surface: "terminal",
       peerCall: "OE3ABC",
+      direction: "incoming",
       text: "x".repeat(512),
       channel: 2,
       station: { roles: ["bbs"] },

@@ -15,6 +15,7 @@ import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/aud
 import { useToolHost } from "./host.js";
 import {
   installTool,
+  remoteCommand,
   removeInstalled,
   retryInstalled,
   setInstalledOn,
@@ -220,7 +221,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       const { manifest, sandbox } = v.tool!;
       if (!sandbox.commands.includes(word)) continue;
       // a remote peer reaches only a remote tool's commands, and not the ones it keeps for the operator
-      if (asRemote && (!manifest.remote || sandbox.remoteOff.includes(word))) continue;
+      if (asRemote && !remoteCommand({ manifest, sandbox }, word)) continue;
       setCmdOut(await sandbox.runCommand(word, args));
       setCmd("");
       return;

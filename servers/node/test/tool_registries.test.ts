@@ -9,8 +9,14 @@ import { authEnv, call, emailSignup, operatorVerify, ORIGIN, type Res } from "./
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 import { createFetchGuard } from "@aprscaching/gateway/fetchguard";
-import { rateLimitedDurable } from "@aprscaching/gateway/corroborate_privacy";
-import { PLAYER_FETCHES_PER_HOUR, REGISTRY_COPY_TTL_S, REGISTRY_FILE_CAP } from "@aprscaching/gateway/toolregistries";
+import { rateLimited, rateLimitedDurable } from "@aprscaching/gateway/corroborate_privacy";
+import {
+  FILE_REQUESTS_PER_MIN,
+  PLAYER_FETCHES_PER_HOUR,
+  REGISTRY_COPY_TTL_S,
+  REGISTRY_FILE_CAP,
+} from "@aprscaching/gateway/toolregistries";
+import { guardOutboundFetches } from "../src/host.js";
 
 const KEY_A = "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0";
 const KEY_B = "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc";
@@ -70,10 +76,10 @@ afterEach(() => {
 });
 
 /** Read one carried file, raw. */
-async function file(env: Env, id: string, url: string, cookie = "") {
+async function file(env: Env, id: string, url: string, cookie = "", ip = "192.0.2.10") {
   const res = await serve(env)(
     new Request(`${ORIGIN}/api/tools/registries/${id}/file?url=${encodeURIComponent(url)}`, {
-      headers: { cookie, "x-real-ip": "192.0.2.10" },
+      headers: { cookie, "x-real-ip": ip },
     }),
   );
   return { status: res.status, text: await res.text(), copy: res.headers.get("x-tool-registry-copy") };
@@ -317,7 +323,7 @@ describe("the carrier", () => {
     const id = (await addInstance(w)).data.registry.id as string;
     const r = await file(w.env, id, REG);
     expect(r.status).toBe(502);
-    expect(JSON.parse(r.text).error).toMatch(/network down/);
+    expect(JSON.parse(r.text).error).toBe("couldn't fetch the file: its host is unreachable from this instance");
   });
 
   it("refuses a file over its cap, and keeps nothing of it", async () => {
@@ -340,14 +346,14 @@ describe("the carrier", () => {
     expect(JSON.parse((await file(w.env, id, REG)).text).error).toMatch(/not JSON/);
   });
 
-  it("goes through the fetch guard: a host on a private address is refused", async () => {
+  it("goes through its own fetch guard: a host that resolves to a private address is refused", async () => {
     const w = await world();
     const net = upstream();
-    const env = { ...w.env, FED_FETCH_GUARD: createFetchGuard({ resolve: async () => ["10.0.0.7"] }) } as Env;
+    const env = { ...w.env, TOOL_FETCH_GUARD: createFetchGuard({ resolve: async () => ["10.0.0.7"] }) } as Env;
     const id = (await addInstance(w)).data.registry.id as string;
     const r = await file(env, id, REG);
     expect(r.status).toBe(502);
-    expect(JSON.parse(r.text).error).toMatch(/private address/);
+    expect(JSON.parse(r.text).error).toBe("couldn't fetch the file: its host is unreachable from this instance");
     expect(net.hits).toEqual([]);
   });
 
@@ -406,5 +412,175 @@ describe("the carrier", () => {
       registries: [{ proxied: false }, { proxied: false }],
     });
     expect((await file(off, id, REG)).status).toBe(404);
+  });
+});
+
+describe("the carrier's fetch guard", () => {
+  const PRIVATE = [
+    "https://10.0.0.7/registry.json",
+    "https://192.168.1.5/registry.json",
+    "https://172.20.0.1/registry.json",
+    "https://100.64.0.1/registry.json",
+    "https://127.0.0.1/registry.json",
+    "https://169.254.169.254/registry.json",
+    "https://[::1]/registry.json",
+    "https://[fd00::1]/registry.json",
+    "https://[::ffff:192.168.1.5]/registry.json",
+    "https://localhost/registry.json",
+    "https://box.localhost/registry.json",
+  ];
+  const GENERIC = "couldn't fetch the registry: its host is unreachable from this instance";
+
+  const preview = async (env: Env, who: Res, spec: string) => {
+    const res = await serve(env)(
+      new Request(`${ORIGIN}/api/tools/registries/preview?spec=${encodeURIComponent(spec)}`, {
+        headers: { cookie: who.cookie, "x-real-ip": "192.0.2.30" },
+      }),
+    );
+    return { status: res.status, error: ((await res.json()) as { error?: string }).error };
+  };
+
+  it("refuses LAN and private targets even with FED_ALLOW_PRIVATE=1 and FED_PEERS / FED_HUB_URL naming them", async () => {
+    const w = await world();
+    const net = upstream();
+    // the host's own guards, under a configuration that opens federation to all of them
+    const env = withEnv(w, {
+      FED_ALLOW_PRIVATE: "1",
+      FED_PEERS: "https://10.0.0.7,https://192.168.1.5",
+      FED_HUB_URL: "https://127.0.0.1",
+    });
+    guardOutboundFetches(env);
+    for (const spec of PRIVATE)
+      expect(await preview(env, w.sysop, spec), spec).toEqual({ status: 502, error: GENERIC });
+    expect(net.hits).toEqual([]);
+    // a carried file the registry leads to is held to the same guard
+    const id = (
+      await call(env, "POST", "/api/admin/tool-registries", { spec: PRIVATE[1], authority: KEY_A }, as(w.sysop))
+    ).data.registry.id as string;
+    expect(await file(env, id, PRIVATE[1]!, "", "192.0.2.31")).toMatchObject({ status: 502 });
+    expect(net.hits).toEqual([]);
+  });
+
+  it("refuses a name that resolves privately under FED_ALLOW_PRIVATE, and says the same as for a name that does not resolve", async () => {
+    const w = await world();
+    const net = upstream();
+    const fedOpen = createFetchGuard({ resolve: async () => ["192.168.1.5"], allowPrivate: true });
+    const lan = { ...w.env, FED_ALLOW_PRIVATE: "1", FED_FETCH_GUARD: fedOpen } as Env;
+    const privateName = {
+      ...lan,
+      TOOL_FETCH_GUARD: createFetchGuard({ resolve: async () => ["192.168.1.5"] }),
+    } as Env;
+    const noName = {
+      ...lan,
+      TOOL_FETCH_GUARD: createFetchGuard({
+        resolve: async () => {
+          throw new Error("ENOTFOUND");
+        },
+      }),
+    } as Env;
+    const a = await preview(privateName, w.sysop, "https://router.lan.example/registry.json");
+    const b = await preview(noName, w.sysop, "https://nowhere.example/registry.json");
+    expect(a).toEqual({ status: 502, error: GENERIC });
+    expect(b).toEqual(a);
+    expect(net.hits).toEqual([]);
+  });
+
+  it("follows a redirect only to https and never onto a private address, at most three times", async () => {
+    const w = await world();
+    const hits: string[] = [];
+    const routes: Record<string, string> = {
+      "https://a.example/r.json": "http://b.example/r.json",
+      "https://c.example/r.json": "https://10.0.0.7/r.json",
+      "https://d.example/r.json": "https://e.example/r.json",
+      "https://e.example/r.json": "https://raw.githubusercontent.com/club/tools/v1/registry.json",
+      "https://l1.example/r.json": "https://l2.example/r.json",
+      "https://l2.example/r.json": "https://l3.example/r.json",
+      "https://l3.example/r.json": "https://l4.example/r.json",
+      "https://l4.example/r.json": "https://l5.example/r.json",
+    };
+    vi.stubGlobal("fetch", async (u: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(u);
+      hits.push(url);
+      expect(init?.redirect).toBe("manual");
+      const to = routes[url];
+      if (to) return new Response(null, { status: 302, headers: { location: to } });
+      const body = files[url];
+      return body === undefined ? new Response("nope", { status: 404 }) : new Response(body);
+    });
+    const env = withEnv(w, { FED_ALLOW_PRIVATE: "1" });
+    guardOutboundFetches(env);
+    // the resolver is the host's: keep these names off the network by answering them here
+    env.TOOL_FETCH_GUARD = createFetchGuard({ resolve: async () => ["203.0.113.9"] });
+    expect(await preview(env, w.sysop, "https://a.example/r.json")).toEqual({
+      status: 502,
+      error: "couldn't fetch the registry: it redirects off https",
+    });
+    expect(hits).toEqual(["https://a.example/r.json"]);
+    expect(await preview(env, w.sysop, "https://c.example/r.json")).toEqual({ status: 502, error: GENERIC });
+    expect(hits).not.toContain("https://10.0.0.7/r.json");
+    expect((await preview(env, w.sysop, "https://d.example/r.json")).status).toBe(200);
+    expect(await preview(env, w.sysop, "https://l1.example/r.json")).toEqual({
+      status: 502,
+      error: "couldn't fetch the registry: it redirects too many times",
+    });
+    expect(hits).not.toContain("https://l5.example/r.json");
+  });
+});
+
+describe("carried files", () => {
+  it("are limited per client address", async () => {
+    const w = await world();
+    upstream();
+    const id = (await addInstance(w)).data.registry.id as string;
+    const ip = "192.0.2.40";
+    expect((await file(w.env, id, REG, "", ip)).status).toBe(200);
+    for (let i = 1; i < FILE_REQUESTS_PER_MIN; i++)
+      rateLimited(`toolreg-file:${w.env.INSTANCE ?? ""}:${ip}`, Date.now(), FILE_REQUESTS_PER_MIN);
+    expect((await file(w.env, id, REG, "", ip)).status).toBe(429);
+    // another client is not held back by it
+    expect((await file(w.env, id, REG, "", "192.0.2.41")).status).toBe(200);
+  });
+
+  it("parse the registry once, until a refreshed copy changes what it leads to", async () => {
+    const w = await world();
+    const net = upstream();
+    const id = (await addInstance(w)).data.registry.id as string;
+    const manifest = "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.json";
+    const script = "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.js";
+    let reads = 0;
+    const db = w.env.DB;
+    const counted = {
+      ...w.env,
+      DB: new Proxy(db, {
+        get: (t, k) =>
+          k === "prepare"
+            ? (sql: string) => {
+                if (sql === "SELECT url, body FROM tool_registry_files WHERE registry_id=?") reads++;
+                return t.prepare(sql);
+              }
+            : Reflect.get(t, k, t),
+      }),
+    } as Env;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const t0 = Date.now();
+    for (const u of [REG, manifest, script]) expect((await file(counted, id, u)).status).toBe(200);
+    const before = reads;
+    for (let i = 0; i < 5; i++) {
+      expect((await file(counted, id, manifest)).status).toBe(200);
+      expect((await file(counted, id, script)).status).toBe(200);
+    }
+    expect(reads).toBe(before); // fresh copies, the registry's leads from the cache
+
+    // the registry drops the tool: once its copy is refreshed, the manifest is no longer carried
+    const kept = files[REG]!;
+    files[REG] = JSON.stringify({ entries: [], authority: KEY_A, sig: "x" });
+    try {
+      vi.setSystemTime(t0 + (REGISTRY_COPY_TTL_S + 1) * 1000);
+      expect((await file(counted, id, REG)).copy).toBe("fresh");
+      expect((await file(counted, id, manifest)).status).toBe(404);
+      expect(net.hits.filter((u) => u === manifest)).toHaveLength(1);
+    } finally {
+      files[REG] = kept;
+    }
   });
 });

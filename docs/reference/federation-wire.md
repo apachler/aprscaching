@@ -138,8 +138,10 @@ neither take a new record for one they hold nor suppress it with a deletion of a
 ```
 
 - It lists the instance itself, with the top of each of its own sequences, and every origin whose records the
-  `FED_RESERVE` policy passes on. The asker (`for`) is left out. Origins come in instance-id order, 500 a page;
-  `next` is the `after` of the next page.
+  `FED_RESERVE` policy passes on. The asker (`for`) is left out. Origins come in instance-id order, 100 a page
+  (the summary answers anyone, so one page stays cheap to build); `next` is the `after` of the next page.
+- `for` counts only when it names an instance this one holds a peer row for and has not blocked. Any other value
+  is ignored and the answer is the one a request without `for` gets, so naming an instance learns nothing about it.
 - Per kind, `held` is how far the instance holds the origin whole for the asker's `bbox`, and `top` the highest
   record it can pass on. A kind it holds none of is left out of either. `held` stops before the first record kept
   at the hop limit, and is left out where the instance read the origin's caches under a region the asker's does not
@@ -203,9 +205,13 @@ gaps of an origin and kind come from frames and `gaps`; past that the mark waits
 fills within 7 days and after 5 failed asks counts as refused for good (time alone is not enough, so a clock that
 jumps ahead gives up nothing): it moves to `fed_gaps_given_up`, which **Instance admin → Federation → Records given
 up** and `doctor` list until the sysop marks them seen (`POST /federation/gaps/seen`); a record seen 30 days ago
-leaves the table. A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
+leaves the table, and one never marked seen leaves it after 90 days. A tombstone gap is never given up: a missing
+tombstone is a deletion that never arrived, so it is asked for again, once a day per neighbour, until one fills it
+(a `hops` tombstone gap, whose deletion applied here, still goes after 30 days). A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
 mesh every distant record is one, and only a shorter path fills it. It holds no mark back, counts toward no
-limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame refused for good (outside its origin's
+limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame kept for
+passing on (`fed_transit`) goes nightly once its record is deleted, superseded or tombstoned; tombstone frames
+stay. A frame refused for good (outside its origin's
 namespace, local-only, deleted, a version already held or older) settles like an applied one. Without a summary
 the consumer still asks the neighbour for its own records. When a neighbour's key handed on is replaced and the
 records only it vouched for go, both positions and the gaps of the origin go too, and a pull already under way
