@@ -136,22 +136,16 @@ machine-readable output. Related:
 
 ## Tool signing — `tools/toolkey/` {#toolkey}
 
-Sign tool plugins and the tool registry so the app can verify them (see
-[Tools and plugins](../shack/tools.md); [The tool registry](../contribute/tool-registry.md) covers keys and registries):
+Bundle the project's tool registry into a release of the app:
 
 ```bash
-node tools/toolkey/genkey.mjs                                   # a tool-author keypair
-TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs manifest tool.json   # sign a tool manifest
-TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs registry registry.json  # sign a registry's entries
 node tools/toolkey/bundle-registry.mjs v1.0.0                   # bundle a release of the project registry
 ```
 
-The signer hashes the manifest's entry script into `entrySha256`, writes your public key into the manifest and
-signs it with its keys sorted. `bundle-registry.mjs` copies a tagged release of the project registry into
-`apps/web/public/tools/`, after checking every signature and script hash
-([Bundled with each release](../contribute/tool-registry.md#bundled-with-each-release)).
-[Signing and trust](../contribute/tool-reference.md#signing-and-trust) says what the app checks, and the case in
-which it refuses a signed manifest.
+`bundle-registry.mjs` copies a tagged release of the project registry into `apps/web/public/tools/`, after checking
+every signature and script hash; every instance serves that copy at `/tools/registry.json`
+([Tools and plugins](../shack/tools.md)). Signing a tool or a registry is on the tools site:
+[Sign a tool](https://apachler.github.io/aprscaching-tools/write/sign/) and [Keys, rotation and release practice](https://apachler.github.io/aprscaching-tools/publish/keys-and-releases/).
 
 ## Development & conformance
 

@@ -402,8 +402,7 @@ Next release:
       about OpenHamClock being complementary with a different centre of gravity. Ships with the dashboard
       or it misses the window.
 
-Tool API gaps an author meets (each is described as it stands in
-[`docs/contribute/tool-reference.md`](docs/contribute/tool-reference.md)):
+Tool API gaps an author meets (each is described as it stands in [The sandbox API](https://apachler.github.io/aprscaching-tools/write/sandbox-api/)):
 
 - [ ] **Tool commands and session events on the connected surfaces** _(P2 · M)_ — a tool's `/commands` run from
       the Tools console only, not from the packet terminal's, the BBS's or the node's command line, and no
@@ -411,7 +410,7 @@ Tool API gaps an author meets (each is described as it stands in
       (auto-responder, away note, connect bell, info responder, link ping) have no live session to answer.
       `geo` has no API.
 
-Tool registry gaps a sysop meets ([The tool registry](docs/contribute/tool-registry.md)):
+Tool registry gaps a sysop meets ([How registries work](https://apachler.github.io/aprscaching-tools/publish/)):
 
 - [ ] **Author-key revocation** _(P2 · S)_ — removing an entry stops the registry vouching, but a
       browser that accepted a leaked author key keeps showing "matches the key you trusted before" for

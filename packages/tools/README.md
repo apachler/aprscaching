@@ -52,10 +52,10 @@ pnpm --filter @aprscaching/tools test
 A third-party tool does not depend on this package: it is a `tool.json` and a script that the app loads into a
 sandbox. `examples/station-log/` is a complete one, and the test suite checks it against the validator.
 
-- [Write your first tool](../../docs/contribute/first-tool.md): build, run, test and publish a tool.
-- [Tool reference](../../docs/contribute/tool-reference.md): the manifest, the script API, the messages and the
-  limits.
-- [Writing a Shack plugin](../../docs/contribute/plugins.md): how the plugin system fits together.
+- [Write your first tool](https://apachler.github.io/aprscaching-tools/write/first-tool/): build, run, test and publish a tool.
+- [The manifest](https://apachler.github.io/aprscaching-tools/write/manifest/) and [the sandbox API](https://apachler.github.io/aprscaching-tools/write/sandbox-api/): every field, call and message.
+- [Limits and budgets](https://apachler.github.io/aprscaching-tools/write/limits/): what the sandbox allows a tool.
+- [Sign a tool](https://apachler.github.io/aprscaching-tools/write/sign/): the author key and what the signature covers.
 
 ## Licence
 

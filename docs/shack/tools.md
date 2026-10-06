@@ -21,33 +21,9 @@ the map) and the permissions it holds (**perms**).
 
 ## The project's tools
 
-The **APRScaching tools** registry, which comes with every instance, lists the project's own tools:
-
-| Tool | What it does |
-|---|---|
-| **Packet decoder** | Paste a raw TNC2 or APRS-IS line and see every field it carries. Works offline. |
-| **PSK31 + CW decoders** | Decode PSK31 and CW (Morse), from text or by ear through the microphone. |
-| **7PLUS reassembler** | Collect the parts of a 7PLUS file sent over a BBS and say which are missing. |
-| **Monitor colouriser** | Colour heard traffic in the packet monitor by station type. |
-| **CTEXT macro pack** | `/cq`, `/73` and `/qth` expand to canned text. |
-| **Auto-responder** | Greets a station that connects to you. |
-| **Beacon scheduler** | `/beacon` transmits a status beacon every 10 minutes or more. Needs a verified callsign. |
-| **APRS SSID guide** | A table of the usual APRS SSIDs. |
-| **Watch & alert** | `/watch <call>` highlights a callsign and logs when it is heard. |
-| **MHeard** | The stations heard recently, from your radio and the live APRS layer. |
-| **Auto-status** | `/autostatus` transmits a status on a timer. Needs a verified callsign. |
-| **Grid & bearing** | `/grid` gives distance and bearing between two Maidenhead locators. |
-| **Unit converter** | `/conv` converts km, miles, feet, knots and temperatures. |
-| **CW encoder** | `/cw <text>` turns text into dots and dashes. |
-| **Station DB (NAMES.GP)** | Sorts heard stations by type and shares that with other tools. |
-| **Station log** | Lists the stations Station DB hears, with `/seen` and `/whois`. |
-| **Info / menu responder** | Answers a connected station's INFO, MENU and WHOIS. |
-| **Away note** | An away message, and a short note a connected station can leave. |
-| **Connect bell** | Rings when a station connects. |
-| **Link ping (RTT)** | The round-trip time to the station you are connected to. |
-| **Scheduled query (GPAUTO)** | Runs a connect, wait, send, disconnect script against a BBS or cluster. |
-| **Block art (GIP)** | Shows CP437/ANSI block art in a panel. |
-| **Map waypoints** | `/wp <locator>` drops a marker on the map. |
+The **APRScaching tools** registry, which comes with every instance, lists the project's own tools: decoders,
+monitor and station tools, responders, transmit tools and utilities. The [tool catalogue](https://apachler.github.io/aprscaching-tools/catalogue/) describes
+each one, with the permissions it asks for.
 
 ## Install a tool
 
@@ -231,4 +207,4 @@ what it does.
 ## Next
 
 - [Packet terminal & BBS](packet-and-bbs.md): where most tools show their colours and commands.
-- [The tool registry](../contribute/tool-registry.md): how registries work and how to publish one.
+- [Tool catalogue](https://apachler.github.io/aprscaching-tools/catalogue/): every tool in the project registry.

@@ -9,8 +9,12 @@ checkout, then read where your change belongs.
 4. Design notes: the [design language](design/design-language.md), [MeshCom integration (design)](design/meshcom.md),
    [logging finds over radio](design/radio-find-logging.md) and [caches on the MeshCom map](design/meshcom-tdeck-map.md).
 5. [The AX.25 stack](ax25-stack.md): the connected-mode data-link layer.
-6. [Writing a Shack plugin](plugins.md): the manifest, permissions and signing; then
-   [Write your first tool](first-tool.md) and the [Tool reference](tool-reference.md).
+6. Shack tools: a tool is a signed `tool.json` and a script that the **Tools** app runs in a sandbox, published in
+   a registry, with no change to this repository. The [tools site](https://apachler.github.io/aprscaching-tools/) holds everything for tool authors and
+   publishers: [Write your first tool](https://apachler.github.io/aprscaching-tools/write/first-tool/), [the manifest](https://apachler.github.io/aprscaching-tools/write/manifest/),
+   [the sandbox API](https://apachler.github.io/aprscaching-tools/write/sandbox-api/), [API versions](https://apachler.github.io/aprscaching-tools/api/), [publish a registry](https://apachler.github.io/aprscaching-tools/publish/) and
+   [contribute a tool to the project registry](https://apachler.github.io/aprscaching-tools/project/contribute/). Using tools is under
+   [Tools and plugins](../shack/tools.md).
 7. [Style guide for the manual](style-guide.md).
 8. [Specification registry](specs.md): what is built from which open specification.
 
