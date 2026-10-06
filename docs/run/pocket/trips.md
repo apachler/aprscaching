@@ -122,4 +122,5 @@ and key.
 ## Next
 
 - [Backups and moving](../day-to-day/backups.md#pocket): keep a copy of the station off the phone.
+- [Carry records between instances](carry-records.md): the phone as the only link between two instances.
 - [Hubs, relays and the registry](../federation/hubs-and-relays.md): the hub side in full.

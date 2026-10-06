@@ -82,7 +82,7 @@ const ORIGIN_PAGES_PER_MIN = 1200;
 type ReservePolicy = "trusted" | "all" | "off";
 
 /** Which mirrored records this instance passes on (FED_RESERVE). */
-export function reservePolicy(env: Env): ReservePolicy {
+function reservePolicy(env: Env): ReservePolicy {
   const v = setting(env, "FED_RESERVE");
   return v === "all" || v === "off" ? v : "trusted";
 }
@@ -205,9 +205,7 @@ async function heldFor(
 ): Promise<{ held: number; whole: boolean }> {
   const m = await markRow(env, origin, kind);
   let held = m?.seq ?? 0;
-  const gap = await env.DB.prepare(
-    "SELECT MIN(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops >= ?",
-  )
+  const gap = await env.DB.prepare("SELECT MIN(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops >= ?")
     .bind(origin, kind, MAX_TRANSIT_HOPS)
     .first<{ v: number | null }>();
   if (gap?.v != null) held = Math.min(held, gap.v - 1);

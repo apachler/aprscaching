@@ -28,13 +28,17 @@ None of the transports has run between independent instances on live infrastruct
 ## Pull
 
 **What it carries.** Every feed: caches, finds, callsign keys, bulletins, tombstones and account moves.
-Tombstones come first, so a deletion arrives before the record it deletes. Last comes the transit feed: the
-caches, finds and tombstones the peer mirrored from other instances and passes on, each still signed by its home
-([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)).
+With them come the caches, finds, tombstones and account moves the peer mirrored from other instances and passes
+on, each still signed by its home
+([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)). Tombstones come
+first, from every home, so a deletion arrives before the record it deletes.
 
-**How it works.** Your instance asks each peer, "what is new since my last cursor?" The peer answers with a
-page of up to 500 records it signed itself. Your instance checks each signature, applies what is newer than what
-it holds, and keeps the cursor for next time. When the peer writes something new, it sends your instance a short
+**How it works.** Your instance reads the peer's summary of what it holds of each home instance, itself
+included, and asks only where the peer holds more than your instance: "records of this home after the last one I
+hold". The peer answers with pages of up to 500 records, each signed by its home. Your instance checks each
+signature, applies what is newer than what it holds, and records how far it now holds that home. Keys and
+bulletins come from the peer's own feeds, from a cursor kept per peer
+([How records travel through the mesh](how-it-works.md#how-records-travel-through-the-mesh)). When the peer writes something new, it sends your instance a short
 "come and pull" ping (`POST /federation/notify`), and your instance pulls at once. The ping is unsigned and only
 asks for a pull your instance would make anyway: a ping from an instance you do not follow is ignored.
 
@@ -58,8 +62,9 @@ three times a minute at most.
 **Configure.** A signing key on the peer; the peer added under **Instance admin → Federation** or in
 `FED_PEERS` ([Join the network](index.md)). Optional: `FED_SYNC_REGION` to pull one area's caches only.
 
-**Limits.** A page is at most 4 MiB and 500 records; a pass reads at most 50 pages per feed and carries on at
-the next. Each address gets 5 seconds to answer, a `hamnet` address 2.
+**Limits.** A page is at most 4 MiB and 500 records; a pass reads at most 50 pages of each of the peer's own feeds,
+50 pages of what it passes on from other homes, and carries on at the next. A peer answers 120 summaries and 1200
+pages a minute per address; past that the rest waits for the next pass. Each address gets 5 seconds to answer, a `hamnet` address 2.
 
 ### Addresses: https, 44Net and HAMNET
 
@@ -282,8 +287,8 @@ transmitting is the operator's own tooling, under the rules for
 
 ## Packet circuit
 
-**What it carries.** Every feed, as on a [pull](#pull): tombstones, caches, finds, callsign keys, account moves
-and bulletins, each record signed by its origin. Pages are small to suit the channel: 25 records at most on a VHF
+**What it carries.** The peer's own feeds: tombstones, caches, finds, callsign keys, account moves and bulletins,
+each record signed by the peer. The records the peer passes on from other instances do not travel over a circuit. Pages are small to suit the channel: 25 records at most on a VHF
 port, fewer when a page would not fit one line of the session.
 
 **How it works.** The pulling instance's ingest box asks its gateway which peers publish an `ax25` or `netrom`
@@ -292,7 +297,9 @@ the sync service (`ACSL1`), which reads pages from its own gateway. Both ends ex
 agree on the slower rate, the smaller batch and the best common compression. The puller then asks for one page at a
 time, feed after feed, and its box hands each page to its own gateway's `POST /federation/frames`, where every
 frame is checked against its origin's pinned key. At the end the box reports the session to its gateway, which
-keeps where each feed stopped. Neither box holds a key.
+keeps where each feed stopped. A feed starts where the last session stopped, or at what the gateway already holds
+of the peer by any path when that is further, so no airtime goes to records an http pull or a hub brought. Neither
+box holds a key.
 
 ```mermaid
 sequenceDiagram

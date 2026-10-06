@@ -108,12 +108,47 @@ hear of others: its trusted peers list the instances they trust, and instances o
 announce themselves by mDNS. What it hears of is listed, switched off and unvetted, and nothing is pulled from it
 until the sysop follows it ([Discovery](index.md#discovery)).
 
-A hub passes on the records of the instances it trusts, on its transit feed
+A hub passes on the records of the instances it trusts
 ([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)). The hub signs
 nothing of them and lends them none of its trust: your instance checks each record against its home instance's
 key and shows it with your own trust in that home. A home you never vetted stays hidden however many hubs it
 crossed, and one you block stays blocked. A record crosses at most four instances, and never travels back to
 where it came from.
+
+## How records travel through the mesh
+
+Every instance keeps track of what it holds **per home instance**: "every cache of instance A up to number 812 is
+here". Each home numbers its records in the order it writes them, and the number is part of what it signs. When
+your instance meets a neighbour, over the internet, 44Net, HAMNET or a hub, it reads the neighbour's summary of
+what the neighbour holds of each home, and asks only for what lies past its own position: "A's caches after 812".
+Any neighbour can fill the gap, so your instance switches paths without reading again what it already holds.
+
+```mermaid
+flowchart LR
+  A["Instance A<br/>signs caches 1 to 900"]
+  H1["Hub 1<br/>holds A up to 812"]
+  H2["Hub 2<br/>holds A up to 900"]
+  M["Pocket station<br/>holds A up to 900"]
+  C["Your instance<br/>holds A up to 812"]
+  A -->|pull| H1
+  A -->|pull| H2
+  A -->|pull at home| M
+  H1 -->|summary: A up to 812, nothing to ask| C
+  H2 -->|A after 812: 813 to 900| C
+  M -.->|at the field event, when no other path exists| C
+```
+
+- **Signed by the home, whoever carries it.** A hub, a second hub or a phone passes each record on exactly as its
+  home signed it. Your instance checks it against the home's key; the path adds no trust.
+- **Deletions first.** Each exchange brings every home's tombstones before any cache or find, and your instance
+  keeps tombstones for good, so a stale copy that arrives later over another path is refused.
+- **Gaps get filled.** A neighbour you trust moves your position for a home; a neighbour nobody vetted still
+  delivers records, but your instance does not take its word for what it holds, so a neighbour that skips a
+  record cannot hide it. A record that reached a hub over four instances stops there, and your instance asks
+  another neighbour for it.
+- **A phone carries records.** A Pocket station that syncs at home and later meets an instance with no path home
+  is an ordinary neighbour: it passes on what it holds, each record signed by its home
+  ([Carry records between instances](../pocket/carry-records.md)).
 
 ## How a find gets confirmed across instances
 
@@ -214,7 +249,7 @@ spoke to answer through its hub, both set `FED_RELAY_SECRET`
 | Finds, DNFs and notes on those caches, signed by the finder where they signed them | Finds on local-only or imported caches |
 | Callsign keys, and whether each call is verified | Imported data: heritage places and caches imported from other platforms |
 | Bulletins, tombstones and account moves | The hint of every cache, and the description of an **unlisted** cache |
-| Caches, finds and tombstones mirrored from the instances you trust, unchanged (`FED_RESERVE`) | Accounts, email addresses, sessions, passkeys and profiles |
+| Caches, finds, tombstones and account moves mirrored from the instances you trust, unchanged (`FED_RESERVE`) | Accounts, email addresses, sessions, passkeys and profiles |
 | | Station positions, tracks, messages and packet logs |
 
 An **unlisted** cache travels without its description, and a mirror keeps it off its map as its

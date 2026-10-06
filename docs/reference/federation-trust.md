@@ -18,8 +18,8 @@ before mirroring it into display-only tables.
 - Finds federate only with their cache: a find on a `local-only` or imported cache stays home too.
 - A cache marked `unlisted` withholds its description on the wire, and a mirror keeps it off its map and
   offline packs as the origin does.
-- A receiver refuses a `local-only` or imported cache on every carrier, whoever passes it on, and a hub's transit
-  feed serves neither.
+- A receiver refuses a `local-only` or imported cache on every carrier, whoever passes it on, and no origin page
+  serves either.
 
 ### Key rotation
 
@@ -118,13 +118,15 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
 
 ## Records passed on through hubs
 
-A hub serves the caches, finds and tombstones it mirrored on its transit feed (`GET /federation/sync/transit`),
+An instance serves the caches, finds, tombstones and account moves it mirrored, origin by origin
+(`GET /federation/sync/summary` and `GET /federation/sync/origin`, [Per-origin sync](federation-wire.md#per-origin-sync)),
 as their home instances signed them, byte for byte. It re-signs nothing, so it can neither change a record nor
-lend it any trust. `FED_RESERVE` decides what it passes on: by default the records of instances it trusts.
+lend it any trust. `FED_RESERVE` decides what it passes on: by default the records of instances it trusts. A
+hub, a second hub and a Pocket station that carries records are the same thing here.
 
 - **Verified against the home's key.** Each frame verifies under its origin's keys: the peer row the receiver
   holds for that origin, the key the signed registry binds to it, or the key a hub handed on. A hub hands on the
-  key, accept set and rotation records it holds for each origin it passes on (`GET /federation/transit/keys`).
+  key, accept set and rotation records it holds for each origin it passes on, in its summary.
 - **Pinned on first sight.** The first hub to name an origin the receiver does not know pins that origin's key
   in a peer row `transit:<instance>`: `unvetted`, never pulled, its fingerprint shown in Instance admin like any
   peer's. Later the pin moves only along verified rotation records. No hub moves the key of an origin known any
@@ -138,20 +140,23 @@ lend it any trust. `FED_RESERVE` decides what it passes on: by default the recor
 - **No new voice.** The corroboration quorum asks only trusted peers this instance follows itself, directly or
   through a hub's relay for one nobody can dial; a passed-on record is never an
   answer, and an origin known only through a hub is never asked.
-- **Deletes reach every hop.** A tombstone passes on like any record, and a hub stops passing on what a
-  tombstone removed. A bounded tombstone (`upTo`) passes on too, so a restored cache follows it at its higher
-  version.
+- **Deletes reach every hop, and come first.** A tombstone passes on like any record, and a hub stops passing on
+  what a tombstone removed. A pull applies every origin's tombstones before any cache or find, and a receiver
+  keeps its tombstones for good, so a stale copy that reaches it later over another path is refused. A bounded
+  tombstone (`upTo`) passes on too, so a restored cache follows it at its higher version.
+- **Marks move only on what is sure.** A receiver records how far it holds each origin from the origin's own
+  pages, and from a neighbour's only when it trusts that neighbour and every frame of the page verified. Pages
+  from any other neighbour still apply, but never move the mark, so a neighbour that skips a record cannot keep it
+  from a path that carries it. A record a hub holds at the hop limit is a gap in what it says it holds, which a
+  receiver fills elsewhere.
 - **Bounded travel.** The page carries each frame's hop count beside it; a record crosses at most four instances.
-  A hub never sends a record back to its origin or to the instance it came from, and serves its own records on
-  its own feeds only. Apply is idempotent by global id and version, so a record that comes round a ring of hubs
-  again changes nothing and is not passed on twice.
+  A hub never sends a record back to its origin or to the instance it came from. Apply is idempotent by global id
+  and version, so a record that comes round a ring of hubs again changes nothing and is not passed on twice; the
+  same version over a shorter path replaces the hop count kept.
 - **Regions apply.** A pull narrowed by `FED_SYNC_REGION` narrows the passed-on caches too; deletes travel whole.
-- **Held-back records follow the policy.** When an origin becomes trusted on the hub (the sysop's decision, a
-  matching `FED_PEERS` fingerprint pin, or corroboration's auto-promotion), its kept records move to the end of
-  the transit feed, past every follower's cursor. When `FED_RESERVE` widens, the records it newly lets out move
-  the same way, once: the hub stores the policy it last applied (`fed_transit_state`) and compares it on a
-  setting write and at every start, so an unchanged setting moves nothing. A narrower policy moves nothing
-  either, since serving filters by the policy in force.
+- **The policy in force decides.** The summary lists what `FED_RESERVE` lets out at the moment it is read. An
+  origin the hub trusts later, or a wider setting, reaches every receiver at its next pull, since a receiver asks
+  from what it holds, not from where it stopped reading the hub.
 
 ## Cross-instance corroboration
 

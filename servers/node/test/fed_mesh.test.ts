@@ -26,7 +26,12 @@ interface Node {
 /** An instance `<name>.example`. */
 async function node(name: string, extra: Record<string, unknown> = {}): Promise<Node> {
   const key = await newFedKey();
-  return { name: `${name}.example`, url: `https://${name}.example`, env: instanceEnv(`${name}.example`, key, extra), key };
+  return {
+    name: `${name}.example`,
+    url: `https://${name}.example`,
+    env: instanceEnv(`${name}.example`, key, extra),
+    key,
+  };
 }
 
 /** `from` follows `to`, its key pinned, at `trust`. */
@@ -75,7 +80,8 @@ const caches = (env: Env, origin = "a.example") =>
 const mark = async (env: Env, kind: string, origin = "a.example") =>
   ((await one(env, "SELECT seq FROM fed_origin_marks WHERE origin = ? AND kind = ?", origin, kind))?.seq as number) ??
   0;
-const rev = async (env: Env, id: number) => (await one(env, "SELECT fed_rev FROM caches WHERE id = ?", id))!.fed_rev;
+const rev = async (env: Env, id: number) =>
+  (await one(env, "SELECT fed_rev FROM caches WHERE id = ?", id))!.fed_rev as number;
 const fingerprint = (k: FedKey) =>
   createHash("sha256")
     .update(Buffer.from(k.pub, "base64url"))
@@ -161,8 +167,7 @@ describe("per-origin sync", () => {
     const id = await addCache(a.env, now() - 60);
     await syncAllPeers(h1.env); // h1 keeps the cache and never hears of its removal
     expect(
-      (await call(a.env, "POST", "/api/admin/moderation/remove", { kind: "cache", id, reason: "takedown" }, OP))
-        .status,
+      (await call(a.env, "POST", "/api/admin/moderation/remove", { kind: "cache", id, reason: "takedown" }, OP)).status,
     ).toBe(200);
     await syncAllPeers(h2.env); // h2 holds the removal, a tombstone bounded by the version it covers
     expect(await one(h2.env, "SELECT up_to FROM remote_tombstones")).toEqual({ up_to: await rev(a.env, id) });
@@ -249,8 +254,7 @@ describe("per-origin sync", () => {
     await syncAllPeers(b.env);
     expect((await caches(b.env)).length).toBe(1);
     expect(
-      (await call(b.env, "POST", "/federation/peers/trust", { url: "transit:a.example", trust: "blocked" }, OP))
-        .status,
+      (await call(b.env, "POST", "/federation/peers/trust", { url: "transit:a.example", trust: "blocked" }, OP)).status,
     ).toBe(200);
     await addCache(a.env, now() - 30);
     await syncAllPeers(h.env);
@@ -265,9 +269,7 @@ describe("per-origin sync", () => {
     );
     const summary = await call(h.env, "GET", "/federation/sync/summary");
     expect(summary.data.origins.map((o: { origin: string }) => o.origin)).toEqual(["h.example"]);
-    const page = await serve(h.env)(
-      new Request(`${h.url}/federation/sync/origin?origin=a.example&kind=cache&since=0`),
-    );
+    const page = await serve(h.env)(new Request(`${h.url}/federation/sync/origin?origin=a.example&kind=cache&since=0`));
     expect(page.status).toBe(404);
   });
 
@@ -369,9 +371,7 @@ describe("a Pocket station carries records", () => {
     expect(await caches(c.env)).toEqual([]);
     expect(await rows(c.env, "SELECT global_id FROM remote_finds")).toEqual([]);
     // C asked M for the deletions alone: the caches and finds it holds were not read again
-    expect(log.filter((l) => l.query.get("kind") !== "tombstone" && l.query.get("origin") === "a.example")).toEqual(
-      [],
-    );
+    expect(log.filter((l) => l.query.get("kind") !== "tombstone" && l.query.get("origin") === "a.example")).toEqual([]);
   });
 
   it("carries the records of origins it never vetted when FED_RESERVE is all", async () => {

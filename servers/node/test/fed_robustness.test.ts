@@ -264,10 +264,7 @@ describe("carrier ids and body caps", () => {
     const f = await frame(a, "cache", "a.example:cache:1", 1000, { code: "AC-1", title: "t", updatedAt: 1000 });
     const inner = serve(a);
     stubFetch({
-      [A]: (req) =>
-        cachePage(req)
-          ? Promise.resolve(page(Array.from({ length: 501 }, () => f)))
-          : inner(req),
+      [A]: (req) => (cachePage(req) ? Promise.resolve(page(Array.from({ length: 501 }, () => f))) : inner(req)),
     });
     const r = await syncAllPeers(hub);
     expect(r.errors.join()).toMatch(/frames/);

@@ -8,14 +8,7 @@ import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { parseBbox, bboxKey } from "@aprscaching/gateway/fedregion";
 import { emitTombstones } from "@aprscaching/gateway/tombstones";
-import {
-  newFedKey,
-  instanceEnv,
-  serve,
-  stubFetch,
-  withDescriptor,
-  remoteCacheCount,
-} from "./helpers/fedpeer.js";
+import { newFedKey, instanceEnv, serve, stubFetch, withDescriptor, remoteCacheCount } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());

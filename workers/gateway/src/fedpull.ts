@@ -41,7 +41,7 @@ import {
   listEnabledPeers,
 } from "./fedpeers.js";
 import { learnFromPeer } from "./feddiscover.js";
-import { SYNC_DEFS, type SyncDef, type FrameGate, admitFrame } from "./fedapply.js";
+import { SYNC_DEFS, type FrameGate, admitFrame } from "./fedapply.js";
 import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import {
@@ -402,9 +402,9 @@ async function syncPeer(
   // deletes first, from every origin, so no stale copy outruns its tombstone in this pass; keys before the
   // account moves, whose proofs verify under them
   await byOrigin(["tombstone"]);
-  counts.key = want("key") ? await pullFeed(ctx, p, SYNC_DEF_KEY) : 0;
+  counts.key = want("key") ? await pullFeed(ctx, p, "key") : 0;
   await byOrigin(["account-move", "cache", "find"]);
-  counts.bulletin = want("bulletin") ? await pullFeed(ctx, p, SYNC_DEF_BULLETIN) : 0;
+  counts.bulletin = want("bulletin") ? await pullFeed(ctx, p, "bulletin") : 0;
   // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
   // (surfaced via /federation/peers → last_counts)
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -464,9 +464,6 @@ interface PullContext {
   bytes: number;
 }
 
-const SYNC_DEF_KEY = SYNC_DEFS.find((d) => d.type === "key")!;
-const SYNC_DEF_BULLETIN = SYNC_DEFS.find((d) => d.type === "bulletin")!;
-
 /** Summary pages one pull reads, and the largest one it accepts. */
 const MAX_SUMMARY_PAGES = 20;
 const MAX_SUMMARY_BYTES = 1024 * 1024;
@@ -498,8 +495,7 @@ async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntr
       if (!e || !isInstanceId(e.origin) || out.some((o) => o.origin === e.origin)) continue;
       // a kind the summary leaves out is one the peer holds none of
       const held: SummaryEntry["held"] = {};
-      for (const kind of ORIGIN_KINDS)
-        held[kind] = seqOf((e.held as Record<string, unknown> | undefined)?.[kind]) ?? 0;
+      for (const kind of ORIGIN_KINDS) held[kind] = seqOf((e.held as Record<string, unknown> | undefined)?.[kind]) ?? 0;
       out.push({ ...e, origin: e.origin, held });
     }
     if (page.complete !== false || typeof page.next !== "string" || page.next <= after) break;
@@ -569,12 +565,15 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
     if (!body) throw new Error(`${path} page too large (over ${MAX_PAGE_BYTES} bytes)`);
     ctx.bytes += body.byteLength;
     const pg = decodeFedSyncPage(body);
-    if (pg.frames.length > PAGE_LIMIT) throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
+    if (pg.frames.length > PAGE_LIMIT)
+      throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
     let whole = true;
     for (const [i, fb] of pg.frames.entries()) {
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
       const skipped = (err: unknown) =>
-        console.warn(`federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`);
+        console.warn(
+          `federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`,
+        );
       // a frame without its hop count is taken as having travelled as far as a record may
       const hops = (pg.hops?.[i] ?? MAX_TRANSIT_HOPS) + 1;
       try {
@@ -605,8 +604,9 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
  * (wk.instance), never anything the payload claims, and a page carries only its own feed's type. A 404 means the
  * peer doesn't serve this feed → skip it, never failing the whole sync.
  */
-async function pullFeed(ctx: PullContext, p: PeerRow, def: SyncDef): Promise<number> {
+async function pullFeed(ctx: PullContext, p: PeerRow, type: "key" | "bulletin"): Promise<number> {
   const { env } = ctx;
+  const def = SYNC_DEFS.find((d) => d.type === type)!;
   const cursorCol = def.cursorCol!;
   let cursor = p[cursorCol] ?? 0,
     cursorId = def.cursorIdCol ? (p[def.cursorIdCol] ?? null) : null,

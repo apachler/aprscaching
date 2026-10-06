@@ -427,7 +427,7 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
   for (const url of new Set(urls)) {
     await env.DB.prepare("UPDATE fed_peers SET rep_confirmed = rep_confirmed + 1 WHERE url = ?").bind(url).run();
     if (threshold <= 0) continue;
-    const promoted = await env.DB.prepare(
+    await env.DB.prepare(
       // added_via keeps how the peer arrived; auto_promoted_at marks the promotion as corroboration's own
       "UPDATE fed_peers SET trust='trusted', auto_promoted_at=?, approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
     )

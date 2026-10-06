@@ -25,7 +25,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`). A mirror is stored under its gid, never under the BID it carries, so one instance cannot claim another's BID; the BID only skips a bulletin already held from FBB forwarding |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
-| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. A cache's `v` is its revision counter plus 2³²; a bulletin's is its posting time; the rest count up |
+| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. For caches, finds, tombstones and account moves it is also the origin's **sequence** for that kind, rising across all its records of the kind: a cache's place in the caches sequence (every insert and update takes the next number), a find's log id, a tombstone's and an account move's seq. Per-origin sync tracks it ([Per-origin sync](#per-origin-sync)). A bulletin's `v` is its posting time; a key's counts up |
 | `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
 | `signer` (6) | The signing instance id; a mirrored record is accepted only when it equals `origin` |
 | `body` (7) | Type-specific fields, text-keyed, integer-scaled numbers only |
@@ -63,18 +63,18 @@ refused.
 ## The sync surface
 
 `GET /federation/sync/<type>?since=&limit=` (type ∈ `cache · find · key · tombstone · account-move ·
-bulletin · transit`) serves a CBOR page of frames:
+bulletin`) serves a CBOR page of the instance's own frames:
 
 ```
-page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]? }   (application/cbor)
+page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]?, 7 held? }   (application/cbor)
 ```
 
-The cache and bulletin feeds page by a timestamp, which many records can share, so their cursor is
-composite: the page's `nextId` is the local id of its last record, and the consumer asks for the next
+The cache, find, tombstone and account-move feeds page by the origin's sequence (`v`). The bulletin feed pages
+by a timestamp, which many records can share, so its cursor is composite: the page's `nextId` is the local id of its last record, and the consumer asks for the next
 page with `?since=<nextCursor>&sinceId=<nextId>` to resume strictly after that pair. A consumer keeps the
 tie-breaker only while a pass still has pages to read; once a page is complete it resumes from the
 timestamp alone, re-reading that second (idempotent) so a record updated again within it is not missed.
-Without `sinceId` a feed returns records at or after `since`; a consumer that doesn't know field 5
+Without `sinceId` the bulletin feed returns records at or after `since`; a consumer that doesn't know field 5
 ignores it. Each frame on a page is applied on its own: a malformed or unappliable record is skipped
 and counted, and the cursor still moves past it.
 
@@ -83,7 +83,7 @@ the `cache` feed to the caches inside the box; a malformed box is a 400. Every o
 deletes, keys and account moves always travel whole and a region never hides a delete. A publisher that
 serves the filter lists `sync-cache-bbox` in its descriptor's capabilities; a consumer sends a box only to
 such a publisher and pulls the whole feed elsewhere. A cursor is exact only for the box it was read under,
-so a consumer whose box changes (or goes away) reads the caches feed again from the start. A cache edited to
+so a consumer whose box changes (or goes away) reads the caches again from the start. A cache edited to
 move out of the box is not sent again; the consumer keeps its last copy until a delete or a whole-feed pull.
 
 The page envelope is unsigned — each record carries its own signature. This is the **only wire
@@ -94,16 +94,6 @@ frame signatures possible) does not serve the surface and cannot be mirrored. Th
 (`/federation/caches`, `/finds`, `/bulletins`, `/keys`, `/tombstones`, `/account-moves`, `/registry`) are an unsigned transparency/browse surface only — nothing consumes them for
 mirroring.
 
-**Transit feed.** `transit` serves the caches, finds and tombstones the instance mirrored from others, each frame
-exactly as its origin signed it, in the order they arrived (the cursor is a local sequence). Field 6 gives, per
-frame, the instances it has crossed since its origin; a receiver stores one more and passes on only frames that
-crossed fewer than four. `for=<instance>` names the asking instance, and the page leaves out records from that
-origin or delivered by it; `bbox` narrows the cache frames, never the deletes. An instance advertises the feed as
-the `transit` capability, unless `FED_RESERVE` is `off`. `GET /federation/transit/keys` lists, as JSON, the key of
-each origin the feed passes on: `{instance, keys: [{instance, publicKey, publicKeys, rotations}]}`. A receiver
-verifies each frame under its origin's keys and refuses a frame from the serving instance itself
-([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
-
 **Scaled fields.** The deterministic codec carries no floats, so fractional record fields travel as
 integer twins and map back on receipt:
 
@@ -112,6 +102,68 @@ integer twins and map back on receipt:
 | `lat` / `lon` | `latE7` / `lonE7` | ×10⁷ (1e-7°, ~1 cm) |
 | `difficulty` / `terrain` | `difficultyX10` / `terrainX10` | ×10 (half-steps exact) |
 | `distanceM` | `distanceCm` | ×100 (centimetres) |
+
+## Per-origin sync
+
+An instance tracks what it holds **per origin**, not how far it read each neighbour: for each origin and each of
+the kinds cache, find, tombstone and account move, a mark says "every record up to sequence N is here, or was
+superseded or deleted" (`fed_origin_marks`). Any neighbour can then fill the gap after N, and a pull that changes
+path (a hub, another hub, the origin itself, a Pocket station) never reads again what it holds. Keys and
+bulletins keep per-peer cursors on `/federation/sync/<type>`. A signed instance advertises the two endpoints as
+the `sync-origins` capability.
+
+**Summary.** `GET /federation/sync/summary?for=<instance>&after=<origin>` answers, as JSON:
+
+```json
+{
+  "instance": "hub.example",
+  "origins": [
+    { "origin": "a.example", "held": { "cache": 812, "find": 1440, "tombstone": 9 },
+      "publicKey": "…", "publicKeys": [{ "x": "…" }], "rotations": [] },
+    { "origin": "hub.example", "held": { "tombstone": 3, "account-move": 0, "cache": 57, "find": 120 } }
+  ],
+  "complete": true
+}
+```
+
+- It lists the instance itself, with the top of each of its own sequences, and every origin whose records the
+  `FED_RESERVE` policy passes on, with how far it holds each kind whole (a kind it holds none of is left out).
+  The asker (`for`) is left out. Origins come in instance-id order, 500 a page; `next` is the `after` of the next
+  page.
+- Each other origin carries the key the instance holds for it: its pin (`publicKey`), its accept set
+  (`publicKeys`, each `{x, until?}`) and its rotation records. A receiver that has no key for the origin pins
+  this one in a `transit:<instance>` row ([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
+- A record held at the hop limit is a gap: `held` stops before the first such record, so a puller fills it from
+  another neighbour.
+
+**Origin pages.** `GET /federation/sync/origin?origin=<id>&kind=<kind>&since=<N>&limit=&bbox=&for=<instance>`
+answers a CBOR page of the origin's records of that kind after sequence N, ordered by sequence:
+
+- For the instance's own records it serves its native feed (field 6 is all zeros). For another origin it serves
+  the frames it keeps, exactly as the origin signed them, with field 6 giving the instances each crossed since
+  its origin.
+- It leaves out a record past the hop limit (crossed four instances), one delivered by the asker (`for`), a
+  local-only cache, and a record it no longer holds; `bbox` narrows the caches, never the deletes. It answers
+  404 for the asker's own records and for an origin the policy does not pass on, including one the instance
+  blocked.
+- `nextCursor` is how far the page read. `held` (field 7) is the sequence up to which the server holds the origin
+  and kind whole, read before the rows, so a record written meanwhile lies above it. A server whose caches mark
+  was read under a region the request's `bbox` does not lie inside sends the caches without `held`.
+- Limits: `limit` 1–1000 (default 200), a consumer asks for 500 and reads at most 4 MiB a page. A client may
+  ask for 120 summaries and 1200 origin pages a minute; past that the answer is 429, and the consumer leaves the
+  rest to its next pass.
+
+**The pull.** A consumer reads the neighbour's summary, pins the keys it hands on, and for each origin it does
+not block and holds a key for, and each kind, asks for "origin after my mark" where the summary holds more:
+deletes first, from every origin, then the neighbour's keys, then account moves, caches and finds. Every frame
+verifies under its origin's keys. The mark moves to `min(held, nextCursor)` of each page: from the origin itself
+always; from a neighbour the consumer trusts when every frame of the page verified; from any other neighbour
+never. A page from an unvetted neighbour still applies, and the consumer remembers how far it read it until the
+process restarts, so a neighbour that skips a record cannot hide it from another path. Without a summary the
+consumer still asks the neighbour for its own records.
+
+A hub that a spoke pushes to holds the spoke's records like a pulled origin's: a submission page that continues
+what the hub holds of the spoke (`x-fed-since`, below) moves the hub's mark for it.
 
 ## Corroboration exchange
 
@@ -311,7 +363,8 @@ The submitted key must be one the hub already verified for that instance under a
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
 `unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
 moves the spoke's pin only along them, by the same rules as a pulled peer. A spoke pushes every feed the
-pull serves, in the pull's order. Relay feed answers carry
+pull serves, in the pull's order, and names where each page starts in `x-fed-since`; a page that verifies whole
+and starts at or below what the hub holds of the spoke moves the hub's mark to the page's end. Relay feed answers carry
 a CBOR page (`pageB64`, a base64 fedwire page). A relayed corroboration question carries the asker's signed
 `corroborationQuery` frame verbatim (`params.question`, base64url), and its answer is
 `{ status, frameB64 }`: the spoke's signed `corroboration` frame and the HTTP status a direct answer would
@@ -334,16 +387,23 @@ either:         ACSL1 E <text>
 
 On links that negotiated `deflateDict1`, page payloads are dictionary-compressed before base64. The
 server clamps the limit to the negotiated `batchMax` and halves it until the reply fits the session
-line budget. `sinceId` is the tie-breaker of a composite `(cursor, id)` position (the caches and bulletins
-feeds), the page's `nextId`; the server then answers strictly after that pair, as `?sinceId=` does on the
+line budget. `sinceId` is the tie-breaker of a composite `(cursor, id)` position (the bulletins feed), the
+page's `nextId`; the server then answers strictly after that pair, as `?sinceId=` does on the
 HTTP surface. Both ends are operator-local ingest boxes. The serving box answers on `FED_LINK_CALL` with the
 service greeting, and its NET/ROM node switches a session to the service on the `FED` command; pages come from
 its own gateway's CBOR sync surface. The pulling box learns whom to dial from `GET /federation/packet/peers`
-(ingest-gated: each peer's `ax25` and `netrom` endpoints and its packet cursors), delivers each page to its
+(ingest-gated: each peer's `ax25` and `netrom` endpoints and its packet cursors; a feed of the peer's own records
+starts at the gateway's mark for the peer when that is further, so a record another path brought costs no
+airtime), delivers each page to its
 own gateway at `POST /federation/frames` (ingest-gated), where the shared trust-gated pipeline verifies every
 frame against its origin's keys — the page envelope's claimed instance is ignored, and the ingest holds no
 keys — and reports the session at `POST /federation/packet/status`. The schedule and its limits are in
 [Packet circuit](../run/federation/transports.md#packet-circuit).
+
+A circuit pulls the peer's own feeds only, not the records it passes on from other origins. Asking for "origin
+after N" over a circuit needs the summary on the circuit and an ordered page that the gateway applies as one
+answer to one request; the ingest box hands pages to `POST /federation/frames`, which takes frames from any carrier
+in any order, and a mark moved by the box's report would let that report decide what the gateway holds.
 
 ## Beacon tier
 
