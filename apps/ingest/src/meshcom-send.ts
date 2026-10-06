@@ -4,7 +4,8 @@
  *
  * Off unless the operator enables it and names their own callsign, which must be the call the target
  * node transmits under: the node sends every message as itself, so software can only ever transmit under
- * the licensed operator's call. Direct messages to a callsign only (the encoder refuses groups and `*`),
+ * the licensed operator's call. That call passes the box's transmit gate like any RF port's: the gateway
+ * confirms it control-verified and held by the box's operator. Direct messages to a callsign only (the encoder refuses groups and `*`),
  * only to configured node addresses, through a conservative token bucket because LoRa airtime is shared.
  * Every attempt is audited without its text. ExtUDP has no acknowledgement, so the best outcome is
  * "handed to node" — never "delivered"; the node reports refusals (QRS/QRT) back on the listener.
@@ -28,6 +29,11 @@ export interface MeshcomSenderOpts {
   /** JSON-lines audit file; unset = audit to the log only. */
   auditPath?: string;
   port?: number;
+  /**
+   * The box's transmit gate (callverify.ts): why the gateway does not confirm a call for this box now, or null.
+   * The operator's call must pass it like any RF port's.
+   */
+  gate?: (call: string) => string | null;
 }
 
 export interface MeshcomSendRequest {
@@ -45,6 +51,7 @@ export type MeshcomSendRefusal =
   | "node-not-allowlisted"
   | "node-call-unknown"
   | "call-mismatch"
+  | "call-not-confirmed"
   | "rate-limited"
   | "socket-error"
   | MeshcomEncodeReason;
@@ -117,6 +124,7 @@ export class MeshcomSender {
     if (!node) return refuse("node-not-allowlisted", req.node ?? null);
     if (!node.call) return refuse("node-call-unknown", node.ip);
     if (baseCall(node.call) !== baseCall(this.o.operatorCall)) return refuse("call-mismatch", node.ip);
+    if (this.o.gate?.(this.o.operatorCall.trim().toUpperCase())) return refuse("call-not-confirmed", node.ip);
 
     const enc = encodeMeshcomText(req.dst, req.text);
     if (!enc.ok) return refuse(enc.reason, node.ip);

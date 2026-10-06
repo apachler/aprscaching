@@ -5,6 +5,10 @@ import { describe, it, expect } from "vitest";
 import { outboxPending, outboxRowOk } from "../src/outbox.js";
 import type { Env } from "../src/env.js";
 
+/** Every call the drain asks about is control-verified. */
+const verifiedRows = (sql: string, args: unknown[]) =>
+  sql.includes("FROM callsign_verifications") ? args.map((callsign) => ({ callsign, method: "sysop" })) : null;
+
 const row = (id: number, over: Record<string, string> = {}) => ({
   id,
   src_call: "OE8APR-7",
@@ -32,8 +36,16 @@ describe("outbox rows", () => {
     const rows = [row(1), row(2, { payload: ">a\nb" }), row(3), row(4, { src_call: "X\0" })];
     const db = {
       prepare(sql: string) {
-        const all = async () => ({ results: sql.startsWith("SELECT") ? rows : [] });
-        return { all, bind: (...args: unknown[]) => ({ sql, args, all, first: async () => null }) };
+        const all = async () => ({ results: sql.startsWith("SELECT id") ? rows : [] });
+        return {
+          all,
+          bind: (...args: unknown[]) => ({
+            sql,
+            args,
+            all: async () => ({ results: verifiedRows(sql, args) ?? (await all()).results }),
+            first: async () => null,
+          }),
+        };
       },
       async batch(stmts: { sql: string; args: unknown[] }[]) {
         for (const s of stmts) if (s.sql.includes("status='failed'")) failed.push(s.args[0]);
@@ -63,7 +75,15 @@ describe("outbox rows", () => {
           sql.includes("FROM callsign_suspensions") && args[0] === "OE1BAD"
             ? { category: "spam", until: null, at: 1 }
             : null;
-        return { all, bind: (...args: unknown[]) => ({ sql, args, all, first: () => first(args) }) };
+        return {
+          all,
+          bind: (...args: unknown[]) => ({
+            sql,
+            args,
+            all: async () => ({ results: verifiedRows(sql, args) ?? (await all()).results }),
+            first: () => first(args),
+          }),
+        };
       },
       async batch(stmts: { sql: string; args: unknown[] }[]) {
         for (const s of stmts) if (s.sql.startsWith("DELETE FROM aprs_outbox")) deleted.push(s.args[0]);

@@ -31,6 +31,8 @@ import { verificationOf, verificationsOf } from "./callsign.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { eraseAccountRegistries, exportAccountRegistries } from "./toolregistries.js";
+import { eraseAccountBoxes, releaseBoxCall } from "./boxowner.js";
+import { forgetAttestedSites } from "./attestedsites.js";
 
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
@@ -465,6 +467,11 @@ export async function handleAccountDelete(req: Request, env: Env, named: string)
   const account = eraseAccount(env, instance, scope.accountId, scope.emails, calls);
   for (const t of account.tombstones) tombstoneStmts.add(t);
   stmts.push(...account.tombstones, ...account.stmts);
+  // the person's boxes go with every row of theirs (a box enrolled for another ham stays that ham's), and no box
+  // or site trusted under one of the calls keeps attesting
+  const bases = [...new Set(calls.map((c) => baseCall(c.trim().toUpperCase())))];
+  if (scope.accountId) stmts.push(...(await eraseAccountBoxes(env, scope.accountId, bases)));
+  for (const c of bases) stmts.push(...releaseBoxCall(env, c, "erased", nowS()));
   // A suspension outlives the erasure: each base call the account held keeps a minimal record (category and
   // end, no account and no free text) until it ends, so the person cannot come back under the same call. A call
   // that already carries a longer suspension keeps it.
@@ -482,6 +489,7 @@ export async function handleAccountDelete(req: Request, env: Env, named: string)
     );
   stmts.push(...queueMediaDeletes(env, mediaKeys));
   const results = await env.DB.batch(stmts);
+  forgetAttestedSites(env);
   const tombstones = results.reduce(
     (n, r, i) => n + (tombstoneStmts.has(stmts[i]!) ? Number(r.meta?.changes ?? 0) : 0),
     0,
@@ -651,7 +659,7 @@ async function eraseCall(
 }
 
 /** Erase every account-scoped row: sign-in material (passkeys, pending ceremonies, email links), the
- *  held calls (freeing each base call), and the person's subscriptions, watches, views, boxes, keys,
+ *  held calls (freeing each base call), and the person's subscriptions, watches, views, keys,
  *  ratings, directory entries, personal mail, and every bulletin and queued radio message the person wrote. Returns
  *  the statements for the erasure's one batch, with the tombstones that go before them. */
 function eraseAccount(
@@ -781,17 +789,6 @@ function eraseAccount(
       env.DB.prepare(
         "UPDATE moderation_reports SET reporter_account=NULL, reporter_call=NULL WHERE reporter_account=?",
       ).bind(accountId),
-    );
-  if (accountId)
-    stmts.push(
-      env.DB.prepare("DELETE FROM box_commands WHERE box_id IN (SELECT box_id FROM boxes WHERE account_id=?)").bind(
-        accountId,
-      ),
-      env.DB.prepare("DELETE FROM boxes WHERE account_id=?").bind(accountId),
-      // the boxes this account enrolled lose their keys with it, and its codes and revocations are forgotten
-      env.DB.prepare("DELETE FROM box_keys WHERE enrolled_by=?").bind(accountId),
-      env.DB.prepare("UPDATE box_keys SET revoked_by='erased' WHERE revoked_by=?").bind(accountId),
-      env.DB.prepare("DELETE FROM box_enrollment_codes WHERE created_by=?").bind(accountId),
     );
   return { tombstones, stmts };
 }

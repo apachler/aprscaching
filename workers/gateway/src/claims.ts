@@ -35,6 +35,8 @@ import { bytesToB64url } from "./util/b64.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { json } from "./http.js";
+import { releaseBoxCall } from "./boxowner.js";
+import { forgetAttestedSites } from "./attestedsites.js";
 import { baseCall } from "@aprscaching/aprs";
 import {
   sessionIdentity,
@@ -463,6 +465,9 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
     env.DB.prepare(`DELETE FROM callsign_keys WHERE ${ofCall("callsign")}`).bind(cs, like),
     env.DB.prepare(`DELETE FROM account_stations WHERE ${ofCall("callsign")}`).bind(cs, like),
     env.DB.prepare(`DELETE FROM wx_keys WHERE ${ofCall("callsign")}`).bind(cs, like),
+    // a box enrolled for the call is revoked, and no site of the call stays trusted: the next holder's
+    // transmitter and receiver are not the previous holder's box
+    ...releaseBoxCall(env, cs, "released", now),
     env.DB.prepare(`DELETE FROM cache_adoption_requests WHERE account_id = ? AND ${ofCall("callsign")}`).bind(
       holderId,
       cs,
@@ -508,6 +513,7 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
 async function afterRelease(env: Env, r: Release, why: string): Promise<void> {
   // what the previous holder left queued for APRS-IS under the call never goes on the air after the release
   await dropQueuedFor(env, [r.callsign]);
+  forgetAttestedSites(env);
   const instance = instanceName(env);
   if (instance && r.tombstones.length) await emitTombstones(env, instance, r.tombstones);
   const shown = isFormerMarker(r.shownAs) ? null : r.shownAs;

@@ -368,7 +368,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`ADMIN_CALLSIGNS`",
-        "Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign))",
+        "Comma-separated licensed calls that may administer this instance (sysop), matched by base call (`OE8APR-10` names the holder of `OE8APR`). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign))",
         "—",
       ],
       [

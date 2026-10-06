@@ -39,6 +39,15 @@ describe("MeshCom sender — opt-in and operator control", () => {
     expect(await s.send(req())).toEqual({ ok: false, reason: "call-mismatch" });
     expect(sent).toHaveLength(0);
   });
+  it("refuses while the gateway does not confirm the operator's call for this box", async () => {
+    let why: string | null = "verify OE8APR to transmit — control-verification required";
+    const { s, sent } = make({ gate: () => why });
+    expect(await s.send(req())).toEqual({ ok: false, reason: "call-not-confirmed" });
+    expect(sent).toHaveLength(0);
+    why = null;
+    expect((await s.send(req())).ok).toBe(true);
+    expect(sent).toHaveLength(1);
+  });
   it("refuses a node whose call is not configured, and a node that is not allowlisted", async () => {
     expect(await make({ nodes: [{ ip: "192.168.1.50" }] }).s.send(req())).toEqual({
       ok: false,

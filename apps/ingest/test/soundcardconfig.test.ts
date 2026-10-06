@@ -11,6 +11,7 @@ import {
   TxGateRefused,
   TxGateUnsupported,
   boxTransmits,
+  frameCalls,
   gateCheck,
   gatewayTxGateLookup,
   stationCalls,
@@ -318,20 +319,62 @@ describe("the call gate", () => {
     let master = true;
     const open = gateCheck(
       v,
-      ["OE8APR-10"],
+      () => ["OE8APR-10"],
+      undefined,
       () => master,
       (m) => logged.push(m),
     );
-    expect(open()).toBe(false);
-    expect(open()).toBe(false);
+    const own = ["OE8APR-10", "WIDE1-1"];
+    expect(open(own)).toBe(false);
+    expect(open(own)).toBe(false);
     await v.refresh(["OE8APR-10"]);
-    expect(open()).toBe(true);
+    expect(open(own)).toBe(true);
     master = false;
-    expect(open()).toBe(false);
+    expect(open(own)).toBe(false);
     expect(logged).toEqual([
       "transmit refused: the gateway has not confirmed OE8APR-10 recently",
       "transmit refused: transmit is switched off on this box",
     ]);
+  });
+
+  it("gates each frame by the box's calls it carries, so a refused receive-only call does not silence the rest", async () => {
+    const v = new CallVerifier(async () =>
+      answers({ "OE8APR-10": { ok: true }, "OE8APR-1": { ok: false, reason: "not control-verified" } }),
+    );
+    await v.refresh(["OE8APR-10", "OE8APR-1"]);
+    const own = () => ["OE8APR-10", "OE8APR-1"];
+    const open = gateCheck(
+      v,
+      own,
+      "OE8APR-10",
+      () => true,
+      () => {},
+    );
+    // the digipeater's repeat names its own call as the used hop
+    expect(open(["DL1ABC-7", "OE8APR-10*", "WIDE2-1"])).toBe(true);
+    // an IGate frame under the refused call does not go out
+    expect(open(["OE8APR-1", "WIDE1-1"])).toBe(false);
+    // a frame carrying a refused call anywhere does not go out, even beside a confirmed one
+    expect(open(["OE8APR-1", "OE8APR-10*"])).toBe(false);
+    // a frame naming none of the box's calls goes out under the fallback; with none it does not go out
+    expect(open(["DL1ABC-7", "WIDE1*"])).toBe(true);
+    expect(
+      gateCheck(
+        v,
+        own,
+        undefined,
+        () => true,
+        () => {},
+      )(["DL1ABC-7", "WIDE1*"]),
+    ).toBe(false);
+    expect(frameCalls(own(), ["oe8apr-10*", "OE8APR-10", "DL1ABC"])).toEqual(["OE8APR-10"]);
+    expect(frameCalls(["OE8APR"], ["OE8APR-0"])).toEqual(["OE8APR"]);
+  });
+
+  it("MeshCom transmit counts as transmitting, and its call is a station call", () => {
+    expect(boxTransmits({ MESHCOM_NODE: "192.168.1.50=OE8APR-12", MESHCOM_TX: "1" }, false)).toBe(true);
+    expect(boxTransmits({ MESHCOM_NODE: "192.168.1.50=OE8APR-12" }, false)).toBe(false);
+    expect(stationCalls({ MESHCOM_TX_CALL: "OE8APR-12" })).toEqual(["OE8APR-12"]);
   });
 });
 

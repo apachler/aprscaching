@@ -157,14 +157,16 @@ alone. To receive AXUDP in a container, publish its UDP port the same way, on on
 
 ## Transmit gate
 
-Every port the box transmits on, the KISS TNC and the [soundcard ports](soundcard.md), sends only while the
-box's transmit switch is on and the gateway confirms each station call the box transmits under: control-verified,
-and held by whoever runs the box ([The transmit gate](soundcard.md#the-transmit-gate)). Receiving goes on
-regardless. The log says why: `[kiss] transmit refused: verify OE8APR-10 to transmit — control-verification
-required`.
+Every port the box transmits on, the KISS TNC, the [soundcard ports](soundcard.md) and MeshCom transmit
+(`MESHCOM_TX`), sends only while the box's transmit switch is on and the gateway confirms the station call it
+sends under: control-verified, not suspended, and held by whoever runs the box
+([The transmit gate](soundcard.md#the-transmit-gate)). The gate judges each frame by the box's calls it carries,
+as source or as a via hop, so a call the gateway refuses holds back only its own frames: an `IGATE_CALL` you keep
+receive-only does not silence the digipeater. Receiving goes on regardless. The log says why:
+`[kiss] transmit refused: verify OE8APR-10 to transmit — control-verification required`.
 
-The box asks the gateway every three minutes. An answer that a call is not verified, or not this box's
-operator's, closes the gate at once. While the gateway cannot be reached (no network, a timeout, a server
+The box asks the gateway every three minutes. An answer that a call is not verified, is suspended, or is not
+this box's operator's, closes the gate for that call at once. While the gateway cannot be reached (no network, a timeout, a server
 error, a gateway without the endpoint), the last confirmation keeps counting for `TX_GATE_GRACE`: 6 minutes by
 default, up to 24 hours (`30`, `30m` or `2h`; a plain number is minutes). Past it the box stops transmitting
 until the gateway answers again, and it asks every 30 seconds or so meanwhile. Raise the grace for a link that

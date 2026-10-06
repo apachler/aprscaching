@@ -70,6 +70,23 @@ describe("MeshCom KISS link", () => {
     expect(node.got).toEqual(["OE8APR-15::OE5XYZ-7 :de OE1ABC: hi{1A"]);
   });
 
+  it("sends only from a call the gateway confirms for this box", async () => {
+    const node = await fakeNode({ auth: true });
+    let why: string | null = "verify OE8APR to transmit — control-verification required";
+    const k = new MeshcomKiss(
+      { host: "127.0.0.1", port: node.port, password: PASS, nodeCall: "OE8APR-12", log: quiet, gate: () => why },
+      () => {},
+    );
+    cleanups.push(() => (k.stop(), node.close()));
+    k.start();
+    await until(() => k.ready());
+    expect(k.canSend("OE8APR-15")).toBe(false);
+    expect(await k.send("OE8APR-15", ":OE5XYZ-7 :hi{1A")).toBe("no-answer");
+    expect(node.got).toEqual([]);
+    why = null;
+    expect(k.canSend("OE8APR-15")).toBe(true);
+  });
+
   it("passes on an ack a station sent to the service call, and nothing else", async () => {
     const node = await fakeNode({ auth: true });
     const acks: string[] = [];

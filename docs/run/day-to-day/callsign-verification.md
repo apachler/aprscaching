@@ -99,8 +99,9 @@ For an operator out of range of every attested site:
 2. Type how you checked control of the licence, and select **Verify by hand**.
 3. Confirm. The call is verified with method `sysop` for that account, recording your call and the time.
 
-**Verified by hand** lists every manual verification, and **Revoke** returns a call to unverified. Revoking
-touches only manual verifications: a call verified on the air or by the operator CLI is neither listed nor
+**Verified by hand** lists every manual verification, and **Revoke** returns a call to unverified. What the
+call had queued for APRS-IS or for an ingest box to transmit is deleted with it, and the queues serve only calls
+that are still verified. Revoking touches only manual verifications: a call verified on the air or by the operator CLI is neither listed nor
 revocable there. Both actions are logged in `account_events`.
 
 ## Claims: a licensee takes a call over

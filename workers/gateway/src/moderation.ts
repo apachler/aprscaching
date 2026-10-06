@@ -32,7 +32,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json, asStr } from "./http.js";
 import { setting } from "./siteconfig.js";
-import { requireSysop, adminCalls, isSysop } from "./admin.js";
+import { requireSysop, isSysop } from "./admin.js";
 import {
   sessionIdentity,
   baseHolder,
@@ -42,7 +42,9 @@ import {
   suspensionOf,
   callsignSuspension,
   mayActAsOwner,
+  isAdminCall,
 } from "./auth.js";
+import { forgetAttestedSites } from "./attestedsites.js";
 import { dropQueuedFor } from "./outbox.js";
 import { serviceCall } from "./servicecall.js";
 import { tombstoneStatements, type TombstoneItem } from "./tombstones.js";
@@ -636,8 +638,7 @@ async function heldCalls(env: Env, accountId: string): Promise<string[]> {
 
 /** Does the account hold a call named in ADMIN_CALLSIGNS? Such an account is never suspended from here. */
 async function accountIsSysop(env: Env, accountId: string): Promise<boolean> {
-  const admins = adminCalls(env);
-  return (await heldCalls(env, accountId)).some((c) => admins.has(c));
+  return (await heldCalls(env, accountId)).some((c) => isAdminCall(env, c));
 }
 
 async function handleSuspend(req: Request, env: Env, call: string, lift: boolean): Promise<Response> {
@@ -662,6 +663,8 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
       .bind(acct)
       .first();
     if (!had) return json({ error: "this account is not suspended" }, { status: 409 });
+    // the boxes the account owns attest again
+    forgetAttestedSites(env);
     await audit(env, {
       actor,
       action: "unsuspend",
@@ -709,8 +712,9 @@ async function handleSuspend(req: Request, env: Env, call: string, lift: boolean
       reason: `${category}: ${r.reason}${until ? ` (until ${new Date(until * 1000).toISOString().slice(0, 10)})` : ""}`,
     }),
   ]);
-  // whatever the account queued for APRS-IS stays off the air
+  // whatever the account queued for APRS-IS stays off the air, and the boxes it owns stop attesting
   await dropQueuedFor(env, calls);
+  forgetAttestedSites(env);
   const untilText = until ? ` until ${new Date(until * 1000).toISOString().slice(0, 10)}` : "";
   await notifyAccount(
     env,

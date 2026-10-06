@@ -6,6 +6,7 @@ import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import { addrStr } from "@aprscaching/ax25";
 import { validateConfig, type Packet } from "@aprscaching/shared";
 import { gatewayUrls, loadDotEnv, numEnv, portEnv } from "./config.js";
 import { Delivery } from "./deliver.js";
@@ -133,8 +134,10 @@ const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 // The ports this box transmits on itself: the KISS TNC and the soundcard ports. Each forwards what it hears
 // to the batch and to its subscribers (the digipeater, the IGate, the connected-mode services).
 //
-// Every one shares the call gate: the box transmits only under station calls the gateway confirms for this
-// box (control-verified, held by the box's operator; callverify.ts). RX never needs it.
+// Every one shares the call gate with MeshCom transmit: the box transmits only under station calls the gateway
+// confirms for this box (control-verified, not suspended, held by the box's operator; callverify.ts). Each
+// frame is judged by the box's calls it goes out under, so one refused call holds back only its own frames.
+// RX never needs it.
 const { CallVerifier, boxTransmits, gatewayTxGateLookup, gateCheck, stationCalls, txGateGraceMs } =
   await import("./callverify.js");
 let txGateGrace: number;
@@ -148,7 +151,14 @@ const callGate = new CallVerifier(
   gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
   { log: (m) => console.error(m), graceMs: txGateGrace },
 );
-const gateCalls = new Set(stationCalls(env));
+/** The box's station calls; the gateway's service call joins them once the gateway names it. */
+const gateCalls: string[] = stationCalls(env);
+const addGateCall = (c: string) => {
+  const u = c.trim().toUpperCase();
+  if (u && !gateCalls.includes(u)) gateCalls.push(u);
+};
+/** A frame that names none of the box's calls (a repeat through an alias) goes out under the digipeater's. */
+const gateFallback = env.DIGI_CALL?.trim().toUpperCase() || undefined;
 interface TxRadio {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
   sendFrame(f: import("@aprscaching/ax25").Ax25Frame): boolean;
@@ -184,13 +194,14 @@ if (env.KISS_TNC_HOST) {
   console.log("[kiss] enabled%s", siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : "");
   const kissOpen = gateCheck(
     callGate,
-    [...gateCalls],
+    () => gateCalls,
+    gateFallback,
     () => station.tx,
     (m) => console.log("[kiss] %s", m),
   );
   radios.push({
-    send: (f) => kissOpen() && kiss.send(f),
-    sendFrame: (f) => kissOpen() && kiss.sendFrame(f),
+    send: (f) => kissOpen([f.src, ...(f.path ?? [])]) && kiss.send(f),
+    sendFrame: (f) => kissOpen([addrStr(f.src), ...(f.digis ?? []).map(addrStr)]) && kiss.sendFrame(f),
     frameSubs,
     rawSubs,
   });
@@ -218,8 +229,7 @@ if (soundcardSettings.length) {
   for (const sc of soundcardSettings) {
     const frameSubs: ((f: ParsedFrame) => void)[] = [];
     const rawSubs: ((b: Uint8Array) => void)[] = [];
-    const calls = stationCalls(env, sc.call);
-    for (const c of calls) gateCalls.add(c);
+    for (const c of stationCalls(env, sc.call)) addGateCall(c);
     const port = new SoundcardPort(
       sc,
       {
@@ -231,7 +241,7 @@ if (soundcardSettings.length) {
           for (const s of rawSubs) s(b);
         },
       },
-      { master: () => station.tx, calls, refusal: (c) => callGate.refusal(c) },
+      { master: () => station.tx, calls: gateCalls, fallback: gateFallback, refusal: (c) => callGate.refusal(c) },
       { siteCall, sent: sentFrames },
     );
     await port.start();
@@ -250,19 +260,20 @@ if (soundcardSettings.length) {
 // The gateway's answers for every station call, refreshed every three minutes (sooner while it cannot be
 // reached); each transmitting soundcard port says what still holds it back.
 // A receive-only box (no port or function that transmits) never asks.
-if (
-  radios.length &&
-  boxTransmits(
-    env,
-    soundcardSettings.some((s) => s.tx),
-  )
-)
-  callGate.start([...gateCalls], () => {
-    for (const p of soundcardRunning) {
-      const why = p.cfg.tx ? p.txRefusal() : null;
-      if (why) console.log("[soundcard:%s] transmit held back: %s", p.cfg.name, why);
-    }
-  });
+const gateRunning = boxTransmits(
+  env,
+  soundcardSettings.some((s) => s.tx),
+);
+if (gateRunning)
+  callGate.start(
+    () => gateCalls,
+    () => {
+      for (const p of soundcardRunning) {
+        const why = p.cfg.tx ? p.txRefusal() : null;
+        if (why) console.log("[soundcard:%s] transmit held back: %s", p.cfg.name, why);
+      }
+    },
+  );
 
 // The first transmitting port (the KISS TNC, else the first soundcard port) carries the remote box's
 // transmissions and the connected-mode services. The digipeater repeats on the port that heard the frame, with
@@ -375,6 +386,7 @@ if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
     operatorCall,
     nodes,
     auditPath: env.MESHCOM_TX_AUDIT || undefined,
+    gate: (c) => callGate.refusal([c]),
     ...txLimitFromEnv("meshcom"),
   });
   meshcomTx = { nodes, send: (req) => sender.send(req) };
@@ -390,6 +402,7 @@ if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
         port: portEnv("MESHCOM_KISS_PORT", 8001),
         password: env.MESHCOM_KISS_PASS,
         nodeCall: first.call,
+        gate: (c) => callGate.refusal([c]),
       },
       (from, msgNo) =>
         enqueue({
@@ -537,6 +550,11 @@ async function learnServiceCall(): Promise<void> {
     const { serviceCall, sites } = (await r.json()) as { serviceCall?: string; sites?: string[] };
     if (!serviceCall) return;
     aprs.setServiceCall(serviceCall);
+    // the box sends the gateway's answers from the service call: it passes the transmit gate like a station call
+    if (!gateCalls.includes(serviceCall.toUpperCase())) {
+      addGateCall(serviceCall);
+      if (gateRunning) void callGate.refresh(gateCalls);
+    }
     if (meshcomKiss) {
       meshcomKiss.service = serviceCall.toUpperCase();
       meshcomKiss.link.setServiceCall(serviceCall);

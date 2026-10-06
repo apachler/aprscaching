@@ -17,7 +17,7 @@
  * a frame goes out only while
  *  - the port's transmit is on (`SOUNDCARD_TX=1`, off by default) and its PTT driver is open;
  *  - the box's master transmit switch is on (a remote "TX off" stops it);
- *  - the gateway confirms every station call the box transmits under (control-verified, the box's operator's);
+ *  - the gateway confirms the station calls each frame goes out under (callverify.ts frameCalls);
  *  - capture runs (carrier detect needs it), and the port is not faulted (the PTT watchdog latched).
  * A refused frame is dropped and logged. An accepted one waits for a clear channel (carrier detect from the
  * demodulator, then p-persistence CSMA with the KISS defaults) and for the duty-cycle budget, then keys the
@@ -26,7 +26,7 @@
  */
 import { Afsk1200Rx, decodeAx25, encodeAx25, modulateAfsk1200 } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
-import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
+import { addrStr, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import { SentFrames } from "./echo.js";
 import {
@@ -39,6 +39,7 @@ import {
   type AudioSpawn,
 } from "./alsa.js";
 import { Backoff } from "./backoff.js";
+import { frameRefusal } from "./callverify.js";
 import { tncPacket } from "./link.js";
 import { describePtt, openPtt, type Ptt, type PttSpec } from "./ptt/index.js";
 import { releaseAllSync, trackPtt, untrackPtt } from "./ptt/release.js";
@@ -80,8 +81,10 @@ export interface SoundcardHandlers {
 export interface SoundcardGate {
   /** The box's master transmit switch. */
   master: () => boolean;
-  /** The station calls this port transmits under. */
+  /** The box's station calls: a frame goes out under those it names (callverify.ts frameCalls). */
   calls: readonly string[];
+  /** The call a frame that names none of `calls` goes out under (the digipeater's), if any. */
+  fallback?: string;
   /** Why the box may not transmit under `calls` now (callverify.ts), or null. */
   refusal: (calls: readonly string[]) => string | null;
 }
@@ -134,7 +137,7 @@ export class SoundcardPort {
   private player: AudioChild | null = null;
   private ptt: PttWatchdog | null = null;
   private pttError: string | null = null;
-  private queue: { frame: Uint8Array; at: number }[] = [];
+  private queue: { frame: Uint8Array; addrs: readonly string[]; at: number }[] = [];
   private draining: Promise<void> | null = null;
   private transmitting = false;
   private unkeyedAt = -Infinity;
@@ -236,25 +239,31 @@ export class SoundcardPort {
     return `soundcard ${this.cfg.name}${this.faultReason ? " (fault: PTT watchdog)" : ""}`;
   }
 
-  /** Why a transmission would be refused now, or null when the gate is open. */
-  txRefusal(): string | null {
+  /**
+   * Why a transmission would be refused now, or null when the gate is open. With a frame's addresses (source,
+   * then via hops), for that frame: the calls it goes out under must be confirmed. Without, for the port: it is
+   * held back only while none of the box's calls is confirmed.
+   */
+  txRefusal(addrs?: readonly string[]): string | null {
     if (!this.cfg.tx) return "transmit is off on this port (set SOUNDCARD_TX=1)";
     if (this.stopped) return "the port is stopping";
     if (this.faultReason) return `the port is faulted: ${this.faultReason}`;
     if (!this.ptt) return this.pttError ?? "no PTT driver is open";
     if (!this.captureUp) return "capture is down, so carrier detect cannot see a busy channel";
     if (!this.gate.master()) return "transmit is switched off on this box";
-    return this.gate.refusal(this.gate.calls);
+    if (addrs) return frameRefusal(this.gate, this.gate.calls, addrs, this.gate.fallback);
+    const why = this.gate.calls.map((c) => this.gate.refusal([c]));
+    return why.some((w) => w === null) ? null : (why[0] ?? this.gate.refusal([]));
   }
 
   /** Transmit an AX.25 UI frame; false when the gate refuses it or the queue is full. */
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean {
-    return this.enqueue(encodeAx25(f));
+    return this.enqueue(encodeAx25(f), [f.src, ...(f.path ?? [])]);
   }
 
   /** Transmit a full AX.25 frame (connected mode: node, connected digipeater, BBS). */
   sendFrame(f: Ax25Frame): boolean {
-    return this.enqueue(encodeFrame(f));
+    return this.enqueue(encodeFrame(f), [addrStr(f.src), ...(f.digis ?? []).map(addrStr)]);
   }
 
   /** Push captured PCM; the capture process feeds it, and a test may too. */
@@ -264,8 +273,8 @@ export class SoundcardPort {
     this.rx.push(samples);
   }
 
-  private enqueue(frame: Uint8Array): boolean {
-    const refused = this.txRefusal();
+  private enqueue(frame: Uint8Array, addrs: readonly string[]): boolean {
+    const refused = this.txRefusal(addrs);
     if (refused) {
       this.logRefusal(refused);
       return false;
@@ -274,7 +283,7 @@ export class SoundcardPort {
       this.logRefusal("the transmit queue is full (busy channel?)");
       return false;
     }
-    this.queue.push({ frame, at: this.now() });
+    this.queue.push({ frame, addrs, at: this.now() });
     this.draining ??= this.drain().finally(() => {
       this.draining = null;
     });
@@ -310,7 +319,7 @@ export class SoundcardPort {
           continue;
         }
         // the gate is checked again at the moment of keying: a remote TX off or a fault while waiting wins
-        const refused = this.txRefusal();
+        const refused = this.txRefusal(item.addrs);
         if (refused) {
           this.logRefusal(refused);
           this.queue = [];

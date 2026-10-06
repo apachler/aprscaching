@@ -54,15 +54,22 @@ The gateway's sysop does this part.
    **Create enrollment code**. The code is shown once, holds 80 random bits, works for one box and expires
    after 15 minutes.
 2. Give the code to the box's operator, who uses it in [Enrolling the box](#enrolling-the-box).
-3. The box appears under **Enrolled boxes**, with when it was enrolled and last seen. When you created the
-   code while signed in, you own the box for [remote control](remote-box.md) without a separate pairing
-   step.
+3. The box appears under **Enrolled boxes**, with when it was enrolled and last seen. A box limited to a
+   callsign belongs to whoever holds that call, for [remote control](remote-box.md) and for the calls it may
+   transmit under ([The transmit gate](soundcard.md#the-transmit-gate)): enrolling a ham's box hands it to
+   that ham, not to you. Any other box you created the code for while signed in is yours, without a separate
+   pairing step; a box let in with `OPERATOR_SECRET` and no callsign belongs to nobody.
 4. For its hearings to verify finds, switch on **Trust this station's hearings** under the box and enter the
    receiving site call it stamps on what it hears. A box limited to a callsign takes only sites of that call.
    The box then shows since when and by whom it is trusted, and the finds it verified. A box that a ham lends
    you works the same way: [Lend your receiver to an instance](lend-a-receiver.md).
-5. To cut a box off, select **Revoke** beside it. Its key stops working at once and its trust ends; it comes
-   back only with a fresh code and a new key, and untrusted.
+5. To cut a box off, select **Revoke** beside it. Its key stops working at once, and its trust, its owner and
+   its queued commands end; it comes back only with a fresh code and a new key, untrusted, with the owner the
+   new code gives it.
+
+When the call a box was limited to changes hands (the sysop releases it, or a claim moves it) or its holder
+erases their account, the box is revoked and no site of that call stays trusted, by call or through any box.
+While the box's owner is suspended, its trusted sites attest nothing and it transmits under no call.
 
 The same works over the API, as the sysop or with `OPERATOR_SECRET`: `POST /api/admin/boxes/codes` (fields
 `label`, `callsign`, `ttlMin` from 10 to 15), `GET /api/admin/boxes`, `POST /api/admin/boxes/<id>/trust`
