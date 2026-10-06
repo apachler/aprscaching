@@ -14,13 +14,18 @@ import { sessionIdentity, ingestOrServiceBoxOk, operatorSecretOk } from "./auth.
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 import { handleAdminCallsign } from "./claims.js";
 import { instanceOrigins } from "./origins.js";
+import { baseCall } from "@aprscaching/aprs";
 
-/** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
+/**
+ * The base calls allowed to administer this instance, in the order ADMIN_CALLSIGNS lists them. Empty ⇒ no web
+ * sysop. A listed SSID is dropped: an account holds a base call, so the operator is the holder of `OE8APR`
+ * whether the list says `OE8APR` or `OE8APR-10`. Every check of the list reads it here.
+ */
 export function adminCalls(env: Env): Set<string> {
   return new Set(
     (env.ADMIN_CALLSIGNS ?? "")
       .split(",")
-      .map((c) => c.trim().toUpperCase())
+      .map((c) => baseCall(c.trim().toUpperCase()))
       .filter(Boolean),
   );
 }
@@ -35,7 +40,7 @@ function sysopOrigin(origin: string, env: Env): boolean {
 }
 
 /**
- * The signed-in session when its call is listed in ADMIN_CALLSIGNS and it was issued on an address that may
+ * The signed-in session when its base call is listed in ADMIN_CALLSIGNS and it was issued on an address that may
  * administer this instance. The session resolves only while its account holds the call's base call, so the
  * listed call is held by the session's own account.
  */
@@ -43,7 +48,7 @@ async function adminSession(req: Request, env: Env) {
   const admins = adminCalls(env);
   if (admins.size === 0) return null;
   const me = await sessionIdentity(req, env);
-  return me && admins.has(me.callsign.toUpperCase()) && sysopOrigin(me.origin, env) ? me : null;
+  return me && admins.has(me.base) && sysopOrigin(me.origin, env) ? me : null;
 }
 
 /**

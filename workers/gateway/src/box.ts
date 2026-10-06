@@ -27,7 +27,9 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { isCallsignVerified } from "./callsign.js";
+import { isCallsignVerified, verificationsOf } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
+import { boxOwner } from "./boxowner.js";
 import { serviceCall } from "./servicecall.js";
 import { boxPrincipal } from "./boxprincipal.js";
 import { BOX_COMMAND_QUEUED_TTL_S } from "./retention.js";
@@ -36,12 +38,9 @@ const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
 const boxAuth = ingestOrBoxOk;
 
-/** Is `accountId` the paired owner of `boxId`? An unpaired box has no owner and takes no session commands. */
+/** Does `accountId` own `boxId` (boxowner.ts)? A box with no owner takes no session commands. */
 async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
-  const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?")
-    .bind(boxId)
-    .first<{ account_id: string }>();
-  return row?.account_id === accountId;
+  return (await boxOwner(env, boxId)) === accountId;
 }
 
 /** A pairing code is good for 15 minutes — long enough to read it off the box and type it in. */
@@ -242,17 +241,33 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
   )
     .bind(boxId, stale)
     .run();
-  const rows = (
+  const leased = (
     await env.DB.prepare(
       "SELECT id, callsign, kind, payload, sig, created_at AS createdAt FROM box_commands WHERE box_id = ? AND status = 'queued' AND created_at >= ? ORDER BY created_at LIMIT 50",
     )
       .bind(boxId, stale)
-      .all<{ id: number; payload: string | null }>()
+      .all<{ id: number; callsign: string | null; kind: string; payload: string | null }>()
   ).results;
-  if (rows.length) {
+  // a transmit command goes out only while its call is still control-verified: a verification revoked after
+  // it was queued fails it here
+  const verified = await verificationsOf(
+    env,
+    leased.flatMap((r) => (TX_KINDS.has(r.kind) && r.callsign ? [r.callsign] : [])),
+  );
+  const unverified = (r: { callsign: string | null; kind: string }) =>
+    TX_KINDS.has(r.kind) && !verified.has(baseCall((r.callsign ?? "").toUpperCase()));
+  const rows = leased.filter((r) => !unverified(r));
+  if (leased.length) {
     const t = nowS();
     await env.DB.batch(
-      rows.map((r) => env.DB.prepare("UPDATE box_commands SET status='sent', sent_at=? WHERE id=?").bind(t, r.id)),
+      leased.map((r) =>
+        unverified(r)
+          ? env.DB.prepare("UPDATE box_commands SET status='failed', result=? WHERE id=?").bind(
+              `verify ${baseCall((r.callsign ?? "").toUpperCase()) || "the call"} to transmit — control-verification required`,
+              r.id,
+            )
+          : env.DB.prepare("UPDATE box_commands SET status='sent', sent_at=? WHERE id=?").bind(t, r.id),
+      ),
     );
   }
   return json({

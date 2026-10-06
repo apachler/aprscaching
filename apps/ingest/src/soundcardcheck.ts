@@ -210,7 +210,7 @@ async function txRows(
     out.push(
       row(
         "warn",
-        `port ${p.name}: ${g.call} ${g.reason}, so the port does not transmit`,
+        `port ${p.name}: ${g.call} ${g.reason}, so no frame goes out under it`,
         g.reason === "not control-verified"
           ? `verify ${g.call} in the app: You → Verify callsign`
           : "transmit under calls of the account that owns this box",

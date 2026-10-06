@@ -151,8 +151,7 @@ const RESERVED_CALLS = new Set([WITHDRAWN, FORMER, FALLBACK_SERVICE_CALL]);
 
 /** Is `cs` (or its base call) listed in ADMIN_CALLSIGNS? Such a call is registered only through the operator's
  *  link or a proof of control, never by an unproven sign-up. */
-export const isAdminCall = (env: Env, cs: string): boolean =>
-  [...adminCalls(env)].some((c) => baseCall(c) === baseCall(cs));
+export const isAdminCall = (env: Env, cs: string): boolean => adminCalls(env).has(baseCall(cs.trim().toUpperCase()));
 const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
 /** The account holding a base call. `account_callsigns` is the one record of who holds a licence:

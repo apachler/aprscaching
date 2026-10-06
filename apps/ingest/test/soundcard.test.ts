@@ -191,6 +191,27 @@ describe("SoundcardPort", () => {
       expect(audio.aplay()).toHaveLength(0);
     });
 
+    it("gates each frame by the calls it goes out under: a refused receive-only call holds back only its own frames", async () => {
+      const refused = new Set(["OE8APR-1"]);
+      const { port, audio } = await makePort({
+        gate: {
+          calls: ["OE8APR-10", "OE8APR-1"],
+          fallback: "OE8APR-10",
+          refusal: (c) => c.find((x) => refused.has(x)) ?? null,
+        },
+      });
+      expect(port.txRefusal()).toBeNull(); // some call is confirmed: the port is up
+      expect(port.send({ ...frame, src: "OE8APR-1" })).toBe(false);
+      // a digipeated frame names the digipeater's call as its own hop
+      expect(port.send({ ...frame, src: "DL1ABC-7", path: ["OE8APR-10*", "WIDE2-1"] })).toBe(true);
+      // a frame that names none of the box's calls goes out under the fallback (the digipeater's call)
+      expect(port.send({ ...frame, src: "DL1ABC-7", path: ["WIDE1*"] })).toBe(true);
+      refused.add("OE8APR-10");
+      expect(port.send({ ...frame, src: "DL1ABC-7", path: ["WIDE1*"] })).toBe(false);
+      expect(port.txRefusal()).toBe("OE8APR-10");
+      await until(() => audio.aplay().length > 0);
+    });
+
     it("refuses when the box's transmit switch is off", async () => {
       const { port } = await makePort({ gate: { master: () => false } });
       expect(port.txRefusal()).toBe("transmit is switched off on this box");

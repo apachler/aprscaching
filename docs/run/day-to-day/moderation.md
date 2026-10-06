@@ -88,14 +88,17 @@ While a suspension holds:
 - the account writes nothing: no log, no hide, no message, and no radio command in its callsigns' name;
 - the ingest box cannot post a BBS message in its name, and its Mailbox messages are refused;
 - its weather stations' pushes are refused, so they store no reading and send no weather beacon;
-- nothing is transmitted for it through this instance: what it had queued for APRS-IS is deleted, and the
-  Mailbox messages it left that were still waiting are deleted, not held for a lift.
+- nothing is transmitted for it through this instance: what it had queued for APRS-IS and for its boxes is
+  deleted, and the Mailbox messages it left that were still waiting are deleted, not held for a lift;
+- its ingest boxes transmit under no call, and the receiving sites trusted through them attest nothing until
+  the suspension ends ([Ingest boxes](../radios/ingest-box.md#enrolling-boxes-on-the-gateway)).
 
 The account's public content stays. Remove items one by one where needed.
 
 **Lift suspension** ends it early, with a reason. A dated suspension ends by itself at its end date.
 
-An account that holds a callsign in `ADMIN_CALLSIGNS` cannot be suspended here.
+An account that holds a callsign in `ADMIN_CALLSIGNS` cannot be suspended here. The list matches by base
+call: `OE8APR-10` in it names the holder of `OE8APR`.
 
 A suspended person can still export or erase their data with a request signed by their device key
 ([Data protection](../compliance/data-protection.md)).

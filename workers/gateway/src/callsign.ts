@@ -43,6 +43,7 @@ import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } 
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
+import { dropQueuedFor } from "./outbox.js";
 import { attestedSites } from "./attestedsites.js";
 import type { SqlStatement } from "./runtime.js";
 import {
@@ -472,6 +473,8 @@ export async function sysopRevoke(env: Env, callsign: string, sysopCall: string)
     .first();
   if (!cur) return json({ error: `${cs} has no sysop verification` }, { status: 404 });
   await env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=? AND method='sysop'").bind(cs).run();
+  // what the call queued while verified does not go on the air without it
+  await dropQueuedFor(env, [cs]);
   await logEvent(env, cs, "sysop_revoked", { by: baseCall(sysopCall) });
   return json({ revoked: true, callsign: cs });
 }

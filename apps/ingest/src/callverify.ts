@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The transmit gate every RF transmit port of the box shares (the KISS TNC and the soundcard ports): the box
- * transmits only under station calls the gateway confirms for this box — control-verified, and held by the
- * box's own operator (`GET /ingest/txgate`, workers/gateway/src/txgate.ts). Receiving never needs it.
+ * The transmit gate every transmit port of the box shares (the KISS TNC, the soundcard ports and the MeshCom
+ * node): the box transmits only under station calls the gateway confirms for this box — control-verified, not
+ * suspended, and held by the box's own operator (`GET /ingest/txgate`, workers/gateway/src/txgate.ts).
+ * Receiving never needs it.
+ *
+ * The gate judges each frame by the box's calls it goes out under: its source and its via hops that are station
+ * calls of the box ({@link frameCalls}). Every one of them must be confirmed, so a frame never goes out under a
+ * call the gateway refused, while a refused call (an IGATE_CALL kept receive-only) holds back only its own
+ * frames, not the digipeater's.
  *
  * With the shared INGEST_SECRET the gateway MACs the box's nonce and the body. That stops an attacker who can
  * change responses but cannot read requests; over plain http the request carries the secret, so a reader on
@@ -109,10 +115,13 @@ export class CallVerifier {
     }
   }
 
-  /** Refresh now and keep refreshing: every interval while the gateway answers, sooner while it does not. */
-  start(calls: readonly string[], after?: () => void): void {
+  /**
+   * Refresh now and keep refreshing: every interval while the gateway answers, sooner while it does not. `calls`
+   * may be a function, read at every refresh, for a set that grows (the service call, once the gateway names it).
+   */
+  start(calls: readonly string[] | (() => readonly string[]), after?: () => void): void {
     const tick = async () => {
-      const ok = await this.refresh(calls);
+      const ok = await this.refresh(typeof calls === "function" ? calls() : calls);
       after?.();
       const wait = ok ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
       // each distinct failure is logged once, not at every retry
@@ -154,19 +163,47 @@ export class CallVerifier {
   }
 }
 
+/** A call as the gate keys it: upper-case, without the has-been-repeated mark and without a zero SSID. */
+const gateKey = (c: string) => c.trim().toUpperCase().replace(/\*$/, "").replace(/-0$/, "");
+
 /**
- * A transmit check for a port that holds no gate of its own (the KISS TNC): true when the box's switch is on
- * and the gateway confirms `calls`; a refusal is logged once per change of reason.
+ * The station calls of the box (`own`) a frame goes out under: those among its addresses (`addrs`: the source,
+ * then the via hops, as `CALL-SSID` with an optional `*`). A frame that names none of them, such as a repeat
+ * through an alias the connected digipeater serves, goes out under `fallback` (the digipeater's call); with no
+ * fallback it goes out under no call of the box, and the gate refuses it.
+ */
+export function frameCalls(own: readonly string[], addrs: readonly string[], fallback?: string): string[] {
+  const mine = new Set(own.map(gateKey));
+  const hit = [...new Set(addrs.map(gateKey).filter((a) => mine.has(a)))];
+  return hit.length ? hit : fallback ? [gateKey(fallback)] : [];
+}
+
+/** Why a frame with these addresses may not go out now, or null: {@link frameCalls}, then the verifier. */
+export function frameRefusal(
+  verifier: Pick<CallVerifier, "refusal">,
+  own: readonly string[],
+  addrs: readonly string[],
+  fallback?: string,
+): string | null {
+  const calls = frameCalls(own, addrs, fallback);
+  return calls.length ? verifier.refusal(calls) : "the frame names none of this box's station calls";
+}
+
+/**
+ * A transmit check for a port that holds no gate of its own (the KISS TNC): called with a frame's addresses,
+ * true when the box's switch is on and the gateway confirms the calls the frame goes out under
+ * ({@link frameCalls}); a refusal is logged once per change of reason.
  */
 export function gateCheck(
   verifier: Pick<CallVerifier, "refusal">,
-  calls: readonly string[],
+  own: () => readonly string[],
+  fallback: string | undefined,
   master: () => boolean,
   log: (msg: string) => void,
-): () => boolean {
+): (addrs: readonly string[]) => boolean {
   let logged: string | null = null;
-  return () => {
-    const why = master() ? verifier.refusal(calls) : "transmit is switched off on this box";
+  return (addrs) => {
+    const why = master() ? frameRefusal(verifier, own(), addrs, fallback) : "transmit is switched off on this box";
     if (why && why !== logged) log(`transmit refused: ${why}`);
     logged = why;
     return !why;
@@ -220,11 +257,13 @@ export function gatewayTxGateLookup(o: {
 }
 
 /**
- * Whether any function of the box would transmit over RF: a soundcard port with transmit on, or a KISS TNC with
- * a transmitting function set. A receive-only box never asks the gateway about its calls.
+ * Whether any function of the box would transmit: a soundcard port with transmit on, MeshCom transmit
+ * (`MESHCOM_TX`), or a KISS TNC with a transmitting function set. A receive-only box never asks the gateway
+ * about its calls.
  */
 export function boxTransmits(env: Record<string, string | undefined>, soundcardTx: boolean): boolean {
   if (soundcardTx) return true;
+  if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") return true;
   if (!env.KISS_TNC_HOST) return false;
   const on = (k: string) => env[k] === "1";
   return !!(
@@ -241,7 +280,8 @@ export function boxTransmits(env: Record<string, string | undefined>, soundcardT
 
 /**
  * The station calls a box transmits under, from its settings: every frame it sends carries one of them as its
- * source or as the digipeater's own hop.
+ * source or as the digipeater's own hop, and MeshCom transmit goes out under MESHCOM_TX_CALL. The gateway's
+ * service call joins them once the gateway names it.
  */
 export function stationCalls(env: Record<string, string | undefined>, portCall?: string): string[] {
   const keys = [
@@ -252,6 +292,7 @@ export function stationCalls(env: Record<string, string | undefined>, portCall?:
     "BBS_NODE_CALL",
     "BBS_FORWARD_CALL",
     "FED_LINK_CALL",
+    "MESHCOM_TX_CALL",
   ] as const;
   const calls = [portCall, ...keys.map((k) => env[k])]
     .map((c) => c?.trim().toUpperCase())

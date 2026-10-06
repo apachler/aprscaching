@@ -2,7 +2,8 @@
 /**
  * attestedsites.ts — the receiving sites this instance attests for Tier A: the sites preset in
  * FIRST_PARTY_SITES, the trusted receiving stations the sysop adds in Instance admin (trusted_sites), and the
- * sites of enrolled ingest boxes the sysop trusts there (box_trusted_sites). A revoked box's sites never count.
+ * sites of enrolled ingest boxes the sysop trusts there (box_trusted_sites). A revoked box's sites never count,
+ * and a box's sites pause while its owner (boxowner.ts) is suspended.
  * Every reader of the attested set goes through this module, so the env list and the admin switch can never
  * disagree.
  *
@@ -18,6 +19,7 @@
  */
 import type { Env } from "./env.js";
 import { parseAttestedSites } from "./provenance.js";
+import { BOX_OWNER_SQL } from "./boxowner.js";
 
 const TTL_MS = 30_000;
 
@@ -33,12 +35,20 @@ async function trustedRows(env: Env): Promise<Trusted> {
   const key = env.DB as unknown as object;
   const hit = kept.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.trusted;
+  // a box whose owner is suspended attests nothing until the suspension ends or is lifted
+  const now = Math.floor(Date.now() / 1000);
   const rows = await env.DB.prepare(
     `SELECT site, NULL AS box FROM trusted_sites
      UNION ALL
      SELECT t.site, t.box_id AS box FROM box_trusted_sites t JOIN box_keys k ON k.box_id = t.box_id
-      WHERE k.revoked_at IS NULL`,
-  ).all<{ site: string; box?: string | null }>();
+      WHERE k.revoked_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM account_suspensions s
+                         WHERE s.account_id = ${BOX_OWNER_SQL} AND (s.until IS NULL OR s.until > ?))
+        AND NOT EXISTS (SELECT 1 FROM callsign_suspensions c
+                         WHERE c.callsign = k.callsign AND (c.until IS NULL OR c.until > ?))`,
+  )
+    .bind(now, now)
+    .all<{ site: string; box?: string | null }>();
   const trusted: Trusted = { stations: [], byBox: new Map() };
   for (const r of rows.results ?? []) {
     const site = r.site.toUpperCase();

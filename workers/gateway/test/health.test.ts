@@ -54,7 +54,8 @@ describe("/health readiness probe", () => {
       DB: {
         prepare: (sql: string) => {
           if (!/^\s*SELECT\b/i.test(sql) || !/trusted_sites/.test(sql)) touched = true;
-          return { all: async () => ({ results: [{ site: "oe8abc-10" }] }) };
+          const all = async () => ({ results: [{ site: "oe8abc-10" }] });
+          return { all, bind: () => ({ all }) };
         },
       },
     } as unknown as Env;

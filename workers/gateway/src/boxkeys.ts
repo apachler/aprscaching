@@ -38,7 +38,8 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
-import { sessionIdentity } from "./auth.js";
+import { baseHolder, sessionIdentity } from "./auth.js";
+import { forgetBoxes } from "./boxowner.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
@@ -271,15 +272,19 @@ export async function handleBoxServices(req: Request, env: Env, box: string): Pr
 export async function handleRevokeBox(req: Request, env: Env, box: string): Promise<Response> {
   const denied = await requireSysop(req, env, { allowOperatorSecret: true });
   if (denied) return denied;
-  const r = await env.DB.prepare(
-    "UPDATE box_keys SET revoked_at = ?, revoked_by = ? WHERE box_id = ? AND revoked_at IS NULL",
-  )
-    .bind(nowS(), await actor(req, env), box)
-    .run();
-  if (!r.meta?.changes)
-    return json({ error: "no enrolled box with that id, or it is revoked already" }, { status: 404 });
-  // a revoked box's sites stop counting for Tier A with its key
-  await env.DB.prepare("DELETE FROM box_trusted_sites WHERE box_id = ?").bind(box).run();
+  const live = await env.DB.prepare("SELECT 1 AS x FROM box_keys WHERE box_id = ? AND revoked_at IS NULL")
+    .bind(box)
+    .first();
+  if (!live) return json({ error: "no enrolled box with that id, or it is revoked already" }, { status: 404 });
+  // a revoked box's sites stop counting for Tier A with its key, and it has no owner until it enrols again
+  await env.DB.batch([
+    ...forgetBoxes(env, "?", [box]),
+    env.DB.prepare("UPDATE box_keys SET revoked_at = ?, revoked_by = ? WHERE box_id = ? AND revoked_at IS NULL").bind(
+      nowS(),
+      await actor(req, env),
+      box,
+    ),
+  ]);
   forgetAttestedSites(env);
   return json({ box, revoked: true });
 }
@@ -354,12 +359,20 @@ export async function handleEnroll(req: Request, env: Env): Promise<Response> {
       now,
     )
     .run();
-  // The sysop who let the box in owns it for remote control, replacing the separate pairing step; a box
-  // another account already owns keeps its owner.
-  if (used.createdBy !== "operator")
-    await env.DB.prepare("INSERT OR IGNORE INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)")
-      .bind(box, used.createdBy, now)
-      .run();
+  // The box belongs to whoever holds the call it was enrolled for, else to the sysop who let it in: that
+  // replaces the separate pairing step, and an owner from before this enrolment (a pairing, a revoked key) is
+  // replaced with it. A box enrolled with the operator secret for no call has no owner.
+  const owner = used.callsign
+    ? await baseHolder(env, used.callsign)
+    : used.createdBy !== "operator"
+      ? used.createdBy
+      : null;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM boxes WHERE box_id = ?").bind(box),
+    ...(owner
+      ? [env.DB.prepare("INSERT INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)").bind(box, owner, now)]
+      : []),
+  ]);
   console.log("box %s enrolled by %s%s", box, used.createdBy, used.callsign ? ` for ${used.callsign}` : "");
   return json({ box, instance: env.INSTANCE ?? null, label: used.label, callsign: used.callsign }, { status: 201 });
 }

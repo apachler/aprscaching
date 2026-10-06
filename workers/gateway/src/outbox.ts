@@ -6,6 +6,8 @@ import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
 import { json } from "./http.js";
 import { serviceCall } from "./servicecall.js";
 import { callSuspended } from "./moderation.js";
+import { verificationsOf } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
 
 type OutboxRow = { id: number; src_call: string; tocall: string; kind: string; payload: string; target: string };
 
@@ -19,6 +21,7 @@ const mailboxSender = (payload: string): string | null =>
 
 /**
  * The ingest box pulls queued APRS-IS messages to publish: the shared secret, or a box that runs this instance's services.
+ * A row whose sender is suspended or no longer control-verified is deleted instead of served.
  * A row that is not `outboxRowOk` is never served: it is marked failed, since no retry can make it one line.
  */
 export async function outboxPending(req: Request, env: Env): Promise<Response> {
@@ -36,11 +39,17 @@ export async function outboxPending(req: Request, env: Env): Promise<Response> {
     if (!suspended.has(call)) suspended.set(call, await callSuspended(env, call));
     return suspended.get(call)!;
   };
+  // nor does one whose sender is no longer control-verified: a verification revoked after it was queued
+  const verified = await verificationsOf(
+    env,
+    all.map((r) => r.src_call.toUpperCase()).flatMap((src) => (src === service ? [] : [src])),
+  );
   const held: OutboxRow[] = [];
   for (const r of all) {
     const src = r.src_call.toUpperCase();
     const sender = src === service ? mailboxSender(r.payload) : src;
     if (sender && (await isSuspended(sender))) held.push(r);
+    else if (src !== service && !verified.has(baseCall(src))) held.push(r);
   }
   const live = all.filter((r) => !held.includes(r));
   const items = live.filter(outboxRowOk);
@@ -54,9 +63,10 @@ export async function outboxPending(req: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Delete the queued APRS-IS traffic of these base calls: what they send under any SSID, and the Mailbox
- * messages the service call carries for them (`de <call>: …`). Nothing a suspended, erased or released holder
- * left in the queue goes on the air after it. Sent rows stay, since they already went out.
+ * Delete the queued traffic of these base calls: what they send to APRS-IS under any SSID, the Mailbox messages
+ * the service call carries for them (`de <call>: …`), and the transmit commands a box has not collected under
+ * them. Nothing a suspended, erased or released holder, or a call whose verification was revoked, left in the
+ * queue goes on the air after it. Sent rows stay, since they already went out.
  */
 export async function dropQueuedFor(env: Env, calls: string[]): Promise<void> {
   const service = serviceCall(env);
@@ -64,13 +74,17 @@ export async function dropQueuedFor(env: Env, calls: string[]): Promise<void> {
   if (!bases.length) return;
   // an APRS message payload is `:ADDRESSEE:text`, so its text starts at the twelfth character
   await env.DB.batch(
-    bases.map((c) =>
+    bases.flatMap((c) => [
       env.DB.prepare(
         `DELETE FROM aprs_outbox WHERE status='queued' AND (
            upper(src_call) = ? OR upper(src_call) LIKE ? OR
            (upper(src_call) = ? AND kind = 'message' AND (substr(payload, 12) LIKE ? OR substr(payload, 12) LIKE ?)))`,
       ).bind(c, `${c}-%`, service, `de ${c}:%`, `de ${c}-%`),
-    ),
+      // and what a box was asked to transmit under the call and has not collected yet
+      env.DB.prepare(
+        "DELETE FROM box_commands WHERE status='queued' AND (upper(callsign) = ? OR upper(callsign) LIKE ?)",
+      ).bind(c, `${c}-%`),
+    ]),
   );
 }
 

@@ -121,6 +121,7 @@ describe("a suspension stops what the account had queued", () => {
     const w = await world();
     const bad = await user(w.env, "DL1QUE");
     await markCallVerified(w.env, "DL1QUE");
+    await markCallVerified(w.env, "OE1OTH"); // the drain serves only a call still control-verified
     const other = await queue(w.env, "OE1OTH", ":DL1ABC   :hello{1");
     await queue(w.env, "DL1QUE-9", ":DL1ABC   :buy now{2");
     await queue(w.env, SERVICE, ":DL1ABC-7 :de DL1QUE-9: buy now{A1");

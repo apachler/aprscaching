@@ -2,15 +2,17 @@
 /**
  * GET /ingest/txgate?calls=<call>,…&nonce=<n>[&box=<BOX_ID>] — may this ingest box transmit under these calls?
  *
- * Every transmit port of an ingest box (a KISS TNC, a soundcard port) asks before it keys. A call passes when
- * its base call is control-verified AND it belongs to whoever operates this box:
- *  - the account that owns the box (`boxes`: the sysop who enrolled it, or the account it was paired with);
- *  - the operator of a receiving site of the box's own: an enrolled box's trusted sites, or for the shared
- *    secret the instance's own attested sites (FIRST_PARTY_SITES). The trusted stations a sysop adds by call
- *    vouch for what they hear, not for this box's transmitter, so another ham's site call never passes;
- *  - for the shared INGEST_SECRET, the instance's own operator calls (ADMIN_CALLSIGNS): whoever holds the
- *    secret runs this instance's backend.
- * A verified call of somebody else therefore never opens a box's transmitter.
+ * Every transmit port of an ingest box (a KISS TNC, a soundcard port, a MeshCom node) asks before it keys. A call
+ * passes when its base call is control-verified, neither the call nor the box's owner is suspended, and the base
+ * call is held by whoever operates this box:
+ *  - the account that owns the box (boxowner.ts): for a box enrolled for a callsign, that call's holder now;
+ *    otherwise the sysop who enrolled it, or the account it was paired with. A revoked box has no owner;
+ *  - for the shared INGEST_SECRET, also the instance's operators (the holders of ADMIN_CALLSIGNS, and those calls
+ *    themselves): whoever holds the secret runs this instance's backend. The secret names its box with `?box=`
+ *    only for a box paired on the secret; a box with its own key speaks only through its signature.
+ * A receiving site's call passes on the same terms and no other: its base call is held by the box's operator.
+ * A site the sysop trusts, or one FIRST_PARTY_SITES names, vouches for what it hears, never for this box's
+ * transmitter, and a site call that has changed hands belongs to its new holder's boxes, not the old one's.
  *
  * For the shared secret the answer carries an HMAC-SHA256 over the box's nonce and the body, keyed with
  * INGEST_SECRET (`x-txgate-mac`). That stops an attacker who can change responses on the way but cannot read
@@ -20,10 +22,11 @@
  */
 import { baseCall } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
-import { ingestOrBoxOk, ingestSecretOk, isAdminCall, baseHolder } from "./auth.js";
+import { ingestOrBoxOk, ingestSecretOk, isAdminCall, baseHolder, suspensionOf } from "./auth.js";
 import { boxPrincipal } from "./boxprincipal.js";
-import { attestation, sitesFor } from "./attestedsites.js";
-import { parseAttestedSites } from "./provenance.js";
+import { boxHasKey, boxOwner } from "./boxowner.js";
+import { adminCalls } from "./admin.js";
+import { callSuspended } from "./moderation.js";
 import { verificationsOf } from "./callsign.js";
 import { json } from "./http.js";
 
@@ -69,30 +72,32 @@ export async function handleTxGate(req: Request, env: Env): Promise<Response> {
 
   const principal = boxPrincipal(req);
   const shared = !principal && ingestSecretOk(req, env);
-  // the shared secret names its box; an enrolled box is the one that signed
-  const boxId = principal?.box ?? (url.searchParams.get("box") || null);
-  const owner = boxId
-    ? ((
-        await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?")
-          .bind(boxId)
-          .first<{ account_id: string }>()
-      )?.account_id ?? null)
-    : null;
-  const sites = principal ? sitesFor(await attestation(env), principal.box) : parseAttestedSites(env.FIRST_PARTY_SITES);
-  const siteBases = new Set([...sites].map(baseCall));
+  // an enrolled box is the one that signed; the shared secret names only a box without a key of its own
+  const named = url.searchParams.get("box") || null;
+  const boxId = principal?.box ?? (named && !(await boxHasKey(env, named)) ? named : null);
+  const owner = boxId ? await boxOwner(env, boxId) : null;
+  const operators = new Set<string>(owner ? [owner] : []);
+  if (shared)
+    for (const c of adminCalls(env)) {
+      const holder = await baseHolder(env, c);
+      if (holder) operators.add(holder);
+    }
+  const ownerSuspended = owner !== null && !!(await suspensionOf(env, owner));
   const verified = await verificationsOf(env, calls);
 
   const out: Record<string, TxGateAnswer> = {};
   for (const call of calls) {
     const base = baseCall(call);
+    if (ownerSuspended || (await callSuspended(env, call))) {
+      out[call] = { ok: false, reason: "suspended" };
+      continue;
+    }
     if (!verified.has(base)) {
       out[call] = { ok: false, reason: "not control-verified" };
       continue;
     }
-    const operator =
-      siteBases.has(base) ||
-      (shared && isAdminCall(env, base)) ||
-      (owner !== null && (await baseHolder(env, base)) === owner);
+    const holder = await baseHolder(env, base);
+    const operator = (shared && isAdminCall(env, base)) || (holder !== null && operators.has(holder));
     out[call] = operator ? { ok: true } : { ok: false, reason: "not held by this box's operator" };
   }
   const body = JSON.stringify({ calls: out });
