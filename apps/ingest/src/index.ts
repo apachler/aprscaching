@@ -157,6 +157,9 @@ interface TxRadio {
   label?: () => string;
 }
 const radios: TxRadio[] = [];
+// What the box sent on any port, so no port reports the box's own signal as a hearing (echo.ts).
+const { SentFrames } = await import("./echo.js");
+const sentFrames = new SentFrames();
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
@@ -166,7 +169,7 @@ if (env.KISS_TNC_HOST) {
   // so a gateway that trusts it attests those frames. This batch is the only way the
   // site's hearings reach Tier A: the RX-IGate's APRS-IS copy (`qAR,<site>`) is never attested.
   const kiss = new KissTnc(
-    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall },
+    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall, sent: sentFrames },
     {
       onPacket: enqueue,
       onFrame: (f) => {
@@ -229,7 +232,7 @@ if (soundcardSettings.length) {
         },
       },
       { master: () => station.tx, calls, refusal: (c) => callGate.refusal(c) },
-      { siteCall },
+      { siteCall, sent: sentFrames },
     );
     await port.start();
     onShutdown.push(() => port.stop());
@@ -431,6 +434,7 @@ if (env.AGWPE_HOST) {
       port: portEnv("AGWPE_PORT", 8000),
       radioPort: numEnv("AGWPE_RADIO_PORT", 0, { min: 0 }),
       siteCall,
+      sent: sentFrames,
     },
     { onPacket: enqueue },
   ).start();
@@ -630,16 +634,25 @@ if (env.FED_LINK_PULL === "1") {
 
 // ---- Remote control: lease commands the operator queued in the web app and execute them.
 // Opt-in with BOX_ID; remote transmit additionally needs BOX_TX=1 and a command callsign that is this
-// box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL).
+// box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon names the box's own
+// position (BOX_LAT, BOX_LON), never one the command carries.
 if (env.BOX_ID) {
-  const { BoxPoller, parseBoxPath } = await import("./boxpoll.js");
+  const { BoxPoller, parseBoxPath, parseBoxPosition } = await import("./boxpoll.js");
   const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
+  let boxPosition: ReturnType<typeof parseBoxPosition>;
+  try {
+    boxPosition = parseBoxPosition(env.BOX_LAT, env.BOX_LON);
+  } catch (e) {
+    console.error(`[ingest] FATAL: ${(e as Error).message}`);
+    process.exit(1);
+  }
   new BoxPoller({
     base: GATEWAY_BASE,
     secret: SECRET,
     boxId: env.BOX_ID,
     boxCall,
     remoteTx: env.BOX_TX === "1",
+    ...(boxPosition ? { position: boxPosition } : {}),
     radio: boxRadio,
     meshcom: meshcomTx,
     state: station,

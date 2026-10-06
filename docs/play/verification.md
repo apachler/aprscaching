@@ -35,7 +35,10 @@ All of these must hold:
   instance trusts. The instance's sysop vouches for each such station. The beacon can be APRS or MeshCom; a
   MeshCom position counts only when a trusted node hears it directly, not one relayed over the mesh or passed
   on by the MeshCom server.
-- That station is not yours. A station you run cannot vouch for your own find.
+- That station is not yours. A station you run cannot vouch for your own find, and neither can an ingest box
+  paired to your account, whatever station it names.
+- The beacon is your radio's own. A beacon you asked your ingest box to send from **Shack → Remote box** says
+  where the box is, not where you are, and never counts.
 - The position is within **150 m** of the cache.
 - The beacon was heard in the **30 minutes** before you logged.
 - Your track makes sense. A beacon at the cache while your other beacons are far away, too far to travel
@@ -45,7 +48,9 @@ Another instance in the network can also confirm that it heard you on the air. T
 the logbook then shows *confirmed later*.
 
 A [living cache](../glossary.md#living-cache) travels with a station. There, you need to be within 150 m of
-that station. Both of you must be heard within 5 minutes of each other.
+that station. Both of you must be heard within 5 minutes of each other. The station's own position counts only
+when a trusted receiving station heard it on the air, or the cache's owner sent it through the app's radio
+bridge; next to a station position that came only over the internet, a find is **Logged**.
 
 ### Location-verified
 

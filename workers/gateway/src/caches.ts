@@ -30,7 +30,7 @@ import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
-import { askPeers, corroboratorIgate } from "./corroborate.js";
+import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
@@ -935,6 +935,22 @@ export interface FindScore {
   retry?: RetryPlan;
 }
 
+/** Does the account that owns cache `cacheId` hold the base call of `stationCall`? */
+async function ownerSignsFor(env: Env, cacheId: number, stationCall: string | null | undefined): Promise<boolean> {
+  if (!stationCall) return false;
+  const c = await env.DB.prepare("SELECT owner_call FROM caches WHERE id = ?")
+    .bind(cacheId)
+    .first<{ owner_call: string }>();
+  if (!c || isWithdrawnCall(c.owner_call)) return false;
+  const held = await env.DB.prepare(
+    `SELECT 1 AS x FROM account_callsigns o JOIN account_callsigns s ON s.account_id = o.account_id
+     WHERE o.callsign = ? AND s.callsign = ?`,
+  )
+    .bind(baseCall(c.owner_call), baseCall(stationCall))
+    .first();
+  return !!held;
+}
+
 /**
  * Score a found log for `loggerCall` at time `at`: the logger's positions in the verification window
  * before `at`, stamped with first-party attestation, the Tier-A independence set, and — when local
@@ -952,7 +968,7 @@ export async function scoreFind(
   const since = at - DEFAULT_POLICY.windowSec;
   const lp = await env.DB.prepare(
     // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
+    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
   )
     .bind(loggerCall, since, at + 60)
     .all<PositionRow>();
@@ -971,16 +987,19 @@ export async function scoreFind(
   // engine branches on attestation alone, never on transport. The attested sites (FIRST_PARTY_SITES and the
   // trusted stations of Instance admin) narrow attestation; a site trusted through a box counts only for the
   // fixes that box delivered (ingest_box).
+  // A fix that matched a commanded box beacon (positions.commanded) is never evidence; the engine skips it.
   const attested = await loadAttestation(env);
   const attest = (rows: PositionRow[]): PositionRow[] =>
     rows.map((p) => ({
       ...p,
+      commanded: !!p.commanded,
       firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
     }));
 
   // Tier-A independence — every base callsign the logger controls (their own call,
   // all base calls held by their account, their registered stations). A beacon gated by any of
-  // these is self-gated and can never corroborate the logger's own find.
+  // these is self-gated and can never corroborate the logger's own find. So is one delivered by an ingest box
+  // of the logger's own (paired to their account, or enrolled for one of their calls), whatever site it names.
   const loggerOwnIgates = new Set<string>([baseCall(loggerCall)]);
   const acct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
     .bind(baseCall(loggerCall))
@@ -995,14 +1014,24 @@ export async function scoreFind(
       .all<{ callsign: string }>();
     for (const r of stations.results) loggerOwnIgates.add(baseCall(r.callsign));
   }
+  const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
+
+  // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
+  // browser bridge signed: a signed batch carries only its signer's base call, so a `browser-rf` fix under a base
+  // call the owner's account holds is the owner's own.
+  const ownerSigned = cacheStationPositions?.length ? await ownerSignsFor(env, cache.id, cache.station_call) : false;
+  const station = cacheStationPositions
+    ? attest(cacheStationPositions).map((p) => ({ ...p, ownerSigned: ownerSigned && p.source === "browser-rf" }))
+    : undefined;
 
   const result = verifyFind(
     cache,
     appGeo,
     {
       loggerPositions: attest(lp.results),
-      cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
+      cacheStationPositions: station,
       loggerOwnIgates,
+      loggerOwnBoxes,
       now: at, // app-reading freshness is judged against log time
     },
     { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) },
@@ -1022,7 +1051,7 @@ export async function scoreFind(
   // to Tier A only if the logger's own local track could have been there.
   let corroboratedBy: string | null = null;
   let retry: RetryPlan | undefined;
-  const lastStation = cacheStationPositions?.find((p) => p.ts <= at + 60);
+  const lastStation = station?.find((p) => p.ts <= at + 60 && (p.firstPartyAttested || p.ownerSigned) && !p.commanded);
   const point =
     cache.type === "aprs_living"
       ? lastStation
@@ -1048,7 +1077,8 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    if (ev && plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+    const track = lp.results.filter((p) => !p.commanded);
+    if (ev && plausiblePresence({ ...point, ts: ev.ts }, track, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
