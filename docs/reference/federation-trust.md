@@ -130,7 +130,8 @@ lend it any trust. `FED_RESERVE` decides what it passes on: by default the recor
 - **The origin's trust, never the hub's.** A passed-on record lands under its origin, so the receiver shows it
   with its own trust in that origin: hidden while the origin is `unvetted`, never shown when it is blocked. A
   trusted hub lifts nothing.
-- **No new voice.** The corroboration quorum asks reachable trusted peers only; a passed-on record is never an
+- **No new voice.** The corroboration quorum asks only trusted peers this instance follows itself, directly or
+  through a hub's relay for one nobody can dial; a passed-on record is never an
   answer, and an origin known only through a hub is never asked.
 - **Deletes reach every hop.** A tombstone passes on like any record, and a hub stops passing on what a
   tombstone removed. A bounded tombstone (`upTo`) passes on too, so a restored cache follows it at its higher

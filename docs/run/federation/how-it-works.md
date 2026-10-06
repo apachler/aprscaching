@@ -171,7 +171,8 @@ phone or a box behind a carrier's NAT that pushes to a hub, gets it through the 
 collects it on its own outbound connection and answers from its own receivers, and the asking instance reads
 the signed answer back. The hub queues questions only for its own push spokes and only from instances it
 knows, and it cannot change an answer. When the asking instance is the hub itself, the question goes straight
-into its own queue.
+into its own queue. A home instance known only through the records a hub passes on is not asked: its key came
+from that hub, which would then both carry the answer and vouch for the key that signs it.
 
 ```mermaid
 sequenceDiagram

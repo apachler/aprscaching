@@ -171,6 +171,16 @@ describe("a find confirmed through a hub's relay", () => {
     expect(asked.relayed.map((a) => a.instance)).toEqual(["s.example"]);
   });
 
+  it("never asks an origin known only through a hub's passed-on records", async () => {
+    const t = await network();
+    // the hub handed the spoke's key on: the asker's only row for it is a `transit:` row, even if trusted
+    await t.asker.DB.prepare(
+      "UPDATE fed_peers SET url = 'transit:s.example', added_via = 'transit', enabled = 0 WHERE instance = 's.example'",
+    ).run();
+    const { score } = await logFind(t.asker, t.cache);
+    expect(score.retry).toBeUndefined();
+  });
+
   it("ends the attempts on the spoke's verified no", async () => {
     const t = await network({ spokeHeard: false });
     const { logId } = await logFind(t.asker, t.cache);
