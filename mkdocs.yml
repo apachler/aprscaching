@@ -139,6 +139,7 @@ nav:
           - Set up an ingest box: run/radios/ingest-box.md
           - Lend your receiver to an instance: run/radios/lend-a-receiver.md
           - RF ingest & transports: run/radios/rf-ingest.md
+          - Soundcard port: run/radios/soundcard.md
           - MeshCom: run/radios/meshcom.md
           - "Packet: BBS & NET/ROM node": run/radios/packet-node.md
           - Remote control of your box: run/radios/remote-box.md

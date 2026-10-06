@@ -29,9 +29,11 @@ import { gatewayFetch } from "./gatewayauth.js";
 import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
 import { TokenBucket } from "./txlimit.js";
 
-/** What the box can transmit through — the KISS TNC's UI-frame send. */
+/** What the box can transmit through — the UI-frame send of its first radio (the KISS TNC or a soundcard port). */
 export interface BoxRadio {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
+  /** The radio as the status line shows it; absent for the KISS TNC (`kiss`). */
+  label?: () => string;
 }
 
 /** The runtime switches remote commands flip. `digi`/`igate` are null when that function isn't configured. */
@@ -299,7 +301,7 @@ export class BoxPoller {
     const gate = this.answerGate(cmd);
     if (gate) return gate;
     if (!this.o.boxCall) return fail("no station call configured on this box (set BOX_CALL)");
-    if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC)");
+    if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC or a soundcard port)");
     const limited = this.rateLimited();
     if (limited) return limited;
     const tocall = this.o.tocall ?? "APZACG";
@@ -310,7 +312,9 @@ export class BoxPoller {
       path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
       payload: `}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text, msgNo)}`,
     });
-    return ok ? { status: "done", result: `answer to ${to} sent as ${call}` } : fail("the TNC link is down");
+    return ok
+      ? { status: "done", result: `answer to ${to} sent as ${call}` }
+      : fail("the radio refused the frame (TNC link down, or the soundcard port's transmit gate)");
   }
 
   /** A MeshCom answer, handed to the node that heard the message. The sender applies its own checks. */
@@ -366,7 +370,7 @@ export class BoxPoller {
     const maxAge = this.o.maxAgeSec ?? 900;
     if (cmd.createdAt != null && this.now() / 1000 - cmd.createdAt > maxAge)
       return fail(`expired — queued more than ${Math.round(maxAge / 60)} min ago`);
-    if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC)");
+    if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC or a soundcard port)");
     const limited = this.rateLimited();
     if (limited) return limited;
     return { src };
@@ -383,7 +387,10 @@ export class BoxPoller {
     });
     return ok
       ? { status: "done", result: `${what} sent as ${g.src}` }
-      : { status: "failed", result: "the TNC link is down" };
+      : {
+          status: "failed",
+          result: "the radio refused the frame (TNC link down, or the soundcard port's transmit gate)",
+        };
   }
 
   /** Switch a function. OFF is always honoured; ON is a transmit decision and passes the full gate. */
@@ -410,7 +417,7 @@ export class BoxPoller {
     const s = this.o.state;
     const parts = [
       `up ${h}h${String(m).padStart(2, "0")}m`,
-      `rf ${this.o.radio ? "kiss" : "none"}`,
+      `rf ${this.o.radio ? (this.o.radio.label?.() ?? "kiss") : "none"}`,
       `tx ${fmtState(s.tx)}`,
       `digi ${fmtState(s.digi)}`,
       `igate ${fmtState(s.igate)}`,

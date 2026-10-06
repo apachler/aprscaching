@@ -28,6 +28,9 @@ services:
     # that GID with group_add.
     # devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
     # group_add: ["18"]
+    # A soundcard port (SOUNDCARD_DEVICE) needs the sound devices, and its PTT device: a CM108's /dev/hidraw*, a
+    # GPIO chip (/dev/gpiochip0). The user is in `audio` (GID 29); add the GPIO chip's group (`stat -c %g`) too.
+    # devices: ["/dev/snd:/dev/snd", "/dev/hidraw0:/dev/hidraw0"]
     # The settings come from .env alone (INGEST_URL, e.g. https://gateway.example.net/ingest; the APRS-IS
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.

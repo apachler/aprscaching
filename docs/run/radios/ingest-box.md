@@ -27,7 +27,8 @@ settings go in `deploy/.env` ([Connect a radio: quick starts](quick-starts.md)).
 - **A one-time enrollment code** from the gateway's sysop ([Enrolling boxes on the gateway](#enrolling-boxes-on-the-gateway)),
   or the gateway's `INGEST_SECRET` if the sysop prefers the shared secret.
 - **What the box connects to**: an APRS-IS filter, a KISS TNC, a MeshCom node. Each link is in
-  [Connect a radio: quick starts](quick-starts.md).
+  [Connect a radio: quick starts](quick-starts.md). With a sound card between box and radio, the box is the
+  modem itself: [Soundcard port](soundcard.md).
 - **The box's clock** within five minutes of the gateway's: a signed request outside that window is refused.
 
 ## How the box signs in
@@ -147,9 +148,9 @@ Without the helper, the box runs `deploy/compose.ingest-only.yml`, the ingest co
 The container receives every setting in `deploy/.env` and blanks the gateway's own secrets
 (`OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY` and the rest), should the file hold any.
 Inside it, `localhost` is the container: [From a container](rf-ingest.md#from-a-container).
-The ingest runs as an unprivileged user (UID 10001) in the group `dialout`: a serial TNC or PTT line is passed
-in with the `devices:` entry the file shows, and `group_add:` adds the device's group where the host gives it a
-GID other than 20.
+The ingest runs as an unprivileged user (UID 10001) in the groups `dialout` and `audio`: a serial TNC or PTT
+line, or a sound card (`/dev/snd`), is passed in with the `devices:` entry the file shows, and `group_add:` adds
+the device's group where the host gives it another GID.
 
 **From a checkout without Docker**, the settings go in `.env` at the top of the repository (copy
 `.env.example`), the enroll command appends to `../../.env`, and the ingest starts with

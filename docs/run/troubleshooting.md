@@ -337,14 +337,62 @@ Every shape with an ingest.
 - **Fix:** update the node's firmware.
 - **See:** [MeshCom: before you start](radios/meshcom.md#before-you-start).
 
+### `ingest.soundcard_alsa`
+
+- **Tests:** with a soundcard port set (`SOUNDCARD_DEVICE` or `SOUNDCARD_PORTS`), that `arecord` and `aplay`
+  are installed where the ingest runs. The doctor runs the soundcard checks inside the ingest container, or
+  from the checkout with Node.js.
+- **Message:** `arecord not found: install ALSA's tools (apt install alsa-utils)` (fail). Install
+  `alsa-utils`; the Docker image has it.
+- **Message:** `the soundcard checks could not run here` (warn). Run the doctor where the ingest runs: with
+  the ingest container up, or with Node.js and the checkout.
+- **See:** [Soundcard port: before you start](radios/soundcard.md#before-you-start).
+
+### `ingest.soundcard_audio.<port>`
+
+- **Tests:** the port's capture device opens for one second, and its playback device plays 50 ms of silence.
+  A device the running ingest holds passes as in use. Silence never trips a VOX, so the check keys nothing.
+- **Message:** `port <port>: capture <device> does not open: …` (fail). Check `SOUNDCARD_DEVICE` against
+  `arecord -l`; in a container, pass `/dev/snd` in.
+- **Message:** `port <port>: playback <device> does not open: …` (fail). Check `SOUNDCARD_PLAYBACK` against
+  `aplay -l`.
+- **See:** [Find the sound card](radios/soundcard.md#1-find-the-sound-card).
+
+### `ingest.soundcard_ptt.<port>`
+
+- **Tests:** on a port with `SOUNDCARD_TX=1`, that its PTT driver can work, without keying it: the
+  `serialport` package and a writable device for `serial:` and `cat:`, a writable `/dev/hidraw*` for
+  `cm108:`, `gpioset` and a writable GPIO chip for `gpio:`, a TCP connection to rigctld for `rigctld`. A port
+  that receives only, or keys by VOX, passes.
+- **Message:** `port <port>: PTT <driver>: <device> does not exist` or `no write access to <device>` (fail).
+  Pass the device into the container, and give the ingest's user access: `dialout` for serial, a udev rule
+  for a CM108, `gpio` for a GPIO chip.
+- **Message:** `port <port>: PTT rigctld <host>:<port> does not answer` (fail). Start rigctld, or correct
+  `SOUNDCARD_PTT`.
+- **See:** [Choose how the radio is keyed](radios/soundcard.md#choose-how-the-radio-is-keyed).
+
+### `ingest.soundcard_tx.<port>`
+
+- **Tests:** on a port with `SOUNDCARD_TX=1`, the PTT watchdog (`SOUNDCARD_PTT_MAX_MS`), and that the gateway
+  knows every station call the box transmits under as control-verified. A port that receives only passes.
+- **Message:** `port <port>: the PTT watchdog allows <ms> ms of key time` (warn). Lower
+  `SOUNDCARD_PTT_MAX_MS`: an APRS frame needs well under ten seconds.
+- **Message:** `port <port>: <call> is not control-verified, so the port does not transmit` (warn). Verify
+  the call: **You → Verify callsign**.
+- **Message:** `port <port>: no station call is set` (fail). Set `SOUNDCARD_CALL` or `BOX_CALL`.
+- **Message:** `port <port>: the gateway did not say whether the station calls (…) are verified` (warn).
+  Check `INGEST_URL`.
+- **See:** [The transmit gate](radios/soundcard.md#the-transmit-gate) and
+  [Callsign verification](day-to-day/callsign-verification.md).
+
 ### `ingest.fedlink`
 
 - **Tests:** whether the box serves or pulls federation over packet circuits (`FED_LINK_SERVE`,
-  `FED_LINK_PULL`), and that it can: a frame link (`KISS_TNC_HOST`, or `AXUDP_PORT` and `AXUDP_PEERS`), and
-  `FED_LINK_CALL` (serving without it works only as the NET/ROM node's FED command). It passes when both are
-  off, and says what runs.
-- **Message:** `federation over packet needs a frame link` (fail). Set `KISS_TNC_HOST`, or `AXUDP_PORT` and
-  `AXUDP_PEERS`.
+  `FED_LINK_PULL`), and that it can: a frame link (`KISS_TNC_HOST`, `SOUNDCARD_DEVICE`, or `AXUDP_PORT` and
+  `AXUDP_PEERS`), and `FED_LINK_CALL` (serving without it works only as the NET/ROM node's FED command). It
+  passes when both are off, and says what runs.
+- **Message:** `federation over packet needs a frame link` (fail). Set `KISS_TNC_HOST` or `SOUNDCARD_DEVICE`,
+  or `AXUDP_PORT` and `AXUDP_PEERS`.
 - **Message:** `federation over packet needs FED_LINK_CALL` (fail). Set `FED_LINK_CALL` to the call-SSID the
   box answers and dials as.
 - **See:** [Packet circuit](federation/transports.md#packet-circuit).

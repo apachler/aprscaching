@@ -614,6 +614,15 @@ check "MeshCom firmware 4.35u is new enough" bash -c ". '$DEPLOY/lib/doctor.sh';
 check "  … 4.40a too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.40a 4 35 u"
 check "  … 4.35t is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35t 4 35 u"
 check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 u"
+# The soundcard checks the ingest prints (check.ts --soundcard) become doctor rows under their ids and links.
+SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
+  doc_get() { [ \"\$1\" = SOUNDCARD_DEVICE ] && echo plughw:1,0; true; }
+  shape_doctor_ingest_node() { printf 'alsa\t-\tpass\tarecord and aplay are installed\t\nptt\t1\tfail\tno hidraw\tudev\ntx\t1\twarn\tnot verified\tverify\n'; }
+  doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
+check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
+  "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+check "  … and without a soundcard port it adds none" eq \
+  "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_get() { true; }; doc_soundcard; echo \"\${#DOC_ROWS[@]}\"")" 0
 # the same key and value as workers/gateway/test/fed_fingerprint.test.ts: doctor and Instance admin agree
 FP_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
 check "a federation key's fingerprint matches Instance admin's" eq \

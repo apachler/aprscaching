@@ -28,10 +28,10 @@ export interface IgateOpts {
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
 
 /**
- * Bidirectional APRS IGate over a KISS TNC + an APRS-IS connection.
- *   RX-IGate: RF frames heard on KISS are relayed up to APRS-IS with a qAR construct.
+ * Bidirectional APRS IGate over a radio port (a KISS TNC or a soundcard port) + an APRS-IS connection.
+ *   RX-IGate: RF frames heard on the box's radio ports are relayed up to APRS-IS with a qAR construct.
  *   TX-IGate: messages from APRS-IS addressed to a station heard locally on RF are gated to RF.
- * "Heard locally" is tracked from KISS RF receptions. Gating rules are in @aprscaching/aprs (pure).
+ * "Heard locally" is tracked from the RF receptions. Gating rules are in @aprscaching/aprs (pure).
  */
 export class Igate {
   private sock?: net.Socket;
@@ -46,7 +46,7 @@ export class Igate {
   private bucket: TokenBucket;
 
   constructor(
-    private kiss: KissTnc,
+    private kiss: Pick<KissTnc, "send">,
     private o: IgateOpts,
   ) {
     this.localTtl = (o.localTtlSec ?? 1800) * 1000;

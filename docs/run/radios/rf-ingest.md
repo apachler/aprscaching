@@ -27,6 +27,7 @@ own `port`, counted at `GET /api/ports`.
 | Transport | Turn on with | What it does |
 |-----------|-------------|--------------|
 | **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (for example Direwolf). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. A MeshCom node's KISS port is refused: the box logs an error and ignores it, because a frame the MeshCom server relayed would read as heard directly. Listen to a node with `MESHCOM_NODE`. |
+| **Soundcard port** | `SOUNDCARD_DEVICE` (+ `SOUNDCARD_*`, `SOUNDCARD_PORTS`) | The box is the 1200-baud AFSK modem: ALSA's `arecord` and `aplay` with a USB sound card or a sound HAT, keyed by a PTT driver (CM108 GPIO, Linux GPIO, serial RTS/DTR, CAT, rigctld or VOX). Receives like a KISS TNC and carries the same functions. Transmit is off by default and needs a control-verified call; a watchdog bounds the key time. Setup: [Soundcard port](soundcard.md). |
 | **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
 | **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes send to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Accepts only licensed nodes (licensed ham mode on, callsign as long name), under their callsign; drops licence-free nodes. Always Tier C. The browser's Web Serial path uses the same decoder and rule. |
@@ -64,7 +65,8 @@ stations**, or `FIRST_PARTY_SITES`).
 ## Receiving site and Tier A
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local
-TNCs (KISS, AGWPE or WA8DED host mode) hears **directly** carries that callsign to the gateway. A gateway that
+TNCs (KISS, AGWPE or WA8DED host mode) or soundcard ports hears **directly** carries that callsign to the
+gateway. A gateway that
 trusts the call counts those frames as RF-corroborated evidence for Tier A, with no APRS-IS round trip, so it
 works off-grid too. The gateway's independence rule still keeps your own receiver from corroborating your own
 finds.
@@ -109,7 +111,8 @@ only when its call is trusted ([How MeshCom traffic is trusted](meshcom.md#how-m
 
 ## IGate
 
-An IGate passes traffic between RF and APRS-IS. It needs a KISS TNC and both `IGATE_CALL` and `IGATE_PASS`.
+An IGate passes traffic between RF and APRS-IS. It needs a KISS TNC or a soundcard port, and both
+`IGATE_CALL` and `IGATE_PASS`.
 With those two set it receives only: the RX direction needs no transmitter. Passing APRS-IS messages down to
 RF transmits, so it also needs `IGATE_TX=1`.
 
@@ -128,8 +131,9 @@ RF transmits, so it also needs `IGATE_TX=1`.
 
 ## Digipeater
 
-Set `DIGI_CALL`, and optionally `DIGI_ALIASES` (default `WIDE1,WIDE2`), to repeat traffic over a KISS TNC with
-the new n-N paradigm. It inserts your call with the has-been-repeated bit and decrements `WIDEn-N`, with a
+Set `DIGI_CALL`, and optionally `DIGI_ALIASES` (default `WIDE1,WIDE2`), to repeat traffic with the new n-N
+paradigm, over a KISS TNC or a soundcard port. With several radio ports, each frame is repeated on the port
+that heard it. It inserts your call with the has-been-repeated bit and decrements `WIDEn-N`, with a
 loop guard and a 30-second window that keeps it from repeating the same frame twice.
 
 Set `DIGI_CONNECTED=1` to also repeat connected-mode frames (SABM, I, RR, …) whose next unrepeated hop is

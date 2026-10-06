@@ -40,6 +40,9 @@ doc_see() {
     setup.*) a=setupitem ;;
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
+    ingest.soundcard_audio.*) a=ingestsoundcard_audioport ;;
+    ingest.soundcard_ptt.*) a=ingestsoundcard_pttport ;;
+    ingest.soundcard_tx.*) a=ingestsoundcard_txport ;;
     federation.peer.*) a=federationpeerhost ;;
     identity.*) a=identityline ;;
     *) a="${1//./}" ;;
@@ -95,6 +98,17 @@ doc_signed_check() {
 }
 
 tcp_open() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+
+# apps/ingest/src/check.ts with ARGS, where the ingest runs: the shape's own way (inside its container), else
+# from this checkout with the settings loaded. Prints nothing when neither is possible.
+doc_ingest_node() {
+  if declare -F shape_doctor_ingest_node >/dev/null; then
+    shape_doctor_ingest_node "$@"
+  elif have node && [ -n "$DOC_ENV" ]; then
+    # shellcheck disable=SC1090 # the installation's own .env
+    (set -a && . "$DOC_ENV" && set +a && cd "$DEPLOY_DIR/../apps/ingest" && node --import tsx src/check.ts "$@") 2>/dev/null
+  fi
+}
 
 # ---- config -------------------------------------------------------------------------------------------------
 doc_config() {
@@ -428,7 +442,31 @@ doc_transports() {
     fi
   done
   doc_meshcom
+  doc_soundcard
   doc_fedlink_box
+}
+
+# The soundcard ports, checked by the ingest itself (check.ts --soundcard): the ALSA tools, the devices, the
+# PTT driver, the watchdog and the station calls' verification. It never keys the radio.
+doc_soundcard() {
+  local out kind port st msg fix
+  [ -n "$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)" ] || return 0
+  out="$(doc_ingest_node --soundcard || true)"
+  if [ -z "$out" ]; then
+    warnc ingest.soundcard_alsa "the soundcard checks could not run here" "run doctor where the ingest runs, with Node.js"
+    return 0
+  fi
+  while IFS=$'\t' read -r kind port st msg fix; do
+    case "$kind:$st" in
+      alsa:fail) failc ingest.soundcard_alsa "$msg" "$fix" ;;
+      audio:fail) failc "ingest.soundcard_audio.$port" "$msg" "$fix" ;;
+      ptt:fail) failc "ingest.soundcard_ptt.$port" "$msg" "$fix" ;;
+      tx:fail) failc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
+      tx:warn) warnc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
+      alsa:pass) pass ingest.soundcard_alsa "$msg" ;;
+      audio:pass | ptt:pass | tx:pass) pass "ingest.soundcard_$kind.$port" "$msg" ;;
+    esac
+  done <<<"$out"
 }
 
 # Federation over packet circuits on this box: what it serves and pulls, and whether the settings can work.
@@ -437,14 +475,14 @@ doc_fedlink_box() {
   serve="$(doc_get FED_LINK_SERVE)"
   pull="$(doc_get FED_LINK_PULL)"
   call="$(doc_get FED_LINK_CALL)"
-  [ -z "$(doc_get KISS_TNC_HOST)$(doc_get AXUDP_PEERS)" ] || link=1
+  [ -z "$(doc_get KISS_TNC_HOST)$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)$(doc_get AXUDP_PEERS)" ] || link=1
   [ -z "$(doc_get NETROM_CALL)" ] || [ -z "$(doc_get NETROM_ALIAS)" ] || node=1
   if [ "$serve" != 1 ] && [ "$pull" != 1 ]; then
     pass ingest.fedlink "federation over packet circuits is off"
     return 0
   fi
   if [ -z "$link" ]; then
-    failc ingest.fedlink "federation over packet needs a frame link" "set KISS_TNC_HOST, or AXUDP_PORT and AXUDP_PEERS"
+    failc ingest.fedlink "federation over packet needs a frame link" "set KISS_TNC_HOST or SOUNDCARD_DEVICE, or AXUDP_PORT and AXUDP_PEERS"
     return 0
   fi
   if [ -z "$call" ] && { [ "$pull" = 1 ] || [ -z "$node" ]; }; then

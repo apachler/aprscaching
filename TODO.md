@@ -188,15 +188,13 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 **Rig control, keying, position:**
 
 - [ ] **rigctld client** _(P1 · S)_ — talk to an existing hamlib rigctld (net) for
-      frequency/mode/PTT; band-tag everything the hub ingests. The client is `packages/aprs/src/rigctld.ts`;
-      the hub driver is what's left.
+      frequency/mode; band-tag everything the hub ingests. The client is `packages/aprs/src/rigctld.ts`, and
+      its PTT keys the soundcard port (`apps/ingest/src/ptt/rigctld.ts`); frequency and mode are what's left.
 - [ ] **Direct CAT serial drivers** _(P2 · M)_ — Icom CI-V, Kenwood, Yaesu protocol families for
-      zero-dependency setups — the codec is `packages/aprs/src/cat.ts`; the hub driver is what's left.
+      zero-dependency setups — the codec is `packages/aprs/src/cat.ts`, and its PTT keys the soundcard port
+      (`apps/ingest/src/ptt/cat.ts`); frequency and mode from the box are what's left.
 - [ ] **rigctld-compatible re-export server** _(P2 · M)_ — the hub serves the rigctld wire
       protocol so logging/digimode apps share the rig through us — same bridge idea as packet.
-- [ ] **PTT/keying paths** _(P2 · M)_ — serial RTS/DTR, CAT PTT, CM108 GPIO and Raspberry Pi GPIO behind one PTT
-      abstraction with per-port assignment and a TX watchdog. This keys the hub's own transmit ports, gated on callsign control-verification; the Shack's
-      rig control through the box below never keys.
 - [ ] **GPS/position sources** _(P2 · S)_ — gpsd client + raw NMEA serial feeding station
       position, beaconing, and the shack map.
 

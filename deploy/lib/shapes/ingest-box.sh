@@ -182,6 +182,12 @@ shape_doctor_extra() {
   fi
 }
 
+# doctor's ingest checks (check.ts with its arguments), inside the running ingest container: it holds the
+# box's key, and the sound card, the PTT device and the ALSA tools are the container's
+shape_doctor_ingest_node() {
+  ib_compose exec -T -w /app/apps/ingest ingest node --import tsx src/check.ts "$@" 2>/dev/null
+}
+
 # doctor's signed credential check, inside the running ingest container (which holds the key)
 shape_doctor_signed_check() {
   ib_compose exec -T -w /app/apps/ingest ingest node --import tsx src/check.ts 2>/dev/null ||

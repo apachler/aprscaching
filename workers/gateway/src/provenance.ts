@@ -70,6 +70,7 @@ const NEVER_ATTESTED: ReadonlySet<Transport> = new Set<Transport>(["axudp", "axi
 const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   "aprs-is": "aprs-is",
   "kiss-tnc": "tnc",
+  soundcard: "tnc",
   agwpe: "tnc",
   hostmode: "tnc",
   "webserial-kiss": "browser-rf",

@@ -22,10 +22,14 @@ COPY --from=build /app /app
 # /app stays root-owned and read-only to it. /data (the database, the generated secrets, the media, backup
 # staging) and /srv/web (the SPA copy Caddy serves) belong to it, so a fresh named volume mounted there takes
 # that owner; a bind-mounted host directory needs `chown -R 10001:10001` once. The user is in `dialout`
-# (GID 20 on Debian, Ubuntu and Raspberry Pi OS), so a serial TNC or PTT passed in with `devices:` opens.
+# (GID 20 on Debian, Ubuntu and Raspberry Pi OS), so a serial TNC or PTT passed in with `devices:` opens, and in
+# `audio`, for a sound card. The ingest's soundcard port runs ALSA's arecord and aplay (alsa-utils) and keys a GPIO
+# PTT with libgpiod's gpioset (gpiod).
+RUN apt-get update && apt-get install -y --no-install-recommends alsa-utils gpiod \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack install \
  && groupadd --system --gid 10001 aprscaching \
- && useradd --system --uid 10001 --gid 10001 --groups dialout --create-home --home-dir /home/aprscaching \
+ && useradd --system --uid 10001 --gid 10001 --groups dialout,audio --create-home --home-dir /home/aprscaching \
       --shell /usr/sbin/nologin aprscaching \
  && mkdir -p /data/media /srv/web \
  && chown -R 10001:10001 /data /srv/web

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { catSetFrequency, catSetMode, APRS_FREQ } from "../src/index.js";
+import { catSetFrequency, catSetMode, catSetPtt, APRS_FREQ } from "../src/index.js";
 
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, "0")).join(" ");
 const ascii = (b: Uint8Array) => new TextDecoder().decode(b);
@@ -29,5 +29,20 @@ describe("cat — set mode", () => {
     expect(hex(catSetMode("icom", "FM")!)).toBe("fe fe 94 e0 06 05 fd");
     expect(catSetMode("yaesu-bin", "FM")).toBeNull(); // opcode varies per classic model
     expect(catSetMode("kenwood", "bogus")).toBeNull();
+  });
+});
+
+describe("cat — set PTT", () => {
+  it("Kenwood TX; / RX;", () => {
+    expect(ascii(catSetPtt("kenwood", true))).toBe("TX;");
+    expect(ascii(catSetPtt("kenwood", false))).toBe("RX;");
+  });
+  it("Icom CI-V 1C 00 at the radio's address", () => {
+    expect(hex(catSetPtt("icom", true))).toBe("fe fe 94 e0 1c 00 01 fd");
+    expect(hex(catSetPtt("icom", false, { icomAddr: 0xa4 }))).toBe("fe fe a4 e0 1c 00 00 fd");
+  });
+  it("classic Yaesu opcode 08 / 88", () => {
+    expect(hex(catSetPtt("yaesu-bin", true))).toBe("00 00 00 00 08");
+    expect(hex(catSetPtt("yaesu-bin", false))).toBe("00 00 00 00 88");
   });
 });

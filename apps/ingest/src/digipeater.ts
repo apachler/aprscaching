@@ -12,14 +12,19 @@ import {
 } from "@aprscaching/ax25";
 import type { KissTnc } from "./kiss.js";
 
+/** A radio port the digipeater transmits on: the KISS TNC or a soundcard port. */
+type UiRadio = Pick<KissTnc, "send">;
+type FrameRadio = Pick<KissTnc, "sendFrame">;
+
 /**
- * APRS digipeater over a KISS TNC. For each RF frame heard, compute the n-N repeat (digipeat()) and
- * transmit it — with duplicate suppression so we don't repeat the same payload twice in a window.
+ * APRS digipeater over a radio port (a KISS TNC or a soundcard port). For each RF frame heard, compute the
+ * n-N repeat (digipeat()) and transmit it — with duplicate suppression so we don't repeat the same payload
+ * twice in a window.
  */
 export class Digipeater {
   private recent = new Map<string, number>(); // dedupe key -> ts(ms)
   constructor(
-    private kiss: KissTnc,
+    private kiss: UiRadio,
     private opts: { mycall: string; aliases?: Set<string>; dedupeMs?: number },
   ) {}
 
@@ -47,7 +52,7 @@ export class ConnectedDigipeater {
   private recent = new Map<string, number>(); // dedupe key -> ts(ms)
   private viscous = new ViscousDigi<ReturnType<typeof setTimeout>>();
   constructor(
-    private kiss: KissTnc,
+    private kiss: FrameRadio,
     private opts: { mycall: string; aliases?: string[]; dedupeMs?: number; viscousMs?: number },
   ) {
     this.ours = [opts.mycall, ...(opts.aliases ?? [])].map((c) => parseAddr(c));

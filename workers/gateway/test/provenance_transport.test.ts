@@ -14,6 +14,7 @@ describe("transportForPort", () => {
   it.each([
     ["aprs-is", "aprs-is"],
     ["kiss-tnc", "tnc"],
+    ["soundcard", "tnc"],
     ["agwpe", "tnc"],
     ["hostmode", "tnc"],
     ["webserial-kiss", "browser-rf"],

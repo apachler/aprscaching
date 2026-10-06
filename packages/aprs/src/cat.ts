@@ -5,9 +5,9 @@
  *   - "kenwood"   ASCII `FA…;` (Kenwood TS-*, and modern Yaesu FT-991/FTDX which speak Kenwood CAT)
  *   - "icom"      CI-V binary `FE FE <addr> E0 05 <freq BCD LE> FD`
  *   - "yaesu-bin" classic 5-byte binary CAT (FT-817/857/897): BCD freq (10 Hz units) + opcode
- * Pure: produces the bytes to write; the browser owns the serial transport. Set-frequency is RX-side
- * (it only tunes), so it is not gated on callsign control-verification. APRS calling frequencies live
- * here for one-click tune.
+ * Pure: produces the bytes to write; the browser or the ingest box owns the serial transport. Set-frequency
+ * is RX-side (it only tunes), so it is not gated on callsign control-verification; set-PTT keys the
+ * transmitter, and its caller gates it. APRS calling frequencies live here for one-click tune.
  */
 export type CatRig = "kenwood" | "icom" | "yaesu-bin";
 
@@ -95,4 +95,15 @@ export function catSetMode(rig: CatRig, mode: string, opts: { icomAddr?: number 
     return Uint8Array.from([0xfe, 0xfe, addr & 0xff, 0xe0, 0x06, c, 0xfd]);
   }
   return null; // classic Yaesu mode opcode varies per model — skip
+}
+
+/**
+ * Encode a set-PTT command: Kenwood `TX;` / `RX;`, Icom CI-V `1C 00 01|00`, classic Yaesu opcode `08` (key)
+ * / `88` (unkey). Keying transmits: the caller gates it on callsign control-verification, never this codec.
+ */
+export function catSetPtt(rig: CatRig, on: boolean, opts: { icomAddr?: number } = {}): Uint8Array {
+  if (rig === "kenwood") return enc(on ? "TX;" : "RX;");
+  if (rig === "yaesu-bin") return Uint8Array.from([0, 0, 0, 0, on ? 0x08 : 0x88]);
+  const addr = opts.icomAddr ?? 0x94;
+  return Uint8Array.from([0xfe, 0xfe, addr & 0xff, 0xe0, 0x1c, 0x00, on ? 0x01 : 0x00, 0xfd]);
 }
