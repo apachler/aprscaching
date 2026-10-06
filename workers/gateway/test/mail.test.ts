@@ -5,6 +5,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createServer, type Server, type Socket } from "node:net";
 import type { AddressInfo } from "node:net";
+import { format } from "node:util";
 import { mailTransport, sendEmail, deliverMail, handleMailTest } from "../src/mail.js";
 import type { Env } from "../src/env.js";
 
@@ -192,7 +193,7 @@ describe("sendEmail over SMTP", () => {
     expect(res.ok).toBe(false);
     expect(!res.ok && res.error).toContain("535");
     expect(warn).toHaveBeenCalledTimes(1);
-    const line = String(warn.mock.calls[0]![0]);
+    const line = format(...(warn.mock.calls[0] as [unknown, ...unknown[]]));
     expect(line).toContain("SMTP 127.0.0.1");
     for (const leak of ["mailbox-password", "ham@example.org", "secret body"]) expect(line).not.toContain(leak);
   });

@@ -251,7 +251,7 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
     } catch {
       /* an unparsable URL: the path stays unknown */
     }
-    console.error(`${req.method} ${path}:`, e);
+    console.error("%s %s:", req.method, path, e);
     try {
       return withCors(internalError(), req, env);
     } catch {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { format } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { TokenBucket, TX_LIMITS, txLimitFromEnv } from "../src/txlimit.js";
@@ -98,7 +99,7 @@ describe("TX-IGate pacing", () => {
     for (let i = 1; i <= 4; i++) igate.onIsLine(msg(i));
     expect(sent).toHaveLength(2);
     expect(warn).toHaveBeenCalledTimes(2);
-    expect(String(warn.mock.calls[0]![0])).toMatch(/rate limited — message for OE3ABC-7/);
+    expect(format(...(warn.mock.calls[0] as [unknown, ...unknown[]]))).toMatch(/rate limited — message for OE3ABC-7/);
     clock.t += 60_000;
     igate.onIsLine(msg(5));
     expect(sent).toHaveLength(3);
@@ -153,7 +154,9 @@ describe("FBB forwarding session gate", () => {
     const p = { call: "DB0XYZ-1" } as Parameters<typeof admit>[0];
     expect(admit(p)).toBe(true);
     expect(admit(p)).toBe(false);
-    expect(String(warn.mock.calls[0]![0])).toMatch(/session with DB0XYZ-1 deferred \(next in 300 s\)/);
+    expect(format(...(warn.mock.calls[0] as [unknown, ...unknown[]]))).toMatch(
+      /session with DB0XYZ-1 deferred \(next in 300 s\)/,
+    );
     clock.t += 300_000;
     expect(admit(p)).toBe(true);
   });

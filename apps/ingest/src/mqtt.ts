@@ -177,7 +177,7 @@ export class MqttSubscriber {
     this.sock = s;
     const keepAliveSec = this.o.keepAliveSec ?? 60;
     this.connack = setTimeout(() => {
-      console.log(`[${this.name}] no CONNACK from the broker — reconnecting`);
+      console.log("[%s] no CONNACK from the broker — reconnecting", this.name);
       s.destroy();
     }, this.o.connackTimeoutMs ?? 10_000);
     this.connack.unref?.();
@@ -195,7 +195,7 @@ export class MqttSubscriber {
       this.watchdog?.refresh(); // any byte from the broker proves the session is alive
       this.receive(Uint8Array.from(chunk), keepAliveSec);
     });
-    s.on("error", (e: Error) => console.log(`[${this.name}] ${e.message}, retrying…`));
+    s.on("error", (e: Error) => console.log("[%s] %s, retrying…", this.name, e.message));
     s.on("close", () => {
       if (this.sock !== s) return; // a superseded socket's late close must not touch the current session
       this.clearSessionTimers();
@@ -213,7 +213,7 @@ export class MqttSubscriber {
     merged.set(chunk, this.buf.length);
     const split = splitPackets(merged);
     if (!split) {
-      console.log(`[${this.name}] oversized or malformed packet — reconnecting`);
+      console.log("[%s] oversized or malformed packet — reconnecting", this.name);
       this.sock?.destroy();
       return;
     }
@@ -224,7 +224,7 @@ export class MqttSubscriber {
         if (this.connack) clearTimeout(this.connack);
         this.connack = undefined;
         if (pkt.body[1] !== 0) {
-          console.log(`[${this.name}] broker refused the connection (code ${pkt.body[1]})`);
+          console.log("[%s] broker refused the connection (code %s)", this.name, pkt.body[1]);
           this.sock?.destroy();
           return;
         }
@@ -238,7 +238,7 @@ export class MqttSubscriber {
           this.ping = setInterval(() => sock?.write(Uint8Array.from([0xc0, 0x00])), (keepAliveSec * 1000) / 2);
           this.ping.unref?.();
           this.watchdog = setTimeout(() => {
-            console.log(`[${this.name}] broker silent for ${keepAliveSec * 1.5} s — reconnecting`);
+            console.log("[%s] broker silent for %s s — reconnecting", this.name, keepAliveSec * 1.5);
             sock?.destroy();
           }, keepAliveSec * 1500);
           this.watchdog.unref?.();
@@ -246,12 +246,12 @@ export class MqttSubscriber {
       } else if (pkt.type === 9) {
         // SUBACK: one return code per topic after the packet id; 0x80 is a refusal
         if (pkt.body.subarray(2).includes(0x80)) {
-          console.log(`[${this.name}] broker refused the subscription to ${this.o.topics.join(", ")} — reconnecting`);
+          console.log("[%s] broker refused the subscription to %s — reconnecting", this.name, this.o.topics.join(", "));
           this.sock?.destroy();
           return;
         }
         this.backoff.reset(); // a working subscription → the next reconnect starts from the base interval
-        console.log(`[${this.name}] connected, subscribed to ${this.o.topics.join(", ")}`);
+        console.log("[%s] connected, subscribed to %s", this.name, this.o.topics.join(", "));
       } else if (pkt.type === 3) {
         const pub = parsePublish(pkt);
         if (!pub) continue;

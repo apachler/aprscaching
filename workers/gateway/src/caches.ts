@@ -635,7 +635,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   try {
     await awardHideBadge(env, owner);
   } catch (e) {
-    console.warn(`caches: hide badge for ${owner} not awarded: ${(e as Error).message}`);
+    console.warn("caches: hide badge for %s not awarded: %s", owner, (e as Error).message);
   }
   return json({ cache: toSummary(row!) }, { status: 201 });
 }

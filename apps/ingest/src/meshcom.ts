@@ -67,7 +67,7 @@ export function parseMeshcomFanout(spec: string | undefined): { host: string; po
     const i = t.lastIndexOf(":");
     const port = Number(t.slice(i + 1));
     if (i <= 0 || !Number.isInteger(port) || port < 1 || port > 65535) {
-      console.warn(`[meshcom] ignoring MESHCOM_FANOUT target "${t}" — expected host:port`);
+      console.warn('[meshcom] ignoring MESHCOM_FANOUT target "%s" — expected host:port', t);
       continue;
     }
     out.push({ host: t.slice(0, i), port });

@@ -439,7 +439,7 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
     try {
       federation = await applyFedBbsBulletin(env, row.body);
     } catch (e) {
-      console.warn(`federation: ACSFED bulletin ${row.bid} could not be applied: ${(e as Error).message}`);
+      console.warn("federation: ACSFED bulletin %s could not be applied: %s", row.bid, (e as Error).message);
     }
   }
   // FBB White Pages: a personal message's R: headers name its sender's home BBS. `origin` names the partner

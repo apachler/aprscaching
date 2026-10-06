@@ -3,6 +3,7 @@
 // service call's own answers as plain packets, a player's announced find as third-party traffic.
 import { describe, it, expect } from "vitest";
 import net from "node:net";
+import { format } from "node:util";
 import { AprsIs } from "../src/aprsis.js";
 import { AprsUplink, isPublishable, parseLogresp, uplinkLogin } from "../src/uplink.js";
 import { SOFTWARE_VERSION } from "../src/version.js";
@@ -106,7 +107,7 @@ describe("APRS-IS uplink verification", () => {
     const srv = await lineServer({ logresp: "unverified" });
     const errors: string[] = [];
     const orig = console.error;
-    console.error = (m: string) => errors.push(m);
+    console.error = (...a: unknown[]) => errors.push(format(...(a as [unknown, ...unknown[]])));
     try {
       const up = new AprsUplink({ host: "127.0.0.1", port: srv.port, serviceCall: "OE8APR-15", servicePass: "1" });
       up.start();

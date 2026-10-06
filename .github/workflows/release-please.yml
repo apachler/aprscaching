@@ -10,7 +10,11 @@ name: release-please
 # The release artifacts (the OCI stack zip and the desktop binaries) are built here, as called
 # workflows, once release-please reports a new release, and nowhere else: a pushed tag starts no
 # workflow, so each release is built once. release-verify then adds the git bundle, the checksums and
-# the signed attestations over all of them.
+# the signed attestations over all of them. Once the release exists, `sync-dev` opens the pull request that brings `dev` up to `main`.
+#
+# A release reaches `main` one of two ways, both pull requests merged with a merge commit: `dev` into `main`, or a
+# `hotfix/vX.Y.Z` branch cut from the release tag into `main` (CONTRIBUTING.md, Releases). main-pr.yml refuses any
+# other head branch.
 on:
   push:
     branches: [main]
@@ -56,12 +60,56 @@ jobs:
     needs: [release-please, oci-stack, desktop]
     if: needs.release-please.outputs.release_created == 'true'
     permissions:
-      contents: write # attach the bundle, the source archive and SHA256SUMS
+      contents: write # attach the bundle, the source archive, the SBOM and SHA256SUMS
       id-token: write # sign the attestations
       attestations: write
     uses: ./.github/workflows/release-verify.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+
+  # After a release, `dev` takes everything `main` has: the release commit (CHANGELOG.md, the manifest, the version)
+  # and, after a hotfix, the fix itself. The `dev` ruleset takes changes by pull request only, so the job opens one
+  # from `main` into `dev`, merged with a merge commit: a squash would leave `main`'s commits outside `dev`'s history,
+  # and the next merge of `dev` into `main` would conflict on them. The workflow token opens it, and GitHub starts no
+  # workflow for that token's events, so the owner closes and reopens it to run the checks `dev` requires.
+  sync-dev:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # open the pull request into dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: open the pull request from main into dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main dev
+          if git merge-base --is-ancestor origin/main origin/dev; then
+            echo "dev already contains main"
+            exit 0
+          fi
+          open=$(gh pr list --base dev --head main --state open --json url --jq '.[0].url // empty')
+          if [ -n "$open" ]; then
+            echo "a pull request from main into dev is open: $open"
+            exit 0
+          fi
+          {
+            echo "Brings \`dev\` up to \`main\` after $TAG: the release commit, and any hotfix released from \`main\`."
+            echo
+            echo "1. **Close this pull request and reopen it** to run the checks \`dev\` requires. The workflow token opened"
+            echo "   it, and GitHub starts no workflow for that token's events. Do not use *Update branch* here: it would"
+            echo "   merge \`dev\` into \`main\`."
+            echo "2. **Merge it with a merge commit**, never a squash, so that \`dev\`'s history contains \`main\`'s commits."
+          } >body.md
+          gh pr create --base dev --head main --title "chore(release): bring dev up to $TAG" --body-file body.md
 
   # Each release opens a discussion in Announcements, linked to the release, so people watching the
   # repository or its discussions hear about it. It runs last, once the release carries all its assets.

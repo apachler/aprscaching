@@ -61,15 +61,15 @@ export function numEnv(
   if (raw == null || raw.trim() === "") return def;
   const n = Number(raw);
   if (!Number.isFinite(n)) {
-    console.warn(`[config] ${name}="${raw}" is not a number — using ${def}`);
+    console.warn('[config] %s="%s" is not a number — using %s', name, raw, def);
     return def;
   }
   if (opts.min != null && n < opts.min) {
-    console.warn(`[config] ${name}=${n} is below the minimum ${opts.min} — using ${opts.min}`);
+    console.warn("[config] %s=%s is below the minimum %s — using %s", name, n, opts.min, opts.min);
     return opts.min;
   }
   if (opts.max != null && n > opts.max) {
-    console.warn(`[config] ${name}=${n} is above the maximum ${opts.max} — using ${opts.max}`);
+    console.warn("[config] %s=%s is above the maximum %s — using %s", name, n, opts.max, opts.max);
     return opts.max;
   }
   return n;

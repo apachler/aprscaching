@@ -601,7 +601,11 @@ async function admitOriginFrame(
   // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
   const skipped = (err: unknown) =>
     console.warn(
-      `federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`,
+      "federation: skipped a %s record of %s from %s: %s",
+      kind,
+      e.origin,
+      ctx.neighbour,
+      (err as Error).message,
     );
   // a frame without its hop count is taken as having travelled as far as a record may
   const hops = (hopsBefore ?? MAX_TRANSIT_HOPS) + 1;
@@ -792,7 +796,7 @@ async function pullFeed(ctx: PullContext, p: PeerRow, type: "key" | "bulletin"):
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to
       // hold the cursor and replay the page forever
       const skipped = (e: unknown) =>
-        console.warn(`federation: skipped a ${def.type} record from ${ctx.neighbour}: ${(e as Error).message}`);
+        console.warn("federation: skipped a %s record from %s: %s", def.type, ctx.neighbour, (e as Error).message);
       try {
         const { verdict, error } = await admitFrame(env, fb, gate);
         if (verdict === "applied") applied++;

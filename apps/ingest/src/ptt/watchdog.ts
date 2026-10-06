@@ -103,7 +103,7 @@ export class PttWatchdog implements Ptt {
       await this.unkey();
     } finally {
       await withTimeout(this.ptt.close(), this.opMs, `${this.ptt.label} close`).catch((e: Error) => {
-        console.error(`[ptt] ${e.message}`);
+        console.error("[ptt] %s", e.message);
         this.ptt.releaseSync?.();
       });
     }
@@ -142,17 +142,17 @@ export class PttWatchdog implements Ptt {
       try {
         this.ptt.releaseSync?.();
       } catch (e) {
-        console.error(`[ptt] watchdog: the synchronous release of ${this.ptt.label} failed: ${(e as Error).message}`);
+        console.error("[ptt] watchdog: the synchronous release of %s failed: %s", this.ptt.label, (e as Error).message);
       }
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           await this.confirmUnkey();
           return;
         } catch (e) {
-          console.error(`[ptt] watchdog could not unkey ${this.ptt.label}: ${(e as Error).message}`);
+          console.error("[ptt] watchdog could not unkey %s: %s", this.ptt.label, (e as Error).message);
         }
       }
-      console.error(`[ptt] watchdog: ${this.ptt.label} may still be keyed; the radio's own time-out must end it`);
+      console.error("[ptt] watchdog: %s may still be keyed; the radio's own time-out must end it", this.ptt.label);
     })().finally(() => {
       this.tripping = null;
     });

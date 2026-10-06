@@ -663,7 +663,7 @@ export function parseFedPeers(raw: string | undefined): ConfiguredPeer[] {
     if (!url) continue;
     const fingerprint = hash < 0 ? null : normalizeFingerprint(entry.slice(hash + 1));
     if (hash >= 0 && !fingerprint)
-      console.warn(`federation: the FED_PEERS entry for ${url} carries a suffix that is not a key fingerprint`);
+      console.warn("federation: the FED_PEERS entry for %s carries a suffix that is not a key fingerprint", url);
     out.push({ url, fingerprint });
   }
   return out;

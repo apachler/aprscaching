@@ -90,7 +90,7 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
       onNetrom: (packet, remote, sendNetrom) => node.onLinkNetrom(remote, packet, sendNetrom),
     });
     node.serveInbound(nodeApp); // also answer stations that connect a NET/ROM circuit TO us (L4 inbound)
-    console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
+    console.log("[netrom] node CLI answering inbound connects on %s", env.NETROM_CALL);
   }
 
   if (env.BBS_NODE_CALL) {
@@ -118,12 +118,12 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
         });
       },
     });
-    console.log(`[bbs] BBS answering inbound connects on ${env.BBS_NODE_CALL} (FBB forwarding gate armed)`);
+    console.log("[bbs] BBS answering inbound connects on %s (FBB forwarding gate armed)", env.BBS_NODE_CALL);
   }
 
   if (fedApp && env.FED_LINK_CALL) {
     services.push({ addr: parseAddr(env.FED_LINK_CALL), name: "FED", app: () => fedApp() });
-    console.log(`[fedlink] federation sync answering inbound connects on ${env.FED_LINK_CALL}`);
+    console.log("[fedlink] federation sync answering inbound connects on %s", env.FED_LINK_CALL);
   }
   if (fedApp && env.NETROM_CALL && env.NETROM_ALIAS) console.log("[fedlink] the node answers the FED command");
   else if (fedApp && !env.FED_LINK_CALL)
@@ -136,7 +136,7 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
       },
       services,
       onEvent: (e) => {
-        console.log(`[l2] ${e.kind}: ${e.remote} -> ${e.service}`);
+        console.log("[l2] %s: %s -> %s", e.kind, e.remote, e.service);
         if (e.kind === "connect") users.add(e.remote);
         else if (e.kind === "disconnect") users.delete(e.remote);
       },

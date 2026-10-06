@@ -48,8 +48,8 @@ export async function openSerial(
 ): Promise<SerialLike> {
   const port = new ctor({ path, baudRate, autoOpen: false, hupcl: true });
   // without an `error` listener a USB unplug emits an unhandled 'error' that would stop the whole ingest
-  port.on("error", (e: Error) => console.error(`[${tag}] serial error on ${path}: ${e.message}`));
-  port.on("close", () => console.warn(`[${tag}] serial port ${path} closed (radio unplugged?)`));
+  port.on("error", (e: Error) => console.error("[%s] serial error on %s: %s", tag, path, e.message));
+  port.on("close", () => console.warn("[%s] serial port %s closed (radio unplugged?)", tag, path));
   await new Promise<void>((res, rej) =>
     port.open((e) => (e ? rej(new Error(`cannot open ${path}: ${e.message}`)) : res())),
   );

@@ -183,7 +183,7 @@ export async function openGpioPtt(
           holder = null;
           onceUnkeyed();
         });
-        console.error(`[ptt] GPIO idle holder failed (${(e as Error).message}); the line was set unkeyed once`);
+        console.error("[ptt] GPIO idle holder failed (%s); the line was set unkeyed once", (e as Error).message);
       }
     },
     close: () =>

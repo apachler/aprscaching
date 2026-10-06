@@ -44,7 +44,7 @@ export function forgetPtt(p: Ptt): void {
 export async function releaseAllPtt(): Promise<void> {
   await Promise.all(
     [...open].map((p) =>
-      p.unkey().catch((e: Error) => console.error(`[ptt] could not unkey ${p.label}: ${e.message}`)),
+      p.unkey().catch((e: Error) => console.error("[ptt] could not unkey %s: %s", p.label, e.message)),
     ),
   );
 }
@@ -55,7 +55,7 @@ export function releaseAllSync(): void {
     try {
       p.releaseSync?.();
     } catch (e) {
-      console.error(`[ptt] exit release of ${p.label} failed: ${(e as Error).message}`);
+      console.error("[ptt] exit release of %s failed: %s", p.label, (e as Error).message);
     }
   }
 }

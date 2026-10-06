@@ -95,13 +95,13 @@ export class KissTnc {
     s.on("connect", () => {
       this.connected = true;
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
-      console.log(`[kiss] connected ${this.o.host}:${this.o.port}`);
+      console.log("[kiss] connected %s:%s", this.o.host, this.o.port);
     });
     s.on("data", (chunk: Buffer) => {
       const overflows = this.rx.overflows;
       const frames = this.rx.push(chunk);
       if (this.rx.overflows !== overflows)
-        console.warn(`[kiss] RX frame over ${KISS_RX_MAX_BYTES} bytes with no closing FEND — not KISS? dropped`);
+        console.warn("[kiss] RX frame over %s bytes with no closing FEND — not KISS? dropped", KISS_RX_MAX_BYTES);
       for (const crcd of frames) {
         // a KISS host such as the Linux kernel's mkiss opens with SMACK and FlexNet CRC probes
         const k = kissStripCrc(crcd);
@@ -111,7 +111,9 @@ export class KissTnc {
         if (!this.meshcomNode && isMeshcomNode(k, f?.dst)) {
           this.meshcomNode = true;
           console.error(
-            `[kiss] ${this.o.host}:${this.o.port} is a MeshCom node, not a TNC: its frames are ignored and nothing is sent through it. Listen to the node with MESHCOM_NODE instead.`,
+            "[kiss] %s:%s is a MeshCom node, not a TNC: its frames are ignored and nothing is sent through it. Listen to the node with MESHCOM_NODE instead.",
+            this.o.host,
+            this.o.port,
           );
         }
         if (this.meshcomNode) continue;

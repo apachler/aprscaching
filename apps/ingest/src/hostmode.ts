@@ -155,13 +155,14 @@ export class HostmodeTnc {
       this.poll = setInterval(() => {
         if (this.connected) this.send(hostmodeCommand(0, "G"));
       }, 500);
-      console.log(`[hostmode] connected ${this.o.host}:${this.o.port}`);
+      console.log("[hostmode] connected %s:%s", this.o.host, this.o.port);
     });
     s.on("data", (chunk: Buffer) => {
       const monitored = this.rx.push(chunk);
       if (!monitored) {
         console.warn(
-          `[hostmode] RX buffer over ${HOSTMODE_RX_MAX_BYTES} bytes with no frame — not host mode? reconnecting`,
+          "[hostmode] RX buffer over %s bytes with no frame — not host mode? reconnecting",
+          HOSTMODE_RX_MAX_BYTES,
         );
         s.destroy();
         return;

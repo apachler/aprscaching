@@ -95,7 +95,7 @@ export class MeshcomSender {
       outcome,
     };
     if (this.deps.audit) return this.deps.audit(entry);
-    console.log(`[meshcom] tx ${JSON.stringify(entry)}`);
+    console.log("[meshcom] tx %s", JSON.stringify(entry));
     if (this.o.auditPath) await appendFile(this.o.auditPath, JSON.stringify(entry) + "\n").catch(() => {});
   }
 

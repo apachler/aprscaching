@@ -257,7 +257,7 @@ export async function learnFromPeer(
     const doc = JSON.parse(new TextDecoder().decode(body)) as { peers?: unknown } | null;
     await learnListing(env, wk.instance, doc?.peers);
   } catch (e) {
-    console.warn(`federation: the peer list of ${wk.instance} was not read: ${(e as Error).message}`);
+    console.warn("federation: the peer list of %s was not read: %s", wk.instance, (e as Error).message);
   }
 }
 

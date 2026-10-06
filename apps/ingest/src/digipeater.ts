@@ -45,7 +45,7 @@ export class Digipeater {
     const key = dedupeKey(f);
     if (this.recent.has(key)) return;
     this.recent.set(key, nowMs);
-    if (this.kiss.send(out)) console.log(`[digi] repeated ${f.src} -> ${out.path.join(",")}`);
+    if (this.kiss.send(out)) console.log("[digi] repeated %s -> %s", f.src, out.path.join(","));
   }
 }
 
@@ -94,7 +94,7 @@ export class ConnectedDigipeater {
     if (this.recent.has(key)) return; // already handled this frame this window
     this.recent.set(key, nowMs);
     const tx = () => {
-      if (this.kiss.sendFrame(out)) console.log(`[digi-c] repeated ${addrStr(f.src)}→${addrStr(f.dst)} ${f.type}`);
+      if (this.kiss.sendFrame(out)) console.log("[digi-c] repeated %s→%s %s", addrStr(f.src), addrStr(f.dst), f.type);
     };
     if (this.opts.viscousMs) {
       const tok = setTimeout(() => {

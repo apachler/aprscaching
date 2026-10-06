@@ -4,6 +4,7 @@
 // on their indexes and its pages stay small, and a summary honours `for` only for a peer this instance knows.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
+import { format } from "node:util";
 import type { AddressInfo } from "node:net";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 /** Origins one summary page lists (fedtransit.ts). */
@@ -72,7 +73,7 @@ describe("a failure inside the gateway", () => {
     const body = await res.text();
     expect(JSON.parse(body)).toEqual({ error: "internal error" });
     expect(body).not.toMatch(/SQLITE|\/srv/);
-    expect(String(logged.mock.calls[0]?.[1])).toMatch(/SQLITE_CORRUPT/);
+    expect(format(...(logged.mock.calls[0] as [unknown, ...unknown[]]))).toMatch(/SQLITE_CORRUPT/);
   });
 
   it("answers the same over the Node server's listener", async () => {

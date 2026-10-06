@@ -1,7 +1,8 @@
 name: release-verify
 # Makes a release verifiable. Once its other artifacts are attached, this adds the downloads an operator
 # starts from — the release as a git bundle (clone it, and the checkout updates like any other), the source
-# archive and the Pocket installer, stamped with the tag and the bundle's SHA-256 — then a SHA256SUMS over every asset and a signed build-provenance
+# archive and the Pocket installer, stamped with the tag and the bundle's SHA-256, and a CycloneDX SBOM of the
+# npm packages the app ships — then a SHA256SUMS over every asset and a signed build-provenance
 # attestation for each (Sigstore, keyless: the signature names this repository's workflow, so there is no
 # signing key to keep). Operators check them with `sha256sum -c` and `gh attestation verify`
 # (docs/run/install/verified-downloads.md).
@@ -25,7 +26,7 @@ jobs:
   sign:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # attach the bundle, the source archive, pocket.sh and SHA256SUMS
+      contents: write # attach the bundle, the source archive, the SBOM, pocket.sh and SHA256SUMS
       id-token: write # the Sigstore signing identity of the attestations
       attestations: write
     env:
@@ -34,6 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { ref: "${{ inputs.tag }}", fetch-depth: 0 }
+      # pnpm and Node for the SBOM; no cache, so the release reads only its own lockfile and the registry
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24 }
       - name: Build the downloads and collect the release's assets
         run: |
           set -euo pipefail
@@ -47,6 +52,14 @@ jobs:
           sed -e "s/^POCKET_RELEASE=\"\"/POCKET_RELEASE=\"$TAG\"/" -e "s/^POCKET_BUNDLE_SHA256=\"\"/POCKET_BUNDLE_SHA256=\"$sum\"/" \
             deploy/pocket/pocket.sh >"$out/pocket.sh"
           grep -qx "POCKET_BUNDLE_SHA256=\"$sum\"" "$out/pocket.sh" || { echo "pocket.sh was not stamped" >&2; exit 1; }
+          # the SBOM: every workspace package's production dependencies, from the tag's lockfile. The install only
+          # unpacks the packages, so the SBOM can carry their licences; no install script runs.
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm -r sbom --sbom-format cyclonedx --sbom-spec-version 1.6 --prod --sbom-type application \
+            >"$out/aprscaching-$TAG.cdx.json"
+          node -e 'const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            if (b.bomFormat !== "CycloneDX" || !b.components?.length) process.exit(1);
+            console.log("SBOM: %d components", b.components.length);' "$out/aprscaching-$TAG.cdx.json"
           # the OCI stack, the desktop binaries and the Bun runtime's licence notices, attached by the jobs
           # before this one; SHA256SUMS covers every one of them, so a missing asset fails the release
           assets=(aprscaching-oci-stack.zip aprscaching-windows-x64.exe aprscaching-macos-arm64 aprscaching-macos-x64
@@ -67,4 +80,5 @@ jobs:
       - name: Attach the downloads and the checksums
         run: |
           gh release upload "$TAG" --clobber "dist/release/aprscaching-$TAG.bundle" \
-            "dist/release/aprscaching-$TAG-source.tar.gz" dist/release/pocket.sh dist/release/SHA256SUMS
+            "dist/release/aprscaching-$TAG-source.tar.gz" "dist/release/aprscaching-$TAG.cdx.json" \
+            dist/release/pocket.sh dist/release/SHA256SUMS

@@ -70,7 +70,7 @@ export async function startFieldDiscovery(env: Env, port: number, fieldShape: bo
       onFound: (f) => void recordLanSighting(env, f).catch((e) => console.error("mdns:", (e as Error).message)),
     });
   } catch (e) {
-    console.warn(`mdns: not started: ${(e as Error).message}`);
+    console.warn("mdns: not started: %s", (e as Error).message);
   }
 }
 

@@ -154,7 +154,7 @@ function linkSent(env: Env, e: string, purpose: string, token: string, link: str
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
   // explicit opt-in, never merely "email isn't configured". Off ⇒ fail closed.
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
-    console.log(`dev sign-in link for ${e}: ${link}`); // the server log stands in for the mailbox
+    console.log("dev sign-in link for %s: %s", e, link); // the server log stands in for the mailbox
     return json({ sent: false, purpose, devToken: token, devLink: link });
   }
   return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
@@ -260,7 +260,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   // names the app origin. Reached on another address of this instance, it names that address.
   const onLoopback = LOOPBACK_HOSTS.has(new URL(req.url).hostname);
   const origin = requested ?? (onLoopback && env.APP_URL ? appBase(env) : gatewayBase(req, env));
-  console.log(`operator sign-in link issued for ${cs} (${existing ? "existing" : "new"} account)`);
+  console.log("operator sign-in link issued for %s (%s account)", cs, existing ? "existing" : "new");
   return json({
     link: `${origin}/auth/email/verify?token=${token}`,
     callsign: cs,
@@ -572,7 +572,7 @@ export async function sendEmailConfirmation(
   );
   if (sent) return { sent };
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
-    console.log(`dev confirmation link for ${email}: ${link}`);
+    console.log("dev confirmation link for %s: %s", email, link);
     return { sent, devToken: token, devLink: link };
   }
   return { sent };
