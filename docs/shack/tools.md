@@ -124,7 +124,8 @@ change how finds are verified.
 
 Transmitting is gated three ways. The tool needs the `tx` or `beacon` permission; the app checks that your
 callsign is [verified](../play/join.md#verify-your-callsign) each time the tool asks; and the frame goes out only
-over a radio connected to this tab with your [consent for this tab](my-radio.md#allow-transmitting-for-this-tab).
+over the radio you connected in [**My radio**](my-radio.md), with your
+[consent for this tab](my-radio.md#allow-transmitting-for-this-tab).
 A tool never asks for that consent itself: without it, the tool's transmission is held and the app says so. Every
 frame a tool sends shows in **Recent transmissions** under the tool's name and flashes the transmit indicator. The
 app lets each tool transmit at most once a minute, and a beacon at most every 10 minutes. A scheduled query

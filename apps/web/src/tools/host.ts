@@ -12,7 +12,7 @@
  * transmission is held. The host rate-limits each tool (`TOOL_TX_MIN_GAP_MS`) and clamps its beacon interval.
  */
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { ToolHost, type BeaconSpec } from "@aprscaching/tools";
+import { ToolHost, TOOL_TX_MIN_GAP_MS, type BeaconSpec } from "@aprscaching/tools";
 import { TOAST_EVENT } from "../ui/Toast.js";
 import { radioLink } from "../rf/RadioLinkHost.js";
 
@@ -40,12 +40,21 @@ const toast = (msg: string) => {
 /** The gate a tool's transmission passes: a verified callsign and a live transmit grant for this tab's radio. */
 export const toolTxOpen = (): boolean => txVerified && radioLink.canTransmit();
 
+/** When each tool last transmitted: its requests and its beacons share the one-a-minute limit. */
+const lastTx = new Map<string, number>();
+
 /** Send one APRS information field for a tool over the radio link, under the callsign the grant covers. */
 async function transmitFor(tool: string, info: string): Promise<boolean> {
   if (!toolTxOpen()) {
     toast(`${titleOf(tool)}: transmission held, no transmit consent for this tab`);
     return false;
   }
+  const now = Date.now();
+  if (now - (lastTx.get(tool) ?? -Infinity) < TOOL_TX_MIN_GAP_MS) {
+    toast(`${titleOf(tool)}: transmission held, one a minute`);
+    return false;
+  }
+  lastTx.set(tool, now);
   try {
     await radioLink.transmit(
       { src: radioLink.txCall(), dst: TOOL_DST, path: TOOL_PATH, payload: info },

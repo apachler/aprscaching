@@ -145,14 +145,16 @@ A tool transmits only through the app's browser radio link, the way the app's ow
 
 - the tool holds `tx` (or `beacon` for a beacon);
 - the player's callsign is control-verified, checked at every request;
-- a transmit-capable radio is connected to this tab, with the player's [transmit consent for this
-  tab](../shack/my-radio.md#allow-transmitting-for-this-tab). A tool never asks for that consent itself; without
-  it, the transmission is held and the app says so.
+- a transmit-capable radio is connected in **Settings → My radio** (the browser radio link), with the player's
+  [transmit consent for this tab](../shack/my-radio.md#allow-transmitting-for-this-tab). A tool never asks for
+  that consent itself; without it, the transmission is held and the app says so. The packet terminal's own TNC
+  port is not a tool's to use, except through the `session.script` service.
 
 Every frame goes out from the callsign the consent covers, to `APZACG` via `WIDE1-1`, shows in **Recent
 transmissions** under the tool's title and flashes the transmit indicator. The app refuses an information field
 that is empty, longer than 256 characters, more than one line, or third-party traffic (starting with `}`). It lets
-each tool transmit once a minute (`TOOL_TX_MIN_GAP_MS`); a request inside that minute answers `false`.
+each tool transmit once a minute (`TOOL_TX_MIN_GAP_MS`), its beacon included; a request inside that minute answers
+`false`.
 
 A beacon transmits its comment as an APRS status (`>comment`), at once and then every `intervalSec` seconds while
 the gate is open. The app clamps the interval to 10 minutes through one day and the comment to one line of 62
