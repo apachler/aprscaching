@@ -127,10 +127,12 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
   footers); the DCO workflow rejects them. `main` is the
   release branch: release-please runs on pushes to `main`, and a merged release PR tags `vX.Y.Z` and calls the desktop,
   OCI-stack and release-verify workflows (a hand-pushed tag starts none of them); release-verify attaches the
-  CycloneDX SBOM beside `SHA256SUMS`. After the release, `sync-dev` fast-forwards `dev` to `main`, or, when `dev`
-  has moved, opens a PR from `main` into `dev` that is merged with a merge commit, never squashed.
+  CycloneDX SBOM beside `SHA256SUMS`. After the release, `sync-dev` opens a PR from `main` into `dev` (the `dev`
+  ruleset is PR-only), merged with a merge commit, never squashed. That PR and release-please's release PR are
+  opened by the workflow token, so no check runs on them until the owner closes and reopens them; the required
+  checks block the merge until then (DCO skips both, which counts as passed).
 - `main` takes PRs from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch only (`main-pr.yml`, the
-  `head branch` check). A hotfix branch is cut from the release tag, takes `fix:` commits, and merges into `main`
+  `head branch` check, optional, not required by the ruleset). A hotfix branch is cut from the release tag, takes `fix:` commits, and merges into `main`
   with a merge commit; release-please releases the patch, and `sync-dev` brings it to `dev`. `/release`
   (`.claude/skills/release/`) walks a release; it never merges into `main` without the owner's go-ahead in the
   conversation, and never starts a release unasked.

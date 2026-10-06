@@ -210,9 +210,9 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
-| `main-pr.yml` — `head branch`: a PR into `main` comes from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch | PR into `main` | **Yes** (`main`) |
+| `main-pr.yml` — `head branch`: a PR into `main` comes from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch | PR into `main` | Optional (`main` may require it) |
 | `scorecard.yml` — OpenSSF Scorecard: results in code scanning and on the public Scorecard API (the README badge) | push (`dev`), weekly, branch protection changes + manual | Informational |
-| `release-please.yml` — versioning + changelog, then the three below, the operator actions at the top of the notes, the release's Announcements discussion, and `sync-dev`, which brings `dev` up to `main` | push (main) | Release |
+| `release-please.yml` — versioning + changelog, then the three below, the operator actions at the top of the notes, the release's Announcements discussion, and `sync-dev`, which opens the pull request that brings `dev` up to `main` | push (main) | Release |
 | `desktop-release.yml` — Bun desktop binaries | called by `release-please.yml` + manual | Release |
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | called by `release-please.yml` + manual | Release |
 | `release-verify.yml` — git bundle, source archive, `pocket.sh`, the CycloneDX SBOM, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
@@ -227,7 +227,7 @@ When the diff cannot be read, every job runs.
 ### Cutting a release
 
 `main` takes pull requests from `dev`, from a `hotfix/vX.Y.Z` branch and from release-please's own branch, each
-merged with a merge commit; the `head branch` check fails any other. A release starts with a pull request from
+merged with a merge commit; the optional `head branch` check fails any other. A release starts with a pull request from
 `dev` into `main`; the owner runs it with the `/release` skill (`.claude/skills/release/SKILL.md`), which stops for
 the owner's go-ahead before each merge into `main`.
 
@@ -244,14 +244,18 @@ published, the workflow puts them at the top of its notes under **Operator actio
 `BEGIN_COMMIT_OVERRIDE` block in that pull request's description (see `CONTRIBUTING.md`, Operator notes) before
 merging the release PR.
 
-release-please opens its PR with the workflow token, and GitHub starts no workflow for that token's events, so the
-`head branch` check and the rest of CI do not run on the release PR by themselves. Close and reopen the release PR
-to run them before merging it.
+Once the release exists, the `sync-dev` job opens a pull request from `main` into `dev`, titled
+`chore(release): bring dev up to vX.Y.Z`; the `dev` ruleset takes changes by pull request only. Merge it with a
+merge commit, never a squash: `dev`'s history then contains `main`'s, and the next merge into `main` does not
+conflict.
 
-Once the release exists, the `sync-dev` job brings `dev` up to `main`. When `dev` has not moved since it was merged
-into `main`, the job fast-forwards `dev`. Otherwise, or when a ruleset refuses the push, it opens a pull request
-from `main` into `dev`, titled `chore(release): bring dev up to vX.Y.Z`. Merge that pull request with a merge
-commit, never a squash: `dev`'s history then contains `main`'s, and the next merge into `main` does not conflict.
+The release PR and the pull request into `dev` are opened with the workflow token, and GitHub starts no workflow for
+that token's events. The checks the `main` and `dev` rulesets require (`lint + format`, `unit tests + builds`, the
+three conformance legs and the DCO `check`) therefore never report on them, and the merge stays blocked. Close each
+pull request and reopen it: the reopen is the owner's event, so CI, DCO and `head branch` run. DCO skips a pull
+request opened by `github-actions[bot]`, and a skipped job counts as passed. Reopen the release PR again whenever
+release-please updates it. On the pull request into `dev`, never use *Update branch*: it would merge `dev` into
+`main`.
 
 ### Releasing a hotfix
 
@@ -272,8 +276,8 @@ flowchart LR
 4. release-please walks every commit the merge brings in since the last release, not only `main`'s first
    parents, so the `fix:` commits give it a patch bump: it opens the release PR for `v1.0.1`. A `Release-As: 1.0.1`
    footer on a commit fixes the version when the commit types would give another.
-5. Merging the release PR releases `v1.0.1`. `sync-dev` then opens the pull request from `main` into `dev`, since
-   `dev` has moved since `v1.0.0`; merging it brings the fix to `dev`.
+5. Merging the release PR releases `v1.0.1`. `sync-dev` then opens the pull request from `main` into `dev`; close
+   and reopen it, then merge it with a merge commit, which brings the fix to `dev`.
 
 ## Next
 

@@ -134,15 +134,23 @@ branch onto the updated `dev` rather than basing it on the other branch.
 
 `main` is the release branch and takes pull requests from three branches only: `dev`, a `hotfix/vX.Y.Z` branch,
 and release-please's own release branch. The `head branch` check (`.github/workflows/main-pr.yml`) fails a pull
-request into `main` from any other branch.
+request into `main` from any other branch; it is optional, not one of the checks the `main` ruleset requires.
 
 1. A pull request from `dev` into `main`, merged with a **merge commit**.
 2. release-please opens or updates its release PR on `main`: the version and the `CHANGELOG.md` entry, from the
    Conventional Commits since the last release. Merging it tags `vX.Y.Z`, publishes the GitHub release and builds
    its downloads.
-3. The release workflow then brings `dev` up to `main`. When `dev` has not moved since step 1, it fast-forwards
-   `dev`; otherwise it opens a pull request from `main` into `dev`, which is merged with a **merge commit**, never
-   a squash, so that `dev`'s history contains `main`'s.
+3. The release workflow then opens a pull request from `main` into `dev`, titled
+   `chore(release): bring dev up to vX.Y.Z` (the `dev` ruleset takes changes by pull request only). It is merged
+   with a **merge commit**, never a squash, so that `dev`'s history contains `main`'s.
+
+**Two pull requests need a close and a reopen.** release-please's release PR (step 2) and the pull request into
+`dev` (step 3) are opened with the workflow token, and GitHub starts no workflow for that token's events. Their
+required checks (`lint + format`, `unit tests + builds`, the three conformance legs and the DCO `check`) therefore
+never report, and the merge stays blocked. Close the pull request and reopen it: the reopen is yours, so CI and DCO
+run. DCO skips a pull request opened by `github-actions[bot]`, and a skipped job counts as passed. Do it again
+whenever release-please updates its PR. On the pull request into `dev`, never press *Update branch*: it would merge
+`dev` into `main`.
 
 ### Hotfixes
 
@@ -155,8 +163,8 @@ A fix that cannot wait for the next release from `dev` ships as a patch release 
 3. Open a pull request from `hotfix/v1.0.1` into `main`, merged with a **merge commit**.
 4. release-please reads the `fix:` commits the merge brings in and opens a release PR for `v1.0.1`. Merging it
    releases the patch.
-5. The release workflow opens the pull request from `main` into `dev` (step 3 of [Releases](#releases)), which
-   brings the fix to `dev`. The hotfix branch is deleted once it has merged.
+5. The release workflow opens the pull request from `main` into `dev` (step 3 of [Releases](#releases)); close and
+   reopen it, then merge it with a merge commit, which brings the fix to `dev`. The hotfix branch is deleted once it has merged.
 
 ### Dependencies
 

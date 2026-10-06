@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   check:
-    # release-please's own release PRs are authored by github-actions[bot] and carry no sign-off
+    # pull requests opened by the workflow token (release-please's release PR, the sync of dev after a release) are
+    # github-actions[bot]'s; the job reports as skipped, which a required check accepts once the workflow runs
     if: github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -30,6 +31,9 @@ jobs:
             # skip merge commits (they have >1 parent)
             if [ "$(git rev-list --parents -n 1 "$sha" | wc -w)" -gt 2 ]; then continue; fi
             author="$(git show -s --format='%an <%ae>' "$sha")"
+            # release-please's release commits are github-actions[bot]'s and carry no sign-off; they reach a pull
+            # request from main into dev after a release
+            if [ "$author" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" ]; then continue; fi
             if ! git show -s --format='%B' "$sha" | grep -qiE "^Signed-off-by: .+ <.+@.+>"; then
               echo "::error::Commit $sha ($author) is missing a Signed-off-by line."
               missing=1

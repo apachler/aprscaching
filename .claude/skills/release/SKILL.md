@@ -75,7 +75,8 @@ Hotfixes) and `docs/contribute/testing.md` (Cutting a release).
     gh pr checks <n> -R $R --watch
     ```
 
-    The `head branch` check, CI and the DCO check run. Report each result. A failure stops here.
+    CI, the DCO `check` and the optional `head branch` check run. The `main` ruleset requires `lint + format`,
+    `unit tests + builds`, the three conformance legs and `check`. Report each result. A failure stops here.
 
 4. **Merge it, on the owner's go-ahead only.** Show the PR URL, the checks and the commit count
    (`gh pr view <n> -R $R --json commits --jq '.commits | length'`), then ask. With the go-ahead in the
@@ -101,13 +102,17 @@ Hotfixes) and `docs/contribute/testing.md` (Cutting a release).
     more: stop. A wrong version or a missing entry is fixed on `dev` (a `Release-As:` footer, a
     `BEGIN_COMMIT_OVERRIDE` block in a merged PR's description), never by editing the release PR.
 
-    release-please opens the PR with the workflow token, so no check has run on it. Close and reopen it to run them,
-    then wait:
+    release-please opens the PR with the workflow token, and GitHub starts no workflow for that token's events: no
+    check has run on it, and the required ones block the merge. Close and reopen it with the owner's `gh` login, so
+    the reopen is the owner's event and CI, DCO and `head branch` run (DCO skips a `github-actions[bot]` PR, which
+    counts as passed). Then wait until every required check has reported:
 
     ```bash
     gh pr close <release pr> -R $R && gh pr reopen <release pr> -R $R
     gh pr checks <release pr> -R $R --watch
     ```
+
+    When release-please updates the PR again (another merge into `main`), close and reopen it again.
 
 6. **Merge the release PR, on the owner's go-ahead only.** Ask, showing the version, the CHANGELOG entry and the
    checks. With the go-ahead in the conversation:
@@ -144,17 +149,24 @@ Hotfixes) and `docs/contribute/testing.md` (Cutting a release).
     (`gh run rerun <run id> -R $R --failed`, or `release-verify.yml` by hand with the tag) waits for the owner's
     go-ahead. Report the release URL and its assets.
 
-8. **Confirm the dev sync.** The `sync-dev` job either fast-forwarded `dev` or opened a pull request from `main`
-   into `dev`:
+8. **Confirm the dev sync.** The `dev` ruleset takes changes by pull request only, so the `sync-dev` job opened a
+   pull request from `main` into `dev` (`chore(release): bring dev up to vX.Y.Z`):
+
+    ```bash
+    gh pr list -R $R --base dev --head main --state open --json number,url
+    gh pr close <sync pr> -R $R && gh pr reopen <sync pr> -R $R
+    gh pr checks <sync pr> -R $R --watch
+    ```
+
+    The workflow token opened it too, so close and reopen it as in step 5 to run the checks `dev` requires. Never use
+    `gh pr update-branch` or *Update branch* on it: that merges `dev` into `main`. Give the owner its URL and the
+    checks; it is merged with a **merge commit**, never a squash, and only on the owner's go-ahead:
+    `gh pr merge <sync pr> -R $R --merge`. Then confirm:
 
     ```bash
     git -c url."https://github.com/".insteadOf="git@github.com:" fetch origin
     git merge-base --is-ancestor origin/main origin/dev && echo "dev contains main"
-    gh pr list -R $R --base dev --head main --state open --json number,url
     ```
-
-    When a pull request is open, give the owner its URL: it is merged with a **merge commit**, never a squash, and
-    only on the owner's go-ahead. Report the job's result either way.
 
 ## Report
 
