@@ -62,7 +62,6 @@ owner-gating → auth guards). CI runs it against this server and the Bun server
 two runtimes can never silently diverge.
 
 ## Scope / notes
-- Single-process SQLite ⇒ single node. Horizontal scale (libSQL/Turso or Postgres) can slot into the
-  same `SqlDatabase` shim later.
-- No WS hibernation (a self-host process is always up).
+- Single-process SQLite ⇒ single node. Another database would plug in behind the same `SqlDatabase` shim.
+- WebSockets stay open in the one process, which is always up.
 - The offline map archive is a file (`OFFLINE_TILES_PATH`), served by byte range at `/tiles/offline.pmtiles`.

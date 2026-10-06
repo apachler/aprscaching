@@ -30,9 +30,9 @@ Each callsign is verified on its own. A verified callsign shows **✓ you contro
 is held, not proven: its licensee can take it over ([Take over your callsign](#take-over-your-callsign)), so
 verify every callsign that is yours.
 
-If **Add** says another account holds the callsign without having proven control, **Take over** opens the
-same steps as [Take over your callsign](#take-over-your-callsign). The callsign then joins your account,
-verified.
+If **Add** says another account holds the callsign without having proven control, Settings shows the steps of
+[Take over your callsign](#take-over-your-callsign) right there: tap **Prove control** to start. The callsign
+then joins your account, verified.
 
 **Set active** picks the callsign you operate as. The active one shows **active**. Switching never asks you
 to verify again. Your past finds stay with the callsign you logged them under.
@@ -176,14 +176,14 @@ or erase your data:
 
 1. Tap **Sign in**, then **Get or erase my data**.
 2. Type the email address confirmed on your account and tap **Email me a link**.
-3. Open the link and confirm. The **Your data** panel offers **Download my data** and **Erase my account**.
+3. Open the link and tap **Open my data**. The **Your data** panel offers **Download my data** and **Erase my account**.
 
 The link opens your data and nothing else, and the session it starts lasts an hour.
 
 ## Move to another instance
 
-The app has no button yet for moving your account to another instance; a guided move is planned. Until then,
-ask the sysop of the instance you want to move to: the instances can carry your callsign and your device keys
+The app has no button for moving your account to another instance. Ask the sysop of the instance you want
+to move to: the instances can carry your callsign and your device keys
 across, and other instances then credit your earlier finds to your new home.
 
 What a move does not take along:

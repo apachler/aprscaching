@@ -131,7 +131,7 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 ## Report a problem
 
 Something wrong on a cache page? Tap **More** (**⋯**) beside a cache, a log, a photo or a profile, then
-**Report**. Pick what is wrong: **Spam**, **Offensive**, **Wrong location or unsafe**, **Copyright** or
+**Report…**. Pick what is wrong: **Spam**, **Offensive**, **Wrong location or unsafe**, **Copyright** or
 **Other**, and add a few words. **Other** needs the words. The report goes to your instance's
 [sysop](../glossary.md#sysop), who decides what to do. The person you report never learns who reported them.
 You can report without signing in, but less often.

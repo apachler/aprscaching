@@ -154,9 +154,10 @@ explains it in full.
     ([Verify your callsign](play/join.md#verify-your-callsign)).
 
 <span id="attested-site"></span>Attested site
-:   A receiving station the sysop vouches for as their own. Only a direct hearing at an attested site can
-    make a find Radio-verified
-    ([Receiving site and Tier A](run/radios/rf-ingest.md#receiving-site-and-tier-a)).
+:   A receiving station the sysop vouches for: one of their own, or the ingest box a member lends the instance
+    once the sysop trusts its hearings. Only a direct hearing at an attested site can make a find Radio-verified
+    ([Receiving site and Tier A](run/radios/rf-ingest.md#receiving-site-and-tier-a),
+    [Lend your receiver to an instance](run/radios/lend-a-receiver.md)).
 
 <span id="ingest-box"></span>Ingest box
 :   The program on the operator's own computer that connects their radios and APRS-IS to the
@@ -228,8 +229,10 @@ explains it in full.
     ([Cache adoption](play/hide-a-cache.md#cache-adoption)).
 
 <span id="needs-maintenance"></span>Needs maintenance
-:   A flag on a cache whose last three find or did-not-find logs are all DNFs. It tells the owner to check the
-    cache ([Maintain your cache](play/hide-a-cache.md#maintain-your-cache)).
+:   A flag on a cache that tells the owner to check it. A finder sets it by ticking **The cache needs
+    maintenance** on a log or with **Report a problem: needs maintenance**, and the owner's next maintenance log
+    clears it. The last three find or did-not-find logs all being DNFs set it too, and the next find clears that
+    ([Maintain your cache](play/hide-a-cache.md#maintain-your-cache)).
 
 <span id="favourite"></span>Favourite
 :   A heart (♡) you give a cache you like. The cache sheet shows how many players gave it one

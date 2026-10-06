@@ -44,7 +44,7 @@ step:
 |---|---|
 | `tools/smoke/smoke.mjs` | The end-to-end gateway flow: ingest auth, caches, finds, trust tiers, BBS, federation signing (with `fedwire-mini.mjs`, an independent minimal CBOR codec used as a cross-implementation check) |
 | `tools/smoke/geofence.mjs` | Real-time geofencing over WebSocket: a position near a cache produces a `near_cache` prompt for the right callsign only |
-| `tools/smoke/federation.mjs` | Two instances: publisher seeds, subscriber pull-syncs, signature-verified mirroring (needs `PUB`, `SUB`, `RELAY_SECRET`) |
+| `tools/smoke/federation.mjs` | Two instances: publisher seeds, subscriber pull-syncs, signature-verified mirroring. It reads `PUB` and `SUB` (the two instances), `INGEST_SECRET`, `OPERATOR_SECRET`, `SUBMIT_SECRET` (the hub's `FED_SUBMIT_SECRET`) and `RELAY_SECRET` (both instances' `FED_RELAY_SECRET`); `tools/dev/smoke.sh federation` starts both and sets all six |
 
 ### Running them against each runtime
 
@@ -94,6 +94,12 @@ proves that everything reaches the gateway through the dev server's one origin: 
 with their session cookies, Instance admin, hiding a cache with a photo, logging a find, a packet on the live
 socket, Vite's hot-reload socket, and a passkey registration and sign-in with Chromium's virtual authenticator.
 CI runs it in the `dev-stack` job ([Run from source](run-from-source.md#check-the-dev-stack)).
+
+`pnpm run e2e:offline` (`tools/e2e/offline-shell.mjs`) proves the offline app shell in headless Chromium: it serves
+the built web app (`pnpm --filter @aprscaching/web build` first) with a stand-in gateway, makes an offline pack,
+cuts the connection and reloads, and checks that the app opens signed in with the pack's map and caches, and that a
+signed-out visitor reaches them too. It skips without a Chromium, fails in CI without one, and runs in the
+`e2e-offline` job.
 
 ## Design and accessibility
 
@@ -199,7 +205,10 @@ Pocket's USB TNC bridge is written from the USB CDC-ACM class specification. Pri
 CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent, `dead-exports.mjs`
 fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
 present-tense, every configuration key the code reads documented (and every documented key read), the
-manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
+manual's nav complete, and the links outside the manual whole. CI also runs `node tools/config/generate.mjs --check`,
+which fails when a file generated from the configuration schema (the configuration reference's tables, the
+`.env.example` files, `deploy/lib/config-keys.*`) is out of date
+([Add a configuration key](architecture.md#add-a-configuration-key)). `tools/interop/` runs
 interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc, Direwolf); see its README.
 
 ## CI map (`.github/workflows/`)

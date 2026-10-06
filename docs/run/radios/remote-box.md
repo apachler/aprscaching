@@ -41,7 +41,8 @@ command's callsign has the same base call as the box's station call (`BOX_CALL`,
 
 - be queued within the last `BOX_CMD_MAX_AGE` seconds (default 900, 15 minutes), so a box that was offline
   never sends a stale beacon or message;
-- find transmit switched on, and a KISS TNC on the box;
+- find transmit switched on, and a radio on the box: the KISS TNC, else the first
+  [soundcard port](soundcard.md);
 - fit the box's rate limit: three in a burst, then one per minute.
 
 A beacon goes out at the position set on the box, `BOX_LAT` and `BOX_LON` in degrees; a box without them
@@ -55,8 +56,9 @@ The app asks you to confirm each of these commands before it queues it. A refuse
 command log with the reason. A message carries a message number, so the recipient's station acknowledges it,
 and once the box has sent it, it shows in **Messages**, marked **sent**.
 
-**TX off** is the box's master switch: it silences the APRS digipeater, IGate transmit to RF and remote
-transmits until switched on again or the ingest restarts. The switches live in memory, so a restart returns
+**TX off** is the box's master switch: it silences every port that transmits (the KISS TNC and the soundcard
+ports), and with them the APRS digipeater, IGate transmit to RF, remote transmits, the packet node, the BBS
+and FBB forwarding, until switched on again or the ingest restarts. The switches live in memory, so a restart returns
 the box to its configured state.
 
 ## Answers to radio commands

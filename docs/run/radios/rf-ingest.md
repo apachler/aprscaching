@@ -12,7 +12,7 @@ machine is in [Set up an ingest box](ingest-box.md).
 ## How the box works
 
 Every transport decodes into a normalised packet and adds it to one batch. Every `BATCH_MS` (default
-1500 ms; the Self-host stack's `docker-compose.yml` sets 2000 ms) the box posts the batch as JSON to `INGEST_URL` (default
+1500 ms; the `.env` that `deploy/setup.sh` writes from `deploy/.env.example` sets 2000 ms) the box posts the batch as JSON to `INGEST_URL` (default
 `http://127.0.0.1:8787/ingest`). It signs the request with its own key when it is enrolled (`BOX_ID`,
 `BOX_KEY`), and otherwise sends the shared `INGEST_SECRET` in the `x-ingest-secret` header. `INGEST_URL` can
 point at a gateway on `localhost`, on your LAN or in the cloud: the box works with a gateway anywhere.

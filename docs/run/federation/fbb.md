@@ -81,7 +81,7 @@ over FBB on its own. Both need `FED_BBS` on, on both instances.
 ## Check that it worked
 
 - **Instance admin → Setup** shows **Federation over FBB (experimental)**: off, or on with the number of partners
-  marked for it. `deploy/aprscaching doctor` reports the same as `federation.fbb`.
+  marked for it. `deploy/aprscaching doctor` reports whether it is on or off as `federation.fbb`.
 - After the partner's next forwarding session, your caches show on the partner instance's map.
 
 ## Next

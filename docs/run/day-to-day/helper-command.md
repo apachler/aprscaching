@@ -82,8 +82,8 @@ deploy/aprscaching doctor
 deploy/aprscaching --json doctor
 ```
 
-Each check prints `pass`, `warn` or `fail`, grouped by its id: `config`, `gateway`, `setup`, `ingest`,
-`network`, `federation`, `net44`, `service`, `resources` and `source`. A check that does not pass also
+Each check prints `pass`, `warn` or `fail`, grouped by its id: `config`, `gateway`, `setup`, `mail`, `site`,
+`origins`, `ingest`, `network`, `federation`, `identity`, `net44`, `service`, `resources` and `source`. A check that does not pass also
 prints a `fix:` line and, where one helps, a `see:` line naming a page of this manual. The last line counts
 the passes, warnings and failures. [Troubleshooting](../troubleshooting.md) explains every check, what its
 message means and how to fix it.

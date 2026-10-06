@@ -200,8 +200,10 @@ fingerprint with a copy button, and its last pull and push. **Trust** needs a pi
 fingerprint you compared: a peer added from the registry pins one on its first sync, as `unvetted`, and you
 compare its fingerprint before you trust it. A script that trusts a peer over `OPERATOR_SECRET` sends the
 fingerprint too. Instances your instance only heard of wait in their own group ([Discovery](#discovery)).
-Blocking a peer hides everything it sent. Every trust change, and every peer added, followed or removed, lands in
-**Instance admin → Audit log** ([The audit log](../day-to-day/moderation.md#the-audit-log)).
+A peer row that is switched off shows *not synced until you enable it*: **Enable** starts mirroring it,
+`unvetted`, and **Sync now** stays off until then. Blocking a peer hides everything it sent. Every trust change,
+and every peer added, followed or removed, lands in **Instance admin → Audit log**
+([The audit log](../day-to-day/moderation.md#the-audit-log)).
 
 ### Remove a peer
 

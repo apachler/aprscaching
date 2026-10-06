@@ -80,7 +80,7 @@ INGEST_SECRET=dev-ingest-${hex(16)}
 OPERATOR_SECRET=dev-operator-${hex(16)}
 SESSION_SECRET=dev-session-${hex(16)}
 
-# --- the operator: sign in with this call, then run pnpm dev:verify ---
+# --- the operator: sign in with this call, then run pnpm dev:admin ---
 ADMIN_CALLSIGNS=${call}
 
 # --- dev conveniences: sign-in links come back in-band (and in the gateway log), no mail server needed ---

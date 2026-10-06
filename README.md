@@ -6,8 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/apachler/aprscaching?sort=semver)](https://github.com/apachler/aprscaching/releases)
 [![Manual](https://img.shields.io/badge/manual-apachler.github.io-14b8a6)](https://apachler.github.io/aprscaching/)
 
-**Find real places on the air.** aprscaching is an APRS geocaching game and ham-radio **Shack**. You hide a
-cache, go find it, and log the find *verified by radio* — not just by tapping a button. Hide, hunt, operate.
+**Find real places on the air.** APRScaching is an APRS geocaching game and ham-radio **Shack**. You hide a
+cache, go find it, and log the find *verified by radio*, not by tapping a button. Hide, hunt, operate.
 It runs in a browser, self-hosts on a Raspberry Pi, and federates with other instances into one open network.
 
 Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, MeshCom, TAK/CoT).
@@ -67,8 +67,8 @@ pnpm dev            # gateway + web app on http://localhost:5173, reloading on e
 pnpm dev --ingest   # also the operator-local RF/APRS-IS ingest
 ```
 
-[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the Bun desktop build
-and the ingest box, and
+[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the ingest, a
+federating peer, the Bun runtime and the desktop build, and
 [Testing](https://apachler.github.io/aprscaching/contribute/testing/) covers the smoke and conformance suites.
 
 For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key

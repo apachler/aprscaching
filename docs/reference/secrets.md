@@ -64,11 +64,14 @@ operator surface is unaffected.
 ## Who is a sysop
 
 `ADMIN_CALLSIGNS` (comma-separated licensed calls) names the instance's operators. A signed-in account is a
-**sysop** when all three hold:
+**sysop** when all four hold:
 
 1. its active callsign is in `ADMIN_CALLSIGNS`;
 2. the account holds that call;
-3. the call is **control-verified**, the same proof transmitting needs.
+3. the call is **control-verified**, the same proof transmitting needs;
+4. the session was issued on an https address of the instance. A session issued over plain http (a HAMNET
+   address) has crossed the network unencrypted and administers nothing, unless the instance has no https
+   address at all.
 
 Signing up under a listed call grants nothing until that verification succeeds. The operator confirms their
 own call once after the first sign-in, with the operator CLI
@@ -87,8 +90,14 @@ set.
 
 ## Sessions
 
-A session names its account and that account's session generation. It is honoured only while the account
-exists at that generation and still holds the session's call.
+A session names its account, that account's session generation, the address of the instance it was issued
+on and its scope. It is honoured only on that address, while the account exists at that generation, still
+holds the session's call and is not suspended. A session issued over plain http never passes on the https
+address of the same host.
+
+The scope is `full` for a normal sign-in. An email link to an account that holds no call issues a `data`
+session: it lasts an hour and reaches only the account's data export and erasure, which a suspension never
+closes.
 
 | Event | Effect |
 |---|---|
@@ -97,9 +106,11 @@ exists at that generation and still holds the session's call.
 | **Settings → Account → Sign out everywhere** (`POST /auth/logout-all`) | Every session of the account ends |
 | `SESSION_EPOCH` set to the current Unix time | Every session minted before it is refused: every user is signed out |
 | `SESSION_SECRET` rotated | Every user is signed out |
+| The account is suspended | Its `full` sessions act as nobody until the suspension ends or is lifted; a `data` session still reaches export and erasure |
 | A manual callsign verification is revoked | Sessions continue: the account still holds the call. Transmitting and the sysop role check verification on every request |
 
-A cross-origin request carries a session only from `APP_URL` or an origin in `CORS_ORIGINS`.
+A cross-origin request carries a session only from `APP_URL`, an origin in `EXTRA_ORIGINS` or an origin in
+`CORS_ORIGINS`, and only when that origin is https or loopback.
 
 ## Rotating a secret
 

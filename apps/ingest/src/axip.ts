@@ -6,8 +6,8 @@ import { PeerAllowlist, openListenerWarning, type Resolver } from "./peerfilter.
 
 /**
  * axip.ts — AXIP listener: AX.25 frames encapsulated directly in **IP protocol 93** (the JNOS/BPQ AXIP
- * mode), as opposed to AXUDP (axudp.ts), which wraps the same frames in UDP port 10093. RESERVED seam
- *: wired but feature-flagged off; start only when AXIP_ENABLE is set.
+ * mode), as opposed to AXUDP (axudp.ts), which wraps the same frames in UDP port 10093. Off unless
+ * AXIP_ENABLE or AXIP_PEERS is set; the port sends as well as receives (`AxipPort.sendFrame`).
  *
  * The one thing genuinely different from AXUDP: a raw proto-93 socket delivers the **whole IP datagram
  * including the IP header** (a UDP socket hands you just the payload), so we strip the IPv4 header before

@@ -14,6 +14,7 @@ over Web Serial).
 | `CatRig` | The radio family: `"kenwood"` (Kenwood ASCII `FA…;`, also modern Yaesu such as FT-991 and FTDX), `"icom"` (Icom CI-V binary) or `"yaesu-bin"` (classic Yaesu binary: FT-817, 857, 897) |
 | `catSetFrequency(rig, hz, { icomAddr })` | The set-VFO-frequency command. `icomAddr` is the CI-V address, `0x94` by default |
 | `catSetMode(rig, mode, { icomAddr })` | The set-mode command, or `null` when the mode is not mapped for that family. Mode setting is best-effort; frequency is the reliable core |
+| `catSetPtt(rig, on, { icomAddr })` | The key or unkey command: Kenwood `TX;` / `RX;`, Icom CI-V `1C 00 01` / `1C 00 00`, classic Yaesu opcode `08` / `88`. Keying transmits: the caller gates it on callsign control-verification |
 | `APRS_FREQ` | The APRS calling frequencies in Hz: `eu` 144 800 000, `na` 144 390 000 |
 
 ## Hamlib `rigctld` client
@@ -35,9 +36,12 @@ The line builders (`rigctldSetFreq`, `rigctldGetFreq`, `rigctldSetMode`, `rigctl
 Setting a frequency or a mode is receive-side tuning. `setPtt` keys the transmitter: the caller must check
 that the operator's callsign is control-verified before calling it.
 
-No app or ingest box connects to `rigctld` itself.
+The ingest box's [soundcard port](../run/radios/soundcard.md) keys the radio through this client when its
+PTT is `rigctld`, and through `catSetPtt` when its PTT is a CAT command on the radio's serial port. The app
+does not connect to `rigctld`.
 
 ## Next
 
 - [Rig control & weather](../shack/rig-weather.md): the app that uses the codec.
+- [Soundcard port](../run/radios/soundcard.md): the ingest box's PTT drivers.
 - [Architecture and runtimes](../contribute/architecture.md): where the libraries sit.

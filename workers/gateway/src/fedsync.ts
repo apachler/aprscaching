@@ -94,7 +94,7 @@ export { encodeFedSyncPage, decodeFedSyncPage, type FedSyncPage } from "@aprscac
 /**
  * Build the signed fedwire frames for one feed's local records since a cursor. The shared producer
  * behind every carrier: the HTTP sync surface serves the frames as a CBOR page, and the FBB
- * store-and-forward path packs the same frames into an `ACSFED` bulletin — one signing base, two
+ * store-and-forward path packs the same frames into an `ACSFED` batch — one signing base, two
  * carriers. Null when the instance has no signing key (frames cannot exist unsigned).
  */
 export async function buildFedFrames(

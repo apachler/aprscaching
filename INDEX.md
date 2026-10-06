@@ -20,23 +20,31 @@ The APRScaching-first web app, by OE8APR. This file is a map of the repository.
 - `workers/gateway/` — the runtime-neutral gateway app (`src/app.ts` `handle()`); `src/verify.ts` is the trust-tier engine,
   `src/fedapply.ts` `admitFrame()` admits every signed federation frame
 - `servers/node/`, `servers/bun/` — the same gateway on Node + SQLite and Bun + `bun:sqlite`
-- `apps/ingest/` — the operator-local RF/APRS-IS ingest (KISS, AGWPE, host mode, MeshCom, Meshtastic, IGate,
-  digipeater, NET/ROM node, AXUDP/AXIP)
+- `apps/ingest/` — the operator-local RF/APRS-IS ingest (KISS, AGWPE, host mode, the soundcard port with its PTT
+  drivers under `src/ptt/`, MeshCom, Meshtastic, IGate, digipeater, NET/ROM node, AXUDP/AXIP)
 - `apps/web/` — the React + MapLibre single-page app
 - `db/migrations/` — the schema, `0001_baseline.sql` (edited directly until 1.0; numbered migrations follow it after)
 
 ## Deployment — `deploy/`
+- `aprscaching` — the one command for every shape (init, status, doctor, update, backup, restore,
+  rotate-secret, net44); its modules are under `lib/` (one per shape under `lib/shapes/`) and its checks under
+  `test/`
 - `setup.sh` (writes a self-host `.env`), `docker-compose.yml` + `compose.home.yml` + `compose.ingest-only.yml`,
   `Dockerfile`, `Caddyfile`, `backup.sh`, `systemd/`
 - `desktop/` (the Bun single binary), `pocket/` (a station on an Android phone), `cloudflare/` (CDN cache rules
-  for Self-host behind Cloudflare), `oci/` (the Oracle Cloud stack)
-- `scripts/build-oci-stack.sh` — builds the Oracle Cloud one-click stack archive
+  for Self-host behind Cloudflare), `cloudflared/` (the Cloudflare Tunnel configuration), `oci/` (the Oracle Cloud
+  stack)
+- `scripts/build-oci-stack.sh` (at the repository root) — builds the Oracle Cloud one-click stack archive
 
 ## tools/
 - `tools/dev/` — `check.sh`, `smoke.sh`, `verify.sh`, the contributor inner loop
 - `tools/smoke/`, `tools/conformance/`, `tools/e2e/` — runtime conformance suites, the MeshCom conformance run
-  and the browser end-to-end test
+  and the three browser end-to-end tests (microphone decode, tool sandbox, offline app shell)
 - `tools/checks/` — CI guards (the OCI stack, dead exports, the documentation)
+- `tools/config/` — renders the configuration reference, the `.env.example` files and `deploy/lib/config-keys.*`
+  from the configuration schema
+- `tools/backup/` — the database dump and restore the deploy helpers' backups use
+- `tools/data/` — builds the DXCC country table from AD1C's `cty` data
 - `tools/interop/` — interoperability tests against reference packet software
 - `tools/admin/`, `tools/fedkey/`, `tools/toolkey/`, `tools/licence/` — operator and signing command-line tools
 - `tools/teaser/`, `tools/webauthn/` — screenshot and teaser tooling, and a WebAuthn test helper
@@ -44,4 +52,4 @@ The APRScaching-first web app, by OE8APR. This file is a map of the repository.
 ## Trust model (the core idea)
 Two orthogonal signals, neither of which blocks logging a find:
 - Find tier: **A** = RF-corroborated · **B** = app-geolocation corroborated · **C** = IS-only
-- Account: callsign control proven (on-air `VERIFY`, ampr.org DNS, LoTW certificate, or a sysop)
+- Account: callsign control proven (on-air `VERIFY`, ampr.org DNS, LoTW certificate, a sysop, or the operator CLI for `ADMIN_CALLSIGNS`)

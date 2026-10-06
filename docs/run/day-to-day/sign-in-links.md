@@ -78,9 +78,9 @@ address when the phone has several private ones.
   `ADMIN_CALLSIGNS` on an instance that has passkeys; without it the gateway refuses. It also lets a leaked
   operator secret open any account, so it belongs only on a station the operator alone runs. On a phone,
   `tls.sh` sets it, and `tls.sh --disable` removes it before anyone else operates the station.
-- **The link names only the hotspot origin.** `--link-origin` accepts `APP_URL`, or `https` at a private IPv4
-  address (10/8, 172.16/12, 192.168/16) on `HTTPS_PORT` while that listener runs. The gateway refuses any
-  other origin.
+- **The link names only an address of the instance.** `--link-origin` accepts `APP_URL`, an `EXTRA_ORIGINS`
+  address (a member on HAMNET opens the HAMNET one), or `https` at a private IPv4 address (10/8, 172.16/12,
+  192.168/16) on `HTTPS_PORT` while that listener runs. The gateway refuses any other origin.
 - **The session lives on that origin.** The visitor confirms on the hotspot origin and returns there. A page
   from any other origin, including another device on the hotspot, cannot confirm the link.
 - **Nothing about trust changes.** A visitor's new account is unverified, logs finds only under the visitor's

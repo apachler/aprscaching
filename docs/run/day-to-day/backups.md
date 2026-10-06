@@ -183,9 +183,11 @@ After the move, point the ingest box at the new address, or enroll it again
 
 Run `deploy/aprscaching doctor` and read the `resources` group:
 
-- `resources.backup` passes while the newest archive is at most 7 days old (`APRS_BACKUP_MAX_DAYS`). It looks
-  for `deploy/aprscaching backup` archives in `BACKUP_DIR`, in `deploy/backups`, or under `archives/` in
-  `OCI_BUCKET` when the `oci` CLI is installed. On Pocket it looks in the phone's shared storage.
+- `resources.backup` passes while the newest backup is at most 7 days old (`APRS_BACKUP_MAX_DAYS`). It counts
+  both the archives of `deploy/aprscaching backup` and the snapshots of `deploy/backup.sh`, wherever either
+  writes: `BACKUP_DIR` or `deploy/backups`, `OCI_BUCKET` when the `oci` CLI is installed, and `BACKUP_BUCKET`
+  with `R2_ENDPOINT` when the `aws` CLI is. On Pocket it also looks in the phone's shared storage. The
+  [table of places](../troubleshooting.md#resourcesbackup) lists them per shape.
 - `resources.backup_place` warns when the backups stay on this host's disk: no `BACKUP_DIR`, and no bucket
   with the CLI that uploads to it. `BACKUP_BUCKET` takes the snapshots of `deploy/backup.sh`, not these
   archives.

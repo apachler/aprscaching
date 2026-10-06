@@ -30,8 +30,8 @@ Cache adoption** hands such caches to new owners.
 ## Assign an owner directly
 
 **Assign…** hands a cache straight to a call. The call must be held by an account and control-verified; verify
-it by hand first if needed. A note is required. Tick **the container is confirmed in place** to make the cache
-active again.
+it by hand first if needed. A note is required. Tick **The container is confirmed in place: make the cache
+active** to make the cache active again.
 
 ## What changes on a hand-over
 

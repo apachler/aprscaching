@@ -410,7 +410,7 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
     // the genuine batch look like a duplicate.
     const batch = decodeFedBbsBatch(row.body);
     if (!batch || batch.bid !== row.bid)
-      return json({ error: "federation bulletin BID does not match its content" }, { status: 400 });
+      return json({ error: "federation batch BID does not match its content" }, { status: 400 });
   }
   const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
@@ -439,7 +439,7 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
     try {
       federation = await applyFedBbsBulletin(env, row.body);
     } catch (e) {
-      console.warn("federation: ACSFED bulletin %s could not be applied: %s", row.bid, (e as Error).message);
+      console.warn("federation: ACSFED batch %s could not be applied: %s", row.bid, (e as Error).message);
     }
   }
   // FBB White Pages: a personal message's R: headers name its sender's home BBS. `origin` names the partner

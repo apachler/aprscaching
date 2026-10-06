@@ -83,12 +83,14 @@ the capture device. `SOUNDCARD_RATE` is `48000` (default) or `44100`.
 `deploy/docker-compose.yml`), on the ingest service:
 
 ```yaml
-    devices: ["/dev/snd:/dev/snd"]
+    devices: ["/dev/snd:/dev/snd", "/dev/hidraw0:/dev/hidraw0"]
 ```
 
-The image's user is in the `audio` group, GID 29 on Debian, Ubuntu and Raspberry Pi OS. On a host whose sound
-devices belong to another GID (`stat -c %g /dev/snd/controlC0`), add it on the ingest service:
-`group_add: ["<gid>"]`. Restart the ingest.
+Pass the PTT device too: a CM108's `/dev/hidraw*`, a GPIO chip (`/dev/gpiochip0`), or the serial port that keys
+the radio by RTS, DTR or CAT (`/dev/ttyUSB0`). VOX and `rigctld` over the network need none. The image's user is
+in the `audio` group, GID 29 on Debian, Ubuntu and Raspberry Pi OS, and in `dialout`, GID 20. On a host whose
+sound, GPIO or serial devices belong to another GID (`stat -c %g /dev/snd/controlC0`), add it on the ingest
+service: `group_add: ["<gid>"]`. Restart the ingest.
 The log shows `[soundcard:1] receive only (SOUNDCARD_TX=1 allows transmit)`, then
 `[soundcard:1] capturing plughw:1,0 at 48000 Hz`.
 
@@ -144,10 +146,17 @@ or a clear channel, under your call. From a checkout, in `apps/ingest`:
 node --import tsx src/check.ts --ptt-test
 ```
 
-In Docker, in `deploy/`, with the ingest stopped (`docker compose -f compose.ingest-only.yml stop ingest`):
+In Docker, in `deploy/`, with the ingest stopped. On an ingest box (`docker compose -f compose.ingest-only.yml
+stop ingest`):
 
 ```bash
 docker compose -f compose.ingest-only.yml run --rm -w /app/apps/ingest ingest node --import tsx src/check.ts --ptt-test
+```
+
+In the Self-host stack (`docker compose stop ingest`):
+
+```bash
+docker compose run --rm -w /app/apps/ingest ingest node --import tsx src/check.ts --ptt-test
 ```
 
 Name a port after `--ptt-test` to test another than the first. It prints

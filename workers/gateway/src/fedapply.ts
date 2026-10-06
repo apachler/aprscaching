@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * fedapply.ts — admitting and applying verified federation records. Every carrier (HTTP pull,
- * push-to-hub, FBB bulletins, HF beacons, connected-mode circuits) hands its signed fedwire frames to
+ * push-to-hub, FBB batches, HF beacons, connected-mode circuits) hands its signed fedwire frames to
  * {@link admitFrame}, which runs the one set of acceptance checks and the idempotent-by-gid appliers
  * that mirror a record into remote_caches / remote_finds / remote_keys / remote_account_moves /
  * remote_tombstones. Mirrored rows are display-only; the frames behind the caches, finds, tombstones and
@@ -292,9 +292,9 @@ const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
 const SYNC_DEF_BY_TYPE = new Map(SYNC_DEFS.map((d) => [d.type, d]));
 
 export interface FedBbsApplyResult {
-  /** Was the body a federation bulletin at all (vs an ordinary BBS message)? */
+  /** Was the body a federation batch at all (vs an ordinary BBS message)? */
   federation: boolean;
-  /** The bulletin's content-addressed BID — the caller dedups the mesh by this. */
+  /** The batch's content-addressed BID — the caller dedups by this. */
   bid: string | null;
   /** Frames verified, accepted, and applied to a mirror. */
   applied: number;
@@ -329,7 +329,7 @@ export type FrameVerdict = "applied" | "rejected" | "quarantined" | "ignored";
 
 /**
  * The single admission path for a signed fedwire frame, whichever carrier delivered it — an HTTP pull,
- * a push-to-hub submission, an FBB bulletin, an HF beacon datagram or a connected-mode circuit page.
+ * a push-to-hub submission, an FBB batch, an HF beacon datagram or a connected-mode circuit page.
  * The claimed origin selects the keys (a forged claim buys nothing: the signature must verify under a
  * key independently bound to that origin); then the signature, the origin, our own namespace, the
  * record's namespace and self-attestation, its origin's tombstones, the cache's scope and the
@@ -419,7 +419,7 @@ export async function applyFrames(env: Env, frames: Uint8Array[], gate: FrameGat
 }
 
 /**
- * The trust-gated apply pipeline every non-HTTP carrier feeds — FBB bulletins, HF beacon datagrams,
+ * The trust-gated apply pipeline every non-HTTP carrier feeds — FBB batches, HF beacon datagrams,
  * connected-mode circuit pages. Each frame is verified against ITS CLAIMED ORIGIN's keys — the key
  * we last pinned for that peer plus any the signed registry binds to it — then admitted through the
  * same {@link admitFrame} checks as an HTTP pull or a push-to-hub submission, so carriers can never
@@ -473,9 +473,9 @@ async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Prom
 }
 
 /**
- * Receive a store-and-forward federation bulletin off the FBB mesh: decode the `ACSFED` envelope,
- * then feed its frames through the shared trust-gated pipeline. The caller dedups by the
- * content-addressed BID before invoking (a re-flooded copy never re-applies).
+ * Receive a store-and-forward federation batch (personal mail to `ACSFED` from a marked partner): decode the
+ * envelope, then feed its frames through the shared trust-gated pipeline. The caller dedups by the
+ * content-addressed BID before invoking (a second copy never re-applies).
  */
 export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBbsApplyResult> {
   const batch = decodeFedBbsBatch(body);

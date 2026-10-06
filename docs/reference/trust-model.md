@@ -14,7 +14,7 @@ Every find carries exactly one tier, graded by the evidence behind it:
 
 | Tier | Name | Requirement |
 |------|------|-------------|
-| **A** | Radio-verified | The station was heard directly on the air by a receiving site the operator attests (the site's own TNC or MeshCom node, delivered by its own ingest box), on a plausible track, and the finder does **not** operate that site. An APRS-IS copy (`qAR,<site>`) never counts. |
+| **A** | Radio-verified | The station was heard directly on the air by a receiving site the operator attests (the site's own TNC, soundcard port or MeshCom node, delivered by its own ingest box), on a plausible track, and the finder does **not** operate that site. An APRS-IS copy (`qAR,<site>`) never counts. |
 | **B** | Location-verified | The finder's own device reported a first-party geolocation that matches the cache at log time. |
 | **C** | Logged | Nothing independent placed the finder at the cache: at most a bare APRS-IS beacon reached the instance. Recorded, not verified. |
 
@@ -77,8 +77,8 @@ The verification engine reads a normalised **provenance** object, never a raw tr
 ```
 
 `firstPartyAttested` is the *only* gate on Tier A. It is set only for a frame that the operator's own ingest
-box heard directly on its own receiver, a local TNC (KISS, AGWPE, WA8DED host mode) or a MeshCom node, at a
-receiving site the sysop trusts (Instance admin → **Trusted receiving stations**, an enrolled box's
+box heard directly on its own receiver, a local TNC (KISS, AGWPE, WA8DED host mode), a soundcard port or a
+MeshCom node, at a receiving site the sysop trusts (Instance admin → **Trusted receiving stations**, an enrolled box's
 **Trust this station's hearings**, or the configuration preset `FIRST_PARTY_SITES`). A site trusted through an
 enrolled box counts only for the frames that box delivers itself, and a box's frames claim no other site:
 `FIRST_PARTY_SITES` and the stations added by call count only for frames sent with the shared ingest secret.
@@ -101,6 +101,7 @@ The verify engine never branches on the transport, so a new transport can raise 
 | Transport | Can carry attestation |
 |---|---|
 | Local TNC (KISS, AGWPE, WA8DED host mode) on the operator's ingest box | yes, at an attested site |
+| Soundcard port on the operator's ingest box (its own modem; recorded as `tnc`) | yes, at an attested site |
 | MeshCom node on the operator's ingest box, heard directly over LoRa | yes, at an attested site |
 | APRS-IS | never |
 | AXUDP, AXIP and other internet tunnels | never |
@@ -128,7 +129,7 @@ the tiers that grade a find. Every verification records its method and who vouch
 
 | Method | Counts when |
 |---|---|
-| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an attested receiving site hears it on its own radio: a TNC, or a MeshCom node that heard it directly over LoRa |
+| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an attested receiving site hears it on its own radio: a TNC, a soundcard port, or a MeshCom node that heard it directly over LoRa |
 | ampr.org DNS | The holder publishes the code under their ARDC-delegated `<call>.ampr.org` name, confirmed by a DNSSEC-validated answer or by several independent public resolvers returning the same record |
 | LoTW certificate | The holder signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the browser |
 | Operator CLI | The instance's operator confirms their own call listed in `ADMIN_CALLSIGNS` |

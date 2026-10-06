@@ -63,12 +63,37 @@ runner (`migrate.ts`), which records each applied file by name. Until 1.0 the sc
 `0001_baseline.sql`, and a schema change edits it directly. Once 1.0 is released the baseline is frozen: each
 schema change is a new file with the next number, and a file that has been applied is never edited.
 
+## Add a configuration key
+
+Every setting is a key in one schema, and the gateway, the ingest, the deploy helpers and this manual read it
+from there:
+
+1. Add the key to `CONFIG_KEYS` in `packages/shared/src/configkeys.ts`: its type, the units that read it
+   (`gateway`, `ingest`, `server`, …), a literal default where there is one, and `secret` for a secret. A key with
+   the `gateway` unit reaches the gateway's `env` on Node, Bun and the desktop app without further wiring
+   (`stringEnvFrom` in `workers/gateway/src/env.ts`). `site` makes it an Instance setting too.
+2. Add its one-line hint to `CONFIG_HINTS` and its row to a table in `CONFIG_TABLES`, both in
+   `packages/shared/src/configdocs.ts`. A key that belongs in an example `.env` gets a line in
+   `tools/config/envfiles.mjs`.
+3. Regenerate what restates the schema: the tables of the
+   [configuration reference](../reference/configuration.md), both `.env.example` files and
+   `deploy/lib/config-keys.{tsv,json}`.
+
+```bash
+node tools/config/generate.mjs           # write the generated files
+node tools/config/generate.mjs --check   # what CI runs: fails when a generated file is out of date
+node tools/checks/docs.mjs               # fails on a key the code reads that the schema lacks, and the reverse
+```
+
+Never edit the generated tables in `configuration.md` by hand: the next run overwrites them.
+
 ## Images
 
 `deploy/Dockerfile` builds the full image from the repository root: it installs the workspace with the pinned
 pnpm, builds every package (the web app into `apps/web/dist` inside the image) and starts the gateway by
 default. The same image runs the ingest through a compose `command:` override. Its services run as the
-unprivileged user `aprscaching` (UID and GID 10001, in `dialout` for serial devices), which owns `/data` and
+unprivileged user `aprscaching` (UID and GID 10001, in `dialout` for serial devices and `audio` for a sound
+card), which owns `/data` and
 `/srv/web`; the code under `/app` stays root-owned.
 
 ```bash

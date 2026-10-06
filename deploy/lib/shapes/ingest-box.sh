@@ -130,9 +130,14 @@ shape_init() {
     warn "publish 1799/udp on this host's LAN address in compose.ingest-only.yml (see the comment there)"
   fi
   if [ -n "$kiss" ]; then
-    info "A TNC you operate can name this box as its receiving site. It counts for Tier A only once the"
-    info "gateway's sysop trusts it under Instance admin -> Trusted receiving stations (or lists it in"
-    info "FIRST_PARTY_SITES); leave it blank for someone else's TNC."
+    info "A TNC you operate can name this box as its receiving site; leave it blank for someone else's TNC."
+    if [ -n "$(env_file_get "$SHAPE_ENV" BOX_KEY)" ]; then
+      info "It counts for Tier A only once the gateway's sysop switches on Trust this station's hearings"
+      info "for this box under Instance admin -> Ingest boxes, with this site call."
+    else
+      info "It counts for Tier A only once the gateway's sysop trusts it under Instance admin -> Trusted"
+      info "receiving stations (or lists it in FIRST_PARTY_SITES)."
+    fi
     ask site "The receiving site's callsign-SSID (e.g. ${call:-OE8APR}-10; blank = none)" \
       "${site:-$(env_file_get "$SHAPE_ENV" RF_SITE_CALL)}"
     [ -z "$site" ] || env_file_set "$SHAPE_ENV" RF_SITE_CALL "$(printf '%s' "$site" | tr '[:lower:]' '[:upper:]')"

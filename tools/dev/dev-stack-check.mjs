@@ -5,7 +5,7 @@
  * and data, and proves that everything reaches the gateway through the dev server's one origin:
  *
  *   the page and Vite's hot-reload socket · an API call · a sign-in by email link (dev token) and the
- *   session cookie it sets · the operator verify (pnpm dev:verify) and an admin-only route · hiding a cache,
+ *   session cookie it sets · the operator verify (pnpm dev:admin) and an admin-only route · hiding a cache,
  *   adding a photo and logging a find · the live WebSocket, with a packet posted to /ingest arriving on it ·
  *   a passkey registration and sign-in with Chromium's virtual authenticator.
  *

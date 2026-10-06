@@ -33,6 +33,8 @@ FED_SUBMIT_INSTANCES=oe8apr-pocket,oe8xyz.net  # the spokes allowed to push
 On the spoke:
 
 ```bash
+INSTANCE=oe8apr-pocket                         # its instance id, as the hub lists it in FED_SUBMIT_INSTANCES
+FED_PRIVATE_KEY=<its signing key>              # every pushed record is signed; setup.sh generates one
 FED_HUB_URL=https://aprs.example.net           # the hub it pushes to
 FED_SUBMIT_SECRET=<the hub's FED_SUBMIT_SECRET>
 FED_PEERS=https://aprs.example.net             # optional: also pull from the hub

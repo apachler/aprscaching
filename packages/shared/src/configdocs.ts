@@ -195,7 +195,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IGATE_TX_PATH: "Digipeater path for frames the IGate transmits; blank sends direct",
   IGATE_TX_BURST: "IGate transmits allowed at once before pacing applies",
   IGATE_TX_REFILL_SEC: "Seconds to regain one IGate transmit",
-  RF_SITE_CALL: "Callsign naming this box as the receiving site of what its TNCs hear",
+  RF_SITE_CALL: "Callsign naming this box as the receiving site of what its TNCs and soundcard ports hear",
   BOX_ID: "Remote-control ID of this box; set it to link the box to your account",
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
@@ -384,11 +384,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "`SERVICE_CALL`",
         "The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks and replies are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit",
-        "the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one",
+        "the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one, or when that base call is longer than six characters",
       ],
       [
         "`RADIO_REPLIES`",
-        "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`)",
+        "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`)",
         "off",
       ],
     ],
@@ -408,7 +408,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`OFFLINE_TILES_URL`",
-        "The offline map archive hosted elsewhere (it must allow offline use and answer byte ranges with CORS); overrides the two above",
+        "The offline map archive hosted elsewhere (it must allow offline use and answer byte ranges with CORS); set, phones fetch it instead of `OFFLINE_TILES_PATH`",
         "none",
       ],
       ["`OFFLINE_TILES_ATTRIBUTION`", "Shown on the offline map", "`© OpenStreetMap contributors`"],
@@ -561,7 +561,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_REGISTRY` / `FED_REGISTRY_KEY`",
-        "Signed instance registry + the pinned authority key that verifies it (required whenever a registry is configured)",
+        "The signed instance registry, as the JSON document itself (not a URL), + the pinned authority key that verifies it (required whenever a registry is configured)",
         "—",
       ],
       [
@@ -737,7 +737,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. `BOX_ID` also names the box for remote control (below)",
         "—",
       ],
-      ["`BATCH_MS`", "Batch flush interval", "`1500` (`2000` in the Docker stack)"],
+      ["`BATCH_MS`", "Batch flush interval", "`1500` (`2000` in the `.env` that `deploy/setup.sh` writes)"],
       ["`INGEST_SPOOL_MAX`", "Undelivered-packet spool bound (drop-oldest) during a gateway outage", "`5000`"],
       ["`APRSIS_HOST` / `APRSIS_PORT`", "APRS-IS server", "`rotate.aprs2.net` / `14580`"],
       [
@@ -753,10 +753,13 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       ["KISS TNC (gates digi/node/BBS/IGate)", "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`)"],
       ["AGWPE", "`AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`)"],
-      ["WA8DED hostmode", "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT`"],
       [
-        "Transmit gate (every RF transmit port: KISS TNC, soundcard)",
-        "`TX_GATE_GRACE` (`6` minutes; a plain number is minutes, or `30m`, `2h`; clamped to 6 minutes to 24 hours): how long the gateway's last confirmation of a station call keeps counting while the gateway cannot be reached. A call the gateway says is not verified, or not this box's operator's, closes the gate at once — [Transmit gate](../run/radios/rf-ingest.md#transmit-gate)",
+        "WA8DED hostmode",
+        "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` (`0`, the first channel)",
+      ],
+      [
+        "Transmit gate (every transmit port: the KISS TNC, the soundcard ports and MeshCom transmit)",
+        "`TX_GATE_GRACE` (`6` minutes; a plain number is minutes, or `30m`, `2h`; clamped to 6 minutes to 24 hours): how long the gateway's last confirmation of a station call keeps counting while the gateway cannot be reached. A call the gateway says is not verified, or not this box's operator's, closes the gate for that call at once. The gate judges each frame by the box's calls it carries, so a refused call holds back only its own frames — [Transmit gate](../run/radios/rf-ingest.md#transmit-gate)",
       ],
       [
         "Soundcard port (1200-baud AFSK in the box; carries digi/node/BBS/IGate without a TNC)",
@@ -770,7 +773,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "MeshCom",
         "`MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file), `MESHCOM_TX_BURST` (`3`) / `MESHCOM_TX_REFILL_SEC` (`60`), `MESHCOM_KISS_PASS` (the first node's KISS password: with it, answers and Mailbox messages go out from the service call through the node's KISS port, which needs the node's `--kiss auth on`) / `MESHCOM_KISS_PORT` (`8001`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
-      ["AXUDP", "`AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS`"],
+      [
+        "AXUDP",
+        "`AXUDP_PORT` (setting it turns AXUDP on; a value that is not a number falls back to `10093`), `AXUDP_BIND`, `AXUDP_PEERS`",
+      ],
       ["AXIP", "`AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND`"],
       [
         "Digipeater",
@@ -794,7 +800,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Receiving site (Tier A)",
-        "`RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); the gateway's sysop trusts it in Instance admin (or presets it in `FIRST_PARTY_SITES`). Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station",
+        "`RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) and soundcard ports hear directly (default `IGATE_CALL`); the gateway's sysop trusts it in Instance admin (or presets it in `FIRST_PARTY_SITES`). Set it only for a radio you operate — leave it unset when the TNC host is someone else's station",
       ],
       [
         "Remote control (Shack → Remote box)",
@@ -859,7 +865,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`DOMAIN`",
         "`deploy/Caddyfile`",
         "What Caddy serves: a hostname gets automatic Let's Encrypt TLS, `:80` serves plain HTTP (local or off-grid). `deploy/setup.sh` writes it",
-        "—",
+        "`:80`",
       ],
       [
         "`TUNNEL_TOKEN`",

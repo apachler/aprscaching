@@ -114,3 +114,4 @@ value. Peers, trust and forwarding partners are managed on the sysop surfaces.
 
 - [Connect a radio: quick starts](radios/quick-starts.md): get packets flowing into the instance.
 - [Join the network](federation/index.md): federate with other instances.
+- [Backups](day-to-day/backups.md): schedule the backup step 5 asks for, and check that it restores.

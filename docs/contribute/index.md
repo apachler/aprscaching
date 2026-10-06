@@ -20,6 +20,8 @@ checkout, then read where your change belongs.
 
 Contributions are inbound = outbound: each one is licensed under the licence of the unit it changes
 ([About](../about.md)). Commits carry a DCO sign-off (`git commit -s`).
+[CONTRIBUTING.md](https://github.com/apachler/aprscaching/blob/dev/CONTRIBUTING.md) sets out the branch flow,
+Conventional Commits and the pull-request checklist.
 
 ## Next
 

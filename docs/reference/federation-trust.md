@@ -32,7 +32,7 @@ with an `until`: the rotation time plus a grace, 7 days by default (`FED_ROTATIO
   from which a signed rotation leads to the current key), and only until its `until`, never later than the
   rotation time plus the grace;
 - treats a rotated-away key as revoked for good once that cutoff passes, on every carrier: HTTP sync, FBB
-  bulletins, HF beacons and packet circuits alike. A later descriptor cannot revive it.
+  batches (personal mail to `ACSFED`), HF beacons and packet circuits alike. A later descriptor cannot revive it.
 
 ## Keys are compared before trust
 
@@ -63,7 +63,6 @@ and only one live (not blocked) row may hold that id. A block covers the instanc
 - A second URL claiming a bound instance is refused.
 - A descriptor that renames its instance is refused.
 - Instance ids are lowercase hostnames; an id with a `:` or other characters outside a hostname is refused.
-
 - A blocked instance stays blocked on every path: a pull from another address, a 44Net add, a registry entry, a
   discovered address and a hub push are all refused, and its frames apply over no carrier. Blocking one row
   blocks every row naming the instance; lifting the block on one is refused while another still blocks it.
