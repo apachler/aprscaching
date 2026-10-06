@@ -153,10 +153,11 @@ hub, a second hub and a Pocket station that carries records are the same thing h
   limit, and a record a trusted neighbour says it lacks become gaps. The mark moves on, every later record passes
   on, and the receiver asks its neighbours for each gap by itself, backing off from 5 minutes to a day per
   neighbour. A copy over fewer hops closes a hop gap, so the record passes on from there. A gap no neighbour fills
-  within 7 days counts as refused for good; **Instance admin → Federation → Records given up** and `doctor` list
-  it until the sysop marks it seen.
-- **Numbers are never reused.** Each origin numbers its records at least by the time in milliseconds, and a
-  record's global id is that number, never its row id. A database restored from an older backup still numbers its
+  within 7 days and 5 asks counts as refused for good; **Instance admin → Federation → Records given up** and
+  `doctor` list it until the sysop marks it seen. A record past the hop limit raises no alarm: at the edge of the
+  mesh every distant record is one, and its gap goes quietly after 30 days.
+- **Numbers are never reused.** Each origin numbers its records, callsign keys included, at least by the time in
+  milliseconds, and a record's global id is that number, never its row id. A database restored from an older backup still numbers its
   new records, deletions included, above what its peers hold, under global ids no peer holds or deleted. A peer the
   restored instance trusts tells it how far it holds the instance's records, which raises the numbering past that
   even on a box whose clock is behind. The restore itself leaves the rows as the backup holds them.

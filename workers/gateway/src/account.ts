@@ -447,9 +447,9 @@ async function eraseCall(
   ).results;
   // the same for the callsign's key bindings (an SSID's too) and move announcements, which peers mirrored
   const keyIds = (
-    await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=? OR callsign LIKE ?")
+    await env.DB.prepare("SELECT id, fed_seq FROM callsign_keys WHERE callsign=? OR callsign LIKE ?")
       .bind(cs, `${cs}-%`)
-      .all<{ id: number }>()
+      .all<{ id: number; fed_seq: number }>()
   ).results;
   const moveSeqs = (
     await env.DB.prepare("SELECT seq, fed_seq FROM account_moves WHERE callsign=?")
@@ -550,7 +550,7 @@ async function eraseCall(
   return {
     tombstones: [
       ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.fed_seq}` })),
-      ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
+      ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.fed_seq}` })),
       ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.fed_seq}` })),
     ],
     mediaKeys: [

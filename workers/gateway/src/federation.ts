@@ -78,6 +78,7 @@ interface FindRow {
 }
 interface KeyRow {
   id: number;
+  fed_seq: number;
   callsign: string;
   public_key: string;
   created_at: number;
@@ -844,7 +845,7 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
   selectRows: async (env, since, limit) => {
     const rows = (
       await env.DB.prepare(
-        "SELECT id, callsign, public_key, created_at FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
+        "SELECT id, fed_seq, callsign, public_key, created_at FROM callsign_keys WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
       )
         .bind(since, limit)
         .all<Omit<KeyRow, "verified">>()
@@ -855,7 +856,9 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
     );
     return rows.map((r) => ({ ...r, verified: verified.has(baseCall(r.callsign)) }));
   },
-  recordOf: (r, instance) => ({ id: `${instance}:key:${r.id}`, cursor: r.id, data: keyData(r) }),
+  // the key's place in the keys sequence: a restored database never hands it out again, so a new key gets past
+  // every peer's cursor under a global id of its own
+  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_seq, data: keyData(r) }),
 };
 
 export const handleFederationCaches = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, CACHE_FEED);

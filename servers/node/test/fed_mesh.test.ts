@@ -452,10 +452,19 @@ describe("what moves a mark", () => {
       [String(bad - 1), "1"],
     ]);
 
-    // a week on, nobody filled it: it is given up, listed once for the sysop, and leaves the list when seen
+    // the clock jumps a week ahead (a box without a real-time clock meeting NTP): two asks are not enough to give up
     clock = at(8 * 86_400_000);
     await syncAllPeers(b.env);
     clock.mockRestore();
+    const open = await rows(b.env, "SELECT v, attempts FROM fed_origin_gaps");
+    expect(open.map((r) => r.v)).toEqual([bad]);
+    expect(open[0]!.attempts as number).toBeLessThan(5);
+    // asked a day apart until five asks have failed: given up, listed once for the sysop, and gone when seen
+    for (let day = 9; day <= 12; day++) {
+      clock = at(day * 86_400_000);
+      await syncAllPeers(b.env);
+      clock.mockRestore();
+    }
     expect(await rows(b.env, "SELECT v FROM fed_origin_gaps")).toEqual([]);
     const peers = await call(b.env, "GET", "/federation/peers", undefined, OP);
     expect(peers.data.givenUp).toEqual({
@@ -504,6 +513,42 @@ describe("a long chain", () => {
     const top = (await one(a.env, "SELECT n FROM fed_seq WHERE kind = 'cache'"))!.n as number;
     expect(await mark(h4.env, "cache")).toBe(top);
   }, 30_000);
+});
+
+describe("the edge of the mesh", () => {
+  it("records past the hop limit hold no mark back, start no read again, and raise no alarm", async () => {
+    const all = { FED_RESERVE: "all" };
+    const a = await node("a");
+    const hubs = await Promise.all([1, 2, 3, 4].map((i) => node(`h${i}`, all)));
+    const z = await node("z");
+    await follow(hubs[0]!, a);
+    for (let i = 1; i < 4; i++) await follow(hubs[i]!, hubs[i - 1]!);
+    await follow(z, hubs[3]!);
+    const log = network([a, ...hubs, z]);
+    for (let i = 0; i < 1100; i++) await addCache(a.env, 5000);
+    for (const n of hubs) await syncAllPeers(n.env);
+    const firsts: string[] = [];
+    for (let pass = 0; pass < 6; pass++) {
+      // a writes on every pass, and it reaches h4
+      await addCache(a.env, 5000);
+      for (const n of hubs) await syncAllPeers(n.env);
+      log.length = 0;
+      await syncAllPeers(z.env, { maxPages: 1 });
+      const reads = cachePages(log, "h4.example").filter((l) => l.query.get("limit") === "500");
+      if (reads.length) firsts.push(reads[0]!.query.get("since")!);
+    }
+    // z never asks h4 again from where it asked before, and its mark keeps up with what h4 holds
+    expect(new Set(firsts).size).toBe(firsts.length);
+    expect(await mark(z.env, "cache")).toBe(await mark(hubs[3]!.env, "cache"));
+    // every record lies past the hop limit at h4: z keeps those gaps apart, outside the cap and any alarm
+    const kinds = await rows(z.env, "SELECT reason, COUNT(*) AS n FROM fed_origin_gaps GROUP BY reason");
+    expect(kinds).toEqual([{ reason: "upstream-hops", n: 1106 }]);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31 * 86_400_000);
+    await syncAllPeers(z.env);
+    clock.mockRestore();
+    expect((await call(z.env, "GET", "/federation/peers", undefined, OP)).data.givenUp.count).toBe(0);
+    expect(await rows(z.env, "SELECT v FROM fed_origin_gaps")).toEqual([]); // gone quietly after 30 days
+  }, 60_000);
 });
 
 describe("a restored origin", () => {
@@ -568,12 +613,58 @@ describe("a restored origin", () => {
     expect(await title(await gid(a.env, "cache", first))).toBeNull();
     expect(await gid(restored, "cache", fresh)).not.toBe(lostGid);
 
+    // the map shows each cache under the global id its peers know it by
+    const map = await call(restored, "GET", "/api/caches?bbox=15,47,16,48");
+    expect(map.data.caches.find((c: { id: number }) => c.id === fresh)?.globalId).toBe(
+      await gid(restored, "cache", fresh),
+    );
+
     // and a trusted peer that holds more of a than a itself does raises a's counters when a pulls it
     await follow({ ...a, env: restored }, b);
     await restored.DB.prepare("UPDATE fed_seq SET n = 1 WHERE kind = 'cache'").run();
     await syncAllPeers(restored);
     const n = (await one(restored, "SELECT n FROM fed_seq WHERE kind = 'cache'"))!.n as number;
     expect(n).toBeGreaterThanOrEqual(await mark(b.env, "cache"));
+  });
+
+  it("sends a callsign key registered after the restore to its peers, under a global id of its own", async () => {
+    const Database = (await import("better-sqlite3")).default;
+    const { makeD1 } = await import("../src/d1.js");
+    const { freshDb } = await import("./helpers/fedpeer.js");
+    const key = await newFedKey();
+    const { sqlite } = freshDb();
+    const a: Node = {
+      name: "a.example",
+      url: "https://a.example",
+      env: instanceEnv("a.example", key, {}, makeD1(sqlite)),
+      key,
+    };
+    const b = await node("b");
+    await follow(b, a);
+    network([a, b]);
+    const register = (env: Env, pub: string) =>
+      env.DB.prepare("INSERT INTO callsign_keys (callsign, public_key, created_at) VALUES ('OE8KEY', ?, ?)")
+        .bind(pub, now())
+        .run();
+    await register(a.env, "K1-before-the-backup");
+    const backup = sqlite.serialize();
+    await register(a.env, "K2-lost-with-the-restore");
+    await syncAllPeers(b.env);
+    const restored = instanceEnv("a.example", key, {}, makeD1(new Database(backup)));
+    network([{ ...a, env: restored }, b]);
+    await new Promise((r) => setTimeout(r, 5));
+    await register(restored, "K3-after-the-restore");
+    expect((await one(restored, "SELECT id FROM callsign_keys WHERE public_key = 'K3-after-the-restore'"))!.id).toBe(
+      (await one(a.env, "SELECT id FROM callsign_keys WHERE public_key = 'K2-lost-with-the-restore'"))!.id,
+    );
+    await syncAllPeers(b.env);
+    const held = await rows(b.env, "SELECT global_id, public_key FROM remote_keys ORDER BY public_key");
+    expect(held.map((r) => r.public_key)).toEqual([
+      "K1-before-the-backup",
+      "K2-lost-with-the-restore",
+      "K3-after-the-restore",
+    ]);
+    expect(new Set(held.map((r) => r.global_id)).size).toBe(3);
   });
 
   it("takes a neighbour's word on its own numbering only when it trusts that neighbour", async () => {

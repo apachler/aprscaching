@@ -521,7 +521,8 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 ### `federation.gaps`
 
 - **Tests:** whether this instance gave up on records of other instances: records it lacked and asked its
-  neighbours for, one by one, for a week, without one delivering them. Sync has moved past them. It reads
+  neighbours for, one by one, for a week and at least five times, without one delivering them. A record past the
+  hop limit never counts here. Sync has moved past them. It reads
   `GET /federation/peers` with `OPERATOR_SECRET`.
 - **Message:** `<n> record(s) of other instances given up: no neighbour delivered them within a week` (warn).
 - **Fix:** read them under Instance admin → Federation → **Records given up**: each names its home instance and why

@@ -31,7 +31,7 @@ import {
 import { mergeEndpoints, storedEndpoints, syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { decodeFedSyncPage } from "./fedsync.js";
 import { decodeFedFrame, parseEndpoints, type FedSyncPage } from "@aprscaching/shared";
-import { addGap, backOff, dueGaps, giveUpGaps, removeGap } from "./fedgaps.js";
+import { addGap, backOff, dueGaps, gapsFull, giveUpGaps, removeGap } from "./fedgaps.js";
 import {
   type PeerRow,
   absorbDiscovered,
@@ -628,7 +628,8 @@ async function admitOriginFrame(
  * position how far it has read this peer's pages of it. A peer is asked past both, when it has records there. A
  * peer whose word moves the mark (the origin itself, or a peer this instance trusts) and whose `held` lies past
  * the mark is read again from the mark once per value of its `held`, so its word covers what was read before it
- * vouched for it; the mark moves with every page of that, so the read always ends.
+ * vouched for it: counted when the read starts, never while the origin's gaps are full, so every such read moves
+ * the mark and none repeats.
  *
  * The mark moves to the page's `min(held, nextCursor)`. A frame that did not settle, a record kept past the hop
  * limit and a record the page names as lacking become gaps (fedgaps.ts) instead of holding the mark back, and the
@@ -659,11 +660,20 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
   };
   const counts = { applied: 0 };
   const known = held !== undefined || top !== undefined;
-  const replay = known && advances && (held ?? 0) > mark && (held ?? 0) > read.replayed;
+  // read again from the mark once for each `held`, and only where it can move the mark: not while the gaps of the
+  // origin are full, which holds the mark back whatever is read
+  const replay =
+    known &&
+    advances &&
+    (held ?? 0) > mark &&
+    (held ?? 0) > read.replayed &&
+    mark < read.seq &&
+    !(await gapsFull(env, e.origin, kind));
   let cursor = replay ? mark : Math.max(mark, read.seq);
+  // counted when it starts, so a read cut short by the page budget carries on past the mark next time, not again
+  if (replay) await setReplayed(env, ctx.neighbour, e.origin, kind, region, held ?? 0);
   if (!known || replay || (top ?? 0) > cursor) {
     const budget = own ? { pages: ctx.maxPages } : ctx.relayed;
-    let ended = false;
     while (budget.pages > 0) {
       budget.pages--;
       const pg = await originPage(ctx, e, kind, cursor, PAGE_LIMIT);
@@ -684,10 +694,11 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
         const lacking = [
           ...unsettled.map((v) => ({ v, reason: "unsettled" as const })),
           ...(pg.gaps ?? []).map((v) => ({ v, reason: "upstream" as const })),
+          ...(pg.hopGaps ?? []).map((v) => ({ v, reason: "upstream-hops" as const })),
         ].sort((x, y) => x.v - y.v);
         for (const g of lacking) {
           if (g.v <= cursor || g.v > upTo) continue;
-          if (g.reason === "upstream" && (await heldHere(env, e.origin, kind, g.v))) continue;
+          if (g.reason !== "unsettled" && (await heldHere(env, e.origin, kind, g.v))) continue;
           if (!(await addGap(env, e.origin, kind, g.v, g.reason))) upTo = Math.min(upTo, g.v - 1);
         }
         if (upTo > mark) {
@@ -696,11 +707,9 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
         }
       }
       await setReadPos(env, ctx.neighbour, e.origin, kind, region, next, gen);
-      if (pg.complete || next >= read.seq) ended = true;
       if (pg.complete || next <= cursor) break;
       cursor = next;
     }
-    if (replay && ended) await setReplayed(env, ctx.neighbour, e.origin, kind, region, held ?? 0);
   }
   await retryGaps(ctx, e, kind, gate, advances, counts);
   return counts.applied;
@@ -743,6 +752,7 @@ async function retryGaps(
       pg.held !== undefined &&
       pg.held >= v &&
       !(pg.gaps ?? []).includes(v) &&
+      !(pg.hopGaps ?? []).includes(v) &&
       !pg.frames.some((fb) => frameIds(fb)?.v === v);
     if (!filled && absent) await removeGap(env, e.origin, kind, v);
     // a record kept within the hop limit closed the gap in noteSettled; one still at the limit backs off like a miss

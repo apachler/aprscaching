@@ -11,13 +11,14 @@
 -- back with a backup and are handed out again, sequence numbers are not, so a new record never takes the global id
 -- of one the peers hold or deleted. A cache keeps the number it was made with in `fed_id`.
 CREATE TABLE fed_seq (
-  kind TEXT PRIMARY KEY,                           -- cache | find | tombstone | account-move
+  kind TEXT PRIMARY KEY,                           -- cache | find | tombstone | account-move | key
   n    INTEGER NOT NULL
 );
 INSERT INTO fed_seq (kind, n) SELECT 'cache', MAX(COALESCE(MAX(fed_rev), 0), COALESCE(MAX(id), 0)) FROM caches;
 INSERT INTO fed_seq (kind, n) SELECT 'find', COALESCE(MAX(id), 0) FROM cache_logs;
 INSERT INTO fed_seq (kind, n) SELECT 'tombstone', COALESCE(MAX(seq), 0) FROM tombstones;
 INSERT INTO fed_seq (kind, n) SELECT 'account-move', COALESCE(MAX(seq), 0) FROM account_moves;
+INSERT INTO fed_seq (kind, n) SELECT 'key', COALESCE(MAX(id), 0) FROM callsign_keys;
 
 ALTER TABLE caches ADD COLUMN fed_id INTEGER NOT NULL DEFAULT 0;
 UPDATE caches SET fed_id = id;
@@ -69,6 +70,18 @@ BEGIN
 END;
 CREATE INDEX idx_account_moves_fed_seq ON account_moves (fed_seq);
 
+-- Callsign keys travel per peer, not per origin, but number the same way: the keys cursor pages by fed_seq, and the
+-- key's global id is `<instance>:key:<fed_seq>`, so a key registered after a restore reaches every peer.
+ALTER TABLE callsign_keys ADD COLUMN fed_seq INTEGER NOT NULL DEFAULT 0;
+UPDATE callsign_keys SET fed_seq = id;
+CREATE TRIGGER callsign_keys_fed_seq AFTER INSERT ON callsign_keys
+WHEN NEW.fed_seq = 0
+BEGIN
+  UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'key';
+  UPDATE callsign_keys SET fed_seq = (SELECT n FROM fed_seq WHERE kind = 'key') WHERE id = NEW.id;
+END;
+CREATE INDEX idx_callsign_keys_fed_seq ON callsign_keys (fed_seq);
+
 -- What this instance holds of each origin: for one record kind (cache | find | tombstone | account-move), every
 -- record up to `seq` is here, or was superseded or deleted. `region` is the FED_SYNC_REGION a caches mark was read
 -- under; '' holds the whole feed and stands for any region.
@@ -101,13 +114,15 @@ CREATE TABLE fed_origin_gaps (
   origin     TEXT NOT NULL,
   kind       TEXT NOT NULL,
   v          INTEGER NOT NULL,
-  reason     TEXT NOT NULL,                      -- unsettled | hops | upstream
+  reason     TEXT NOT NULL,                      -- unsettled | upstream | hops | upstream-hops
   first_seen INTEGER NOT NULL,
   tries      TEXT NOT NULL DEFAULT '{}',
+  attempts   INTEGER NOT NULL DEFAULT 0,         -- failed asks, from every neighbour together
   PRIMARY KEY (origin, kind, v)
 );
--- Gaps no neighbour filled within 7 days: given up, so the marks move past them, and listed for the sysop until
--- marked seen.
+-- Gaps no neighbour filled within 7 days and 5 asks: given up, so the marks move past them, and listed for the
+-- sysop until marked seen; a row seen 30 days ago goes. A record past the hop limit (`hops`, `upstream-hops`) is no
+-- fault anyone can fix but by a shorter path: its gap goes silently after 30 days.
 CREATE TABLE fed_gaps_given_up (
   origin     TEXT NOT NULL,
   kind       TEXT NOT NULL,

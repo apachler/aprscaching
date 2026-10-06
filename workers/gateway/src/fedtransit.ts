@@ -469,8 +469,9 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
     hops: number[],
     held?: number,
     gaps?: number[],
+    hopGaps?: number[],
   ) =>
-    new Response(encodeFedSyncPage(self, next, complete, frames, undefined, hops, held, gaps) as BodyInit, {
+    new Response(encodeFedSyncPage(self, next, complete, frames, undefined, hops, held, gaps, hopGaps) as BodyInit, {
       headers: { "content-type": "application/cbor" },
     });
 
@@ -524,12 +525,15 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   // past PAGE_GAPS of them the page promises nothing beyond the last one named
   let pageHeld = whole ? held : undefined;
   let gaps: number[] = [];
+  let hopGaps: number[] = [];
   if (pageHeld !== undefined) {
     gaps = await gapsBetween(env, origin, kind, since, next, PAGE_GAPS + 1);
     if (gaps.length > PAGE_GAPS) {
       pageHeld = Math.min(pageHeld, gaps[PAGE_GAPS]! - 1);
       gaps = gaps.slice(0, PAGE_GAPS);
     }
+    // the records past the hop limit, apart: no neighbour along this path can fill them, so they raise no alarm
+    hopGaps = await gapsBetween(env, origin, kind, since, Math.min(next, pageHeld), limit, true);
   }
   return page(
     next,
@@ -538,6 +542,7 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
     out.map((r) => r.hops),
     pageHeld,
     gaps,
+    hopGaps,
   );
 }
 

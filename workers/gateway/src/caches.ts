@@ -49,6 +49,8 @@ import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cach
 // ---- database row shapes (snake_case) ----
 export interface CacheDbRow {
   id: number;
+  /** The number the cache took from the caches sequence when it was made: its global id (federation.ts cacheGid) */
+  fed_id?: number;
   code: string;
   owner_call: string;
   title: string;
@@ -221,7 +223,8 @@ export interface RemoteCacheRow {
 
 export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
   return {
-    globalId: `${instance}:cache:${r.id}`,
+    // the global id peers know it by (federation.ts cacheGid), so a mirror and the original never list twice
+    globalId: `${instance}:cache:${r.fed_id ?? r.id}`,
     id: r.id,
     code: r.code,
     ownerCall: displayCall(r.owner_call),

@@ -25,7 +25,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`). A mirror is stored under its gid, never under the BID it carries, so one instance cannot claim another's BID; the BID only skips a bulletin already held from FBB forwarding |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
-| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. For caches, finds, tombstones and account moves it is also the origin's **sequence** for that kind, rising across all its records of the kind: a cache's `fed_rev` (every insert and update takes the next number) and a find's, a tombstone's and an account move's `fed_seq`, each at least the time in milliseconds. The global id carries a number of the same sequence, never a row id: `<origin>:cache:<fed_id>` (the number the cache was made with), `<origin>:find:<fed_seq>`, `<origin>:tombstone:<fed_seq>`, `<origin>:move:<fed_seq>`. Per-origin sync tracks it ([Per-origin sync](#per-origin-sync)). A bulletin's `v` is its posting time; a key's counts up |
+| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. For caches, finds, tombstones and account moves it is also the origin's **sequence** for that kind, rising across all its records of the kind: a cache's `fed_rev` (every insert and update takes the next number) and a find's, a tombstone's and an account move's `fed_seq`, each at least the time in milliseconds. The global id carries a number of the same sequence, never a row id: `<origin>:cache:<fed_id>` (the number the cache was made with), `<origin>:find:<fed_seq>`, `<origin>:tombstone:<fed_seq>`, `<origin>:move:<fed_seq>`. Per-origin sync tracks it ([Per-origin sync](#per-origin-sync)). A callsign key's `v` is its `fed_seq` too, numbered the same way, and the keys feed pages by it; a bulletin's `v` is its posting time |
 | `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
 | `signer` (6) | The signing instance id; a mirrored record is accepted only when it equals `origin` |
 | `body` (7) | Type-specific fields, text-keyed, integer-scaled numbers only |
@@ -66,7 +66,7 @@ refused.
 bulletin`) serves a CBOR page of the instance's own frames:
 
 ```
-page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]?, 7 held?, 8 [gaps …]? }   (application/cbor)
+page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]?, 7 held?, 8 [gaps …]?, 9 [hopGaps …]? }   (application/cbor)
 ```
 
 The cache, find, tombstone and account-move feeds page by the origin's sequence (`v`). The bulletin feed pages
@@ -165,8 +165,9 @@ answers a CBOR page of the origin's records of that kind after sequence N, order
 - `nextCursor` is how far the page read. `held` (field 7) is the sequence up to which the server holds the origin
   and kind whole, read before the rows, so a record written meanwhile lies above it, except the records `gaps`
   (field 8) names: those in the page's range the server knows it lacks, at most 200 (past that, `held` stops
-  before the next one). A server whose caches mark was read under a region the request's `bbox` does not lie
-  inside sends the caches without `held`.
+  before the next one). `hopGaps` (field 9) names apart those it keeps or lacks past the hop limit, which no
+  neighbour along this path can fill; they count toward neither limit. A server whose caches mark was read under
+  a region the request's `bbox` does not lie inside sends the caches without `held`.
 - Limits: `limit` 1–1000 (default 200), a consumer asks for 500 and reads at most 4 MiB a page. A client may
   ask for 120 summaries and 1200 origin pages a minute; past that the answer is 429, and the consumer leaves the
   rest to its next pass.
@@ -182,22 +183,28 @@ Every frame verifies under its origin's keys. It keeps two positions per origin 
 
 A neighbour is asked from past both positions, and only when its `top` lies there. Once for each value of its
 `held` that lies past the mark, a neighbour whose word moves the mark is read again from the mark, so the mark
-covers what was read before that neighbour vouched for it; every page of that read moves the mark, so it ends.
+covers what was read before that neighbour vouched for it. The read counts as done when it starts
+(`fed_read_positions.replayed`), and none starts while the origin's gaps are full, so each moves the mark and none
+repeats.
 
 **Gaps.** A record the consumer knows it lacks does not hold the mark back (`fed_origin_gaps`):
 
 - a frame on the page that did not settle: signed ahead of the consumer's clock, one its database could not take at that moment, one it could not keep for passing on, one that did not verify;
 - a record it keeps that crossed the hop limit;
-- a sequence the page names in `gaps`, which the consumer does not keep.
+- a sequence the page names in `gaps`, or in `hopGaps`, which the consumer does not keep.
 
 The mark moves past it, and the consumer asks for it by itself (`since=v-1&limit=1`), up to 20 a pull per origin
 and kind and 100 a pull in all, from each neighbour after a backoff that doubles from 5 minutes to a day. A
 settled frame fills the gap, so does a copy within the hop limit; a neighbour whose word moves the mark, whose
 `held` lies past the gap and which neither serves nor names the record shows that the record was superseded,
-deleted or lies outside the region, and the gap closes too. At most 1000 gaps of an origin and kind come from
-frames and pages; past that the mark waits below the next one. A gap nobody fills within 7 days counts as refused
-for good: it moves to `fed_gaps_given_up`, which **Instance admin → Federation → Records given up** and `doctor`
-list until the sysop marks them seen (`POST /federation/gaps/seen`). A frame refused for good (outside its origin's
+deleted or lies outside the region, and the gap closes too. Gaps a neighbour can fill come first. At most 1000
+gaps of an origin and kind come from frames and `gaps`; past that the mark waits below the next one. A gap nobody
+fills within 7 days and after 5 failed asks counts as refused for good (time alone is not enough, so a clock that
+jumps ahead gives up nothing): it moves to `fed_gaps_given_up`, which **Instance admin → Federation → Records given
+up** and `doctor` list until the sysop marks them seen (`POST /federation/gaps/seen`); a record seen 30 days ago
+leaves the table. A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
+mesh every distant record is one, and only a shorter path fills it. It holds no mark back, counts toward no
+limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame refused for good (outside its origin's
 namespace, local-only, deleted, a version already held or older) settles like an applied one. Without a summary
 the consumer still asks the neighbour for its own records. When a neighbour's key handed on is replaced and the
 records only it vouched for go, both positions and the gaps of the origin go too, and a pull already under way

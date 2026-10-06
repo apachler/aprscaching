@@ -169,7 +169,8 @@ const P_INSTANCE = 1,
   P_NEXT_ID = 5,
   P_HOPS = 6,
   P_HELD = 7,
-  P_GAPS = 8;
+  P_GAPS = 8,
+  P_HOP_GAPS = 9;
 
 /**
  * Encode a sync page. `nextId` is the tie-breaker of a composite `(cursor, id)` position, sent by
@@ -179,7 +180,8 @@ const P_INSTANCE = 1,
  * bounds how far a record travels. `held`, on a per-origin page, is the sequence up to which the server holds
  * every record of that origin and kind: a receiver that took the page whole holds them up to
  * `min(held, nextCursor)` as well, except the sequences in `gaps`: records of that origin and kind the server
- * knows it lacks, between `since` and `nextCursor`. They sit outside the signatures, which cover the records only.
+ * knows it lacks, between `since` and `nextCursor`; `hopGaps` names apart those it keeps or lacks past the hop limit,
+ * which no neighbour along that path can fill. They sit outside the signatures, which cover the records only.
  */
 export function encodeFedSyncPage(
   instance: string,
@@ -190,6 +192,7 @@ export function encodeFedSyncPage(
   hops?: number[],
   held?: number,
   gaps?: number[],
+  hopGaps?: number[],
 ): Uint8Array<ArrayBuffer> {
   const m: CborMap = new Map<number, CborValue>([
     [P_INSTANCE, instance],
@@ -204,6 +207,7 @@ export function encodeFedSyncPage(
   }
   if (held !== undefined) m.set(P_HELD, held);
   if (gaps !== undefined && gaps.length) m.set(P_GAPS, gaps);
+  if (hopGaps !== undefined && hopGaps.length) m.set(P_HOP_GAPS, hopGaps);
   return cborEncode(m);
 }
 
@@ -219,6 +223,8 @@ export interface FedSyncPage {
   held?: number;
   /** Per-origin pages: the sequences in this page's range the server knows it lacks. */
   gaps?: number[];
+  /** Per-origin pages: the sequences in this page's range the server keeps or lacks past the hop limit. */
+  hopGaps?: number[];
 }
 
 export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
@@ -245,12 +251,11 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
   const held = m.get(P_HELD);
   if (held !== undefined && (typeof held !== "number" || !Number.isSafeInteger(held)))
     throw new Error("fedsync: held must be an integer");
+  const ints = (x: unknown) => Array.isArray(x) && x.every((g) => typeof g === "number" && Number.isSafeInteger(g));
   const gaps = m.get(P_GAPS);
-  if (
-    gaps !== undefined &&
-    (!Array.isArray(gaps) || gaps.some((g) => typeof g !== "number" || !Number.isSafeInteger(g)))
-  )
-    throw new Error("fedsync: gaps must be a list of integers");
+  if (gaps !== undefined && !ints(gaps)) throw new Error("fedsync: gaps must be a list of integers");
+  const hopGaps = m.get(P_HOP_GAPS);
+  if (hopGaps !== undefined && !ints(hopGaps)) throw new Error("fedsync: hopGaps must be a list of integers");
   return {
     instance,
     nextCursor,
@@ -260,6 +265,7 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
     ...(hops !== undefined && { hops: hops as number[] }),
     ...(held !== undefined && { held }),
     ...(gaps !== undefined && { gaps: gaps as number[] }),
+    ...(hopGaps !== undefined && { hopGaps: hopGaps as number[] }),
   };
 }
 
