@@ -5,7 +5,7 @@
 // holding the call, every step is audited, and the audit rows are inside export/erase.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify, sysopVerifyCall, type Res } from "./helpers/authflow.js";
-import { newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
+import { gid as gidOf, newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { ADOPTION_NOTICE_SEC } from "@aprscaching/gateway/adoption";
 import type { Env } from "@aprscaching/gateway/env";
@@ -502,7 +502,7 @@ describe("federation", () => {
     const id = await withdrawnCache(w);
     await w.env.DB.prepare("UPDATE caches SET fed_scope='unlisted' WHERE id=?").bind(id).run();
     expect((await syncAllPeers(hub)).errors).toEqual([]);
-    const gid = `a.example:cache:${id}`;
+    const gid = await gidOf(w.env, "cache", id);
     const mirror = () =>
       hub.DB.prepare("SELECT owner_call, status, description FROM remote_caches WHERE global_id=?")
         .bind(gid)

@@ -151,6 +151,7 @@ import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
 import { handleOriginSync, handleSyncSummary } from "./fedtransit.js";
+import { handleGapsSeen } from "./fedgaps.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
 import { handlePacketPeers, handlePacketStatus } from "./fedpacket.js";
@@ -570,6 +571,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/peers" && m === "POST") return handlePeerAdd(req, env); // look up, then add unvetted
   if (p === "/federation/peers" && m === "DELETE") return handlePeerRemove(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
+  if (p === "/federation/gaps/seen" && m === "POST") return handleGapsSeen(req, env); // given-up records, seen
   if (p === "/federation/peers/sync" && m === "POST") return handlePeerSyncNow(req, env); // Sync now, one peer
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
   if (p === "/federation/peers/follow" && m === "POST") return handlePeerFollow(req, env); // follow a discovered one

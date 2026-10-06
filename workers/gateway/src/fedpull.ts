@@ -30,7 +30,8 @@ import {
 } from "./federation.js";
 import { mergeEndpoints, storedEndpoints, syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { decodeFedSyncPage } from "./fedsync.js";
-import { decodeFedFrame, parseEndpoints } from "@aprscaching/shared";
+import { decodeFedFrame, parseEndpoints, type FedSyncPage } from "@aprscaching/shared";
+import { addGap, backOff, dueGaps, giveUpGaps, removeGap } from "./fedgaps.js";
 import {
   type PeerRow,
   absorbDiscovered,
@@ -46,7 +47,6 @@ import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import {
   heldKeys,
-  hopGap,
   learnTransitKeys,
   markGen,
   markOf,
@@ -55,6 +55,7 @@ import {
   rotationsJson,
   setMark,
   setReadPos,
+  setReplayed,
   supersedeTransitPeer,
   MAX_TRANSIT_HOPS,
   ORIGIN_KINDS,
@@ -192,6 +193,8 @@ export async function syncAllPeers(env: Env, opts: PullOptions = {}): Promise<Sy
 }
 
 async function syncAllPeersInner(env: Env, opts: PullOptions): Promise<SyncResult> {
+  // gaps nobody filled in a week count as refused for good, before this pass asks for any
+  await giveUpGaps(env);
   const peers = await listEnabledPeers(env);
   let bytes = 0,
     caches = 0,
@@ -389,6 +392,7 @@ async function syncPeer(
     region: region && caps.includes(SYNC_REGION_CAPABILITY) ? bboxKey(region) : "",
     maxPages,
     relayed: { pages: maxPages },
+    gapRetries: { left: GAP_RETRIES_PER_PULL },
     bytes: 0,
   };
   // what the peer holds, per origin: its own records, and those of the origins it passes on, whose keys it hands on
@@ -465,6 +469,8 @@ interface PullContext {
   maxPages: number;
   /** Pages left for the records it passes on from other origins, shared by all of them. */
   relayed: { pages: number };
+  /** Gaps left to ask the peer for in this pull. */
+  gapRetries: { left: number };
   /** Bytes of sync pages read. */
   bytes: number;
 }
@@ -478,8 +484,8 @@ const seqOf = (v: unknown): number | undefined =>
 
 /**
  * The peer's summary: the origins it serves, its own first. Without one (a peer that serves none, or an error)
- * the peer's own records are still pulled, from this instance's marks. Where the peer says how far it holds this
- * instance's own records, this instance's sequences rise to at least that (raiseOwnSequences).
+ * the peer's own records are still pulled, from this instance's marks. Where a trusted peer says how far it holds
+ * this instance's own records, this instance's sequences rise to at least that (raiseOwnSequences).
  */
 async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntry[]> {
   const out: SummaryEntry[] = [];
@@ -502,7 +508,8 @@ async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntr
     } catch {
       break;
     }
-    if (i === 0 && page.asker?.held && typeof page.asker.held === "object") {
+    // how far a trusted peer holds this instance's own records: numbering goes on above it
+    if (i === 0 && ctx.trusted && page.asker?.held && typeof page.asker.held === "object") {
       const mine: SummaryEntry["held"] = {};
       for (const kind of ORIGIN_KINDS) {
         const v = seqOf((page.asker.held as Record<string, unknown>)[kind]);
@@ -530,13 +537,85 @@ async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntr
   return [own ?? { origin: ctx.neighbour, held: {}, top: {} }, ...out.filter((e) => e !== own)];
 }
 
-/** The sequence a frame claims, before any check: where a page stops being held when that frame did not settle. */
-function claimedSeq(fb: Uint8Array): number {
+/** Gaps one pull asks one peer for, per origin and kind, and across the whole pull. */
+const GAP_RETRIES = 20;
+const GAP_RETRIES_PER_PULL = 100;
+
+/** A frame's global id and sequence, before any check, or null for bytes that are no frame. */
+function frameIds(fb: Uint8Array): { gid: string; v: number } | null {
   try {
-    return decodeFedFrame(fb).record.v;
+    const r = decodeFedFrame(fb).record;
+    return { gid: r.gid, v: r.v };
   } catch {
-    return 0;
+    return null;
   }
+}
+
+/**
+ * After a frame settled: the record is held here, so the gap at its sequence closes, unless the copy kept for passing
+ * on crossed the hop limit, which opens one until a copy over fewer hops comes.
+ */
+async function noteSettled(env: Env, origin: string, kind: OriginKind, ids: { gid: string; v: number }) {
+  const kept = await env.DB.prepare("SELECT v, hops FROM fed_transit WHERE gid = ?")
+    .bind(ids.gid)
+    .first<{ v: number; hops: number }>();
+  if (kept && kept.v === ids.v && kept.hops >= MAX_TRANSIT_HOPS) await addGap(env, origin, kind, ids.v, "hops");
+  else await removeGap(env, origin, kind, ids.v);
+}
+
+/** One page of the peer's records of an origin and kind after `since`, or the status that ended the read. */
+async function originPage(
+  ctx: PullContext,
+  e: SummaryEntry,
+  kind: OriginKind,
+  since: number,
+  limit: number,
+): Promise<FedSyncPage | 404 | 429> {
+  const us = ours(ctx.env);
+  const region = kind === "cache" ? ctx.region : "";
+  const path = `/federation/sync/origin?origin=${encodeURIComponent(e.origin)}&kind=${kind}`;
+  const query = `${region ? `&bbox=${region}` : ""}${us ? `&for=${encodeURIComponent(us)}` : ""}&limit=${limit}`;
+  const res = await ctx.transport.get(`${path}&since=${since}${query}`);
+  if (res.status === 404 || res.status === 429) return res.status;
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${path}`);
+  const body = await readCappedBody(res, MAX_PAGE_BYTES);
+  if (!body) throw new Error(`${path} page too large (over ${MAX_PAGE_BYTES} bytes)`);
+  ctx.bytes += body.byteLength;
+  const pg = decodeFedSyncPage(body);
+  if (pg.frames.length > limit) throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${limit})`);
+  return pg;
+}
+
+/** Admit one frame of an origin page; the sequence it claims when it did not settle, else null. */
+async function admitOriginFrame(
+  ctx: PullContext,
+  e: SummaryEntry,
+  kind: OriginKind,
+  gate: FrameGate,
+  fb: Uint8Array,
+  hopsBefore: number | undefined,
+  counts: { applied: number },
+): Promise<number | null> {
+  // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
+  const skipped = (err: unknown) =>
+    console.warn(
+      `federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`,
+    );
+  // a frame without its hop count is taken as having travelled as far as a record may
+  const hops = (hopsBefore ?? MAX_TRANSIT_HOPS) + 1;
+  const ids = frameIds(fb);
+  try {
+    const r = await admitFrame(ctx.env, fb, gate, hops);
+    if (r.verdict === "applied") counts.applied++;
+    else if (r.error) skipped(r.error);
+    if (r.settled && ids) {
+      await noteSettled(ctx.env, e.origin, kind, ids);
+      return null;
+    }
+  } catch (err) {
+    skipped(err);
+  }
+  return ids?.v ?? null;
 }
 
 /**
@@ -546,18 +625,18 @@ function claimedSeq(fb: Uint8Array): number {
  * that origin, with this instance's trust in it: an origin unknown or blocked here is not asked for.
  *
  * Two positions. The mark says how far this instance holds the origin, whichever path brought it; the read
- * position how far it has read this peer's pages of it. A peer whose word moves the mark (the origin itself, or a
- * peer this instance trusts) and that holds the origin whole past the mark is asked from the mark, so it fills a
- * gap below what was read; otherwise the peer is asked only past both, and only when it has records there.
+ * position how far it has read this peer's pages of it. A peer is asked past both, when it has records there. A
+ * peer whose word moves the mark (the origin itself, or a peer this instance trusts) and whose `held` lies past
+ * the mark is read again from the mark once per value of its `held`, so its word covers what was read before it
+ * vouched for it; the mark moves with every page of that, so the read always ends.
  *
- * The mark moves to the page's `min(held, nextCursor)`, never past the first frame that did not settle (a
- * temporary refusal) nor past a record this instance keeps but may not pass on (the hop limit), which another
- * neighbour then fills.
+ * The mark moves to the page's `min(held, nextCursor)`. A frame that did not settle, a record kept past the hop
+ * limit and a record the page names as lacking become gaps (fedgaps.ts) instead of holding the mark back, and the
+ * gaps due are asked of the peer one by one (retryGaps).
  */
 async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): Promise<number> {
   const { env } = ctx;
-  const us = ours(env);
-  if (e.origin === us) return 0;
+  if (e.origin === ours(env)) return 0;
   const own = e.origin === ctx.neighbour;
   let keys = ctx.activeKeys;
   if (!own) {
@@ -572,72 +651,104 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
   const advances = own || ctx.trusted;
   const held = e.held[kind];
   const top = e.top[kind];
-  let cursor: number;
-  if (held === undefined && top === undefined) cursor = advances ? mark : Math.max(mark, read);
-  else if (advances && (held ?? 0) > mark) cursor = mark;
-  else if ((top ?? 0) > Math.max(mark, read)) cursor = Math.max(mark, read);
-  else return 0; // nothing new there
-  const budget = own ? { pages: ctx.maxPages } : ctx.relayed;
   const gate: FrameGate = {
     origin: e.origin,
     type: kind,
     keysFor: () => Promise.resolve(keys),
     ...(!own && { mirrorOnly: true, via: ctx.neighbour }),
   };
-  const path = `/federation/sync/origin?origin=${encodeURIComponent(e.origin)}&kind=${kind}`;
-  const query = `${region ? `&bbox=${region}` : ""}${us ? `&for=${encodeURIComponent(us)}` : ""}&limit=${PAGE_LIMIT}`;
-  let applied = 0;
-  while (budget.pages > 0) {
-    budget.pages--;
-    const res = await ctx.transport.get(`${path}&since=${cursor}${query}`);
-    if (res.status === 404) break; // not served there
-    if (res.status === 429) {
-      budget.pages = 0; // the peer asks for a pause: the rest waits for the next pass
-      break;
-    }
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${path}`);
-    const body = await readCappedBody(res, MAX_PAGE_BYTES);
-    if (!body) throw new Error(`${path} page too large (over ${MAX_PAGE_BYTES} bytes)`);
-    ctx.bytes += body.byteLength;
-    const pg = decodeFedSyncPage(body);
-    if (pg.frames.length > PAGE_LIMIT)
-      throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
-    let unsettled: number | null = null;
-    for (const [i, fb] of pg.frames.entries()) {
-      // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
-      const skipped = (err: unknown) =>
-        console.warn(
-          `federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`,
-        );
-      // a frame without its hop count is taken as having travelled as far as a record may
-      const hops = (pg.hops?.[i] ?? MAX_TRANSIT_HOPS) + 1;
-      let settled = false;
-      try {
-        const r = await admitFrame(env, fb, gate, hops);
-        if (r.verdict === "applied") applied++;
-        else if (r.error) skipped(r.error);
-        settled = r.settled === true;
-      } catch (err) {
-        skipped(err);
+  const counts = { applied: 0 };
+  const known = held !== undefined || top !== undefined;
+  const replay = known && advances && (held ?? 0) > mark && (held ?? 0) > read.replayed;
+  let cursor = replay ? mark : Math.max(mark, read.seq);
+  if (!known || replay || (top ?? 0) > cursor) {
+    const budget = own ? { pages: ctx.maxPages } : ctx.relayed;
+    let ended = false;
+    while (budget.pages > 0) {
+      budget.pages--;
+      const pg = await originPage(ctx, e, kind, cursor, PAGE_LIMIT);
+      if (pg === 404) break; // not served there
+      if (pg === 429) {
+        budget.pages = 0; // the peer asks for a pause: the rest waits for the next pass
+        break;
       }
-      if (!settled) unsettled = Math.min(unsettled ?? Infinity, claimedSeq(fb));
-    }
-    const next = pg.nextCursor;
-    if (advances && pg.held !== undefined) {
-      let upTo = Math.min(pg.held, next);
-      if (unsettled !== null) upTo = Math.min(upTo, unsettled - 1);
-      const gap = await hopGap(env, e.origin, kind, mark);
-      if (gap !== null) upTo = Math.min(upTo, gap - 1);
-      if (upTo > mark) {
-        await setMark(env, e.origin, kind, upTo, gen, region);
-        mark = upTo;
+      const unsettled: number[] = [];
+      for (const [i, fb] of pg.frames.entries()) {
+        const v = await admitOriginFrame(ctx, e, kind, gate, fb, pg.hops?.[i], counts);
+        if (v !== null) unsettled.push(v);
       }
+      const next = pg.nextCursor;
+      if (advances && pg.held !== undefined) {
+        let upTo = Math.min(pg.held, next);
+        // what did not settle here, and what the peer lacks, is asked for on its own; the mark moves on
+        const lacking = [
+          ...unsettled.map((v) => ({ v, reason: "unsettled" as const })),
+          ...(pg.gaps ?? []).map((v) => ({ v, reason: "upstream" as const })),
+        ].sort((x, y) => x.v - y.v);
+        for (const g of lacking) {
+          if (g.v <= cursor || g.v > upTo) continue;
+          if (g.reason === "upstream" && (await heldHere(env, e.origin, kind, g.v))) continue;
+          if (!(await addGap(env, e.origin, kind, g.v, g.reason))) upTo = Math.min(upTo, g.v - 1);
+        }
+        if (upTo > mark) {
+          await setMark(env, e.origin, kind, upTo, gen, region);
+          mark = upTo;
+        }
+      }
+      await setReadPos(env, ctx.neighbour, e.origin, kind, region, next, gen);
+      if (pg.complete || next >= read.seq) ended = true;
+      if (pg.complete || next <= cursor) break;
+      cursor = next;
     }
-    await setReadPos(env, ctx.neighbour, e.origin, kind, region, next, gen);
-    if (pg.complete || next <= cursor) break;
-    cursor = next;
+    if (replay && ended) await setReplayed(env, ctx.neighbour, e.origin, kind, region, held ?? 0);
   }
-  return applied;
+  await retryGaps(ctx, e, kind, gate, advances, counts);
+  return counts.applied;
+}
+
+/** Whether the record of `origin` and `kind` at `v` is kept here, within the hop limit. */
+async function heldHere(env: Env, origin: string, kind: OriginKind, v: number): Promise<boolean> {
+  return !!(await env.DB.prepare("SELECT 1 AS x FROM fed_transit WHERE origin = ? AND kind = ? AND v = ? AND hops < ?")
+    .bind(origin, kind, v, MAX_TRANSIT_HOPS)
+    .first());
+}
+
+/**
+ * Ask the peer for the gaps of an origin and kind that are due, one record each (`since=v-1&limit=1`). A frame that
+ * settles closes its gap; so does a peer whose word moves the mark, holds the origin past the gap and does not lack
+ * it, since the record was superseded, deleted, or lies outside the region. Otherwise the peer is asked again after
+ * a backoff. At most GAP_RETRIES per origin and kind, and GAP_RETRIES_PER_PULL in all.
+ */
+async function retryGaps(
+  ctx: PullContext,
+  e: SummaryEntry,
+  kind: OriginKind,
+  gate: FrameGate,
+  advances: boolean,
+  counts: { applied: number },
+): Promise<void> {
+  const { env } = ctx;
+  const due = await dueGaps(env, e.origin, kind, ctx.neighbour, Math.min(GAP_RETRIES, ctx.gapRetries.left));
+  for (const v of due) {
+    ctx.gapRetries.left--;
+    const pg = await originPage(ctx, e, kind, v - 1, 1);
+    if (pg === 404 || pg === 429) break;
+    let filled = false;
+    for (const [i, fb] of pg.frames.entries()) {
+      if (frameIds(fb)?.v !== v) continue;
+      filled = (await admitOriginFrame(ctx, e, kind, gate, fb, pg.hops?.[i], counts)) === null;
+    }
+    const absent =
+      advances &&
+      pg.held !== undefined &&
+      pg.held >= v &&
+      !(pg.gaps ?? []).includes(v) &&
+      !pg.frames.some((fb) => frameIds(fb)?.v === v);
+    if (!filled && absent) await removeGap(env, e.origin, kind, v);
+    // a record kept within the hop limit closed the gap in noteSettled; one still at the limit backs off like a miss
+    if (!absent && !(filled && (await heldHere(env, e.origin, kind, v))))
+      await backOff(env, e.origin, kind, v, ctx.neighbour);
+  }
 }
 
 /**

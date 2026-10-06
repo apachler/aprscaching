@@ -414,14 +414,14 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
       .all<{ id: number }>()
   ).results;
   const findIds = (
-    await env.DB.prepare(`SELECT id FROM cache_logs WHERE ${ofCall("logger_call")} AND ts >= ?`)
+    await env.DB.prepare(`SELECT id, fed_seq FROM cache_logs WHERE ${ofCall("logger_call")} AND ts >= ?`)
       .bind(cs, like, since)
-      .all<{ id: number }>()
+      .all<{ id: number; fed_seq: number }>()
   ).results;
   const tombstones: TombstoneItem[] = instance
     ? [
         ...keyIds.map((k) => ({ kind: "key" as const, targetId: `${instance}:key:${k.id}` })),
-        ...findIds.map((l) => ({ kind: "find" as const, targetId: `${instance}:find:${l.id}` })),
+        ...findIds.map((l) => ({ kind: "find" as const, targetId: `${instance}:find:${l.fed_seq}` })),
       ]
     : [];
 

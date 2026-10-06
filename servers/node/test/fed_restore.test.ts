@@ -5,7 +5,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
 import { call } from "./helpers/authflow.js";
-import { addCache, instanceEnv, newFedKey, serve, servedFrames, stubFetch } from "./helpers/fedpeer.js";
+import { addCache, gid, instanceEnv, newFedKey, serve, servedFrames, stubFetch } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -42,7 +42,7 @@ describe("a restored cache reaches the peers again", () => {
     const rm = await call(a, "POST", "/api/admin/moderation/remove", { kind: "cache", id, reason: "takedown" }, OP);
     expect(rm.status).toBe(200);
     const t = await a.DB.prepare("SELECT up_to FROM tombstones WHERE target_id = ?")
-      .bind(`a.example:cache:${id}`)
+      .bind(await gid(a, "cache", id))
       .first<{ up_to: number }>();
     // the removal covers the cache's place in the caches sequence, where the removal itself put it
     const rev = await a.DB.prepare("SELECT fed_rev FROM caches WHERE id = ?").bind(id).first<{ fed_rev: number }>();
@@ -78,7 +78,7 @@ describe("a restored cache reaches the peers again", () => {
     await a.DB.prepare(
       "INSERT INTO tombstones (id, kind, target_id, origin, ts) VALUES ('t1', 'cache', ?, 'a.example', ?)",
     )
-      .bind(`a.example:cache:${id}`, Math.floor(Date.now() / 1000))
+      .bind(await gid(a, "cache", id), Math.floor(Date.now() / 1000))
       .run();
     await syncAllPeers(hub);
     expect(await mirrored(hub)).toBeNull();

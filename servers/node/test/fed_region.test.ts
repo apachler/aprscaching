@@ -8,7 +8,7 @@ import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { parseBbox, bboxKey } from "@aprscaching/gateway/fedregion";
 import { emitTombstones } from "@aprscaching/gateway/tombstones";
-import { newFedKey, instanceEnv, serve, stubFetch, withDescriptor, remoteCacheCount } from "./helpers/fedpeer.js";
+import { gid, newFedKey, instanceEnv, serve, stubFetch, withDescriptor, remoteCacheCount } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -103,7 +103,7 @@ describe("the publisher", () => {
     const a = instanceEnv("a.example", await newFedKey());
     const id = await cacheAt(a, 48.21, 16.37);
     expect((await served(a, "cache?since=0&bbox=1,2,3")).status).toBe(400);
-    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: `a.example:cache:${id}` }]);
+    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: await gid(a, "cache", id) }]);
     expect(await frameCount(await served(a, `tombstone?since=0&bbox=${GRAZ}`))).toBe(1);
   });
 
@@ -167,8 +167,9 @@ describe("the subscriber", () => {
     expect(await remoteCacheCount(hub, "a.example")).toBe(1);
 
     (hub as { FED_SYNC_REGION?: string }).FED_SYNC_REGION = GRAZ;
+    const target = await gid(a, "cache", vienna);
     await a.DB.prepare("DELETE FROM caches WHERE id = ?").bind(vienna).run();
-    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: `a.example:cache:${vienna}` }]);
+    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: target }]);
     await syncAllPeers(hub);
     expect(await remoteCacheCount(hub, "a.example")).toBe(0);
   });
@@ -195,8 +196,9 @@ describe("a narrowed pull", () => {
       .bind(id)
       .run();
     const gone = await cacheAt(a, 47.08, 15.43);
+    const target = await gid(a, "cache", gone);
     await a.DB.prepare("DELETE FROM caches WHERE id = ?").bind(gone).run();
-    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: `a.example:cache:${gone}` }]);
+    await emitTombstones(a, "a.example", [{ kind: "cache", targetId: target }]);
     stubFetch({ [A]: serve(a) });
     const r = await syncAllPeers(hub, { types: ["cache"] });
     expect(r.errors).toEqual([]);

@@ -518,6 +518,17 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
   Federation shows each peer's last packet session and its error.
 - **See:** [Packet circuit](federation/transports.md#packet-circuit).
 
+### `federation.gaps`
+
+- **Tests:** whether this instance gave up on records of other instances: records it lacked and asked its
+  neighbours for, one by one, for a week, without one delivering them. Sync has moved past them. It reads
+  `GET /federation/peers` with `OPERATOR_SECRET`.
+- **Message:** `<n> record(s) of other instances given up: no neighbour delivered them within a week` (warn).
+- **Fix:** read them under Instance admin → Federation → **Records given up**: each names its home instance and why
+  it did not arrive. A record that crossed too many instances needs a shorter path to its home, such as following
+  it or a hub nearer to it. Then mark them seen.
+- **See:** [How federation stays honest](../reference/federation-trust.md#records-passed-on-through-hubs).
+
 ## The 44Net tunnel and name (`net44`)
 
 An instance with a `44net` endpoint in `FED_ENDPOINTS`, or a host with the `wg44` tunnel up. Self-host and

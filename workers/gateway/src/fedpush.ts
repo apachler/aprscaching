@@ -33,6 +33,7 @@ import { admitFrame, type FrameGate } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
 import { markGen, markOf, rotationsJson, setMark, ORIGIN_KINDS, type OriginKind } from "./fedtransit.js";
+import { addGap } from "./fedgaps.js";
 
 /**
  * The feeds a spoke pushes: every feed the pull serves, in the pull's order (fedapply.ts `SYNC_DEFS`) —
@@ -253,13 +254,13 @@ async function submitFrames(
 
   const gate: FrameGate = { origin: instance, keysFor: () => Promise.resolve([publicKey]), mirrorOnly: true };
   let applied = 0,
-    rejected = 0,
-    unsettled = Infinity;
+    rejected = 0;
+  const unsettled: number[] = [];
   for (const fb of frames) {
     const r = await admitFrame(env, fb, gate);
     if (r.verdict === "applied") applied++;
     else if (r.verdict === "rejected") rejected++;
-    if (!r.settled) unsettled = Math.min(unsettled, claimedSeq(fb));
+    if (!r.settled) unsettled.push(claimedSeq(fb));
   }
   // How far this spoke's feed now stands here, returned so the spoke resumes from what the hub holds.
   const type = page ? pageFeed(frames) : null;
@@ -268,13 +269,16 @@ async function submitFrames(
   if (page && type) {
     mark = { type, cursor: page.nextCursor, ...(page.nextId !== undefined && { id: page.nextId }) };
     await recordMark(env, instance, type, mark);
-    // a page that continues what the hub holds of the spoke: the hub now holds it up to the page's end, or up to
-    // the first record that did not settle, and passes that on in its summary like any origin it pulled
+    // a page that continues what the hub holds of the spoke: the hub now holds it up to the page's end, the records
+    // that did not settle aside, which become gaps (fedgaps.ts), and passes that on like any origin it pulled
     if ((ORIGIN_KINDS as readonly string[]).includes(type)) {
       const kind = type as OriginKind;
       const gen = await markGen(env, instance);
       held = await markOf(env, instance, kind);
-      const upTo = Math.min(page.nextCursor, unsettled - 1);
+      let upTo = page.nextCursor;
+      if (page.since !== undefined && page.since <= held)
+        for (const v of unsettled.sort((a, b) => a - b))
+          if (v > held && v <= upTo && !(await addGap(env, instance, kind, v, "unsettled"))) upTo = v - 1;
       if (page.since !== undefined && page.since <= held && upTo > held) {
         await setMark(env, instance, kind, upTo, gen);
         held = await markOf(env, instance, kind);
@@ -304,6 +308,15 @@ const loadCursor = async (env: Env, hub: string, type: string): Promise<PushMark
     .first<{ cursor: number; cursor_id: number | null }>();
   return r ? { cursor: r.cursor, ...(r.cursor_id != null && { id: r.cursor_id }) } : { cursor: 0 };
 };
+/** Where the push of one feed last went back to, at the hub's word. */
+const rewoundTo = async (env: Env, hub: string, type: string): Promise<number | null> =>
+  (
+    await env.DB.prepare("SELECT rewound_to FROM fed_push_cursors WHERE hub = ? AND type = ?")
+      .bind(hub, type)
+      .first<{ rewound_to: number | null }>()
+  )?.rewound_to ?? null;
+const setRewoundTo = (env: Env, hub: string, type: string, v: number | null) =>
+  env.DB.prepare("UPDATE fed_push_cursors SET rewound_to = ? WHERE hub = ? AND type = ?").bind(v, hub, type).run();
 const saveCursor = (env: Env, hub: string, type: string, m: PushMark) =>
   env.DB.prepare(
     `INSERT INTO fed_push_cursors (hub, type, cursor, cursor_id, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -413,7 +426,6 @@ async function pushCycle(
   let backlog = false;
   for (const def of PUSH_FEEDS) {
     let { cursor, id } = await loadCursor(env, hub, def.type);
-    let rewound = false;
     for (let page = 0; ; page++) {
       if (page === MAX_PAGES) {
         backlog = true;
@@ -460,14 +472,17 @@ async function pushCycle(
       let next: PushMark = mark ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) } : sent;
       // the hub holds this feed of ours whole only up to below where this page started: send again from there,
       // so the pages join up and the hub passes our records on
-      const held = answer?.held;
-      const rewind = !rewound && typeof held === "number" && Number.isSafeInteger(held) && held >= 0 && held < cursor;
+      // once for each place the hub names, so a hub that cannot take the pages whole never keeps us resending
+      const held = typeof answer?.held === "number" && Number.isSafeInteger(answer.held) ? answer.held : null;
+      const before = await rewoundTo(env, hub, def.type);
+      const rewind = held !== null && held >= 0 && held < cursor && held !== before;
       if (rewind) next = { cursor: held };
       await saveCursor(env, hub, def.type, next);
+      // a page that joined up clears it: should the hub forget us again later, we go back again
+      if (rewind || (held !== null && held >= cursor && before !== null))
+        await setRewoundTo(env, hub, def.type, rewind ? held : null);
       pushed += built.frames.length;
-      // once per feed and cycle, so a hub that cannot take the pages whole never keeps a cycle going
       if (rewind) {
-        rewound = true;
         cursor = next.cursor;
         id = undefined;
         continue;

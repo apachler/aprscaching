@@ -742,6 +742,23 @@ doc_fedlink_gateway() {
   fi
 }
 
+# Records of other instances that no neighbour delivered within a week, given up so sync moves on (fedgaps.ts),
+# until the sysop marks them seen in Instance admin (GET /federation/peers, read with the operator secret).
+doc_fedgaps() {
+  local body n
+  [ -n "$DOC_BASE" ] && [ -n "$DOC_HEALTH" ] && [ -n "$DOC_OPERATOR_SECRET" ] || return 0
+  body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 10 \
+    "$DOC_BASE/federation/peers" 2>/dev/null || true)"
+  n="$(printf '%s' "$body" | sed -n -E 's/.*"givenUp":\{"count":([0-9]+).*/\1/p' | head -n 1)"
+  [ -n "$n" ] || return 0
+  if [ "$n" = 0 ]; then
+    pass federation.gaps "no records of other instances given up"
+  else
+    warnc federation.gaps "$n record(s) of other instances given up: no neighbour delivered them within a week" \
+      "read them under Instance admin -> Federation -> Records given up, then mark them seen"
+  fi
+}
+
 # ---- callsign identity -------------------------------------------------------------------------------------------
 # The gateway's own self-check of the records that let peers add this instance by callsign (44Net, https or both),
 # read with the operator secret and relayed line by line, each fix carrying the exact value to publish.
@@ -1040,6 +1057,7 @@ run_doctor() {
   doc_origins
   doc_federation
   doc_fedlink_gateway
+  doc_fedgaps
   doc_identity
   doc_net44
   if declare -F shape_doctor_extra >/dev/null; then shape_doctor_extra; fi

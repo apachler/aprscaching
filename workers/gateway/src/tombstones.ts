@@ -74,7 +74,7 @@ export const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
         .bind(since, limit)
         .all<TombstoneRow>()
     ).results,
-  recordOf: (r, instance) => ({ id: `${instance}:tombstone:${r.seq}`, cursor: r.fed_seq, data: tombstoneData(r) }),
+  recordOf: (r, instance) => ({ id: `${instance}:tombstone:${r.fed_seq}`, cursor: r.fed_seq, data: tombstoneData(r) }),
 };
 
 export const handleFederationTombstones = (req: Request, env: Env): Promise<Response> =>

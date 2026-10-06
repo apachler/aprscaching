@@ -4,7 +4,7 @@
 // federation (through a signed tombstone). Only the sysop reaches any of it.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
-import { addCache, instanceEnv, newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
+import { addCache, gid, instanceEnv, newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -223,7 +223,8 @@ describe("removing a cache", () => {
     const r = await sysopCall(w, "POST", "/remove", { kind: "cache", id, reason: "advertising listing" });
     expect(r.status).toBe(200);
     expect(r.data.tombstones).toBe(1);
-    expect(await tombstones(w.env)).toEqual([{ kind: "cache", target_id: `gw.test:cache:${id}` }]);
+    const cacheGid = await gid(w.env, "cache", id);
+    expect(await tombstones(w.env)).toEqual([{ kind: "cache", target_id: cacheGid }]);
     expect((await sysopCall(w, "POST", "/remove", { kind: "cache", id, reason: "again" })).status).toBe(409);
 
     // public reads
@@ -236,9 +237,9 @@ describe("removing a cache", () => {
     expect(map.data.caches.map((c: { code: string }) => c.code)).not.toContain(code);
     expect((await call(w.env, "GET", `/api/v1/caches/${code}.gpx`)).status).toBe(404);
     const fed = await call(w.env, "GET", "/federation/caches?since=0");
-    expect(JSON.stringify(fed.data)).not.toContain(`gw.test:cache:${id}`);
+    expect(JSON.stringify(fed.data)).not.toContain(cacheGid);
     const tsFeed = await call(w.env, "GET", "/federation/tombstones?since=0");
-    expect(JSON.stringify(tsFeed.data)).toContain(`gw.test:cache:${id}`);
+    expect(JSON.stringify(tsFeed.data)).toContain(cacheGid);
 
     // the owner and the sysop still see it, marked
     const own = await call(w.env, "GET", `/api/caches/${id}`, undefined, as(owner));
@@ -276,11 +277,12 @@ describe("removing a single item", () => {
     const owner = await user(w, "DL1OWN");
     const { id } = await hide(w, owner);
     const logId = await addLog(w.env, id, "DL1BAD", "note", "offensive words");
+    const logGid = await gid(w.env, "find", logId);
     expect((await call(w.env, "GET", `/api/caches/${id}/logs`)).data.logs).toHaveLength(1);
     const r = await sysopCall(w, "POST", "/remove", { kind: "log", id: logId, reason: "offensive note" });
     expect(r.status).toBe(200);
     expect((await call(w.env, "GET", `/api/caches/${id}/logs`)).data.logs).toHaveLength(0);
-    expect(await tombstones(w.env)).toContainEqual({ kind: "find", target_id: `gw.test:find:${logId}` });
+    expect(await tombstones(w.env)).toContainEqual({ kind: "find", target_id: logGid });
     expect((await sysopCall(w, "POST", "/remove", { kind: "log", id: logId, reason: "again" })).status).toBe(404);
   });
 

@@ -441,9 +441,9 @@ async function eraseCall(
   // to purge the pre-deletion copies on peers. Logs sent from an SSID (a radio find from OE8APR-7) are
   // the callsign's too.
   const findIds = (
-    await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?")
+    await env.DB.prepare("SELECT id, fed_seq FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?")
       .bind(cs, `${cs}-%`)
-      .all<{ id: number }>()
+      .all<{ id: number; fed_seq: number }>()
   ).results;
   // the same for the callsign's key bindings (an SSID's too) and move announcements, which peers mirrored
   const keyIds = (
@@ -452,7 +452,9 @@ async function eraseCall(
       .all<{ id: number }>()
   ).results;
   const moveSeqs = (
-    await env.DB.prepare("SELECT seq FROM account_moves WHERE callsign=?").bind(cs).all<{ seq: number }>()
+    await env.DB.prepare("SELECT seq, fed_seq FROM account_moves WHERE callsign=?")
+      .bind(cs)
+      .all<{ seq: number; fed_seq: number }>()
   ).results;
   // media uploaded to the caches this call (or an SSID of it) owns, captured while owner_call still names it
   const media = (
@@ -547,9 +549,9 @@ async function eraseCall(
   ]);
   return {
     tombstones: [
-      ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
+      ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.fed_seq}` })),
       ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
-      ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
+      ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.fed_seq}` })),
     ],
     mediaKeys: [
       ...media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
@@ -811,7 +813,8 @@ export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
         .all<MoveRow>()
     ).results,
   recordOf: (r, instance) => ({
-    id: `${instance}:move:${r.seq}`,
+    // the global id is the move's place in the moves sequence, which a restored database never hands out again
+    id: `${instance}:move:${r.fed_seq}`,
     cursor: r.fed_seq,
     data: {
       callsign: r.callsign,

@@ -27,6 +27,7 @@ import {
   type RegistryEntry,
 } from "./federation.js";
 import { forgetTransitPeer, supersedeTransitPeer } from "./fedtransit.js";
+import { givenUpUnseen } from "./fedgaps.js";
 import { storedEndpoints } from "./fedtransport.js";
 import { endpointBaseUrls } from "@aprscaching/shared";
 
@@ -273,6 +274,8 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       discovery: { learn: discoverOn(env), lists: peerExchangeOn(env), mdns: env.FED_MDNS ?? "off" },
     },
     peers,
+    // records no neighbour filled within a week, given up and not yet marked seen (fedgaps.ts)
+    givenUp: await givenUpUnseen(env),
   });
 }
 

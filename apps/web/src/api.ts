@@ -994,8 +994,26 @@ export function listFederationPeers(): Promise<{
     discovery?: { learn: boolean; lists: boolean; mdns: "off" | "listen" | "announce" };
   };
   peers: FedPeer[];
+  /** Records no neighbour filled within a week, given up and not marked seen yet */
+  givenUp?: { count: number; gaps: FedGivenUp[] };
 }> {
   return call(`/federation/peers`);
+}
+
+/** A record of another instance this one asked its neighbours for, for a week, and gave up on. */
+export interface FedGivenUp {
+  origin: string;
+  kind: "cache" | "find" | "tombstone" | "account-move";
+  /** The record's number in its home instance's sequence */
+  v: number;
+  /** unsettled: it arrived but would not apply or verify; hops: it crossed too many instances; upstream: a neighbour lacked it */
+  reason: "unsettled" | "hops" | "upstream";
+  firstSeen: number;
+  givenUp: number;
+}
+/** Operator: the given-up records have been seen; they leave the list. */
+export function markGivenUpSeen(): Promise<{ ok: boolean; seen: number }> {
+  return call(`/federation/gaps/seen`, { method: "POST", body: "{}" });
 }
 
 /** What looking a would-be peer up by its address shows, before anything is stored. */

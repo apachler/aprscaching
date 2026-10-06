@@ -11,7 +11,7 @@ import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import { bodyToWire } from "@aprscaching/gateway/fedsync";
 import { call } from "./helpers/authflow.js";
-import { addCache, instanceEnv, newFedKey, serve, stubFetch, type FedKey } from "./helpers/fedpeer.js";
+import { addCache, gid, instanceEnv, newFedKey, serve, stubFetch, type FedKey } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -61,8 +61,10 @@ async function world(
   await follow(b, "https://hub.example", "hub.example", kh);
   const cacheId = await addCache(a, now() - 60);
   const findId = await addFind(a, cacheId);
+  const cacheGid = await gid(a, "cache", cacheId);
+  const findGid = await gid(a, "find", findId);
   stubFetch({ "https://a.example": serve(a), "https://hub.example": serve(hub), "https://b.example": serve(b) });
-  return { a, hub, b, ka, kh, kb, cacheId, findId };
+  return { a, hub, b, ka, kh, kb, cacheId, findId, cacheGid, findGid };
 }
 
 const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
@@ -95,24 +97,18 @@ describe("a hub passes its spokes' records on", () => {
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
 
-    const cache = await one(
-      w.b,
-      "SELECT origin FROM remote_caches WHERE global_id = ?",
-      `a.example:cache:${w.cacheId}`,
-    );
+    const cache = await one(w.b, "SELECT origin FROM remote_caches WHERE global_id = ?", w.cacheGid);
     expect(cache).toEqual({ origin: "a.example" });
-    expect(await one(w.b, "SELECT origin FROM remote_finds WHERE global_id = ?", `a.example:find:${w.findId}`)).toEqual(
-      {
-        origin: "a.example",
-      },
-    );
+    expect(await one(w.b, "SELECT origin FROM remote_finds WHERE global_id = ?", w.findGid)).toEqual({
+      origin: "a.example",
+    });
     // the frames are the ones A signed, byte for byte, under A's key
     const held = await rows(w.b, "SELECT gid, frame, signer_key, via, hops FROM fed_transit ORDER BY gid");
     expect(held.map((r) => [r.gid, r.signer_key, r.via, r.hops])).toEqual([
-      [`a.example:cache:${w.cacheId}`, w.ka.pub, "hub.example", 2],
-      [`a.example:find:${w.findId}`, w.ka.pub, "hub.example", 2],
+      [w.cacheGid, w.ka.pub, "hub.example", 2],
+      [w.findGid, w.ka.pub, "hub.example", 2],
     ]);
-    const atHub = await one(w.hub, "SELECT frame FROM fed_transit WHERE gid = ?", `a.example:cache:${w.cacheId}`);
+    const atHub = await one(w.hub, "SELECT frame FROM fed_transit WHERE gid = ?", w.cacheGid);
     expect(Buffer.from(held[0]!.frame as Uint8Array).equals(Buffer.from(atHub!.frame as Uint8Array))).toBe(true);
 
     // B learned A's key from the hub: an unvetted origin, never pulled, its records hidden by default
@@ -217,9 +213,7 @@ describe("a hub passes its spokes' records on", () => {
     ).toBe(200);
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
-    expect(
-      await one(w.b, "SELECT status FROM remote_caches WHERE global_id = ?", `a.example:cache:${w.cacheId}`),
-    ).toEqual({
+    expect(await one(w.b, "SELECT status FROM remote_caches WHERE global_id = ?", w.cacheGid)).toEqual({
       status: "disabled",
     });
   });
@@ -230,14 +224,12 @@ describe("a hub passes its spokes' records on", () => {
     await w.a.DB.prepare(
       "INSERT INTO tombstones (id, kind, target_id, origin, ts) VALUES ('t1', 'cache', ?, 'a.example', ?)",
     )
-      .bind(`a.example:cache:${w.cacheId}`, now())
+      .bind(w.cacheGid, now())
       .run();
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
     expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
-    expect(
-      await one(w.b, "SELECT origin FROM remote_tombstones WHERE target_id = ?", `a.example:cache:${w.cacheId}`),
-    ).toEqual({
+    expect(await one(w.b, "SELECT origin FROM remote_tombstones WHERE target_id = ?", w.cacheGid)).toEqual({
       origin: "a.example",
     });
   });
@@ -397,9 +389,7 @@ describe("a hub passes its spokes' records on", () => {
     await w.hub.DB.prepare("UPDATE fed_transit SET hops = 4").run();
     const page = (await originPage(w.hub, "cache"))!;
     expect(page.frames).toHaveLength(0);
-    // the hub holds A whole only up to before it, so a puller fills the gap from another neighbour
-    const kept = await one(w.hub, "SELECT v FROM fed_transit WHERE kind = 'cache'");
-    expect(page.held).toBe((kept!.v as number) - 1);
+    // the gap a record at the limit leaves, and how it closes, is fed_mesh.test.ts
   });
 
   it("a local-only or imported cache never leaves its origin, whoever signs it on", async () => {

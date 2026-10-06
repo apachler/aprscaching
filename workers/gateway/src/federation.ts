@@ -37,6 +37,7 @@ export const ORIGIN_SYNC_CAPABILITY = "sync-origins";
 // ---- database row shapes (subset) ----
 interface CacheRow {
   id: number;
+  fed_id: number;
   code: string;
   owner_call: string;
   title: string;
@@ -61,6 +62,7 @@ interface FindRow {
   id: number;
   fed_seq: number;
   cache_id: number;
+  cache_fed_id: number;
   cache_code: string | null;
   logger_call: string;
   ts: number;
@@ -108,7 +110,7 @@ function cacheData(r: CacheRow) {
 }
 function findData(r: FindRow, instance: string) {
   return {
-    cacheId: `${instance}:cache:${r.cache_id}`,
+    cacheId: `${instance}:cache:${r.cache_fed_id}`,
     cacheCode: r.cache_code,
     loggerCall: displayCall(r.logger_call),
     ts: r.ts,
@@ -783,6 +785,20 @@ export async function cacheFedVersion(env: Env, id: number): Promise<number> {
   return r?.fed_rev ?? 0;
 }
 /**
+ * The global id of this instance's cache `id`: `<instance>:cache:<fed_id>`, the number the cache took from the
+ * caches sequence when it was made. A database restored from an older backup hands its ids out again, never a
+ * sequence number, so a new cache never takes the global id of one its peers hold or deleted.
+ */
+export async function cacheGid(env: Env, instance: string, id: number): Promise<string> {
+  const r = await env.DB.prepare("SELECT fed_id FROM caches WHERE id = ?").bind(id).first<{ fed_id: number }>();
+  return `${instance}:cache:${r?.fed_id ?? id}`;
+}
+/** The global id of this instance's find `id`, its place in the finds sequence (see cacheGid). */
+export async function findGid(env: Env, instance: string, id: number): Promise<string> {
+  const r = await env.DB.prepare("SELECT fed_seq FROM cache_logs WHERE id = ?").bind(id).first<{ fed_seq: number }>();
+  return `${instance}:find:${r?.fed_seq ?? id}`;
+}
+/**
  * The caches feed pages by `fed_rev`, which every insert and update of a cache takes from one counter
  * (`fed_cache_rev`): it rises across all of this instance's caches, so it is both a cache's version and the
  * feed's cursor, and a cache edited twice in one second takes two positions.
@@ -801,7 +817,7 @@ export const CACHE_FEED: FeedServeDef<CacheRow> = {
         .all<CacheRow>()
     ).results;
   },
-  recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.fed_rev ?? 0, data: cacheData(r) }),
+  recordOf: (r, instance) => ({ id: `${instance}:cache:${r.fed_id}`, cursor: r.fed_rev ?? 0, data: cacheData(r) }),
 };
 export const FIND_FEED: FeedServeDef<FindRow> = {
   type: "find",
@@ -809,15 +825,19 @@ export const FIND_FEED: FeedServeDef<FindRow> = {
     (
       await env.DB.prepare(
         // finds federate only with their cache: never on a local-only or imported cache
-        `SELECT l.*, c.code AS cache_code FROM cache_logs l
+        `SELECT l.*, c.code AS cache_code, c.fed_id AS cache_fed_id FROM cache_logs l
        JOIN caches c ON c.id = l.cache_id
       WHERE l.fed_seq > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.fed_seq LIMIT ?`,
       )
         .bind(since, limit)
         .all<FindRow>()
     ).results,
-  // the cursor and version is the finds sequence (fed_seq), the gid the log id
-  recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.fed_seq, data: findData(r, instance) }),
+  // the global id, the cursor and the version are the find's place in the finds sequence, never handed out again
+  recordOf: (r, instance) => ({
+    id: `${instance}:find:${r.fed_seq}`,
+    cursor: r.fed_seq,
+    data: findData(r, instance),
+  }),
 };
 export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",

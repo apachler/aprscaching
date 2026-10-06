@@ -144,18 +144,22 @@ hub, a second hub and a Pocket station that carries records are the same thing h
   what a tombstone removed. A pull applies every origin's tombstones before any cache or find, and a receiver
   keeps its tombstones for good, so a stale copy that reaches it later over another path is refused. A bounded
   tombstone (`upTo`) passes on too, so a restored cache follows it at its higher version.
-- **Marks move only on what is sure.** A receiver records how far it holds each origin from the origin's own
-  pages, and from a neighbour's only when it trusts that neighbour. The mark stops below the first record that
-  did not settle: a frame signed ahead of the receiver's clock, one its database could not take at that moment, one that did
-  not verify. Pages from any other neighbour still apply but never move the mark, so a neighbour that skips a
-  record cannot keep it from a path that carries it.
-- **A record at the hop limit is a gap.** An instance that keeps a record which crossed four instances holds the
-  origin only up to below it, says so in its summary, and asks its other neighbours for that record. When one of
-  them has it over fewer hops, the same version replaces the kept one, the gap closes, and the record passes on
-  from there with every later one. Records after the gap pass on all along.
-- **Numbers are never reused.** Each origin numbers its records at least by the time in milliseconds, so a
-  database restored from an older backup still numbers its new records, deletions included, above what its peers
-  hold, and a peer that holds more of an origin than the origin does tells it so in its summary.
+- **Marks move on what a trusted word says.** A receiver records how far it holds each origin from the origin's
+  own pages, and from a neighbour's only when it trusts that neighbour. Pages from any other neighbour still apply
+  but never move the mark, so a neighbour nobody vetted cannot keep a record from a path that carries it. A
+  trusted neighbour that leaves a record out still moves the mark past it: trust decides whose word counts.
+- **What did not arrive is asked for on its own.** A frame that did not settle (signed ahead of the receiver's
+  clock, one its database could not take at that moment, one that did not verify), a record kept past the hop
+  limit, and a record a trusted neighbour says it lacks become gaps. The mark moves on, every later record passes
+  on, and the receiver asks its neighbours for each gap by itself, backing off from 5 minutes to a day per
+  neighbour. A copy over fewer hops closes a hop gap, so the record passes on from there. A gap no neighbour fills
+  within 7 days counts as refused for good; **Instance admin → Federation → Records given up** and `doctor` list
+  it until the sysop marks it seen.
+- **Numbers are never reused.** Each origin numbers its records at least by the time in milliseconds, and a
+  record's global id is that number, never its row id. A database restored from an older backup still numbers its
+  new records, deletions included, above what its peers hold, under global ids no peer holds or deleted. A peer the
+  restored instance trusts tells it how far it holds the instance's records, which raises the numbering past that
+  even on a box whose clock is behind. The restore itself leaves the rows as the backup holds them.
 - **Bounded travel.** The page carries each frame's hop count beside it; a record crosses at most four instances.
   A hub never sends a record back to its origin. Apply is idempotent by global id
   and version, so a record that comes round a ring of hubs again changes nothing and is not passed on twice; the

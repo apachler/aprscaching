@@ -61,6 +61,7 @@ describe("CBOR sync page codec", () => {
 describe("serve + consume a cache page", () => {
   const cacheRow = {
     id: 42,
+    fed_id: 42,
     code: "ACS-042",
     owner_call: "OE8APR",
     title: "Schlossberg",

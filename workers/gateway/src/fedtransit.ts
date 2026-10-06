@@ -27,9 +27,9 @@
  * neighbour the puller trusts, and never past the first frame that did not settle (fedapply.ts). Pages from a
  * neighbour nobody vetted still apply but move no mark, so a neighbour that skips a record cannot hide it from the
  * paths that carry it. Beside the mark, a read position per neighbour (`fed_read_positions`) keeps a puller from
- * reading the same pages again. A record kept past the hop limit is a gap: the mark stays below it, so the
- * instance asks its other neighbours for it, and `held` in its own summary stops there too; `top` still sends
- * pullers on to the records after it.
+ * reading the same pages again. A record that did not settle, or that is kept past the hop limit, is a gap
+ * (fedgaps.ts): the mark moves past it, the instance asks its neighbours for that record on its own, and its pages
+ * name the gap, so a reader that takes its word asks elsewhere too.
  *
  * Keys. A receiver verifies an origin it has never peered with under the key a neighbour hands on in its summary
  * (the origin's pinned key, its accept set and its rotation records). The first neighbour to name an origin's key
@@ -65,6 +65,7 @@ import {
 import { bboxKey, bboxWhere, bboxWithin, parseBbox, type Bbox } from "./fedregion.js";
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 import { buildFedFrames } from "./fedsync.js";
+import { forgetGapsStatement, gapsBetween } from "./fedgaps.js";
 
 /** The record kinds synced per origin, in the order a pull applies them: deletes first, keys before moves. */
 export const ORIGIN_KINDS = ["tombstone", "account-move", "cache", "find"] as const;
@@ -78,6 +79,8 @@ const MAX_TRANSIT_PEERS = 500;
 const SUMMARY_PAGE = 500;
 /** Rotation records kept per origin. */
 const MAX_ROTATIONS = 32;
+/** Gaps one page names. */
+const PAGE_GAPS = 200;
 /** Requests per client and minute: summaries, and origin pages. */
 const SUMMARY_PER_MIN = 120;
 const ORIGIN_PAGES_PER_MIN = 1200;
@@ -203,17 +206,39 @@ export async function setMark(
     .run();
 }
 
-/** How far this instance has read `via`'s pages of `origin` and `kind`, held or not. */
-export async function readPosOf(env: Env, via: string, origin: string, kind: OriginKind, region: string) {
-  return (
-    (
-      await env.DB.prepare(
-        "SELECT seq FROM fed_read_positions WHERE via = ? AND origin = ? AND kind = ? AND region = ?",
-      )
-        .bind(via, origin, kind, kind === "cache" ? region : "")
-        .first<{ seq: number }>()
-    )?.seq ?? 0
-  );
+/**
+ * How far this instance has read `via`'s pages of `origin` and `kind`, held or not, and the neighbour's `held` it last
+ * read them again from the mark for.
+ */
+export async function readPosOf(
+  env: Env,
+  via: string,
+  origin: string,
+  kind: OriginKind,
+  region: string,
+): Promise<{ seq: number; replayed: number }> {
+  const r = await env.DB.prepare(
+    "SELECT seq, replayed FROM fed_read_positions WHERE via = ? AND origin = ? AND kind = ? AND region = ?",
+  )
+    .bind(via, origin, kind, kind === "cache" ? region : "")
+    .first<{ seq: number; replayed: number }>();
+  return { seq: r?.seq ?? 0, replayed: r?.replayed ?? 0 };
+}
+
+/** Record that `via`'s pages were read again from the mark for its `held` of `replayed`. */
+export async function setReplayed(
+  env: Env,
+  via: string,
+  origin: string,
+  kind: OriginKind,
+  region: string,
+  replayed: number,
+): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE fed_read_positions SET replayed = ? WHERE via = ? AND origin = ? AND kind = ? AND region = ? AND replayed < ?",
+  )
+    .bind(replayed, via, origin, kind, kind === "cache" ? region : "", replayed)
+    .run();
 }
 
 /** Move the read position forward (never back), for the same generation of the origin's marks. */
@@ -236,44 +261,29 @@ export async function setReadPos(
     .run();
 }
 
-/**
- * The first record of `origin` and `kind` above `above` that this instance keeps but may not pass on (it crossed
- * the hop limit), or null. A mark stays below it, so this instance asks other neighbours for that record again,
- * and a copy of the same version over a shorter path replaces it.
- */
-export async function hopGap(env: Env, origin: string, kind: OriginKind, above: number): Promise<number | null> {
-  return (
-    (
-      await env.DB.prepare("SELECT MIN(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops >= ? AND v > ?")
-        .bind(origin, kind, MAX_TRANSIT_HOPS, above)
-        .first<{ v: number | null }>()
-    )?.v ?? null
-  );
-}
-
 /** This instance's own records: the top of each kind's sequence. */
 async function nativeHeld(env: Env, kind: OriginKind): Promise<number> {
   return (await env.DB.prepare("SELECT n FROM fed_seq WHERE kind = ?").bind(kind).first<{ n: number }>())?.n ?? 0;
 }
 
 /**
- * Raise this instance's own sequences to at least what a neighbour holds of them, never further than a day
- * ahead of this clock: a database restored from an older backup then numbers its next records above what the
- * network already holds, even with a clock that is behind.
+ * Raise this instance's own sequences to at least what a trusted neighbour holds of them: a database restored from
+ * an older backup, on a box whose clock is behind (a Pi without a real-time clock), then still numbers its next
+ * records above what the network holds. Only a trusted neighbour's word counts (fedpull.ts summaryOf).
  */
 export async function raiseOwnSequences(env: Env, held: Partial<Record<OriginKind, number>>): Promise<void> {
-  const limit = Date.now() + 86_400_000;
   for (const kind of ORIGIN_KINDS) {
     const v = held[kind];
-    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0 || v > limit) continue;
+    // 2^52 leaves every later number a safe integer
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0 || v > 2 ** 52) continue;
     await env.DB.prepare("UPDATE fed_seq SET n = ? WHERE kind = ? AND n < ?").bind(v, kind, v).run();
   }
 }
 
 /**
- * How far this instance holds another origin whole, for a reader of `region`: its mark, stopped before the first
- * record it keeps but may not pass on. `whole` is false when the caches mark was read under a region the reader's
- * does not lie inside, so the records serve but promise nothing. `top` is the highest record it can pass on.
+ * How far this instance holds another origin whole, for a reader of `region`: its mark, but for the gaps it knows of
+ * (fedgaps.ts), which a page names. `whole` is false when the caches mark was read under a region the reader's does
+ * not lie inside, so the records serve but promise nothing. `top` is the highest record it can pass on.
  */
 async function heldFor(
   env: Env,
@@ -282,9 +292,7 @@ async function heldFor(
   region: string,
 ): Promise<{ held: number; whole: boolean; top: number }> {
   const m = await markRow(env, origin, kind);
-  let held = m?.seq ?? 0;
-  const gap = await hopGap(env, origin, kind, 0);
-  if (gap != null) held = Math.min(held, gap - 1);
+  const held = m?.seq ?? 0;
   const top =
     (
       await env.DB.prepare("SELECT MAX(v) AS v FROM fed_transit WHERE origin = ? AND kind = ? AND hops < ?")
@@ -307,6 +315,7 @@ async function resetMarks(env: Env, origin: string): Promise<void> {
     ).bind(origin),
     env.DB.prepare("DELETE FROM fed_origin_marks WHERE origin = ?").bind(origin),
     env.DB.prepare("DELETE FROM fed_read_positions WHERE origin = ?").bind(origin),
+    forgetGapsStatement(env, origin),
   ]);
 }
 
@@ -453,8 +462,15 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
   const region = kind === "cache" && bbox ? bbox : null;
   const self = instanceOf(req, env);
-  const page = (next: number, complete: boolean, frames: Uint8Array[], hops: number[], held?: number) =>
-    new Response(encodeFedSyncPage(self, next, complete, frames, undefined, hops, held) as BodyInit, {
+  const page = (
+    next: number,
+    complete: boolean,
+    frames: Uint8Array[],
+    hops: number[],
+    held?: number,
+    gaps?: number[],
+  ) =>
+    new Response(encodeFedSyncPage(self, next, complete, frames, undefined, hops, held, gaps) as BodyInit, {
       headers: { "content-type": "application/cbor" },
     });
 
@@ -504,12 +520,24 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   const complete = rows.length < limit;
   const read = rows.length ? rows[rows.length - 1]!.v : since;
   const next = complete ? Math.max(read, since, whole ? held : 0) : read;
+  // the records in this page's range this instance knows it lacks, so a reader that takes its word asks elsewhere;
+  // past PAGE_GAPS of them the page promises nothing beyond the last one named
+  let pageHeld = whole ? held : undefined;
+  let gaps: number[] = [];
+  if (pageHeld !== undefined) {
+    gaps = await gapsBetween(env, origin, kind, since, next, PAGE_GAPS + 1);
+    if (gaps.length > PAGE_GAPS) {
+      pageHeld = Math.min(pageHeld, gaps[PAGE_GAPS]! - 1);
+      gaps = gaps.slice(0, PAGE_GAPS);
+    }
+  }
   return page(
     next,
     complete,
     out.map((r) => (r.frame instanceof Uint8Array ? r.frame : new Uint8Array(r.frame))),
     out.map((r) => r.hops),
-    whole ? held : undefined,
+    pageHeld,
+    gaps,
   );
 }
 
