@@ -50,7 +50,8 @@ export interface SessionEventsOpts {
 }
 
 /** A remote command: a word of letters, digits and dashes, then its arguments. A leading slash is not one. */
-const COMMAND_RE = /^([A-Za-z][A-Za-z0-9-]{0,31})(?:\s+(.*))?$/;
+// One separator character, and the rest taken as it is: no two parts can trade characters, so matching stays linear.
+const COMMAND_RE = /^([A-Za-z][A-Za-z0-9-]{0,31})(?:\s([\s\S]*))?$/;
 /** The most remote commands that wait on one session, the running one included. */
 export const REMOTE_QUEUE_MAX = 4;
 
@@ -115,7 +116,7 @@ export class SessionEvents {
   line(channel: number, text: string): void {
     const info = this.open.get(channel);
     if (!info || info.direction !== "incoming") return;
-    const m = COMMAND_RE.exec(text.trim());
+    const m = COMMAND_RE.exec(text.trim().slice(0, 256));
     if (!m) return;
     const word = m[1]!.toLowerCase();
     if (this.o.ownsWord?.(word)) return;
