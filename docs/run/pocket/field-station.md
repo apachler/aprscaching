@@ -177,6 +177,14 @@ The browser on the phone can connect a Bluetooth Low Energy KISS TNC, such as a 
 first. To forward everything the radio hears, choose **secret (self-host)** with the gateway base URL
 `http://localhost:8787` and the station's ingest secret: `grep INGEST_SECRET ~/.aprscaching/.env`.
 
+## Other stations on the hotspot
+
+The phone listens for other instances on its Wi-Fi network or hotspot by mDNS (`FED_MDNS=listen` in the `.env`).
+A station that announces itself shows under **Instance admin → Federation → Discovered**, marked *on this
+network*, switched off until you follow it. To be found by the others, set `FED_MDNS=announce` and run
+`restart.sh`; `off` stops both. Compare key fingerprints face to face before you choose **Trust**
+([Field discovery on a LAN](../federation/index.md#field-discovery-on-a-lan)).
+
 ## Backup
 
 `backup.sh` writes an archive to the phone's shared storage, and `extras/setup.sh --scheduled-backup` runs it
@@ -196,6 +204,7 @@ restore.
 | The battery saver never switches | `POCKET_BATTERY_LOW` is 0, or Termux:API does not answer. `status.sh` shows the saver state. |
 | `usb-kiss.sh --list` shows nothing | Check the OTG adapter, and that the TNC has power. A TNC on an FTDI, CP210x, CH340 or PL2303 chip is refused by name: only CDC-ACM devices work. |
 | `sync-now.sh` refuses to run | The phone is not on a Wi-Fi network, or Termux:API cannot tell. Join Wi-Fi, or allow mobile data with `--mobile`. "0 peers" means `FED_PEERS` names no instance. |
+| No station shows under **Discovered** | The other station does not announce (`FED_MDNS=announce` there), is on another network, or Android filters multicast on this phone. List it in `FED_PEERS` as `http://<its address>:<its port>` instead. |
 | `ampr-cert.sh` gives up waiting for the record | The portal publishes about once an hour. Check the record there, then run it again; Let's Encrypt then asks for a new value. |
 | `status.sh` says 44Net is not connected | The WireGuard app's tunnel is off, or carries no address in ARDC's 44Net space. |
 | The MeshCom node is not heard | The listener started before the network was up. Run `restart.sh ingest`; `status.sh` says when it is needed. More on [MeshCom troubleshooting](../radios/meshcom.md#troubleshooting). |

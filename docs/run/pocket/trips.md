@@ -59,7 +59,8 @@ records in the field back to it. The phone needs no inbound connection, so this 
 3. **On the home instance**, promote the phone once under **Instance admin → Federation**. Its first push
    registers it `unvetted`, so its caches arrive hidden on the map until you do.
 
-Leave `FED_DISCOVER` off on the phone; it follows only what you name.
+Leave `FED_DISCOVER` off on the phone; it follows only what you name. Stations on the same hotspot still show
+under **Discovered**, as the phone listens for them by mDNS ([Field discovery on a LAN](../federation/index.md#field-discovery-on-a-lan)).
 
 ### Back from a trip
 

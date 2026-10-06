@@ -291,10 +291,12 @@ describe("FED_PEERS seeding", () => {
     expect(await peerRow(wrong, H)).toMatchObject({ trust: "unvetted", public_key: null });
   });
 
-  it("publishes the FED_PEERS URLs in the descriptor without their fingerprints", async () => {
+  it("keeps FED_PEERS out of the descriptor: peers learn only the trusted ones, from the peer list", async () => {
     const hub = instanceEnv("hub.example", await newFedKey(), { FED_PEERS: `${A}#${"ab".repeat(8)}` });
     const wk = await req(hub, "GET", "/.well-known/aprscaching");
-    expect(wk.data.peers).toEqual([A]);
+    expect(wk.data.peers).toBeUndefined();
+    expect(JSON.stringify(wk.data)).not.toContain(A);
+    expect((await req(hub, "GET", "/federation/exchange")).data.peers).toEqual([]);
   });
 });
 

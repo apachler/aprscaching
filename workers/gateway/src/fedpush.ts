@@ -28,7 +28,7 @@ import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
 import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
-import { type TrustLevel, ours } from "./fedpeers.js";
+import { type TrustLevel, absorbDiscovered, ours } from "./fedpeers.js";
 import { applyFrames } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
@@ -191,6 +191,8 @@ async function submitFrames(
   const regEntry = registry.get(instance);
   if (regEntry?.key && regEntry.key !== publicKey)
     return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
+  // a spoke that discovery listed becomes the spoke its pushes register
+  await absorbDiscovered(env, instance);
   const known = (
     await env.DB.prepare("SELECT url, public_key, accept_keys, trust FROM fed_peers WHERE instance = ?")
       .bind(instance)

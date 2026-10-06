@@ -478,7 +478,7 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 
 | Message | What to change |
 |---|---|
-| `FED_DISCOVER is on` | set it to `0`, or accept that learned peers arrive disabled until you enable them |
+| `FED_DISCOVER is on` | set it to `0`, or accept that the instances trusted peers list wait under **Discovered**, switched off, until you follow one |
 | `FED_AUTO_PROMOTE is not 0` | set it to `0`, so only you promote a peer to `trusted` |
 | `FED_CORROBORATION_QUORUM is below 2` | set it to `2` or more, so no single peer lifts a find to Tier A |
 | `peer <url> is neither https nor a plain-http HAMNET peer` | use the peer's `https://` address, or `http://<name or address>[:port]` for a HAMNET or LAN peer |

@@ -21,7 +21,9 @@ FIRST_PARTY_SITES	calls	gateway			0	0	selfhost,baremetal,pocket,desktop	Receivin
 MIN_TRUST	enum	gateway	B	A|B	0	0	selfhost,baremetal,pocket,desktop	Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)	game
 CACHE_MOVE_LIMIT_M	number	gateway	100		0	0	selfhost,baremetal,pocket,desktop	Metres an owner may move a cache from where it was first found (0 keeps it there)	game
 FED_PEERS	list	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	Comma-separated base URLs of federation peers to sync from; <url>#<fingerprint> pins a peer's key	
-FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,baremetal,pocket,desktop	1 learns the peers that trusted peers advertise	
+FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,baremetal,pocket,desktop	1 lists the instances trusted peers trust, switched off until you follow one	
+FED_PEER_EXCHANGE	enum	gateway	1	0|1|false|true|no|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops serving peers the list of instances this one trusts	federation
+FED_MDNS	enum	gateway,server	off	off|listen|announce	0	0	selfhost,baremetal,pocket,desktop	Find instances on the local network by mDNS: off, listen, or announce (listens too)	
 FED_CORROBORATION_QUORUM	int	gateway	2		0	0	selfhost,baremetal,pocket,desktop	Distinct corroborating identities required to promote a find to Tier A	
 FED_AUTO_PROMOTE	int	gateway	0		0	0	selfhost,baremetal,pocket,desktop	Confirmed corroborations that promote an unvetted peer to trusted (0 = off)	
 FED_CORROBORATION_SECRET	string	gateway			1	0	selfhost,baremetal,pocket,desktop	Shared secret corroboration questions must carry (x-fed-secret)	

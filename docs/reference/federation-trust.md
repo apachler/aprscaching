@@ -42,8 +42,8 @@ A URL says where a peer answers, not who holds its key, so no peer is `trusted` 
   of the raw Ed25519 key, its first 16 hex digits. The peer is added `unvetted` with that key pinned, and only when the
   fingerprint sent back is still the key's, so the key stored is the key compared.
 - **Raising a peer to `trusted`** needs a pinned key and the fingerprint the sysop compared, from Instance admin
-  and over the operator secret alike. A peer with no key, such as one found by discovery, syncs as `unvetted`
-  first. The fingerprint must be the pinned key's.
+  and over the operator secret alike. A peer with no key, such as one from the registry, syncs as `unvetted`
+  first. The fingerprint must be the pinned key's. An instance only discovery listed is followed first.
 - **Auto-promotion** (`FED_AUTO_PROMOTE`) records that it raised a peer, beside how the peer arrived. Such a peer
   never reaches the quorum alone, and any trust decision of the sysop's replaces the automatic one.
 - **A `FED_PEERS` entry** starts `unvetted`, unless it pins a fingerprint (`<url>#<fingerprint>`). Then the
@@ -103,13 +103,18 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
   unauthenticated, so it only ever asks for a pull the instance would make anyway: a notify naming an
   instance it does not follow is ignored, each host and each instance is rate-limited, and the pull goes
   through the same coalescer as the scheduled sync.
-- **Discovery is cautious.** With `FED_DISCOVER`, an instance learns peers only from trusted peers, takes only
-  `https` URLs, adds each learned peer `unvetted` and disabled, and stops at 200 discovered peers.
+- **Discovery only lists.** An instance lists to its peers only the instances it trusts, never an unvetted or
+  blocked one, and names each key by its fingerprint alone (`FED_PEER_EXCHANGE`). With `FED_DISCOVER` it reads
+  only trusted peers' lists. What it learns there, or hears announced by mDNS on its LAN, is a sighting on the
+  instance's one peer row: a new instance is listed `unvetted` and disabled, never pulled, and at most 200 wait
+  at once. A sighting never sets or moves a key; a fingerprint that disagrees with another source or with the
+  pinned key is flagged, and the pin stays. **Follow** fetches the key and refuses one that differs from what was
+  listed or pinned ([Discovery](../run/federation/index.md#discovery)).
 - **Private networks stay closed.** Every federation fetch resolves its host first and refuses
   loopback, private, link-local and CGNAT addresses (IPv4 inside IPv6 included), and checks every redirect hop
   the same way. A URL from another party can never reach the host's LAN. The peers configured by hand
-  (`FED_PEERS`, `FED_HUB_URL`) are exempt, and `FED_ALLOW_PRIVATE=1` opens it for a federation that lives on a
-  LAN.
+  (`FED_PEERS`, `FED_HUB_URL`) are exempt, and so is the address an mDNS announcement came from, once mDNS found
+  an instance there. `FED_ALLOW_PRIVATE=1` opens it for a federation that lives on a LAN.
 
 ## Records passed on through hubs
 

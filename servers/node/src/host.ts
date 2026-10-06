@@ -9,11 +9,14 @@ import { runRelayTick, runScheduled } from "@aprscaching/gateway/app";
 import { onPushSoon } from "@aprscaching/gateway/fedpush";
 import { catchUp } from "@aprscaching/gateway/fedcatchup";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
-import type { Env } from "@aprscaching/gateway/env";
+import { lanOriginAllowed, recordLanSighting } from "@aprscaching/gateway/feddiscover";
+import { ownKeyFingerprint } from "@aprscaching/gateway/federation";
+import { applyDerivedDefaults, type Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
 import type { RoomNamespace } from "@aprscaching/gateway/runtime";
 import { serveRoom, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { makeFetchGuard } from "./fetchguard.js";
+import { mdnsMode, startMdns } from "./mdns.js";
 
 /** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
@@ -27,13 +30,40 @@ export function roomNamespace(rooms: RoomsCore): RoomNamespace {
 
 /**
  * Federation fetches never reach this host's private networks, except the peers the operator
- * configured by hand (FED_PEERS, FED_HUB_URL) or with FED_ALLOW_PRIVATE=1.
+ * configured by hand (FED_PEERS, FED_HUB_URL), an instance mDNS found at the address that announced it,
+ * or everything with FED_ALLOW_PRIVATE=1.
  */
 export function guardFederationFetches(env: Env): void {
   env.FED_FETCH_GUARD = makeFetchGuard({
     allowedOrigins: operatorOrigins(env),
     allowPrivate: env.FED_ALLOW_PRIVATE === "1",
+    allowLocalOrigin: (origin) => lanOriginAllowed(env, origin),
   });
+}
+
+/**
+ * Field discovery (FED_MDNS): listen for other instances on the local network and, in `announce` mode, announce
+ * this one, which needs its instance id and a signing key. `fieldShape` is a Pocket or Desktop instance, which
+ * listens unless the setting says otherwise; the effective mode is written back to the env for Instance admin.
+ */
+export async function startFieldDiscovery(env: Env, port: number, fieldShape: boolean): Promise<void> {
+  const mode = mdnsMode(env.FED_MDNS, fieldShape);
+  env.FED_MDNS = mode;
+  if (mode === "off") return;
+  applyDerivedDefaults(env); // INSTANCE from APP_URL
+  const fingerprint = await ownKeyFingerprint(env);
+  const self = env.INSTANCE && fingerprint ? { instance: env.INSTANCE, fingerprint, port } : null;
+  if (mode === "announce" && !self)
+    console.warn("mdns: announcing needs INSTANCE (or APP_URL) and FED_PRIVATE_KEY; listening only");
+  try {
+    startMdns({
+      mode,
+      self,
+      onFound: (f) => void recordLanSighting(env, f).catch((e) => console.error("mdns:", (e as Error).message)),
+    });
+  } catch (e) {
+    console.warn(`mdns: not started: ${(e as Error).message}`);
+  }
 }
 
 /** The checked-out commit, for the AGPL §13 source link of an instance run from a git checkout. */

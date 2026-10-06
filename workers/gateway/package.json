@@ -26,6 +26,7 @@
     "./fedcatchup": "./src/fedcatchup.ts",
     "./fedpush": "./src/fedpush.ts",
     "./fetchguard": "./src/fetchguard.ts",
+    "./feddiscover": "./src/feddiscover.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
     "./radiolog": "./src/radiolog.ts",
     "./servicecall": "./src/servicecall.ts",

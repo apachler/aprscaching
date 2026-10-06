@@ -170,14 +170,16 @@ The defaults are safe. These settings decide how much a stranger can do.
 | Setting | Safe choice | Secure by default |
 |---|---|---|
 | `FED_PEERS` | List the peers you know, each with its key fingerprint: `https://`, or `http://` for a [HAMNET peer](#hamnet-peers-in-fed_peers). Only a matching key starts `trusted`. | yes |
-| `FED_DISCOVER` | Leave at `0`, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
+| `FED_DISCOVER` | `1` lists the instances your trusted peers trust, switched off and unvetted until you follow one. | yes (off) |
+| `FED_PEER_EXCHANGE` | On: your trusted peers, never an unvetted or blocked one, are listed to your peers with their fingerprints and public addresses. `0` keeps the list to yourself. | yes (trusted only) |
+| `FED_MDNS` | `listen` lists instances on your local network; `announce` tells them about yours too. Neither pulls anything until you follow. | yes (off; `listen` on Pocket and Desktop) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
 | `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |
 | `FED_REGISTRY` / `FED_REGISTRY_DNS` + `FED_REGISTRY_KEY` | Pin the registry authority's key; DNS may only locate the document. | yes (no registry) |
 | `FED_CORROBORATION_QUORUM` | Keep at least `2`, so no single peer can lift a find to Tier A. | yes (`2`) |
 | `FED_CORROBORATION_REQUIRE_KNOWN` | Set `1` to answer corroboration questions only from your peers. | no (answers anyone, coarsened) |
 | `FED_REVEAL_IGATE` | Leave off unless you and your peers want IGate credit to cross instances. | yes (off) |
-| `FED_ALLOW_PRIVATE` | Leave off, so federation never reaches your LAN except the peers you configured. | yes (off) |
+| `FED_ALLOW_PRIVATE` | Leave off, so federation never reaches your LAN except the peers you configured and the instances mDNS found. | yes (off) |
 | 44Net peers | Admitted `unvetted`; promote them yourself. Automatic admission trusts `DOH_URL`'s DNSSEC flag. | yes (`unvetted`) |
 
 Keep `FED_PRIVATE_KEY` secret, and [rotate it](#rotate-your-key) if it may have leaked. The doctor checks this
@@ -190,14 +192,14 @@ Each peer is a row with a trust level:
 | Trust | What your instance does |
 |-------|-----------|
 | `trusted` | Mirrors it, and counts it toward Tier A corroboration. A `FED_PEERS` entry whose pinned fingerprint matches starts here. |
-| `unvetted` | Mirrors it, hidden on the map by default. Peers added by URL, unpinned `FED_PEERS` entries, and peers from the registry, discovery, 44Net and hub pushes start here. |
+| `unvetted` | Mirrors it, hidden on the map by default. Peers added by URL, unpinned `FED_PEERS` entries, followed discovered instances, and peers from the registry, 44Net and hub pushes start here. |
 | `blocked` | Never mirrors it, never shows it. The block covers the instance at every address: `FED_PEERS`, the registry, discovery, 44Net and hub pushes never bring it back. |
 
 Change a peer's trust under **Instance admin → Federation**. Each row shows the peer's trust level, its key
 fingerprint with a copy button, and its last pull and push. **Trust** needs a pinned key and sends the
-fingerprint you compared: a peer found by discovery pins one on its first sync, as `unvetted`, and you compare
-its fingerprint before you trust it. A script that trusts a peer over `OPERATOR_SECRET` sends the fingerprint
-too.
+fingerprint you compared: a peer added from the registry pins one on its first sync, as `unvetted`, and you
+compare its fingerprint before you trust it. A script that trusts a peer over `OPERATOR_SECRET` sends the
+fingerprint too. Instances your instance only heard of wait in their own group ([Discovery](#discovery)).
 Blocking a peer hides everything it sent.
 
 ### Remove a peer
@@ -243,13 +245,77 @@ ask for a pull after they write, so new records arrive sooner ([Pull](transports
   from peers that filter by region. A peer without the filter sends every cache. Deletes are never filtered.
   It suits an instance that serves one area, such as a phone in the field
   ([Before a trip](../pocket/trips.md)).
-- **Discovery.** `FED_DISCOVER=1` learns peers from your trusted peers' lists. It takes only `https` URLs, adds
-  each learned peer `unvetted` and disabled, and stops at 200. Choosing a trust level for a discovered peer
-  enables it.
 - **Private networks.** Federation refuses to fetch loopback, private,
   link-local and CGNAT addresses, so a URL from another party never reaches your LAN. The peers you configured
-  (`FED_PEERS`, `FED_HUB_URL`) are exempt. Set `FED_ALLOW_PRIVATE=1` for a federation that lives entirely on a
-  LAN.
+  (`FED_PEERS`, `FED_HUB_URL`) are exempt, and so is an instance mDNS found, at the address that announced it
+  ([Field discovery on a LAN](#field-discovery-on-a-lan)). Set `FED_ALLOW_PRIVATE=1` for a federation that
+  lives entirely on a LAN.
+
+## Discovery
+
+Your instance can hear of instances you have not added. Your trusted peers list the instances they trust (peer
+exchange), and instances on your local network announce themselves (mDNS). Either way the new instance is
+**listed, switched off and unvetted**: nothing is pulled from it, and what reaches you of its records through a
+hub stays hidden on the map, until you follow and trust it.
+
+### Peer exchange
+
+- **What your instance lists.** It serves its trusted peers at `/federation/exchange`: each one's instance id,
+  key fingerprint and addresses, less any on a LAN. An unvetted or blocked peer is never listed. **Instance
+  admin → Instance settings → List trusted peers** (`FED_PEER_EXCHANGE`, on by default) stops the list.
+- **What it learns.** With `FED_DISCOVER=1` it reads the list of each trusted peer once an hour, when it pulls
+  from that peer. It never reads the list of an unvetted or blocked peer.
+- **Bounds.** At most 200 discovered instances wait at once. A listing goes 14 days after the last trusted peer
+  named it, and at once when the peer that named it is no longer trusted.
+
+The [wire format](../../reference/federation-wire.md#peer-exchange) has the fields.
+
+### The Discovered group
+
+**Instance admin → Federation → Discovered** lists each instance with where it was heard (*listed by* a peer, or
+*on this network*), the key fingerprint each source gave, and its addresses.
+
+- **Follow** fetches the instance's descriptor at those addresses and checks that it answers as that instance,
+  with a key whose fingerprint every source gave. It then becomes a normal peer at the address that answered:
+  enabled and `unvetted`.
+- **Trust** does the same and trusts it at once. Its dialog repeats the fingerprint: compare it with the other
+  sysop first, as for any peer ([Compare key fingerprints](#compare-key-fingerprints)).
+- **Block** blocks the instance. No listing and no announcement brings it back.
+
+An instance whose records a hub already passes on to you keeps one entry: the listing joins the hub's. **Follow**
+keeps the key the hub handed on, and **Trust** trusts that key without a route to the instance, so an instance
+you can reach only through a hub, such as one on HAMNET, can still be trusted.
+
+**Key mismatch.** When two sources give different fingerprints, or one gives another fingerprint than the key
+your instance already pinned, the entry is marked **key mismatch** and **Follow** and **Trust** are off. A
+listing never changes a pinned key. Ask the other sysop for the fingerprint, then add the instance under **Add
+peer** when it matches. A followed peer that a source lists with another key shows the same warning on its row.
+
+### Field discovery on a LAN
+
+Instances on one Wi-Fi network or phone hotspot find each other by mDNS, with no internet and no address typed
+in. `FED_MDNS` sets what an instance does; it is read at start.
+
+| `FED_MDNS` | What the instance does | Default on |
+|---|---|---|
+| `off` | Neither listens nor announces | Self-host, bare metal, Oracle Cloud |
+| `listen` | Lists the instances that announce themselves, marked *on this network* | Pocket, Desktop |
+| `announce` | Listens, and announces its own instance id, key fingerprint and port | none |
+
+1. **The other station announces.** Its sysop sets `FED_MDNS=announce` and restarts. Announcing needs an
+   instance id (from `APP_URL`) and `FED_PRIVATE_KEY`. A Desktop app answers on `127.0.0.1` only: set `HOST` to
+   `0.0.0.0` so the other station reaches it.
+2. **It appears under Discovered** on yours, *on this network*, within about 5 minutes.
+3. **Compare fingerprints** face to face, then choose **Trust**, or **Follow** to mirror it unvetted.
+
+`FED_ALLOW_PRIVATE` stays off. Your instance reaches the address an announcement came from, and only that
+address: from the moment mDNS finds an instance there, and for good once you follow it. The address is the one
+the answer was sent from, so an announcement cannot point your instance at another host on the LAN. mDNS is
+not authenticated, which is why the fingerprint is compared before trust, as for any peer.
+
+mDNS stays on one network segment: it does not cross a router, a VPN or HAMNET. If nothing appears on a phone,
+Android may be filtering multicast; list the other station in `FED_PEERS` as `http://<address>:<port>`
+instead. [Federation over HAMNET](hamnet.md) covers peers beyond the LAN.
 
 ## Check that it worked
 
@@ -263,4 +329,5 @@ ask for a pull after they write, so new records arrive sooner ([Pull](transports
 
 - [Hubs, relays and the registry](hubs-and-relays.md): reach peers behind a firewall.
 - [Federation transports](transports.md): every transport, step by step.
+- [Federation over HAMNET](hamnet.md): peers on the amateur network, with no internet.
 - [Instance admin at a glance](../day-to-day/index.md): running it day to day.

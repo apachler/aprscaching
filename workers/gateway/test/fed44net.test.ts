@@ -258,7 +258,11 @@ describe("handleFed44netAdd — admission policy", () => {
     expect(insert).toMatch(/trust\s+= fed_peers\.trust/);
     expect(insert).not.toContain("approved_at"); // unvetted, so not approved
     expect(insert).not.toMatch(/'trusted'|'blocked'/);
-    expect(sqls.filter((s) => /^\s*(UPDATE|DELETE)/i.test(s))).toEqual([]);
+    // nothing else is changed; only a row discovery alone brought for the instance gives way
+    const writes = sqls.filter((s) => /^\s*(UPDATE|DELETE)/i.test(s));
+    expect(
+      writes.filter((s) => !/^\s*DELETE FROM fed_peers WHERE instance = \? AND url LIKE 'discovered:%'/.test(s)),
+    ).toEqual([]);
   });
 
   it("a descriptor at host= that contradicts the DNS binding is refused", async () => {

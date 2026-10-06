@@ -146,6 +146,7 @@ import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from ".
 import { handleAdminModeration, handleReport } from "./moderation.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
+import { expireDiscovered, handlePeerExchange, handlePeerFollow } from "./feddiscover.js";
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
@@ -361,6 +362,12 @@ export async function runScheduled(env: Env): Promise<void> {
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await purgeRelayQueue(env);
+  // discovered instances no trusted peer and no announcement names any more
+  try {
+    await expireDiscovered(env);
+  } catch (e) {
+    console.error("discovery expiry:", (e as Error).message);
+  }
   // FED_RESERVE set wider in the environment since the last run: the newly eligible records go out once
   try {
     await applyReservePolicy(env);
@@ -571,6 +578,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
   if (p === "/federation/peers/sync" && m === "POST") return handlePeerSyncNow(req, env); // Sync now, one peer
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
+  if (p === "/federation/peers/follow" && m === "POST") return handlePeerFollow(req, env); // follow a discovered one
+  if (p === "/federation/exchange" && m === "GET") return handlePeerExchange(req, env); // the instances trusted here
   // CBOR sync surface — fedwire frames (the canonical signed form); consumers prefer it over the JSON feeds
   const fedSync = /^\/federation\/sync\/([a-z-]+)$/.exec(p);
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);

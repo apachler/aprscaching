@@ -77,7 +77,7 @@ export function urlTransport(url: string): FedTransportKind {
 }
 
 /** A peer's typed endpoint set, priority-ordered, with its `url` last unless the set lists it. */
-function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
+export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
   const list = storedEndpoints(p.endpoints);
   // The url column is written by the operator (FED_PEERS, the admin surface) or by a path that already
   // validated it, and may be plain http on a LAN or HAMNET peer, so it is taken as given.

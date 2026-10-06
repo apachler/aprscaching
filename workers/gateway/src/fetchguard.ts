@@ -7,7 +7,9 @@
  * LAN (a router admin page, a metadata service), so every federation fetch on Node and Bun resolves
  * the host first and refuses loopback, private, link-local, CGNAT and unspecified addresses. The
  * operator's own configuration is trusted: an origin listed in FED_PEERS or FED_HUB_URL is allowed
- * whatever it resolves to, and FED_ALLOW_PRIVATE=1 lifts the check for an all-LAN network.
+ * whatever it resolves to, and FED_ALLOW_PRIVATE=1 lifts the check for an all-LAN network. An instance found
+ * by mDNS on the local network is reachable at the address that announced it (feddiscover.ts
+ * lanOriginAllowed), and nothing else on that network through it.
  *
  * The check runs before the fetch and again before every redirect hop; a resolver that answers
  * differently the second time (DNS rebinding) is outside what a pre-flight check can see.
@@ -70,12 +72,14 @@ export function isLocalHost(host: string): boolean {
 
 /**
  * A guard over `resolve`. `allowedOrigins` are the operator-configured origins exempt from the check;
- * `allowPrivate` lifts it entirely.
+ * `allowPrivate` lifts it entirely; `allowLocalOrigin` is asked about an origin on a private or loopback IP
+ * address before it is refused.
  */
 export function createFetchGuard(opts: {
   resolve: Resolve;
   allowedOrigins?: string[];
   allowPrivate?: boolean;
+  allowLocalOrigin?: (origin: string) => Promise<boolean>;
 }): FetchGuard {
   const allowed = new Set(
     (opts.allowedOrigins ?? []).flatMap((o) => {
@@ -97,6 +101,7 @@ export function createFetchGuard(opts: {
     if (opts.allowPrivate || allowed.has(u.origin)) return;
     const host = u.hostname.replace(/^\[|\]$/g, "");
     const literal = blockedAddress(host);
+    if (literal && opts.allowLocalOrigin && (await opts.allowLocalOrigin(u.origin))) return;
     if (literal) throw new Error(`refused: ${host} is a ${literal} address`);
     if (/^[\d.]+$/.test(host) || host.includes(":")) return; // a public IP literal
     if (host === "localhost" || host.endsWith(".localhost")) throw new Error(`refused: ${host} is loopback`);

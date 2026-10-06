@@ -72,8 +72,8 @@ to the link you turn on, but it does not choose the RF parameters for you.
 ## 44Net (AMPRNet) and HAMNET
 
 **44Net** is amateur IP address space reachable from the internet, through 44Net Connect or BGP. **HAMNET** is
-an amateur IP network reached only over RF links. They are separate networks, and the rules follow the path the
-traffic takes:
+an amateur IP network reached over RF links, and by licensed hams through HAMNET VPN access. They are separate
+networks, and the rules follow the path the traffic takes:
 
 - **HAMNET** traffic crosses amateur RF, so it is amateur radio: no content encryption, and callsign
   identification and control-operator rules apply, as on a 1200-baud packet channel. Where a HAMNET segment has

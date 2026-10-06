@@ -8,7 +8,7 @@
  * Runtime-neutral (fetch + crypto.subtle + env.DB) → runs on Node and Bun alike. This
  * instance never mirrors itself.
  */
-import { flagOn, type Env } from "./env.js";
+import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
@@ -28,8 +28,17 @@ import {
 } from "./federation.js";
 import { mergeEndpoints, storedEndpoints, syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { decodeFedSyncPage } from "./fedsync.js";
-import { parseEndpoints, validEndpointAddress } from "@aprscaching/shared";
-import { type PeerRow, blockedAt, ours, originKeys, seedPeers, listEnabledPeers } from "./fedpeers.js";
+import { parseEndpoints } from "@aprscaching/shared";
+import {
+  type PeerRow,
+  absorbDiscovered,
+  blockedAt,
+  ours,
+  originKeys,
+  seedPeers,
+  listEnabledPeers,
+} from "./fedpeers.js";
+import { learnFromPeer } from "./feddiscover.js";
 import { SYNC_DEFS, type SyncDef, type FrameGate, admitFrame } from "./fedapply.js";
 import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -50,8 +59,6 @@ export const MAX_PAGES = 50;
 /** Largest pull page the consumer reads, and the most frames it accepts per requested page. */
 const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 const PAGE_LIMIT = 500;
-/** Discovered peers, across all sources: the table never grows past this through discovery. */
-const MAX_DISCOVERED = 200;
 
 /**
  * A narrower pull, for an operator who pays for every byte (a phone before a trip): only some feeds,
@@ -232,13 +239,10 @@ async function syncPeer(
     publicKey: string | null;
     publicKeys?: FedPublicKey[];
     rotations?: RotationRecord[];
-    peers?: string[];
     capabilities?: string[];
     protocolVersions?: string[];
     addresses?: unknown;
   }>("/.well-known/aprscaching");
-  // the address that answered the descriptor carries the rest of the sync
-  const base = transport.baseUrl;
   const pub = wk.signed ? wk.publicKey : null;
 
   // Identity first, and nothing is written until every check below has passed. The instance id
@@ -251,6 +255,8 @@ async function syncPeer(
   // never mirror ourselves
   if (wk.instance === ours(env))
     return { bytes: 0, caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0, transit: 0 };
+  // a row only discovery brought gives way to this one (feddiscover.ts)
+  await absorbDiscovered(env, wk.instance, p.url);
   // one live row per instance id: a second URL claiming a bound instance is an impostor or a stale
   // address, and the operator decides which (block or remove the other peer in Instance admin)
   // (a key a hub handed on gives way to the peer's own, below)
@@ -354,30 +360,8 @@ async function syncPeer(
   }
   const newActive = usableKeys(keys.accept, nowS());
 
-  // Opt-in transitive discovery: learn the peers a TRUSTED peer advertises. Only https URLs are
-  // taken, a learned peer starts `unvetted` and disabled (never fetched until an operator enables
-  // it), and discovery stops adding once MAX_DISCOVERED discovered rows exist. INSERT OR IGNORE never
-  // downgrades a peer already known.
-  if (flagOn(env.FED_DISCOVER) && p.trust === "trusted") {
-    const have =
-      (
-        await env.DB.prepare("SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'discovered'").first<{
-          n: number;
-        }>()
-      )?.n ?? 0;
-    let room = Math.max(0, MAX_DISCOVERED - have);
-    for (const url of (Array.isArray(wk.peers) ? wk.peers : []).slice(0, 50)) {
-      if (room <= 0) break;
-      const u = trimTrailingSlashes(String(url).trim());
-      if (!u || u === base || !validEndpointAddress("https", u)) continue;
-      const r = await env.DB.prepare(
-        "INSERT OR IGNORE INTO fed_peers (url, trust, added_via, enabled) VALUES (?, 'unvetted', 'discovered', 0)",
-      )
-        .bind(u)
-        .run();
-      if (r.meta.changes) room--;
-    }
-  }
+  // peer exchange: the instances a trusted peer trusts, listed here switched off (feddiscover.ts)
+  await learnFromPeer(env, transport, p, wk);
 
   // capability negotiation: a peer that speaks our protocol version has an authoritative
   // capability list → skip feeds it doesn't advertise; otherwise every known feed is tried and a 404

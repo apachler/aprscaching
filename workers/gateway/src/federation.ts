@@ -7,7 +7,7 @@
  * Node and Bun) so a mirror can verify provenance + integrity. The envelope is
  * shaped so per-callsign signing slots in without a format change (signer becomes a callsign, not the instance).
  *
- *   GET /.well-known/aprscaching        instance descriptor + public key + peers
+ *   GET /.well-known/aprscaching        instance descriptor + public key + addresses
  *   GET /federation/caches?since=<ts>   signed cache records (cursor = updated_at high-water mark)
  *   GET /federation/finds?since=<id>    signed find records  (cursor = append-only log id)
  *
@@ -26,6 +26,7 @@ import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/share
 import { bboxWhere, SYNC_REGION_CAPABILITY, type Bbox } from "./fedregion.js";
 import { serviceCall } from "./servicecall.js";
 import { reservePolicy, TRANSIT_CAPABILITY } from "./fedtransit.js";
+import { PEER_EXCHANGE_CAPABILITY, PEER_EXCHANGE_PATH, peerExchangeOn } from "./feddiscover.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -669,8 +670,8 @@ export function instanceOf(req: Request, env: Env): string {
 // ---- endpoints ----
 export async function handleWellKnown(req: Request, env: Env): Promise<Response> {
   const fk = await loadKey(env);
-  const peers = parseFedPeers(env.FED_PEERS).map((p) => p.url);
   const passesOn = !!fk && reservePolicy(env) !== "off";
+  const listsPeers = peerExchangeOn(env);
   return json({
     protocol: PROTOCOL,
     protocolVersions: PROTOCOL_VERSIONS,
@@ -689,6 +690,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       fk ? "corroborate-signed/1" : null, // signed corroboration questions and answers
       fk ? SYNC_REGION_CAPABILITY : null, // the CBOR caches feed narrows to a region (fedregion.ts)
       passesOn ? TRANSIT_CAPABILITY : null, // mirrored records passed on as their origins signed them
+      listsPeers ? PEER_EXCHANGE_CAPABILITY : null, // the instances this one trusts (feddiscover.ts)
     ].filter(Boolean),
     endpoints: {
       caches: "/federation/caches",
@@ -698,6 +700,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       "account-moves": "/federation/account-moves",
       notify: "/federation/notify",
       ...(passesOn && { transit: "/federation/sync/transit", "transit-keys": "/federation/transit/keys" }),
+      ...(listsPeers && { exchange: PEER_EXCHANGE_PATH }),
     },
     sigAlg: "Ed25519",
     signed: !!fk,
@@ -710,7 +713,6 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     // Typed transport endpoints this instance is reachable on (https / 44net / ax25 / netrom /
     // bbs) — the instance's own multi-address set, distinct from `endpoints` (the feed-path map).
     addresses: parseEndpoints(parseJsonArray(env.FED_ENDPOINTS)),
-    peers,
   });
 }
 
