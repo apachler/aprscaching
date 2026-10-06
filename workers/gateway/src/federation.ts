@@ -15,6 +15,7 @@
  * this origin's caches up to N" whichever path brought them (fedtransit.ts). Records are idempotent by `id`.
  */
 import { b64urlToBytes } from "./util/b64.js";
+import { TOOL_API_VERSION } from "@aprscaching/tools/api";
 import { nowS } from "./util/time.js";
 import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
@@ -681,6 +682,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     protocolVersions: PROTOCOL_VERSIONS,
     instance: instanceOf(req, env),
     software: "aprscaching",
+    toolApi: TOOL_API_VERSION, // the tool API the app's sandbox implements (@aprscaching/tools api.ts)
     capabilities: [
       "caches",
       "finds",

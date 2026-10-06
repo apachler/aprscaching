@@ -15,7 +15,7 @@
  * at all: its sandbox closes, and switching it on loads it again.
  */
 import { useEffect, useReducer } from "react";
-import { checkManifestSignature, type ToolManifest } from "@aprscaching/tools";
+import { checkManifestSignature, toolApiProblem, type ToolManifest } from "@aprscaching/tools";
 import { API_BASE } from "../api.js";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 import { loadSandbox, fetchToolManifest, sandboxTool, type Sandbox } from "./sandbox.js";
@@ -129,6 +129,8 @@ async function start(rec: InstalledRecord): Promise<string | null> {
   const r = await fetchToolManifest(rec.url, carrier);
   if (!r.ok) return `its manifest can't be loaded (${r.error})`;
   if (r.manifest.name !== rec.name) return "its manifest names another tool";
+  const api = toolApiProblem(r.manifest.api);
+  if (api) return api;
   if ((await checkManifestSignature(r.raw)) !== "valid") return "its signature does not verify";
   if (r.manifest.pubkey !== rec.pubkey) return "it is signed by another key now; install it again to check the new key";
   const extra = beyondApproval(r.manifest, rec);
@@ -195,6 +197,8 @@ export async function installTool(opts: {
 }): Promise<string | null> {
   const { manifest, base, carrier, via, persist = true } = opts;
   if (!manifest.pubkey) return "the manifest is unsigned";
+  const api = toolApiProblem(manifest.api);
+  if (api) return api;
   if (persist && toolOwner() === null) return "the session is not known yet";
   const rec = recordFor(manifest, base, via);
   const stored = readStored();

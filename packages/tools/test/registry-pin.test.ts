@@ -26,6 +26,7 @@ const entries: RegistryEntry[] = Array.from({ length: 7 }, (_, i) => ({
   title: `Tool ${i}`,
   author: "OE8APR",
   version: "1.0.0",
+  api: "1.0",
   pubkey: "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
   entry: `tool-${i}/tool.json`,
 }));
@@ -87,6 +88,7 @@ describe("checkEntryHash", () => {
       title: "Hash",
       author: "OE8APR",
       version: "1.0.0",
+      api: "1.0",
       permissions: ["command"],
       entry: "tool.js",
       entrySha256: await sha256B64(script),
@@ -106,7 +108,7 @@ describe("checkEntryHash", () => {
   });
 
   it("is validated as 32 bytes of base64", () => {
-    const m = { name: "x-tool", title: "X", author: "OE8APR", version: "1", permissions: [] };
+    const m = { name: "x-tool", title: "X", author: "OE8APR", version: "1", api: "1.0", permissions: [] };
     expect(validateManifest({ ...m, entrySha256: "abc" }).ok).toBe(false);
     expect(validateManifest({ ...m, entrySha256: 42 }).ok).toBe(false);
   });

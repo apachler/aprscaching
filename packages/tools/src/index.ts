@@ -5,6 +5,7 @@ export * from "./panel.js";
 export * from "./maplayer.js";
 export * from "./macros.js";
 export * from "./session-script.js";
+export * from "./api.js";
 export * from "./manifest.js";
 export * from "./registry.js";
 export * from "./host.js";

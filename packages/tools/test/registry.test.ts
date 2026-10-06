@@ -32,6 +32,7 @@ describe("manifest signing", () => {
       title: "Signed",
       author: "OE8APR",
       version: "1.0",
+      api: "1.0",
       permissions: ["command"],
       pubkey: pubB64url,
     });
@@ -44,7 +45,15 @@ describe("manifest signing", () => {
     // a signature made by a different key than the manifest's pubkey
     const other = await genKeys();
     const mismatched = await signManifest(
-      manifest({ name: "mm", title: "M", author: "X", version: "1", permissions: [], pubkey: other.pubB64url }),
+      manifest({
+        name: "mm",
+        title: "M",
+        author: "X",
+        version: "1",
+        api: "1.0",
+        permissions: [],
+        pubkey: other.pubB64url,
+      }),
       priv,
     );
     expect(await checkManifestSignature(mismatched)).toBe("invalid");
@@ -55,7 +64,15 @@ describe("signed registry (marketplace index)", () => {
   it("verifies against the pinned authority; rejects a wrong authority or edited entries", async () => {
     const auth = await genKeys();
     const entries: RegistryEntry[] = [
-      { name: "t", title: "T", author: "OE8APR", version: "1", pubkey: "AAAA", entry: "https://x/tool.json" },
+      {
+        name: "t",
+        title: "T",
+        author: "OE8APR",
+        version: "1",
+        api: "1.0",
+        pubkey: "AAAA",
+        entry: "https://x/tool.json",
+      },
     ];
     const reg = await signRegistry(entries, auth.pubB64url, auth.priv);
     expect(await verifyRegistry(reg, auth.pubB64url)).toBe(true);
@@ -84,6 +101,7 @@ describe("registryEntryFor", () => {
     title: "CW",
     author: "OE8APR",
     version: "1",
+    api: "1.0",
     pubkey: "K",
     entry: "https://tools.example.org/cw-tool/tool.json",
   };

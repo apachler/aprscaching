@@ -250,6 +250,9 @@ importers:
       '@aprscaching/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@aprscaching/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       nodemailer:
         specifier: ^10.0.14
         version: 10.0.14

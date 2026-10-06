@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   checkManifestSignature,
   resolveTrust,
+  toolApiProblem,
+  TOOL_API_VERSION,
   type Capability,
   type ToolManifest,
   type ToolTrust,
@@ -236,6 +238,11 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       return;
     }
     // The bus names a tool by its manifest name, so a second tool may not take an installed tool's name.
+    const api = toolApiProblem(r.manifest.api);
+    if (api) {
+      setImportError(`Refused: ${api}.`);
+      return;
+    }
     const same = installed.find((v) => v.record.name === r.manifest.name);
     if (same && same.record.url !== r.base) {
       toast(`Refused: you already have a tool named "${r.manifest.name}". Remove it first.`);
@@ -368,7 +375,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       <p className="muted">
         Signed plugins you install from a registry. Each runs sealed off from your session and reaches only what you
         approve. A tool&apos;s <strong>surfaces</strong> say where it runs: this console, the packet terminal, BBS, the
-        node or the map. TX-capable tools need a verified callsign. Pin a tool to put it on the rail.
+        node or the map. TX-capable tools need a verified callsign. Pin a tool to put it on the rail.{" "}
+        <span className="fine mono">tool API {TOOL_API_VERSION}</span>
       </p>
       {!props.verified && (
         <p className="muted fine">Your callsign isn&apos;t verified yet — TX/beacon tools stay gated until it is.</p>

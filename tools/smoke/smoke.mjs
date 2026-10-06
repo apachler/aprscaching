@@ -542,6 +542,7 @@ ok(
 // ---- federation: discovery + signed, mirrorable feeds ----
 const wk = await call("GET", "/.well-known/aprscaching");
 ok("well-known descriptor", (wk.data?.protocol ?? "").startsWith("aprscaching-federation"), JSON.stringify(wk.data));
+ok("well-known descriptor names the tool API", /^\d+\.\d+$/.test(wk.data?.toolApi ?? ""), String(wk.data?.toolApi));
 const fc = await call("GET", "/federation/caches?since=0&limit=500");
 ok(
   "caches feed has records",

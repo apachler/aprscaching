@@ -27,27 +27,28 @@ describe("Tool manifest validation", () => {
       title: "T",
       author: "oe8apr",
       version: "1.0",
+      api: "1.0",
       permissions: ["command"],
     });
     expect(r.ok && r.manifest.author).toBe("OE8APR");
   });
   it("rejects a bad name / unknown capability", () => {
-    expect(validateManifest({ name: "Bad Name", title: "T", author: "X", version: "1", permissions: [] }).ok).toBe(
-      false,
-    );
-    expect(validateManifest({ name: "ok", title: "T", author: "X", version: "1", permissions: ["hack"] }).ok).toBe(
-      false,
-    );
+    expect(
+      validateManifest({ name: "Bad Name", title: "T", author: "X", version: "1", api: "1.0", permissions: [] }).ok,
+    ).toBe(false);
+    expect(
+      validateManifest({ name: "ok", title: "T", author: "X", version: "1", api: "1.0", permissions: ["hack"] }).ok,
+    ).toBe(false);
   });
   it("a network tool lists the https/wss origins it reaches, normalised to origins", () => {
-    const base = { name: "net-tool", title: "T", author: "X", version: "1", permissions: ["network"] };
+    const base = { name: "net-tool", title: "T", author: "X", version: "1", api: "1.0", permissions: ["network"] };
     expect(validateManifest(base).ok).toBe(false);
     expect(validateManifest({ ...base, connect: [] }).ok).toBe(false);
     const r = validateManifest({ ...base, connect: ["https://api.example.org/", "wss://feed.example.org:8443"] });
     expect(r.ok && r.manifest.connect).toEqual(["https://api.example.org", "wss://feed.example.org:8443"]);
   });
   it("refuses connect entries that are not bare https/wss origins", () => {
-    const base = { name: "net-tool", title: "T", author: "X", version: "1", permissions: ["network"] };
+    const base = { name: "net-tool", title: "T", author: "X", version: "1", api: "1.0", permissions: ["network"] };
     for (const bad of ["http://example.org", "https://example.org/path", "https://u:p@example.org", "*", 42])
       expect(validateManifest({ ...base, connect: [bad] }).ok).toBe(false);
     expect(validateManifest({ ...base, connect: Array.from({ length: 9 }, (_, i) => `https://h${i}.org`) }).ok).toBe(
@@ -64,7 +65,7 @@ function mk(
   extra: Partial<Tool["manifest"]> = {},
 ): Tool {
   return {
-    manifest: { name, title: name, author: "X", version: "1", permissions, surfaces: ["web"], ...extra },
+    manifest: { name, title: name, author: "X", version: "1", api: "1.0", permissions, surfaces: ["web"], ...extra },
     activate,
   };
 }
@@ -299,19 +300,35 @@ describe("The host ends a beacon and guards its own services", () => {
 
 describe("Tool surfaces — a tool's type routes its contributions", () => {
   it("defaults surfaces to ['web'] and validates the enum", () => {
-    const r = validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: ["panel"] });
+    const r = validateManifest({
+      name: "tt",
+      title: "T",
+      author: "X",
+      version: "1",
+      api: "1.0",
+      permissions: ["panel"],
+    });
     expect(r.ok && r.manifest.surfaces).toEqual(["web"]);
     const t2 = validateManifest({
       name: "tt",
       title: "T",
       author: "X",
       version: "1",
+      api: "1.0",
       permissions: ["command"],
       surfaces: ["terminal", "bbs"],
     });
     expect(t2.ok && t2.manifest.surfaces).toEqual(["terminal", "bbs"]);
     expect(
-      validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: [], surfaces: ["nope"] }).ok,
+      validateManifest({
+        name: "tt",
+        title: "T",
+        author: "X",
+        version: "1",
+        api: "1.0",
+        permissions: [],
+        surfaces: ["nope"],
+      }).ok,
     ).toBe(false);
   });
 
@@ -454,6 +471,7 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
       title: "P",
       author: "X",
       version: "1",
+      api: "1.0",
       permissions: ["ipc", "command"],
       surfaces: ["web"],
     },
@@ -469,7 +487,15 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
     },
   });
   const consumer = (sink: string[]): Tool => ({
-    manifest: { name: "cons", title: "C", author: "X", version: "1", permissions: ["ipc"], surfaces: ["web"] },
+    manifest: {
+      name: "cons",
+      title: "C",
+      author: "X",
+      version: "1",
+      api: "1.0",
+      permissions: ["ipc"],
+      surfaces: ["web"],
+    },
     activate(ctx) {
       ctx.subscribe("topic.a", (data, from) => sink.push(`${from}:${(data as { msg: string }).msg}`));
     },
@@ -494,6 +520,7 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
         title: "C",
         author: "X",
         version: "1",
+        api: "1.0",
         permissions: ["ipc", "command"],
         surfaces: ["web"],
       },
@@ -526,6 +553,7 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
         title: "C",
         author: "X",
         version: "1",
+        api: "1.0",
         permissions: ["ipc", "command"],
         surfaces: ["web"],
       },
@@ -541,7 +569,15 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
 
   it("emit/subscribe require the 'ipc' capability", () => {
     const rogue: Tool = {
-      manifest: { name: "noipc", title: "N", author: "X", version: "1", permissions: ["command"], surfaces: ["web"] },
+      manifest: {
+        name: "noipc",
+        title: "N",
+        author: "X",
+        version: "1",
+        api: "1.0",
+        permissions: ["command"],
+        surfaces: ["web"],
+      },
       activate(ctx) {
         (ctx as unknown as { emit: (t: string) => void }).emit("x");
       },
@@ -560,6 +596,7 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
         title: "C",
         author: "X",
         version: "1",
+        api: "1.0",
         permissions: ["ipc", "command"],
         surfaces: ["terminal"],
       },
@@ -581,7 +618,15 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
 
 describe("The bus for a sandboxed tool — its own sender name, its own grants", () => {
   const listener = (sink: string[]): Tool => ({
-    manifest: { name: "listen", title: "L", author: "X", version: "1", permissions: ["ipc"], surfaces: ["web"] },
+    manifest: {
+      name: "listen",
+      title: "L",
+      author: "X",
+      version: "1",
+      api: "1.0",
+      permissions: ["ipc"],
+      surfaces: ["web"],
+    },
     activate(ctx) {
       ctx.subscribe("topic.a", (data, from) => sink.push(`${from}:${String(data)}`));
       ctx.provideService("whoami", () => "listen");
@@ -617,6 +662,7 @@ describe("The bus for a sandboxed tool — its own sender name, its own grants",
         title: "E",
         author: "X",
         version: "1",
+        api: "1.0",
         permissions: ["ipc", "command"],
         surfaces: ["web"],
       },
@@ -666,7 +712,7 @@ describe("The bus for a sandboxed tool — its own sender name, its own grants",
     const host = new ToolHost();
     host.registerHostService("session.script", () => ({ ok: true }), { requires: "tx" });
     const caller = (name: string, permissions: Tool["manifest"]["permissions"]): Tool => ({
-      manifest: { name, title: "C", author: "X", version: "1", permissions, surfaces: ["terminal"] },
+      manifest: { name, title: "C", author: "X", version: "1", api: "1.0", permissions, surfaces: ["terminal"] },
       activate(ctx) {
         ctx.registerCommand(name, () => [JSON.stringify(ctx.callService("session.script", { steps: [] }))]);
       },

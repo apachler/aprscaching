@@ -31,6 +31,7 @@ error it reports.
 | `title` | string | yes | Not blank; trimmed. The label users see. | `title required` |
 | `author` | string | yes | Not blank; trimmed and upper-cased. The author's callsign. | `author (callsign) required` |
 | `version` | string | yes | Not blank; trimmed. Free text, for example `1.0.0`. | `version required` |
+| `api` | string | yes | The [tool API version](#tool-api-version) the tool needs, `MAJOR.MINOR`, for example `1.0`. | `api must name the tool API version the tool needs, as "MAJOR.MINOR"` |
 | `permissions` | string array | yes | Each one a [capability](#capabilities); duplicates dropped. `[]` is allowed. | `permissions must be a list of known capabilities` |
 | `surfaces` | string array | no | Each one a [surface](#surfaces); duplicates dropped; `["web"]` when left out or empty. | `surfaces must be a list of known surfaces (web/terminal/bbs/node/map)` |
 | `remote` | boolean | no | `true` marks the tool's commands as callable by a remote connected station. Any other value counts as not set. | none |
@@ -43,6 +44,15 @@ error it reports.
 
 A tool that asks for `network` without a `connect` list fails with `a tool asking for network lists the origins it
 reaches in connect`. Fields the validator does not know are dropped.
+
+## Tool API version
+
+The API this page describes is **tool API 1.0** (`TOOL_API` in `@aprscaching/tools`), versioned apart from the
+app's releases. A change that only adds (a new capability, method, event or field) raises the minor; a change that
+breaks a tool written for the old API raises the major. The app installs and starts a tool whose `api` has the
+app's major and a minor no higher than the app's. Any other tool is refused, with the reason: `it needs tool API
+1.1; this instance implements 1.0`. The Tools app shows the version it implements, and the instance descriptor
+(`/.well-known/aprscaching`) names it as `toolApi`.
 
 ## Capabilities
 
@@ -305,6 +315,7 @@ sequenceDiagram
 | `Refused: Signature INVALID — refused` | The signature does not match the manifest. |
 | `Refused: Author key CHANGED since you last trusted it — refused` | The key differs from the registry's entry or from the one the player accepted before. |
 | `Refused: you already have a tool named "<name>". …` | An installed tool from another address has the name. |
+| `Refused: it needs tool API <x.y>; this instance implements <a.b>.` | The tool needs another [tool API version](#tool-api-version). |
 | `Install failed: the tool did not start in time` | The frame and worker did not report `loaded` within 15 seconds. |
 | `Install failed: <message>` | The script threw while loading, or the entry could not be fetched. |
 
