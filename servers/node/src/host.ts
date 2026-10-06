@@ -5,7 +5,8 @@
  * commit, and the scheduled jobs.
  */
 import { execSync } from "node:child_process";
-import { runScheduled } from "@aprscaching/gateway/app";
+import { runRelayTick, runScheduled } from "@aprscaching/gateway/app";
+import { onPushSoon } from "@aprscaching/gateway/fedpush";
 import { catchUp } from "@aprscaching/gateway/fedcatchup";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import type { Env } from "@aprscaching/gateway/env";
@@ -54,9 +55,12 @@ export function gitHead(): string | undefined {
  * is idempotent. The frequent federation tasks (pull from peers, push to a hub, retry corroborations,
  * answer relay queries; runFrequentSync) run every `fedSyncMs` (0 disables them) whatever the
  * configuration says: a peer the sysop adds in Instance admin exists only as a row, and a tick without
- * peers, hub or retries costs a few queries, since each task no-ops without its config or rows.
+ * peers, hub or retries costs a few queries, since each task no-ops without its config or rows. The relay
+ * tick (a spoke collecting its hub's queries, an asker reading relayed corroboration answers;
+ * runRelayTick) runs every `relayPollMs` (0 leaves it to the frequent sync), and a push after a local write
+ * reports to the same catch-up loop as the scheduled push.
  */
-export function startSchedules(env: Env, fedSyncMs: number): void {
+export function startSchedules(env: Env, fedSyncMs: number, relayPollMs = 0): void {
   const nightly = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
   nightly();
   setInterval(nightly, 24 * 3600 * 1000);
@@ -67,12 +71,18 @@ export function startSchedules(env: Env, fedSyncMs: number): void {
     const frequent = () => void loop.run().catch((e) => console.error("federation sync:", e));
     frequent();
     setInterval(frequent, fedSyncMs);
+    onPushSoon((push) => loop.after({ push }));
   }
+  if (relayPollMs > 0) setInterval(() => void runRelayTick(env).catch((e) => console.error("relay:", e)), relayPollMs);
 }
 
 /** FED_SYNC_INTERVAL_MS: the frequent federation cadence (default 5 min; 0 disables it). */
 export const fedSyncInterval = (src: Record<string, string | undefined>): number =>
   Number(src.FED_SYNC_INTERVAL_MS ?? 5 * 60 * 1000);
+
+/** FED_RELAY_POLL_MS: the relay tick's cadence (default 15 s; 0 leaves it to the frequent sync). */
+export const relayPollInterval = (src: Record<string, string | undefined>): number =>
+  Number(src.FED_RELAY_POLL_MS ?? 15 * 1000);
 
 /** One stray rejection must not kill an unattended gateway (there is no supervisor by default). */
 export function logStrayErrors(): void {

@@ -1062,6 +1062,114 @@ if (RELAY_SECRET) {
     await spokeSig("oe.other", skp.privateKey, "GET", otherPath),
   );
   ok("relay: a spoke's key can't lease another instance", wrongInstance.status === 401, String(wrongInstance.status));
+
+  // A corroboration question for the push spoke, from an instance the hub knows: the hub queues it, the
+  // spoke collects it on its own poll and answers with a signed frame, and only the asker, signing its
+  // read, collects that answer with its ticket. The asker becomes known to the hub by pushing a page.
+  const akpR = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const apubR = b64u(await crypto.subtle.exportKey("raw", akpR.publicKey));
+  const askerBody = { ...spokeBody, code: "SP-0002", title: "Asker Cache " + now() };
+  const askerPage = encodePage("oe.asker", askerBody.updatedAt, true, [
+    await buildFrame(
+      {
+        kind: 1,
+        gid: "oe.asker:cache:1",
+        origin: "oe.asker",
+        v: askerBody.updatedAt,
+        at: now(),
+        signer: "oe.asker",
+        body: askerBody,
+      },
+      akpR.privateKey,
+      apubR,
+    ),
+  ]);
+  ok("relay: the asker is known to the hub", (await submitCbor(SUB, askerPage)).data?.ok === true);
+  const qAt = now();
+  const question = await buildFrame(
+    {
+      kind: 10,
+      gid: "oe.asker:corroborationQuery:r1",
+      origin: "oe.asker",
+      v: qAt,
+      at: qAt,
+      signer: "oe.asker",
+      body: {
+        callsign: "LO3RF",
+        latE7: 470707000,
+        lonE7: 154395000,
+        radiusM: 200,
+        since: qAt - 1800,
+        until: qAt,
+        nonce: "r1",
+        target: spoke,
+      },
+    },
+    akpR.privateKey,
+    apubR,
+  );
+  const fwd = await fetch(SUB + "/federation/corroborate", {
+    method: "POST",
+    headers: { "content-type": "application/cbor" },
+    body: question,
+  }).then(async (r) => ({ status: r.status, data: await r.json().catch(() => null) }));
+  ok(
+    "relay: the hub queues a question for its push spoke (202, a ticket)",
+    fwd.status === 202 && fwd.data?.relayed === true && typeof fwd.data?.ticket === "string",
+    JSON.stringify(fwd),
+  );
+  const lease2 = await call(SUB, "GET", leasePath, undefined, await spokeSig(spoke, skp.privateKey, "GET", leasePath));
+  const q2 = (lease2.data?.queries ?? []).find((q) => q.id === fwd.data?.id);
+  ok(
+    "relay: the spoke collects the question, the asker's signed bytes unchanged",
+    q2?.kind === "corroborate" && q2.params?.question === b64u(question),
+    JSON.stringify(lease2.data),
+  );
+  const reply = await buildFrame(
+    {
+      kind: 11,
+      gid: `${spoke}:corroboration:r1`,
+      origin: spoke,
+      v: now(),
+      at: now(),
+      signer: spoke,
+      body: {
+        corroborated: false,
+        nonce: "r1",
+        queryHash: createHash("sha256").update(frameParts(question).payload).digest("hex"),
+      },
+    },
+    skp.privateKey,
+    spub,
+  );
+  const answer2 = {
+    id: fwd.data?.id,
+    instance: spoke,
+    result: { ok: true, kind: "corroborate", data: { status: 200, frameB64: b64u(reply) } },
+  };
+  await call(
+    SUB,
+    "POST",
+    "/federation/relay/answer",
+    answer2,
+    await spokeSig(spoke, skp.privateKey, "POST", "/federation/relay/answer", JSON.stringify(answer2)),
+  );
+  const resultPath = `/federation/relay/result/${fwd.data?.id}`;
+  const notSigned = await call(SUB, "GET", resultPath, undefined, { ...rh, "x-relay-ticket": fwd.data?.ticket });
+  ok(
+    "relay: the relay secret alone does not read an instance's answer",
+    notSigned.status === 401,
+    String(notSigned.status),
+  );
+  const got = await call(SUB, "GET", resultPath, undefined, {
+    ...(await spokeSig("oe.asker", akpR.privateKey, "GET", resultPath)),
+    "x-relay-ticket": fwd.data?.ticket,
+  });
+  ok(
+    "relay: the asker reads the spoke's signed answer",
+    got.data?.status === "answered" && got.data?.answer?.data?.frameB64 === b64u(reply),
+    JSON.stringify(got.data),
+  );
 }
 
 // ---- corroboration: a signed exchange, coarsened answers, rate limits ----

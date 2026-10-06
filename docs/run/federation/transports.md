@@ -15,9 +15,9 @@ against the key it pinned for the record's origin, so no transport adds or remov
 | Transport | Carries | Who starts it | Delay | Default | Tested |
 |---|---|---|---|---|---|
 | [Pull](#pull) over https, 44Net or HAMNET | caches, finds, keys, bulletins, tombstones, account moves; the caches, finds and tombstones a hub passes on | the instance that wants the records | seconds after a write, at most `FED_SYNC_INTERVAL_MS` (5 min) | on for every peer you add | CI, two instances on one host |
-| [Push to a hub](#push-to-a-hub) | caches, finds, keys, tombstones | the spoke | at most `FED_SYNC_INTERVAL_MS`; 30 s to 10 min after an outage | off | CI, two instances on one host |
-| [Rendezvous relay](#rendezvous-relay) | a firewalled spoke's caches, finds or keys feed, on request | a requester with the hub's relay secret | at most `FED_SYNC_INTERVAL_MS` for the spoke to answer | off | CI, two instances on one host |
-| [Corroboration exchange](#corroboration-exchange) | one question and its answer about a find | the instance where the find is logged | seconds; retried 1, 6 and 24 h later | on with a signing key | CI, two instances on one host |
+| [Push to a hub](#push-to-a-hub) | caches, finds, keys, bulletins, tombstones, account moves | the spoke | 3 s after a write, 15 s at most in a stream of writes; 30 s to 10 min after an outage | off | CI, two instances on one host |
+| [Rendezvous relay](#rendezvous-relay) | a firewalled spoke's caches, finds or keys feed, and questions to confirm a find | a requester with the hub's relay secret; an instance asking a spoke to confirm a find | the spoke's next collect, `FED_RELAY_POLL_MS` (15 s) | off | CI, two instances on one host; server tests with three |
+| [Corroboration exchange](#corroboration-exchange) | one question and its answer about a find | the instance where the find is logged | seconds; through a relay, the spoke's next collect; retried 1, 6 and 24 h later | on with a signing key | CI, two instances on one host; server tests with three |
 | [Presence beacon](#presence-beacon) | an instance's addresses, one datagram | the operator's own tooling | whenever it transmits | endpoints only | unit tests |
 | [Packet circuit](#packet-circuit) (AX.25, NET/ROM) | caches, finds, keys, bulletins, tombstones, account moves | the pulling instance's ingest box | at most `FED_LINK_PULL_MS` (1 h) per session, one peer at a time | off (`FED_LINK_SERVE`, `FED_LINK_PULL`) | local loop over AX.25/AXUDP; not on real radios |
 | [FBB store-and-forward](#fbb-store-and-forward) | a batch of feed records as packet mail | the sysop, by hand or timer | hours to days | off (`FED_BBS`) | local loop over AX.25; not on real BBS networks |
@@ -92,8 +92,8 @@ from https to http are covered by the gateway's tests. Real 44Net and HAMNET rou
 
 ## Push to a hub
 
-**What it carries.** The spoke's own tombstones, caches, finds and callsign keys, in that order. Bulletins and
-account moves stay with pull.
+**What it carries.** Every feed the pull serves, the spoke's own records only: tombstones, caches, finds,
+callsign keys, account moves and bulletins, in that order, so a deletion arrives before the record it deletes.
 
 **How it works.** The spoke sends pages of its signed records to the hub's `POST /federation/submit`, with the
 hub's submit secret. The secret decides who may introduce a new key to the hub; the hub checks every record's
@@ -115,8 +115,11 @@ sequenceDiagram
   Note over H: spoke shows unvetted until the sysop trusts it
 ```
 
-**When.** In the same scheduled cycle as pull, every `FED_SYNC_INTERVAL_MS`. A write on the spoke does not push
-at once. **Sync now** pushes immediately.
+**When.** Shortly after a write on the spoke: 3 seconds after the last write, so a burst of writes goes in
+one cycle, and at most 15 seconds after the first, so a steady stream of writes still goes out. A cycle with
+nothing new sends nothing. The push also runs in the scheduled cycle with pull, every `FED_SYNC_INTERVAL_MS`,
+and **Sync now** pushes immediately. One cycle runs at a time. While the hub is unreachable, writes wait for
+the catch-up below.
 
 **Configure.** On the hub: `FED_SUBMIT_SECRET`, and `FED_SUBMIT_INSTANCES` to name the spokes allowed. On the
 spoke: `INSTANCE`, `FED_PRIVATE_KEY`, `FED_HUB_URL` and the hub's `FED_SUBMIT_SECRET`; add the hub to `FED_PEERS`
@@ -155,50 +158,68 @@ as stale after `FED_SPOKE_STALE_HOURS` (24) without a push.
 
 ## Rendezvous relay
 
-**What it carries.** One feed page of a firewalled spoke, on request: its caches, finds or callsign keys since a
-cursor, at most 1000 records, signed by the spoke.
+**What it carries.** Two kinds of query for a firewalled spoke: one feed page on request (its caches, finds or
+callsign keys since a cursor, at most 1000 records, signed by the spoke), and a question to confirm a find
+(the same signed question and answer as the [corroboration exchange](#corroboration-exchange)).
 
 **How it works.** The relay is a mailbox on the hub, so a question can reach a spoke that nobody can dial. A
 requester leaves a query for the spoke at the hub and gets a ticket. The spoke collects the queries addressed to
 it on its own outbound connection, answers each from its own database, and posts the answer back. The requester
 collects the answer with its ticket. The spoke signs each collect and answer request with its federation key,
 and the hub checks that key against the one it already holds for the spoke, so no spoke can answer for another.
-The answer is a page of the spoke's signed records: whoever uses it checks every signature, as for a pull.
+The answer is signed by the spoke: a feed page is checked record by record, as for a pull, and a corroboration
+answer is checked against the question it answers, as a direct one.
 
 ```mermaid
 sequenceDiagram
   participant R as Requester
   participant H as Hub
   participant S as Spoke, no inbound port
-  R->>H: POST query for S, relay secret
+  R->>H: POST query for S
   H-->>R: ticket
   S->>H: GET my queries, request signed by S
   H-->>S: queries addressed to S
-  Note over S: build a page of its own signed records
+  Note over S: answer from its own database, signed by S
   S->>H: POST answer, request signed by S
-  R->>H: GET result, relay secret and ticket
-  H-->>R: signed page
-  Note over R: check every signature against S's key
+  R->>H: GET result with the ticket
+  H-->>R: the answer signed by S
+  Note over R: check the signature against S's key
 ```
 
-**When.** The spoke collects queries in its scheduled cycle, every `FED_SYNC_INTERVAL_MS`, so an answer is ready
-within one interval. A query the spoke collected but did not answer goes back to the queue after 5 minutes; an
-unanswered query older than an hour goes at the nightly cleanup.
+**Who asks.** Two kinds of requester.
 
-**Who asks.** No instance asks through the relay on its own. The requester is a script or a tool that holds
-the hub's `FED_RELAY_SECRET`; it may hold up to 50 queries waiting and make 60 a minute. To apply a relayed page
-on an instance, post it to that instance's `POST /federation/frames` with its operator or ingest secret: the
-frames go through the same checks as a pull. The relay does not carry
-[corroboration questions](#corroboration-exchange): the query kind for them is reserved, and a spoke answers only
-feed queries.
+- **A script or tool** asks for feed pages. It holds the hub's `FED_RELAY_SECRET`, may hold up to 50 queries
+  waiting and make 60 a minute. To apply a relayed page on an instance, post it to that instance's
+  `POST /federation/frames` with its operator or ingest secret: the frames go through the same checks as a pull.
+- **An instance** asks on its own, to confirm a find. When a trusted peer has no address it can dial, or none
+  of its addresses answers, the instance leaves its signed question with a hub: its own queue when the peer is
+  one of its push spokes, else its `FED_HUB_URL` hub and then its other trusted peers, three hubs at most, the
+  first that takes it. It posts the question to the hub's `POST /federation/corroborate`, addressed to the
+  spoke. The hub queues it only for one of its own push spokes, and only from an instance whose key it holds and
+  whose signature verifies, with the same caps per instance; it answers 202 with a ticket. The asking instance
+  reads the answer with that ticket, signing the read with its own key, so the relay secret alone does not read
+  it.
+
+**When.** The spoke collects its queries every `FED_RELAY_POLL_MS` (default 15000, 15 seconds; `0` leaves it to
+the scheduled cycle) and in every scheduled cycle, so while it is online an answer is ready within about 15
+seconds. An asking instance reads the answers it waits for on the same cadence. A query the spoke collected
+but did not answer goes back to the queue after 5 minutes; an unanswered query older than an hour goes at the
+nightly cleanup. A corroboration question stays answerable for an hour: one still unanswered then is asked
+again at the next [later attempt](#corroboration-exchange).
 
 **Configure.** On the hub: `FED_RELAY_SECRET`. On the spoke: `FED_HUB_URL` and `FED_RELAY_SECRET` (any value turns
 the spoke's collecting on; the spoke never sends it), a signing key, and a hub that already knows the spoke's key
-through a push, a pull or the registry ([Rendezvous relay](hubs-and-relays.md#rendezvous-relay)).
+through a push, a pull or the registry ([Rendezvous relay](hubs-and-relays.md#rendezvous-relay)). For a question to
+confirm a find, the spoke also pushes to the hub, and the hub knows the asking instance's key: it pulls from it,
+or the asking instance pushes to it. Optional: `FED_RELAY_POLL_MS`.
 
-**Limits.** An answer is at most 8 MiB. A spoke collects at most 25 queries per cycle.
+**Limits.** An answer is at most 8 MiB. A spoke collects at most 25 queries per round. Over
+[FBB](#fbb-store-and-forward) the relay carries feed queries only: a round trip there takes longer than a
+corroboration question stays answerable.
 
-**Tested.** Enqueue, collect, answer and result run in CI between two gateways.
+**Tested.** Enqueue, collect, answer and result, for a feed query and for a corroboration question the hub
+queues for its push spoke, run in CI between two gateways. A find confirmed by a firewalled spoke's receiver
+through its hub runs in the server tests with three instances: the asker, the hub and the spoke.
 
 ## Corroboration exchange
 
@@ -207,19 +228,24 @@ and one signed answer. Nothing of it is mirrored or forwarded.
 
 **How it works.** [How a find gets confirmed across instances](how-it-works.md#how-a-find-gets-confirmed-across-instances)
 explains it in full, with its diagram. As a transport: the asking instance posts the question to the peer's
-`POST /federation/corroborate` at the peer's pull addresses, up to three of them, in the same order as a pull.
+`POST /federation/corroborate` at the peer's pull addresses, up to three of them, in the same order as a pull. A
+trusted peer nobody can dial, such as a spoke that only pushes, gets the same question through a hub's
+[relay](#rendezvous-relay).
 
 **When.** When a find is logged and has not reached Tier A on its own; every trusted peer at once, 3 seconds
-each. Peers that could not be reached are asked again 1, 6 and 24 hours after the find, never after 72 hours.
+each. A peer asked through a relay answers when it collects the question, within about 15 seconds while it is
+online, and the find lifts then, shown as *confirmed later*. Peers that could not be reached are asked again 1,
+6 and 24 hours after the find, never after 72 hours.
 
 **Configure.** `FED_PRIVATE_KEY` to ask; trusted peers to ask; your own receiving sites (`FIRST_PARTY_SITES` or
 **Instance admin → Trusted receiving stations**) to answer "yes". Optional: `FED_CORROBORATION_QUORUM`,
-`FED_CORROBORATION_SECRET`, `FED_CORROBORATION_REQUIRE_KNOWN`, `FED_REVEAL_IGATE`.
+`FED_CORROBORATION_SECRET`, `FED_CORROBORATION_REQUIRE_KNOWN`, `FED_REVEAL_IGATE`, `FED_RELAY_POLL_MS`.
 
-**Limits.** A peer is asked only at an address the asking instance can dial: never through a hub, the relay or
-packet radio. A spoke that only pushes is never asked.
+**Limits.** A peer is asked at an address the asking instance can dial, or through a hub that relays for it;
+never over packet radio. A spoke whose hub runs no relay, or that does not collect its queries, is not asked.
 
-**Tested.** Tier A by peer corroboration, the quorum and the retries run in CI between two gateways.
+**Tested.** Tier A by peer corroboration, the quorum and the retries run in CI between two gateways; the
+confirmation through a hub's relay runs in the server tests with three instances.
 
 ## Presence beacon
 

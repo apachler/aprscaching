@@ -200,6 +200,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   OFFLINE_TILES_MAXZOOM: "The most detailed zoom level a pack takes from the offline map",
   OFFLINE_TILES_PATH: "The offline map archive (a PMTiles file) this server serves",
   FED_SYNC_INTERVAL_MS: "Federation peer-sync interval in milliseconds; 0 turns it off",
+  FED_RELAY_POLL_MS: "Relay round interval in milliseconds (spoke queries, relayed answers); 0 leaves it to the sync",
   WEB_DIST: "Built web app directory, served on the same origin as the API",
   HTTPS_PORT: "Port of the optional https listener; needs TLS_CERT and TLS_KEY",
   TLS_CERT: "PEM certificate, with its chain, for the https listener",
@@ -378,6 +379,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ["`OFFLINE_TILES_ATTRIBUTION`", "Shown on the offline map", "`© OpenStreetMap contributors`"],
       ["`OFFLINE_TILES_MAXZOOM`", "The most detailed zoom a pack takes; a pack too large for it takes less", "`14`"],
       ["`FED_SYNC_INTERVAL_MS`", "Milliseconds between scheduled peer syncs; `0` disables them", "`300000`"],
+      [
+        "`FED_RELAY_POLL_MS`",
+        "Milliseconds between relay rounds: a spoke collects the queries its hub holds for it, and an instance reads the answers to corroboration questions it left at a hub; `0` leaves both to the peer sync",
+        "`15000`",
+      ],
       [
         "`WEB_DIST`",
         "Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front",
@@ -572,7 +578,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ["`FED_SPOKE_STALE_HOURS`", "Hub: hours without a submission before Instance admin shows a spoke as stale", "24"],
       [
         "`FED_RELAY_SECRET`",
-        "Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key",
+        "Enables the rendezvous relay. Gates a script's enqueueing and results (the requester side, which carries no signature); an instance forwarding a corroboration question to one of this hub's push spokes is let in by its own signed question instead, and spokes lease and answer by signing with their own key. **Spoke:** any value turns collecting on",
         "—",
       ],
       [

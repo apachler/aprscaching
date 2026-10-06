@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * fedpush.ts — push-to-hub: NAT/firewall peers contribute without inbound reachability. A spoke
- * pushes sync pages of its own signed frames to a hub (pushToHub); the hub binds the submitter's
+ * pushes sync pages of its own signed frames to a hub (pushToHub) — every feed the pull serves — a few
+ * seconds after a local write (pushSoon) and in every frequent sync; the hub binds the submitter's
  * identity and admits the frames through the same path as a pull (handleFederationSubmit).
  */
 import type { Env } from "./env.js";
@@ -23,6 +24,8 @@ import {
   type RegistryEntry,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
+import { BULLETIN_FEED } from "./bbs.js";
+import { ACCOUNT_MOVE_FEED } from "./account.js";
 import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
 import { type TrustLevel, ours } from "./fedpeers.js";
@@ -31,8 +34,18 @@ import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
 import { rotationsJson } from "./fedtransit.js";
 
-/** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
-const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
+/**
+ * The feeds a spoke pushes: every feed the pull serves, in the pull's order (fedapply.ts `SYNC_DEFS`) —
+ * tombstones first, so a delete suppresses a re-mirror.
+ */
+export const PUSH_FEEDS: FeedServeDef[] = [
+  TOMBSTONE_FEED,
+  CACHE_FEED,
+  FIND_FEED,
+  KEY_FEED,
+  ACCOUNT_MOVE_FEED,
+  BULLETIN_FEED,
+];
 /** Largest submission body the hub reads: a full page of frames fits well inside it. */
 const MAX_SUBMIT_BYTES = 4 * 1024 * 1024;
 
@@ -92,11 +105,15 @@ interface PushMark {
   id?: number;
 }
 
-/** The feed a page carries: the record kind of its first decodable frame (a spoke pushes one feed per page). */
+/**
+ * The feed a page carries, named as its sync type: the record kind of its first decodable frame (a spoke
+ * pushes one feed per page).
+ */
 function pageFeed(frames: Uint8Array[]): string | null {
   for (const fb of frames) {
     try {
-      return decodeFedFrame(fb).record.kind;
+      const kind = decodeFedFrame(fb).record.kind;
+      return kind === "accountMove" ? "account-move" : kind;
     } catch {
       continue;
     }
@@ -324,12 +341,25 @@ async function readMarks(
  * from its persisted cursor, which advances only after the hub's 2xx, to the mark the hub returns; the
  * hub's marks are read once per process and again with `resync` (after an outage), so a restore on either
  * side resumes from what the hub holds. Re-sending a page is harmless (the hub upserts by global id).
- * Null unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
+ * Null unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present. Cycles run one after another
+ * (the frequent sync, Sync now and the push after a write share one queue), so a page is never sent twice
+ * from the same cursor at once.
  */
-export async function pushToHub(
+export function pushToHub(
   env: Env,
   fetchFn: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fedFetch(env, u, i),
   opts: { resync?: boolean } = {},
+): Promise<PushResult | null> {
+  const run = pushQueue.then(() => pushCycle(env, fetchFn, opts));
+  pushQueue = run.catch(() => null);
+  return run;
+}
+let pushQueue: Promise<unknown> = Promise.resolve();
+
+async function pushCycle(
+  env: Env,
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response>,
+  opts: { resync?: boolean },
 ): Promise<PushResult | null> {
   const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
   const secret = env.FED_SUBMIT_SECRET;
@@ -395,6 +425,53 @@ export async function pushToHub(
     }
   }
   return stop({ pushed, backlog });
+}
+
+/** The pause after a local write before the push, and the longest a stream of writes may hold it back. */
+export const PUSH_SOON_DELAY_MS = 3000;
+export const PUSH_SOON_MAX_WAIT_MS = 15_000;
+
+let soon: { timer: ReturnType<typeof setTimeout>; first: number } | null = null;
+let afterPushSoon: ((r: PushResult) => void) | null = null;
+
+/**
+ * Hand each push-after-write outcome to the host's catch-up loop (fedcatchup.ts), so a network failure
+ * starts its probes and a backlog its early cycle, as after a scheduled push.
+ */
+export function onPushSoon(fn: ((r: PushResult) => void) | null): void {
+  afterPushSoon = fn;
+}
+
+/**
+ * Push to the hub shortly after a local write: {@link PUSH_SOON_DELAY_MS} after the last write, so a burst
+ * (a find and its photo, a cache and its stages) goes in one cycle, and at most
+ * {@link PUSH_SOON_MAX_WAIT_MS} after the first, so a steady stream of writes still goes out. Skipped while
+ * the hub is known to be unreachable: the catch-up probe pushes the moment it answers. A no-op without a
+ * hub; a cycle with nothing new sends nothing.
+ */
+export function pushSoon(env: Env): void {
+  if (!env.FED_HUB_URL || !env.FED_SUBMIT_SECRET || !env.INSTANCE) return;
+  const now = Date.now();
+  const first = soon?.first ?? now;
+  if (soon) clearTimeout(soon.timer);
+  const wait = Math.max(0, Math.min(PUSH_SOON_DELAY_MS, first + PUSH_SOON_MAX_WAIT_MS - now));
+  const timer = setTimeout(() => {
+    soon = null;
+    void pushAfterWrite(env).catch((e) => console.error("push after write:", (e as Error).message));
+  }, wait);
+  // a pending push never holds the process open
+  (timer as { unref?: () => void }).unref?.();
+  soon = { timer, first };
+}
+
+async function pushAfterWrite(env: Env): Promise<void> {
+  const hub = trimTrailingSlashes(env.FED_HUB_URL ?? "");
+  const st = await env.DB.prepare("SELECT offline_since FROM fed_hub_status WHERE hub = ?")
+    .bind(hub)
+    .first<{ offline_since: number | null }>();
+  if (st?.offline_since != null) return; // backing off: the catch-up probe pushes when the hub answers
+  const r = await pushToHub(env);
+  if (r) afterPushSoon?.(r);
 }
 
 /** Records past the persisted push cursor, per feed, counted up to `cap` (more shows as the cap). */

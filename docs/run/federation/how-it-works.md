@@ -93,7 +93,8 @@ An arrow starts at the instance that opens the connection.
   news asks you to fetch at once. A 44Net instance is on the internet and pulls like any internet instance; a
   HAMNET instance reaches only other HAMNET hosts.
 - **Push** is for an instance nobody can reach, such as a phone on mobile data or a box behind a carrier's NAT:
-  it sends its records to a hub it can reach.
+  it sends its records to a hub it can reach, a few seconds after each write, and collects the questions the
+  hub holds for it.
 - **Packet circuit** is a pull over AX.25 or NET/ROM, dialled by your ingest box, for a peer you reach by radio
   rather than IP. It is off by default.
 - **Store-and-forward** over FBB packet mail is for a peer with no IP path at all. It is experimental and off by
@@ -156,22 +157,48 @@ sequenceDiagram
   H-->>F: find is Radio-verified
 ```
 
-**Confirmed later.** When a trusted peer could not be reached (a timeout, a failed connection, a rate limit or
-a server error), the same question goes to the peers that missed it again 1, 6 and 24 hours after the find, and
-never after 72 hours. Answers already in hand still count, as long as their peer is still trusted. A find lifted
-this way shows *confirmed later*. A verified "no" from a trusted peer ends the retries.
+**Confirmed later.** An answer that comes through a hub's relay (below) arrives once the spoke collects the
+question, about 15 seconds after the find while the spoke is online, and lifts the find then. When a trusted
+peer could not be reached (a timeout, a failed connection, a rate limit or a server error), the same question
+goes to the peers that missed it again 1, 6 and 24 hours after the find, and never after 72 hours. Answers
+already in hand still count, as long as their peer is still trusted. A find lifted this way shows *confirmed
+later*. A verified "no" from a trusted peer ends the retries.
 
-**Which instances can answer.** A peer answers only when it is reachable at an address the asking instance
-can dial: its https URL, its 44Net name or its HAMNET address. A question never travels through a hub, the relay
-or packet radio. A spoke that only pushes to a hub therefore is never asked, so its receivers confirm finds
-logged on the spoke itself, and not finds logged elsewhere. To let a firewalled instance's receivers confirm
-finds for the network, make it reachable: a Cloudflare Tunnel or a 44Net address gives it an address peers can
-dial ([Choose how to connect](choose.md)).
+**Which instances can answer.** A peer reachable at an address the asking instance can dial (its https URL,
+its 44Net name or its HAMNET address) gets the question directly. A trusted peer nobody can dial, such as a
+phone or a box behind a carrier's NAT that pushes to a hub, gets it through the hub's
+[relay](transports.md#rendezvous-relay): the asking instance leaves the signed question with the hub, the spoke
+collects it on its own outbound connection and answers from its own receivers, and the asking instance reads
+the signed answer back. The hub queues questions only for its own push spokes and only from instances it
+knows, and it cannot change an answer. When the asking instance is the hub itself, the question goes straight
+into its own queue.
+
+```mermaid
+sequenceDiagram
+  participant A as Home instance
+  participant H as Hub
+  participant S as Spoke, no inbound port
+  A->>H: signed question for S
+  H-->>A: ticket
+  S->>H: collect my queries, every 15 s
+  H-->>S: the question, unchanged
+  Note over S: search positions its own receivers heard on air
+  S->>H: signed answer
+  A->>H: read the answer, signed, with the ticket
+  H-->>A: S's signed answer
+  Note over A: check it against S's key and the nonce
+```
+
+A spoke answers only while it is online and collecting its queries (`FED_RELAY_SECRET` on the spoke). A
+question it has not answered within an hour goes to the next later attempt. The quorum counts the spoke by its
+identity, as any other peer, whichever path its answer took. Packet radio carries no questions.
 
 **What a sysop configures.** A signing key (`FED_PRIVATE_KEY`) to ask at all; the peers you trust; your own
 receiving sites under **Instance admin → Trusted receiving stations** or `FIRST_PARTY_SITES`, without which your
 instance never vouches for anyone; and optionally `FED_CORROBORATION_QUORUM`, `FED_CORROBORATION_REQUIRE_KNOWN`
-and `FED_REVEAL_IGATE` ([Running federation safely](index.md#running-federation-safely)).
+and `FED_REVEAL_IGATE` ([Running federation safely](index.md#running-federation-safely)). For a firewalled
+spoke to answer through its hub, both set `FED_RELAY_SECRET`
+([Rendezvous relay](hubs-and-relays.md#rendezvous-relay)).
 
 ## What travels, and what never does
 

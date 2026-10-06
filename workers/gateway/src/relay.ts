@@ -5,7 +5,8 @@ import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
- * cannot be dialled inbound STILL serve its feed to the commons, by reusing the **poll-based rendezvous
+ * cannot be dialled inbound STILL serve its feed to the commons and confirm finds logged elsewhere, by
+ * reusing the **poll-based rendezvous
  * seam** the remote-control box already uses (box.ts — the ECHOCAT pattern), NOT a persistent WebSocket.
  * That keeps it runtime-neutral (plain SQL + HTTP, no runtime-divergent socket infra):
  *
@@ -14,13 +15,16 @@ import { secretOk } from "./auth.js";
  *   The spoke answers each from its OWN DB and posts the result back      → POST /federation/relay/answer
  *   The requester collects the answer                                     → GET  /federation/relay/result/:id
  *
- * Trust is unchanged: a relayed answer is a signed feed page, verified exactly like a pulled one — the
- * relay is pure transport. The spoke answers `feed` queries (downstream re-serving of a firewalled
- * peer's feed); `corroborate` is a reserved kind. The relay is enabled by `FED_RELAY_SECRET`, which
- * gates enqueueing and reading results; a requester reads only its own results, by the ticket it got
- * at enqueue time. A spoke leases and answers by signing each request with its own federation key,
- * which the hub checks against the key it already holds for that instance — a spoke can never act
- * for another spoke, whatever secrets it knows. A lease that goes unanswered returns to the queue.
+ * Trust is unchanged: the relay is pure transport. A `feed` answer is a signed feed page, verified exactly
+ * like a pulled one; a `corroborate` answer is the spoke's signed corroboration frame, bound to the asker's
+ * nonce and question hash and verified exactly like a direct answer (corroborate.ts). The relay is enabled
+ * by `FED_RELAY_SECRET`. Two kinds of requester enqueue: a script holding that secret, and another
+ * instance forwarding a corroboration question to one of this hub's push spokes, authenticated by its own
+ * signed question (corroborate.ts). A requester reads only its own results, by the ticket it got at
+ * enqueue time; an instance also signs the read with its federation key. A spoke leases and answers by
+ * signing each request with its own federation key, which the hub checks against the key it already holds
+ * for that instance — a spoke can never act for another spoke, whatever secrets it knows. A lease that
+ * goes unanswered returns to the queue.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -32,6 +36,7 @@ import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
 import { importVerifyKey, signRaw } from "./federation.js";
 import { keysForOrigin } from "./fedpeers.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
+import { answerQuestion } from "./corroborate.js";
 
 type RelayKind = "feed" | "corroborate";
 interface ParsedRelayQuery {
@@ -217,21 +222,28 @@ export async function feedSource(env: Env, params: Record<string, unknown>): Pro
 }
 
 // ------------------------------------------------------------------ hub-side endpoints
-/** POST /federation/relay/:instance/query — a requester enqueues a relay query for a spoke instance. */
-export async function handleRelayEnqueue(req: Request, env: Env, instance: string): Promise<Response> {
-  if (!relayAuth(req, env)) return json({ error: "relay disabled or bad secret" }, { status: 401 });
-  const requester = clientIp(req, env);
+/** Who left a query: a script by its address, another instance by its id, or this instance itself. */
+export const SELF_REQUESTER = "self";
+export const instanceRequester = (id: string): string => `instance:${id.toLowerCase()}`;
+
+/**
+ * Queue a query for a spoke, within the requester's caps: at most 50 waiting and 60 enqueues a minute.
+ * Returns the query's id and the ticket its result is read with, or the refusal.
+ */
+export async function enqueueRelayQuery(
+  env: Env,
+  instance: string,
+  q: ParsedRelayQuery,
+  requester: string,
+): Promise<{ id: number; ticket: string } | { status: 429; error: string }> {
   if (await rateLimitedDurable(env, `relay-enqueue:${requester}`, Date.now(), RELAY_ENQUEUE_PER_MINUTE))
-    return json({ error: "rate limited" }, { status: 429 });
+    return { status: 429, error: "rate limited" };
   const waiting = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM fed_relay_queue WHERE requester = ? AND status IN ('queued','leased','dispatched')",
   )
     .bind(requester)
     .first<{ n: number }>();
-  if ((waiting?.n ?? 0) >= RELAY_MAX_QUEUED_PER_REQUESTER)
-    return json({ error: "too many queries waiting" }, { status: 429 });
-  const q = parseRelayQuery(await req.json().catch(() => null));
-  if (!q) return json({ error: "kind (feed|corroborate) required" }, { status: 400 });
+  if ((waiting?.n ?? 0) >= RELAY_MAX_QUEUED_PER_REQUESTER) return { status: 429, error: "too many queries waiting" };
   const ticket = hex(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
   const ins = await env.DB.prepare(
     "INSERT INTO fed_relay_queue (instance, kind, params, status, created_at, ticket_hash, requester) VALUES (?,?,?, 'queued', ?, ?, ?)",
@@ -245,7 +257,44 @@ export async function handleRelayEnqueue(req: Request, env: Env, instance: strin
       requester,
     )
     .run();
-  return json({ id: Number(ins.meta.last_row_id), ticket, instance, kind: q.kind, status: "queued" }, { status: 201 });
+  return { id: Number(ins.meta.last_row_id), ticket };
+}
+
+/**
+ * Is `instance` a push spoke this hub relays questions to? This hub runs the relay, the instance has
+ * submitted here (its `submit:` row), and no row blocks it.
+ */
+export async function isRelaySpoke(env: Env, instance: string): Promise<boolean> {
+  if (!env.FED_RELAY_SECRET) return false;
+  const id = instance.toLowerCase();
+  const row = await env.DB.prepare(
+    `SELECT 1 AS x FROM fed_peers WHERE url = ?
+      AND NOT EXISTS (SELECT 1 FROM fed_peers WHERE instance = ? AND trust = 'blocked')`,
+  )
+    .bind(`submit:${id}`, id)
+    .first();
+  return !!row;
+}
+
+/** The state of a query this instance queued for one of its own spokes (the row is local: no ticket). */
+export async function localRelayResult(
+  env: Env,
+  id: number,
+): Promise<{ status: string; answer: RelayResult | null } | null> {
+  const row = await env.DB.prepare("SELECT status, answer FROM fed_relay_queue WHERE id = ? AND requester = ?")
+    .bind(id, SELF_REQUESTER)
+    .first<{ status: string; answer: string | null }>();
+  return row ? { status: row.status, answer: row.answer ? (JSON.parse(row.answer) as RelayResult) : null } : null;
+}
+
+/** POST /federation/relay/:instance/query — a requester enqueues a relay query for a spoke instance. */
+export async function handleRelayEnqueue(req: Request, env: Env, instance: string): Promise<Response> {
+  if (!relayAuth(req, env)) return json({ error: "relay disabled or bad secret" }, { status: 401 });
+  const q = parseRelayQuery(await req.json().catch(() => null));
+  if (!q) return json({ error: "kind (feed|corroborate) required" }, { status: 400 });
+  const r = await enqueueRelayQuery(env, instance, q, clientIp(req, env));
+  if ("error" in r) return json({ error: r.error }, { status: r.status });
+  return json({ id: r.id, ticket: r.ticket, instance, kind: q.kind, status: "queued" }, { status: 201 });
 }
 
 /** GET /federation/relay/lease?instance=SELF — the spoke leases queries addressed to it. */
@@ -299,10 +348,16 @@ export async function handleRelayAnswer(req: Request, env: Env): Promise<Respons
 
 /** GET /federation/relay/result/:id — the requester polls for the spoke's answer. */
 export async function handleRelayResult(req: Request, env: Env, id: string): Promise<Response> {
-  if (!relayAuth(req, env)) return new Response("unauthorized", { status: 401 });
-  const row = await env.DB.prepare("SELECT status, answer, ticket_hash FROM fed_relay_queue WHERE id = ?")
-    .bind(Number(id))
-    .first<{ status: string; answer: string | null; ticket_hash: string | null }>();
+  if (!env.FED_RELAY_SECRET) return new Response("unauthorized", { status: 401 });
+  const row = await env.DB.prepare(
+    "SELECT status, answer, ticket_hash, requester FROM fed_relay_queue WHERE id = ? AND requester != ?",
+  )
+    .bind(Number(id), SELF_REQUESTER)
+    .first<{ status: string; answer: string | null; ticket_hash: string | null; requester: string | null }>();
+  // a script holds the relay secret; an instance that forwarded a question signs the read with its own key
+  const asker = row?.requester?.startsWith("instance:") ? row.requester.slice("instance:".length) : null;
+  const authed = asker ? await spokeAuth(req, env, asker, new Uint8Array(0)) : relayAuth(req, env);
+  if (!authed) return new Response("unauthorized", { status: 401 });
   if (!row) return json({ error: "no such query" }, { status: 404 });
   // only the requester, holding the ticket it was given, reads the result
   const ticket = req.headers.get("x-relay-ticket") ?? "";
@@ -319,7 +374,8 @@ export async function handleRelayResult(req: Request, env: Env, id: string): Pro
  * forwarding carries the batch to the partners marked for federation, and the spoke's answers come back
  * the same way as signed `relayAnswer` frames (the store-and-forward receive lands them in this queue).
  * The frame signatures bind both directions to their instances — the per-spoke HMAC token exists only on
- * the HTTP legs, so no secret material ever rides the air. Refused while `FED_BBS` is off.
+ * the HTTP legs, so no secret material ever rides the air. Refused while `FED_BBS` is off. Only feed
+ * queries go: a corroboration question is good for an hour, and an FBB round trip takes longer.
  */
 export async function handleRelayDispatch(req: Request, env: Env, instance: string): Promise<Response> {
   const denied = await requireSysop(req, env, { allowOperatorSecret: true });
@@ -330,7 +386,7 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
   if (!hub) return json({ error: "INSTANCE required" }, { status: 500 });
   const rows = (
     await env.DB.prepare(
-      "SELECT id, kind, params FROM fed_relay_queue WHERE instance = ? AND status = 'queued' ORDER BY created_at LIMIT 25",
+      "SELECT id, kind, params FROM fed_relay_queue WHERE instance = ? AND kind = 'feed' AND status = 'queued' ORDER BY created_at LIMIT 25",
     )
       .bind(spoke)
       .all<{ id: number; kind: string; params: string }>()
@@ -365,9 +421,30 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
 
 // ------------------------------------------------------------------ spoke-side poller
 /**
- * A NAT'd spoke leases relay queries from its hub and answers them from its own DB. Run from `runScheduled`;
- * a no-op unless both `FED_HUB_URL` and `FED_RELAY_SECRET` are set. This is the outbound-only leg that makes
- * a firewalled peer's feed reachable through the hub.
+ * The spoke's answer to a relayed corroboration question: the same check and the same signed answer as a
+ * direct question (corroborate.ts {@link answerQuestion}), as `{status, frameB64}`; a refusal carries the
+ * status a direct answer would have had, so the asker tells "not reached" (429, 5xx) from a refusal.
+ */
+async function corroborateSource(
+  env: Env,
+  params: Record<string, unknown>,
+): Promise<{ status: number; frameB64?: string; error?: string }> {
+  let bytes: Uint8Array<ArrayBuffer>;
+  try {
+    bytes = b64urlToBytes(typeof params.question === "string" ? params.question : "");
+  } catch {
+    return { status: 400, error: "bad question" };
+  }
+  if (!bytes.length) return { status: 400, error: "bad question" };
+  const r = await answerQuestion(env, bytes, { relayed: true });
+  return "frame" in r ? { status: 200, frameB64: bytesToB64url(r.frame) } : { status: r.status, error: r.error };
+}
+
+/**
+ * A NAT'd spoke leases relay queries from its hub and answers them from its own DB: feed pages and
+ * corroboration questions. Runs on the relay tick (app.ts `runRelayTick`: every `FED_RELAY_POLL_MS`, 15 s,
+ * and in every frequent sync); a no-op unless both `FED_HUB_URL` and `FED_RELAY_SECRET` are set. This is
+ * the outbound-only leg that makes a firewalled peer's feed and receivers reachable through the hub.
  */
 export async function relayPoll(env: Env): Promise<void> {
   const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
@@ -377,7 +454,7 @@ export async function relayPoll(env: Env): Promise<void> {
   const leaseUrl = `${hub}/federation/relay/lease?instance=${encodeURIComponent(instance)}`;
   const leaseAuth = await signRelayRequest(env, "GET", leaseUrl);
   if (!leaseAuth) return; // no signing key — the hub could not tell us from anyone else
-  const leaseRes = await fedFetch(env, leaseUrl, { headers: leaseAuth });
+  const leaseRes = await fedFetch(env, leaseUrl, { headers: leaseAuth, signal: AbortSignal.timeout(5000) });
   if (!leaseRes.ok) return;
   const { queries } = (await leaseRes.json().catch(() => ({ queries: [] }))) as {
     queries: { id: number; kind: RelayKind; params: Record<string, unknown> }[];
@@ -385,7 +462,7 @@ export async function relayPoll(env: Env): Promise<void> {
   for (const q of queries ?? []) {
     const result = await answerRelayQuery(
       { kind: q.kind, params: q.params ?? {} },
-      { feed: (p) => feedSource(env, p) },
+      { feed: (p) => feedSource(env, p), corroborate: (p) => corroborateSource(env, p) },
     );
     const answerUrl = `${hub}/federation/relay/answer`;
     const body = JSON.stringify({ id: q.id, result, instance });
@@ -395,6 +472,7 @@ export async function relayPoll(env: Env): Promise<void> {
       method: "POST",
       headers: { "content-type": "application/json", ...auth },
       body,
+      signal: AbortSignal.timeout(5000),
     }).catch(() => {});
   }
 }

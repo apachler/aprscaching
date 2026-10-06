@@ -114,6 +114,7 @@ The Node and Bun servers also read plain runtime knobs that are not part of the 
 | `OFFLINE_TILES_ATTRIBUTION` | Shown on the offline map | `© OpenStreetMap contributors` |
 | `OFFLINE_TILES_MAXZOOM` | The most detailed zoom a pack takes; a pack too large for it takes less | `14` |
 | `FED_SYNC_INTERVAL_MS` | Milliseconds between scheduled peer syncs; `0` disables them | `300000` |
+| `FED_RELAY_POLL_MS` | Milliseconds between relay rounds: a spoke collects the queries its hub holds for it, and an instance reads the answers to corroboration questions it left at a hub; `0` leaves both to the peer sync | `15000` |
 | `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front | — |
 <!-- /config-table -->
 
@@ -175,7 +176,7 @@ app do not read these.
 | `FED_SUBMIT_INSTANCES` | Hub allowlist of submitter instances | any non-self |
 | `FED_HUB_URL` | Spoke: a reachable hub to push signed records to. Each feed resumes where the hub's marks say it stands; after a network failure the spoke probes the hub (30 s backing off to 10 min) and pushes as soon as it answers | — |
 | `FED_SPOKE_STALE_HOURS` | Hub: hours without a submission before Instance admin shows a spoke as stale | 24 |
-| `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key | — |
+| `FED_RELAY_SECRET` | Enables the rendezvous relay. Gates a script's enqueueing and results (the requester side, which carries no signature); an instance forwarding a corroboration question to one of this hub's push spokes is let in by its own signed question instead, and spokes lease and answer by signing with their own key. **Spoke:** any value turns collecting on | — |
 | `FED_BBS` | Experimental. `1`: federation records travel as FBB personal messages to the forwarding partners marked for federation, and records arriving that way from those partners are applied. Off, nothing is queued for FBB and such messages are dropped. See [Federation over FBB](../run/federation/fbb.md) | off |
 <!-- /config-table -->
 
