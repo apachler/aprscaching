@@ -8,6 +8,27 @@
     color: var(--heading);
     font-weight: 700;
   }
+  /* a mirrored cache's way on: its page on the home instance, a link drawn as the sheet's primary action */
+  a.remote-home {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;
+    padding: var(--ctl-pad-y) var(--ctl-pad-x);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-brand);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  a.remote-home:hover {
+    filter: brightness(1.06);
+  }
+  a.remote-home:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .imported {
     background: var(--surface-2);
     border-left: 3px solid var(--beige);

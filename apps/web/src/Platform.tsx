@@ -75,7 +75,17 @@ import { OutboxPanel } from "./log/OutboxPanel.js";
 import { AlertsPanel } from "./shack/AlertsPanel.js";
 import { OfflinePanel } from "./offline/OfflinePanel.js";
 import type { OfflineSource } from "./offline/packs.js";
-import { cacheLoadText, offlineReady, listWatch, type OfflineFrom } from "./api.js";
+import {
+  attentionLogs,
+  CACHES_EVENT,
+  cacheIdByCode,
+  cacheLoadText,
+  ensureDeviceKey,
+  offlineReady,
+  listWatch,
+  refusalAdvice,
+  type OfflineFrom,
+} from "./api.js";
 
 // offline packs' map tiles answer acs-pack:// requests (offline/packTiles.ts)
 registerPackTiles(offlineReady);
@@ -101,6 +111,7 @@ import {
   type PanelKey,
   type View,
 } from "./nav.js";
+import { cacheFromQuery } from "./deeplink.js";
 import { PlatformContext } from "./platform/PlatformContext.js";
 import { TabBar } from "./platform/TabBar.js";
 import { MoreSheet } from "./platform/MoreSheet.js";
@@ -161,6 +172,9 @@ function useLayerPref(key: string, fallback: boolean) {
   }, [key, on]);
   return [on, setOn] as const;
 }
+
+/** A callsign without its SSID: OE8APR-7 holds OE8APR's caches. */
+const baseCall = (c: string) => c.toUpperCase().split("-")[0] ?? "";
 
 const bboxOf = (m: maplibregl.Map): BBox => {
   const b = m.getBounds();
@@ -402,9 +416,19 @@ export default function Platform({ session, startTour }: { session: SessionState
   const launchApp = useCallback((id: ShackApp["id"]) => openView({ kind: "app", id }), [openView]);
   const visibleApps = useMemo(() => SHACK_APPS.filter((a) => sysop || !a.sysop), [sysop]);
   const pinnedItems = usePinnedItems(pins, sysop);
-  const openCache = useCallback((id: number) => {
+  // A cache opened from anywhere (a marker, Nearby, search, a share link, a new hide) is brought into sight once
+  // its sheet is up: `reveal` below pans the map so the marker sits clear of the sheet. `minZoom` zooms in too.
+  const pendingReveal = useRef<{ id: number | string; minZoom: number } | null>(null);
+  const openCache = useCallback((id: number, minZoom = 0) => {
+    pendingReveal.current = { id, minZoom };
     setRemote(null);
     setSelectedId(id);
+  }, []);
+  /** Open a mirrored (peer) cache's read-only sheet. */
+  const openRemote = useCallback((c: MapCache, minZoom = 0) => {
+    pendingReveal.current = { id: c.globalId, minZoom };
+    setSelectedId(null);
+    setRemote(c);
   }, []);
   // A sign-in started from a cache returns to it: in this page after a passkey, or in the page an email link opens.
   useEffect(() => {
@@ -451,7 +475,8 @@ export default function Platform({ session, startTour }: { session: SessionState
         debounce.current = setTimeout(() => void refreshRef.current(), 250);
       },
       onClick: (m, e) => {
-        if (!hiding) return;
+        // only the hide form takes a pin: an unverified call sees the way to verify instead
+        if (!hiding || !verified) return;
         placeDraftPin(m, draftMarker, setDraft, +e.lngLat.lat.toFixed(6), +e.lngLat.wrap().lng.toFixed(6));
       },
     },
@@ -460,6 +485,44 @@ export default function Platform({ session, startTour }: { session: SessionState
   const flyTo = useCallback(
     (lat: number, lon: number, minZoom: number) =>
       mapRef.current?.flyTo({ center: [lon, lat], zoom: Math.max(mapRef.current.getZoom(), minZoom) }),
+    [mapRef],
+  );
+  /**
+   * Bring a cache's marker into the part of the map its sheet leaves free: above a phone's bottom sheet, left of
+   * a tablet's floating drawer. A marker already clear of the sheet stays where it is, unless it must zoom in.
+   * The sheet's box is read once, when it opens: the camera is the map's, so this is behaviour, not styling.
+   */
+  const reveal = useCallback(
+    (lat: number, lon: number, minZoom: number) => {
+      const m = mapRef.current;
+      if (!m) return;
+      const mr = m.getContainer().getBoundingClientRect();
+      const pr = document.querySelector(".shell > .panel.right")?.getBoundingClientRect();
+      let coverBottom = 0;
+      let coverRight = 0;
+      if (pr && pr.left < mr.right && pr.right > mr.left && pr.top < mr.bottom && pr.bottom > mr.top) {
+        // a sheet as wide as the map covers its bottom; a narrower drawer covers its right side
+        if (pr.width >= mr.width * 0.8) coverBottom = Math.min(mr.bottom - pr.top, mr.height * 0.75);
+        else coverRight = Math.min(mr.right - pr.left, mr.width * 0.75);
+      }
+      const zoom = Math.max(m.getZoom(), minZoom);
+      const p = m.project([lon, lat]);
+      const margin = 32;
+      const clear =
+        p.x >= margin &&
+        p.x <= mr.width - coverRight - margin &&
+        p.y >= margin &&
+        p.y <= mr.height - coverBottom - margin;
+      if (zoom !== m.getZoom()) {
+        m.easeTo({ center: [lon, lat], zoom, offset: [-coverRight / 2, -coverBottom / 2] });
+        return;
+      }
+      if (clear) return;
+      // at the same zoom the map moves only as far as it must, so the rest of the view stays where it was
+      const dx = Math.min(0, p.x - margin) + Math.max(0, p.x - (mr.width - coverRight - margin));
+      const dy = Math.min(0, p.y - margin) + Math.max(0, p.y - (mr.height - coverBottom - margin));
+      m.panBy([dx, dy]);
+    },
     [mapRef],
   );
 
@@ -551,6 +614,23 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (!v) return;
     openView(v);
   }, [initialQuery, openView, sysopKnown]);
+
+  // One-shot ?cache= share link (Copy link, the printed QR, the embed, feeds, the sysop's reports): once the map is
+  // up, the cache opens and the map brings it into sight. The address drops the parameter at the first history sync.
+  const cacheLinked = useRef(false);
+  useEffect(() => {
+    if (cacheLinked.current || !ready) return;
+    cacheLinked.current = true;
+    const code = cacheFromQuery(initialQuery);
+    if (!code) return;
+    cacheIdByCode(code)
+      .then((id) => {
+        if (id == null) toast(`${code} is not on this instance — it may be archived, removed or on another instance.`);
+        else openCache(id, 14);
+      })
+      .catch(() => toast(`Couldn't open ${code} — check your connection and open the link again.`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast identity is stable (context push)
+  }, [ready, initialQuery, openCache]);
 
   // capture / restore a shareable map view
   const getViewState = useCallback((): MapViewState => {
@@ -743,9 +823,34 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     void refresh();
   }, [includeUnvetted, refresh]);
+  // and when the instance's caches change under it: a federation pull, a peer's trust moved (api.ts CACHES_EVENT)
+  useEffect(() => {
+    const h = () => void refresh();
+    window.addEventListener(CACHES_EVENT, h);
+    return () => window.removeEventListener(CACHES_EVENT, h);
+  }, [refresh]);
 
-  // logs queued while offline flush on load, whenever connectivity returns, and as backoffs come due
-  const sync = useSync(() => void refresh());
+  // logs queued while offline flush on load, whenever connectivity returns, and as backoffs come due; a refusal
+  // is said at once, with what to do, as well as on the cache's sheet and under Logs to sync
+  const sync = useSync(
+    () => void refresh(),
+    (n) =>
+      void attentionLogs().then((a) => {
+        const last = a[a.length - 1];
+        toast(
+          `${n === 1 ? "A log was" : `${n} logs were`} not accepted${last ? `: ${refusalAdvice(last.reason)}` : ". Open Logs to sync to see why."}`,
+        );
+      }),
+  );
+  // An offline map gives way to the live one as soon as the instance answers again: the reconnect re-reads it
+  // (above), and while the instance stays unreachable on a working connection the map asks again now and then.
+  usePoll(() => void refresh(), 30_000, { enabled: offlineMap != null, immediate: false });
+
+  // A find logged offline is signed with this device's key, and the instance takes it on sync only when the key
+  // is registered to the call: register it at sign-in, while there is a connection.
+  useEffect(() => {
+    if (session.signedIn && callsign) void ensureDeviceKey(callsign);
+  }, [session.signedIn, callsign]);
 
   // re-subscribe when the callsign changes so prompts are addressed to you
   useEffect(() => {
@@ -755,12 +860,19 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // ---- map markers: caches, live stations and activity spots (platform/markerLayers.ts) ----
   const phosphor = locSettings.theme === "phosphor";
-  useCacheMarkers(map, shown, phosphor, (c) => {
-    if (c.mirrored) {
-      setSelectedId(null);
-      setRemote(c);
-    } else if (c.id != null) openCache(c.id);
-  });
+  // the open cache keeps its own pin when the map gathers the others into clusters
+  const selectedGid =
+    remote?.globalId ?? (selectedId != null ? shown.find((c) => c.id === selectedId)?.globalId : null);
+  useCacheMarkers(
+    map,
+    shown,
+    phosphor,
+    (c) => {
+      if (c.mirrored) openRemote(c);
+      else if (c.id != null) openCache(c.id);
+    },
+    selectedGid ?? null,
+  );
   // a MeshCom node draws once, as a MeshCom pin, while that layer is on
   const meshcomCalls = useMemo(() => new Set(meshcomNodes.map((n) => n.callsign)), [meshcomNodes]);
   const stationPins = useMemo(
@@ -842,6 +954,19 @@ export default function Platform({ session, startTour }: { session: SessionState
     // eslint-disable-next-line react-hooks/exhaustive-deps -- toast identity is stable (context push)
   }, [selectedId]);
 
+  // once an opened cache's sheet is up, bring its marker into sight beside it (reveal)
+  useEffect(() => {
+    const want = pendingReveal.current;
+    const c = remote ?? detail;
+    if (!want || !c || (remote ? remote.globalId : detail?.id) !== want.id || c.lat == null || c.lon == null) return;
+    const { lat, lon } = c;
+    const frame = requestAnimationFrame(() => {
+      pendingReveal.current = null;
+      reveal(lat, lon, want.minZoom);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detail, remote, reveal]);
+
   const reloadDetail = useCallback(async () => {
     if (selectedId == null) return;
     try {
@@ -875,6 +1000,17 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [callsign]);
   const target: [number, number] | null =
     detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
+  // The open cache takes no find from this player — their own ("own"), or an archived or disabled one (its status):
+  // the tab bar's action then posts a note, and says why. `logFocus` brings the sheet's log form into sight.
+  const openNoFind: string | null =
+    selectedId != null && detail && detail.id === selectedId
+      ? detail.own || (callsign.length >= 3 && baseCall(callsign) === baseCall(detail.ownerCall))
+        ? "own"
+        : detail.status !== "active"
+          ? detail.status
+          : null
+      : null;
+  const [logFocus, setLogFocus] = useState(0);
 
   // global search: a Maidenhead locator or "lat, lon" flies the map there; otherwise filter by text
   function runSearch(raw: string) {
@@ -888,12 +1024,13 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (ll) flyTo(ll.lat, ll.lon, 12);
   }
 
-  // enriched-search picks: a cache opens its detail + flies there; a station just flies to it
+  // enriched-search picks: a cache opens its sheet (a peer's cache its read-only one) and the map brings it into
+  // sight beside the sheet; a station just flies to it
   function pickCacheHit(hit: SearchHitCache) {
     setFilters((f) => ({ ...f, q: "" }));
     closeAll();
-    setSelectedId(hit.id);
-    if (hit.lat != null && hit.lon != null) flyTo(hit.lat, hit.lon, 14);
+    if (hit.remote) openRemote(hit.remote, 14);
+    else if (hit.id != null) openCache(hit.id, 14);
   }
   function pickStationHit(hit: SearchHitStation) {
     setFilters((f) => ({ ...f, q: "" }));
@@ -903,8 +1040,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   async function onCreated(c: CacheSummary) {
     closeView();
     await refresh();
-    setSelectedId(c.id);
-    if (c.lat != null && c.lon != null) mapRef.current?.flyTo({ center: [c.lon, c.lat], zoom: 14 });
+    openCache(c.id, 14);
   }
 
   const onNav = (key: (typeof NAV_ITEMS)[number]["key"]) => openView(viewOf(key));
@@ -940,7 +1076,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             verified={verified}
             onAccount={() => openView(panel(session.signedIn ? "settings" : "signin"))}
             onHide={() => openView(panel("hide"))}
-            count={shown.length}
+            count={ready ? shown.length : null}
             syncLine={sync.line}
             attention={sync.status.attention}
             onQueue={() => openView(panel("outbox"))}
@@ -992,6 +1128,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 }}
                 onCancel={closeView}
                 onCreated={onCreated}
+                onVerify={() => openView(panel("settings"))}
               />
             )}
             {isPanel("nearby") && (
@@ -1156,10 +1293,8 @@ export default function Platform({ session, startTour }: { session: SessionState
                   <Button
                     variant="primary"
                     onClick={() => {
-                      openCache(nearPrompt.cacheId);
+                      openCache(nearPrompt.cacheId, 14);
                       setNearPrompt(null);
-                      const m = mapRef.current;
-                      m?.flyTo({ center: m.getCenter(), zoom: Math.max(m.getZoom(), 14) });
                     }}
                   >
                     Log it
@@ -1209,6 +1344,8 @@ export default function Platform({ session, startTour }: { session: SessionState
                   void refreshSettled();
                 }}
                 onSignIn={signInFromCache}
+                onOutbox={() => openView(panel("outbox"))}
+                logFocus={logFocus}
               />
             )}
             {remote && !hiding && !isPanel("ranks") && (
@@ -1220,15 +1357,24 @@ export default function Platform({ session, startTour }: { session: SessionState
             <TabBar
               active={activeKey(view, tabKeys)}
               onNav={onNav}
-              fabLabel={selectedId != null || nearPrompt ? "Log" : "Hide"}
+              fabLabel={openNoFind ? "Note" : selectedId != null || nearPrompt ? "Log" : "Hide"}
               onMore={() => setMoreOpen(true)}
               moreActive={inMore(view)}
               moreAttention={MORE_ITEMS.some((i) => attention.has(i.key))}
               onFab={() => {
-                if (nearPrompt) {
+                if (selectedId != null) {
+                  // the open cache's log form comes into sight; one that takes no find says why
+                  setLogFocus((n) => n + 1);
+                  if (openNoFind)
+                    toast(
+                      openNoFind === "own"
+                        ? "You own this cache: post a note or a maintenance log."
+                        : `This cache is ${openNoFind}: it takes notes, not finds.`,
+                    );
+                } else if (nearPrompt) {
                   closeAll();
-                  setSelectedId(nearPrompt.cacheId);
-                } else if (selectedId == null) openView(panel("hide"));
+                  openCache(nearPrompt.cacheId, 14);
+                } else openView(panel("hide"));
               }}
             />
           )}

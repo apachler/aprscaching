@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "../api.js";
+import {
+  attentionLogs,
+  ensureDeviceKey,
+  getInstance,
+  logFind,
+  queuedLogs,
+  refusalAdvice,
+  type LogResult,
+  type AppGeo,
+} from "../api.js";
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
@@ -65,9 +74,16 @@ export function LogForm(props: {
   onSignIn: () => void;
   /** Counts the requests to log a find from elsewhere on the sheet (the Find view): each new one runs it. */
   logRequest?: number;
+  /** Open Logs to sync, where a refused log is retried, edited or discarded. */
+  onOutbox?: () => void;
+  /** Counts the requests to bring the form into sight and focus its first action (the tab bar's Log or Note). */
+  focusRequest?: number;
 }) {
   const fmt = useFmt();
   const confirm = useConfirm();
+  // A log saved offline: what became of it once the queue synced — sent, or refused with the reason.
+  const queuedSince = useRef(0);
+  const [fate, setFate] = useState<{ sent: true } | { refused: string } | null>(null);
   const prompt = usePrompt();
   const [busy, setBusy] = useState<LogType | null>(null);
   const [result, setResult] = useState<LogResult | null>(null);
@@ -90,6 +106,8 @@ export function LogForm(props: {
     }
     setBusy(logType);
     setErr(null);
+    setFate(null);
+    queuedSince.current = Date.now();
     try {
       // The device's own reading is the in-app evidence (Tier B). A find without one still logs, and
       // stays Tier C unless a receiving station heard it; a typed coordinate is never sent as evidence.
@@ -122,7 +140,7 @@ export function LogForm(props: {
         if (instance) {
           const at = Math.floor(Date.now() / 1000);
           author = await signAuthorship({ cache: props.cacheCode, instance, logger: props.callsign, logType, at });
-          if (author) await registerKey({ callsign: props.callsign, publicKey: author.authorKey }).catch(() => {});
+          if (author) await ensureDeviceKey(props.callsign);
         }
       } catch {
         /* unsupported browser -> log unsigned */
@@ -186,6 +204,37 @@ export function LogForm(props: {
     if (!busy) void doLog("found");
   });
 
+  // a request from the tab bar: the form comes into sight with its first action focused, so the press is felt
+  const focused = useRef(props.focusRequest ?? 0);
+  useEffect(() => {
+    const n = props.focusRequest ?? 0;
+    if (n === focused.current) return;
+    focused.current = n;
+    formRef.current?.scrollIntoView({ block: "nearest" });
+    formRef.current?.querySelector<HTMLElement>("button:not(:disabled), textarea")?.focus({ preventScroll: true });
+  });
+
+  // Follow a log saved offline through the queue: once it leaves, it was sent or the instance refused it.
+  const queued = !!result?.queued;
+  const { cacheId, onLogged } = props;
+  useEffect(() => {
+    if (!queued) return;
+    let live = true;
+    const since = queuedSince.current;
+    const check = async () => {
+      const [waiting, refused] = await Promise.all([queuedLogs(), attentionLogs()]);
+      if (!live || waiting.some((q) => q.cacheId === cacheId && q.queuedAt >= since)) return;
+      const r = refused.filter((a) => a.cacheId === cacheId && a.queuedAt >= since).pop();
+      setFate(r ? { refused: refusalAdvice(r.reason) } : { sent: true });
+      if (!r) onLogged();
+    };
+    window.addEventListener("acs-queued", check);
+    return () => {
+      live = false;
+      window.removeEventListener("acs-queued", check);
+    };
+  }, [queued, cacheId, onLogged]);
+
   if (result) {
     const found = result.logType === "found";
     const verb = found
@@ -200,13 +249,30 @@ export function LogForm(props: {
     return (
       <Card ref={formRef} className="logresult" role="status">
         <div className="big">
-          {result.queued ? "Saved" : verb} {found && result.verified && !result.duplicate ? "✓" : ""}
+          {result.queued ? (fate && "sent" in fate ? "Sent" : fate ? "Not sent" : "Saved") : verb}{" "}
+          {found && result.verified && !result.duplicate ? "✓" : ""}
         </div>
         {result.queued ? (
-          <div className="muted mt-1">
-            <Icon name="offline" cp437="" className="lead-ic" />
-            offline — will sync when you're back online
-          </div>
+          fate && "refused" in fate ? (
+            <div className="inline-note bad mt-1" role="alert">
+              <p>
+                <Icon name="alert" size={16} className="lead-ic" />
+                The instance refused this log: {fate.refused}
+              </p>
+              {props.onOutbox && (
+                <Button variant="primary" className="mt-2" onClick={props.onOutbox}>
+                  Open Logs to sync
+                </Button>
+              )}
+            </div>
+          ) : fate ? (
+            <div className="muted mt-1">Synced — your log reached the instance; the logbook shows how it scored.</div>
+          ) : (
+            <div className="muted mt-1">
+              <Icon name="offline" cp437="" className="lead-ic" />
+              offline — will sync when you're back online
+            </div>
+          )
         ) : (
           found && (
             <>

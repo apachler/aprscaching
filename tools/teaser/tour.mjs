@@ -489,7 +489,7 @@ for (const v of VIEWS) {
       await closeAll(page);
       await clickAny(page, [".nav-desktop button:has-text('Activity')", ".tabbar button:has-text('Activity')"]);
       await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
-      await clickAny(page, [".panel button:has-text('full leaderboard')"]);
+      await clickAny(page, [".panel button:has-text('All ranks')"]);
       await page.waitForSelector(".panel .board, .panel .logs, .panel table", { timeout: 6000 }).catch(() => {});
       await page.waitForTimeout(450);
       await shot(page, v.id, "leaderboard", "Leaderboard");

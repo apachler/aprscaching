@@ -353,6 +353,10 @@ Tool API gaps an author meets (each is described as it stands in [The sandbox AP
       surface raises `on_connect` or `on_disconnect` or publishes `link.rtt`, so the session tools
       (auto-responder, away note, connect bell, info responder, link ping) have no live session to answer.
       `geo` has no API.
+- [ ] **Session bridge from the ingest box** _(owner decision, after 1.0 · P2 · M)_ — the BBS and the NET/ROM
+      node answer their connected sessions on the ingest box, where no tool runs, so a tool's connect events and
+      remote commands never reach those sessions. Carry them ingest → gateway → the operator's browser and the
+      tool's reply back the same way, under the remote-command rate limits a tool already has.
 
 Tool registry gaps a sysop meets ([How registries work](https://apachler.github.io/aprscaching-tools/publish/)):
 

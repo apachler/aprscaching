@@ -5,7 +5,7 @@ import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad, InfoTip } from "../ui/index.js";
+import { Button, EmptyState, Panel, Row, Switch, Advanced, Segmented, useLoad, InfoTip } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { TEXT_LIMITS, dxccOfCall, type CacheType, type FedScope } from "@aprscaching/shared";
 import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
@@ -31,6 +31,8 @@ export function HidePanel(props: {
   onPlace: (lat: number, lon: number) => void;
   onCancel: () => void;
   onCreated: (c: CacheSummary) => void;
+  /** Open Settings, where the callsign is verified (an unverified call cannot hide a cache). */
+  onVerify?: () => void;
 }) {
   const { callsign, verified } = usePlatform();
   const [title, setTitle] = useState("");
@@ -145,13 +147,32 @@ export function HidePanel(props: {
     }
   }
 
+  // an unverified call meets the reason and the way to verify first, not a form it cannot send
+  if (callsign.length >= 3 && !verified)
+    return (
+      <Panel side="left" title="Hide a cache" onClose={props.onCancel}>
+        <EmptyState
+          action={
+            <div className="row gap-2">
+              {props.onVerify && (
+                <Button variant="primary" onClick={props.onVerify}>
+                  Verify {callsign}
+                </Button>
+              )}
+              <Button onClick={props.onCancel}>Not now</Button>
+            </div>
+          }
+        >
+          <span id="hide-verify-reason">
+            Verify your callsign to hide a cache: an owner answers for the place and for every log on it. Verifying
+            takes a few minutes: on the air, through ampr.org or with LoTW.
+          </span>
+        </EmptyState>
+      </Panel>
+    );
+
   return (
     <Panel side="left" title="Hide a cache">
-      {callsign.length >= 3 && !verified && (
-        <p className="muted" id="hide-verify-reason">
-          Verify your callsign in Settings to hide a cache: an owner answers for the place and for every log on it.
-        </p>
-      )}
       {quota?.limit != null &&
         (atLimit ? (
           <p className="inline-note bad" id="hide-limit-reason" role="status">

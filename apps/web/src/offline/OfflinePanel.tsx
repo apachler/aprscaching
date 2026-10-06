@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { locatorBounds, normalizeLocator, type CacheType, type PackArea, type PackResponse } from "@aprscaching/shared";
 import type * as maplibregl from "maplibre-gl";
 import { maidenhead } from "../map/geo.js";
-import { API_BASE, offlineReady } from "../api.js";
+import { API_BASE, ensureDeviceKey, offlineReady } from "../api.js";
 import { useFmt } from "../format.js";
 import { TYPE_META, FILTER_TYPES } from "../cacheTypes.js";
 import { usePlatform } from "../platform/PlatformContext.js";
@@ -211,6 +211,7 @@ function OwnerPack(props: { packs: PackMeta[]; onSaved: () => void; disabled: bo
   const existing = props.packs.find((p) => p.area && "mine" in p.area);
   const run = async () => {
     setBusy(true);
+    void ensureDeviceKey(callsign);
     try {
       const store = await offlineReady();
       if (existing) await refreshPack(store, fetcher, API_BASE, existing, Date.now());
@@ -277,7 +278,7 @@ function squareSize(locator: string): string {
 }
 
 function NewPack(props: { onSaved: () => void; disabled: boolean }) {
-  const { map } = usePlatform();
+  const { map, session, callsign } = usePlatform();
   const toast = useToast();
   const [input, setInput] = useState("");
   const [name, setName] = useState("");
@@ -325,6 +326,8 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const save = async () => {
     if (!data) return;
     setBusy("save");
+    // a find logged from this pack offline is signed with the device key: register it while there is a connection
+    if (session.signedIn) void ensureDeviceKey(callsign);
     abort.current = new AbortController();
     try {
       const store = await offlineReady();

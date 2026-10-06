@@ -4,6 +4,7 @@ import { getActivity, getLeaderboard, getCorroborators, type BBox } from "../api
 import { useFmt } from "../format.js";
 import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad, Button } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { activityBadge, activityVerb } from "./verbs.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
 export function ActivityPanel(props: { onBoard: () => void; onClose: () => void }) {
@@ -28,7 +29,7 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
   const corr = useLoad(() => getCorroborators(bbox).then((r) => r.corroborators.slice(0, 5)), [bbox]).data ?? [];
   return (
     <Panel title="Activity" onClose={props.onClose}>
-      <h4>Recent finds</h4>
+      <h4>Recent logs</h4>
       {feed.error && feed.items.length === 0 ? (
         <ErrorState onRetry={feed.reload} />
       ) : feed.items.length === 0 ? (
@@ -40,9 +41,9 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
               {a.logType === "found" ? (
                 <TierBadge tier={a.tier as "A" | "B" | "C" | null} verified={a.verified} />
               ) : (
-                <Badge kind={a.logType}>{a.logType}</Badge>
+                <Badge kind={a.logType}>{activityBadge(a.logType)}</Badge>
               )}
-              <strong className="mono">{a.loggerCall}</strong> <span className="muted">found</span>{" "}
+              <strong className="mono">{a.loggerCall}</strong> <span className="muted">{activityVerb(a.logType)}</span>{" "}
               <span className="mono">{a.cacheCode}</span>
               <span className="muted"> · {fmt.ago(a.ts)}</span>
             </li>
@@ -53,7 +54,7 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
       <div className="row between">
         <h4>Top finders</h4>
         <Button variant="quiet" onClick={props.onBoard}>
-          full leaderboard →
+          All ranks →
         </Button>
       </div>
       <ol className="board">

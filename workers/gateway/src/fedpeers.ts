@@ -12,6 +12,7 @@ import type { Env } from "./env.js";
 import { discoverOn, peerExchangeOn } from "./feddiscover.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
+import { actorOf, audit } from "./moderation.js";
 import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import {
@@ -32,6 +33,46 @@ import { storedEndpoints } from "./fedtransport.js";
 import { endpointBaseUrls } from "@aprscaching/shared";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
+
+/** A federation trust decision in the audit log: what the sysop did to which peer. */
+type PeerAuditAction = "add-peer" | "remove-peer" | "follow" | "trust" | "unvet" | "block" | "unblock";
+
+const PEER_NOTE_MAX = 200;
+
+/**
+ * Record a sysop's federation trust decision in the audit log, beside the moderation actions and setting
+ * changes: the peer is the target, its instance id the id when known, and `note` says what changed.
+ */
+export async function auditPeer(
+  req: Request,
+  env: Env,
+  action: PeerAuditAction,
+  peer: { url: string; instance: string | null },
+  note?: string | null,
+): Promise<void> {
+  const label = peer.instance ? `${peer.instance} (${peer.url})` : peer.url;
+  const reason = note ? (note.length > PEER_NOTE_MAX ? `${note.slice(0, PEER_NOTE_MAX - 1)}…` : note) : null;
+  await audit(env, {
+    actor: await actorOf(req, env),
+    action,
+    kind: "peer",
+    id: peer.instance ?? peer.url,
+    label,
+    reason,
+  }).run();
+}
+
+/** The audit action for a move from one trust level to another. */
+function trustAction(from: TrustLevel | null, to: TrustLevel): PeerAuditAction {
+  if (to === "blocked") return "block";
+  if (from === "blocked") return "unblock";
+  return to === "trusted" ? "trust" : "unvet";
+}
+
+/** A sysop's optional note on a trust decision: a short line, or nothing. */
+function peerNote(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim().slice(0, PEER_NOTE_MAX) : null;
+}
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
 
 export interface PeerRow {
@@ -454,6 +495,7 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
         throw new PeerAddRefused(`${d.instance} was added meanwhile`, 409, preview);
       throw e;
     }
+    await auditPeer(req, env, "add-peer", { url, instance: d.instance }, `unvetted, key ${preview.fingerprint}`);
     return json({ ok: true, peer: { ...preview, trust: "unvetted" } }, { status: 201 });
   } catch (e) {
     if (e instanceof PeerAddRefused)
@@ -478,9 +520,9 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
   if (gate) return gate;
   const url = trimTrailingSlashes((new URL(req.url).searchParams.get("url") ?? "").trim());
   if (!url) return json({ error: "url required" }, { status: 400 });
-  const row = await env.DB.prepare("SELECT url, instance, added_via FROM fed_peers WHERE url = ?")
+  const row = await env.DB.prepare("SELECT url, instance, added_via, trust FROM fed_peers WHERE url = ?")
     .bind(url)
-    .first<{ url: string; instance: string | null; added_via: string | null }>();
+    .first<{ url: string; instance: string | null; added_via: string | null; trust: TrustLevel }>();
   if (!row) return json({ error: "unknown peer" }, { status: 404 });
   if (parseFedPeers(env.FED_PEERS).some((p) => p.url === url))
     return json(
@@ -493,6 +535,7 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
     await env.DB.prepare("DELETE FROM fed_submit_marks WHERE instance = ?").bind(row.instance).run();
   // an origin known only through a hub: what that hub's key vouched for goes with the key
   if (row.instance && row.added_via === "transit") await forgetTransitPeer(env, row.instance);
+  await auditPeer(req, env, "remove-peer", row, `was ${row.trust}`);
   return json({ ok: true, url });
 }
 
@@ -512,14 +555,19 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
-  const b = (await req.json().catch(() => null)) as { url?: string; trust?: string; fingerprint?: unknown } | null;
+  const b = (await req.json().catch(() => null)) as {
+    url?: string;
+    trust?: string;
+    fingerprint?: unknown;
+    reason?: unknown;
+  } | null;
   const trust = b?.trust as TrustLevel | undefined;
   if (typeof b?.url !== "string" || !trust || !TRUST_LEVELS.includes(trust))
     return json({ ok: false, error: "url + trust (trusted|unvetted|blocked) required" }, { status: 400 });
   const url = trimTrailingSlashes(b.url.trim());
-  const exists = await env.DB.prepare("SELECT url, instance, public_key FROM fed_peers WHERE url = ?")
+  const exists = await env.DB.prepare("SELECT url, instance, public_key, trust FROM fed_peers WHERE url = ?")
     .bind(url)
-    .first<{ url: string; instance: string | null; public_key: string | null }>();
+    .first<{ url: string; instance: string | null; public_key: string | null; trust: TrustLevel }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
   if (trust !== "blocked" && url.startsWith(DISCOVERED_PREFIX))
     return json(
@@ -584,6 +632,16 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
         { status: 409 },
       );
     throw e;
+  }
+  if (exists.trust !== trust) {
+    const note = peerNote(b.reason);
+    await auditPeer(
+      req,
+      env,
+      trustAction(exists.trust, trust),
+      exists,
+      `${exists.trust} → ${trust}${note ? `: ${note}` : ""}`,
+    );
   }
   return json({ ok: true, url, trust });
 }

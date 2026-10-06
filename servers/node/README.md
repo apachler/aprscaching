@@ -43,7 +43,7 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 | `MIGRATIONS_DIR` | `../../db/migrations` | the shared schema |
 | `INGEST_SECRET` | *(required)* | bearer for `/ingest`, `/outbox` — the server refuses to boot when unset or `change-me` |
 | `MEDIA_DIR` | `./data/media` | uploaded cache media |
-| `WEB_DIST` | *(unset)* | the built SPA (`apps/web/dist`): set, the server serves it on the same origin as the API, so no reverse proxy is needed; unset, it serves only the API (Caddy serves the SPA in the Docker stack) |
+| `WEB_DIST` | *(unset)* | the built SPA (`apps/web/dist`): set, the server serves it on the same origin as the API, so no reverse proxy is needed, and sends its text assets brotli- or gzip-compressed to a browser that accepts it; unset, it serves only the API (Caddy serves the SPA in the Docker stack) |
 | `HTTPS_PORT` | *(unset)* | an https listener beside `PORT`, with the same API, SPA and `/ws`; request-derived links say `https`. The plain port then redirects other devices' page loads there (never loopback, API, ingest or federation calls). Needs `TLS_CERT` + `TLS_KEY` or the server refuses to boot |
 | `TLS_CERT` / `TLS_KEY` | *(unset)* | PEM certificate (with chain) and key for `HTTPS_PORT`; `kill -HUP <pid>` of the node process reloads them without a restart |
 | `TLS_CA_CERT` | *(unset)* | a CA certificate served read-only at `/pocket-ca.crt` on both ports, for visitors to install |

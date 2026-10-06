@@ -121,7 +121,7 @@ The Node and Bun servers also read plain runtime knobs that are not part of the 
 | `OFFLINE_TILES_MAXZOOM` | The most detailed zoom a pack takes; a pack too large for it takes less | `14` |
 | `FED_SYNC_INTERVAL_MS` | Milliseconds between scheduled peer syncs; `0` disables them | `300000` |
 | `FED_RELAY_POLL_MS` | Milliseconds between relay rounds: a spoke collects the queries its hub holds for it, and an instance reads the answers to corroboration questions it left at a hub; `0` leaves both to the peer sync | `15000` |
-| `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front | — |
+| `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front. Text assets go out brotli- or gzip-compressed when the browser accepts it | — |
 <!-- /config-table -->
 
 The Node server can also listen for https itself, beside its plain port, for a station whose visitors reach

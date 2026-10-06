@@ -7,27 +7,32 @@ const EMPTY: SyncStatus = { queued: 0, elsewhere: 0, attention: 0, oldestPack: n
 
 /**
  * Keep the app's offline state in sync (offline/sync.ts): on mount, whenever the connection returns, and when
- * a backed-off log comes due. `onSynced` runs after a sync sent something or refreshed a pack (the map
- * re-reads). Returns the state and the status line the top bar shows.
+ * a backed-off log comes due. `onSynced` runs after a sync sent something or refreshed a pack, and whenever the
+ * connection returns (the map re-reads, and an offline map gives way to the live one). `onRefused` runs with
+ * the number of logs the instance refused in a sync, so the person hears of it at once. Returns the state and
+ * the status line the top bar shows.
  */
-export function useSync(onSynced: () => void): { status: SyncStatus; line: string } {
+export function useSync(onSynced: () => void, onRefused?: (n: number) => void): { status: SyncStatus; line: string } {
   const [status, setStatus] = useState<SyncStatus>(EMPTY);
   const synced = useRef(onSynced);
+  const refused = useRef(onRefused);
   useEffect(() => {
     synced.current = onSynced;
+    refused.current = onRefused;
   });
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const reread = () => void syncStatus().then(setStatus);
-    const sync = async () => {
+    const sync = async (reconnected = false) => {
       clearTimeout(timer);
       const r = await runSync();
       reread();
-      if (r.sent || r.refreshed) synced.current();
+      if (r.sent || r.refreshed || reconnected) synced.current();
+      if (r.refused) refused.current?.(r.refused);
       if (r.nextAt != null) timer = setTimeout(() => void sync(), Math.max(1000, r.nextAt - Date.now()));
     };
     void sync();
-    const online = () => void sync();
+    const online = () => void sync(true);
     window.addEventListener("online", online);
     window.addEventListener("acs-queued", reread);
     window.addEventListener("acs-packs", reread);

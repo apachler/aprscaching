@@ -32,7 +32,15 @@ import {
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../shack/Watchlist.js";
-import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
+import {
+  pushSupported,
+  pushSubscribed,
+  enablePush,
+  disablePush,
+  iosOutsideApp,
+  pushFailureText,
+  type PushFailure,
+} from "../push.js";
 import { ProfileEditor } from "../profile/ProfileEditor.js";
 import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
@@ -76,9 +84,7 @@ export function SettingsPanel(props: {
     () => (session.signedIn ? getNotifyPrefs() : Promise.resolve(undefined)),
     [session.signedIn],
   );
-  const [pushState, setPushState] = useState<
-    "loading" | "unsupported" | "off" | "on" | "denied" | "error" | "unconfigured"
-  >("loading");
+  const [pushState, setPushState] = useState<"loading" | "off" | "on" | PushFailure>("loading");
   // the push state belongs to the signed-in account: asked again for each session, and unknown without one
   useEffect(() => {
     let live = true;
@@ -245,7 +251,7 @@ export function SettingsPanel(props: {
             key={radioAsk}
             title="My radio (browser)"
             status={radioLinkState.link ? `connected · ${LINK_LABEL[radioLinkState.link]}` : "not connected"}
-            help="Connect a radio or TNC to this browser over USB or Bluetooth, to hear and send APRS. It stays connected while you use the rest of the app."
+            help="Connect a radio or TNC to this browser over USB or Bluetooth, to hear and send APRS, with no server needed. It stays connected while you use the rest of the app, until you disconnect it or close the page."
             defaultOpen={radioAsk > 0}
           >
             <ConnectionsSettings callsign={callsign} verified={verified} />
@@ -290,20 +296,19 @@ export function SettingsPanel(props: {
             {!prefs?.pushConfigured ? (
               <span className="muted">Not enabled on this instance</span>
             ) : pushState === "unsupported" ? (
-              <span className="muted">Not supported in this browser</span>
+              <span className="muted">
+                {iosOutsideApp() ? "Add the app to your home screen" : "Not in this browser"}
+              </span>
             ) : (
               <Button onClick={togglePush} disabled={pushState === "loading"}>
                 {pushState === "on" ? "Disable" : "Enable"}
               </Button>
             )}
           </Row>
-          {pushState === "denied" && (
-            <p className="muted error">
-              Notifications are blocked — allow them in your browser settings, then try again.
+          {pushState !== "loading" && pushState !== "on" && pushState !== "off" && (
+            <p className={pushState === "unsupported" ? "muted" : "muted error"} role="status">
+              {pushFailureText(pushState, iosOutsideApp())}
             </p>
-          )}
-          {pushState === "error" && (
-            <p className="muted error">Could not enable push. On iPhone, install the app to your home screen first.</p>
           )}
           <h4 className="set-subh">Watchlist</h4>
           <Watchlist callsign={callsign} onFly={props.onFly} />

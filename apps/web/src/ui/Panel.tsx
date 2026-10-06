@@ -26,6 +26,8 @@ export function Panel(props: {
   /** An InfoTip beside the title: it sits in the heading, but the heading and the panel take only the title as
    *  their name. */
   info?: ReactNode;
+  /** A dense configuration surface (Instance admin) docks in a broader column at ≥1024px, the map beside it. */
+  broad?: boolean;
 }) {
   const ref = useRef<HTMLElement>(null);
   const titleId = useId();
@@ -58,7 +60,7 @@ export function Panel(props: {
       onKeyDown={onKeyDown}
       data-shell={props.wide ? "terminal" : undefined}
       data-density={props.wide ? "compact" : props.density}
-      className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}
+      className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}${props.broad ? " panel-broad" : ""}`}
       data-peek={props.peek ? (expanded ? "open" : "half") : undefined}
     >
       {props.peek && (

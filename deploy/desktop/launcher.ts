@@ -22,6 +22,7 @@ import { appDataDir } from "./appdata.ts";
 import { createServer, type BunServer } from "../../servers/bun/server.ts";
 import { migrationsFromDir } from "../../servers/node/src/migrate.ts";
 import { resolveInstanceSecrets } from "../../servers/node/src/secrets.ts";
+import { compressed, negotiate } from "../../servers/node/src/compress.ts";
 
 declare const BUILD_VERSION: string;
 const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
@@ -85,18 +86,37 @@ const CT: Record<string, string> = {
 };
 const ctOf = (p: string) => CT[p.slice(p.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream";
 
-function serveSpa(pathname: string): Response {
+/**
+ * One SPA file: embedded in the binary, or from the build on disk in dev. Text assets go out brotli- or
+ * gzip-compressed when the browser accepts it, as the Node server sends them (servers/node/src/compress.ts).
+ */
+async function serveSpa(pathname: string, req: Request): Promise<Response> {
   const p = pathname === "/" ? "/index.html" : pathname;
+  let file: string;
+  let type: string;
   if (embedded) {
-    const file = SPA[p] ?? SPA["/index.html"]; // SPA-router fallback
-    return new Response(Bun.file(file), { headers: { "content-type": ctOf(SPA[p] ? p : "/index.html") } });
+    file = SPA[p] ?? SPA["/index.html"]!; // SPA-router fallback
+    type = ctOf(SPA[p] ? p : "/index.html");
+  } else {
+    const fp = join(WEB_DIST, p.replace(/^\/+/, ""));
+    if (!fp.startsWith(WEB_DIST)) return new Response("bad path", { status: 400 });
+    const found = existsSync(fp);
+    file = found ? fp : join(WEB_DIST, "index.html");
+    type = found ? ctOf(fp) : "text/html; charset=utf-8";
   }
-  const fp = join(WEB_DIST, p.replace(/^\/+/, ""));
-  if (!fp.startsWith(WEB_DIST)) return new Response("bad path", { status: 400 });
-  if (existsSync(fp)) return new Response(Bun.file(fp), { headers: { "content-type": ctOf(fp) } });
-  return new Response(Bun.file(join(WEB_DIST, "index.html")), {
-    headers: { "content-type": "text/html; charset=utf-8" },
+  const body = Bun.file(file);
+  const { encoding, vary } = negotiate(type, body.size, {
+    acceptEncoding: req.headers.get("accept-encoding"),
+    range: req.headers.get("range"),
   });
+  const headers: Record<string, string> = { "content-type": type };
+  if (vary) headers.vary = "Accept-Encoding";
+  if (!encoding) return new Response(body, { headers });
+  // an embedded file never changes; one on disk is keyed by its version, so a rebuild is picked up
+  const key = embedded ? file : `${file}\0${body.size}\0${body.lastModified}`;
+  const out = await compressed(key, encoding, async () => new Uint8Array(await body.arrayBuffer()));
+  headers["content-encoding"] = encoding;
+  return new Response(out, { headers });
 }
 
 // ---- the gateway: every route app.ts serves goes to it, everything else is the SPA ----

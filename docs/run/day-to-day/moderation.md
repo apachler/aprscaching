@@ -134,7 +134,9 @@ it too.
 
 **Instance admin → Audit log** lists every action: who, when, the action (`remove`, `restore`, `suspend`,
 `unsuspend`, `resolve`, `reopen`), the target and the reason. A change to an
-[instance setting](instance-settings.md) shows too, with its old and new value. It is kept on this instance
+[instance setting](instance-settings.md) shows too, with its old and new value, and so does each federation trust
+decision: adding, following and removing a peer (`add-peer`, `follow`, `remove-peer`) and moving it between trust
+levels (`trust`, `unvet`, `block`, `unblock`), with the levels before and after. It is kept on this instance
 and never federates.
 A person's export carries the rows about their account; the rows stay after their erasure
 ([Moderation records](../compliance/data-protection.md#moderation-records)).

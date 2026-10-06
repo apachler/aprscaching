@@ -13,6 +13,9 @@
  *      takes along.
  *   4. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
  *      call, with the map (MapLibre comes from the shell too) drawing the pack's tiles and showing its caches.
+ *      A find and a note logged there wait on the device. When the connection returns, the find syncs under the
+ *      device key registered at sign-in, the note the stand-in refuses says why on the sheet and in a message,
+ *      and the Offline banner goes.
  *   5. A visitor, signed out, makes a pack too. Then the instance goes away while the device still reports a
  *      connection, and the basemap's style answers from the cache while its tiles' description never does: a
  *      new visit opens the landing, Explore reaches the map with the pack's caches, and search finds them.
@@ -112,15 +115,43 @@ function pack(url) {
 
 /**
  * The built app, plus a stand-in gateway: a session (signed in, or none for a visitor), an empty map, one offline
- * pack, nothing else.
+ * pack, the device-key registration and the log endpoint, nothing else. Like the real instance, it takes a signed
+ * log only under a key registered to the call, and it refuses notes (as on a cache the sysop removed), so a sync
+ * meets both outcomes. `state` records what it saw.
  */
-function serve({ signedIn = true } = {}) {
-  return createServer((req, res) => {
+function serve({ signedIn = true, state = {} } = {}) {
+  state.keys ??= new Set();
+  state.logs ??= [];
+  return createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     const send = (status, type, body) => {
       res.writeHead(status, { "content-type": type, "cache-control": "no-cache" });
       res.end(body);
     };
+    const body = async () => {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      return JSON.parse(raw || "{}");
+    };
+    if (url.pathname === "/keys/register" && req.method === "POST") {
+      const b = await body();
+      state.keys.add(`${b.callsign} ${b.publicKey}`);
+      return send(200, TYPES[".json"], JSON.stringify({ ok: true }));
+    }
+    if (/^\/api\/caches\/\d+\/logs$/.test(url.pathname) && req.method === "POST") {
+      const b = await body();
+      const registered = !b.author || state.keys.has(`${b.loggerCall} ${b.author.authorKey}`);
+      state.logs.push({ logType: b.logType, signed: !!b.author, registered });
+      if (!registered)
+        return send(400, TYPES[".json"], JSON.stringify({ error: "author key not registered to callsign" }));
+      if (b.logType === "note")
+        return send(409, TYPES[".json"], JSON.stringify({ error: "the sysop removed this cache — it takes no logs" }));
+      return send(
+        200,
+        TYPES[".json"],
+        JSON.stringify({ logged: true, logType: b.logType, accountVerified: true, verified: false, tier: "C" }),
+      );
+    }
     if (url.pathname === "/auth/session")
       return send(
         200,
@@ -130,7 +161,11 @@ function serve({ signedIn = true } = {}) {
     if (url.pathname === "/.well-known/aprscaching")
       return send(200, TYPES[".json"], JSON.stringify({ instance: "e2e.test" }));
     if (url.pathname === "/api/caches") return send(200, TYPES[".json"], JSON.stringify({ caches: [] }));
-    if (url.pathname === "/api/offline/pack") return send(200, TYPES[".json"], JSON.stringify(pack(url)));
+    if (url.pathname === "/api/offline/pack") {
+      const p = pack(url);
+      state.cache = { latitude: p.caches[0].lat, longitude: p.caches[0].lon };
+      return send(200, TYPES[".json"], JSON.stringify(p));
+    }
     if (url.pathname === "/api/offline/tiles")
       return send(
         200,
@@ -278,11 +313,27 @@ async function visitorOffline(browser, check) {
   }
 }
 
-/** A signed-in player makes a pack, then opens the app with no connection at all. */
+/** Poll `fn` until it holds, for at most `ms`. */
+async function until(fn, ms = 15_000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (fn()) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+}
+
+/**
+ * A signed-in player on a fresh device makes a pack, then opens the app with no connection at all, and logs a
+ * find and a note there. Back online, the find syncs (the device key was registered at sign-in, before it was
+ * needed), the note the instance refuses says why on the cache sheet and in a message, and the Offline banner
+ * goes.
+ */
 async function signedInOffline(browser, check) {
-  const { base, stop } = await start({ signedIn: true });
+  const state = {};
+  const { base, stop } = await start({ signedIn: true, state });
   try {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ permissions: ["geolocation"] });
     // the online basemap's host is unreachable throughout, so a cached copy of its style can never make the
     // offline map work by accident: the map has to fall back to the self-contained style
     await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (r) => r.abort());
@@ -300,6 +351,10 @@ async function signedInOffline(browser, check) {
     check(`the shell is stored (${stored} files)`, stored > 10);
 
     check("a pack of the subsquare at the map centre is saved (IndexedDB)", await makePack(page));
+    check(
+      "online: the device key is registered with the instance at sign-in",
+      await until(() => [...state.keys].some((k) => k.startsWith(`${CALL} `))),
+    );
 
     await context.setOffline(true);
     await page.reload();
@@ -328,6 +383,32 @@ async function signedInOffline(browser, check) {
       return !!reg?.pushManager;
     });
     check("the registration still offers Web Push", pushHandlers);
+
+    // at the cache, still without a connection: a find, then a note, both kept on the device
+    if (state.cache) await context.setGeolocation(state.cache);
+    await page.fill(".topsearch input", "AC-E2E");
+    await page.click('.search-opt:has-text("AC-E2E")');
+    await page.click('button:has-text("Log a find")', { timeout: 15_000 });
+    await page.click('button:has-text("Log anyway")', { timeout: 3_000 }).catch(() => {});
+    check("offline: the find is saved on the device", await seen(page, '.logresult:has-text("Saved")'));
+    await page.click('.logresult button:has-text("Add a note")');
+    await page.fill(".logresult textarea", "TFTC");
+    await page.click('.logresult button:has-text("Post")');
+    await until(() => false, 500);
+
+    // the connection returns
+    const toastSeen = seen(page, '.toast:has-text("not accepted")', 30_000, "attached");
+    await context.setOffline(false);
+    check("back online: the Offline banner clears", await seen(page, ".offline-banner", 30_000, "detached"));
+    check(
+      "back online: the find made offline syncs, signed with a key registered before it was made",
+      await until(() => state.logs.some((l) => l.logType === "found" && l.signed && l.registered)),
+    );
+    check("back online: a refused log says so in a message", await toastSeen);
+    check(
+      "back online: the cache sheet says the refused log was not sent, and why",
+      await seen(page, '.logresult:has-text("Not sent"):has-text("takes no logs")'),
+    );
     await context.close();
   } finally {
     await stop();

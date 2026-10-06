@@ -23,7 +23,8 @@ conformance lane runs), so the desktop core is the *identical* gateway, schedule
 federation sync) and live rooms as the Node and Bun runtimes. At build time `gen-assets.ts`
 embeds the built SPA + SQL migrations into the executable; the server applies migrations on first run,
 sends every gateway route (`isGatewayPath` in the gateway's `app.ts`, the same split `deploy/Caddyfile`
-makes) through `handle()` and serves everything else as the SPA (router-fallback to `index.html`), and
+makes) through `handle()` and serves everything else as the SPA (router-fallback to `index.html`, text assets brotli- or gzip-compressed
+for a browser that accepts it), and
 keeps SQLite in the OS app-data dir. `bun run
 launcher.ts` in the repo gives a disk-backed dev run (no embed needed). RF is browser Web Serial/BLE
 (operator-local); an always-on local feed is `apps/ingest`, run separately. The compiled binary is

@@ -98,6 +98,10 @@ export function DetailPanel(props: {
   offlineFrom?: OfflineFrom | null;
   onClose: () => void;
   onLogged: () => void;
+  /** Open Logs to sync (a log saved offline that the instance refused is handled there). */
+  onOutbox?: () => void;
+  /** Counts the requests (the tab bar's Log or Note) to bring the log form into sight. */
+  logFocus?: number;
   onSignIn: () => void;
 }) {
   const { callsign } = usePlatform();
@@ -439,6 +443,8 @@ export function DetailPanel(props: {
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
         logRequest={logRequest}
+        onOutbox={props.onOutbox}
+        focusRequest={props.logFocus}
       />
 
       {c.findsByMonth && c.findsByMonth.some((m) => m.n > 0) && (
@@ -462,7 +468,9 @@ export function DetailPanel(props: {
 
       <div className="row between logbook-h">
         <h4 className="m-0">Logbook</h4>
-        <span className="ulabel">{c.finds} finds</span>
+        <span className="ulabel">
+          {c.finds} verified find{c.finds === 1 ? "" : "s"}
+        </span>
       </div>
       {c.logs.length === 0 && <p className="muted">No logs yet — be the first to find it.</p>}
       {[...c.logs, ...moreLogs].map((l) => (

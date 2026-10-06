@@ -23,12 +23,53 @@ import {
 import { Badge, Button, Disclosure, ErrorState, Switch, useConfirm, useToast } from "../ui/index.js";
 import {
   BUILTIN_FALLBACK,
+  carrierFor,
   groupListings,
   loadRegistry,
   previewRegistrySource,
   type Listing,
   type LoadedRegistry,
 } from "./registries.js";
+import { fetchToolManifest } from "./sandbox.js";
+import { groupByKind, kindOfPermissions, type ToolKind } from "./toolKind.js";
+
+/** Each listed tool's group, by its manifest address: read once a page, from the tool's signed manifest. */
+const kindCache = new Map<string, Promise<ToolKind | null>>();
+function manifestKind(l: Listing): Promise<ToolKind | null> {
+  let p = kindCache.get(l.manifestUrl);
+  if (!p) {
+    p = fetchToolManifest(l.manifestUrl, carrierFor(l.from.reg, API_BASE))
+      .then((r) => (r.ok ? kindOfPermissions(r.manifest.permissions) : null))
+      .catch(() => null);
+    kindCache.set(l.manifestUrl, p);
+  }
+  return p;
+}
+
+/**
+ * The group each listing shows under: the one its registry names, else the one its manifest's permissions give
+ * (read in the background). Until a manifest answers, its tool waits in a trailing group.
+ */
+function useListingKinds(listings: Listing[]): (l: Listing) => ToolKind | null {
+  const [kinds, setKinds] = useState<ReadonlyMap<string, ToolKind | null>>(new Map());
+  const wanted = listings
+    .filter((l) => !l.entry.category)
+    .map((l) => l.manifestUrl)
+    .join("\n");
+  useEffect(() => {
+    let live = true;
+    for (const l of listings)
+      if (!l.entry.category)
+        void manifestKind(l).then((k) => {
+          if (live) setKinds((m) => (m.get(l.manifestUrl) === k ? m : new Map(m).set(l.manifestUrl, k)));
+        });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the manifest addresses, not the array identity
+  }, [wanted]);
+  return (l) => l.entry.category ?? kinds.get(l.manifestUrl) ?? null;
+}
 
 /** A key's fingerprint, computed in the browser. */
 function useFingerprint(key: string): string | null {
@@ -140,6 +181,7 @@ export function RegistryGroups(props: {
     ...g,
     shown: filter ? g.listings.filter((l) => listingMatches(l, filter)) : g.listings,
   }));
+  const kindOf = useListingKinds(groups.flatMap((g) => g.listings));
   return (
     <>
       {groups.map(({ reg: l, listings, shown }) => (
@@ -157,6 +199,7 @@ export function RegistryGroups(props: {
             installed={props.installed}
             onInstall={props.onInstall}
             onRetry={() => props.onRetry(l.reg)}
+            kindOf={kindOf}
             onReconfirm={props.onReconfirm}
           />
         </section>
@@ -174,6 +217,8 @@ function RegistryBody(props: {
   onInstall: (l: Listing) => void;
   onRetry: () => void;
   onReconfirm: (reg: EffectiveToolRegistry, authority: string, fingerprint: string | null) => void;
+  /** The catalogue group a listing shows under, null while its manifest is still being read. */
+  kindOf: (l: Listing) => ToolKind | null;
 }) {
   const { l } = props;
   const who = l.reg.scope === "account" ? "you confirm" : "the sysop confirms";
@@ -235,29 +280,38 @@ function RegistryBody(props: {
           {props.listings.length > 0 && props.shown.length === 0 && (
             <p className="muted fine">No tool here matches &ldquo;{props.filter}&rdquo;.</p>
           )}
-          {props.shown.map((x) => (
-            <div key={`${x.entry.name}:${x.manifestUrl}`} className="tool-row">
-              <div className="tool-meta">
-                <strong>{x.entry.title}</strong>{" "}
-                <span className="muted fine">
-                  v{x.entry.version} · {x.entry.author}
-                </span>
-                {x.entry.description && <div className="muted fine">{x.entry.description}</div>}
-                {x.sources.length > 1 && <div className="muted fine">Listed by {x.sources.join(", ")}</div>}
-              </div>
-              {props.installed.has(x.entry.name) ? (
-                <Badge kind="found" title="This tool is in your tools above">
-                  Installed
-                </Badge>
-              ) : (
-                <Button onClick={() => props.onInstall(x)} hint={`Check ${x.entry.title} and approve its permissions`}>
-                  Install…
-                </Button>
-              )}
-            </div>
+          {groupByKind(props.shown, props.kindOf).map((g) => (
+            <section key={g.kind} className="reg-kind" aria-label={g.kind}>
+              <h5 className="ulabel">{g.kind}</h5>
+              {g.items.map((x) => listingRow(x))}
+            </section>
           ))}
         </>
       );
+  }
+
+  function listingRow(x: Listing) {
+    return (
+      <div key={`${x.entry.name}:${x.manifestUrl}`} className="tool-row">
+        <div className="tool-meta">
+          <strong>{x.entry.title}</strong>{" "}
+          <span className="muted fine">
+            v{x.entry.version} · {x.entry.author}
+          </span>
+          {x.entry.description && <div className="muted fine">{x.entry.description}</div>}
+          {x.sources.length > 1 && <div className="muted fine">Listed by {x.sources.join(", ")}</div>}
+        </div>
+        {props.installed.has(x.entry.name) ? (
+          <Badge kind="found" title="This tool is in your tools above">
+            Installed
+          </Badge>
+        ) : (
+          <Button onClick={() => props.onInstall(x)} hint={`Check ${x.entry.title} and approve its permissions`}>
+            Install…
+          </Button>
+        )}
+      </div>
+    );
   }
 }
 
@@ -359,8 +413,10 @@ export function RegistryAddForm(props: {
           </p>
           <p>
             Compare this fingerprint with the one the registry&apos;s publisher gives you, in their README, on their
-            site or in person. Pin it only if every digit matches: this instance then trusts only this key for the
-            registry.
+            site or in person. Pin it only if every digit matches:{" "}
+            {props.scope === "my"
+              ? "your browser then lists this registry's tools only while its file verifies under this key."
+              : "this instance then trusts only this key for the registry."}
           </p>
           <div className="row gap-2 end">
             <Button disabled={busy} onClick={() => setPreview(null)}>

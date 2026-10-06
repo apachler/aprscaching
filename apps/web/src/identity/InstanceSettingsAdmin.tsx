@@ -181,7 +181,7 @@ function SettingRow(props: { setting: SiteSettingView; onSaved: (s: SiteSettingV
             by <span className="mono">{s.stored.by}</span>, {fmt.dateTime(s.stored.at)} · default: {defaultText(s)}
           </span>
         )}
-        {s.source === "default" && <span className="muted fine">default: {defaultText(s)}</span>}
+        {s.source === "default" && <span className="muted fine">built-in value: {defaultText(s)}</span>}
         {locked && (
           <span className="muted fine">
             <span className="mono">{s.key}</span> is set in the environment, which wins: change it there and restart the

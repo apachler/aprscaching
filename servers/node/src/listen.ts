@@ -22,6 +22,7 @@ import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { spaFile } from "./spa.js";
 import { BODY_MAX_BYTES } from "./host.js";
+import { compressed, negotiate } from "./compress.js";
 
 /** The one path TLS_CA_CERT is served at. No other path ever reads a file named by configuration. */
 const CA_CERT_PATH = "/pocket-ca.crt";
@@ -161,7 +162,7 @@ async function serveRequest(
         }
       }
       if (opts.webDist && !isGatewayPath(pathname)) {
-        sendSpa(nres, spaFile(opts.webDist, pathname), method);
+        await sendSpa(nres, spaFile(opts.webDist, pathname), method, nreq.headers);
         return;
       }
     }
@@ -232,18 +233,48 @@ function sendCaCert(nres: http.ServerResponse, file: string, method: string): vo
   });
 }
 
-/** One file of the built SPA, or a 404 when nothing in the build answers the path. */
-function sendSpa(nres: http.ServerResponse, f: ReturnType<typeof spaFile>, method: string): void {
+/**
+ * One file of the built SPA, or a 404 when nothing in the build answers the path. A text asset goes out
+ * brotli- or gzip-compressed when the request accepts it (compress.ts); the cache and type headers are the
+ * same either way.
+ */
+async function sendSpa(
+  nres: http.ServerResponse,
+  f: ReturnType<typeof spaFile>,
+  method: string,
+  headers: http.IncomingHttpHeaders,
+): Promise<void> {
   if (!f) {
     nres.statusCode = 404;
     nres.setHeader("content-type", "text/plain; charset=utf-8");
     nres.end("not found");
     return;
   }
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(f.file);
+  } catch {
+    nres.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found");
+    return;
+  }
+  const { encoding, vary } = negotiate(f.contentType, stat.size, {
+    acceptEncoding: headers["accept-encoding"],
+    range: headers.range,
+  });
   nres.statusCode = 200;
   nres.setHeader("content-type", f.contentType);
   nres.setHeader("cache-control", f.cacheControl);
   nres.setHeader("x-content-type-options", "nosniff");
+  if (vary) nres.setHeader("vary", "Accept-Encoding");
+  if (encoding) {
+    const body = await compressed(`${f.file}\0${stat.size}\0${stat.mtimeMs}`, encoding, () =>
+      fs.promises.readFile(f.file),
+    );
+    nres.setHeader("content-encoding", encoding);
+    nres.setHeader("content-length", body.length);
+    nres.end(method === "HEAD" ? undefined : body);
+    return;
+  }
   if (method === "HEAD") {
     nres.end();
     return;

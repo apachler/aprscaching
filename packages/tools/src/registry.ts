@@ -104,6 +104,8 @@ export interface RegistryEntry {
   pubkey: string; // the author key this tool's manifest MUST match to be "verified"
   entry: string; // the tool.json's URL; a relative one resolves against the registry's own URL
   description?: string;
+  /** The group the registry lists the tool under (the catalogue's "Decoders", "Responders", …). */
+  category?: string;
 }
 /**
  * An authority-signed registry: `sig` (base64) covers the canonical `{ format, entries }`; `authority` is its

@@ -72,6 +72,14 @@
     align-items: baseline;
     gap: var(--space-xs) var(--space-sm);
   }
+  /* a registry's tools in the catalogue's groups (Decoders, Responders, …), each under a small label */
+  .reg-kind {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .reg-kind > h5 {
+    margin: var(--space-sm) 0 0;
+  }
   .reg-fp {
     font-size: var(--text-caption);
     color: var(--muted);

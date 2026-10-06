@@ -59,14 +59,15 @@ export function CommunityPanel(props: { onClose: () => void }) {
         }
       >
         <div className="row between">
-          <Button onClick={() => setProfile(null)}>← leaderboard</Button>
+          <Button onClick={() => setProfile(null)}>← Ranks</Button>
           <ContentMenu
             target={{ kind: "profile", id: profile.callsign, label: profile.callsign }}
             onRemoved={() => setProfile(null)}
           />
         </div>
         <p className="mt-5">
-          <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden
+          <strong>{profile.finds}</strong> {profile.finds === 1 ? "find" : "finds"} · <strong>{profile.points}</strong>{" "}
+          pts · {profile.hides} hidden
         </p>
         {profile.lastFind && <p className="muted">last find {fmt.date(profile.lastFind)}</p>}
         <h4>Badges</h4>
@@ -107,7 +108,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
       title={
         <>
           <Icon name="trophy" cp437="" className="lead-ic" />
-          Leaderboard
+          Ranks
         </>
       }
       onClose={props.onClose}
@@ -134,7 +135,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
       {loading && <p className="muted">Loading…</p>}
       {!loading && failed && (
         <ErrorState onRetry={() => void load()}>
-          Couldn&apos;t load the leaderboard — check your connection and retry.
+          Couldn&apos;t load the ranks — check your connection and retry.
         </ErrorState>
       )}
       {!loading && !failed && !rows.length && <EmptyState>{PERIODS.find((p) => p.value === period)?.empty}</EmptyState>}

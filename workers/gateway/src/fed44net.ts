@@ -41,7 +41,7 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
-import { absorbDiscovered, blockedAt } from "./fedpeers.js";
+import { absorbDiscovered, auditPeer, blockedAt } from "./fedpeers.js";
 import { resolveTxt, acsFields, amprNames } from "./doh.js";
 import { net44Host, parseEndpoints } from "@aprscaching/shared";
 
@@ -383,6 +383,13 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
   )
     .bind(url, resolved.instance, resolved.publicKey, endpoints, resolved.callsign)
     .run();
+  await auditPeer(
+    req,
+    env,
+    "add-peer",
+    { url, instance: resolved.instance },
+    `44Net binding for ${resolved.callsign}, ${resolved.dnssec ? "DNSSEC-validated" : "confirmed by the sysop"}`,
+  );
   return json(
     {
       ok: true,

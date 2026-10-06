@@ -1,5 +1,11 @@
 /* Instance admin: adoption requests, 44net onboarding, FBB partners, setup checklist. */
 @layer surfaces {
+  /* docked on a desktop, the admin surface takes a broader column than a slim drawer; the map keeps the rest */
+  @media (min-width: 1024px) {
+    .shell > .panel.panel-broad {
+      flex-basis: min(var(--dock-w-broad), 50%);
+    }
+  }
   /* pending requests nested under an offered cache (Instance admin → Cache adoption) */
   .logs.adopt-reqs {
     margin: var(--space-xs) 0 var(--space-xs) var(--space-md);

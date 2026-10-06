@@ -112,7 +112,8 @@ When two living caches meet, both record a rendezvous. It shows on the cache pag
 ## Share and export
 
 - On a cache page, **Copy link** copies a link to it. **QR** shows a QR code to print and place at your
-  station or the site; **download SVG** saves it.
+  station or the site; **download SVG** saves it. Either opens the map on the cache, for a visitor who is
+  not signed in too.
 - On the map, **Search & filter → Share this view** copies a link to what you see.
 - Under **You**, **Embed your badge** shows an image of your all-time rank, verified finds, points and hides.
   **Copy** copies the HTML that shows it on QRZ.com, in a forum signature or on a club page. The image stays

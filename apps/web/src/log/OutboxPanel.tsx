@@ -12,6 +12,7 @@ import {
   getInstance,
   knownServiceCall,
   queuedLogs,
+  refusalAdvice,
   removeQueuedLog,
   retryAttentionLog,
   type QueueBody,
@@ -192,7 +193,7 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; whe
       </div>
       <div className="muted fine">made {props.when}</div>
       <p className="inline-note bad" role="status">
-        Refused: {l.reason}
+        Refused: {refusalAdvice(l.reason)}
       </p>
       <label htmlFor={noteId} className="fine">
         Comment

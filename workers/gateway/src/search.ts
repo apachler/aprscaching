@@ -2,12 +2,14 @@
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { displayCall } from "./auth.js";
-import { listedOrOwn } from "./caches.js";
+import { listedOrOwn, remoteMapCache, type RemoteCacheRow } from "./caches.js";
 import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from "@aprscaching/shared";
 
 /**
  * search.ts — enriched as-you-type suggestions. A single portable endpoint that
- * matches caches (by code / title / owner) and stations (by callsign) with prefix-first ranking.
+ * matches caches (by code / title / owner) and stations (by callsign) with prefix-first ranking. The caches
+ * mirrored from federation peers are searched too, after this instance's own and under the map's trust policy:
+ * a trusted origin's caches, an unvetted origin's with `?includeUnvetted=1`, a blocked origin's never.
  * Deliberately LIKE-based, NOT FTS5: the schema holds no virtual tables (see 0001_baseline.sql), so a
  * plain indexed LIKE keeps the query identical on every SQLite driver (better-sqlite3, bun:sqlite) and
  * is plenty for suggest-sized result sets. The map already handles grid / lat-lon itself client-side.
@@ -65,6 +67,33 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
       .all<CacheHitRow>()
   ).results;
 
+  // Mirrored caches fill what is left of the limit, each carrying its home instance (codes repeat across instances).
+  const includeUnvetted = u.searchParams.get("includeUnvetted") === "1";
+  const room = limit - cacheRows.length;
+  const remoteRows =
+    room > 0
+      ? (
+          await env.DB.prepare(
+            `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust, fp.url AS origin_url
+               FROM remote_caches rc
+               LEFT JOIN fed_peers fp ON fp.instance = rc.origin
+              WHERE rc.status != 'archived' AND rc.fed_scope != 'unlisted'
+                AND COALESCE(fp.trust, 'unvetted') != 'blocked'
+                AND (? = 1 OR COALESCE(fp.trust, 'unvetted') = 'trusted')
+                AND (rc.code LIKE ? ESCAPE '\\' OR rc.title LIKE ? ESCAPE '\\' OR rc.owner_call LIKE ? ESCAPE '\\')
+              ORDER BY
+                CASE WHEN rc.code LIKE ? ESCAPE '\\' THEN 0
+                     WHEN rc.code LIKE ? ESCAPE '\\' THEN 1
+                     WHEN rc.title LIKE ? ESCAPE '\\' THEN 2
+                     ELSE 3 END,
+                length(rc.code)
+              LIMIT ?`,
+          )
+            .bind(includeUnvetted ? 1 : 0, contains, contains, contains, prefix, contains, contains, room)
+            .all<RemoteCacheRow>()
+        ).results
+      : [];
+
   // Stations: callsign match, prefix-first then most-recently heard.
   const stationRows = (
     await env.DB.prepare(
@@ -87,6 +116,20 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
     lat: r.lat,
     lon: r.lon,
   }));
+  for (const r of remoteRows) {
+    const m = remoteMapCache(r);
+    caches.push({
+      kind: "cache",
+      id: null,
+      code: m.code,
+      title: m.title,
+      ownerCall: displayCall(m.ownerCall ?? ""),
+      type: m.type,
+      lat: m.lat,
+      lon: m.lon,
+      remote: m,
+    });
+  }
   const stations: SearchHitStation[] = stationRows.map((r) => ({
     kind: "station",
     callsign: r.callsign,

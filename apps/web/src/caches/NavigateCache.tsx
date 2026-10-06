@@ -7,7 +7,7 @@ import { Icon, Button } from "../ui/index.js";
  * hands the coordinates to a maps app for the drive there. The hand-off links need no permission: Google and Apple
  * route from the phone's own location, and the phone's maps app and OpenStreetMap show the spot.
  */
-export function NavigateCache(props: { lat: number; lon: number; title: string; onFind: () => void }) {
+export function NavigateCache(props: { lat: number; lon: number; title: string; onFind?: () => void }) {
   const { lat, lon, title } = props;
   const [open, setOpen] = useState(false);
 
@@ -25,9 +25,11 @@ export function NavigateCache(props: { lat: number; lon: number; title: string; 
   return (
     <div className="navcache">
       <div className="navcache-row">
-        <Button className="navcache-btn" onClick={props.onFind}>
-          <Icon name="locate" size={15} /> Find
-        </Button>
+        {props.onFind && (
+          <Button className="navcache-btn" onClick={props.onFind}>
+            <Icon name="locate" size={15} /> Find
+          </Button>
+        )}
         <Button className="navcache-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           <Icon name="navigation" size={15} /> Navigate
         </Button>

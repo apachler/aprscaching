@@ -25,6 +25,10 @@ The **APRScaching tools** registry, which comes with every instance, lists the p
 monitor and station tools, responders, transmit tools and utilities. The [tool catalogue](https://apachler.github.io/aprscaching-tools/catalogue/) describes
 each one, with the permissions it asks for.
 
+Each registry lists its tools in the catalogue's groups: **Transmit tools**, **Decoders**, **Monitor and
+station tools**, **Responders** and **Utilities**. A registry can name a tool's group itself (`category` in
+its entry); otherwise the permissions in the tool's signed manifest decide, the transmit permissions first.
+
 ## Install a tool
 
 1. Under **Registry**, find the tool (type in **Find a tool** to narrow the list) and select **Install…**. Or
