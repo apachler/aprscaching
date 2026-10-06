@@ -42,3 +42,13 @@ export function bboxWhere(b: Bbox): { sql: string; params: number[] } {
   const lon = b.west <= b.east ? "lon BETWEEN ? AND ?" : "(lon >= ? OR lon <= ?)";
   return { sql: `lat BETWEEN ? AND ? AND ${lon}`, params: [b.south, b.north, b.west, b.east] };
 }
+
+/** Does `inner` lie inside `outer`? Either may cross the antimeridian. */
+export function bboxWithin(inner: Bbox, outer: Bbox): boolean {
+  if (inner.south < outer.south || inner.north > outer.north) return false;
+  // a box crossing the antimeridian spans west .. east + 360; compare the inner one in each 360° frame
+  const span = (b: Bbox): [number, number] => [b.west, b.west <= b.east ? b.east : b.east + 360];
+  const [iw, ie] = span(inner);
+  const [ow, oe] = span(outer);
+  return [0, 360, -360].some((d) => iw + d >= ow && ie + d <= oe);
+}

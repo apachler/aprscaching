@@ -44,7 +44,9 @@ describe("a restored cache reaches the peers again", () => {
     const t = await a.DB.prepare("SELECT up_to FROM tombstones WHERE target_id = ?")
       .bind(`a.example:cache:${id}`)
       .first<{ up_to: number }>();
-    expect(t?.up_to).toBeGreaterThan(2 ** 32);
+    // the removal covers the cache's place in the caches sequence, where the removal itself put it
+    const rev = await a.DB.prepare("SELECT fed_rev FROM caches WHERE id = ?").bind(id).first<{ fed_rev: number }>();
+    expect(t?.up_to).toBe(rev?.fed_rev);
     await syncAllPeers(hub);
     expect(await mirrored(hub)).toBeNull();
     expect((await applyFedFrames(hub, before)).applied).toBe(0);

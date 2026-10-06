@@ -214,6 +214,12 @@ describe("the Node fetch guard", () => {
   });
 });
 
+/** A pull's request for a page of the peer's caches. */
+const cachePage = (req: Request) => {
+  const u = new URL(req.url);
+  return u.pathname === "/federation/sync/origin" && u.searchParams.get("kind") === "cache";
+};
+
 describe("carrier ids and body caps", () => {
   it("refuses an ACSFED bulletin whose BID does not match its content", async () => {
     const { a, hub } = await pair({ FED_BBS: "1" });
@@ -239,11 +245,12 @@ describe("carrier ids and body caps", () => {
 
   it("refuses a pull page larger than 4 MiB", async () => {
     const { a, hub } = await pair();
+    await addCache(a); // its summary then names a cache to fetch
     const inner = serve(a);
     const huge = new Uint8Array(5 * 1024 * 1024);
     stubFetch({
       [A]: (req) =>
-        new URL(req.url).pathname === "/federation/sync/cache"
+        cachePage(req)
           ? Promise.resolve(new Response(huge, { headers: { "content-type": "application/cbor" } }))
           : inner(req),
     });
@@ -253,11 +260,12 @@ describe("carrier ids and body caps", () => {
 
   it("refuses a page with more frames than it asked for", async () => {
     const { a, hub } = await pair();
+    await addCache(a);
     const f = await frame(a, "cache", "a.example:cache:1", 1000, { code: "AC-1", title: "t", updatedAt: 1000 });
     const inner = serve(a);
     stubFetch({
       [A]: (req) =>
-        new URL(req.url).pathname === "/federation/sync/cache"
+        cachePage(req)
           ? Promise.resolve(page(Array.from({ length: 501 }, () => f)))
           : inner(req),
     });

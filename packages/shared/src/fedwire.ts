@@ -167,14 +167,17 @@ const P_INSTANCE = 1,
   P_COMPLETE = 3,
   P_FRAMES = 4,
   P_NEXT_ID = 5,
-  P_HOPS = 6;
+  P_HOPS = 6,
+  P_HELD = 7;
 
 /**
  * Encode a sync page. `nextId` is the tie-breaker of a composite `(cursor, id)` position, sent by
  * feeds whose cursor (a timestamp) can repeat; a consumer that knows it resumes strictly after that
  * pair, one that doesn't ignores the field. `hops`, one entry per frame, is how many instances each
- * frame has already crossed since its origin signed it: the transit feed sends it, so a receiver
- * bounds how far a record travels. It sits outside the signatures, which cover the records only.
+ * frame has already crossed since its origin signed it: a per-origin page sends it, so a receiver
+ * bounds how far a record travels. `held`, on a per-origin page, is the sequence up to which the server holds
+ * every record of that origin and kind: a receiver that took the page whole holds them up to
+ * `min(held, nextCursor)` as well. Both sit outside the signatures, which cover the records only.
  */
 export function encodeFedSyncPage(
   instance: string,
@@ -183,6 +186,7 @@ export function encodeFedSyncPage(
   frames: Uint8Array[],
   nextId?: number,
   hops?: number[],
+  held?: number,
 ): Uint8Array<ArrayBuffer> {
   const m: CborMap = new Map<number, CborValue>([
     [P_INSTANCE, instance],
@@ -195,6 +199,7 @@ export function encodeFedSyncPage(
     if (hops.length !== frames.length) throw new Error("fedsync: one hop count per frame");
     m.set(P_HOPS, hops);
   }
+  if (held !== undefined) m.set(P_HELD, held);
   return cborEncode(m);
 }
 
@@ -206,6 +211,8 @@ export interface FedSyncPage {
   nextId?: number;
   /** Per frame, the instances it crossed since its origin; absent on a feed of the server's own records. */
   hops?: number[];
+  /** Per-origin pages: the server holds every record of the origin and kind up to this sequence. */
+  held?: number;
 }
 
 export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
@@ -229,6 +236,9 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
       hops.some((h) => typeof h !== "number" || !Number.isInteger(h) || h < 0))
   )
     throw new Error("fedsync: hops must be one non-negative integer per frame");
+  const held = m.get(P_HELD);
+  if (held !== undefined && (typeof held !== "number" || !Number.isSafeInteger(held)))
+    throw new Error("fedsync: held must be an integer");
   return {
     instance,
     nextCursor,
@@ -236,6 +246,7 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
     frames: frames as Uint8Array[],
     ...(nextId !== undefined && { nextId }),
     ...(hops !== undefined && { hops: hops as number[] }),
+    ...(held !== undefined && { held }),
   };
 }
 

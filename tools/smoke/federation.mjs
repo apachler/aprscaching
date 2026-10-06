@@ -560,8 +560,8 @@ ok(
 );
 const peersT = await call(SUB, "GET", "/federation/peers");
 ok(
-  "subscriber tombstones_cursor advanced",
-  (peersT.data?.peers ?? []).some((p) => p.instance === pubInstance && p.tombstones_cursor > 0),
+  "subscriber holds the publisher's tombstones up to a mark",
+  (peersT.data?.peers ?? []).some((p) => p.instance === pubInstance && p.marks?.tombstone > 0),
   JSON.stringify(peersT.data),
 );
 
@@ -661,7 +661,10 @@ const spokeFrame = await buildFrame(
   skp.privateKey,
   spub,
 );
-const sub1 = await submitCbor(SUB, encodePage("oe.spoke", spokeBody.updatedAt, true, [spokeFrame]));
+// the page starts at the beginning of the spoke's caches, so the hub holds them whole up to its end
+const sub1 = await submitCbor(SUB, encodePage("oe.spoke", spokeBody.updatedAt, true, [spokeFrame]), {
+  "x-fed-since": "0",
+});
 ok(
   "hub accepts a spoke's page of signed frames (applied 1)",
   sub1.data?.ok === true && sub1.data?.applied === 1,
@@ -927,8 +930,8 @@ const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operat
 ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));
 const mpeers = await call(SUB, "GET", "/federation/peers");
 ok(
-  "subscriber moves_cursor advanced",
-  (mpeers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.moves_cursor > 0),
+  "subscriber holds the publisher's account moves up to a mark",
+  (mpeers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.marks?.["account-move"] > 0),
   JSON.stringify(mpeers.data),
 );
 
@@ -1312,8 +1315,15 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
   );
 
   // ---- a hub passes its spokes' records on: oe.spoke → SUB (the hub) → PUB, which never peers with oe.spoke ----
+  const summary = await call(SUB, "GET", `/federation/sync/summary?for=${encodeURIComponent(pubInstance)}`);
+  const spokeHeld = (summary.data?.origins ?? []).find((o) => o.origin === "oe.spoke");
+  ok(
+    "the hub's summary lists the spoke, how far it holds its caches, and the spoke's key",
+    spokeHeld?.held?.cache === spokeBody.updatedAt && spokeHeld?.publicKey === spub,
+    JSON.stringify(summary.data),
+  );
   const transitOf = async (query) => {
-    const res = await fetch(`${SUB}/federation/sync/transit?since=0${query}`);
+    const res = await fetch(`${SUB}/federation/sync/origin?origin=oe.spoke&kind=cache&since=0${query}`);
     return res.ok ? decodePage(new Uint8Array(await res.arrayBuffer())) : null;
   };
   const spokeFrames = (pg) =>
@@ -1326,15 +1336,18 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
       passed.every((f) => frameParts(f).signerKey === spub) &&
       passed.some((f) => Buffer.from(f).equals(Buffer.from(spokeFrame))) &&
       Array.isArray(tpage?.hops) &&
-      tpage.hops.length === tpage.frames.length,
-    JSON.stringify({ n: passed.length, hops: tpage?.hops }),
+      tpage.hops.length === tpage.frames.length &&
+      tpage.held === spokeBody.updatedAt,
+    JSON.stringify({ n: passed.length, hops: tpage?.hops, held: tpage?.held }),
   );
-  ok("nothing goes back to the spoke it came from", spokeFrames(await transitOf("&for=oe.spoke")).length === 0);
-  const tkeys = await call(SUB, "GET", "/federation/transit/keys");
+  ok("nothing goes back to the spoke it came from", (await transitOf("&for=oe.spoke")) === null);
+  // the gap after what a puller holds: only the second cache, which came later
+  const gap = await fetch(`${SUB}/federation/sync/origin?origin=oe.spoke&kind=cache&since=${spokeBody.updatedAt}`);
+  const gapPage = gap.ok ? decodePage(new Uint8Array(await gap.arrayBuffer())) : null;
   ok(
-    "the hub hands on the spoke's key",
-    (tkeys.data?.keys ?? []).some((k) => k.instance === "oe.spoke" && k.publicKey === spub),
-    JSON.stringify(tkeys.data),
+    "asked for the spoke's caches after a sequence, the hub sends only what comes after it",
+    gapPage !== null && spokeFrames(gapPage).every((f) => !Buffer.from(f).equals(Buffer.from(spokeFrame))),
+    JSON.stringify({ n: gapPage?.frames?.length }),
   );
   await call(PUB, "POST", "/federation/sync", undefined, OPH);
   const learned = (await call(PUB, "GET", "/federation/peers", undefined, OPH)).data?.peers?.find(

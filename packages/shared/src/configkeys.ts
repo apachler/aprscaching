@@ -79,7 +79,7 @@ export const CONFIG_KEYS = {
   FED_SYNC_REGION: { type: "string", units: ["gateway", "pocket"] },
   FED_RESERVE: {
     type: "enum",
-    units: ["gateway"],
+    units: ["gateway", "pocket"],
     default: "trusted",
     values: ["trusted", "all", "off"],
     site: { group: "federation" },

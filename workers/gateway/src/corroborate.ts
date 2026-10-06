@@ -20,7 +20,6 @@ import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin, type PeerRow } from "./fedpeers.js";
-import { requeuePeer } from "./fedtransit.js";
 import { provenanceOf } from "./provenance.js";
 import { attestation, sitesFor, type Attestation } from "./attestedsites.js";
 import { isInstanceId, loadRegistry, type RegistryEntry } from "./federation.js";
@@ -434,8 +433,6 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
     )
       .bind(at, at, url, threshold)
       .run();
-    // a newly trusted origin's records held back from the transit feed go out now, as for the sysop's trust
-    if (promoted.meta.changes) await requeuePeer(env, url);
   }
 }
 

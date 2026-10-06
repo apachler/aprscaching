@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * fedpull.ts — the consumer side of federation. Pull peers' CBOR sync feeds, verify each frame under
- * the key set pinned for the peer (checked against its descriptor, the signed registry and its
- * rotation records), and hand every frame to the shared admission path (fedapply.ts). Per-peer
- * cursors make it incremental; one pull per peer runs at a time.
+ * fedpull.ts — the consumer side of federation. Pull peers' CBOR sync pages, verify each frame under
+ * the key set pinned for its origin (checked against the peer's descriptor, the signed registry and its
+ * rotation records), and hand every frame to the shared admission path (fedapply.ts). Caches, finds,
+ * tombstones and account moves are pulled per origin, from the marks of what this instance holds
+ * (fedtransit.ts); keys and bulletins per peer, from its cursors. One pull per peer runs at a time.
  *
  * Runtime-neutral (fetch + crypto.subtle + env.DB) → runs on Node and Bun alike. This
  * instance never mirrors itself.
@@ -15,6 +16,7 @@ import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import {
   FED_PROTOCOL_VERSION,
+  ORIGIN_SYNC_CAPABILITY,
   type FedPublicKey,
   isInstanceId,
   keyFingerprint,
@@ -45,12 +47,14 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import {
   heldKeys,
   learnTransitKeys,
-  requeuePeer,
+  markOf,
   rotationsJson,
+  setMark,
   supersedeTransitPeer,
   MAX_TRANSIT_HOPS,
-  TRANSIT_CAPABILITY,
-  TRANSIT_KINDS,
+  ORIGIN_KINDS,
+  type OriginKind,
+  type SummaryEntry,
 } from "./fedtransit.js";
 
 /** Most pages one pass reads (pull) or sends (push) per feed. */
@@ -129,7 +133,7 @@ type SyncResult = {
   tombstones: number;
   moves: number;
   bulletins: number;
-  /** Records passed on by peers from other instances (their transit feeds). */
+  /** Records peers passed on from other origins. */
   transit: number;
   errors: string[];
 };
@@ -349,14 +353,7 @@ async function syncPeer(
     )
       .bind(nowS(), p.url)
       .run();
-    if (r.meta.changes) {
-      p.trust = "trusted";
-      await requeuePeer(env, p.url);
-    }
-  } else if (!p.instance && p.trust === "trusted") {
-    // a peer the sysop trusted before its first pull: the records a hub passed on for it were held back
-    // until this binding named their origin
-    await requeuePeer(env, p.url);
+    if (r.meta.changes) p.trust = "trusted";
   }
   const newActive = usableKeys(keys.accept, nowS());
 
@@ -365,39 +362,49 @@ async function syncPeer(
 
   // capability negotiation: a peer that speaks our protocol version has an authoritative
   // capability list → skip feeds it doesn't advertise; otherwise every known feed is tried and a 404
-  // is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered tombstones-FIRST so a
-  // delete suppresses re-mirroring of a stale record later in the same pass. The CBOR sync surface
-  // is the only mirror wire — a peer without it (or unsigned) simply has nothing verifiable to
-  // mirror, and its feeds are skipped via the same 404 contract.
+  // is treated as "not supported". The CBOR sync surface is the only mirror wire — a peer without it (or
+  // unsigned) simply has nothing verifiable to mirror, and its feeds are skipped via the same 404 contract.
+  const caps = wk.capabilities ?? [];
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
   const wanted = opts.types ? new Set([...opts.types, "tombstone"]) : null;
-  // The caches feed narrows to FED_SYNC_REGION where the publisher filters by region; elsewhere it
-  // travels whole.
+  const want = (type: string) => toSync.has(type) && (!wanted || wanted.has(type));
+  // The caches narrow to FED_SYNC_REGION where the publisher filters by region; elsewhere they travel whole.
   const region = parseBbox(env.FED_SYNC_REGION);
   if (env.FED_SYNC_REGION && !region)
     console.warn("federation: FED_SYNC_REGION is not S,W,N,E in decimal degrees; pulling every cache");
-  const feedOpts: FeedPullOptions = {
-    maxPages: Math.min(Math.max(1, opts.maxPages ?? MAX_PAGES), MAX_PAGES),
-    region: region && (wk.capabilities ?? []).includes(SYNC_REGION_CAPABILITY) ? bboxKey(region) : "",
+  const maxPages = Math.min(Math.max(1, opts.maxPages ?? MAX_PAGES), MAX_PAGES);
+  const ctx: PullContext = {
+    env,
+    transport,
+    neighbour: wk.instance,
+    trusted: p.trust === "trusted",
+    activeKeys: newActive,
+    registry,
+    keyCache: new Map(),
+    region: region && caps.includes(SYNC_REGION_CAPABILITY) ? bboxKey(region) : "",
+    maxPages,
+    relayed: { pages: maxPages },
     bytes: 0,
   };
-  const counts: Record<string, number> = {};
-  for (const def of SYNC_DEFS) {
-    // iterate SYNC_DEFS to preserve the tombstones-first order
-    if (!toSync.has(def.type) || (wanted && !wanted.has(def.type))) {
-      counts[def.type] = 0;
-      continue;
-    }
-    counts[def.type] = await syncFeed(env, transport, p, wk.instance, newActive, def, feedOpts);
-  }
-  // then what the peer passes on from other instances, under the keys it hands on for them; deletes
-  // ride the same feed, so a narrowed pull that wants caches or finds takes it whole
-  const transitWanted = !wanted || ["cache", "find", "transit"].some((t) => wanted.has(t));
-  counts.transit = 0;
-  if (transitWanted && (wk.capabilities ?? []).includes(TRANSIT_CAPABILITY)) {
-    await learnTransitKeys(env, wk.instance, await transitKeysOf(transport), registry);
-    counts.transit = await syncTransit(env, transport, p, wk.instance, registry, feedOpts);
-  }
+  // what the peer holds, per origin: its own records, and those of the origins it passes on, whose keys it hands on
+  const origins = await summaryOf(ctx, caps.includes(ORIGIN_SYNC_CAPABILITY));
+  await learnTransitKeys(env, wk.instance, origins, registry);
+  const counts: Record<string, number> = { transit: 0 };
+  const byOrigin = async (kinds: OriginKind[]) => {
+    for (const e of origins)
+      for (const kind of kinds) {
+        if (!want(kind)) continue;
+        const n = await pullOrigin(ctx, e, kind);
+        if (e.origin === wk.instance) counts[kind] = (counts[kind] ?? 0) + n;
+        else counts.transit! += n;
+      }
+  };
+  // deletes first, from every origin, so no stale copy outruns its tombstone in this pass; keys before the
+  // account moves, whose proofs verify under them
+  await byOrigin(["tombstone"]);
+  counts.key = want("key") ? await pullFeed(ctx, p, SYNC_DEF_KEY) : 0;
+  await byOrigin(["account-move", "cache", "find"]);
+  counts.bulletin = want("bulletin") ? await pullFeed(ctx, p, SYNC_DEF_BULLETIN) : 0;
   // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
   // (surfaced via /federation/peers → last_counts)
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -408,7 +415,7 @@ async function syncPeer(
     .bind(nowS(), nowS(), total, JSON.stringify({ ...counts, encoding: "cbor" }), p.url)
     .run();
   return {
-    bytes: feedOpts.bytes,
+    bytes: ctx.bytes,
     caches: counts.cache ?? 0,
     finds: counts.find ?? 0,
     keys: counts.key ?? 0,
@@ -423,7 +430,7 @@ async function syncPeer(
  * Capability negotiation (pure/testable): which of our feed defs to pull from a peer. A peer that
  * advertises our protocol version has an authoritative capability list → pull only the feeds it offers;
  * a peer that does not advertise our protocol version is tried for every known feed (a 404 is handled gracefully
- * by syncFeed). Order is preserved, so the tombstones-first invariant survives.
+ * by the pull). Order is preserved.
  */
 export function negotiateFeeds<T extends { capability: string }>(
   wk: { capabilities?: string[]; protocolVersions?: string[] },
@@ -436,150 +443,193 @@ export function negotiateFeeds<T extends { capability: string }>(
   return defs.filter((d) => caps.has(d.capability));
 }
 
-/** How one feed is pulled: the page cap, the caches region ('' = whole), and the bytes read so far. */
-interface FeedPullOptions {
-  maxPages: number;
+/** One peer's pull: the peer, the keys its own frames verify under, the caches region and the page budgets. */
+interface PullContext {
+  env: Env;
+  transport: FedSyncTransport;
+  /** The peer being pulled. */
+  neighbour: string;
+  /** This instance trusts the peer: its pages of other origins move the marks. */
+  trusted: boolean;
+  activeKeys: string[];
+  registry: Map<string, RegistryEntry>;
+  keyCache: Map<string, string[] | "blocked">;
+  /** The caches region ('' = whole). */
   region: string;
+  /** Pages per feed, and per kind of the peer's own records. */
+  maxPages: number;
+  /** Pages left for the records it passes on from other origins, shared by all of them. */
+  relayed: { pages: number };
+  /** Bytes of sync pages read. */
   bytes: number;
 }
 
-/** One feed as the consumer reads it: its path, the cursor columns it advances, and who may speak on it. */
-interface FeedPlan {
-  type: string;
-  cursorCol: SyncDef["cursorCol"] | "transit_cursor";
-  cursorIdCol?: SyncDef["cursorIdCol"];
-  /** The column holding the region the cursor was read under, for a feed the region narrows. */
-  regionCol?: "caches_region" | "transit_region";
-  gate: FrameGate;
-  /** The page carries each frame's hop count (the transit feed); a frame arrives one hop further. */
-  hopped?: boolean;
-  /** Extra query parameters. */
-  query?: string;
+const SYNC_DEF_KEY = SYNC_DEFS.find((d) => d.type === "key")!;
+const SYNC_DEF_BULLETIN = SYNC_DEFS.find((d) => d.type === "bulletin")!;
+
+/** Summary pages one pull reads, and the largest one it accepts. */
+const MAX_SUMMARY_PAGES = 20;
+const MAX_SUMMARY_BYTES = 1024 * 1024;
+
+const seqOf = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+
+/**
+ * The peer's summary: the origins it serves, its own first. Without one (a peer that serves none, or an error)
+ * the peer's own records are still pulled, from this instance's marks.
+ */
+async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntry[]> {
+  const out: SummaryEntry[] = [];
+  const us = ours(ctx.env);
+  let after = "";
+  for (let i = 0; served && i < MAX_SUMMARY_PAGES; i++) {
+    const q = `${us ? `for=${encodeURIComponent(us)}` : ""}${after ? `&after=${encodeURIComponent(after)}` : ""}`;
+    const res = await ctx.transport.get(`/federation/sync/summary?${q}`);
+    if (!res.ok) break; // what was read stands; the peer's own records come regardless
+    const body = await readCappedBody(res, MAX_SUMMARY_BYTES);
+    let page: { origins?: unknown; complete?: unknown; next?: unknown };
+    try {
+      page = body ? (JSON.parse(new TextDecoder().decode(body)) as typeof page) : {};
+    } catch {
+      break;
+    }
+    for (const raw of Array.isArray(page.origins) ? page.origins : []) {
+      const e = raw as Partial<SummaryEntry> | null;
+      if (!e || !isInstanceId(e.origin) || out.some((o) => o.origin === e.origin)) continue;
+      // a kind the summary leaves out is one the peer holds none of
+      const held: SummaryEntry["held"] = {};
+      for (const kind of ORIGIN_KINDS)
+        held[kind] = seqOf((e.held as Record<string, unknown> | undefined)?.[kind]) ?? 0;
+      out.push({ ...e, origin: e.origin, held });
+    }
+    if (page.complete !== false || typeof page.next !== "string" || page.next <= after) break;
+    after = page.next;
+  }
+  const own = out.find((e) => e.origin === ctx.neighbour);
+  // a peer that did not list itself is asked for its own records regardless: no `held` means "ask"
+  return [own ?? { origin: ctx.neighbour, held: {} }, ...out.filter((e) => e !== own)];
+}
+
+/** How far this process read the pages of peers whose word moves no mark, per env: each is read once a process. */
+const readPositions = new WeakMap<object, Map<string, number>>();
+function positionsOf(env: Env): Map<string, number> {
+  let m = readPositions.get(env);
+  if (!m) readPositions.set(env, (m = new Map()));
+  return m;
 }
 
 /**
- * Pull one of a peer's own feeds. The origin is ALWAYS the verified serving peer (wk.instance), never
- * anything the payload claims — a peer inherits only its own namespace + trust — its frames verify under
- * its active keys, and a page carries only its own feed's type.
+ * Pull one origin's records of one kind from the peer: "origin after N", N being how far this instance holds
+ * that origin, whichever path brought it. Skipped when the peer's summary holds nothing past N. Every frame
+ * verifies under ITS ORIGIN's keys — the peer's own when the peer is the origin, otherwise the peer row this
+ * instance holds for the origin, the key a neighbour handed on (`transit:` rows, learnTransitKeys) or the
+ * registry's binding — and lands under that origin, with this instance's trust in it: an origin unknown or
+ * blocked here is not asked for. The mark moves to the page's `min(held, nextCursor)`: from the origin itself
+ * always, from a trusted peer when every frame of the page verified, from any other peer never.
  */
-function syncFeed(
-  env: Env,
-  transport: FedSyncTransport,
-  p: PeerRow,
-  instance: string,
-  activeKeys: string[],
-  def: SyncDef,
-  opts: FeedPullOptions,
-): Promise<number> {
-  return pullFeed(env, transport, p, instance, opts, {
-    type: def.type,
-    cursorCol: def.cursorCol,
-    cursorIdCol: def.cursorIdCol,
-    regionCol: def.type === "cache" ? "caches_region" : undefined,
-    gate: { origin: instance, type: def.type, keysFor: () => Promise.resolve(activeKeys) },
-  });
-}
-
-/**
- * Pull a peer's transit feed: the caches, finds and tombstones it mirrored from other instances, each frame
- * signed by its own origin. Every frame verifies under ITS ORIGIN's keys — the peer row this instance holds
- * for that origin, the key a hub handed on (`transit:` rows, learnTransitKeys) or the registry's binding —
- * and lands under that origin, with this instance's trust in it: an origin unknown here arrives unvetted
- * and a blocked one is quarantined. The serving peer's own records are refused here: they come on its own
- * feeds.
- */
-function syncTransit(
-  env: Env,
-  transport: FedSyncTransport,
-  p: PeerRow,
-  instance: string,
-  registry: Map<string, RegistryEntry>,
-  opts: FeedPullOptions,
-): Promise<number> {
-  const cache = new Map<string, string[] | "blocked">();
+async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): Promise<number> {
+  const { env } = ctx;
   const us = ours(env);
-  return pullFeed(env, transport, p, instance, opts, {
-    type: "transit",
-    cursorCol: "transit_cursor",
-    regionCol: "transit_region",
-    gate: {
-      notOrigin: instance,
-      types: TRANSIT_KINDS,
-      mirrorOnly: true,
-      via: instance,
-      keysFor: (origin) => originKeys(env, origin, registry, cache),
-    },
-    hopped: true,
-    query: us ? `&for=${encodeURIComponent(us)}` : "",
-  });
-}
-
-/** Largest transit key list the consumer reads. */
-const MAX_TRANSIT_KEYS_BYTES = 1024 * 1024;
-
-/** The origin keys a peer hands on with its transit feed; none when it answers with anything else. */
-async function transitKeysOf(transport: FedSyncTransport): Promise<unknown> {
-  const res = await transport.get("/federation/transit/keys");
-  if (!res.ok) return [];
-  const body = await readCappedBody(res, MAX_TRANSIT_KEYS_BYTES);
-  try {
-    return body ? ((JSON.parse(new TextDecoder().decode(body)) as { keys?: unknown }).keys ?? []) : [];
-  } catch {
-    return [];
+  if (e.origin === us) return 0;
+  const own = e.origin === ctx.neighbour;
+  let keys = ctx.activeKeys;
+  if (!own) {
+    const k = await originKeys(env, e.origin, ctx.registry, ctx.keyCache);
+    if (k === "blocked" || !k.length) return 0;
+    keys = k;
   }
+  const region = kind === "cache" ? ctx.region : "";
+  let mark = await markOf(env, e.origin, kind, region);
+  const advances = own || ctx.trusted;
+  const posKey = `${ctx.neighbour} ${e.origin} ${kind} ${region}`;
+  const positions = positionsOf(env);
+  let cursor = advances ? mark : Math.max(mark, positions.get(posKey) ?? 0);
+  const held = e.held[kind];
+  if (held !== undefined && held <= cursor) return 0; // nothing new there
+  const budget = own ? { pages: ctx.maxPages } : ctx.relayed;
+  const gate: FrameGate = {
+    origin: e.origin,
+    type: kind,
+    keysFor: () => Promise.resolve(keys),
+    ...(!own && { mirrorOnly: true, via: ctx.neighbour }),
+  };
+  const path = `/federation/sync/origin?origin=${encodeURIComponent(e.origin)}&kind=${kind}`;
+  const query = `${region ? `&bbox=${region}` : ""}${us ? `&for=${encodeURIComponent(us)}` : ""}&limit=${PAGE_LIMIT}`;
+  let applied = 0;
+  while (budget.pages > 0) {
+    budget.pages--;
+    const res = await ctx.transport.get(`${path}&since=${cursor}${query}`);
+    if (res.status === 404) break; // not served there
+    if (res.status === 429) {
+      budget.pages = 0; // the peer asks for a pause: the rest waits for the next pass
+      break;
+    }
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${path}`);
+    const body = await readCappedBody(res, MAX_PAGE_BYTES);
+    if (!body) throw new Error(`${path} page too large (over ${MAX_PAGE_BYTES} bytes)`);
+    ctx.bytes += body.byteLength;
+    const pg = decodeFedSyncPage(body);
+    if (pg.frames.length > PAGE_LIMIT) throw new Error(`${path} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
+    let whole = true;
+    for (const [i, fb] of pg.frames.entries()) {
+      // each frame stands alone: a malformed or unappliable record is skipped, never a reason to replay the page
+      const skipped = (err: unknown) =>
+        console.warn(`federation: skipped a ${kind} record of ${e.origin} from ${ctx.neighbour}: ${(err as Error).message}`);
+      // a frame without its hop count is taken as having travelled as far as a record may
+      const hops = (pg.hops?.[i] ?? MAX_TRANSIT_HOPS) + 1;
+      try {
+        const r = await admitFrame(env, fb, gate, hops);
+        if (r.verdict === "applied") applied++;
+        else if (r.error) skipped(r.error);
+        if (!r.verified) whole = false;
+      } catch (err) {
+        whole = false;
+        skipped(err);
+      }
+    }
+    const next = pg.nextCursor;
+    if (advances && (own || whole) && pg.held !== undefined && Math.min(pg.held, next) > mark) {
+      mark = Math.min(pg.held, next);
+      await setMark(env, e.origin, kind, mark, region);
+    }
+    if (!advances && next > (positions.get(posKey) ?? 0)) positions.set(posKey, next);
+    if (pg.complete || next <= cursor) break;
+    cursor = next;
+  }
+  return applied;
 }
 
 /**
- * Generalized feed consumer: pull CBOR sync pages, verify each fedwire frame over its bytes verbatim, run
- * the acceptance checks, apply, advance the peer cursor — one loop for every feed. A 404 means the peer
- * doesn't serve this feed → skip it gracefully, never failing the whole sync.
+ * Pull one of a peer's per-peer feeds (keys, bulletins): CBOR sync pages of frames the peer signed, verified
+ * under its active keys, applied, and the peer cursor advanced. The origin is ALWAYS the verified serving peer
+ * (wk.instance), never anything the payload claims, and a page carries only its own feed's type. A 404 means the
+ * peer doesn't serve this feed → skip it, never failing the whole sync.
  */
-async function pullFeed(
-  env: Env,
-  transport: FedSyncTransport,
-  p: PeerRow,
-  instance: string,
-  opts: FeedPullOptions,
-  plan: FeedPlan,
-): Promise<number> {
-  let cursor = (p[plan.cursorCol] as number) ?? 0,
-    cursorId = plan.cursorIdCol ? (p[plan.cursorIdCol] ?? null) : null,
+async function pullFeed(ctx: PullContext, p: PeerRow, def: SyncDef): Promise<number> {
+  const { env } = ctx;
+  const cursorCol = def.cursorCol!;
+  let cursor = p[cursorCol] ?? 0,
+    cursorId = def.cursorIdCol ? (p[def.cursorIdCol] ?? null) : null,
     applied = 0;
-  // A cursor is exact only for the region it was read under: a new region (or none) reads the feed again
-  // from the start. Deletes are never filtered, so nothing stale survives a region change.
-  const region = plan.regionCol ? opts.region : "";
-  if (plan.regionCol && (p[plan.regionCol] ?? "") !== region) {
-    cursor = 0;
-    cursorId = null;
-    const idReset = plan.cursorIdCol ? `, ${plan.cursorIdCol}=NULL` : "";
-    await env.DB.prepare(`UPDATE fed_peers SET ${plan.cursorCol}=0${idReset}, ${plan.regionCol}=? WHERE url=?`)
-      .bind(region, p.url)
-      .run();
-    p[plan.regionCol] = region;
-  }
-  const regionParam = region ? `&bbox=${region}` : "";
-  for (let page = 0; page < opts.maxPages; page++) {
+  const gate: FrameGate = { origin: ctx.neighbour, type: def.type, keysFor: () => Promise.resolve(ctx.activeKeys) };
+  for (let page = 0; page < ctx.maxPages; page++) {
     const idParam = cursorId != null ? `&sinceId=${cursorId}` : "";
-    const res = await transport.get(
-      `/federation/sync/${plan.type}?since=${cursor}${idParam}${regionParam}${plan.query ?? ""}&limit=${PAGE_LIMIT}`,
-    );
+    const res = await ctx.transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=${PAGE_LIMIT}`);
     if (res.status === 404) return applied; // feed not served here → forward-compat skip
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${plan.type}`);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
     const body = await readCappedBody(res, MAX_PAGE_BYTES);
-    if (!body) throw new Error(`/federation/sync/${plan.type} page too large (over ${MAX_PAGE_BYTES} bytes)`);
-    opts.bytes += body.byteLength;
+    if (!body) throw new Error(`/federation/sync/${def.type} page too large (over ${MAX_PAGE_BYTES} bytes)`);
+    ctx.bytes += body.byteLength;
     const pg = decodeFedSyncPage(body);
     if (pg.frames.length > PAGE_LIMIT)
-      throw new Error(`/federation/sync/${plan.type} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
-    for (const [i, fb] of pg.frames.entries()) {
+      throw new Error(`/federation/sync/${def.type} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
+    for (const fb of pg.frames) {
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to
       // hold the cursor and replay the page forever
       const skipped = (e: unknown) =>
-        console.warn(`federation: skipped a ${plan.type} record from ${instance}: ${(e as Error).message}`);
-      // a passed-on frame without its hop count is taken as having travelled as far as a record may
-      const hops = plan.hopped ? (pg.hops?.[i] ?? MAX_TRANSIT_HOPS) + 1 : 1;
+        console.warn(`federation: skipped a ${def.type} record from ${ctx.neighbour}: ${(e as Error).message}`);
       try {
-        const { verdict, error } = await admitFrame(env, fb, plan.gate, hops);
+        const { verdict, error } = await admitFrame(env, fb, gate);
         if (verdict === "applied") applied++;
         else if (error) skipped(error);
       } catch (e) {
@@ -590,12 +640,12 @@ async function pullFeed(
     // The id tie-breaker only carries a pass across full pages that share one timestamp. Once a page
     // is complete it is dropped, so the next pull re-reads the boundary second (idempotent) and still
     // sees a record updated again within that second.
-    const nextId = plan.cursorIdCol && !pg.complete && pg.nextId !== undefined ? pg.nextId : null;
-    if (plan.cursorIdCol)
-      await env.DB.prepare(`UPDATE fed_peers SET ${plan.cursorCol}=?, ${plan.cursorIdCol}=? WHERE url=?`)
+    const nextId = def.cursorIdCol && !pg.complete && pg.nextId !== undefined ? pg.nextId : null;
+    if (def.cursorIdCol)
+      await env.DB.prepare(`UPDATE fed_peers SET ${cursorCol}=?, ${def.cursorIdCol}=? WHERE url=?`)
         .bind(next, nextId, p.url)
         .run();
-    else await env.DB.prepare(`UPDATE fed_peers SET ${plan.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
+    else await env.DB.prepare(`UPDATE fed_peers SET ${cursorCol}=? WHERE url=?`).bind(next, p.url).run();
     if (pg.complete || (next === cursor && (nextId == null || nextId === cursorId))) break;
     cursor = next;
     cursorId = nextId;
@@ -620,7 +670,7 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
       return json({ error: "the body must be JSON" }, { status: 400 });
     }
   }
-  const known = new Set([...SYNC_DEFS.map((d) => d.type), "transit"]);
+  const known = new Set(SYNC_DEFS.map((d) => d.type));
   const opts: PullOptions = {};
   if (body.types !== undefined) {
     if (!Array.isArray(body.types) || !body.types.every((t) => typeof t === "string" && known.has(t)))

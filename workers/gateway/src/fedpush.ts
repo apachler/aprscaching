@@ -29,10 +29,10 @@ import { ACCOUNT_MOVE_FEED } from "./account.js";
 import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
 import { type TrustLevel, absorbDiscovered, ours } from "./fedpeers.js";
-import { applyFrames } from "./fedapply.js";
+import { admitFrame, type FrameGate } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
-import { rotationsJson } from "./fedtransit.js";
+import { markOf, rotationsJson, setMark, ORIGIN_KINDS, type OriginKind } from "./fedtransit.js";
 
 /**
  * The feeds a spoke pushes: every feed the pull serves, in the pull's order (fedapply.ts `SYNC_DEFS`) —
@@ -96,7 +96,12 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     }
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
-  return submitFrames(env, page.instance, submitKey, page.frames, rotations, page);
+  // where the spoke's page starts, so the hub knows whether it continues what it holds of the spoke
+  const since = Number(req.headers.get("x-fed-since"));
+  return submitFrames(env, page.instance, submitKey, page.frames, rotations, {
+    ...page,
+    ...(Number.isSafeInteger(since) && since >= 0 && { since }),
+  });
 }
 
 /** A spoke's position in one feed: its cursor and, mid-pass in a composite feed, the id tie-breaker. */
@@ -167,7 +172,7 @@ async function submitFrames(
   publicKey: string,
   frames: Uint8Array[],
   rotations: RotationRecord[] = [],
-  page?: { nextCursor: number; nextId?: number },
+  page?: { nextCursor: number; nextId?: number; since?: number },
 ): Promise<Response> {
   if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
   const allow = (env.FED_SUBMIT_INSTANCES ?? "")
@@ -236,17 +241,31 @@ async function submitFrames(
       .bind(`submit:${instance}`, instance, publicKey, JSON.stringify([{ x: publicKey }]))
       .run();
 
-  const { applied, rejected } = await applyFrames(env, frames, {
-    origin: instance,
-    keysFor: () => Promise.resolve([publicKey]),
-    mirrorOnly: true,
-  });
+  const gate: FrameGate = { origin: instance, keysFor: () => Promise.resolve([publicKey]), mirrorOnly: true };
+  let applied = 0,
+    rejected = 0,
+    verified = 0;
+  for (const fb of frames) {
+    const r = await admitFrame(env, fb, gate);
+    if (r.verdict === "applied") applied++;
+    else if (r.verdict === "rejected") rejected++;
+    if (r.verified) verified++;
+  }
   // How far this spoke's feed now stands here, returned so the spoke resumes from what the hub holds.
   const type = page ? pageFeed(frames) : null;
   let mark: (PushMark & { type: string }) | undefined;
   if (page && type) {
     mark = { type, cursor: page.nextCursor, ...(page.nextId !== undefined && { id: page.nextId }) };
     await recordMark(env, instance, type, mark);
+    // a whole page that continues what the hub holds of the spoke: the hub now holds it up to the page's end,
+    // and passes that on in its summary like any origin it pulled
+    if (
+      (ORIGIN_KINDS as readonly string[]).includes(type) &&
+      verified === frames.length &&
+      page.since !== undefined &&
+      page.since <= (await markOf(env, instance, type as OriginKind))
+    )
+      await setMark(env, instance, type as OriginKind, page.nextCursor);
   }
   return json({ ok: true, applied, rejected, ...(mark && { mark }) });
 }
@@ -394,6 +413,8 @@ async function pushCycle(
           headers: {
             "content-type": "application/cbor",
             "x-fed-secret": secret,
+            // where this page starts: the hub holds our records whole only while the pages it takes join up
+            "x-fed-since": String(cursor),
             // our rotation records, so a hub that pinned an earlier key can follow the rotation
             ...(env.FED_ROTATIONS ? { "x-fed-rotations": env.FED_ROTATIONS } : {}),
           },

@@ -195,5 +195,12 @@ export function encodePage(instance, nextCursor, complete, frames) {
 }
 export function decodePage(bytes) {
   const m = cborDecode(bytes);
-  return { instance: m.get(1), nextCursor: m.get(2), complete: m.get(3), frames: m.get(4) ?? [], hops: m.get(6) };
+  return {
+    instance: m.get(1),
+    nextCursor: m.get(2),
+    complete: m.get(3),
+    frames: m.get(4) ?? [],
+    hops: m.get(6),
+    held: m.get(7),
+  };
 }

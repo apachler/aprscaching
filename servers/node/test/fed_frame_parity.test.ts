@@ -45,18 +45,20 @@ async function deliver(path: Path, hub: Env, spoke: Env, frames: Uint8Array[], t
     expect(res.status).toBe(200);
     return ((await res.json()) as { applied: number }).applied;
   }
-  // pull: the spoke's descriptor is genuine; its sync page for `type` carries exactly these frames
-  await hub.DB.prepare(
-    "UPDATE fed_peers SET caches_cursor = 0, caches_cursor_id = NULL, tombstones_cursor = 0, bulletins_cursor = 0 WHERE url = ?",
-  )
-    .bind(S_URL)
-    .run();
+  // pull: the spoke's descriptor is genuine; its sync page for `type` carries exactly these frames, and without a
+  // summary the hub asks for every kind from what it holds of the spoke
+  await hub.DB.prepare("DELETE FROM fed_origin_marks WHERE origin = ?").bind(S).run();
+  await hub.DB.prepare("UPDATE fed_peers SET bulletins_cursor = 0, keys_cursor = 0 WHERE url = ?").bind(S_URL).run();
   const genuine = serve(spoke);
   stubFetch({
-    [S_URL]: async (req) =>
-      new URL(req.url).pathname === `/federation/sync/${type}`
-        ? new Response(page as BodyInit, { headers: { "content-type": "application/cbor" } })
-        : genuine(req),
+    [S_URL]: async (req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/federation/sync/summary") return new Response("{}", { status: 404 });
+      const asked =
+        u.pathname === `/federation/sync/${type}` ||
+        (u.pathname === "/federation/sync/origin" && u.searchParams.get("kind") === type);
+      return asked ? new Response(page as BodyInit, { headers: { "content-type": "application/cbor" } }) : genuine(req);
+    },
   });
   const r = await syncAllPeers(hub);
   expect(r.errors).toEqual([]);
