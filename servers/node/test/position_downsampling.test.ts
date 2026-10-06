@@ -58,12 +58,7 @@ function instance(
       return new Response(null, { status: 204 });
     },
   };
-  const env = instanceEnv(
-    name,
-    key,
-    { FIRST_PARTY_SITES: SITE, ROOMS: { get: () => room }, ...extra },
-    DB,
-  );
+  const env = instanceEnv(name, key, { FIRST_PARTY_SITES: SITE, ROOMS: { get: () => room }, ...extra }, DB);
   return { env, sqlite, live } as Instance;
 }
 
