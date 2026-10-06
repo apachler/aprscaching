@@ -71,6 +71,9 @@ import { forgetGapsStatement, gapsBetween } from "./fedgaps.js";
 export const ORIGIN_KINDS = ["tombstone", "account-move", "cache", "find"] as const;
 export type OriginKind = (typeof ORIGIN_KINDS)[number];
 const isOriginKind = (k: unknown): k is OriginKind => (ORIGIN_KINDS as readonly unknown[]).includes(k);
+/** This instance's own sequences a neighbour reports: the per-origin kinds, and keys, which travel per peer. */
+export const OWN_SEQ_KINDS = [...ORIGIN_KINDS, "key"] as const;
+export type OwnSeqKind = (typeof OWN_SEQ_KINDS)[number];
 /** The most instances a record crosses: one passed on at this count is kept, never passed on again. */
 export const MAX_TRANSIT_HOPS = 4;
 /** Origins learned through neighbours: the peer table never grows past this many `transit:` rows. */
@@ -271,8 +274,8 @@ async function nativeHeld(env: Env, kind: OriginKind): Promise<number> {
  * an older backup, on a box whose clock is behind (a Pi without a real-time clock), then still numbers its next
  * records above what the network holds. Only a trusted neighbour's word counts (fedpull.ts summaryOf).
  */
-export async function raiseOwnSequences(env: Env, held: Partial<Record<OriginKind, number>>): Promise<void> {
-  for (const kind of ORIGIN_KINDS) {
+export async function raiseOwnSequences(env: Env, held: Partial<Record<OwnSeqKind, number>>): Promise<void> {
+  for (const kind of OWN_SEQ_KINDS) {
     const v = held[kind];
     // 2^52 leaves every later number a safe integer
     if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0 || v > 2 ** 52) continue;
@@ -415,13 +418,21 @@ export async function handleSyncSummary(req: Request, env: Env): Promise<Respons
     origins.sort((a, b) => (a.origin < b.origin ? -1 : 1));
   }
   // what this instance holds of the asker's own records, so an asker restored from an older backup numbers on
-  let askerHeld: SummaryEntry["held"] | undefined;
+  let askerHeld: Partial<Record<OwnSeqKind, number>> | undefined;
   if (after === "" && isInstanceId(asker) && asker !== self) {
     askerHeld = {};
     for (const kind of ORIGIN_KINDS) {
       const h = await markOf(env, asker, kind);
       if (h > 0) askerHeld[kind] = h;
     }
+    // keys travel per peer: how far this instance read the asker's keys feed, which pages by its key sequence
+    const keys =
+      (
+        await env.DB.prepare("SELECT MAX(keys_cursor) AS n FROM fed_peers WHERE instance = ?")
+          .bind(asker)
+          .first<{ n: number | null }>()
+      )?.n ?? 0;
+    if (keys > 0) askerHeld.key = keys;
   }
   return json({
     instance: self,

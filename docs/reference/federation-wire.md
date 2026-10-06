@@ -148,7 +148,8 @@ neither take a new record for one they hold nor suppress it with a deletion of a
   (`publicKeys`, each `{x, until?}`) and its rotation records. A receiver that has no key for the origin pins
   this one in a `transit:<instance>` row ([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
   A pull takes at most 50 new origins from one summary and looks at no more than 1000 entries.
-- `asker` is how far the instance holds the asker's own records. An asker that trusts the instance raises its own
+- `asker` is how far the instance holds the asker's own records, per kind, and how far it read the asker's keys
+  (`key`). An asker that trusts the instance raises its own
   counters to at least that, so a restored instance numbers on even with a clock that is behind; from any other
   instance the field is ignored.
 

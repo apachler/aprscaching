@@ -117,22 +117,22 @@ const parseTries = (s: string): Tries => {
   }
 };
 
-/** The gaps of `origin` and `kind` due to be asked of `via` now, lowest first, at most `limit`. */
+/**
+ * The gaps of `origin` and `kind` due to be asked of `via` now, at most `limit`: the gaps a neighbour can fill before
+ * those past the hop limit, which only a shorter path fills, then the longest overdue for `via` first. A gap `via`
+ * was never asked about is due at once.
+ */
 export async function dueGaps(env: Env, origin: string, kind: string, via: string, limit: number): Promise<number[]> {
-  const t = nowS();
-  const rows = // the gaps a neighbour can fill come before those past the hop limit, which only a shorter path fills
-    (
-      await env.DB.prepare(
-        `SELECT v, tries FROM fed_origin_gaps WHERE origin = ? AND kind = ?
-        ORDER BY reason IN ('hops', 'upstream-hops'), v LIMIT 500`,
-      )
-        .bind(origin, kind)
-        .all<{ v: number; tries: string }>()
-    ).results;
-  return rows
-    .filter((r) => (parseTries(r.tries)[via]?.[1] ?? 0) <= t)
-    .slice(0, limit)
-    .map((r) => r.v);
+  return (
+    await env.DB.prepare(
+      `SELECT v FROM (
+         SELECT v, reason, COALESCE((SELECT json_extract(value, '$[1]') FROM json_each(tries) WHERE key = ?), 0) AS due
+           FROM fed_origin_gaps WHERE origin = ? AND kind = ?
+       ) WHERE due <= ? ORDER BY reason IN ('hops', 'upstream-hops'), due, v LIMIT ?`,
+    )
+      .bind(via, origin, kind, nowS(), limit)
+      .all<{ v: number }>()
+  ).results.map((r) => r.v);
 }
 
 /** `via` did not fill the gap at `v`: ask it again after a backoff that doubles each time. */
