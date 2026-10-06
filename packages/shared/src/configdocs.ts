@@ -41,6 +41,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_SPOKE_STALE_HOURS: "On a hub, hours without a submission before a spoke shows as stale",
   FED_REVEAL_IGATE: "1 includes the exact IGate in corroboration answers",
   FED_SYNC_REGION: "S,W,N,E box in decimal degrees: pull only the caches inside it from peers",
+  FED_RESERVE: "Records mirrored from other instances this one passes on to its peers: trusted, all or off",
   FED_ENDPOINTS: "JSON array of this instance's transport endpoints {transport,address,priority}",
   FED_ALLOW_PRIVATE: "1 lets federation fetch private and loopback addresses (an all-LAN network)",
   FED_SUBMIT_SECRET: "Hub: enables record submission; spoke: the secret it pushes with",
@@ -537,6 +538,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "whole feed",
       ],
       [
+        "`FED_RESERVE`",
+        "Which records mirrored from other instances this instance serves on to its peers on the transit feed, each as its home instance signed it: `trusted` passes on the records of instances trusted here, `all` those of every instance not blocked here, `off` none. A peer verifies each record against its home's key and applies its own trust in that home. Also an instance setting ([Hubs, relays and the registry](../run/federation/hubs-and-relays.md#a-hub-passes-its-spokes-records-on))",
+        "`trusted`",
+      ],
+      [
         "`FED_DISCOVER`",
         "Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200)",
         "off",
@@ -865,6 +871,7 @@ export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
   accounts: "Accounts & API",
   retention: "Privacy & retention",
   imports: "Imports & data sources",
+  federation: "Federation",
   imprint: "Imprint & contact",
   support: "Support links",
   updates: "Updates",
@@ -908,6 +915,10 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   SECURITY_CONTACT: {
     label: "Security contacts",
     hint: "Email or https addresses in security.txt; none uses the contact email",
+  },
+  FED_RESERVE: {
+    label: "Pass on peers' records",
+    hint: "Which mirrored caches, finds and deletions this instance serves on to its peers, each signed by its home",
   },
   UPDATE_CHECK: { label: "Look for new releases", hint: "Ask GitHub once a day whether a newer release is out" },
   HIDE_DAILY_LIMIT: { label: "Hides per day", hint: "New caches one account may hide in 24 hours; 0 lifts the limit" },

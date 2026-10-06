@@ -54,7 +54,16 @@ export interface ConfigKey {
 }
 
 /** The groups of Instance admin → Instance settings, in display order. */
-export const SITE_GROUPS = ["game", "accounts", "retention", "imports", "imprint", "support", "updates"] as const;
+export const SITE_GROUPS = [
+  "game",
+  "accounts",
+  "retention",
+  "imports",
+  "federation",
+  "imprint",
+  "support",
+  "updates",
+] as const;
 export type SiteGroup = (typeof SITE_GROUPS)[number];
 
 /**

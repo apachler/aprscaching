@@ -63,10 +63,10 @@ refused.
 ## The sync surface
 
 `GET /federation/sync/<type>?since=&limit=` (type ∈ `cache · find · key · tombstone · account-move ·
-bulletin`) serves a CBOR page of frames:
+bulletin · transit`) serves a CBOR page of frames:
 
 ```
-page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId? }   (application/cbor)
+page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]? }   (application/cbor)
 ```
 
 The cache and bulletin feeds page by a timestamp, which many records can share, so their cursor is
@@ -93,6 +93,16 @@ advertises the surface as the `sync-cbor` capability in its descriptor. An unsig
 frame signatures possible) does not serve the surface and cannot be mirrored. The JSON feeds
 (`/federation/caches`, `/finds`, `/bulletins`, `/keys`, `/tombstones`, `/account-moves`, `/registry`) are an unsigned transparency/browse surface only — nothing consumes them for
 mirroring.
+
+**Transit feed.** `transit` serves the caches, finds and tombstones the instance mirrored from others, each frame
+exactly as its origin signed it, in the order they arrived (the cursor is a local sequence). Field 6 gives, per
+frame, the instances it has crossed since its origin; a receiver stores one more and passes on only frames that
+crossed fewer than four. `for=<instance>` names the asking instance, and the page leaves out records from that
+origin or delivered by it; `bbox` narrows the cache frames, never the deletes. An instance advertises the feed as
+the `transit` capability, unless `FED_RESERVE` is `off`. `GET /federation/transit/keys` lists, as JSON, the key of
+each origin the feed passes on: `{instance, keys: [{instance, publicKey, publicKeys, rotations}]}`. A receiver
+verifies each frame under its origin's keys and refuses a frame from the serving instance itself
+([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
 
 **Scaled fields.** The deterministic codec carries no floats, so fractional record fields travel as
 integer twins and map back on receipt:

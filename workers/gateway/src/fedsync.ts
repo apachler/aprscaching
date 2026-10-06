@@ -24,6 +24,7 @@ import { parseBbox } from "./fedregion.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
+import { handleTransitSync } from "./fedtransit.js";
 
 /** Feed type → envelope record kind (the sync type strings are the shared vocabulary). */
 const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
@@ -135,9 +136,11 @@ export async function buildFedFrames(
  * Serve one CBOR sync page. Unknown feed type → 404 (the same forward-compat contract as the JSON
  * feeds); an unsigned instance → 404 too, so a consumer falls back to the JSON surface — CBOR sync
  * exists only where every frame can carry a signature. `bbox=S,W,N,E` narrows the caches feed to a
- * region (fedregion.ts); every other feed, deletes included, ignores it and travels whole.
+ * region (fedregion.ts); every other feed, deletes included, ignores it and travels whole. The transit
+ * feed, the records this instance mirrored and passes on, is fedtransit.ts.
  */
 export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
+  if (feedType === "transit") return handleTransitSync(req, env);
   if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
   const u = new URL(req.url);
   const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);

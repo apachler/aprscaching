@@ -25,6 +25,7 @@ import {
   usableKeys,
   type RegistryEntry,
 } from "./federation.js";
+import { forgetTransitPeer, requeueOrigin, supersedeTransitPeer } from "./fedtransit.js";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -41,6 +42,9 @@ export interface PeerRow {
   bulletins_cursor: number;
   caches_cursor_id?: number | null;
   caches_region?: string; // the region the caches cursor was read under ('' = the whole feed)
+  transit_cursor?: number; // the transit feed cursor (fedtransit.ts)
+  transit_region?: string; // the region the transit cursor was read under
+  rotations?: string | null; // the peer's rotation records (JSON), handed on with its key
   bulletins_cursor_id?: number | null;
   enabled: number;
   trust: TrustLevel;
@@ -317,13 +321,13 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
       operator: d.operator,
     };
     // one row per instance id: a second URL for a known instance is a stale address or an impostor, and a
-    // blocked instance stays blocked under any address
+    // blocked instance stays blocked under any address. A key a hub handed on gives way to the peer's own.
     const holder = await env.DB.prepare(
-      "SELECT url, trust FROM fed_peers WHERE instance = ? ORDER BY trust = 'blocked' DESC LIMIT 1",
+      "SELECT url, trust, added_via FROM fed_peers WHERE instance = ? ORDER BY trust = 'blocked' DESC LIMIT 1",
     )
       .bind(d.instance)
-      .first<{ url: string; trust: TrustLevel }>();
-    if (holder)
+      .first<{ url: string; trust: TrustLevel; added_via: string | null }>();
+    if (holder && (holder.added_via !== "transit" || holder.trust === "blocked"))
       throw new PeerAddRefused(
         holder.trust === "blocked"
           ? `${d.instance} is blocked here (at ${holder.url}): remove that peer first to add it again`
@@ -346,6 +350,7 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
         409,
         preview,
       );
+    await supersedeTransitPeer(env, d.instance, [d.publicKey]);
     try {
       await env.DB.prepare(
         `INSERT INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via, enabled)
@@ -371,7 +376,9 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
  * FED_PEERS comes back at the next seeding, so it is taken out of FED_PEERS first.
  *
  * What the peer published stays mirrored and is treated like anything from an unknown origin: hidden on the
- * map and in offline packs unless the viewer includes unvetted peers, and never a corroborating voice. No
+ * map and in offline packs unless the viewer includes unvetted peers, and never a corroborating voice. An
+ * origin known only through a hub (a `transit:` row) is the exception: its key came from that hub, so the
+ * records it vouched for go with it. No
  * frame of its applies until it is added again, and then it starts `unvetted` with its key fetched and
  * compared afresh. Blocking, not removing, is what hides everything it published.
  */
@@ -380,9 +387,9 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
   if (gate) return gate;
   const url = trimTrailingSlashes((new URL(req.url).searchParams.get("url") ?? "").trim());
   if (!url) return json({ error: "url required" }, { status: 400 });
-  const row = await env.DB.prepare("SELECT url, instance FROM fed_peers WHERE url = ?")
+  const row = await env.DB.prepare("SELECT url, instance, added_via FROM fed_peers WHERE url = ?")
     .bind(url)
-    .first<{ url: string; instance: string | null }>();
+    .first<{ url: string; instance: string | null; added_via: string | null }>();
   if (!row) return json({ error: "unknown peer" }, { status: 404 });
   if (parseFedPeers(env.FED_PEERS).some((p) => p.url === url))
     return json(
@@ -393,6 +400,8 @@ export async function handlePeerRemove(req: Request, env: Env): Promise<Response
   // a spoke that pushed here: its marks go too, so it starts over as a new spoke if it pushes again
   if (row.instance && url === `submit:${row.instance}`)
     await env.DB.prepare("DELETE FROM fed_submit_marks WHERE instance = ?").bind(row.instance).run();
+  // an origin known only through a hub: what that hub's key vouched for goes with the key
+  if (row.instance && row.added_via === "transit") await forgetTransitPeer(env, row.instance);
   return json({ ok: true, url });
 }
 
@@ -480,5 +489,7 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
       );
     throw e;
   }
+  // records held back while the origin was not trusted (or blocked) go out on the transit feed now
+  if (trust !== "blocked") await requeueOrigin(env, exists.instance);
   return json({ ok: true, url, trust });
 }

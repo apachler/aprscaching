@@ -50,6 +50,12 @@ describe("CBOR sync page codec", () => {
     expect(page).toEqual({ instance: "oe.pub", nextCursor: 42, complete: false, frames });
     expect(() => decodeFedSyncPage(new Uint8Array([0x80]))).toThrow(/not a map/);
   });
+
+  it("carries one hop count per frame on a page of passed-on records", () => {
+    const frames = [new Uint8Array([1]), new Uint8Array([2])];
+    expect(decodeFedSyncPage(encodeFedSyncPage("hub", 7, true, frames, undefined, [1, 3])).hops).toEqual([1, 3]);
+    expect(() => encodeFedSyncPage("hub", 7, true, frames, undefined, [1])).toThrow(/one hop count per frame/);
+  });
 });
 
 describe("serve + consume a cache page", () => {

@@ -14,7 +14,7 @@ against the key it pinned for the record's origin, so no transport adds or remov
 
 | Transport | Carries | Who starts it | Delay | Default | Tested |
 |---|---|---|---|---|---|
-| [Pull](#pull) over https, 44Net or HAMNET | caches, finds, keys, bulletins, tombstones, account moves | the instance that wants the records | seconds after a write, at most `FED_SYNC_INTERVAL_MS` (5 min) | on for every peer you add | CI, two instances on one host |
+| [Pull](#pull) over https, 44Net or HAMNET | caches, finds, keys, bulletins, tombstones, account moves; the caches, finds and tombstones a hub passes on | the instance that wants the records | seconds after a write, at most `FED_SYNC_INTERVAL_MS` (5 min) | on for every peer you add | CI, two instances on one host |
 | [Push to a hub](#push-to-a-hub) | caches, finds, keys, tombstones | the spoke | at most `FED_SYNC_INTERVAL_MS`; 30 s to 10 min after an outage | off | CI, two instances on one host |
 | [Rendezvous relay](#rendezvous-relay) | a firewalled spoke's caches, finds or keys feed, on request | a requester with the hub's relay secret | at most `FED_SYNC_INTERVAL_MS` for the spoke to answer | off | CI, two instances on one host |
 | [Corroboration exchange](#corroboration-exchange) | one question and its answer about a find | the instance where the find is logged | seconds; retried 1, 6 and 24 h later | on with a signing key | CI, two instances on one host |
@@ -28,7 +28,9 @@ None of the transports has run between independent instances on live infrastruct
 ## Pull
 
 **What it carries.** Every feed: caches, finds, callsign keys, bulletins, tombstones and account moves.
-Tombstones come first, so a deletion arrives before the record it deletes.
+Tombstones come first, so a deletion arrives before the record it deletes. Last comes the transit feed: the
+caches, finds and tombstones the peer mirrored from other instances and passes on, each still signed by its home
+([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)).
 
 **How it works.** Your instance asks each peer, "what is new since my last cursor?" The peer answers with a
 page of up to 500 records it signed itself. Your instance checks each signature, applies what is newer than what
@@ -119,8 +121,9 @@ at once. **Sync now** pushes immediately.
 spoke: `INSTANCE`, `FED_PRIVATE_KEY`, `FED_HUB_URL` and the hub's `FED_SUBMIT_SECRET`; add the hub to `FED_PEERS`
 to pull from it too ([Push to a hub](hubs-and-relays.md#push-to-a-hub)).
 
-**Limits.** A submission is at most 4 MiB, 500 records a page and 50 pages per feed per cycle. The hub keeps
-what a spoke pushes for itself: it does not serve it on to its own peers.
+**Limits.** A submission is at most 4 MiB, 500 records a page and 50 pages per feed per cycle. Once the hub's
+sysop trusts the spoke, the hub passes its records on to the other spokes and to every instance that pulls the
+hub, as the spoke signed them (`FED_RESERVE`).
 
 ### Catch-up after an outage
 

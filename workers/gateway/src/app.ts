@@ -149,6 +149,7 @@ import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
+import { handleTransitKeys } from "./fedtransit.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
 import { handleCorroborate } from "./corroborate.js";
@@ -532,6 +533,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // CBOR sync surface — fedwire frames (the canonical signed form); consumers prefer it over the JSON feeds
   const fedSync = /^\/federation\/sync\/([a-z-]+)$/.exec(p);
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);
+  if (p === "/federation/transit/keys" && m === "GET") return handleTransitKeys(req, env); // keys of passed-on origins
   // store-and-forward send: pack local records into an ACSFED bulletin for the FBB mesh (sysop/ingest)
   if (p === "/federation/bbs/enqueue" && m === "POST") return handleFedBbsEnqueue(req, env);
   // beacon tier: GET = this instance's presence datagram (the ingest box transmits it);

@@ -934,7 +934,7 @@ export interface FedPeer {
   /** The pinned key's fingerprint (four groups of four hex digits); null until a signed sync pins a key */
   fingerprint: string | null;
   trust: "trusted" | "unvetted" | "blocked";
-  added_via?: string | null; // manual | admin | registry | discovered | submitted | 44net
+  added_via?: string | null; // manual | admin | registry | discovered | submitted | 44net | transit
   /** When corroboration raised it to trusted on its own (FED_AUTO_PROMOTE); null once the sysop decides */
   auto_promoted_at?: number | null;
   /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
@@ -993,7 +993,16 @@ export function removePeer(url: string): Promise<{ ok: boolean }> {
 export interface PeerSyncResult {
   ok: boolean;
   url: string;
-  pulled?: { caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number };
+  pulled?: {
+    caches: number;
+    finds: number;
+    keys: number;
+    tombstones: number;
+    moves: number;
+    bulletins: number;
+    /** Records the peer passed on from other instances. */
+    transit: number;
+  };
   error?: string;
   lastSync: number | null;
   lastOk: number | null;

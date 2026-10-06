@@ -166,12 +166,15 @@ const P_INSTANCE = 1,
   P_NEXT = 2,
   P_COMPLETE = 3,
   P_FRAMES = 4,
-  P_NEXT_ID = 5;
+  P_NEXT_ID = 5,
+  P_HOPS = 6;
 
 /**
  * Encode a sync page. `nextId` is the tie-breaker of a composite `(cursor, id)` position, sent by
  * feeds whose cursor (a timestamp) can repeat; a consumer that knows it resumes strictly after that
- * pair, one that doesn't ignores the field.
+ * pair, one that doesn't ignores the field. `hops`, one entry per frame, is how many instances each
+ * frame has already crossed since its origin signed it: the transit feed sends it, so a receiver
+ * bounds how far a record travels. It sits outside the signatures, which cover the records only.
  */
 export function encodeFedSyncPage(
   instance: string,
@@ -179,6 +182,7 @@ export function encodeFedSyncPage(
   complete: boolean,
   frames: Uint8Array[],
   nextId?: number,
+  hops?: number[],
 ): Uint8Array<ArrayBuffer> {
   const m: CborMap = new Map<number, CborValue>([
     [P_INSTANCE, instance],
@@ -187,6 +191,10 @@ export function encodeFedSyncPage(
     [P_FRAMES, frames as CborValue[]],
   ]);
   if (nextId !== undefined) m.set(P_NEXT_ID, nextId);
+  if (hops !== undefined) {
+    if (hops.length !== frames.length) throw new Error("fedsync: one hop count per frame");
+    m.set(P_HOPS, hops);
+  }
   return cborEncode(m);
 }
 
@@ -196,6 +204,8 @@ export interface FedSyncPage {
   complete: boolean;
   frames: Uint8Array[];
   nextId?: number;
+  /** Per frame, the instances it crossed since its origin; absent on a feed of the server's own records. */
+  hops?: number[];
 }
 
 export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
@@ -211,7 +221,22 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
     throw new Error("fedsync: frames must be byte strings");
   const nextId = m.get(P_NEXT_ID);
   if (nextId !== undefined && typeof nextId !== "number") throw new Error("fedsync: nextId must be an integer");
-  return { instance, nextCursor, complete, frames: frames as Uint8Array[], ...(nextId !== undefined && { nextId }) };
+  const hops = m.get(P_HOPS);
+  if (
+    hops !== undefined &&
+    (!Array.isArray(hops) ||
+      hops.length !== frames.length ||
+      hops.some((h) => typeof h !== "number" || !Number.isInteger(h) || h < 0))
+  )
+    throw new Error("fedsync: hops must be one non-negative integer per frame");
+  return {
+    instance,
+    nextCursor,
+    complete,
+    frames: frames as Uint8Array[],
+    ...(nextId !== undefined && { nextId }),
+    ...(hops !== undefined && { hops: hops as number[] }),
+  };
 }
 
 // ---- coordinates: 1e-7-degree integers (~1 cm), byte-deterministic across every encoder ----

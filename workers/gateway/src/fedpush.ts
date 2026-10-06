@@ -29,6 +29,7 @@ import { type TrustLevel, ours } from "./fedpeers.js";
 import { applyFrames } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
+import { rotationsJson } from "./fedtransit.js";
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
@@ -197,8 +198,8 @@ async function submitFrames(
         graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
       });
       if (moved.ok) {
-        await env.DB.prepare("UPDATE fed_peers SET public_key = ?, accept_keys = ? WHERE url = ?")
-          .bind(moved.pin, JSON.stringify(moved.accept), r.url)
+        await env.DB.prepare("UPDATE fed_peers SET public_key = ?, accept_keys = ?, rotations = ? WHERE url = ?")
+          .bind(moved.pin, JSON.stringify(moved.accept), rotationsJson(rotations), r.url)
           .run();
         continue;
       }

@@ -18,6 +18,8 @@ before mirroring it into display-only tables.
 - Finds federate only with their cache: a find on a `local-only` or imported cache stays home too.
 - A cache marked `unlisted` withholds its description on the wire, and a mirror keeps it off its map and
   offline packs as the origin does.
+- A receiver refuses a `local-only` or imported cache on every carrier, whoever passes it on, and a hub's transit
+  feed serves neither.
 
 ### Key rotation
 
@@ -50,7 +52,8 @@ A URL says where a peer answers, not who holds its key, so no peer is `trusted` 
   reaches from the matched key, also once the matched key's grace has passed.
 - **Removing a peer** deletes its row and pinned key. What it published stays, with no row to vouch for it: it
   counts as from an unknown origin, hidden by default and never a corroborating voice. Added again, the peer
-  starts `unvetted` and its key is fetched and compared afresh.
+  starts `unvetted` and its key is fetched and compared afresh. A `transit:` row is the exception: its key came
+  from a hub, so the records only that key vouched for go with it.
 
 ## One row per instance
 
@@ -107,6 +110,36 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
   the same way. A URL from another party can never reach the host's LAN. The peers configured by hand
   (`FED_PEERS`, `FED_HUB_URL`) are exempt, and `FED_ALLOW_PRIVATE=1` opens it for a federation that lives on a
   LAN.
+
+## Records passed on through hubs
+
+A hub serves the caches, finds and tombstones it mirrored on its transit feed (`GET /federation/sync/transit`),
+as their home instances signed them, byte for byte. It re-signs nothing, so it can neither change a record nor
+lend it any trust. `FED_RESERVE` decides what it passes on: by default the records of instances it trusts.
+
+- **Verified against the home's key.** Each frame verifies under its origin's keys: the peer row the receiver
+  holds for that origin, the key the signed registry binds to it, or the key a hub handed on. A hub hands on the
+  key, accept set and rotation records it holds for each origin it passes on (`GET /federation/transit/keys`).
+- **Pinned on first sight.** The first hub to name an origin the receiver does not know pins that origin's key
+  in a peer row `transit:<instance>`: `unvetted`, never pulled, its fingerprint shown in Instance admin like any
+  peer's. Later the pin moves only along verified rotation records. No hub moves the key of an origin known any
+  other way, a blocked one included, and a registry binding wins over every hub's word.
+- **The direct key wins.** When the receiver follows the origin itself, by address or in `FED_PEERS`, the
+  origin's own key replaces the one a hub handed on, and every record that only the hub's key vouched for is
+  dropped. A lying hub therefore never gets a forged record shown under a trust the sysop gave the real origin.
+- **The origin's trust, never the hub's.** A passed-on record lands under its origin, so the receiver shows it
+  with its own trust in that origin: hidden while the origin is `unvetted`, never shown when it is blocked. A
+  trusted hub lifts nothing.
+- **No new voice.** The corroboration quorum asks reachable trusted peers only; a passed-on record is never an
+  answer, and an origin known only through a hub is never asked.
+- **Deletes reach every hop.** A tombstone passes on like any record, and a hub stops passing on what a
+  tombstone removed. A bounded tombstone (`upTo`) passes on too, so a restored cache follows it at its higher
+  version.
+- **Bounded travel.** The page carries each frame's hop count beside it; a record crosses at most four instances.
+  A hub never sends a record back to its origin or to the instance it came from, and serves its own records on
+  its own feeds only. Apply is idempotent by global id and version, so a record that comes round a ring of hubs
+  again changes nothing and is not passed on twice.
+- **Regions apply.** A pull narrowed by `FED_SYNC_REGION` narrows the passed-on caches too; deletes travel whole.
 
 ## Cross-instance corroboration
 
