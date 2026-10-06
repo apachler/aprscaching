@@ -380,12 +380,13 @@ describe("peer-corroborated finds still need a plausible local track", () => {
   });
 
   it("asks about a living cache where its station was, not where it was hidden", async () => {
-    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    // the hub's own attested site heard the station there
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1", FIRST_PARTY_SITES: SITE });
     const p1 = await answerer("p1.example", { lat: 48.2, lon: 16.37 }); // the station drove to Vienna
     await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
     stubFetch({ "https://p1.example": serve(p1.env) });
     await hub.env.DB.prepare(
-      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES ('OE8CAR-9', ?, 48.2, 16.37, 'rf', ?, 'aprs', 'aprs-is')",
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES ('OE8CAR-9', ?, 48.2, 16.37, 'rf', ?, 'aprs', 'tnc')",
     )
       .bind(now() - 700, SITE)
       .run();

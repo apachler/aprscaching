@@ -6,6 +6,7 @@ import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
 import { tncPacket } from "./link.js";
+import type { SentFrames } from "./echo.js";
 
 export interface KissOpts {
   host: string;
@@ -13,6 +14,8 @@ export interface KissOpts {
   retryMs?: number;
   /** This box's receiving-site callsign; stamped on frames heard directly (see {@link directSiteCall}). */
   siteCall?: string;
+  /** The frames the box sent on any port: what this TNC sends is remembered there, and an echo of one is dropped. */
+  sent?: SentFrames;
 }
 
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and the partial frame would grow
@@ -60,7 +63,9 @@ export class KissTnc {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean {
     if (!this.connected || !this.sock || this.meshcomNode) return false;
     try {
-      this.sock.write(kissWrap(encodeAx25(f)));
+      const raw = encodeAx25(f);
+      this.sock.write(kissWrap(raw));
+      this.o.sent?.remember(raw);
       return true;
     } catch {
       return false;
@@ -71,7 +76,9 @@ export class KissTnc {
   sendFrame(f: Ax25Frame): boolean {
     if (!this.connected || !this.sock || this.meshcomNode) return false;
     try {
-      this.sock.write(kissWrap(encodeFrame(f)));
+      const raw = encodeFrame(f);
+      this.sock.write(kissWrap(raw));
+      this.o.sent?.remember(raw);
       return true;
     } catch {
       return false;
@@ -108,6 +115,7 @@ export class KissTnc {
           );
         }
         if (this.meshcomNode) continue;
+        if (this.o.sent?.echoes(raw)) continue; // the box's own transmission, heard back
         this.h.onRaw?.(raw); // raw AX.25 for connected-mode consumers (node/digi)
         if (!f) continue;
         this.h.onFrame?.(f);

@@ -13,6 +13,8 @@
  * its own, independent gates, because the shared ingest secret also lets a trusted backend enqueue:
  *  - remote transmit is off unless the operator opts in on the box (`BOX_TX=1`);
  *  - a transmit command must name a callsign whose base call is the box's own station call;
+ *  - a beacon names the box's own position (`BOX_LAT`, `BOX_LON`), never one the command carries, and the
+ *    ack reports it, so the gateway can tell the beacon's hearings from the station's own travels;
  *  - a transmit command older than `maxAgeSec` is refused, so a box that was offline never beacons a
  *    stale position or delivers a stale message when it reconnects;
  *  - remote transmits share a token bucket, so a flood of queued commands cannot key the radio in a burst.
@@ -55,6 +57,8 @@ export interface BoxCommand {
 export interface BoxResult {
   status: "done" | "failed";
   result: string;
+  /** Where a beacon said the station is: the box's configured position, reported with the ack. */
+  position?: { lat: number; lon: number };
 }
 
 /** A MeshCom sender the box can hand answers to (the opt-in `MeshcomSender`). */
@@ -87,6 +91,8 @@ export interface BoxPollerOpts {
   boxCall?: string;
   /** Operator opt-in for remote transmit (`BOX_TX=1`). */
   remoteTx: boolean;
+  /** Where the box stands (`BOX_LAT`, `BOX_LON`): the only position a remote beacon names. */
+  position?: { lat: number; lon: number };
   /** RF transmitter, or null when the box has no TNC. */
   radio: BoxRadio | null;
   /** MeshCom sender, or null when MeshCom transmit is not enabled on this box. */
@@ -120,6 +126,25 @@ export function parseBoxPath(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Parse `BOX_LAT` / `BOX_LON`, the box's own position. Both or neither: with neither the box sends no remote
+ * beacon. A remote beacon names where the box is, never a position the command carries, so a beacon the
+ * operator queues from anywhere cannot place the station somewhere else.
+ */
+export function parseBoxPosition(
+  lat: string | undefined,
+  lon: string | undefined,
+): { lat: number; lon: number } | undefined {
+  const has = (v: string | undefined) => v != null && v.trim() !== "";
+  if (!has(lat) && !has(lon)) return undefined;
+  if (!has(lat) || !has(lon)) throw new Error("set both BOX_LAT and BOX_LON, or neither");
+  const la = Number(lat),
+    lo = Number(lon);
+  if (!Number.isFinite(la) || Math.abs(la) > 90) throw new Error(`BOX_LAT must be a latitude in degrees, not ${lat}`);
+  if (!Number.isFinite(lo) || Math.abs(lo) > 180) throw new Error(`BOX_LON must be a longitude in degrees, not ${lon}`);
+  return { lat: la, lon: lo };
+}
+
 function onFlag(payload: unknown): boolean | null {
   const on = (payload as { on?: unknown } | null)?.on;
   return typeof on === "boolean" ? on : null;
@@ -129,7 +154,7 @@ const fmtState = (v: boolean | null) => (v == null ? "n/a" : v ? "on" : "off");
 
 export class BoxPoller {
   private bucket: TokenBucket;
-  private pendingAcks: { id: number; status: string; result: string }[] = [];
+  private pendingAcks: ({ id: number } & BoxResult)[] = [];
   private timer?: ReturnType<typeof setInterval>;
   private inFlight = false;
   private failing = false;
@@ -436,13 +461,13 @@ export class BoxPoller {
       case "status":
         return this.status();
       case "beacon": {
-        const lat = Number(p.lat),
-          lon = Number(p.lon);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
-          return { status: "failed", result: "beacon needs a valid lat/lon" };
+        // the box's own position, never one the command names
+        const at = this.o.position;
+        if (!at) return { status: "failed", result: "this box has no position to beacon (set BOX_LAT and BOX_LON)" };
         const symbol = typeof p.symbol === "string" && p.symbol.length === 2 ? p.symbol : "/-";
         const comment = typeof p.comment === "string" ? p.comment : "";
-        return this.transmit(cmd, encodeAprsPosition(lat, lon, symbol, comment), "beacon");
+        const res = this.transmit(cmd, encodeAprsPosition(at.lat, at.lon, symbol, comment), "beacon");
+        return res.status === "done" ? { ...res, position: { lat: at.lat, lon: at.lon } } : res;
       }
       case "message": {
         const to = String(p.to ?? "")

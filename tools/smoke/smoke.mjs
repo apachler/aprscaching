@@ -1637,7 +1637,7 @@ ok(
 const boxTxUnver = await call("POST", "/api/box/smoke-box/command", {
   kind: "beacon",
   callsign: "OE5XYZ",
-  payload: { lat: 47, lon: 15 },
+  payload: { comment: "smoke" },
 });
 ok("a TX command for an unverified callsign is blocked (403)", boxTxUnver.status === 403, String(boxTxUnver.status));
 await verifyCallsign("OE7BOX", await signUp("OE7BOX")); // control-verify a fresh call (DL1ABC was GDPR-erased earlier)

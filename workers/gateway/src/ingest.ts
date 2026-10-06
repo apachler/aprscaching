@@ -27,6 +27,7 @@ import { serviceCall } from "./servicecall.js";
 import { deliverMailbox, mailboxOnAck, type Heard } from "./mailbox.js";
 import { transportForPort } from "./provenance.js";
 import { attestation, sitesFor } from "./attestedsites.js";
+import { commandedBeacons, isCommandedBeacon } from "./beacontag.js";
 import {
   downsamplePolicy,
   heardDirectly,
@@ -296,6 +297,14 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       thinned = new Set();
     }
   }
+  // A fix that matches a beacon this instance asked a box to send is tagged, so it never counts as evidence.
+  const beacons = fixes.length
+    ? await commandedBeacons(
+        env,
+        fixes.map((f) => f.p.src),
+        Math.min(now, ...fixes.map((f) => f.p.ts)),
+      )
+    : new Map();
   let persisted = 0;
   for (const f of fixes) {
     const { p, fix } = f;
@@ -308,8 +317,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const src = trusted ? "firehose" : "browser-rf";
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course, transport, ingest_box)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course, transport, ingest_box, commanded)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(
         p.src,
         p.ts,
@@ -325,6 +334,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         f.transport,
         // the box that delivered it, from its verified signature: a site trusted through a box attests only these
         principal?.box ?? null,
+        isCommandedBeacon(beacons, { call: p.src, ts: p.ts, lat: fix.lat, lon: fix.lon }, now) ? 1 : 0,
       ),
     );
     // The station row in two statements, so a station that has not moved never rewrites its geo index:
