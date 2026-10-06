@@ -6,7 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const FILES = execFileSync("git", ["ls-files", "*.md"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
@@ -26,7 +26,13 @@ function blocks(file: string): { line: number; source: string }[] {
 
 const DIAGRAMS = FILES.flatMap((file) => blocks(file).map((b) => ({ file, ...b })));
 
-describe("Mermaid diagrams in the docs", () => {
+// Loading Mermaid under jsdom and parsing a large diagram take seconds when the whole suite runs in parallel:
+// load it once up front, and give each parse room.
+describe("Mermaid diagrams in the docs", { timeout: 30_000 }, () => {
+  beforeAll(async () => {
+    await import("mermaid");
+  }, 60_000);
+
   it.each(DIAGRAMS.map((d) => [`${d.file}:${d.line}`, d.source] as const))("%s parses", async (_where, source) => {
     const { default: mermaid } = await import("mermaid");
     await expect(mermaid.parse(source)).resolves.toBeTruthy();
