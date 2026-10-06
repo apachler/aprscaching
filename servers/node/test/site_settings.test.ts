@@ -91,6 +91,7 @@ describe("the precedence rule", () => {
       "accounts",
       "retention",
       "imports",
+      "federation",
       "imprint",
       "support",
       "updates",

@@ -63,6 +63,13 @@ export const CONFIG_KEYS = {
     values: ["0", "1", "false", "true", "no", "yes"],
   },
   FED_SYNC_REGION: { type: "string", units: ["gateway", "pocket"] },
+  FED_RESERVE: {
+    type: "enum",
+    units: ["gateway"],
+    default: "trusted",
+    values: ["trusted", "all", "off"],
+    site: { group: "federation" },
+  },
   FED_ENDPOINTS: { type: "json", units: ["gateway", "pocket"] },
   FED_ALLOW_PRIVATE: {
     type: "enum",

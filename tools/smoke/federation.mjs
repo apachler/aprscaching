@@ -1202,6 +1202,50 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
     added.status === 201 && added.data?.peer?.trust === "unvetted",
     JSON.stringify(added.data),
   );
+
+  // ---- a hub passes its spokes' records on: oe.spoke → SUB (the hub) → PUB, which never peers with oe.spoke ----
+  const transitOf = async (query) => {
+    const res = await fetch(`${SUB}/federation/sync/transit?since=0${query}`);
+    return res.ok ? decodePage(new Uint8Array(await res.arrayBuffer())) : null;
+  };
+  const spokeFrames = (pg) =>
+    (pg?.frames ?? []).filter((f) => String(miniDecode(frameParts(f).payload).get(3)) === "oe.spoke");
+  const tpage = await transitOf("");
+  const passed = spokeFrames(tpage);
+  ok(
+    "the hub passes on its trusted spoke's records, as the spoke signed them",
+    passed.length > 0 &&
+      passed.every((f) => frameParts(f).signerKey === spub) &&
+      passed.some((f) => Buffer.from(f).equals(Buffer.from(spokeFrame))) &&
+      Array.isArray(tpage?.hops) &&
+      tpage.hops.length === tpage.frames.length,
+    JSON.stringify({ n: passed.length, hops: tpage?.hops }),
+  );
+  ok("nothing goes back to the spoke it came from", spokeFrames(await transitOf("&for=oe.spoke")).length === 0);
+  const tkeys = await call(SUB, "GET", "/federation/transit/keys");
+  ok(
+    "the hub hands on the spoke's key",
+    (tkeys.data?.keys ?? []).some((k) => k.instance === "oe.spoke" && k.publicKey === spub),
+    JSON.stringify(tkeys.data),
+  );
+  await call(PUB, "POST", "/federation/sync", undefined, OPH);
+  const learned = (await call(PUB, "GET", "/federation/peers", undefined, OPH)).data?.peers?.find(
+    (p) => p.instance === "oe.spoke",
+  );
+  ok(
+    "the third instance learns the spoke's key through the hub, unvetted",
+    learned?.url === "transit:oe.spoke" && learned?.trust === "unvetted" && learned?.added_via === "transit",
+    JSON.stringify(learned),
+  );
+  const box = "/api/caches?bbox=15.5,47,16.5,48";
+  const pubDefault = await call(PUB, "GET", box);
+  const pubAll = await call(PUB, "GET", `${box}&includeUnvetted=1`);
+  ok(
+    "the spoke's cache reaches the third instance under the spoke's own trust there (hidden until included)",
+    !(pubDefault.data?.caches ?? []).some((c) => c.origin === "oe.spoke") &&
+      (pubAll.data?.caches ?? []).some((c) => c.origin === "oe.spoke" && c.originTrust === "unvetted"),
+    JSON.stringify((pubAll.data?.caches ?? []).map((c) => [c.origin, c.originTrust])),
+  );
   const raised = await call(
     PUB,
     "POST",

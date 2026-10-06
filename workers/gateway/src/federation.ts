@@ -25,6 +25,7 @@ import { baseCall } from "@aprscaching/aprs";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 import { bboxWhere, SYNC_REGION_CAPABILITY, type Bbox } from "./fedregion.js";
 import { serviceCall } from "./servicecall.js";
+import { reservePolicy, TRANSIT_CAPABILITY } from "./fedtransit.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -148,7 +149,7 @@ const keyCache = new Map<string, Promise<FedKey | null>>();
  * private key as PKCS8 (supported on both Node and Bun; the Ed25519 *private JWK* import is
  * not portable) and publish the raw public key (base64url) for consumers to verify.
  */
-function loadKey(env: Env): Promise<FedKey | null> {
+export function loadKey(env: Env): Promise<FedKey | null> {
   const cacheKey = env.FED_PRIVATE_KEY ?? "";
   const hit = keyCache.get(cacheKey);
   if (hit) return hit;
@@ -669,6 +670,7 @@ export function instanceOf(req: Request, env: Env): string {
 export async function handleWellKnown(req: Request, env: Env): Promise<Response> {
   const fk = await loadKey(env);
   const peers = parseFedPeers(env.FED_PEERS).map((p) => p.url);
+  const passesOn = !!fk && reservePolicy(env) !== "off";
   return json({
     protocol: PROTOCOL,
     protocolVersions: PROTOCOL_VERSIONS,
@@ -686,6 +688,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       env.FED_SUBMIT_SECRET ? "submit" : null,
       fk ? "corroborate-signed/1" : null, // signed corroboration questions and answers
       fk ? SYNC_REGION_CAPABILITY : null, // the CBOR caches feed narrows to a region (fedregion.ts)
+      passesOn ? TRANSIT_CAPABILITY : null, // mirrored records passed on as their origins signed them
     ].filter(Boolean),
     endpoints: {
       caches: "/federation/caches",
@@ -694,6 +697,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       tombstones: "/federation/tombstones",
       "account-moves": "/federation/account-moves",
       notify: "/federation/notify",
+      ...(passesOn && { transit: "/federation/sync/transit", "transit-keys": "/federation/transit/keys" }),
     },
     sigAlg: "Ed25519",
     signed: !!fk,

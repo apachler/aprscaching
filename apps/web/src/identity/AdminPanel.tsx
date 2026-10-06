@@ -2174,13 +2174,18 @@ function PeerRow(props: {
   const [syncing, setSyncing] = useState(false);
   const p = props.peer;
   const name = p.instance ?? p.url;
+  // a peer known through a hub or by its pushes has no address to pull from: its records come to us
+  const unpulled =
+    p.added_via === "transit"
+      ? "its records reach this instance through a hub"
+      : p.added_via === "submitted"
+        ? "its records reach this instance by its pushes"
+        : null;
   // a discovered peer is listed but never synced until the operator picks a level for it
-  const waiting = !Number(p.enabled) && p.trust !== "blocked";
+  const waiting = !unpulled && !Number(p.enabled) && p.trust !== "blocked";
   const pulled = p.last_ok
     ? `last pull ${fmt.ago(p.last_ok)}`
-    : waiting
-      ? "not synced until you enable it"
-      : "never pulled";
+    : (unpulled ?? (waiting ? "not synced until you enable it" : "never pulled"));
   const pushes = [
     p.last_push_in ? `pushed here ${fmt.ago(p.last_push_in)}` : null,
     p.last_push_out ? `last push to it ${fmt.ago(p.last_push_out)}` : null,
@@ -2234,14 +2239,16 @@ function PeerRow(props: {
           </Button>
         )}
         <Button
-          disabled={waiting || p.trust === "blocked" || syncing}
+          disabled={waiting || !!unpulled || p.trust === "blocked" || syncing}
           aria-label={`Sync ${name} now`}
           hint={
             p.trust === "blocked"
               ? "Blocked: it is never contacted"
-              : waiting
-                ? "Enable it first: it is not synced until then"
-                : "Pull from it now, without waiting for the schedule"
+              : unpulled
+                ? `Never pulled: ${unpulled}`
+                : waiting
+                  ? "Enable it first: it is not synced until then"
+                  : "Pull from it now, without waiting for the schedule"
           }
           onClick={() => {
             setSyncing(true);

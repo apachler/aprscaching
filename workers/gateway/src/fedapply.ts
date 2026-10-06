@@ -4,7 +4,8 @@
  * push-to-hub, FBB bulletins, HF beacons, connected-mode circuits) hands its signed fedwire frames to
  * {@link admitFrame}, which runs the one set of acceptance checks and the idempotent-by-gid appliers
  * that mirror a record into remote_caches / remote_finds / remote_keys / remote_account_moves /
- * remote_tombstones. Mirrored rows are display-only: they are never re-published.
+ * remote_tombstones. Mirrored rows are display-only; the frames behind the caches, finds and tombstones are
+ * kept verbatim, so the transit feed can pass them on as their origins signed them (fedtransit.ts).
  */
 import type { Env } from "./env.js";
 import { b64urlToBytes } from "./util/b64.js";
@@ -18,6 +19,7 @@ import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { fedBbsOn } from "./fedbbsgate.js";
 import { ours, originKeys } from "./fedpeers.js";
 import { mergeEndpoints, storedEndpoints } from "./fedtransport.js";
+import { keepForTransit } from "./fedtransit.js";
 import {
   accountActionMessage,
   decodeFedFrame,
@@ -146,6 +148,11 @@ async function isTombstoned(env: Env, globalId: string, origin: string, version:
     .first<{ x: number }>());
 }
 
+/** A cache its origin lets federate: neither local-only nor imported from another platform. */
+function leavesOrigin(d: Record<string, unknown>): boolean {
+  return d.fedScope !== "local-only" && (d.source == null || d.source === "native");
+}
+
 /**
  * The namespace and self checks every carrier shares, applied to a frame whose signature has already
  * verified. A peer may only serve records IN ITS OWN namespace, self-attested — otherwise it could
@@ -199,6 +206,8 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
     env.DB.prepare("DELETE FROM remote_account_moves WHERE global_id = ?").bind(target),
     // a mirrored bulletin is stored under its record id, with the peer that served it as its origin
     env.DB.prepare("DELETE FROM bbs_messages WHERE bid = ? AND origin = ?").bind(target, origin),
+    // nor is it passed on any more
+    env.DB.prepare("DELETE FROM fed_transit WHERE gid = ?").bind(target),
     record,
   ]);
 }
@@ -324,8 +333,14 @@ export interface FrameGate {
   keysFor(origin: string): Promise<string[] | "blocked">;
   /** The one origin this delivery speaks for (the pulled or submitting peer); any other is refused. */
   origin?: string;
+  /** An origin refused outright: a hub's transit feed never carries the hub's own records. */
+  notOrigin?: string;
   /** The one mirror type admitted — a pulled sync page carries a single feed. */
   type?: string;
+  /** The mirror types admitted, for a page that mixes them (the transit feed). */
+  types?: ReadonlySet<string>;
+  /** The instance that delivered the frames, when not their origin (a hub passing records on). */
+  via?: string;
   /** Mirror records only: relay and peer-announce frames are refused (push-to-hub). */
   mirrorOnly?: boolean;
 }
@@ -338,14 +353,16 @@ export type FrameVerdict = "applied" | "rejected" | "quarantined" | "ignored";
  * a push-to-hub submission, an FBB bulletin, an HF beacon datagram or a connected-mode circuit page.
  * The claimed origin selects the keys (a forged claim buys nothing: the signature must verify under a
  * key independently bound to that origin); then the signature, the origin, our own namespace, the
- * record's namespace and self-attestation, its origin's tombstones and the replay/version gate are
- * checked, in that order, before the idempotent-by-gid applier runs. An applier failure is returned as
+ * record's namespace and self-attestation, its origin's tombstones, the cache's scope and the
+ * replay/version gate are checked, in that order, before the idempotent-by-gid applier runs. `hops` is how
+ * many instances the frame crossed to arrive (1 straight from its origin), kept for passing it on. An applier failure is returned as
  * `error` so a malformed record never aborts the frames after it.
  */
 export async function admitFrame(
   env: Env,
   fb: Uint8Array,
   gate: FrameGate,
+  hops = 1,
 ): Promise<{ verdict: FrameVerdict; error?: unknown }> {
   const rejected = { verdict: "rejected" as const };
   let origin: string;
@@ -355,6 +372,7 @@ export async function admitFrame(
     return rejected;
   }
   if (gate.origin !== undefined && origin !== gate.origin) return rejected; // a foreign origin
+  if (gate.notOrigin !== undefined && origin === gate.notOrigin) return rejected;
   if (origin === ours(env)) return rejected; // never mirror our own records back in
   const allowed = await gate.keysFor(origin);
   if (allowed === "blocked" || !allowed.length) return { verdict: "quarantined" };
@@ -370,6 +388,7 @@ export async function admitFrame(
   }
   const def = SYNC_DEF_BY_TYPE.get(SYNC_TYPE_BY_KIND[kind] ?? "");
   if (!def || (gate.type !== undefined && def.type !== gate.type)) return rejected;
+  if (gate.types !== undefined && !gate.types.has(def.type)) return rejected;
   const rec: FeedRecord = {
     type: def.type,
     id: f.record.gid,
@@ -380,10 +399,16 @@ export async function admitFrame(
   };
   // gid outside origin's namespace / not self-attested / tombstoned
   if (!(await passesNamespaceChecks(env, rec, origin))) return rejected;
+  // a local-only or imported cache never leaves its origin, whoever passes it on
+  if (def.type === "cache" && !leavesOrigin(rec.data)) return rejected;
   // a replay, a record at a version already applied, or future-dated
   if (!(await versionAdmits(env, rec))) return rejected;
   try {
     await applyVersioned(env, def, rec, origin);
+    // the mirror holds the record either way; failing to keep it for passing on loses only the onward hop
+    await keepForTransit(env, fb, f, rec.data, gate.via ?? origin, hops).catch((e: unknown) =>
+      console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`),
+    );
     return { verdict: "applied" };
   } catch (error) {
     return { verdict: "rejected", error };

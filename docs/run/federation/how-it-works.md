@@ -46,7 +46,7 @@ starts unvetted, however it arrived, unless you pinned its fingerprint in advanc
 
 **Mirrors.** Your instance keeps a copy of what its peers publish, in tables of its own that are for display
 only. A mirrored cache is read on your instance and logged on its home instance. A record only moves forward:
-an older copy, replayed, changes nothing.
+an older copy, replayed, changes nothing, however many paths bring it.
 
 **Tombstones.** A [tombstone](../../glossary.md#tombstone) is a signed deletion record. It travels ahead of the
 records in every exchange, so a deleted cache or an erased account is never mirrored back. Instances keep
@@ -59,9 +59,10 @@ peers whether their own receivers heard a finder near a cache. A find needs two 
 
 ## How records travel
 
-Records move one hop: from the instance that signed them to an instance that fetched them or was handed them.
-An instance publishes only its own records, never what it mirrored from others, so a peer you want to see is a
-peer you follow.
+A record travels from the instance that signed it to the instances that fetch it or are handed it, and on
+through hubs. An instance publishes its own records and passes on what it mirrored from the instances it
+trusts, each record exactly as its home instance signed it. The spokes of one club hub therefore see each
+other's caches and finds, and so does every instance that follows the hub.
 
 ```mermaid
 flowchart LR
@@ -70,11 +71,14 @@ flowchart LR
   C["Instance C<br/>44Net or HAMNET"]
   H["Club hub"]
   P["Pocket or NAT box"]
+  Q["Second spoke"]
   F["Instance F<br/>no IP path"]
   A <-->|pull both ways| B
   A <-->|pull over 44Net| C
+  B -->|pulls, gets the spokes' records too| H
   P -->|pushes its records| H
-  P -->|pulls the hub's records| H
+  P -->|pulls the hub's and the other spokes' records| H
+  Q -->|pushes and pulls| H
   B -.->|FBB mail, experimental| F
 ```
 
@@ -90,9 +94,12 @@ An arrow starts at the instance that opens the connection.
 [Choose how to connect](choose.md) matches each situation to a path, and [Federation transports](transports.md)
 explains every transport step by step, with who starts it, what it sends, when and what to configure.
 
-A hub keeps what its spokes push for its own map and its own members. It does not pass a spoke's records on to
-its other peers or to the other spokes: each of those follows the spoke itself, or reads its feed through the
-hub's [relay](transports.md#rendezvous-relay).
+A hub passes on the records of the instances it trusts, on its transit feed
+([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)). The hub signs
+nothing of them and lends them none of its trust: your instance checks each record against its home instance's
+key and shows it with your own trust in that home. A home you never vetted stays hidden however many hubs it
+crossed, and one you block stays blocked. A record crosses at most four instances, and never travels back to
+where it came from.
 
 ## How a find gets confirmed across instances
 
@@ -166,7 +173,7 @@ and `FED_REVEAL_IGATE` ([Running federation safely](index.md#running-federation-
 | Finds, DNFs and notes on those caches, signed by the finder where they signed them | Finds on local-only or imported caches |
 | Callsign keys, and whether each call is verified | Imported data: heritage places and caches imported from other platforms |
 | Bulletins, tombstones and account moves | The hint of every cache, and the description of an **unlisted** cache |
-| | Accounts, email addresses, sessions, passkeys and profiles |
+| Caches, finds and tombstones mirrored from the instances you trust, unchanged (`FED_RESERVE`) | Accounts, email addresses, sessions, passkeys and profiles |
 | | Station positions, tracks, messages and packet logs |
 
 An **unlisted** cache travels without its description, and a mirror keeps it off its map as its
@@ -175,8 +182,8 @@ station's callsign is shared only when both sysops opt in (`FED_REVEAL_IGATE`).
 
 ## What federation cannot do
 
-- **Lift trust by itself.** A record from an instance you never vetted stays hidden, whatever path brought it.
-  A beacon or a mail batch from an unknown instance is quarantined, never applied.
+- **Lift trust by itself.** A record from an instance you never vetted stays hidden, whatever path brought it,
+  a trusted hub included. A beacon or a mail batch from an unknown instance is quarantined, never applied.
 - **Forge or alter a record.** A relay, a hub, a tunnel or an RF path in between can delay or drop records, but
   not change them unnoticed.
 - **Recall a record.** A peer that mirrored a cache keeps its copy until a tombstone arrives. A peer that is

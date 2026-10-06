@@ -60,6 +60,7 @@ change. It travels with the database, so a backup carries it. The tables below m
 | Activity spots | `SPOTS_ENABLED` | Imports & data sources | on or off |
 | Spot sources | `SPOTS_SOURCES` | Imports & data sources | any of `pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn` |
 | Poll interval | `SPOTS_TTL_SEC` | Imports & data sources | a whole number, 60–86400 s |
+| Pass on peers' records | `FED_RESERVE` | Federation | one of `trusted`, `all`, `off` |
 | Operator name | `OPERATOR_NAME` | Imprint & contact | one line of text, up to 120 characters |
 | Postal address | `OPERATOR_ADDRESS` | Imprint & contact | one line of text, up to 300 characters |
 | Contact email | `OPERATOR_EMAIL` | Imprint & contact | an email address |
@@ -167,6 +168,7 @@ app do not read these.
 | `FED_OPERATOR` | Operator label, self-published in `/.well-known` beside the service call (`SERVICE_CALL`) | — |
 | `FED_PEERS` | Comma-separated peer base URLs to sync from. An entry starts `unvetted`. `<url>#<fingerprint>` pins the peer's key fingerprint (16 hex digits, from its sysop or `node tools/fedkey/fingerprint.mjs`): a peer whose key matches starts `trusted`, one whose key does not is refused | — |
 | `FED_SYNC_REGION` | `S,W,N,E` in decimal degrees: pull only the caches inside this box from peers that filter by region (`sync-cache-bbox`); deletes are never filtered. Changing it reads the caches feed again from the start | whole feed |
+| `FED_RESERVE` | Which records mirrored from other instances this instance serves on to its peers on the transit feed, each as its home instance signed it: `trusted` passes on the records of instances trusted here, `all` those of every instance not blocked here, `off` none. A peer verifies each record against its home's key and applies its own trust in that home. Also an instance setting ([Hubs, relays and the registry](../run/federation/hubs-and-relays.md#a-hub-passes-its-spokes-records-on)) · *[Instance setting](#instance-settings)* | `trusted` |
 | `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |
 | `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |
 | `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret. Records are signed either way; the secret decides who may register a new spoke's key on the hub | — |

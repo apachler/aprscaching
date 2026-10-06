@@ -55,6 +55,35 @@ Restart both. What happens then:
   `/health?live` after 30 s, doubling up to 10 minutes, and pushes the moment it answers. While more pages wait
   than one cycle sends, the next cycle follows a few seconds later.
 
+### A hub passes its spokes' records on
+
+A hub serves what it mirrored again, on its transit feed, so its spokes see each other's caches and finds, and so
+does every instance that pulls the hub. A spoke needs no extra setting: one that pulls the hub (`FED_PEERS`) reads
+the transit feed with the rest.
+
+Which records the hub passes on is the instance setting **Pass on peers' records** (`FED_RESERVE`), under
+**Instance admin → Instance settings → Federation**:
+
+- `trusted`, the default: the records of the instances trusted on the hub. Each spoke's records travel on once you
+  trust that spoke.
+- `all`: the records of every instance the hub has not blocked, unvetted spokes included.
+- `off`: none. The hub keeps its spokes' records for its own map.
+
+What an instance that pulls the hub does with them:
+
+- **It checks every record against its home instance's key.** The hub signs none of them. It hands on the key it
+  holds for each home (`GET /federation/transit/keys`), and the receiving instance pins that key the first time it
+  sees it, in a peer row `transit:<instance>`: `unvetted` and never pulled. **Instance admin → Federation** lists
+  it; compare its fingerprint with the home's sysop before you trust it, as for any peer. A registry binding wins
+  over any hub's word, and once you follow the home directly its own key replaces the one the hub handed on.
+- **It applies its own trust in the home, never the hub's.** A home you have not vetted stays hidden until a
+  player includes unvetted peers; a home you block stays blocked on every path.
+- **Deletions travel the same way**, a sysop's removal and restore of a cache included.
+- **A record travels a bounded way.** It crosses at most four instances, never goes back to its home or to the
+  instance it came from, and two hubs that follow each other pass it on once.
+
+A home the hub trusts later has its earlier records passed on at the receivers' next pull.
+
 ### Rendezvous relay
 
 The relay is a mailbox on the hub: a requester leaves a query for a firewalled spoke, the spoke collects it on its
@@ -127,6 +156,9 @@ How the registry behaves:
   is unreachable, with **Sync now**. On Pocket, `sync.sh --status` shows the same.
 - On the hub, the same page lists each spoke's last submission. A spoke shows as stale after
   `FED_SPOKE_STALE_HOURS` (24) without one.
+- On a spoke that pulls the hub, the other spokes' caches show *mirrored from* their home instance once you
+  include unvetted peers or trust their homes, and **Instance admin → Federation** lists each home as a
+  `transit:` peer.
 
 ## Next
 
