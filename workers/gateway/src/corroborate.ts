@@ -20,6 +20,7 @@ import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin, type PeerRow } from "./fedpeers.js";
+import { requeuePeer } from "./fedtransit.js";
 import { provenanceOf } from "./provenance.js";
 import { attestation, sitesFor, type Attestation } from "./attestedsites.js";
 import { isInstanceId, loadRegistry, type RegistryEntry } from "./federation.js";
@@ -426,13 +427,15 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
   const at = nowS();
   for (const url of new Set(urls)) {
     await env.DB.prepare("UPDATE fed_peers SET rep_confirmed = rep_confirmed + 1 WHERE url = ?").bind(url).run();
-    if (threshold > 0)
-      await env.DB.prepare(
-        // added_via keeps how the peer arrived; auto_promoted_at marks the promotion as corroboration's own
-        "UPDATE fed_peers SET trust='trusted', auto_promoted_at=?, approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
-      )
-        .bind(at, at, url, threshold)
-        .run();
+    if (threshold <= 0) continue;
+    const promoted = await env.DB.prepare(
+      // added_via keeps how the peer arrived; auto_promoted_at marks the promotion as corroboration's own
+      "UPDATE fed_peers SET trust='trusted', auto_promoted_at=?, approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
+    )
+      .bind(at, at, url, threshold)
+      .run();
+    // a newly trusted origin's records held back from the transit feed go out now, as for the sysop's trust
+    if (promoted.meta.changes) await requeuePeer(env, url);
   }
 }
 

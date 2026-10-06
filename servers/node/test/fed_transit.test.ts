@@ -5,6 +5,8 @@
 import { createHash } from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
+import { runScheduled } from "@aprscaching/gateway/app";
+import { queryPeerCorroboration } from "@aprscaching/gateway/corroborate";
 import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import { bodyToWire } from "@aprscaching/gateway/fedsync";
@@ -42,12 +44,17 @@ async function addFind(env: Env, cacheId: number): Promise<number> {
 
 /** A spoke `a`, a hub following it, and `b` following only the hub. */
 async function world(
-  opts: { hubTrustsA?: string; hubEnv?: Record<string, unknown>; bEnv?: Record<string, unknown> } = {},
+  opts: {
+    hubTrustsA?: string;
+    aEnv?: Record<string, unknown>;
+    hubEnv?: Record<string, unknown>;
+    bEnv?: Record<string, unknown>;
+  } = {},
 ) {
   const ka = await newFedKey(),
     kh = await newFedKey(),
     kb = await newFedKey();
-  const a = instanceEnv("a.example", ka);
+  const a = instanceEnv("a.example", ka, opts.aEnv);
   const hub = instanceEnv("hub.example", kh, opts.hubEnv);
   const b = instanceEnv("b.example", kb, opts.bEnv);
   await follow(hub, "https://a.example", "a.example", ka, opts.hubTrustsA ?? "trusted");
@@ -68,6 +75,12 @@ const one = async (env: Env, sql: string, ...binds: unknown[]) =>
   (await env.DB.prepare(sql)
     .bind(...binds)
     .first<Record<string, unknown>>()) ?? null;
+
+/** B's transit cursor moves past everything the hub holds, as after a page served past held-back records. */
+async function passedAll(b: Env, hub: Env) {
+  const top = (await one(hub, "SELECT COALESCE(MAX(seq), 0) AS n FROM fed_transit"))!.n;
+  await b.DB.prepare("UPDATE fed_peers SET transit_cursor = ? WHERE url = 'https://hub.example'").bind(top).run();
+}
 
 async function mapCaches(env: Env, includeUnvetted = false) {
   const r = await call(env, "GET", `/api/caches${includeUnvetted ? "?includeUnvetted=1" : ""}`);
@@ -242,6 +255,110 @@ describe("a hub passes its spokes' records on", () => {
     ).toBe(200);
     await syncAllPeers(w.b);
     expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
+  });
+
+  it("corroboration's auto-promotion sends the newly trusted origin's older records on", async () => {
+    const LOGGER = "OE8LOG";
+    const heard = async (env: Env) =>
+      env.DB.prepare(
+        "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 47.07, 15.44, 'rf', 'OE8XXX', 'WIDE1-1', 'aprs', 'tnc')",
+      )
+        .bind(LOGGER, now() - 600)
+        .run();
+    const w = await world({
+      hubTrustsA: "unvetted",
+      hubEnv: { FED_CORROBORATION_QUORUM: "1", FED_AUTO_PROMOTE: "1" },
+      aEnv: { FIRST_PARTY_SITES: "OE8XXX" },
+    });
+    // a peer the hub trusts, whose answer confirms the corroboration A also answers
+    const kp = await newFedKey();
+    const p = instanceEnv("p.example", kp, { FIRST_PARTY_SITES: "OE8XXX" });
+    await follow(w.hub, "https://p.example", "p.example", kp);
+    await heard(w.a);
+    await heard(p);
+    stubFetch({
+      "https://a.example": serve(w.a),
+      "https://hub.example": serve(w.hub),
+      "https://b.example": serve(w.b),
+      "https://p.example": serve(p),
+    });
+    await syncAllPeers(w.hub);
+    await syncAllPeers(w.b);
+    expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
+    await passedAll(w.b, w.hub);
+
+    const q = { callsign: LOGGER, lat: 47.07, lon: 15.44, radiusM: 150, since: now() - 1800, until: now() };
+    expect(await queryPeerCorroboration(w.hub, q)).not.toBeNull();
+    expect(await one(w.hub, "SELECT trust FROM fed_peers WHERE url = 'https://a.example'")).toEqual({
+      trust: "trusted",
+    });
+    await syncAllPeers(w.b);
+    expect((await rows(w.b, "SELECT global_id FROM remote_caches WHERE origin = 'a.example'")).length).toBe(1);
+    expect((await rows(w.b, "SELECT global_id FROM remote_finds WHERE origin = 'a.example'")).length).toBe(1);
+  });
+
+  it("a wider FED_RESERVE sends what it newly lets out once, off → trusted and trusted → all", async () => {
+    const setReserve = async (env: Env, value: string) =>
+      expect((await call(env, "PUT", "/api/admin/settings/FED_RESERVE", { value }, OP)).status).toBe(200);
+
+    // off → trusted: the trusted origin's records go out past the follower's cursor
+    const w = await world();
+    await setReserve(w.hub, "off");
+    await syncAllPeers(w.hub);
+    await syncAllPeers(w.b);
+    expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
+    await passedAll(w.b, w.hub);
+    await setReserve(w.hub, "trusted");
+    await syncAllPeers(w.b);
+    expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
+
+    // trusted → all: an origin the hub has not vetted goes out too
+    vi.unstubAllGlobals();
+    const u = await world({ hubTrustsA: "unvetted" });
+    await syncAllPeers(u.hub);
+    await syncAllPeers(u.b);
+    expect(await rows(u.b, "SELECT global_id FROM remote_caches")).toEqual([]);
+    await passedAll(u.b, u.hub);
+    await setReserve(u.hub, "all");
+    await syncAllPeers(u.b);
+    expect((await rows(u.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
+    // narrowing and the same value again move nothing
+    const held = await rows(u.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid");
+    await setReserve(u.hub, "all");
+    await setReserve(u.hub, "trusted");
+    expect(await rows(u.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid")).toEqual(held);
+  });
+
+  it("a restart sends records on only when the environment widened FED_RESERVE since the last one", async () => {
+    const w = await world({ hubTrustsA: "unvetted" });
+    await syncAllPeers(w.hub);
+    await syncAllPeers(w.b);
+    await passedAll(w.b, w.hub);
+    const seqs = () => rows(w.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid");
+    const restart = async (extra: Record<string, unknown> = {}) => {
+      const env = instanceEnv("hub.example", w.kh, extra, w.hub.DB);
+      stubFetch({
+        "https://a.example": serve(w.a),
+        "https://hub.example": serve(env),
+        "https://b.example": serve(w.b),
+      });
+      await runScheduled(env);
+      return env;
+    };
+
+    // the setting unchanged: nothing moves
+    const before = await seqs();
+    await restart();
+    expect(await seqs()).toEqual(before);
+
+    // FED_RESERVE=all in the environment: the unvetted origin's records go out, once
+    await restart({ FED_RESERVE: "all" });
+    const moved = await seqs();
+    expect(moved).not.toEqual(before);
+    await syncAllPeers(w.b);
+    expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
+    await restart({ FED_RESERVE: "all" });
+    expect(await seqs()).toEqual(moved);
   });
 
   it("never sends a record back to its origin or the instance it came from", async () => {

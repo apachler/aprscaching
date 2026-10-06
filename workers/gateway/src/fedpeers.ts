@@ -25,7 +25,7 @@ import {
   usableKeys,
   type RegistryEntry,
 } from "./federation.js";
-import { forgetTransitPeer, requeueOrigin, supersedeTransitPeer } from "./fedtransit.js";
+import { forgetTransitPeer, requeuePeer, supersedeTransitPeer } from "./fedtransit.js";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -497,6 +497,6 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
     throw e;
   }
   // records held back while the origin was not trusted (or blocked) go out on the transit feed now
-  if (trust !== "blocked") await requeueOrigin(env, exists.instance);
+  if (trust !== "blocked") await requeuePeer(env, url);
   return json({ ok: true, url, trust });
 }

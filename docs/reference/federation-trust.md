@@ -141,6 +141,12 @@ lend it any trust. `FED_RESERVE` decides what it passes on: by default the recor
   its own feeds only. Apply is idempotent by global id and version, so a record that comes round a ring of hubs
   again changes nothing and is not passed on twice.
 - **Regions apply.** A pull narrowed by `FED_SYNC_REGION` narrows the passed-on caches too; deletes travel whole.
+- **Held-back records follow the policy.** When an origin becomes trusted on the hub (the sysop's decision, a
+  matching `FED_PEERS` fingerprint pin, or corroboration's auto-promotion), its kept records move to the end of
+  the transit feed, past every follower's cursor. When `FED_RESERVE` widens, the records it newly lets out move
+  the same way, once: the hub stores the policy it last applied (`fed_transit_state`) and compares it on a
+  setting write and at every start, so an unchanged setting moves nothing. A narrower policy moves nothing
+  either, since serving filters by the policy in force.
 
 ## Cross-instance corroboration
 

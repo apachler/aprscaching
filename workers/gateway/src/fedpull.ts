@@ -36,7 +36,7 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import {
   heldKeys,
   learnTransitKeys,
-  requeueOrigin,
+  requeuePeer,
   rotationsJson,
   supersedeTransitPeer,
   MAX_TRANSIT_HOPS,
@@ -345,8 +345,12 @@ async function syncPeer(
       .run();
     if (r.meta.changes) {
       p.trust = "trusted";
-      await requeueOrigin(env, wk.instance);
+      await requeuePeer(env, p.url);
     }
+  } else if (!p.instance && p.trust === "trusted") {
+    // a peer the sysop trusted before its first pull: the records a hub passed on for it were held back
+    // until this binding named their origin
+    await requeuePeer(env, p.url);
   }
   const newActive = usableKeys(keys.accept, nowS());
 
