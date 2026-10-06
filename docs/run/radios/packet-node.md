@@ -4,25 +4,27 @@ This page turns the ingest box into a connected-mode packet station: a NET/ROM n
 forwarding with the wider packet network. It is for the sysop; at the end the node answers connects and
 trades routes with its neighbours.
 
-These services run on the operator's own ingest box, over its KISS TNC, or over an AXUDP link to other nodes
-when the box has no radio.
+These services run on the operator's own ingest box, over its radio (the KISS TNC, else the first
+[soundcard port](soundcard.md)), or over an AXUDP link to other nodes when the box has no radio.
 
 !!! warning "These services transmit automatically"
-    Over a KISS TNC, the NET/ROM node, the BBS and FBB forwarding answer and send on the air without an
+    Over a radio, the NET/ROM node, the BBS and FBB forwarding answer and send on the air without an
     operator at the key. Read [Automatic stations on the air](../compliance/on-air-stations.md) before you
     turn them on with a radio.
 
 ## Before you start
 
-- An ingest box with a working [KISS TNC](quick-starts.md#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc)
-  with PTT, or a two-way [AXUDP link](quick-starts.md#axudp-and-axip-packet-over-the-internet)
-  (`AXUDP_PEERS`).
-- A callsign-SSID for each service, for example `OE8APR-7` for the node and `OE8APR-8` for the BBS.
+- An ingest box with a working radio: a [KISS TNC](quick-starts.md#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc)
+  with PTT or a [soundcard port](soundcard.md) with its PTT; or a two-way
+  [AXUDP link](quick-starts.md#axudp-and-axip-packet-over-the-internet) (`AXUDP_PEERS`).
+- A callsign-SSID for each service, for example `OE8APR-5` for the node and `OE8APR-8` for the BBS
+  ([Callsigns and SSIDs](rf-ingest.md#callsigns-and-ssids)).
 - Settings go in the box's settings file (`deploy/.env` in Docker); restart the ingest after each change.
 
 ## Connected-mode AX.25
 
-The node and the BBS run on the ingest box's own AX.25 stack, over its KISS TNC or an AXUDP port. Defaults:
+The node and the BBS run on the ingest box's own AX.25 stack, over its radio (the KISS TNC, else the first
+soundcard port) or an AXUDP port. Defaults:
 `t1` 3 s, `t3` 30 s, `n2` 10, window 4, modulo 8. The modulus is chosen for an outgoing connect and adopted
 from the peer on an incoming one, and SREJ is opt-in per link. How the stack works is in
 [The AX.25 stack](../../contribute/ax25-stack.md).
@@ -33,8 +35,8 @@ sessions: those answer with their own commands only. Tools answer on a player's 
 
 ## NET/ROM node
 
-Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over a
-two-way AXUDP port. The node:
+Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the box's radio or, without one, over
+a two-way AXUDP port. The node:
 
 - broadcasts its **NODES** table every `NETROM_BROADCAST_MS` (default 3600000, one hour; at least five minutes) and learns
   routes from the NODES broadcasts it hears, letting stale routes age out; `NETROM_PATH_QUALITY` (0–255) is
@@ -80,7 +82,8 @@ BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type 
 
 ### FBB forwarding
 
-Set `BBS_FORWARD=1` and `BBS_FORWARD_CALL` to forward mail. It needs the KISS TNC or a two-way AXUDP port.
+Set `BBS_FORWARD=1` and `BBS_FORWARD_CALL` to forward mail. It needs the box's radio (the KISS TNC or a
+soundcard port) or a two-way AXUDP port.
 The forwarder opens connected-mode AX.25 sessions to partner BBSes and exchanges mail with the **ASCII FBB**
 protocol. It uses hierarchical `TO@BBS.#REGION.STATE.CC.CONT` addressing, longest-prefix routing, and BID/MID
 de-duplication, and runs multi-hop connect scripts. It checks its queue every `BBS_FORWARD_POLL_MS` (default

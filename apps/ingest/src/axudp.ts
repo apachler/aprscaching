@@ -50,8 +50,8 @@ export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now()
 }
 
 /**
- * AXUDP listener — AX.25 frames tunnelled over UDP (the BPQ node mesh, port 10093). RESERVED seam
- *: wired but feature-flagged off; start only when AXUDP_PORT is set.
+ * AXUDP listener — AX.25 frames tunnelled over UDP (the BPQ node mesh, port 10093). Off unless AXUDP_PORT is
+ * set; the port also sends (`AxudpPort.sendFrame`), so the link carries traffic both ways.
  *
  * Trust note: a tunnelled frame is just a transport — it carries no proof it touched RF at a site we
  * operate. So we forward it as `heardVia: "aprs_is"` on the `axudp` port; the gateway's provenance

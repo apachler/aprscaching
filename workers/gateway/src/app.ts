@@ -552,7 +552,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (relayR && m === "GET") return handleRelayResult(req, env, relayR[1]!);
   if (p === "/federation/relay/lease" && m === "GET") return handleRelayLease(req, env);
   if (p === "/federation/relay/answer" && m === "POST") return handleRelayAnswer(req, env);
-  // packet leg: pack a spoke's queued queries into an ACSFED bulletin for the FBB mesh (sysop/ingest)
+  // packet leg: pack a spoke's queued queries into an ACSFED batch, personal mail to FBB partners (sysop/operator secret)
   const relayD = /^\/federation\/relay\/([A-Za-z0-9_.-]+)\/dispatch$/.exec(p);
   if (relayD && m === "POST") return handleRelayDispatch(req, env, relayD[1]!);
 
@@ -620,7 +620,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/sync/origin" && m === "GET") return handleOriginSync(req, env); // one origin after a sequence
   const fedSync = /^\/federation\/sync\/([a-z-]+)$/.exec(p);
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);
-  // store-and-forward send: pack local records into an ACSFED bulletin for the FBB mesh (sysop/ingest)
+  // store-and-forward send: pack local records into an ACSFED batch, personal mail to FBB partners (sysop/operator secret)
   if (p === "/federation/bbs/enqueue" && m === "POST") return handleFedBbsEnqueue(req, env);
   // beacon tier: GET = this instance's presence datagram (the ingest box transmits it);
   // POST = a heard datagram into the trust-gated pipeline (ingest-gated)

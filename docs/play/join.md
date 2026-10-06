@@ -45,7 +45,7 @@ sign in again if you lose your passkey. A returning player must use the email on
 address gets *That email doesn't match …'s account*.
 
 An email you type when you create the account with a passkey waits for confirmation. The instance sends a
-link to it; open it within 24 hours and tap **Sign in**. Until then **Settings → Account** shows the address
+link to it; open it within 24 hours and tap **Confirm address**. Until then **Settings → Account** shows the address
 as **waiting for confirmation**, and it does not sign you in. **Resend** there mails the link again.
 
 To add an email later, or change it, open **Settings → Account**, tap **Add email** or **Change**, type the
@@ -166,7 +166,7 @@ The code in the record is valid for 48 hours.
 
 1. In TQSL, open the **Callsign Certificates** tab. Select your certificate and choose **Save a Callsign
    Certificate**. Save it as a `.p12` file with a password.
-2. In the app, choose the file under **Certificate file (.p12)**, type the **File password** and tap **Verify**.
+2. In the app, tap **Choose the certificate file (.p12)** and pick the file, type the **File password** and tap **Verify**.
 
 The file and its password stay in your browser. Only the certificate and a signature go to the instance.
 

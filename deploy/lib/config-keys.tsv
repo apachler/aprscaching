@@ -183,7 +183,7 @@ IGATE_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 lets 
 IGATE_TX_PATH	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for frames the IGate transmits; blank sends direct	
 IGATE_TX_BURST	int	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	IGate transmits allowed at once before pacing applies	
 IGATE_TX_REFILL_SEC	number	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one IGate transmit	
-RF_SITE_CALL	call	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Callsign naming this box as the receiving site of what its TNCs hear	
+RF_SITE_CALL	call	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Callsign naming this box as the receiving site of what its TNCs and soundcard ports hear	
 BOX_ID	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Remote-control ID of this box; set it to link the box to your account	
 BOX_KEY	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	This box's private signing key, written by enrollment; it replaces INGEST_SECRET	
 BOX_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows transmitting on remote command	

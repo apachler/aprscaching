@@ -333,7 +333,8 @@ NET/ROM network, and then gives the far node's `FED` command.
 
 1. A signing key (`FED_PRIVATE_KEY`) and the endpoint in `FED_ENDPOINTS`, for example
    `{"transport":"ax25","address":"OE1BBB-9","priority":30}`.
-2. On its ingest box: a frame link (`KISS_TNC_HOST`, or `AXUDP_PORT` and `AXUDP_PEERS`), `FED_LINK_SERVE=1` and
+2. On its ingest box: a frame link (`KISS_TNC_HOST`, a [soundcard port](../radios/soundcard.md) (`SOUNDCARD_DEVICE`),
+   or `AXUDP_PORT` and `AXUDP_PEERS`), `FED_LINK_SERVE=1` and
    `FED_LINK_CALL=OE1BBB-9`. With the NET/ROM node running (`NETROM_CALL`, `NETROM_ALIAS`), the node also answers
    the `FED` command, which is what a `netrom` endpoint needs.
 
@@ -377,7 +378,7 @@ sequenceDiagram
   participant SA as Sysop A
   participant A as Instance A
   participant B as Partner instance B
-  SA->>A: POST /federation/bbs/enqueue, since cursor
+  SA->>A: POST /federation/bbs/enqueue, since the last cursors
   Note over A: pack signed records into one ACSFED message
   A->>B: FBB forwarding session, personal mail to ACSFED
   Note over B: marked partner only, check every frame

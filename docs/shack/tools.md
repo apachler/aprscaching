@@ -45,7 +45,8 @@ the registry says **Installed**.
 Your installed tools stay installed: they start again when you reload the page, and when you are signed in they
 follow your account to another device. Each start checks the tool again: its signature under the author key you
 approved, its code against the signed hash, and its permissions, network addresses and remote use against the
-ones you approved. A tool that fails a check stays in **Your tools** with **Not running** and the reason. If its
+ones you approved, and the tool API version its manifest names against the one this instance implements. A tool
+that fails a check stays in **Your tools** with **Not running** and the reason. If its
 author signed with a new key, or the tool now asks for more, install it again from the registry to approve the
 change.
 
@@ -127,7 +128,7 @@ NET/ROM node run on its ingest box, where no tool runs.
 | `network` | Reach the internet, and only the addresses the prompt lists under **connects to**. Without this permission it reaches nothing. |
 | `beacon` | Schedule a beacon under your callsign. |
 | `tx` | Ask to transmit under your callsign. |
-| `geo` | Read your device's location. |
+| `geo` | Read your device's location. The tool API offers no location call, so no tool uses it. |
 
 A tool never sees your session, your passkeys or the keys this browser holds for you, and no permission lets it
 change how finds are verified.
@@ -237,3 +238,5 @@ what it does.
 
 - [Packet terminal & BBS](packet-and-bbs.md): where most tools show their colours and commands.
 - [Tool catalogue](https://apachler.github.io/aprscaching-tools/catalogue/): every tool in the project registry.
+- [Write your first tool](https://apachler.github.io/aprscaching-tools/write/first-tool/): build and sign a tool of
+  your own.

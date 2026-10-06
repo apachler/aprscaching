@@ -3,16 +3,18 @@
 The plugin platform behind the Shack's **Tools** app: the tool manifest and its validator, the capability and
 surface model, the declarative panel and map-layer formats, the tool host, manifest and registry signing, and the
 signal decoders the app's audio front-end runs. It has no runtime dependency and runs the same in
-the browser, a Worker, Node and Bun. MIT-licensed, so other projects can embed it.
+the browser, a Web Worker, Node and Bun. MIT-licensed, so other projects can embed it.
 
 ## What is in it
 
 | Module | Exports |
 |---|---|
 | `manifest.ts` | `ToolManifest`, `validateManifest()`, `connectOrigin()` |
+| `api.ts` | `TOOL_API`, the sandbox API version the app implements, and `toolApiProblem()` for a tool that needs another |
 | `capabilities.ts`, `surfaces.ts` | The capability and surface names, `isGated()` |
 | `panel.ts`, `maplayer.ts` | `PanelSpec`, `MapLayerSpec`, and `sanitizePanel()` / `sanitizeMapLayer()` for untrusted input |
 | `host.ts` | `ToolHost`: registers tools, enforces their capabilities, routes events and the bus between tools |
+| `sessions.ts` | `SessionEvents`: a connected session's `on_connect` / `on_disconnect` and the remote commands a peer types |
 | `registry.ts` | Ed25519 manifest and registry signatures, `verifyRegistry()`, `resolveTrust()` |
 | `decoders/` | CW and PSK31 decoders, and the streaming audio decoders |
 | `macros.ts`, `session-script.ts` | CTEXT macros and the connected-mode session scripts |
@@ -50,7 +52,8 @@ pnpm --filter @aprscaching/tools test
 ## Write a tool
 
 A third-party tool does not depend on this package: it is a `tool.json` and a script that the app loads into a
-sandbox. `examples/station-log/` is a complete one, and the test suite checks it against the validator.
+sandbox. `examples/station-log/` is a complete one, a copy of the signed registry tool, and the test suite checks it against
+the validator and its signature.
 
 - [Write your first tool](https://apachler.github.io/aprscaching-tools/write/first-tool/): build, run, test and publish a tool.
 - [The manifest](https://apachler.github.io/aprscaching-tools/write/manifest/) and [the sandbox API](https://apachler.github.io/aprscaching-tools/write/sandbox-api/): every field, call and message.

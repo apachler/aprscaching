@@ -12,7 +12,7 @@ machine is in [Set up an ingest box](ingest-box.md).
 ## How the box works
 
 Every transport decodes into a normalised packet and adds it to one batch. Every `BATCH_MS` (default
-1500 ms; the Self-host stack's `docker-compose.yml` sets 2000 ms) the box posts the batch as JSON to `INGEST_URL` (default
+1500 ms; the `.env` that `deploy/setup.sh` writes from `deploy/.env.example` sets 2000 ms) the box posts the batch as JSON to `INGEST_URL` (default
 `http://127.0.0.1:8787/ingest`). It signs the request with its own key when it is enrolled (`BOX_ID`,
 `BOX_KEY`), and otherwise sends the shared `INGEST_SECRET` in the `x-ingest-secret` header. `INGEST_URL` can
 point at a gateway on `localhost`, on your LAN or in the cloud: the box works with a gateway anywhere.
@@ -169,7 +169,7 @@ The box asks the gateway every three minutes. An answer that a call is not verif
 this box's operator's, closes the gate for that call at once. While the gateway cannot be reached (no network, a timeout, a server
 error, a gateway without the endpoint), the last confirmation keeps counting for `TX_GATE_GRACE`: 6 minutes by
 default, up to 24 hours (`30`, `30m` or `2h`; a plain number is minutes). Past it the box stops transmitting
-until the gateway answers again, and it asks every 30 seconds or so meanwhile. Raise the grace for a link that
+until the gateway answers again, and meanwhile it asks again after 30 seconds, doubling the wait up to every three minutes. Raise the grace for a link that
 drops out, such as a HAMNET or mobile-data link; keep it short where you can, since a call revoked during an
 outage keeps transmitting for up to the grace. The doctor shows it (`ingest.tx_gate_grace`) and warns above an
 hour.

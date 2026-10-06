@@ -20,7 +20,7 @@ suspend an account. At the end you know what each action does here, on the peers
 | **Audit log** | every moderation action, newest first |
 
 Where you already see content, a **More** (**⋯**) menu offers the same actions: on a cache page, on each
-logbook row and on each photo or sound in the gallery. Players see **Report** there; you also see **Remove**.
+logbook row and on each photo or sound in the gallery. Players see **Report…** there; you also see **Remove…**.
 
 Every route behind these controls checks the sysop server-side. Hiding a control in the app is never the gate.
 

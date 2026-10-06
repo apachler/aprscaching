@@ -9,10 +9,13 @@ instance for real use, see [Is running an instance for me?](../run/index.md).
 
 - **Node 22 or newer** (CI uses 24).
 - **pnpm**: `corepack enable` provides the version the repository pins.
+- **git**.
 
 ## Install
 
 ```bash
+git clone https://github.com/apachler/aprscaching.git
+cd aprscaching
 pnpm install
 pnpm run check    # build every unit, run every unit suite, typecheck and build the web app
 ```
@@ -158,6 +161,18 @@ cp .env.example .env && pnpm dev:ingest                                         
 On Bun, the gateway runs with `INGEST_SECRET=<your secret> bun run servers/bun/server.ts`; both runtimes serve
 the same API and pass the same conformance suites ([Architecture and runtimes](architecture.md)).
 
+## Build the desktop app
+
+The desktop app is the Bun gateway compiled into one file with the web app and the schema inside. With Bun
+installed:
+
+```bash
+bash deploy/desktop/build-exe.sh    # every platform's binary, under dist/desktop/
+```
+
+`bun run deploy/desktop/launcher.ts` runs the same launcher from the checkout without compiling it.
+`deploy/desktop/README.md` covers signing and the release build.
+
 ## Check your checkout
 
 ```bash
@@ -169,4 +184,6 @@ pnpm run verify              # both: the full gate before committing
 ## Next
 
 - [Testing & verification](testing.md): every check and how to run one test.
+- [CONTRIBUTING.md](https://github.com/apachler/aprscaching/blob/dev/CONTRIBUTING.md): branches, Conventional
+  Commits and the DCO sign-off for a pull request.
 - [Architecture and runtimes](architecture.md): where a change belongs.

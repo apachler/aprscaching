@@ -372,19 +372,11 @@ Marketplace track (the `apachler/aprscaching-tools` repo on its own timeline; no
       entry pin a small allowlist (three or fewer), so a publisher announces the next key ahead of the
       rotation and confirmed pins keep verifying through the overlap. Cover the forged-authority rejection
       path — the whole registry trust model rests on `checkPinnedRegistry`.
-- [ ] **Tool bucket + signed publish** _(P1 · M)_ — in the `aprscaching-tools` repo, one JSON
-      file per tool under `bucket/`, so a pull request is single-purpose and pubkey continuity is a
-      one-file diff. Validation reuses `@aprscaching/tools` (MIT and dependency-free precisely so it can):
-      schema, live manifest fetch, a `valid` signature required for listing, independent `entrySha256`
-      verification, HTTPS-only immutable `entry`, no pubkey change for an existing name outside a
-      maintainer-approved rotation, and an automatic review label for the gated capabilities (`network`,
-      `tx`, `beacon`, `geo`). Listed tools ship a readable, non-minified entry script so review audits the
-      exact bytes the hash then freezes — human review is the enforcement, CI only flags obvious
-      minification. Merge builds and signs `registry.json` from the bucket and deploys it to GitHub Pages from a
-      reviewer-protected environment; an offline root key designates the online CI signing key, and its
-      custody and rotation ship documented with the repo. Listings state a license. Wire
-      `tools/toolkey/bundle-registry.mjs` into this repo's release workflow, so each release bundles the
-      registry's latest tag rather than one copied by hand.
+- [ ] **Tool registry publishing** _(P1 · M)_ — what the `aprscaching-tools` repo still lacks: an automatic
+      review label on a pull request for a tool that asks for a gated capability (`network`, `tx`, `beacon`,
+      `geo`); an online CI signing key, designated by the offline root key, so a merge signs `registry.json`
+      without the maintainer's machine; and `tools/toolkey/bundle-registry.mjs` wired into this repo's release
+      workflow, so each release bundles the registry's latest tag rather than one copied by hand.
 
 Backlog (P3 unless noted) — the first three are what a second dashboard release picks up:
 
@@ -667,14 +659,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       decode path (or the synthesised signal's timing), then install the browser with
       `pnpm exec playwright-core install --with-deps chromium` and fail on a missing browser in CI, as the
       `e2e-offline` job does.
-- [ ] **Tighten the type-aware warnings** _(P3 · M)_ — promote `lint:types` warnings to errors rule-by-rule
-      as the code is cleaned. **Errors:** `require-await`, `unbound-method`, `no-base-to-string`, and
-      `restrict-template-expressions` are **errors** (the legitimate exception — a data property named
-      `apply` — is a per-file override in `eslint.config.types.mjs`).
-      Untrusted request-body fields are coerced through `asStr()` (gateway `http.ts`) / a local equivalent
-      (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
-      **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
-      `.json()`/`unknown` returns under `projectService` (auto-fixing it would strip load-bearing casts).
 - [ ] **A preinstalled Raspberry Pi image** _(P3 · L)_ — a ready-to-flash image with the Self-host stack
       and the deploy helpers, so a Pi needs no setup beyond `deploy/aprscaching init selfhost`. It is a large
       build and maintenance effort (image builds per release, updates of the base system), so it waits until the

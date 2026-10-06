@@ -173,10 +173,10 @@ public name pinned to this host. A DNS problem then shows under [the public addr
   than the running gateway.
 - **Message:** `the gateway reports no schema (its database did not answer)` (warn). See `gateway.database`.
 - **Fix:** bring the gateway onto this checkout: `deploy/aprscaching update`. On Self-host the image carries the
-  migrations, so rebuild it in `deploy/` with `docker compose up -d --build`; on the other shapes a restart applies
-  them.
-  Self-host, in `deploy/`: `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build`. For the
-  second message, update the checkout.
+  migrations, so rebuild it in `deploy/` with `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build`;
+  on the other shapes a restart applies them. For the second message, update the checkout.
+- **Note:** before the 1.0 release the schema is one baseline file that changes in place, so this check passes
+  for a database created from an earlier baseline ([Updates](day-to-day/updates.md#self-host-by-hand)).
 - **See:** [Updates](day-to-day/updates.md).
 
 ### `gateway.version`
@@ -238,6 +238,7 @@ is **blocking** and missing. The fix is always on **Instance admin → Setup**; 
 | `db:ingest` | blocking | no packet in the last hour (a warning, never a failure) | see [`ingest.credentials`](#ingestcredentials), or connect a radio ([quick starts](radios/quick-starts.md)) |
 | `db:peers` | optional | no enabled federation peer | [Join the network](federation/index.md#joining-the-network) |
 | `db:partners` | optional | always met: a count of forwarding partners | — |
+| `FED_BBS` | optional | on, but no forwarding partner is marked for federation (a warning); off, it passes | mark a partner under **Forwarding** after asking its sysop, or turn `FED_BBS` off ([Federation over FBB](federation/fbb.md)) |
 | `db:caches` | optional | no active cache yet | hide the first cache |
 | `db:verify` | recommended | your callsign is not control-verified | **You → Verify callsign** ([Callsign verification](day-to-day/callsign-verification.md)) |
 
@@ -544,6 +545,13 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 - **Fix:** in the repository root, run `node tools/fedkey/genkey.mjs --raw`, put the value into
   `FED_PRIVATE_KEY`, and restart.
 - **See:** [Join the network](federation/index.md).
+
+### `federation.fingerprint`
+
+- **Tests:** the instance's own `/.well-known/aprscaching` names a signing key. It passes and prints the key's
+  fingerprint, as **Instance admin → Federation** shows it; it is absent when the instance has no key.
+- **Message:** `this instance's key fingerprint is <fingerprint>; read it to each peer's sysop` (pass).
+- **See:** [Compare key fingerprints](federation/index.md#compare-key-fingerprints).
 
 ### `federation.posture`
 

@@ -11,7 +11,10 @@ of the **Stages** section. Solving it tells you where to go or what comes next.
 ## How you find it
 
 1. Open the cache and play the clip under **Media** or under a stage.
-2. Work out what it tells you: a position, a word, a frequency.
+2. Work out what it tells you: a position, a word, a frequency. Morse code or PSK31 decodes to text with the
+   **PSK31 + CW decoders** tool, which you install from the registry under **Shack → Tools**
+   ([CW and PSK31 by ear](../../shack/index.md#cw-and-psk31-by-ear),
+   [Digimode decoders](https://apachler.github.io/aprscaching-tools/catalogue/digimode-decoders/)).
 3. If the cache has stages, tap **Reveal next stage** on an audio stage once you have the answer. The next
    stage's position and clue appear.
 4. Go to the spot and log the find.

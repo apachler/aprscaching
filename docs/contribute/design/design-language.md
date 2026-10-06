@@ -3,8 +3,7 @@
 How APRScaching looks, reads and behaves, as one set of decisions that every surface follows. It is for people
 who build or review the web app; the operator and player guides never need it. The tokens live in
 `apps/web/src/styles/tokens.css`, and `/?demo=ui` (the UI kit) shows every one of them live, in each theme,
-beside the primitives that use them. Where the app does not meet this page yet, the design review
-(`docs/reviews/design-review-2026-10.md`) lists it.
+beside the primitives that use them.
 
 ## Principles
 

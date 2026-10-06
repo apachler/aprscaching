@@ -91,7 +91,7 @@ flowchart LR
 |---|---|
 | Pull and notify between HAMNET peers, and the records passed on | Passkeys, device location for Tier B finds, the Web Serial and Web Bluetooth radio: they need https |
 | Peer exchange with trusted HAMNET peers | Adding a peer by callsign, unless a DNS-over-HTTPS resolver on HAMNET reaches ARDC's name servers |
-| Corroboration among HAMNET peers that reach each other | A registry located by `FED_REGISTRY_DNS`; set `FED_REGISTRY` to a document on HAMNET |
+| Corroboration among HAMNET peers that reach each other | A registry located by `FED_REGISTRY_DNS`; set `FED_REGISTRY` to the signed registry document itself (its JSON), which needs no lookup |
 | Sign-in by email link (a mail server on HAMNET) or the sysop's one-time link | mDNS across a HAMNET link |
 
 The full list, with workarounds, is in [HAMNET only](../networks/hamnet.md#what-works-and-the-workarounds).

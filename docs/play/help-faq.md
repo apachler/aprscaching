@@ -87,7 +87,7 @@ instance** names the sysop's callsign when the instance publishes it; otherwise 
 you the address. See [Getting to your instance](your-instance.md#find-out-which-ways-your-instance-offers).
 
 **Something on a cache page is wrong or offensive.**
-Tap **More** (**⋯**) beside it, then **Report**. The sysop gets your report; the person you report never
+Tap **More** (**⋯**) beside it, then **Report…**. The sysop gets your report; the person you report never
 learns who sent it. See [Report a problem](community.md#report-a-problem).
 
 **Where do I report a bug?**

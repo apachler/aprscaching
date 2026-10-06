@@ -70,7 +70,12 @@ git pull && SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build
 ```
 
 The image cannot see `.git`, so `SOURCE_COMMIT` is how its source link names the commit it runs. Migrations
-apply when the gateway starts; they run forward only and are tracked in `_migrations`.
+apply when the gateway starts; they run forward only and are tracked in `_migrations` by file name, so a file
+the database has recorded never runs again.
+
+Before the 1.0 release the schema is one baseline file, `db/migrations/0001_baseline.sql`, that changes in
+place. A database created from an earlier baseline keeps its old tables, and `gateway.migrations` still passes
+because the file name is the same: start such a test database afresh instead of updating it.
 
 ## Pocket
 

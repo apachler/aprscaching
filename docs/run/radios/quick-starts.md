@@ -75,7 +75,7 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
 4. Restart the ingest. The log shows `[kiss] connected 127.0.0.1:8001`.
 5. The `kiss-tnc` port counts packets.
 
-Without Direwolf, the box can be the modem itself: [Soundcard port](soundcard.md).
+Without Direwolf, the box can be the modem itself: [Soundcard port (no TNC)](#soundcard-port-no-tnc).
 
 **Count it for find verification (optional).** For a TNC you operate, add `RF_SITE_CALL=OE8APR-10`. The log
 then shows `[kiss] enabled — direct hearings name site OE8APR-10`. What the receiving site does, and the
@@ -83,6 +83,26 @@ gateway setting that attests it, are in [Receiving site and Tier A](rf-ingest.md
 
 Receiving never transmits. The ingest transmits over KISS only when you turn on a digipeater, an IGate, the
 node or BBS forwarding.
+
+## Soundcard port (no TNC)
+
+The ingest box can be the modem itself: a USB sound card or a sound HAT between the box and the radio, with no
+Direwolf and no TNC. It needs ALSA's `arecord` and `aplay` (the Docker image has them).
+
+1. Find the card with `arecord -l`: `card 1: … device 0` is `plughw:1,0`.
+2. Set it:
+
+    ```
+    SOUNDCARD_DEVICE=plughw:1,0
+    ```
+
+3. In Docker, pass the sound devices (and the PTT device, to transmit) into the ingest container
+   ([Turn the port on](soundcard.md#2-turn-the-port-on)), then restart the ingest.
+
+The log shows `[soundcard:1] capturing plughw:1,0 at 48000 Hz`; packets count on the `soundcard` port.
+Receiving never transmits. To transmit, choose how the radio is keyed (CM108 GPIO, Linux GPIO, serial RTS or
+DTR, CAT, `rigctld` or VOX) and set `SOUNDCARD_TX=1` and `SOUNDCARD_PTT`: [Soundcard port](soundcard.md).
+`RF_SITE_CALL` works here as for KISS.
 
 ## AGWPE: Direwolf, SoundModem, UZ7HO
 
@@ -111,8 +131,8 @@ packets count on the `hostmode` port. This link only receives. `RF_SITE_CALL` wo
 ## Your own IGate
 
 An IGate passes what your radio hears to APRS-IS and, when you allow it to transmit, APRS-IS messages for
-nearby stations back to RF. It needs a working [KISS TNC](#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc);
-passing messages to RF also needs PTT and `IGATE_TX=1`. An IGate is an automatically controlled station: read
+nearby stations back to RF. It needs a working [KISS TNC](#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc) or
+[soundcard port](#soundcard-port-no-tnc); passing messages to RF also needs PTT and `IGATE_TX=1`. An IGate is an automatically controlled station: read
 [Automatic stations on the air](../compliance/on-air-stations.md) first.
 
 1. Add the IGate's callsign and its APRS-IS passcode:
@@ -136,7 +156,7 @@ The copies the IGate passes to APRS-IS never count for Tier A:
 
 A digipeater is an automatically controlled station: read
 [Automatic stations on the air](../compliance/on-air-stations.md) before you turn it on. It needs a KISS TNC
-with PTT.
+with PTT, or a soundcard port with its PTT and `SOUNDCARD_TX=1`.
 
 ```
 DIGI_CALL=OE8APR-10

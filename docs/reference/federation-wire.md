@@ -36,8 +36,10 @@ delivery hints, not the source of truth — the content address is.
 
 Standalone signed JSON documents outside the CBOR frames carry their own domain prefix, prepended to
 the canonical (key-sorted) JSON: `acs-rot/1\n` for a rotation record `{key, prevKey, at}`,
-`acs-reg/1\n` for a registry `{at, entries}`, and `acs-ing/1\n` for a signed ingest batch. Verifiers
-accept only the prefixed bytes, so a signature made for one document type never verifies as another.
+`acs-reg/1\n` for a registry `{at, entries}`, `acs-ing/1\n` for a signed ingest batch, `acs-box/1\n` for an
+enrolled box's request and `acs-box-enroll/1\n` for its enrolment. A signed relay or spoke request carries
+`acs-relay/1\n` ([Push paths](#push-paths)). Verifiers accept only the prefixed bytes, so a
+signature made for one document type never verifies as another.
 
 ### Accept sets
 
@@ -63,7 +65,7 @@ refused.
 ## The sync surface
 
 `GET /federation/sync/<type>?since=&limit=` (type ∈ `cache · find · key · tombstone · account-move ·
-bulletin`) serves a CBOR page of the instance's own frames:
+bulletin`; `limit` 1–1000, default 200) serves a CBOR page of the instance's own frames:
 
 ```
 page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId?, 6 [hops …]?, 7 held?, 8 [gaps …]?, 9 [hopGaps …]? }   (application/cbor)
@@ -138,7 +140,7 @@ neither take a new record for one they hold nor suppress it with a deletion of a
 ```
 
 - It lists the instance itself, with the top of each of its own sequences, and every origin whose records the
-  `FED_RESERVE` policy passes on. The asker (`for`) is left out. Origins come in instance-id order, 100 a page
+  `FED_RESERVE` policy passes on. The asker (`for`) is left out of the other origins. Origins come in instance-id order, 100 a page
   (the summary answers anyone, so one page stays cheap to build); `next` is the `after` of the next page.
 - `for` counts only when it names an instance this one holds a peer row for and has not blocked. Any other value
   is ignored and the answer is the one a request without `for` gets, so naming an instance learns nothing about it.
@@ -279,7 +281,7 @@ registry entry (`addresses`). The registry copy is authority-signed, so it is a 
 directory of who-is-reachable-where — still addressing only, never a trust uplift. Every address is
 re-validated through the typed endpoint validator on load, so a malformed entry never rides in.
 
-A peer's stored endpoint set comes from one of three places (`fed_peers.endpoints_source`):
+A peer's stored endpoint set comes from one of four places (`fed_peers.endpoints_source`):
 
 - `dns`: the callsign binding of a peer added over 44Net, every endpoint marked `verifiedVia: "ardc-lot"`. A
   descriptor never replaces it.
@@ -287,7 +289,6 @@ A peer's stored endpoint set comes from one of three places (`fed_peers.endpoint
   check out. It replaces what the descriptor said before.
 - `announce`: a verified presence beacon (a `peer` record). A beacon trimmed to fit one datagram carries
   `partial: true` and only adds; a whole list replaces what the peer said before.
-
 - `discovered`: a trusted peer's [peer list](#peer-exchange), on a row that has no address of its own yet (one
   only discovery brought, or an origin known through a hub). It only adds, and the peer's own descriptor
   replaces it once the peer is followed.
@@ -399,7 +400,9 @@ Both halves ride the existing BBS machinery:
   `FED_BBS` is off) signs the local feed records (tombstones first) into fedwire frames — the same producer the
   HTTP sync surface uses — packs them into one `ACSFED` batch, and stores it once as local personal mail to
   `ACSFED` that expires after 30 days. Nothing on the instance calls it on its own. The content BID lands in
-  `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
+  `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts. `since` is a number that starts
+  every feed there, or the previous answer's `cursors` object (`{<feed>: {cursor, id?}}`), which resumes each
+  feed from its own position: a bulletin's cursor is a time in seconds, the other feeds' a `fed_seq` value.
 - **Receive** — an inbound forwarded message addressed to `ACSFED`, personal or bulletin, is taken only while
   `FED_BBS` is on and only from a partner marked for federation (the forwarding session names the partner);
   anything else is dropped unstored and never applied. A taken batch triggers the trust-gated apply on first
@@ -418,11 +421,15 @@ submission is one key — a second key smuggled into the batch is rejected; the 
 The submitted key must be one the hub already verified for that instance under any peer row (and the
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
 `unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
-moves the spoke's pin only along them, by the same rules as a pulled peer. A spoke pushes every feed the
-pull serves, in the pull's order, and names where each page starts in `x-fed-since`. A page that starts at or
+moves the spoke's pin only along them, by the same rules as a pulled peer. Every submission carries
+`x-fed-secret`, the shared `FED_SUBMIT_SECRET`: a hub without one answers `403`, a wrong value `401`. A spoke
+pushes every feed the pull serves, in the pull's order (tombstone, cache, find, key, account-move, bulletin),
+and names where each page starts in `x-fed-since`. A page that starts at or
 below what the hub holds of the spoke moves the hub's mark to the page's end, the frames that did not settle
 becoming gaps; a page without the header moves nothing. The answer carries `held`, how far the hub holds that feed
-of the spoke. A spoke whose page started past it sends again from there, once for each value of `held`
+of the spoke. `GET /federation/submit/marks`, with `x-fed-secret` and signed by the spoke like a relay request,
+answers where each of that spoke's feeds stands at the hub (`{marks: {type: {cursor, id?}}}`); the spoke reads
+it after a restart or an outage and resumes from there. A spoke whose page started past it sends again from there, once for each value of `held`
 (`fed_push_cursors.rewound_to`), so a hub that keeps answering the same `held` never has the same pages again. Relay feed answers carry
 a CBOR page (`pageB64`, a base64 fedwire page). A relayed corroboration question carries the asker's signed
 `corroborationQuery` frame verbatim (`params.question`, base64url), and its answer is
@@ -526,7 +533,7 @@ characters, no trailing dot) strictly inside the callsign's own zone. A `host=` 
 included, or a `web=` that is not an https origin rejects the whole record. Callsign verification publishes
 its code at `_aprscaching-verify.<call>.ampr.org`, never at the identity's name.
 
-`POST /federation/peers/44net { callsign }` or `{ host }` (sysop-only) resolves the TXT over
+`POST /federation/peers/44net { callsign }` or `{ host }` (sysop or `x-operator-secret`) resolves the TXT over
 DNS-over-HTTPS (`DOH_URL`, default Cloudflare) and cross-checks the live descriptor where the record sends
 peers. A host is lowercased, loses one trailing dot, and must be `<call>.ampr.org` or a name under it for a
 valid base call; anything else is refused before a lookup. More than one valid `acs1` binding at the name is
@@ -561,7 +568,7 @@ The peer row records that callsign as `operator_call`. The corroboration quorum 
 registry operator, else this call, else its signing key, so every instance added under one callsign is one
 voice.
 
-`GET /api/admin/federation/identity` (sysop-only) returns the records this instance publishes, each with
+`GET /api/admin/federation/identity` (sysop or `x-operator-secret`) returns the records this instance publishes, each with
 its name as the 44Net Portal takes it (`portal`), `type`, `value` and `purpose`, computed from `INSTANCE`, the
 federation key, the callsign (the `44net` endpoint's zone, else the first of `ADMIN_CALLSIGNS`), the `44net`
 endpoint and `APP_URL`, the main TXT naming both places when the instance has a `44net` endpoint and a public https

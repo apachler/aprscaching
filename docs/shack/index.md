@@ -45,7 +45,8 @@ Three things live outside the launcher:
 
 ## CW and PSK31 by ear
 
-1. Open **Shack → Tools** and switch on **PSK31 + CW decoders**.
+1. Open **Shack → Tools** and install **PSK31 + CW decoders** from the **Registry** list
+   ([Install a tool](tools.md#install-a-tool)).
 2. Under **Decode**, pick **CW (Morse)** or **PSK31**, select **Listen (mic)** and allow the microphone.
 3. Hold your phone or laptop to the radio's speaker, or connect the radio's audio output to the line-in.
 

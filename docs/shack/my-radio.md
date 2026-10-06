@@ -54,11 +54,11 @@ instance. Your own beacons stay out of the replay.
 
 1. With a radio connected, or with frames held by the field station, switch on **Forward to a gateway**.
 2. Choose the **Auth**:
-    - **signed (YOURCALL)**: for a public instance such as aprscaching.net. Your browser's key signs each
+    - **Signed (YOURCALL)**: for a public instance such as aprscaching.net. Your browser's key signs each
       batch, so no password is needed. The instance accepts only your own station's packets this way (any
       [SSID](../glossary.md#ssid) of your callsign). Other stations your radio hears, and Meshtastic nodes, stay in
       your browser. That way no stranger can inject traffic in your name.
-    - **secret (self-host)**: for your own instance. Enter the **Gateway base URL** and the **Ingest secret**
+    - **Secret (self-host)**: for your own instance. Enter the **Gateway base URL** and the **Ingest secret**
       that the instance's [sysop](../glossary.md#sysop) set. With the secret, everything your radio hears is
       forwarded. The browser remembers the URL; it keeps the secret in memory for this session only, so you
       enter it again after a reload.
@@ -96,7 +96,9 @@ radio and follow their own settings.
    optional comment.
 3. Select **Beacon**, then **Transmit** in the confirmation.
 
-Every transmission asks you to confirm first; nothing is sent automatically. To send a text message, see
+A beacon and a message from this section ask you to confirm first. A message sent from **Messages** over the
+radio, and the **ACK** you send for a message heard for you, go out without a dialog: the tab's transmit consent
+covers them. Every one shows in the TX indicator and under **Recent transmissions**. To send a text message, see
 [Send an APRS message](messages.md#send-an-aprs-message-from-your-radio). Read
 [On-air etiquette and rules](on-air.md) before you transmit.
 

@@ -118,7 +118,7 @@ Every game type gets the same sections, in this order:
 - **Diagrams are Mermaid**, never box-drawing characters. The manual draws them in the theme's colours.
 - **Working examples**: callsigns like `OE8APR-7`, locators like `JN76`, and `<placeholders>` in angle brackets
   for what the reader fills in.
-- **Link text says where it goes**: "[How finds are verified](../reference/trust-model.md)", never "click here".
+- **Link text says where it goes**: "[The trust model](../reference/trust-model.md)", never "click here".
 - **Every page ends with Next**: one or two links.
 
 ## Player pages

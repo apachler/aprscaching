@@ -159,11 +159,11 @@ has no limit.
 **Active** here.
 
 **Stages.** A multi-stage or audio cache has **Stages** at the end of the form: the open start and the locked
-stages in order, each with its unlock, position and clue. **Add a stage** and **Remove the last stage** change
+stages in order, each with its unlock, position and clue. **Add a stage**, and **Remove stage 1**, **Remove stage 2** and so on beside each stage, change
 the list; **Save stages** stores it. A finder who unlocked a stage you changed, or one after it, unlocks those
 stages again, so the app asks before it saves. An audio stage's clip uploads once the stage is saved. Once the
 cache has a find, each stage it had then moves within the same limit as the cache and stays part of the cache:
-its **Remove** button is off. A stage you add later is free until a find includes it.
+its **Remove stage** button is off. A stage you add later is free until a find includes it.
 
 ## Cache adoption
 
