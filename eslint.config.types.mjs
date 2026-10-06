@@ -9,8 +9,8 @@
 //
 // Philosophy mirrors the fast config: the by-design `any` at runtime boundaries (database rows, KISS/AX.25 byte
 // shims, protobuf, COSE) means the `no-unsafe-*` / `no-explicit-any` family is OFF — those are not defects
-// here. What stays ON (error) is the bug-catching set that is genuinely green today; softer stylistic
-// type-aware rules are warnings to tighten over time (see TODO.md).
+// here. Everything that stays ON is an error, and `pnpm lint:types` runs with `--max-warnings 0`, so a
+// warning fails CI too.
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -52,10 +52,9 @@ export default tseslint.config(
       // directives" to the fast config, which doesn't enable these rules).
       "@typescript-eslint/require-await": "error",
       "@typescript-eslint/unbound-method": "error",
-      // `Response.json()` and friends default their generic to `unknown`, and the linter's projectService
-      // view of that default disagrees with the build's — so this rule flags necessary assertions as
-      // "unnecessary". Left as a WARN (never auto-fixed in CI) so it can't remove a load-bearing cast.
-      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
+      // ERROR: an assertion that changes nothing hides the real type from the reader. `pnpm run check`
+      // builds every unit with tsc, so a cast this rule calls redundant but the build needs fails there.
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
 
       // Everything else from recommendedTypeChecked stays at its default (error): the structural,
       // type-view-stable bug catchers — no-floating-promises, no-misused-promises, await-thenable,

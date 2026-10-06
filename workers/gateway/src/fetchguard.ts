@@ -51,7 +51,7 @@ function blockedAddress(ip: string): string | null {
         ? embedded[1]!
         : (() => {
             const hi = parseInt(embedded[1]!, 16),
-              lo = parseInt(embedded[2]!, 16);
+              lo = parseInt(embedded[2], 16);
             return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
           })();
     return blockedAddress(v4) ?? (s.startsWith("64:ff9b:") ? "NAT64" : null);

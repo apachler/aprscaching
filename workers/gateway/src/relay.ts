@@ -76,7 +76,7 @@ async function relaySigningBytes(
   body: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const text = `${RELAY_DOMAIN}${method.toUpperCase()} ${pathAndQuery}\n${at}\n${await sha256Hex(body)}`;
-  return new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
+  return new TextEncoder().encode(text);
 }
 
 /** Headers that authenticate a relay request as this instance (its federation key signs it). */
@@ -91,12 +91,7 @@ export async function signRelayRequest(
   const u = new URL(url);
   const signed = await signRaw(
     env,
-    await relaySigningBytes(
-      method,
-      u.pathname + u.search,
-      at,
-      new TextEncoder().encode(body) as Uint8Array<ArrayBuffer>,
-    ),
+    await relaySigningBytes(method, u.pathname + u.search, at, new TextEncoder().encode(body)),
   );
   if (!instance || !signed) return null;
   return {
@@ -244,7 +239,7 @@ export async function enqueueRelayQuery(
     .bind(requester)
     .first<{ n: number }>();
   if ((waiting?.n ?? 0) >= RELAY_MAX_QUEUED_PER_REQUESTER) return { status: 429, error: "too many queries waiting" };
-  const ticket = hex(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
+  const ticket = hex(crypto.getRandomValues(new Uint8Array(16)).buffer);
   const ins = await env.DB.prepare(
     "INSERT INTO fed_relay_queue (instance, kind, params, status, created_at, ticket_hash, requester) VALUES (?,?,?, 'queued', ?, ?, ?)",
   )
@@ -253,7 +248,7 @@ export async function enqueueRelayQuery(
       q.kind,
       JSON.stringify(q.params),
       nowS(),
-      await sha256Hex(new TextEncoder().encode(ticket) as Uint8Array<ArrayBuffer>),
+      await sha256Hex(new TextEncoder().encode(ticket)),
       requester,
     )
     .run();
@@ -361,7 +356,7 @@ export async function handleRelayResult(req: Request, env: Env, id: string): Pro
   if (!row) return json({ error: "no such query" }, { status: 404 });
   // only the requester, holding the ticket it was given, reads the result
   const ticket = req.headers.get("x-relay-ticket") ?? "";
-  const presented = await sha256Hex(new TextEncoder().encode(ticket) as Uint8Array<ArrayBuffer>);
+  const presented = await sha256Hex(new TextEncoder().encode(ticket));
   if (!ticket || !row.ticket_hash || !secretOk(presented, row.ticket_hash))
     return json({ error: "not your query" }, { status: 403 });
   return json({ status: row.status, answer: row.answer ? JSON.parse(row.answer) : null });

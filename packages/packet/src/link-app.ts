@@ -179,14 +179,13 @@ export function serveApp(
     onNetrom?: (packet: Uint8Array) => void;
   },
 ): ConnectedLink {
-  // eslint-disable-next-line prefer-const -- the driver closes over `link` before it is assigned
-  let link: ConnectedLink;
+  // the driver's io closes over `link`, declared below; makeLineDriver calls none of it while building
   const driver = makeLineDriver(app, {
     send: (b) => link.send(b),
     disconnect: () => link.disconnect(),
     onConnect: opts.onConnect,
   });
-  link = new ConnectedLink(
+  const link: ConnectedLink = new ConnectedLink(
     local,
     remote,
     {
