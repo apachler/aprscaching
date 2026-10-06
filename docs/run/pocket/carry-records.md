@@ -48,6 +48,7 @@ sequenceDiagram
 
     With the default, `trusted`, the phone passes on only the records of instances it trusts itself: your home
     instance, but not the other instances your home instance mirrors.
+
 3. **Restart the gateway:** `bash ~/aprscaching/deploy/pocket/restart.sh gateway`.
 4. **Sync at home** before you leave: `bash ~/aprscaching/deploy/pocket/extras/sync-now.sh --finds`
    ([Sync before a trip](trips.md#sync-before-a-trip)).
@@ -63,6 +64,7 @@ sequenceDiagram
 
     The phone shows its fingerprint under **Instance admin → Federation → Your key fingerprint**. A peer in
     `FED_PEERS` may sit on a private address such as a hotspot; one added under **Add peer** may not.
+
 2. **Sync now** under **Instance admin → Federation** on the other instance. It pulls the phone's own records and
    the ones it carries.
 3. **Bring the club's records home.** Add the other instance to the phone's `FED_PEERS` the same way, with its

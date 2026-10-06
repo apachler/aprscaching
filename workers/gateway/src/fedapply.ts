@@ -85,7 +85,7 @@ async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: F
  * Which feed each sync def consumes: its endpoint, advertised capability and applier. Keys and bulletins are
  * pulled per peer and keep a peer cursor; the other kinds are pulled per origin (fedtransit.ts).
  */
-export interface SyncDef {
+interface SyncDef {
   type: string;
   path: string;
   capability: string;

@@ -60,7 +60,6 @@ import {
   type RotationRecord,
 } from "./federation.js";
 import { bboxKey, bboxWhere, bboxWithin, parseBbox, type Bbox } from "./fedregion.js";
-import { buildFedFrames } from "./fedsync.js";
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 
 /** The record kinds synced per origin, in the order a pull applies them: deletes first, keys before moves. */
@@ -346,6 +345,9 @@ export async function handleOriginSync(req: Request, env: Env): Promise<Response
   if (origin === self) {
     // the top of the sequence is read before the rows, so a record written meanwhile lies above it
     const top = await nativeHeld(env, kind);
+    // loaded on use: the feeds and this module reach each other through app.ts, and a static import would
+    // read the feeds before they exist
+    const { buildFedFrames } = await import("./fedsync.js");
     const built = await buildFedFrames(env, self, kind, since, limit, undefined, region ? { bbox: region } : undefined);
     if (!built) return json({ error: "instance is unsigned" }, { status: 404 });
     const complete = built.frames.length < limit;
