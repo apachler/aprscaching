@@ -160,6 +160,12 @@ deploy/aprscaching restore oci://aprscaching-backups/latest      # the newest ar
    `--no-settings` leaves every setting as it is.
 5. It restores the secret files and any media, starts the instance and runs `doctor`.
 
+The rows come back exactly as the archive holds them. Federation needs nothing more: the instance numbers every new
+cache, find and deletion at least by the time in milliseconds, so its peers never take a new record for one they
+already hold, and a peer the instance trusts tells it how far it holds the instance's records, which raises the
+numbering past that even on a box whose clock is behind
+([Numbers are never reused](../../reference/federation-trust.md#records-passed-on-through-hubs)).
+
 ## Moving between shapes
 
 Take a backup on the old shape, `init` the new one, then `restore` there: for example Pocket to Self-host, or

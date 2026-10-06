@@ -126,7 +126,8 @@ describe("records only move forward", () => {
     const before = await v();
     await a.DB.prepare("UPDATE caches SET title = 'x' WHERE id = ?").bind(id).run();
     await a.DB.prepare("UPDATE caches SET title = 'y' WHERE id = ?").bind(id).run();
-    expect(await v()).toBe(before + 2);
+    const after = await v();
+    expect(after).toBeGreaterThan(before + 1); // each edit takes its own number of the caches sequence
     const r = await a.DB.prepare("SELECT updated_at FROM caches WHERE id = ?").bind(id).first<{ updated_at: number }>();
     expect(r?.updated_at).toBe(5000); // the cursor timestamp is never pushed ahead
   });
@@ -214,6 +215,12 @@ describe("the Node fetch guard", () => {
   });
 });
 
+/** A pull's request for a page of the peer's caches. */
+const cachePage = (req: Request) => {
+  const u = new URL(req.url);
+  return u.pathname === "/federation/sync/origin" && u.searchParams.get("kind") === "cache";
+};
+
 describe("carrier ids and body caps", () => {
   it("refuses an ACSFED bulletin whose BID does not match its content", async () => {
     const { a, hub } = await pair({ FED_BBS: "1" });
@@ -239,11 +246,12 @@ describe("carrier ids and body caps", () => {
 
   it("refuses a pull page larger than 4 MiB", async () => {
     const { a, hub } = await pair();
+    await addCache(a); // its summary then names a cache to fetch
     const inner = serve(a);
     const huge = new Uint8Array(5 * 1024 * 1024);
     stubFetch({
       [A]: (req) =>
-        new URL(req.url).pathname === "/federation/sync/cache"
+        cachePage(req)
           ? Promise.resolve(new Response(huge, { headers: { "content-type": "application/cbor" } }))
           : inner(req),
     });
@@ -253,13 +261,11 @@ describe("carrier ids and body caps", () => {
 
   it("refuses a page with more frames than it asked for", async () => {
     const { a, hub } = await pair();
+    await addCache(a);
     const f = await frame(a, "cache", "a.example:cache:1", 1000, { code: "AC-1", title: "t", updatedAt: 1000 });
     const inner = serve(a);
     stubFetch({
-      [A]: (req) =>
-        new URL(req.url).pathname === "/federation/sync/cache"
-          ? Promise.resolve(page(Array.from({ length: 501 }, () => f)))
-          : inner(req),
+      [A]: (req) => (cachePage(req) ? Promise.resolve(page(Array.from({ length: 501 }, () => f))) : inner(req)),
     });
     const r = await syncAllPeers(hub);
     expect(r.errors.join()).toMatch(/frames/);

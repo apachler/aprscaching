@@ -8,11 +8,11 @@
  * shaped so per-callsign signing slots in without a format change (signer becomes a callsign, not the instance).
  *
  *   GET /.well-known/aprscaching        instance descriptor + public key + addresses
- *   GET /federation/caches?since=<ts>   signed cache records (cursor = updated_at high-water mark)
- *   GET /federation/finds?since=<id>    signed find records  (cursor = append-only log id)
+ *   GET /federation/caches?since=<rev>  cache records (cursor = the caches sequence, fed_rev)
+ *   GET /federation/finds?since=<seq>   find records  (cursor = the finds sequence, fed_seq)
  *
- * Cursors are high-water marks; re-fetching the boundary is safe because records are idempotent
- * by `id` (a mirror upserts on the namespaced id).
+ * Cursors are high-water marks of a sequence that only this instance assigns, so a mirror can say "I hold
+ * this origin's caches up to N" whichever path brought them (fedtransit.ts). Records are idempotent by `id`.
  */
 import { b64urlToBytes } from "./util/b64.js";
 import { nowS } from "./util/time.js";
@@ -25,17 +25,19 @@ import { baseCall } from "@aprscaching/aprs";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 import { bboxWhere, SYNC_REGION_CAPABILITY, type Bbox } from "./fedregion.js";
 import { serviceCall } from "./servicecall.js";
-import { reservePolicy, TRANSIT_CAPABILITY } from "./fedtransit.js";
 import { PEER_EXCHANGE_CAPABILITY, PEER_EXCHANGE_PATH, peerExchangeOn } from "./feddiscover.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
 export const FED_PROTOCOL_VERSION = "0.2";
 const PROTOCOL_VERSIONS = ["0.1", "0.2"];
+/** The descriptor capability of an instance serving the per-origin summary and pages (fedtransit.ts). */
+export const ORIGIN_SYNC_CAPABILITY = "sync-origins";
 
 // ---- database row shapes (subset) ----
 interface CacheRow {
   id: number;
+  fed_id: number;
   code: string;
   owner_call: string;
   title: string;
@@ -58,7 +60,9 @@ interface CacheRow {
 }
 interface FindRow {
   id: number;
+  fed_seq: number;
   cache_id: number;
+  cache_fed_id: number;
   cache_code: string | null;
   logger_call: string;
   ts: number;
@@ -74,6 +78,7 @@ interface FindRow {
 }
 interface KeyRow {
   id: number;
+  fed_seq: number;
   callsign: string;
   public_key: string;
   created_at: number;
@@ -106,7 +111,7 @@ function cacheData(r: CacheRow) {
 }
 function findData(r: FindRow, instance: string) {
   return {
-    cacheId: `${instance}:cache:${r.cache_id}`,
+    cacheId: `${instance}:cache:${r.cache_fed_id}`,
     cacheCode: r.cache_code,
     loggerCall: displayCall(r.logger_call),
     ts: r.ts,
@@ -670,7 +675,6 @@ export function instanceOf(req: Request, env: Env): string {
 // ---- endpoints ----
 export async function handleWellKnown(req: Request, env: Env): Promise<Response> {
   const fk = await loadKey(env);
-  const passesOn = !!fk && reservePolicy(env) !== "off";
   const listsPeers = peerExchangeOn(env);
   return json({
     protocol: PROTOCOL,
@@ -689,7 +693,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       env.FED_SUBMIT_SECRET ? "submit" : null,
       fk ? "corroborate-signed/1" : null, // signed corroboration questions and answers
       fk ? SYNC_REGION_CAPABILITY : null, // the CBOR caches feed narrows to a region (fedregion.ts)
-      passesOn ? TRANSIT_CAPABILITY : null, // mirrored records passed on as their origins signed them
+      fk ? ORIGIN_SYNC_CAPABILITY : null, // the per-origin summary and pages (fedtransit.ts)
       listsPeers ? PEER_EXCHANGE_CAPABILITY : null, // the instances this one trusts (feddiscover.ts)
     ].filter(Boolean),
     endpoints: {
@@ -699,7 +703,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       tombstones: "/federation/tombstones",
       "account-moves": "/federation/account-moves",
       notify: "/federation/notify",
-      ...(passesOn && { transit: "/federation/sync/transit", "transit-keys": "/federation/transit/keys" }),
+      ...(fk && { summary: "/federation/sync/summary", origin: "/federation/sync/origin" }),
       ...(listsPeers && { exchange: PEER_EXCHANGE_PATH }),
     },
     sigAlg: "Ed25519",
@@ -737,8 +741,8 @@ export interface FeedServeDef<Row = any> {
    */
   selectRows(env: Env, since: number, limit: number, sinceId?: number, filter?: FeedFilter): Promise<Row[]>;
   composite?: boolean;
-  /** A row's wire form. `version` is the record's per-gid version (`v`) when it differs from the cursor. */
-  recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown; version?: number };
+  /** A row's wire form. The cursor is also the record's version (`v`). */
+  recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown };
 }
 
 function feedParams(req: Request): { since: number; limit: number } {
@@ -776,36 +780,45 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 }
 
 // only NATIVE caches are federated; imported third-party data stays local
-/** Cache versions count revisions from here: above every unix-second timestamp a version could be. */
-const CACHE_VERSION_BASE = 2 ** 32;
-/** A native cache's current federation version, the `v` its next frame carries. */
+/** A native cache's current federation version, the `v` its next frame carries: its place in the caches sequence. */
 export async function cacheFedVersion(env: Env, id: number): Promise<number> {
   const r = await env.DB.prepare("SELECT fed_rev FROM caches WHERE id = ?").bind(id).first<{ fed_rev: number }>();
-  return CACHE_VERSION_BASE + (r?.fed_rev ?? 0);
+  return r?.fed_rev ?? 0;
 }
+/**
+ * The global id of this instance's cache `id`: `<instance>:cache:<fed_id>`, the number the cache took from the
+ * caches sequence when it was made. A database restored from an older backup hands its ids out again, never a
+ * sequence number, so a new cache never takes the global id of one its peers hold or deleted.
+ */
+export async function cacheGid(env: Env, instance: string, id: number): Promise<string> {
+  const r = await env.DB.prepare("SELECT fed_id FROM caches WHERE id = ?").bind(id).first<{ fed_id: number }>();
+  return `${instance}:cache:${r?.fed_id ?? id}`;
+}
+/** The global id of this instance's find `id`, its place in the finds sequence (see cacheGid). */
+export async function findGid(env: Env, instance: string, id: number): Promise<string> {
+  const r = await env.DB.prepare("SELECT fed_seq FROM cache_logs WHERE id = ?").bind(id).first<{ fed_seq: number }>();
+  return `${instance}:find:${r?.fed_seq ?? id}`;
+}
+/**
+ * The caches feed pages by `fed_rev`, which every insert and update of a cache takes from one counter
+ * (`fed_cache_rev`): it rises across all of this instance's caches, so it is both a cache's version and the
+ * feed's cursor, and a cache edited twice in one second takes two positions.
+ */
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
-  composite: true,
-  selectRows: async (env, since, limit, sinceId = -1, filter) => {
+  selectRows: async (env, since, limit, _sinceId, filter) => {
     // a region narrows the rows before the cursor walks them, so the cursor stays exact for that region
     const region = filter?.bbox ? bboxWhere(filter.bbox) : null;
     return (
       await env.DB.prepare(
         `SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND removed_at IS NULL
-           ${region ? `AND ${region.sql}` : ""}
-           AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at, id LIMIT ?`,
+           ${region ? `AND ${region.sql}` : ""} AND fed_rev > ? ORDER BY fed_rev LIMIT ?`,
       )
-        .bind(...(region?.params ?? []), since, since, sinceId, limit)
+        .bind(...(region?.params ?? []), since, limit)
         .all<CacheRow>()
     ).results;
   },
-  // the version is the row's revision above 2^32, so it sorts after any timestamp version a mirror holds
-  recordOf: (r, instance) => ({
-    id: `${instance}:cache:${r.id}`,
-    cursor: r.updated_at,
-    version: CACHE_VERSION_BASE + (r.fed_rev ?? 0),
-    data: cacheData(r),
-  }),
+  recordOf: (r, instance) => ({ id: `${instance}:cache:${r.fed_id}`, cursor: r.fed_rev ?? 0, data: cacheData(r) }),
 };
 export const FIND_FEED: FeedServeDef<FindRow> = {
   type: "find",
@@ -813,21 +826,26 @@ export const FIND_FEED: FeedServeDef<FindRow> = {
     (
       await env.DB.prepare(
         // finds federate only with their cache: never on a local-only or imported cache
-        `SELECT l.*, c.code AS cache_code FROM cache_logs l
+        `SELECT l.*, c.code AS cache_code, c.fed_id AS cache_fed_id FROM cache_logs l
        JOIN caches c ON c.id = l.cache_id
-      WHERE l.id > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.id LIMIT ?`,
+      WHERE l.fed_seq > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.fed_seq LIMIT ?`,
       )
         .bind(since, limit)
         .all<FindRow>()
     ).results,
-  recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.id, data: findData(r, instance) }),
+  // the global id, the cursor and the version are the find's place in the finds sequence, never handed out again
+  recordOf: (r, instance) => ({
+    id: `${instance}:find:${r.fed_seq}`,
+    cursor: r.fed_seq,
+    data: findData(r, instance),
+  }),
 };
 export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",
   selectRows: async (env, since, limit) => {
     const rows = (
       await env.DB.prepare(
-        "SELECT id, callsign, public_key, created_at FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
+        "SELECT id, fed_seq, callsign, public_key, created_at FROM callsign_keys WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
       )
         .bind(since, limit)
         .all<Omit<KeyRow, "verified">>()
@@ -838,7 +856,9 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
     );
     return rows.map((r) => ({ ...r, verified: verified.has(baseCall(r.callsign)) }));
   },
-  recordOf: (r, instance) => ({ id: `${instance}:key:${r.id}`, cursor: r.id, data: keyData(r) }),
+  // the key's place in the keys sequence: a restored database never hands it out again, so a new key gets past
+  // every peer's cursor under a global id of its own
+  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_seq, data: keyData(r) }),
 };
 
 export const handleFederationCaches = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, CACHE_FEED);

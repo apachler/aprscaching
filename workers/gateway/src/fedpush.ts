@@ -29,10 +29,11 @@ import { ACCOUNT_MOVE_FEED } from "./account.js";
 import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
 import { type TrustLevel, absorbDiscovered, ours } from "./fedpeers.js";
-import { applyFrames } from "./fedapply.js";
+import { admitFrame, type FrameGate } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
 import { signRelayRequest, spokeAuth } from "./relay.js";
-import { rotationsJson } from "./fedtransit.js";
+import { markGen, markOf, rotationsJson, setMark, ORIGIN_KINDS, type OriginKind } from "./fedtransit.js";
+import { addGap } from "./fedgaps.js";
 
 /**
  * The feeds a spoke pushes: every feed the pull serves, in the pull's order (fedapply.ts `SYNC_DEFS`) —
@@ -96,7 +97,13 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     }
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
-  return submitFrames(env, page.instance, submitKey, page.frames, rotations, page);
+  // where the spoke's page starts, so the hub knows whether it continues what it holds of the spoke
+  const sinceRaw = req.headers.get("x-fed-since");
+  const since = sinceRaw && /^\d+$/.test(sinceRaw) ? Number(sinceRaw) : NaN;
+  return submitFrames(env, page.instance, submitKey, page.frames, rotations, {
+    ...page,
+    ...(Number.isSafeInteger(since) && since >= 0 && { since }),
+  });
 }
 
 /** A spoke's position in one feed: its cursor and, mid-pass in a composite feed, the id tie-breaker. */
@@ -119,6 +126,15 @@ function pageFeed(frames: Uint8Array[]): string | null {
     }
   }
   return null;
+}
+
+/** The sequence a frame claims, before any check: where a page stops being held when that frame did not settle. */
+function claimedSeq(fb: Uint8Array): number {
+  try {
+    return decodeFedFrame(fb).record.v;
+  } catch {
+    return 0;
+  }
 }
 
 async function recordMark(env: Env, instance: string, type: string, mark: PushMark): Promise<void> {
@@ -167,7 +183,7 @@ async function submitFrames(
   publicKey: string,
   frames: Uint8Array[],
   rotations: RotationRecord[] = [],
-  page?: { nextCursor: number; nextId?: number },
+  page?: { nextCursor: number; nextId?: number; since?: number },
 ): Promise<Response> {
   if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
   const allow = (env.FED_SUBMIT_INSTANCES ?? "")
@@ -236,19 +252,42 @@ async function submitFrames(
       .bind(`submit:${instance}`, instance, publicKey, JSON.stringify([{ x: publicKey }]))
       .run();
 
-  const { applied, rejected } = await applyFrames(env, frames, {
-    origin: instance,
-    keysFor: () => Promise.resolve([publicKey]),
-    mirrorOnly: true,
-  });
+  const gate: FrameGate = { origin: instance, keysFor: () => Promise.resolve([publicKey]), mirrorOnly: true };
+  let applied = 0,
+    rejected = 0;
+  const unsettled: number[] = [];
+  for (const fb of frames) {
+    const r = await admitFrame(env, fb, gate);
+    if (r.verdict === "applied") applied++;
+    else if (r.verdict === "rejected") rejected++;
+    if (!r.settled) unsettled.push(claimedSeq(fb));
+  }
   // How far this spoke's feed now stands here, returned so the spoke resumes from what the hub holds.
   const type = page ? pageFeed(frames) : null;
   let mark: (PushMark & { type: string }) | undefined;
+  let held: number | undefined;
   if (page && type) {
     mark = { type, cursor: page.nextCursor, ...(page.nextId !== undefined && { id: page.nextId }) };
     await recordMark(env, instance, type, mark);
+    // a page that continues what the hub holds of the spoke: the hub now holds it up to the page's end, the records
+    // that did not settle aside, which become gaps (fedgaps.ts), and passes that on like any origin it pulled
+    if ((ORIGIN_KINDS as readonly string[]).includes(type)) {
+      const kind = type as OriginKind;
+      const gen = await markGen(env, instance);
+      held = await markOf(env, instance, kind);
+      let upTo = page.nextCursor;
+      if (page.since !== undefined && page.since <= held)
+        for (const v of unsettled.sort((a, b) => a - b))
+          if (v > held && v <= upTo && !(await addGap(env, instance, kind, v, "unsettled"))) upTo = v - 1;
+      if (page.since !== undefined && page.since <= held && upTo > held) {
+        await setMark(env, instance, kind, upTo, gen);
+        held = await markOf(env, instance, kind);
+      }
+    }
   }
-  return json({ ok: true, applied, rejected, ...(mark && { mark }) });
+  // `held`: how far the hub holds this feed of the spoke whole, so a spoke whose pages stopped joining up (the
+  // hub forgot what it held, or a page did not settle) sends again from there
+  return json({ ok: true, applied, rejected, ...(mark && { mark }), ...(held !== undefined && { held }) });
 }
 
 /** How one push cycle ended: what it sent, whether more waits, and why it stopped early. */
@@ -269,6 +308,15 @@ const loadCursor = async (env: Env, hub: string, type: string): Promise<PushMark
     .first<{ cursor: number; cursor_id: number | null }>();
   return r ? { cursor: r.cursor, ...(r.cursor_id != null && { id: r.cursor_id }) } : { cursor: 0 };
 };
+/** Where the push of one feed last went back to, at the hub's word. */
+const rewoundTo = async (env: Env, hub: string, type: string): Promise<number | null> =>
+  (
+    await env.DB.prepare("SELECT rewound_to FROM fed_push_cursors WHERE hub = ? AND type = ?")
+      .bind(hub, type)
+      .first<{ rewound_to: number | null }>()
+  )?.rewound_to ?? null;
+const setRewoundTo = (env: Env, hub: string, type: string, v: number | null) =>
+  env.DB.prepare("UPDATE fed_push_cursors SET rewound_to = ? WHERE hub = ? AND type = ?").bind(v, hub, type).run();
 const saveCursor = (env: Env, hub: string, type: string, m: PushMark) =>
   env.DB.prepare(
     `INSERT INTO fed_push_cursors (hub, type, cursor, cursor_id, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -394,6 +442,8 @@ async function pushCycle(
           headers: {
             "content-type": "application/cbor",
             "x-fed-secret": secret,
+            // where this page starts: the hub holds our records whole only while the pages it takes join up
+            "x-fed-since": String(cursor),
             // our rotation records, so a hub that pinned an earlier key can follow the rotation
             ...(env.FED_ROTATIONS ? { "x-fed-rotations": env.FED_ROTATIONS } : {}),
           },
@@ -414,13 +464,29 @@ async function pushCycle(
         cursor: built.nextCursor,
         ...(!complete && built.nextId !== undefined && { id: built.nextId }),
       };
-      const answer = (await res.json().catch(() => null)) as { mark?: PushMark & { type?: string } } | null;
+      const answer = (await res.json().catch(() => null)) as {
+        mark?: PushMark & { type?: string };
+        held?: unknown;
+      } | null;
       const mark = answer?.mark?.type === def.type && Number.isFinite(answer.mark.cursor) ? answer.mark : null;
-      const next: PushMark = mark
-        ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) }
-        : sent;
+      let next: PushMark = mark ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) } : sent;
+      // the hub holds this feed of ours whole only up to below where this page started: send again from there,
+      // so the pages join up and the hub passes our records on
+      // once for each place the hub names, so a hub that cannot take the pages whole never keeps us resending
+      const held = typeof answer?.held === "number" && Number.isSafeInteger(answer.held) ? answer.held : null;
+      const before = await rewoundTo(env, hub, def.type);
+      const rewind = held !== null && held >= 0 && held < cursor && held !== before;
+      if (rewind) next = { cursor: held };
       await saveCursor(env, hub, def.type, next);
+      // a page that joined up clears it: should the hub forget us again later, we go back again
+      if (rewind || (held !== null && held >= cursor && before !== null))
+        await setRewoundTo(env, hub, def.type, rewind ? held : null);
       pushed += built.frames.length;
+      if (rewind) {
+        cursor = next.cursor;
+        id = undefined;
+        continue;
+      }
       if (complete || (built.nextCursor === cursor && built.nextId === id)) break;
       cursor = next.cursor;
       id = next.id;

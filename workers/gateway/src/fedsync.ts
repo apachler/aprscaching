@@ -24,7 +24,6 @@ import { parseBbox } from "./fedregion.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
-import { handleTransitSync } from "./fedtransit.js";
 
 /** Feed type → envelope record kind (the sync type strings are the shared vocabulary). */
 const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
@@ -36,14 +35,22 @@ const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
   bulletin: "bulletin",
 };
 
-const FEED_FOR_TYPE: Record<string, FeedServeDef> = {
-  cache: CACHE_FEED,
-  find: FIND_FEED,
-  key: KEY_FEED,
-  tombstone: TOMBSTONE_FEED,
-  "account-move": ACCOUNT_MOVE_FEED,
-  bulletin: BULLETIN_FEED,
-};
+/**
+ * Feed type → its serve definition, built on first use: the feeds live in modules that reach this one again
+ * through app.ts, so a table built at load time could read them before they exist.
+ */
+let feeds: Record<string, FeedServeDef> | null = null;
+function feedFor(type: string): FeedServeDef | undefined {
+  feeds ??= {
+    cache: CACHE_FEED,
+    find: FIND_FEED,
+    key: KEY_FEED,
+    tombstone: TOMBSTONE_FEED,
+    "account-move": ACCOUNT_MOVE_FEED,
+    bulletin: BULLETIN_FEED,
+  };
+  return Object.hasOwn(feeds, type) ? feeds[type] : undefined;
+}
 
 // ---- fractional fields ↔ integer wire twins (the deterministic codec refuses floats) ----
 
@@ -99,7 +106,7 @@ export async function buildFedFrames(
   sinceId?: number,
   filter?: FeedFilter,
 ): Promise<{ frames: Uint8Array[]; nextCursor: number; nextId?: number } | null> {
-  const def = FEED_FOR_TYPE[feedType];
+  const def = feedFor(feedType);
   const kind = KIND_FOR_TYPE[feedType];
   if (!def || !kind) return { frames: [], nextCursor: since };
   const at = nowS();
@@ -109,12 +116,12 @@ export async function buildFedFrames(
   let nextId = def.composite ? (sinceId ?? -1) : undefined;
   const frames: Uint8Array[] = [];
   for (const r of rows) {
-    const { id, cursor, data, version } = def.recordOf(r, instance);
+    const { id, cursor, data } = def.recordOf(r, instance);
     const record: FedRecord = {
       kind,
       gid: id,
       origin: instance,
-      v: version ?? cursor,
+      v: cursor,
       at,
       signer: instance,
       body: bodyToWire(data as Record<string, unknown>),
@@ -136,12 +143,11 @@ export async function buildFedFrames(
  * Serve one CBOR sync page. Unknown feed type → 404 (the same forward-compat contract as the JSON
  * feeds); an unsigned instance → 404 too, so a consumer falls back to the JSON surface — CBOR sync
  * exists only where every frame can carry a signature. `bbox=S,W,N,E` narrows the caches feed to a
- * region (fedregion.ts); every other feed, deletes included, ignores it and travels whole. The transit
- * feed, the records this instance mirrored and passes on, is fedtransit.ts.
+ * region (fedregion.ts); every other feed, deletes included, ignores it and travels whole. The summary
+ * and the per-origin pages, which serve these records and those this instance passes on, are fedtransit.ts.
  */
 export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
-  if (feedType === "transit") return handleTransitSync(req, env);
-  if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
+  if (!feedFor(feedType) || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
   const u = new URL(req.url);
   const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
   const sinceIdRaw = u.searchParams.get("sinceId");

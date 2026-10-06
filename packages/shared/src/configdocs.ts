@@ -553,7 +553,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_RESERVE`",
-        "Which records mirrored from other instances this instance serves on to its peers on the transit feed, each as its home instance signed it: `trusted` passes on the records of instances trusted here, `all` those of every instance not blocked here, `off` none. A peer verifies each record against its home's key and applies its own trust in that home. A wider value passes on the records it newly lets out, once, on save or at the next start. Also an instance setting ([Hubs, relays and the registry](../run/federation/hubs-and-relays.md#a-hub-passes-its-spokes-records-on))",
+        "Which records mirrored from other instances this instance passes on to its peers, each as its home instance signed it: `trusted` the records of instances trusted here, `all` those of every instance not blocked here, `off` none. A peer verifies each record against its home's key and applies its own trust in that home. A change applies at the peers' next pull. A Pocket station that carries records sets `all` ([Carry records between instances](../run/pocket/carry-records.md)). Also an instance setting ([Hubs, relays and the registry](../run/federation/hubs-and-relays.md#a-hub-passes-its-spokes-records-on))",
         "`trusted`",
       ],
       [

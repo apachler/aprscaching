@@ -26,7 +26,8 @@ import {
   usableKeys,
   type RegistryEntry,
 } from "./federation.js";
-import { forgetTransitPeer, requeuePeer, supersedeTransitPeer } from "./fedtransit.js";
+import { forgetTransitPeer, supersedeTransitPeer } from "./fedtransit.js";
+import { givenUpUnseen } from "./fedgaps.js";
 import { storedEndpoints } from "./fedtransport.js";
 import { endpointBaseUrls } from "@aprscaching/shared";
 
@@ -37,16 +38,8 @@ export interface PeerRow {
   url: string;
   instance: string | null;
   public_key: string | null;
-  caches_cursor: number;
-  finds_cursor: number;
   keys_cursor: number;
-  tombstones_cursor: number;
-  moves_cursor: number;
   bulletins_cursor: number;
-  caches_cursor_id?: number | null;
-  caches_region?: string; // the region the caches cursor was read under ('' = the whole feed)
-  transit_cursor?: number; // the transit feed cursor (fedtransit.ts)
-  transit_region?: string; // the region the transit cursor was read under
   rotations?: string | null; // the peer's rotation records (JSON), handed on with its key
   bulletins_cursor_id?: number | null;
   enabled: number;
@@ -236,9 +229,9 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   const rows = (
     await env.DB.prepare(
       `SELECT url, instance, public_key, public_key IS NOT NULL AS signed, trust, added_via, approved_at, auto_promoted_at,
-            pinned_fingerprint, rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor,
-            tombstones_cursor, moves_cursor, enabled, last_sync, last_ok, last_error, sync_ok, sync_err,
-            mirrored_total, last_counts, discovered, listed_at, endpoints,
+            pinned_fingerprint, rep_confirmed, rep_failed, keys_cursor, enabled, last_sync, last_ok, last_error,
+            sync_ok, sync_err, mirrored_total, last_counts, discovered, listed_at, endpoints,
+            (SELECT json_group_object(m.kind, m.seq) FROM fed_origin_marks m WHERE m.origin = fed_peers.instance) AS marks,
             (SELECT MAX(m.submitted_at) FROM fed_submit_marks m WHERE m.instance = fed_peers.instance) AS last_push_in,
             (SELECT h.last_ok_at FROM fed_hub_status h WHERE h.hub = fed_peers.url) AS last_push_out,
             (SELECT json_object('transport', k.transport, 'address', k.address, 'lastAttempt', k.last_attempt,
@@ -250,7 +243,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   const configured = new Set(parseFedPeers(env.FED_PEERS).map((p) => p.url));
   // derive a health signal + error rate so an operator scans state without doing the math.
   const peers = await Promise.all(
-    rows.map(async ({ public_key, packet_sync, discovered, endpoints, ...p }) => {
+    rows.map(async ({ public_key, packet_sync, discovered, endpoints, marks, ...p }) => {
       const okN = Number(p.sync_ok ?? 0),
         errN = Number(p.sync_err ?? 0);
       const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
@@ -265,6 +258,8 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
         discovery: discoveryView(discovered as string | null, endpoints as string | null, fingerprint),
         configured: configured.has(p.url), // listed in FED_PEERS: removed there, not here
         lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
+        // how far this instance holds the peer's own records, per kind, whichever path brought them
+        marks: marks ? (JSON.parse(marks as string) as Record<string, number>) : {},
         packet, // the last packet-circuit session
         errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
         health,
@@ -279,6 +274,8 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       discovery: { learn: discoverOn(env), lists: peerExchangeOn(env), mdns: env.FED_MDNS ?? "off" },
     },
     peers,
+    // records no neighbour filled within a week, given up and not yet marked seen (fedgaps.ts)
+    givenUp: await givenUpUnseen(env),
   });
 }
 
@@ -588,7 +585,5 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
       );
     throw e;
   }
-  // records held back while the origin was not trusted (or blocked) go out on the transit feed now
-  if (trust !== "blocked") await requeuePeer(env, url);
   return json({ ok: true, url, trust });
 }

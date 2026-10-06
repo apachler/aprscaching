@@ -942,6 +942,13 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
       lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb
       bound and an integrity-checked container so corrupt input fails decode instead of yielding wrong
       bytes.
+- [ ] **Per-origin sync over packet circuits** _(P2 · M)_ — a circuit pulls only the peer's own feeds today
+      (each starting at the gateway's per-origin mark when that is further). Asking for "origin Y after N" over
+      `ACSL1` needs a summary request on the circuit (a new line type beside `R`, `origin` in the request map)
+      and a gateway endpoint that takes an ordered origin page from the ingest box as the answer to one request,
+      applying it as `pullOrigin` does; `POST /federation/frames` takes frames from any carrier in any order, and
+      a mark moved by the box's session report would let that report decide what the gateway holds
+      ([`docs/reference/federation-wire.md`](docs/reference/federation-wire.md#connected-mode-sync-ax25-net-rom-circuits)).
 
 ## 44Net: decided, not planned
 

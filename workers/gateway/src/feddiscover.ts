@@ -62,7 +62,6 @@ import {
   type PeerRow,
   type Sighting,
 } from "./fedpeers.js";
-import { requeuePeer } from "./fedtransit.js";
 import { endpointBaseUrls, parseEndpoints, type FedEndpoint } from "@aprscaching/shared";
 
 /** The descriptor capability of an instance that serves its peer list. */
@@ -461,7 +460,6 @@ export async function handlePeerFollow(req: Request, env: Env): Promise<Response
         row.url,
       )
       .run();
-    if (wantTrust) await requeuePeer(env, found.url);
     return json({ ok: true, peer: { ...preview, trust: wantTrust ? "trusted" : "unvetted" } });
   } catch (e) {
     if (e instanceof PeerAddRefused)

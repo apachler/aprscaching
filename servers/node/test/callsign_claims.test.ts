@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import type { Env } from "@aprscaching/gateway/env";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import { serviceCall } from "@aprscaching/gateway/servicecall";
-import { newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
+import { gid, newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import {
   authEnv,
   call,
@@ -340,9 +340,8 @@ describe("the previous holder's content", () => {
     expect(tomb.results.every((t) => t.target_id.startsWith("gw.test:"))).toBe(true);
     // the cache is served again to peers, under the marker
     const feed = await call(env, "GET", "/federation/caches?since=0");
-    expect(feed.data.items.find((i: { id: string }) => i.id === `gw.test:cache:${cacheId}`).data.ownerCall).toBe(
-      "FORMER",
-    );
+    const gidC = await gid(env, "cache", cacheId);
+    expect(feed.data.items.find((i: { id: string }) => i.id === gidC).data.ownerCall).toBe("FORMER");
     // the previous holder is told in the app
     const alert = await env.DB.prepare("SELECT kind, detail FROM watch_alerts WHERE account_id = ?")
       .bind(squatAcct)
@@ -449,7 +448,7 @@ describe("federation", () => {
     expect((await keys()).results).toEqual([{ callsign: "OE8APR-9", verified: 1 }]);
     expect((await finds()).results).toEqual([]);
     const cache = await hub.DB.prepare("SELECT owner_call FROM remote_caches WHERE global_id = ?")
-      .bind(`a.example:cache:${mine.data.cache.id}`)
+      .bind(await gid(env, "cache", mine.data.cache.id as number))
       .first<{ owner_call: string }>();
     expect(cache!.owner_call).toBe("FORMER");
   });

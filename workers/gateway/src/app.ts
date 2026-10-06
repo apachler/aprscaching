@@ -150,7 +150,8 @@ import { expireDiscovered, handlePeerExchange, handlePeerFollow } from "./feddis
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
-import { applyReservePolicy, handleTransitKeys } from "./fedtransit.js";
+import { handleOriginSync, handleSyncSummary } from "./fedtransit.js";
+import { handleGapsSeen } from "./fedgaps.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
 import { handlePacketPeers, handlePacketStatus } from "./fedpacket.js";
@@ -368,12 +369,6 @@ export async function runScheduled(env: Env): Promise<void> {
   } catch (e) {
     console.error("discovery expiry:", (e as Error).message);
   }
-  // FED_RESERVE set wider in the environment since the last run: the newly eligible records go out once
-  try {
-    await applyReservePolicy(env);
-  } catch (e) {
-    console.error("transit policy:", (e as Error).message);
-  }
   await runFrequentSync(env);
   // the daily look for a newer release (off with UPDATE_CHECK=0); it never throws
   await runUpdateCheck(env);
@@ -576,14 +571,16 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/peers" && m === "POST") return handlePeerAdd(req, env); // look up, then add unvetted
   if (p === "/federation/peers" && m === "DELETE") return handlePeerRemove(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
+  if (p === "/federation/gaps/seen" && m === "POST") return handleGapsSeen(req, env); // given-up records, seen
   if (p === "/federation/peers/sync" && m === "POST") return handlePeerSyncNow(req, env); // Sync now, one peer
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
   if (p === "/federation/peers/follow" && m === "POST") return handlePeerFollow(req, env); // follow a discovered one
   if (p === "/federation/exchange" && m === "GET") return handlePeerExchange(req, env); // the instances trusted here
   // CBOR sync surface — fedwire frames (the canonical signed form); consumers prefer it over the JSON feeds
+  if (p === "/federation/sync/summary" && m === "GET") return handleSyncSummary(req, env); // what is held, per origin
+  if (p === "/federation/sync/origin" && m === "GET") return handleOriginSync(req, env); // one origin after a sequence
   const fedSync = /^\/federation\/sync\/([a-z-]+)$/.exec(p);
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);
-  if (p === "/federation/transit/keys" && m === "GET") return handleTransitKeys(req, env); // keys of passed-on origins
   // store-and-forward send: pack local records into an ACSFED bulletin for the FBB mesh (sysop/ingest)
   if (p === "/federation/bbs/enqueue" && m === "POST") return handleFedBbsEnqueue(req, env);
   // beacon tier: GET = this instance's presence datagram (the ingest box transmits it);

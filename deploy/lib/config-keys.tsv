@@ -31,7 +31,7 @@ FED_CORROBORATION_REQUIRE_KNOWN	enum	gateway		0|1	0	0	selfhost,baremetal,pocket,
 FED_SPOKE_STALE_HOURS	number	gateway	24		0	0	selfhost,baremetal,pocket,desktop	On a hub, hours without a submission before a spoke shows as stale	
 FED_REVEAL_IGATE	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,baremetal,pocket,desktop	1 includes the exact IGate in corroboration answers	
 FED_SYNC_REGION	string	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	S,W,N,E box in decimal degrees: pull only the caches inside it from peers	
-FED_RESERVE	enum	gateway	trusted	trusted|all|off	0	0	selfhost,baremetal,pocket,desktop	Records mirrored from other instances this one passes on to its peers: trusted, all or off	federation
+FED_RESERVE	enum	gateway,pocket	trusted	trusted|all|off	0	0	selfhost,baremetal,pocket,desktop	Records mirrored from other instances this one passes on to its peers: trusted, all or off	federation
 FED_ENDPOINTS	json	gateway,pocket			0	0	selfhost,baremetal,pocket,desktop	JSON array of this instance's transport endpoints {transport,address,priority}	
 FED_ALLOW_PRIVATE	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 lets federation fetch private and loopback addresses (an all-LAN network)	
 FED_SUBMIT_SECRET	string	gateway,pocket			1	0	selfhost,baremetal,pocket,desktop	Hub: enables record submission; spoke: the secret it pushes with	

@@ -441,18 +441,20 @@ async function eraseCall(
   // to purge the pre-deletion copies on peers. Logs sent from an SSID (a radio find from OE8APR-7) are
   // the callsign's too.
   const findIds = (
-    await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?")
+    await env.DB.prepare("SELECT id, fed_seq FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?")
       .bind(cs, `${cs}-%`)
-      .all<{ id: number }>()
+      .all<{ id: number; fed_seq: number }>()
   ).results;
   // the same for the callsign's key bindings (an SSID's too) and move announcements, which peers mirrored
   const keyIds = (
-    await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=? OR callsign LIKE ?")
+    await env.DB.prepare("SELECT id, fed_seq FROM callsign_keys WHERE callsign=? OR callsign LIKE ?")
       .bind(cs, `${cs}-%`)
-      .all<{ id: number }>()
+      .all<{ id: number; fed_seq: number }>()
   ).results;
   const moveSeqs = (
-    await env.DB.prepare("SELECT seq FROM account_moves WHERE callsign=?").bind(cs).all<{ seq: number }>()
+    await env.DB.prepare("SELECT seq, fed_seq FROM account_moves WHERE callsign=?")
+      .bind(cs)
+      .all<{ seq: number; fed_seq: number }>()
   ).results;
   // media uploaded to the caches this call (or an SSID of it) owns, captured while owner_call still names it
   const media = (
@@ -547,9 +549,9 @@ async function eraseCall(
   ]);
   return {
     tombstones: [
-      ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
-      ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
-      ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
+      ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.fed_seq}` })),
+      ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.fed_seq}` })),
+      ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.fed_seq}` })),
     ],
     mediaKeys: [
       ...media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
@@ -791,6 +793,7 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
 // ----------------------------------------------------- federation: account-move feed
 interface MoveRow {
   seq: number;
+  fed_seq: number;
   callsign: string;
   from_instance: string | null;
   to_instance: string;
@@ -804,14 +807,15 @@ export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
   selectRows: async (env, since, limit) =>
     (
       await env.DB.prepare(
-        "SELECT seq, callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at FROM account_moves WHERE seq > ? ORDER BY seq LIMIT ?",
+        "SELECT seq, fed_seq, callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at FROM account_moves WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
       )
         .bind(since, limit)
         .all<MoveRow>()
     ).results,
   recordOf: (r, instance) => ({
-    id: `${instance}:move:${r.seq}`,
-    cursor: r.seq,
+    // the global id is the move's place in the moves sequence, which a restored database never hands out again
+    id: `${instance}:move:${r.fed_seq}`,
+    cursor: r.fed_seq,
     data: {
       callsign: r.callsign,
       fromInstance: r.from_instance,

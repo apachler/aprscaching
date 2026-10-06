@@ -94,6 +94,16 @@ export async function addCache(env: Env, updatedAt = 1000): Promise<number> {
   return Number(r.meta.last_row_id);
 }
 
+/**
+ * The global id of an instance's own cache or find: `<instance>:<kind>:<number>`, the number it took from its
+ * sequence (`caches.fed_id`, `cache_logs.fed_seq`), never its row id.
+ */
+export async function gid(env: Env, kind: "cache" | "find", id: number): Promise<string> {
+  const [col, table] = kind === "cache" ? ["fed_id", "caches"] : ["fed_seq", "cache_logs"];
+  const r = await env.DB.prepare(`SELECT ${col} AS n FROM ${table} WHERE id = ?`).bind(id).first<{ n: number }>();
+  return `${env.INSTANCE}:${kind}:${r?.n}`;
+}
+
 export type Serve = (req: Request) => Promise<Response>;
 export const serve =
   (env: Env): Serve =>

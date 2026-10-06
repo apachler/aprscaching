@@ -4,8 +4,8 @@
  * push-to-hub, FBB bulletins, HF beacons, connected-mode circuits) hands its signed fedwire frames to
  * {@link admitFrame}, which runs the one set of acceptance checks and the idempotent-by-gid appliers
  * that mirror a record into remote_caches / remote_finds / remote_keys / remote_account_moves /
- * remote_tombstones. Mirrored rows are display-only; the frames behind the caches, finds and tombstones are
- * kept verbatim, so the transit feed can pass them on as their origins signed them (fedtransit.ts).
+ * remote_tombstones. Mirrored rows are display-only; the frames behind the caches, finds, tombstones and
+ * account moves are kept verbatim, so origin pages can pass them on as their origins signed them (fedtransit.ts).
  */
 import type { Env } from "./env.js";
 import { b64urlToBytes } from "./util/b64.js";
@@ -50,12 +50,12 @@ const TIME_VERSIONED = new Set(["bulletin"]);
  * not in the future (a far-future version would freeze the mirror). Equal versions never overwrite,
  * so a replayed or forged record at a version already applied changes nothing.
  */
-async function versionAdmits(env: Env, rec: FeedRecord): Promise<boolean> {
+async function versionAdmits(env: Env, rec: FeedRecord): Promise<"newer" | "same" | "older" | "future"> {
   const t = nowS();
-  if (rec.at != null && rec.at > t + MAX_FUTURE_S) return false;
-  if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return false;
+  if (rec.at != null && rec.at > t + MAX_FUTURE_S) return "future";
+  if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return "future";
   const row = await env.DB.prepare("SELECT v FROM fed_versions WHERE gid = ?").bind(rec.id).first<{ v: number }>();
-  return !row || rec.cursor > row.v;
+  return !row || rec.cursor > row.v ? "newer" : rec.cursor === row.v ? "same" : "older";
 }
 
 /** Record the version just applied for a gid (never moving it backwards). */
@@ -81,42 +81,25 @@ async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: F
   await noteVersion(env, rec.id, origin, rec.cursor);
 }
 
-/** Which feed each sync def consumes: its endpoint, advertised capability, peer cursor, and applier. */
-export interface SyncDef {
+/**
+ * Which feed each sync def consumes: its endpoint, advertised capability and applier. Keys and bulletins are
+ * pulled per peer and keep a peer cursor; the other kinds are pulled per origin (fedtransit.ts).
+ */
+interface SyncDef {
   type: string;
   path: string;
   capability: string;
-  cursorCol:
-    "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor" | "bulletins_cursor";
+  cursorCol?: "keys_cursor" | "bulletins_cursor";
   /** The id half of a composite cursor, for feeds whose cursor (a timestamp) can repeat. */
-  cursorIdCol?: "caches_cursor_id" | "bulletins_cursor_id";
+  cursorIdCol?: "bulletins_cursor_id";
   apply(env: Env, rec: FeedRecord, origin: string): Promise<void>;
 }
 export const SYNC_DEFS: SyncDef[] = [
-  {
-    type: "tombstone",
-    path: "/federation/tombstones",
-    capability: "tombstones",
-    cursorCol: "tombstones_cursor",
-    apply: applyTombstone,
-  },
-  {
-    type: "cache",
-    path: "/federation/caches",
-    capability: "caches",
-    cursorCol: "caches_cursor",
-    cursorIdCol: "caches_cursor_id",
-    apply: upsertRemoteCache,
-  },
-  { type: "find", path: "/federation/finds", capability: "finds", cursorCol: "finds_cursor", apply: upsertRemoteFind },
+  { type: "tombstone", path: "/federation/tombstones", capability: "tombstones", apply: applyTombstone },
+  { type: "cache", path: "/federation/caches", capability: "caches", apply: upsertRemoteCache },
+  { type: "find", path: "/federation/finds", capability: "finds", apply: upsertRemoteFind },
   { type: "key", path: "/federation/keys", capability: "keys", cursorCol: "keys_cursor", apply: upsertRemoteKey },
-  {
-    type: "account-move",
-    path: "/federation/account-moves",
-    capability: "moves",
-    cursorCol: "moves_cursor",
-    apply: upsertRemoteAccountMove,
-  },
+  { type: "account-move", path: "/federation/account-moves", capability: "moves", apply: upsertRemoteAccountMove },
   {
     type: "bulletin",
     path: "/federation/bulletins",
@@ -182,7 +165,7 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   if (!target) return;
   // a peer may only tombstone records in ITS OWN namespace. Without this a hostile peer
   // deletes ("censors") any instance's mirrored records network-wide and forges GDPR deletes.
-  // `origin` is the verified serving peer (wk.instance), passed by syncFeed.
+  // `origin` is the frame's own origin, whose key verified it (admitFrame).
   if (!idInNamespace(target, origin)) return;
   const upTo = Number.isSafeInteger(d.upTo) && (d.upTo as number) > 0 ? (d.upTo as number) : null;
   const record = env.DB.prepare(
@@ -333,12 +316,8 @@ export interface FrameGate {
   keysFor(origin: string): Promise<string[] | "blocked">;
   /** The one origin this delivery speaks for (the pulled or submitting peer); any other is refused. */
   origin?: string;
-  /** An origin refused outright: a hub's transit feed never carries the hub's own records. */
-  notOrigin?: string;
   /** The one mirror type admitted — a pulled sync page carries a single feed. */
   type?: string;
-  /** The mirror types admitted, for a page that mixes them (the transit feed). */
-  types?: ReadonlySet<string>;
   /** The instance that delivered the frames, when not their origin (a hub passing records on). */
   via?: string;
   /** Mirror records only: relay and peer-announce frames are refused (push-to-hub). */
@@ -355,15 +334,18 @@ export type FrameVerdict = "applied" | "rejected" | "quarantined" | "ignored";
  * key independently bound to that origin); then the signature, the origin, our own namespace, the
  * record's namespace and self-attestation, its origin's tombstones, the cache's scope and the
  * replay/version gate are checked, in that order, before the idempotent-by-gid applier runs. `hops` is how
- * many instances the frame crossed to arrive (1 straight from its origin), kept for passing it on. An applier failure is returned as
- * `error` so a malformed record never aborts the frames after it.
+ * many instances the frame crossed to arrive (1 straight from its origin), kept for passing it on. `settled`
+ * says this instance now holds the record, or never will: applied and kept, or refused for good (outside its
+ * origin's namespace, local-only, deleted, a version already held or older). A per-origin pull records how far it
+ * holds an origin only up to the first frame that did not settle. An applier failure is returned as `error` so a
+ * malformed record never aborts the frames after it.
  */
 export async function admitFrame(
   env: Env,
   fb: Uint8Array,
   gate: FrameGate,
   hops = 1,
-): Promise<{ verdict: FrameVerdict; error?: unknown }> {
+): Promise<{ verdict: FrameVerdict; settled?: boolean; error?: unknown }> {
   const rejected = { verdict: "rejected" as const };
   let origin: string;
   try {
@@ -372,7 +354,6 @@ export async function admitFrame(
     return rejected;
   }
   if (gate.origin !== undefined && origin !== gate.origin) return rejected; // a foreign origin
-  if (gate.notOrigin !== undefined && origin === gate.notOrigin) return rejected;
   if (origin === ours(env)) return rejected; // never mirror our own records back in
   const allowed = await gate.keysFor(origin);
   if (allowed === "blocked" || !allowed.length) return { verdict: "quarantined" };
@@ -388,7 +369,6 @@ export async function admitFrame(
   }
   const def = SYNC_DEF_BY_TYPE.get(SYNC_TYPE_BY_KIND[kind] ?? "");
   if (!def || (gate.type !== undefined && def.type !== gate.type)) return rejected;
-  if (gate.types !== undefined && !gate.types.has(def.type)) return rejected;
   const rec: FeedRecord = {
     type: def.type,
     id: f.record.gid,
@@ -397,20 +377,33 @@ export async function admitFrame(
     signer: f.record.signer,
     at: f.record.at,
   };
+  // past this point the frame is its origin's own: these refusals are about the record and hold for good
+  const refused = { verdict: "rejected" as const, settled: true };
   // gid outside origin's namespace / not self-attested / tombstoned
-  if (!(await passesNamespaceChecks(env, rec, origin))) return rejected;
+  if (!(await passesNamespaceChecks(env, rec, origin))) return refused;
   // a local-only or imported cache never leaves its origin, whoever passes it on
-  if (def.type === "cache" && !leavesOrigin(rec.data)) return rejected;
-  // a replay, a record at a version already applied, or future-dated
-  if (!(await versionAdmits(env, rec))) return rejected;
+  if (def.type === "cache" && !leavesOrigin(rec.data)) return refused;
+  // kept for passing on; the mirror holds the record either way, but one not kept is not held whole here
+  const keep = () =>
+    keepForTransit(env, fb, f, def.type, rec.data, gate.via ?? origin, hops).then(
+      () => true,
+      (e: unknown) => {
+        console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`);
+        return false;
+      },
+    );
+  // a replay or a record at a version already applied is settled; the version already held, over a shorter path,
+  // is kept for passing on. A frame signed ahead of this clock may apply later, so it settles nothing.
+  const version = await versionAdmits(env, rec);
+  if (version === "future") return { verdict: "rejected" };
+  if (version === "older") return refused;
+  if (version === "same") return (await keep()) ? refused : { verdict: "rejected" };
   try {
     await applyVersioned(env, def, rec, origin);
-    // the mirror holds the record either way; failing to keep it for passing on loses only the onward hop
-    await keepForTransit(env, fb, f, rec.data, gate.via ?? origin, hops).catch((e: unknown) =>
-      console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`),
-    );
-    return { verdict: "applied" };
+    return { verdict: "applied", settled: await keep() };
   } catch (error) {
+    // a database that was busy, or a record that cannot apply yet (an account move whose proof key is not known
+    // here): another pass may apply it
     return { verdict: "rejected", error };
   }
 }

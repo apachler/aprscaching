@@ -10,6 +10,7 @@ import {
   newFedKey,
   instanceEnv,
   addCache,
+  gid,
   serve,
   stubFetch,
   servedFrames,
@@ -158,7 +159,7 @@ describe("same-second updates", () => {
     await a.DB.prepare("UPDATE caches SET status = 'archived' WHERE id = ?").bind(id).run(); // updated_at unchanged
     await syncAllPeers(hub);
     const row = await hub.DB.prepare("SELECT status FROM remote_caches WHERE global_id = ?")
-      .bind(`a.example:cache:${id}`)
+      .bind(await gid(a, "cache", id))
       .first<{ status: string }>();
     expect(row?.status).toBe("archived");
   });

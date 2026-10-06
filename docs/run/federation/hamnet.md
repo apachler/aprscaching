@@ -60,7 +60,7 @@ changes no trust, since every record is signed by its home instance.
 ## From HAMNET to the internet, and back
 
 An instance on both networks bridges them. It follows its HAMNET peers at their `hamnet` addresses and its
-internet peers at their `https` addresses, and passes on what it mirrored on its transit feed, each record as its
+internet peers at their `https` addresses, and passes on what it mirrored, each record as its
 home instance signed it (`FED_RESERVE`, by default the records of instances it trusts).
 
 ```mermaid
@@ -89,7 +89,7 @@ flowchart LR
 
 | Works | Does not work over plain http on HAMNET |
 |---|---|
-| Pull and notify between HAMNET peers, and the transit feed | Passkeys, device location for Tier B finds, the Web Serial and Web Bluetooth radio: they need https |
+| Pull and notify between HAMNET peers, and the records passed on | Passkeys, device location for Tier B finds, the Web Serial and Web Bluetooth radio: they need https |
 | Peer exchange with trusted HAMNET peers | Adding a peer by callsign, unless a DNS-over-HTTPS resolver on HAMNET reaches ARDC's name servers |
 | Corroboration among HAMNET peers that reach each other | A registry located by `FED_REGISTRY_DNS`; set `FED_REGISTRY` to a document on HAMNET |
 | Sign-in by email link (a mail server on HAMNET) or the sysop's one-time link | mDNS across a HAMNET link |

@@ -60,9 +60,9 @@ Restart both. What happens then:
 
 ### A hub passes its spokes' records on
 
-A hub serves what it mirrored again, on its transit feed, so its spokes see each other's caches and finds, and so
-does every instance that pulls the hub. A spoke needs no extra setting: one that pulls the hub (`FED_PEERS`) reads
-the transit feed with the rest.
+A hub serves what it mirrored again, so its spokes see each other's caches and finds, and so does every instance
+that pulls the hub. A spoke needs no extra setting: one that pulls the hub (`FED_PEERS`) asks for them with the
+rest.
 
 Which records the hub passes on is the instance setting **Pass on peers' records** (`FED_RESERVE`), under
 **Instance admin → Instance settings → Federation**:
@@ -72,28 +72,29 @@ Which records the hub passes on is the instance setting **Pass on peers' records
 - `all`: the records of every instance the hub has not blocked, unvetted spokes included.
 - `off`: none. The hub keeps its spokes' records for its own map.
 
+A change applies at each receiver's next pull: a home the hub trusts later, or a wider setting, sends its earlier
+records too.
+
 What an instance that pulls the hub does with them:
 
+- **It asks per home instance.** It reads the hub's summary of what it holds of each home, and asks only for the
+  records past what it already holds of that home, from any path
+  ([How records travel through the mesh](how-it-works.md#how-records-travel-through-the-mesh)).
 - **It checks every record against its home instance's key.** The hub signs none of them. It hands on the key it
-  holds for each home (`GET /federation/transit/keys`), and the receiving instance pins that key the first time it
-  sees it, in a peer row `transit:<instance>`: `unvetted` and never pulled. **Instance admin → Federation** lists
-  it; compare its fingerprint with the home's sysop before you trust it, as for any peer. A registry binding wins
-  over any hub's word, and once you follow the home directly its own key replaces the one the hub handed on.
+  holds for each home in its summary, and the receiving instance pins that key the first time it sees it, in a
+  peer row `transit:<instance>`: `unvetted` and never pulled. **Instance admin → Federation** lists it; compare
+  its fingerprint with the home's sysop before you trust it, as for any peer. A registry binding wins over any
+  hub's word, and once you follow the home directly its own key replaces the one the hub handed on.
 - **It applies its own trust in the home, never the hub's.** A home you have not vetted stays hidden until a
   player includes unvetted peers; a home you block stays blocked on every path.
-- **Deletions travel the same way**, a sysop's removal and restore of a cache included.
-- **A record travels a bounded way.** It crosses at most four instances, never goes back to its home or to the
-  instance it came from, and two hubs that follow each other pass it on once.
-
-A record the hub held back goes out once it qualifies, at the receivers' next pull:
-
-- **A home the hub trusts later** has its earlier records passed on, whether you trusted it, its `FED_PEERS`
-  fingerprint pin matched, or corroboration promoted it (`FED_AUTO_PROMOTE`).
-- **A wider setting** (`off` to `trusted`, `trusted` to `all`) passes on the records it newly lets out, once.
-  The hub notices the change when you save the setting, and at the next start when the environment sets
-  `FED_RESERVE`. A narrower setting needs nothing: the hub stops serving what it no longer passes on.
-
-A receiver applies each record by its global id and version, so a record it already holds changes nothing.
+- **Deletions travel the same way**, a sysop's removal and restore of a cache included, and arrive before the
+  records they remove.
+- **A record travels a bounded way.** It crosses at most four instances, never goes back to its home, and two hubs
+  that follow each other apply it once: a copy that comes round again changes nothing.
+- **Trust the hub to save traffic.** What a hub you trust passes on counts as held, so another path never brings
+  it again. What an unvetted hub passes on applies all the same, and your instance remembers how far it read that
+  hub, but takes no hub's word it did not vet for what it holds, so a hub nobody vetted cannot keep a record from
+  you by skipping it.
 
 ### Rendezvous relay
 

@@ -162,6 +162,7 @@ nav:
           - Pocket extras: run/pocket/extras.md
           - Reach Pocket from outside: run/pocket/44net.md
           - "Before a trip: sync and your home hub": run/pocket/trips.md
+          - Carry records between instances: run/pocket/carry-records.md
       - Day to day:
           - Instance admin at a glance: run/day-to-day/index.md
           - Instance settings: run/day-to-day/instance-settings.md

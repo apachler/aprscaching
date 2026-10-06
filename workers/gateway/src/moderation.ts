@@ -46,7 +46,7 @@ import {
 import { dropQueuedFor } from "./outbox.js";
 import { serviceCall } from "./servicecall.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
-import { cacheFedVersion } from "./federation.js";
+import { cacheFedVersion, cacheGid, findGid } from "./federation.js";
 import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
 import { appBase } from "./sitemap.js";
@@ -385,15 +385,20 @@ async function removeItem(
       ]);
       // the tombstone covers the versions up to this removal, so a restore (a later version) federates again
       return {
-        tombstones: [{ kind: "cache", targetId: `${instance}:cache:${id}`, upTo: await cacheFedVersion(env, id) }],
+        tombstones: [
+          { kind: "cache", targetId: await cacheGid(env, instance, id), upTo: await cacheFedVersion(env, id) },
+        ],
         mediaKeys: [],
       };
-    case "log":
+    case "log": {
+      // the global id is read before the row goes
+      const gid = await findGid(env, instance, id);
       await env.DB.batch([
         env.DB.prepare("DELETE FROM corroboration_retries WHERE log_id=?").bind(id),
         env.DB.prepare("DELETE FROM cache_logs WHERE id=?").bind(id),
       ]);
-      return { tombstones: [{ kind: "find", targetId: `${instance}:find:${id}` }], mediaKeys: [] };
+      return { tombstones: [{ kind: "find", targetId: gid }], mediaKeys: [] };
+    }
     case "media": {
       const m = await env.DB.prepare("SELECT media_key, thumb_key FROM cache_media WHERE id=?")
         .bind(id)

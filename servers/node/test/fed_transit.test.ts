@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A hub passes on what it mirrored: A ⇄ hub ⇄ B, where B never peers with A. A's records reach B as A signed
-// them, verified under A's key and shown with B's own trust in A; blocks, deletes and restores follow the same
-// way; records never circle between hubs that follow each other; a local-only cache never leaves A.
+// them, through the hub's summary and origin pages, verified under A's key and shown with B's own trust in A;
+// blocks, deletes and restores follow the same way; records never circle between hubs that follow each other;
+// a local-only cache never leaves A.
 import { createHash } from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
-import { runScheduled } from "@aprscaching/gateway/app";
 import { queryPeerCorroboration } from "@aprscaching/gateway/corroborate";
 import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import { bodyToWire } from "@aprscaching/gateway/fedsync";
 import { call } from "./helpers/authflow.js";
-import { addCache, instanceEnv, newFedKey, serve, stubFetch, type FedKey } from "./helpers/fedpeer.js";
+import { addCache, gid, instanceEnv, newFedKey, serve, stubFetch, type FedKey } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -61,8 +61,10 @@ async function world(
   await follow(b, "https://hub.example", "hub.example", kh);
   const cacheId = await addCache(a, now() - 60);
   const findId = await addFind(a, cacheId);
+  const cacheGid = await gid(a, "cache", cacheId);
+  const findGid = await gid(a, "find", findId);
   stubFetch({ "https://a.example": serve(a), "https://hub.example": serve(hub), "https://b.example": serve(b) });
-  return { a, hub, b, ka, kh, kb, cacheId, findId };
+  return { a, hub, b, ka, kh, kb, cacheId, findId, cacheGid, findGid };
 }
 
 const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
@@ -76,19 +78,16 @@ const one = async (env: Env, sql: string, ...binds: unknown[]) =>
     .bind(...binds)
     .first<Record<string, unknown>>()) ?? null;
 
-/** B's transit cursor moves past everything the hub holds, as after a page served past held-back records. */
-async function passedAll(b: Env, hub: Env) {
-  const top = (await one(hub, "SELECT COALESCE(MAX(seq), 0) AS n FROM fed_transit"))!.n;
-  await b.DB.prepare("UPDATE fed_peers SET transit_cursor = ? WHERE url = 'https://hub.example'").bind(top).run();
-}
-
 async function mapCaches(env: Env, includeUnvetted = false) {
   const r = await call(env, "GET", `/api/caches${includeUnvetted ? "?includeUnvetted=1" : ""}`);
   return (r.data.caches as Array<{ origin?: string; originTrust?: string }>).filter((c) => c.origin === "a.example");
 }
 
-async function transitPage(env: Env, query = "") {
-  const res = await serve(env)(new Request(`https://hub.example/federation/sync/transit?since=0${query}`));
+/** One page of an origin's records of `kind` as `env` serves them, or null when it serves none. */
+async function originPage(env: Env, kind: string, query = "", origin = "a.example") {
+  const res = await serve(env)(
+    new Request(`https://hub.example/federation/sync/origin?origin=${origin}&kind=${kind}&since=0${query}`),
+  );
   return res.status === 200 ? decodeFedSyncPage(new Uint8Array(await res.arrayBuffer())) : null;
 }
 
@@ -98,24 +97,18 @@ describe("a hub passes its spokes' records on", () => {
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
 
-    const cache = await one(
-      w.b,
-      "SELECT origin FROM remote_caches WHERE global_id = ?",
-      `a.example:cache:${w.cacheId}`,
-    );
+    const cache = await one(w.b, "SELECT origin FROM remote_caches WHERE global_id = ?", w.cacheGid);
     expect(cache).toEqual({ origin: "a.example" });
-    expect(await one(w.b, "SELECT origin FROM remote_finds WHERE global_id = ?", `a.example:find:${w.findId}`)).toEqual(
-      {
-        origin: "a.example",
-      },
-    );
+    expect(await one(w.b, "SELECT origin FROM remote_finds WHERE global_id = ?", w.findGid)).toEqual({
+      origin: "a.example",
+    });
     // the frames are the ones A signed, byte for byte, under A's key
     const held = await rows(w.b, "SELECT gid, frame, signer_key, via, hops FROM fed_transit ORDER BY gid");
     expect(held.map((r) => [r.gid, r.signer_key, r.via, r.hops])).toEqual([
-      [`a.example:cache:${w.cacheId}`, w.ka.pub, "hub.example", 2],
-      [`a.example:find:${w.findId}`, w.ka.pub, "hub.example", 2],
+      [w.cacheGid, w.ka.pub, "hub.example", 2],
+      [w.findGid, w.ka.pub, "hub.example", 2],
     ]);
-    const atHub = await one(w.hub, "SELECT frame FROM fed_transit WHERE gid = ?", `a.example:cache:${w.cacheId}`);
+    const atHub = await one(w.hub, "SELECT frame FROM fed_transit WHERE gid = ?", w.cacheGid);
     expect(Buffer.from(held[0]!.frame as Uint8Array).equals(Buffer.from(atHub!.frame as Uint8Array))).toBe(true);
 
     // B learned A's key from the hub: an unvetted origin, never pulled, its records hidden by default
@@ -129,11 +122,27 @@ describe("a hub passes its spokes' records on", () => {
     });
     expect(await mapCaches(w.b)).toEqual([]);
     expect((await mapCaches(w.b, true)).map((c) => c.originTrust)).toEqual(["unvetted"]);
-    // the key came from the hub's list of the origins it passes on
-    const keys = await call(w.hub, "GET", "/federation/transit/keys");
-    expect(keys.data.keys).toEqual([
-      { instance: "a.example", publicKey: w.ka.pub, publicKeys: [{ x: w.ka.pub }], rotations: [] },
+    // the key came from the hub's summary of the origins it passes on, beside how far it holds each
+    const summary = await call(w.hub, "GET", "/federation/sync/summary?for=b.example");
+    expect(summary.data.origins).toEqual([
+      {
+        origin: "a.example",
+        held: { cache: expect.any(Number), find: expect.any(Number) },
+        top: { cache: expect.any(Number), find: expect.any(Number) },
+        publicKey: w.ka.pub,
+        publicKeys: [{ x: w.ka.pub }],
+        rotations: [],
+      },
+      {
+        origin: "hub.example",
+        held: { tombstone: 0, "account-move": 0, cache: 0, find: 0 },
+        top: { tombstone: 0, "account-move": 0, cache: 0, find: 0 },
+      },
     ]);
+    // and B holds A as far as the hub does, which it trusts
+    expect(await rows(w.b, "SELECT kind, seq FROM fed_origin_marks WHERE origin = 'a.example' ORDER BY kind")).toEqual(
+      await rows(w.hub, "SELECT kind, seq FROM fed_origin_marks WHERE origin = 'a.example' ORDER BY kind"),
+    );
   });
 
   it("B's sysop trusts A by its fingerprint, or blocks it, like any peer", async () => {
@@ -154,7 +163,7 @@ describe("a hub passes its spokes' records on", () => {
       .bind(now(), w.cacheId)
       .run();
     await syncAllPeers(w.hub);
-    const page = await transitPage(w.hub, "&for=b.example");
+    const page = await originPage(w.hub, "cache", "&for=b.example");
     expect((await applyFedFrames(w.b, page!.frames)).applied).toBe(0);
     await syncAllPeers(w.b);
     expect(await one(w.b, "SELECT title FROM remote_caches WHERE origin = 'a.example'")).not.toEqual({
@@ -204,9 +213,7 @@ describe("a hub passes its spokes' records on", () => {
     ).toBe(200);
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
-    expect(
-      await one(w.b, "SELECT status FROM remote_caches WHERE global_id = ?", `a.example:cache:${w.cacheId}`),
-    ).toEqual({
+    expect(await one(w.b, "SELECT status FROM remote_caches WHERE global_id = ?", w.cacheGid)).toEqual({
       status: "disabled",
     });
   });
@@ -217,14 +224,12 @@ describe("a hub passes its spokes' records on", () => {
     await w.a.DB.prepare(
       "INSERT INTO tombstones (id, kind, target_id, origin, ts) VALUES ('t1', 'cache', ?, 'a.example', ?)",
     )
-      .bind(`a.example:cache:${w.cacheId}`, now())
+      .bind(w.cacheGid, now())
       .run();
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
     expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
-    expect(
-      await one(w.b, "SELECT origin FROM remote_tombstones WHERE target_id = ?", `a.example:cache:${w.cacheId}`),
-    ).toEqual({
+    expect(await one(w.b, "SELECT origin FROM remote_tombstones WHERE target_id = ?", w.cacheGid)).toEqual({
       origin: "a.example",
     });
   });
@@ -232,10 +237,10 @@ describe("a hub passes its spokes' records on", () => {
   it("passes on only what FED_RESERVE allows, and a newly trusted origin's records go out then", async () => {
     const off = await world({ hubEnv: { FED_RESERVE: "off" } });
     await syncAllPeers(off.hub);
-    expect(await transitPage(off.hub)).toBeNull();
-    const wk = (await call(off.hub, "GET", "/.well-known/aprscaching")).data;
-    expect(wk.capabilities).not.toContain("transit");
-    expect((await call(off.hub, "GET", "/federation/transit/keys")).status).toBe(404);
+    expect(await originPage(off.hub, "cache")).toBeNull();
+    // the summary names the hub alone
+    const summary = await call(off.hub, "GET", "/federation/sync/summary");
+    expect(summary.data.origins.map((o: { origin: string }) => o.origin)).toEqual(["hub.example"]);
 
     vi.unstubAllGlobals();
     const w = await world({ hubTrustsA: "unvetted" });
@@ -285,7 +290,6 @@ describe("a hub passes its spokes' records on", () => {
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
     expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
-    await passedAll(w.b, w.hub);
 
     const q = { callsign: LOGGER, lat: 47.07, lon: 15.44, radiusM: 150, since: now() - 1800, until: now() };
     expect(await queryPeerCorroboration(w.hub, q)).not.toBeNull();
@@ -297,75 +301,42 @@ describe("a hub passes its spokes' records on", () => {
     expect((await rows(w.b, "SELECT global_id FROM remote_finds WHERE origin = 'a.example'")).length).toBe(1);
   });
 
-  it("a wider FED_RESERVE sends what it newly lets out once, off → trusted and trusted → all", async () => {
+  it("a wider FED_RESERVE lets its records out at the next pull, off → trusted and trusted → all", async () => {
     const setReserve = async (env: Env, value: string) =>
       expect((await call(env, "PUT", "/api/admin/settings/FED_RESERVE", { value }, OP)).status).toBe(200);
 
-    // off → trusted: the trusted origin's records go out past the follower's cursor
+    // off → trusted: the trusted origin's records go out
     const w = await world();
     await setReserve(w.hub, "off");
     await syncAllPeers(w.hub);
     await syncAllPeers(w.b);
     expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
-    await passedAll(w.b, w.hub);
     await setReserve(w.hub, "trusted");
     await syncAllPeers(w.b);
     expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
 
-    // trusted → all: an origin the hub has not vetted goes out too
+    // trusted → all: an origin the hub has not vetted goes out too, also when the environment sets it
     vi.unstubAllGlobals();
     const u = await world({ hubTrustsA: "unvetted" });
     await syncAllPeers(u.hub);
     await syncAllPeers(u.b);
     expect(await rows(u.b, "SELECT global_id FROM remote_caches")).toEqual([]);
-    await passedAll(u.b, u.hub);
-    await setReserve(u.hub, "all");
+    const restarted = instanceEnv("hub.example", u.kh, { FED_RESERVE: "all" }, u.hub.DB);
+    stubFetch({
+      "https://a.example": serve(u.a),
+      "https://hub.example": serve(restarted),
+      "https://b.example": serve(u.b),
+    });
     await syncAllPeers(u.b);
     expect((await rows(u.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
-    // narrowing and the same value again move nothing
-    const held = await rows(u.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid");
-    await setReserve(u.hub, "all");
-    await setReserve(u.hub, "trusted");
-    expect(await rows(u.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid")).toEqual(held);
-  });
-
-  it("a restart sends records on only when the environment widened FED_RESERVE since the last one", async () => {
-    const w = await world({ hubTrustsA: "unvetted" });
-    await syncAllPeers(w.hub);
-    await syncAllPeers(w.b);
-    await passedAll(w.b, w.hub);
-    const seqs = () => rows(w.hub, "SELECT gid, seq FROM fed_transit ORDER BY gid");
-    const restart = async (extra: Record<string, unknown> = {}) => {
-      const env = instanceEnv("hub.example", w.kh, extra, w.hub.DB);
-      stubFetch({
-        "https://a.example": serve(w.a),
-        "https://hub.example": serve(env),
-        "https://b.example": serve(w.b),
-      });
-      await runScheduled(env);
-      return env;
-    };
-
-    // the setting unchanged: nothing moves
-    const before = await seqs();
-    await restart();
-    expect(await seqs()).toEqual(before);
-
-    // FED_RESERVE=all in the environment: the unvetted origin's records go out, once
-    await restart({ FED_RESERVE: "all" });
-    const moved = await seqs();
-    expect(moved).not.toEqual(before);
-    await syncAllPeers(w.b);
-    expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1);
-    await restart({ FED_RESERVE: "all" });
-    expect(await seqs()).toEqual(moved);
   });
 
   it("never sends a record back to its origin or the instance it came from", async () => {
     const w = await world();
     await syncAllPeers(w.hub);
-    expect((await transitPage(w.hub, "&for=a.example"))!.frames).toHaveLength(0);
-    expect((await transitPage(w.hub))!.frames).toHaveLength(2);
+    expect(await originPage(w.hub, "cache", "&for=a.example")).toBeNull();
+    expect((await originPage(w.hub, "cache"))!.frames).toHaveLength(1);
+    expect((await originPage(w.hub, "find"))!.frames).toHaveLength(1);
     // A follows its hub: nothing of its own comes back
     await follow(w.a, "https://hub.example", "hub.example", w.kh);
     await syncAllPeers(w.a);
@@ -397,26 +368,28 @@ describe("a hub passes its spokes' records on", () => {
         )
       ).status,
     ).toBe(200);
-    const before = await rows(w.hub, "SELECT gid, seq, hops, via FROM fed_transit ORDER BY gid");
+    const before = await rows(w.hub, "SELECT gid, v, hops, via FROM fed_transit ORDER BY gid");
     for (let i = 0; i < 3; i++) {
       await syncAllPeers(w.hub);
       await syncAllPeers(hub2);
     }
-    expect(await rows(w.hub, "SELECT gid, seq, hops, via FROM fed_transit ORDER BY gid")).toEqual(before);
+    expect(await rows(w.hub, "SELECT gid, v, hops, via FROM fed_transit ORDER BY gid")).toEqual(before);
     expect((await rows(hub2, "SELECT hops, via FROM fed_transit")).map((r) => [r.hops, r.via])).toEqual([
       [2, "hub.example"],
       [2, "hub.example"],
     ]);
-    // hub2 offers the hub nothing it got from the hub
-    const page = await serve(hub2)(new Request("https://hub2.example/federation/sync/transit?since=0&for=hub.example"));
-    expect(decodeFedSyncPage(new Uint8Array(await page.arrayBuffer())).frames).toHaveLength(0);
+    // what hub2 offers back changes nothing at the hub: apply is idempotent by global id and version
+    const offered = (await originPage(hub2, "cache", "&for=hub.example"))!.frames;
+    expect((await applyFedFrames(w.hub, offered)).applied).toBe(0);
   });
 
   it("stops passing a record on after the hop limit", async () => {
     const w = await world();
     await syncAllPeers(w.hub);
     await w.hub.DB.prepare("UPDATE fed_transit SET hops = 4").run();
-    expect((await transitPage(w.hub))!.frames).toHaveLength(0);
+    const page = (await originPage(w.hub, "cache"))!;
+    expect(page.frames).toHaveLength(0);
+    // the gap a record at the limit leaves, and how it closes, is fed_mesh.test.ts
   });
 
   it("a local-only or imported cache never leaves its origin, whoever signs it on", async () => {
@@ -438,9 +411,10 @@ describe("a hub passes its spokes' records on", () => {
       await forged(902, { fedScope: "public", source: "gcau" }),
     ]);
     expect(r).toMatchObject({ applied: 0, rejected: 2 });
-    // and a transit row that somehow holds one is never served
+    // and a kept frame that somehow holds one is never served
     await w.hub.DB.prepare("UPDATE fed_transit SET scope = 'local-only' WHERE kind = 'cache'").run();
-    expect((await transitPage(w.hub))!.frames).toHaveLength(1); // the find only
+    expect((await originPage(w.hub, "cache"))!.frames).toHaveLength(0);
+    expect((await originPage(w.hub, "find"))!.frames).toHaveLength(1);
   });
 
   it("the region narrows passed-on caches too, never deletes", async () => {
@@ -470,6 +444,7 @@ describe("a hub passes its spokes' records on", () => {
     expect((await rows(w.b, "SELECT global_id FROM remote_caches")).length).toBe(1); // A's own key vouches for it
     // the find came back from A itself; what only the fake key vouched for is gone
     expect(await rows(w.b, "SELECT gid FROM fed_transit WHERE signer_key = ?", fake.pub)).toEqual([]);
+    expect((await rows(w.b, "SELECT global_id FROM remote_finds")).length).toBe(1);
   });
 
   it("removing an origin learned through a hub drops what its key vouched for", async () => {
@@ -485,5 +460,6 @@ describe("a hub passes its spokes' records on", () => {
     );
     expect(r.status).toBe(200);
     expect(await rows(w.b, "SELECT global_id FROM remote_caches")).toEqual([]);
+    expect(await rows(w.b, "SELECT origin FROM fed_origin_marks WHERE origin = 'a.example'")).toEqual([]);
   });
 });

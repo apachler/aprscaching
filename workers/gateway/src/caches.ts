@@ -34,6 +34,7 @@ import { askPeers, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
+import { cacheGid } from "./federation.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
 import { rendezvousFor } from "./rendezvous.js";
@@ -48,6 +49,8 @@ import { CACHE_POINT, moveRefusal, moveRule, pinPlaces, placePins } from "./cach
 // ---- database row shapes (snake_case) ----
 export interface CacheDbRow {
   id: number;
+  /** The number the cache took from the caches sequence when it was made: its global id (federation.ts cacheGid) */
+  fed_id?: number;
   code: string;
   owner_call: string;
   title: string;
@@ -220,7 +223,8 @@ export interface RemoteCacheRow {
 
 export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
   return {
-    globalId: `${instance}:cache:${r.id}`,
+    // the global id peers know it by (federation.ts cacheGid), so a mirror and the original never list twice
+    globalId: `${instance}:cache:${r.fed_id ?? r.id}`,
     id: r.id,
     code: r.code,
     ownerCall: displayCall(r.owner_call),
@@ -739,7 +743,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.
   if (m.fed_scope === "local-only" && existing.fed_scope !== "local-only") {
     const instance = env.INSTANCE ?? new URL(req.url).host;
-    await emitTombstones(env, instance, [{ kind: "cache", targetId: `${instance}:cache:${id}` }]);
+    await emitTombstones(env, instance, [{ kind: "cache", targetId: await cacheGid(env, instance, id) }]);
   }
   const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   return json({ cache: toSummary(row!) });

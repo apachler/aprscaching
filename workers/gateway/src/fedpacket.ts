@@ -4,7 +4,9 @@
  * ingest box (ingest-locality): the box asks here which peers publish an `ax25` or `netrom` endpoint and where
  * its last session with each stopped, dials one, delivers the pages to `POST /federation/frames` (where every
  * frame is checked against its origin's key, as any pulled page), and reports the session back here. The report
- * moves the packet path's own cursors and its status, which Instance admin shows beside the peer.
+ * moves the packet path's own cursors and its status, which Instance admin shows beside the peer. A feed of the
+ * peer's own records resumes from what this gateway holds of the peer by any path when that is further
+ * (fedtransit.ts marks), so a record an http pull or a hub brought costs no airtime.
  *
  * Both endpoints take the ingest credential (or the operator's). A report carries no records and grants
  * nothing: the worst a forged one does is make the next session re-read a feed, which applies idempotently.
@@ -14,6 +16,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireIngestOrOperator } from "./admin.js";
 import { storedEndpoints } from "./fedtransport.js";
+import { markOf, ORIGIN_KINDS } from "./fedtransit.js";
 
 /** The feeds a packet session pulls; a cursor for anything else is dropped. */
 const PACKET_FEEDS = new Set(["tombstone", "cache", "find", "key", "account-move", "bulletin"]);
@@ -71,22 +74,28 @@ export async function handlePacketPeers(req: Request, env: Env): Promise<Respons
       last_error: string | null;
     }>()
   ).results;
-  const peers = rows.flatMap((r) => {
+  const peers = [];
+  for (const r of rows) {
     const endpoints = storedEndpoints(r.endpoints)
       .filter((e) => PACKET_TRANSPORTS.has(e.transport))
       .map((e) => ({ transport: e.transport, address: e.address }));
-    if (!endpoints.length) return [];
-    return [
-      {
-        instance: r.instance,
-        endpoints,
-        cursors: parseCursors(r.cursors),
-        lastAttempt: r.last_attempt,
-        lastOk: r.last_ok,
-        lastError: r.last_error,
-      },
-    ];
-  });
+    if (!endpoints.length) continue;
+    // a feed of the peer's own records starts at what this gateway already holds of it, by any path, when that
+    // is further: airtime is not spent on records an http pull or a hub brought
+    const cursors = parseCursors(r.cursors);
+    for (const kind of ORIGIN_KINDS) {
+      const held = await markOf(env, r.instance, kind);
+      if (held > (cursors[kind]?.since ?? 0)) cursors[kind] = { since: held };
+    }
+    peers.push({
+      instance: r.instance,
+      endpoints,
+      cursors,
+      lastAttempt: r.last_attempt,
+      lastOk: r.last_ok,
+      lastError: r.last_error,
+    });
+  }
   const failing = peers.filter((p) => p.lastError).length; // a session that completes clears the error
   const never = peers.filter((p) => !p.lastOk).length;
   return json({ total: peers.length, failing, never, peers });

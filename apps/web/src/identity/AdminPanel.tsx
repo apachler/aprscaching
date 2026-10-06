@@ -7,6 +7,8 @@ import {
   syncFederationNow,
   adminAddStation,
   listFederationPeers,
+  markGivenUpSeen,
+  type FedGivenUp,
   setPeerTrust,
   lookUpPeer,
   addPeer,
@@ -2188,6 +2190,15 @@ function FederationAdmin() {
           />
         )}
       </Group>
+      {list.data?.givenUp && list.data.givenUp.count > 0 && (
+        <Group
+          title="Records given up"
+          status={`${list.data.givenUp.count} not seen`}
+          help="Records of other instances that no neighbour delivered in full within a week. Sync moved on past them."
+        >
+          <GivenUpRecords given={list.data.givenUp} onSeen={refresh} />
+        </Group>
+      )}
       <Disclosure label="Add a peer by callsign">
         <Fed44netWizard onAdmitted={refresh} />
       </Disclosure>
@@ -2199,6 +2210,59 @@ function FederationAdmin() {
 }
 
 /** The Discovered group's header status: how many wait, how many are on this network, how many disagree on a key. */
+const GIVEN_UP_REASON: Record<FedGivenUp["reason"], string> = {
+  unsettled: "arrived, but would not apply or verify",
+  hops: "crossed too many instances to pass on",
+  upstream: "a neighbour lacked it too",
+};
+
+/** The given-up records, by home instance, each listed until the sysop marks them seen. */
+function GivenUpRecords(props: { given: { count: number; gaps: FedGivenUp[] }; onSeen: () => void }) {
+  const toast = useToast();
+  const byOrigin = new Map<string, FedGivenUp[]>();
+  for (const g of props.given.gaps) byOrigin.set(g.origin, [...(byOrigin.get(g.origin) ?? []), g]);
+  const seen = async () => {
+    try {
+      const r = await markGivenUpSeen();
+      toast(`${r.seen} ${r.seen === 1 ? "record" : "records"} marked seen`);
+      props.onSeen();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  return (
+    <>
+      <ul className="logs">
+        {[...byOrigin].map(([origin, gaps]) => (
+          <li key={origin}>
+            <div className="row">
+              <span className="mono">{origin}</span>
+              <span className="muted">
+                {gaps.length} {gaps.length === 1 ? "record" : "records"}
+              </span>
+            </div>
+            <ul className="fine">
+              {gaps.map((g) => (
+                <li key={`${g.kind}:${g.v}`}>
+                  {g.kind} <span className="mono">{g.v}</span>: {GIVEN_UP_REASON[g.reason]}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+      {props.given.count > props.given.gaps.length && (
+        <p className="muted fine">
+          The latest {props.given.gaps.length} of {props.given.count} are listed.
+        </p>
+      )}
+      <Button onClick={seen} hint="Take these records off the list; new ones show up here again">
+        Mark as seen
+      </Button>
+    </>
+  );
+}
+
 function discoveredStatus(list: FedPeer[] | undefined): string {
   if (!list) return "loading";
   if (!list.length) return "none";
