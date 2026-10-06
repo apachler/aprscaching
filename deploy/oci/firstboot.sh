@@ -236,7 +236,7 @@ say "doctor:"
 # Terraform state still hold them; README-stack.md says so.
 cat >"$UNIT_DIR/aprscaching-scrub-userdata.service" <<UNIT
 [Unit]
-Description=Remove cloud-init's copies of the aprscaching stack settings
+Description=Remove cloud-init's copies of the APRScaching stack settings
 After=cloud-final.service
 
 [Service]

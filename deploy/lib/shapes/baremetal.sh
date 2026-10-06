@@ -19,7 +19,7 @@ bm_usage() {
   cat <<'EOF'
 deploy/aprscaching init baremetal [options] [setup options]
 
-Installs aprscaching from a checkout under systemd: a system user, the checkout, its dependencies and
+Installs APRScaching from a checkout under systemd: a system user, the checkout, its dependencies and
 web build, the .env (the Self-host questions), and the gateway and ingest units.
 
   --dir PATH       install directory                          (default /opt/aprscaching)

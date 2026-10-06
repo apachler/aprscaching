@@ -55,7 +55,7 @@ more unless you set **Allow beyond Always Free**.
 5. Wait a few minutes for the first boot. It installs Docker from Docker's signed apt repository, clones the
    release and stops when the tag points at another commit than the release names. It then runs
    `deploy/aprscaching init selfhost`, which generates the secrets on the VM, starts the stack, runs `doctor` and
-   makes the first backup. The serial console (**Compute → Instances → aprscaching → Console connection**) and
+   makes the first backup. The serial console (**Compute → Instances → `aprscaching` → Console connection**) and
    `/var/log/aprscaching-firstboot.log` show its progress.
 6. For a shell on the VM, use the Bastion: port 22 is closed to the internet. From a checkout of the repository,
    with the OCI CLI set up:

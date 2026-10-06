@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The documentation stays true to the code and to `.claude/rules/docs-and-comments.md`. Five checks, each
+ * The documentation stays true to the code and to `.claude/rules/docs-and-comments.md`. Eight checks, each
  * naming every offending line:
  *
  *  1. Present tense — no milestone, review or ADR codes and no story framing ("previously", "for now", …)
@@ -18,6 +18,7 @@
  *  6. Stale references — pages move without redirects, so every reference to a manual page or heading in any
  *     tracked file (paths, published URLs, the app's manual links, the doctor's hints) must still resolve.
  *  7. Lists — a list item MkDocs would read as paragraph text, for want of a blank line before it.
+ *  8. Wordmark — the product is APRScaching in prose; the lowercase form only as a path, domain or command.
  *
  * Pure word and path matching over the tracked files, with no dependency, so it runs before install.
  */
@@ -381,11 +382,51 @@ for (const f of DIAGRAM_DOCS) {
   }
 }
 
+// ---------------------------------------------------------------- 8. the wordmark
+// The product is written APRScaching wherever a reader meets it as a name. The lowercase form stays only where it
+// is a literal: a path, domain, package, command, user or key, which sits in a code span, a link target or a URL
+// in Markdown, or is joined to a path or domain by `/`, `.`, `-`, `_` or `@`.
+const WORDMARK_DOCS = tracked.filter(
+  (f) =>
+    f.endsWith(".md") &&
+    !f.includes("node_modules/") &&
+    f !== "CHANGELOG.md" &&
+    !f.startsWith("docs/reviews/") &&
+    (PROSE.includes(f) || f === "TODO.md" || f.startsWith(".claude/")),
+);
+const LOWER = /(?<![\w./@$~%\\-])aprscaching(?![\w/-])(?!\.[A-Za-z])/;
+const VARIANT = /\b(?:Aprscaching|APRSCaching|APRS[ -]caching|aprs[ -]caching)\b/;
+for (const f of WORDMARK_DOCS) {
+  let fence = false;
+  let span = false; // inside a code span that a line break continues
+  read(f)
+    .split("\n")
+    .forEach((text, i) => {
+      if (/^\s*```/.test(text)) fence = !fence;
+      if (fence) return;
+      if (!text.trim()) span = false;
+      let line = span ? text.replace(/^[^`]*`?/, "") : text;
+      span = span && !text.includes("`");
+      line = line.replace(/`[^`]*`/g, "");
+      if (line.includes("`")) {
+        line = line.slice(0, line.indexOf("`"));
+        span = true;
+      }
+      const prose = line
+        .replace(/\]\([^)]*\)/g, "]")
+        .replace(/<[^>]*>/g, "")
+        .replace(/https?:\/\/\S+/g, "");
+      const m = prose.match(LOWER) ?? prose.match(VARIANT);
+      if (m)
+        fail(f, i + 1, `the product is written APRScaching, not "${m[0]}" (a path or command goes in a code span)`);
+    });
+}
+
 if (problems.length) {
   for (const p of problems) console.error(`✗ ${p}`);
   console.error(`\n${problems.length} documentation problem(s). The rules: .claude/rules/docs-and-comments.md`);
   process.exit(1);
 }
 console.log(
-  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid, no stale manual references, lists parse`,
+  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid, no stale manual references, lists parse, the wordmark holds`,
 );

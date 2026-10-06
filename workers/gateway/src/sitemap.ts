@@ -93,7 +93,7 @@ export function handleSitemapPage(req: Request, env: Env): Response {
     (f) => `<li><a href="${e(gw + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
   ).join("");
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Site map · aprscaching</title><style>
+<title>Site map · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem}
 h1{font-size:1.4rem}h2{font-size:1.05rem;margin:1.4rem 0 .4rem;text-transform:uppercase;letter-spacing:.05em;opacity:.75}
 ul{list-style:none;padding:0;margin:0}li{padding:.55rem 0;border-bottom:1px solid #8883}
@@ -101,7 +101,7 @@ a{font-weight:600;text-decoration:none}a:hover{text-decoration:underline}.m{opac
 .tag{font-size:.72em;border:1px solid #8886;border-radius:4px;padding:0 .35em;opacity:.8;vertical-align:middle}
 footer{margin-top:2rem;opacity:.7;font-size:.9em}</style>
 <h1>Site map</h1>
-<p class=m>Every page and tool on aprscaching, linked. <a href="${e(base)}/">Open the app</a>.</p>
+<p class=m>Every page and tool on APRScaching, linked. <a href="${e(base)}/">Open the app</a>.</p>
 ${groupHtml}
 <section><h2>Feeds (RSS)</h2><ul>${feedHtml}</ul></section>
 <section><h2>For machines</h2><ul>

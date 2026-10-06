@@ -1,6 +1,6 @@
 # Security Policy
 
-aprscaching ingests hostile input by design — RF packets from anyone with a transmitter, and
+APRScaching ingests hostile input by design — RF packets from anyone with a transmitter, and
 federation traffic from peers we don't control. We take reports seriously.
 
 ## Supported versions

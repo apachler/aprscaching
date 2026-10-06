@@ -19,7 +19,7 @@ const FBB_BBS = "OE9FBB";
 const RUN = Date.now().toString(36).toUpperCase().slice(-6);
 const BID = `${RUN}OE1ACS`; // an FBB BID is at most 12 characters: a longer one is deferred (FS =)
 const TITLE = `Interop ${RUN}`;
-const BODY = `Forwarded by aprscaching to F6FBB.\nRun ${RUN}.`;
+const BODY = `Forwarded by APRScaching to F6FBB.\nRun ${RUN}.`;
 const BACK_TITLE = `Back ${RUN}`;
 const BACK_BODY = `Reverse-forwarded by F6FBB, run ${RUN}.`;
 

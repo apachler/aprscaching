@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pocket in one command: bring Termux up to date, install aprscaching (install.sh), start the station
+# Pocket in one command: bring Termux up to date, install APRScaching (install.sh), start the station
 # (start.sh) and print the URLs and a one-time sign-in link. Safe to run again: it upgrades, updates the
 # checkout, keeps the .env and restarts a running station on the new code.
 #
@@ -39,7 +39,7 @@ POCKET_BUNDLE_SHA256=""
 
 usage() {
   cat <<'EOF'
-pocket.sh: install and start aprscaching on an Android phone in Termux, in one command.
+pocket.sh: install and start APRScaching on an Android phone in Termux, in one command.
 
   bash pocket.sh --call OE8APR     (downloaded from a release and checked: docs/run/install/pocket.md)
 
@@ -125,7 +125,7 @@ main() {
   case "$data" in /*) ;; *) data="$PWD/$data" ;; esac
 
   if ! is_termux && [ "$non_termux" -eq 0 ]; then
-    fail "this sets up aprscaching inside Termux on Android." \
+    fail "this sets up APRScaching inside Termux on Android." \
       "Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) and run it there."
   fi
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * badge.ts — an embeddable SVG badge for QRZ.com / forum signatures / other ham networks.
- * GET /badge/:callsign.svg renders the operator's standing in the aprscaching network (network
+ * GET /badge/:callsign.svg renders the operator's standing in the APRScaching network (network
  * rank, verified finds, points, hides). It's a self-contained SVG (no external fonts/assets) so it
  * renders anywhere an <img> does. This is one way the platform advertises itself as a *network*.
  */
@@ -49,7 +49,7 @@ function renderBadge(d: {
     `<text x="${x}" y="58" font-size="22" font-weight="600" fill="#fff" font-family="${FONT}">${value}</text>` +
     `<text x="${x}" y="76" font-size="11" font-weight="500" fill="rgba(255,255,255,.85)" font-family="${FONT}">${label}</text>`;
   const rankStr = d.rank > 0 ? `#${d.rank}` : "—";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(d.callsign)} on aprscaching">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(d.callsign)} on APRScaching">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2D8BAB"/><stop offset="1" stop-color="#246f88"/></linearGradient>
     <style>@font-face{font-family:'Fredoka';font-style:normal;font-weight:600;src:url(${FREDOKA_DATA_URI}) format('woff2');}text{font-family:${FONT};}</style>

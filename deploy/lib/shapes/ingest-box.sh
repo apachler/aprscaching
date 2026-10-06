@@ -82,7 +82,7 @@ shape_init() {
   status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url/check" 2>/dev/null || true)"
   case "$status" in
     401 | 200) info "the gateway answers at $url" ;;
-    404) die "$url/check is not there." "The address is not an aprscaching gateway." ;;
+    404) die "$url/check is not there." "The address is not an APRScaching gateway." ;;
     *) die "The gateway does not answer at $url." "Check the address and this box's network." ;;
   esac
   env_file_secure "$SHAPE_ENV"

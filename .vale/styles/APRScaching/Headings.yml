@@ -10,7 +10,6 @@ exceptions:
   - APRS
   - APRS-IS
   - APRScaching
-  - aprscaching
   - Shack
   - MeshCom
   - Meshtastic

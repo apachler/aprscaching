@@ -123,8 +123,8 @@ export async function handleMailTest(req: Request, env: Env): Promise<Response> 
   const result = await deliverMail(
     env,
     address,
-    "aprscaching test mail",
-    `This is a test mail from the aprscaching instance at ${env.APP_URL ?? env.INSTANCE ?? "this host"}.\n\n` +
+    "APRScaching test mail",
+    `This is a test mail from the APRScaching instance at ${env.APP_URL ?? env.INSTANCE ?? "this host"}.\n\n` +
       `It went out over ${over}, the way sign-in links and the watch digest go.`,
   );
   return json({ transport: over, ...result }, { status: result.ok ? 200 : 502 });

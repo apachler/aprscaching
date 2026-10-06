@@ -50,7 +50,7 @@ environment) before making the instance public.</div>`;
 const page = (title: string, body: string): Response =>
   new Response(
     `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>${title} · aprscaching</title>${STYLE}${body}
+<title>${title} · APRScaching</title>${STYLE}${body}
 <p class=m><a href="/imprint">Imprint</a> · <a href="/privacy">Privacy</a> · <a href="/source" rel="noopener">Source (AGPL-3.0)</a></p>`,
     { headers: { "content-type": "text/html; charset=utf-8" } },
   );
@@ -65,9 +65,9 @@ export function handleImprintPage(env: Env): Response {
   return page(
     "Imprint",
     `<h1>Imprint</h1>
-<p>Operator of this aprscaching instance (${escapeHtml(env.INSTANCE ?? "unconfigured")}):</p>
+<p>Operator of this APRScaching instance (${escapeHtml(env.INSTANCE ?? "unconfigured")}):</p>
 ${who}
-<p class=m>aprscaching is free software (AGPL-3.0-or-later); every instance is run independently by
+<p class=m>APRScaching is free software (AGPL-3.0-or-later); every instance is run independently by
 its operator. This page identifies the operator of <em>this</em> instance only — not the authors of
 the software.</p>`,
   );

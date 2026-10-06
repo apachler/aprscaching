@@ -41,7 +41,7 @@ pocket_paths
 have tmux || die "tmux is missing." "Install it with:  pkg install tmux"
 have node || die "node is missing." "Run deploy/pocket/install.sh first."
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing." "Run deploy/pocket/install.sh first; it writes that file."
-[ -f "$DIR/servers/node/src/server.ts" ] || die "$DIR is not an aprscaching checkout." "Pass --dir PATH."
+[ -f "$DIR/servers/node/src/server.ts" ] || die "$DIR is not an APRScaching checkout." "Pass --dir PATH."
 mkdir -p "$LOG_DIR" "$RUN_DIR"
 
 BASE="$(gateway_base)"

@@ -1,4 +1,4 @@
-# Contributing to aprscaching
+# Contributing to APRScaching
 
 Thanks for your interest — this is an amateur-radio-first, non-commercial, open project, and
 contributions are welcome from hams, developers, and cachers alike. This guide gets you from clone to

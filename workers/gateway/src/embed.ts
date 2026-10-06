@@ -90,7 +90,7 @@ export function handleEmbed(req: Request, env: Env): Response {
   });
   const html = `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>aprscaching map</title>
+<title>APRScaching map</title>
 <link rel="icon" href="data:,">
 <link href="${escapeHtml(lib)}/maplibre-gl.css" rel="stylesheet">
 <style>html,body,#m{height:100%;margin:0}#m{font:14px system-ui}
@@ -98,7 +98,7 @@ export function handleEmbed(req: Request, env: Env): Response {
 .acg-pin{width:16px;height:16px;border-radius:50% 50% 50% 0;background:#0b76b8;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.4)}
 .maplibregl-popup-content{font:13px system-ui}</style></head>
 <body><div id="m"></div>
-<a class="acg-cta" id="cta" href="${escapeHtml(app)}" target="_blank" rel="noopener">Open in aprscaching →</a>
+<a class="acg-cta" id="cta" href="${escapeHtml(app)}" target="_blank" rel="noopener">Open in APRScaching →</a>
 <script type="module">
 const CFG = ${cfg};
 const maplibregl = await import(CFG.lib);

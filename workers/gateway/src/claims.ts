@@ -532,7 +532,7 @@ async function afterRelease(env: Env, r: Release, why: string): Promise<void> {
   await sendEmail(
     env,
     r.email,
-    `${r.callsign} is no longer on your aprscaching account`,
+    `${r.callsign} is no longer on your APRScaching account`,
     `${detail}\n\n${rest}\n\nIf ${r.callsign} is your licence, contact the sysop of this instance.`,
   );
 }

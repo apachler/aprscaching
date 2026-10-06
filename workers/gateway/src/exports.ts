@@ -46,7 +46,7 @@ export function cachesToGpx(caches: ExpCache[]): string {
     .join("\n");
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<gpx version="1.1" creator="aprscaching" xmlns="http://www.topografix.com/GPX/1/1">\n${wpts}\n</gpx>\n`
+    `<gpx version="1.1" creator="APRScaching" xmlns="http://www.topografix.com/GPX/1/1">\n${wpts}\n</gpx>\n`
   );
 }
 
@@ -62,7 +62,7 @@ export function cachesToKml(caches: ExpCache[]): string {
     .join("\n");
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>aprscaching caches</name>\n${marks}\n  </Document>\n</kml>\n`
+    `<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>APRScaching caches</name>\n${marks}\n  </Document>\n</kml>\n`
   );
 }
 
@@ -73,7 +73,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** ADIF 3.1 records (one per find), mapping each find to a logbook QSO with the cache as SIG_INFO. */
 export function findsToAdif(finds: ExpFind[], call: string): string {
   const header =
-    `aprscaching ADIF export for ${call}\n` +
+    `APRScaching ADIF export for ${call}\n` +
     `${adifField("ADIF_VER", "3.1.4")} ${adifField("PROGRAMID", "aprscaching")} <EOH>\n`;
   const records = finds
     .map((f) => {

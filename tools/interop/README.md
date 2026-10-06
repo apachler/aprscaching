@@ -39,7 +39,7 @@ legs against the Station hub's servers. Every leg that already runs here stays.
 
 ## 1. Local loop — no Docker (`run-local-loop.sh`)
 
-Two full aprscaching stacks (gateway + ingest) crosslinked over AXUDP on localhost:
+Two full APRScaching stacks (gateway + ingest) crosslinked over AXUDP on localhost:
 
 ```bash
 bash tools/interop/run-local-loop.sh
@@ -139,7 +139,7 @@ fresh data volume `start.sh` registers two users through the sysop console (`xfb
 | call | flags | password | role |
 |---|---|---|---|
 | `OE1TST` | `M` (modem/telnet access) | `interop2` | the sysop and the mailbox user the test reads as |
-| `OE1ACS` | `B` (BBS), `M` | `interop1` | the aprscaching forwarding partner |
+| `OE1ACS` | `B` (BBS), `M` | `interop1` | the APRScaching forwarding partner |
 
 `EU` on an existing call asks `Delete <call> (Y/N) ?` first and on an unknown call `Create it
 (Y/N) ?`; the console callsign itself exists from the moment the console connects. The container

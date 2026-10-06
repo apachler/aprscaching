@@ -1,4 +1,4 @@
-# aprscaching
+# APRScaching
 
 [![CI](https://github.com/apachler/aprscaching/actions/workflows/ci.yml/badge.svg)](https://github.com/apachler/aprscaching/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apachler/aprscaching/badge)](https://scorecard.dev/viewer/?uri=github.com/apachler/aprscaching)
@@ -141,5 +141,5 @@ Contributions from hams, developers, and cachers are welcome.
   **[CHANGELOG.md](CHANGELOG.md)**
 - **[TODO.md](TODO.md)** — the launch list and the work deferred past 1.0, with why each piece waits.
 
-aprscaching is **free in full** — every feature, forever. Donations (when available) are
+APRScaching is **free in full** — every feature, forever. Donations (when available) are
 recognition-only and never gate functionality.

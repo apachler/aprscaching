@@ -649,7 +649,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "Spot source allowlist (`pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn`), and seconds between upstream polls (never below a source's own floor)",
         "all / `120`",
       ],
-      ["`SPOTS_USER_AGENT`", "The User-Agent sent to spot upstreams", "names aprscaching"],
+      ["`SPOTS_USER_AGENT`", "The User-Agent sent to spot upstreams", "names APRScaching"],
       [
         "`SPOTS_RECEPTION_URLS`",
         'Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA and SOTA use their public APIs',
@@ -662,7 +662,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`EMAIL_FROM`",
-        "Sender address of sign-in links, address confirmations and the watch-alert digest, e.g. `aprscaching <noreply@aprs.example.net>`. Mail goes out over SMTP when `SMTP_HOST` is set, else over the Resend API when `EMAIL_API_KEY` is set. Without `EMAIL_FROM` and one of the two, no mail is sent: members sign in with passkeys, or off-grid with the operator's link",
+        "Sender address of sign-in links, address confirmations and the watch-alert digest, e.g. `APRScaching <noreply@aprs.example.net>`. Mail goes out over SMTP when `SMTP_HOST` is set, else over the Resend API when `EMAIL_API_KEY` is set. Without `EMAIL_FROM` and one of the two, no mail is sent: members sign in with passkeys, or off-grid with the operator's link",
         "—",
       ],
       [

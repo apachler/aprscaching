@@ -61,7 +61,7 @@ function rss(opts: {
     `    <atom:link href="${xmlEscape(self)}" rel="self" type="application/rss+xml"/>\n` +
     `    <description>${xmlEscape(opts.description)}</description>\n` +
     `    <lastBuildDate>${rfc822(nowS())}</lastBuildDate>\n` +
-    `    <generator>aprscaching</generator>\n` +
+    `    <generator>APRScaching</generator>\n` +
     `${items}\n` +
     `  </channel>\n</rss>\n`;
   return xml(body, { headers: { "content-type": "application/rss+xml; charset=utf-8" } });
@@ -102,7 +102,7 @@ export async function handleActivityFeed(req: Request, env: Env): Promise<Respon
     };
   });
   return rss({
-    title: "aprscaching — Activity",
+    title: "APRScaching — Activity",
     link: surfaceUrl(env, "activity"),
     description: "Recent finds, hides and DNFs across the network.",
     selfPath: "/feeds/activity.xml",
@@ -129,7 +129,7 @@ export async function handleCachesFeed(req: Request, env: Env): Promise<Response
     author: authorOf(r.ownerCall),
   }));
   return rss({
-    title: "aprscaching — New caches",
+    title: "APRScaching — New caches",
     link: surfaceUrl(env, null),
     description: "Recently published public caches.",
     selfPath: "/feeds/caches.xml",
@@ -158,7 +158,7 @@ export async function handleBulletinsFeed(req: Request, env: Env): Promise<Respo
     author: r.fromCall,
   }));
   return rss({
-    title: "aprscaching — Bulletins",
+    title: "APRScaching — Bulletins",
     link: surfaceUrl(env, "bbs"),
     description: "Public APRS bulletins.",
     selfPath: "/feeds/bulletins.xml",
@@ -187,7 +187,7 @@ export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Res
     author: r.loggerCall,
   }));
   return rss({
-    title: "aprscaching — Leaderboard",
+    title: "APRScaching — Leaderboard",
     link: surfaceUrl(env, "ranks"),
     description: "Top finders, ranked by verified finds.",
     selfPath: "/feeds/leaderboard.xml",
@@ -257,7 +257,7 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
     .slice(0, 60);
 
   return rss({
-    title: `aprscaching — ${cs}`,
+    title: `APRScaching — ${cs}`,
     link: `${requestOrigin(req, env)}/?view=profile&call=${encodeURIComponent(cs)}`,
     description: `${cs} — ${findCount} verified finds · ${hides} hides · ${badges.length} badges.`,
     selfPath: userFeedPath(cs),

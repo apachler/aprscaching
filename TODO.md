@@ -91,7 +91,7 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
       untested against node hardware ([`docs/run/radios/meshcom.md`](docs/run/radios/meshcom.md)).
 - [ ] **Federation over FBB on a real BBS network** — `FED_BBS` (experimental, off by default) carries signed
       batches as personal mail to `ACSFED` at a partner marked for federation; the local AXUDP loop proves it
-      between two aprscaching stacks, and nothing yet proves how F6FBB, LinBPQ or JNOS store, route or refuse
+      between two APRScaching stacks, and nothing yet proves how F6FBB, LinBPQ or JNOS store, route or refuse
       that mail, or what a batch costs in airtime ([`docs/run/federation/fbb.md`](docs/run/federation/fbb.md)).
 - [ ] **The packet terminal over a Bluetooth KISS TNC** — the terminal's BLE KISS connection, Mobilinkd's BLE
       KISS service included, is untested on hardware

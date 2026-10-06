@@ -48,7 +48,7 @@ const lineOf = (a: DigestAlert): string => a.detail || `${a.callsign} ${a.kind}`
 export function digestSubject(alerts: DigestAlert[]): string {
   if (alerts.length === 1) {
     const one = lineOf(alerts[0]!);
-    return `aprscaching: ${one.length > SUBJECT_MAX ? one.slice(0, SUBJECT_MAX - 1) + "…" : one}`;
+    return `APRScaching: ${one.length > SUBJECT_MAX ? one.slice(0, SUBJECT_MAX - 1) + "…" : one}`;
   }
   const counts = new Map<string, { t: [string, string]; n: number }>();
   for (const a of alerts) {
@@ -58,7 +58,7 @@ export function digestSubject(alerts: DigestAlert[]): string {
     counts.set(t[0], c);
   }
   const parts = [...counts.values()].sort((x, y) => y.n - x.n).map(({ t, n }) => `${n} ${n === 1 ? t[0] : t[1]}`);
-  return `aprscaching: ${parts.join(", ")}`;
+  return `APRScaching: ${parts.join(", ")}`;
 }
 
 /**
@@ -77,7 +77,7 @@ export function composeDigest(
     ? `To stop this digest, open ${unsubscribeUrl} and confirm, or ${settings}.`
     : `To stop this digest, ${settings}.`;
   const text =
-    `${n} new alert${n === 1 ? "" : "s"} on aprscaching:\n\n${lines.join("\n")}\n\n` +
+    `${n} new alert${n === 1 ? "" : "s"} on APRScaching:\n\n${lines.join("\n")}\n\n` +
     `See them on the map: ${appUrl}/\n\n-- \n${off}\n`;
   return { subject: digestSubject(alerts), text };
 }
@@ -105,7 +105,7 @@ function unsubscribePage(title: string, body: string, status = 200): Response {
   return new Response(
     `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=referrer content=no-referrer>
-<title>${escapeHtml(title)} · aprscaching</title><style>
+<title>${escapeHtml(title)} · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}
 h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height:44px;padding:.6rem 1.2rem;border-radius:10px}
 button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
@@ -161,7 +161,7 @@ export async function handleNotifyUnsubscribe(req: Request, env: Env): Promise<R
   return html
     ? unsubscribePage(
         "Digest stopped",
-        `<p>You get no more digest mails. Turn it back on under Settings → Notifications.</p><p><a href="${escapeHtml(appBase(env))}/">Open aprscaching</a></p>`,
+        `<p>You get no more digest mails. Turn it back on under Settings → Notifications.</p><p><a href="${escapeHtml(appBase(env))}/">Open APRScaching</a></p>`,
       )
     : json({ ok: true, digest: false });
 }

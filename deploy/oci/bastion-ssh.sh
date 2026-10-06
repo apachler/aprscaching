@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# bastion-ssh.sh — log in to the aprscaching OCI VM through OCI Bastion (no public SSH).
+# bastion-ssh.sh — log in to the APRScaching OCI VM through OCI Bastion (no public SSH).
 #
 # The OCI stack leaves port 22 closed to the internet; the only way in is a short-lived Bastion
 # session. This script creates (or reuses) that session with the OCI CLI and runs ssh through it, so a

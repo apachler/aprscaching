@@ -283,7 +283,7 @@ check "  … with no federation peers" eq "$(env_file_get "$L" FED_PEERS)" ""
 M="$TMP/mail.env"
 export SMTP_PASS=mailbox-pw # the password from the environment, off the command line
 check "mail over SMTP is set up" setup --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers "" \
-  --mail smtp --email-from "aprscaching <noreply@aprs.example.net>" --smtp-host mail.example.net \
+  --mail smtp --email-from "APRScaching <noreply@aprs.example.net>" --smtp-host mail.example.net \
   --smtp-user noreply@aprs.example.net
 unset SMTP_PASS
 check "  … names the mail test" grep -q "tools/admin/mail-test.mjs" "$TMP/out"
@@ -293,7 +293,7 @@ check "  … on port 587" eq "$(env_file_get "$M" SMTP_PORT)" "587"
 check "  … over STARTTLS" eq "$(env_file_get "$M" SMTP_SECURE)" "starttls"
 check "  … logging in as the address" eq "$(env_file_get "$M" SMTP_USER)" "noreply@aprs.example.net"
 check "  … with the password from the environment" eq "$(env_file_get "$M" SMTP_PASS)" "mailbox-pw"
-check "  … and the sender" eq "$(env_file_get "$M" EMAIL_FROM)" "aprscaching <noreply@aprs.example.net>"
+check "  … and the sender" eq "$(env_file_get "$M" EMAIL_FROM)" "APRScaching <noreply@aprs.example.net>"
 check "a re-run without --mail keeps it" setup --env-file "$M" --call OE8APR --domain aprs.example.net --fed-peers ""
 check "  … unchanged" eq "$(env_file_get "$M" SMTP_HOST)" "mail.example.net"
 check "port 465 is TLS from the first byte" setup --env-file "$TMP/m465.env" --call OE8APR --domain aprs.example.net \

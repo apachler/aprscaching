@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aprscaching desktop launcher — the single-binary, all-in-one desktop entry (gateway + SPA).
+ * APRScaching desktop launcher — the single-binary, all-in-one desktop entry (gateway + SPA).
  * Compiled with `bun build --compile` (see build-exe.sh): one file that starts the Bun gateway
  * (servers/bun/server.ts, the server the Bun conformance lane tests), serves the embedded SPA, keeps
  * SQLite in the OS app-data dir, and opens the browser. RF comes from the **browser (Web Serial/BLE)** —
@@ -59,7 +59,7 @@ mkdirSync(dir, { recursive: true });
 // ---- secrets: each from the environment, else generated once and kept in the app-data dir ----
 const resolved = resolveInstanceSecrets(process.env, dir);
 if (!resolved.ok) {
-  console.error(`aprscaching: ${resolved.error}`);
+  console.error(`APRScaching: ${resolved.error}`);
   process.exit(1);
 }
 
@@ -136,7 +136,7 @@ try {
     desktop: true,
   });
 } catch (e) {
-  console.error(`aprscaching: ${(e as Error).message}`);
+  console.error(`APRScaching: ${(e as Error).message}`);
   process.exit(1);
 }
 const { server, migrated } = started;
@@ -145,7 +145,7 @@ const { server, migrated } = started;
 const openHost = HOST === "0.0.0.0" || HOST.includes(":") ? "127.0.0.1" : HOST;
 const localUrl = `http://${openHost}:${server.port}`;
 console.log(
-  `aprscaching ${VERSION} → ${localUrl}   (listening on ${HOST}; data: ${dir}${migrated.length ? `, ${migrated.length} migrations applied` : ""}${embedded ? ", embedded assets" : ", disk assets"})`,
+  `APRScaching ${VERSION} → ${localUrl}   (listening on ${HOST}; data: ${dir}${migrated.length ? `, ${migrated.length} migrations applied` : ""}${embedded ? ", embedded assets" : ", disk assets"})`,
 );
 console.log(
   `secrets: ingest.secret, operator.secret and session.secret in ${dir} (an ingest box or tools/admin/* needs them)`,

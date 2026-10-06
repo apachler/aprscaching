@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * aprscaching node-gateway — the portable self-host runtime.
+ * APRScaching node-gateway — the portable self-host runtime.
  *
  * Same handlers as the Bun server (imported from @aprscaching/gateway/app), wired to:
  *   • SQLite via the database shim (d1.ts)   • in-memory region rooms over `ws` (rooms.ts)
@@ -117,7 +117,7 @@ if (TLS) {
   }
   env.HTTPS_LISTENER_PORT = String(TLS.port);
   secure = createGatewayServer({ ...listenerBase, tls: pair }) as https.Server;
-  secure.listen(TLS.port, () => console.log("aprscaching node-gateway https on :%s", TLS.port));
+  secure.listen(TLS.port, () => console.log("APRScaching node-gateway https on :%s", TLS.port));
   // A re-issued certificate (a hotspot that came back on another address) loads without a restart.
   process.on("SIGHUP", () => {
     try {
@@ -132,7 +132,7 @@ const server = createGatewayServer({ ...listenerBase, httpsPort: TLS?.port });
 
 server.listen(PORT, () =>
   console.log(
-    "aprscaching node-gateway listening on :%s  (db: %s)%s",
+    "APRScaching node-gateway listening on :%s  (db: %s)%s",
     PORT,
     DB_PATH,
     WEB_DIST ? `  (web: ${WEB_DIST})` : "",

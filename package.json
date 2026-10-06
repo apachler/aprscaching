@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
-  "description": "aprscaching — an APRS geocaching game and ham-radio Shack",
+  "description": "APRScaching — an APRS geocaching game and ham-radio Shack",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",

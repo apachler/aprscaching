@@ -30,7 +30,7 @@ The gateway picks one transport, by this rule:
     For a hosted mailbox the settings are typically port 587, STARTTLS, and the full address as the login:
 
     ```bash
-    EMAIL_FROM='aprscaching <noreply@aprs.example.net>'
+    EMAIL_FROM='APRScaching <noreply@aprs.example.net>'
     SMTP_HOST=mail.example.net
     SMTP_PORT=587
     SMTP_SECURE=starttls

@@ -1,6 +1,6 @@
 # Getting Support
 
-aprscaching is a volunteer, non-commercial project. There is **no paid support** — help is
+APRScaching is a volunteer, non-commercial project. There is **no paid support** — help is
 community-driven, and that's on purpose.
 
 ## Where to go
@@ -25,7 +25,7 @@ community-driven, and that's on purpose.
 
 ## Supporting the project
 
-aprscaching is **free in full** — every feature, forever, for everyone. Donations (when available) are
+APRScaching is **free in full** — every feature, forever, for everyone. Donations (when available) are
 **recognition-only** and never unlock functionality or gate features. If you want to help without money: run an
 instance, file good bug reports, improve the docs, or test on hardware we can't.
 

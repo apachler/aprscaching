@@ -97,7 +97,7 @@ async function fakeSmtp(opts: FakeOpts = {}): Promise<{ port: number; got: Recei
 
 const smtpEnv = (port: number, extra: Partial<Env> = {}): Env =>
   ({
-    EMAIL_FROM: "aprscaching <noreply@aprs.example.net>",
+    EMAIL_FROM: "APRScaching <noreply@aprs.example.net>",
     SMTP_HOST: "127.0.0.1",
     SMTP_PORT: String(port),
     SMTP_SECURE: "none",
@@ -287,7 +287,7 @@ describe("POST /api/admin/mail-test", () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, transport: `SMTP 127.0.0.1:${s.port} (none)` });
-    expect(s.got[0]!.data).toMatch(/^Subject: aprscaching test mail$/m);
+    expect(s.got[0]!.data).toMatch(/^Subject: APRScaching test mail$/m);
   });
   it("reports the server's reason when it refuses", async () => {
     const s = await server({ refuseLogin: true });

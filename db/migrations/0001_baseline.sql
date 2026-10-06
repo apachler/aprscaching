@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- The aprscaching schema. The Node (better-sqlite3), Bun (bun:sqlite) and desktop servers apply it to
+-- The APRScaching schema. The Node (better-sqlite3), Bun (bun:sqlite) and desktop servers apply it to
 -- a fresh database at boot. It holds no virtual tables (rtree, FTS), so it stays portable across SQLite
 -- builds: spatial lookups use plain (lat, lon) indexes and search is LIKE-based.
 --

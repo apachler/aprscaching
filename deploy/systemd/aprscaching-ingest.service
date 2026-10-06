@@ -1,5 +1,5 @@
 [Unit]
-Description=aprscaching APRS ingest (RF/IS -> gateway)
+Description=APRScaching APRS ingest (RF/IS -> gateway)
 After=network-online.target aprscaching-gateway.service
 Wants=network-online.target
 [Service]

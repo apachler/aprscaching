@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Runtime-agnostic conformance smoke test for the aprscaching gateway.
+// Runtime-agnostic conformance smoke test for the APRScaching gateway.
 // Runs the same end-to-end flow against ANY base URL (Node/SQLite or Bun/bun:sqlite),
 // so CI can prove the two runtimes behave identically. Exits non-zero on the first failure.
 //
@@ -2199,7 +2199,7 @@ ok(
 const supPage = await text("/support");
 ok(
   "/support renders a public HTML transparency page",
-  supPage.status === 200 && /text\/html/.test(supPage.ct) && /Support aprscaching/.test(supPage.body),
+  supPage.status === 200 && /text\/html/.test(supPage.ct) && /Support APRScaching/.test(supPage.body),
 );
 
 // ---- logging finds by radio message: FOUND / DNF to the service call ----

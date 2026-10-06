@@ -135,7 +135,7 @@ await api("POST", "/api/bbs/messages", {
   fromCall: "OE1ACS",
   toCall: "SYSOP @ GB7BPQ.GBR.EU",
   subject: "interop bpq",
-  body: "delivered by the aprscaching FBB forwarder",
+  body: "delivered by the APRScaching FBB forwarder",
 });
 // probe whether this LinBPQ build has its mail application running — its integrated BBS is
 // configured out-of-band (web admin) and varies by version. Without it the forward session can

@@ -327,7 +327,7 @@ export const ENV_FILES = [
       "# passkeys (https APP_URL) or, off-grid, with a one-time link the operator mints (tools/admin/signin-link.mjs",
       "# <CALL>). The sender's domain needs SPF, DKIM and DMARC records for the server that sends. Never set",
       "# ALLOW_DEV_TOKENS on a real instance — it hands sign-in tokens to whoever asks.",
-      "# sender address, e.g. aprscaching <noreply@aprs.example.net>",
+      "# sender address, e.g. APRScaching <noreply@aprs.example.net>",
       { key: "EMAIL_FROM", value: "", off: true },
       "# SMTP: a hosted mailbox is typically port 587 with STARTTLS, logging in as the full address",
       { key: "SMTP_HOST", value: "mail.example.net", off: true },

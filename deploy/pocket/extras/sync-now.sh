@@ -15,7 +15,7 @@
 #   - on Wi-Fi only: without a joined Wi-Fi network (told by Termux:API) it stops, unless --mobile or
 #     POCKET_SYNC_MOBILE=1 allows mobile data.
 # With Termux:API, a notification shows the pull and its result. The Termux:Widget shortcut
-# "aprscaching Sync before trip" (extras/setup.sh --shortcuts) runs this.
+# "APRScaching Sync before trip" (extras/setup.sh --shortcuts) runs this.
 #
 # Options:
 #   --finds              pull finds too
@@ -77,14 +77,14 @@ region="$(env_get FED_SYNC_REGION)"
 step "Sync before the trip${WIFI_SSID:+ (Wi-Fi $WIFI_SSID)}"
 info "caches$([ "$FINDS" -eq 1 ] && printf ', finds'), deletes and keys; up to $PAGES pages per feed and peer"
 info "region: ${region:-all caches (FED_SYNC_REGION=S,W,N,E in the .env narrows them)}"
-notify "aprscaching: syncing" "pulling from the federation peers${WIFI_SSID:+ over $WIFI_SSID}"
+notify "APRScaching: syncing" "pulling from the federation peers${WIFI_SSID:+ over $WIFI_SSID}"
 
 started=$(date +%s)
 # The header comes from a file descriptor, so the secret never shows in the process list.
 if ! out="$(curl -fsS --max-time 900 -X POST -H 'content-type: application/json' \
   -H @<(printf 'x-operator-secret: %s\n' "$secret") \
   --data "{\"types\":[$types],\"maxPages\":$PAGES}" "$base/federation/sync" 2>&1)"; then
-  notify "aprscaching: sync failed" "see sync-now.sh in Termux"
+  notify "APRScaching: sync failed" "see sync-now.sh in Termux"
   die "the sync request failed: $out"
 fi
 took=$(($(date +%s) - started))
@@ -114,7 +114,7 @@ if grep -q "from 0 peers" <<<"$headline"; then
   info "no peers: name your home instance in FED_PEERS (the Pocket guide, Federation)"
 fi
 if [ "$errors" -gt 0 ]; then
-  notify "aprscaching: sync done, $errors peer(s) failed" "$headline"
+  notify "APRScaching: sync done, $errors peer(s) failed" "$headline"
   exit 1
 fi
-notify "aprscaching: synced" "$headline"
+notify "APRScaching: synced" "$headline"

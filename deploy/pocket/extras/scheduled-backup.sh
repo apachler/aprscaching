@@ -41,9 +41,9 @@ fi
 if bash "$HERE/backup.sh" --dir "$DIR" --data-dir "$DATA" >>"$LOG" 2>&1; then
   date +%s >"$RUN_DIR/last-backup"
   say "backup done"
-  toast "aprscaching backup done"
+  toast "APRScaching backup done"
 else
   say "backup FAILED (see above)"
-  toast "aprscaching backup failed: see $LOG"
+  toast "APRScaching backup failed: see $LOG"
   exit 1
 fi

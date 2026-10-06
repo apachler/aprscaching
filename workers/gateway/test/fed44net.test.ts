@@ -141,14 +141,14 @@ describe("resolve44net", () => {
     stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=node.oe8apr.ampr.org` }));
     expect((await resolve44net(envWith({}), "oe8apr")).host).toBe("node.oe8apr.ampr.org");
     stubNet(dohAnswer({ ad: true, txt: `${TXT}; host=example.com` }));
-    await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no valid aprscaching TXT/);
+    await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no valid APRScaching TXT/);
   });
   it("rejects SSIDs, missing records and foreign TXT content", async () => {
     await expect(resolve44net(envWith({}), "OE8APR-7")).rejects.toThrow(/base callsign/);
     stubNet(dohAnswer({ ad: false, status: 3 }));
     await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no _aprscaching/);
     stubNet(dohAnswer({ ad: false, txt: "v=spf1 -all" }));
-    await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no valid aprscaching TXT/);
+    await expect(resolve44net(envWith({}), "oe8apr")).rejects.toThrow(/no valid APRScaching TXT/);
   });
 });
 

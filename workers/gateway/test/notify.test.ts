@@ -13,7 +13,7 @@ describe("notify — email digest + helpers", () => {
       APP,
       `${APP}/api/notify/unsubscribe?token=t`,
     );
-    expect(one.subject).toBe("aprscaching: OE8APR heard near AC-0001 — Schlossberg");
+    expect(one.subject).toBe("APRScaching: OE8APR heard near AC-0001 — Schlossberg");
     expect(one.text).toContain("• OE8APR heard near AC-0001 — Schlossberg");
     expect(one.text).toContain(`${APP}/`);
     expect(one.text).toContain(`${APP}/api/notify/unsubscribe?token=t`);
@@ -26,7 +26,7 @@ describe("notify — email digest + helpers", () => {
       ],
       APP,
     );
-    expect(many.subject).toBe("aprscaching: 2 watched stations heard");
+    expect(many.subject).toBe("APRScaching: 2 watched stations heard");
     expect(many.text).toContain("• A heard"); // falls back to callsign+kind when no detail
     expect(many.text).toContain("• B near X");
     expect(many.text).toContain("Settings → Notifications");
@@ -40,13 +40,13 @@ describe("notify — email digest + helpers", () => {
         { callsign: "OE8APR", kind: "heard", ts: 3 },
         { callsign: "AC-3", kind: "adoption_approved", ts: 4 },
       ]),
-    ).toBe("aprscaching: 2 finds of your caches, 1 watched station heard, 1 cache adoption update");
+    ).toBe("APRScaching: 2 finds of your caches, 1 watched station heard, 1 cache adoption update");
     expect(
       digestSubject([
         { callsign: "DL1FND", kind: "cache_dnf", ts: 1 },
         { callsign: "DL1FND", kind: "cache_maintenance", ts: 2 },
       ]),
-    ).toBe("aprscaching: 2 reports on your caches");
+    ).toBe("APRScaching: 2 reports on your caches");
     expect(digestSubject([{ callsign: "X", kind: "cache_found", detail: "y".repeat(300), ts: 1 }]).length).toBeLessThan(
       120,
     );

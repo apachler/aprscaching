@@ -51,7 +51,7 @@ fi
 compose() {
   local status body battery line
   if status="$(station_status "")" && [ -n "$status" ]; then
-    TITLE="aprscaching: running"
+    TITLE="APRScaching: running"
     # shellcheck disable=SC2016 # JavaScript template literals, not shell
     body="$(printf '%s' "$status" | node -e '
       let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
@@ -67,7 +67,7 @@ compose() {
         process.stdout.write(out.join(" · "));
       });')"
   else
-    TITLE="aprscaching: stopped"
+    TITLE="APRScaching: stopped"
     body="the gateway does not answer on $(gateway_base)"
   fi
   if battery="$(termux_api termux-battery-status)" && [ -n "$battery" ]; then

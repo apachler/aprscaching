@@ -96,7 +96,7 @@ nameConstraints = critical,permitted;IP:10.0.0.0/255.0.0.0,permitted;IP:172.16.0
 EOF
   openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -sha256 \
     -days "$CA_DAYS" -config "$cnf" -extensions v3_ca \
-    -subj "/CN=aprscaching Pocket CA $(station_call) $(openssl rand -hex 4)" \
+    -subj "/CN=APRScaching Pocket CA $(station_call) $(openssl rand -hex 4)" \
     -keyout "$TLS_CA_KEY" -out "$TLS_CA" 2>/dev/null ||
     { rm -f "$cnf"; die "openssl could not create the CA in $TLS_DIR."; }
   rm -f "$cnf"
@@ -138,7 +138,7 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
 EOF
   if ! openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -sha256 \
-    -subj "/CN=aprscaching Pocket $(station_call)" -keyout "$tmp/key" -out "$tmp/csr" 2>/dev/null ||
+    -subj "/CN=APRScaching Pocket $(station_call)" -keyout "$tmp/key" -out "$tmp/csr" 2>/dev/null ||
     ! openssl x509 -req -sha256 -days "$LEAF_DAYS" -in "$tmp/csr" -CA "$TLS_CA" -CAkey "$TLS_CA_KEY" \
       -set_serial "0x$(openssl rand -hex 16)" -extfile "$tmp/ext" -out "$tmp/crt" 2>/dev/null; then
     rm -rf "$tmp"

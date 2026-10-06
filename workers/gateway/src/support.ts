@@ -209,12 +209,12 @@ export async function handleSupportPage(_req: Request, env: Env): Promise<Respon
     ? links.map((l) => `<a href="${escapeHtml(l.url)}" rel="noopener">${escapeHtml(l.label)}</a>`).join(" · ")
     : "<span class=m>Donation links are configured per instance.</span>";
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Support · aprscaching</title><style>
+<title>Support · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
 h1{font-size:1.4rem}.m{opacity:.7}table{border-collapse:collapse;width:100%;margin:1rem 0}
 td,th{border:1px solid #8884;padding:.4rem .6rem;text-align:left}th{font-weight:600}
 .big{font-size:1.1rem;font-weight:600}.box{border:1px solid #8884;border-radius:10px;padding:1rem;margin:1rem 0}</style>
-<h1>Support aprscaching</h1>
+<h1>Support APRScaching</h1>
 <p><strong>Everyone gets everything for free.</strong> Supporters give because they want the project to
 live, and get recognition — a badge and the ability to hide the support prompt — <em>never extra
 functionality</em>. No ads, no paywalls. This page is the public ledger.</p>
@@ -224,6 +224,6 @@ functionality</em>. No ads, no paywalls. This page is the public ledger.</p>
 <table><tr><th>Bucket</th><th>In</th><th>Out</th></tr>${bucketRows}</table>
 <p class=m>Buckets: development, hosting, operation, and peer cost-reimbursement (internet-side only).</p></div>
 <div class=box><div class=big>Supporters</div><p>${supporters.length ? supporters.map(escapeHtml).join(" · ") : "<span class=m>Be the first — your callsign appears here if your profile is public.</span>"}</p></div>
-<p class=m><a href="/source" rel="noopener">Source code (AGPL-3.0)</a> · aprscaching is open source; funded work is public.</p>`;
+<p class=m><a href="/source" rel="noopener">Source code (AGPL-3.0)</a> · APRScaching is open source; funded work is public.</p>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }

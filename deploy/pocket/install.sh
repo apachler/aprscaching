@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pocket install: the aprscaching gateway (servers/node, SQLite) and the ingest (apps/ingest) on an Android
+# Pocket install: the APRScaching gateway (servers/node, SQLite) and the ingest (apps/ingest) on an Android
 # phone in Termux, without root. Installs the Termux packages, fetches the repository, installs only what
 # the gateway, the ingest and the web build need, compiles better-sqlite3 for Android, builds the web app,
 # writes ~/.aprscaching/.env on the first run and starts the gateway once to apply the migrations.
@@ -110,7 +110,7 @@ elif [ "$ALLOW_NON_TERMUX" -eq 1 ]; then
   info "not Termux; continuing (--allow-non-termux)"
   PKG=0
 else
-  die "this script sets up aprscaching inside Termux on Android." \
+  die "this script sets up APRScaching inside Termux on Android." \
     "Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) or its GitHub releases," \
     "then run it there. On a Linux box, use the Docker stack (deploy/README.md) instead."
 fi
@@ -170,7 +170,7 @@ fi
 if command -v node >/dev/null 2>&1; then
   NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
   info "node $(node -v)"
-  [ "$NODE_MAJOR" -ge 22 ] || die "Node $(node -v) is too old; aprscaching needs Node 22 or newer." \
+  [ "$NODE_MAJOR" -ge 22 ] || die "Node $(node -v) is too old; APRScaching needs Node 22 or newer." \
     "Install the LTS line with:  pkg install nodejs-lts"
 fi
 
@@ -222,7 +222,7 @@ else
   run git clone --quiet --filter=blob:none --branch "$BRANCH" "$REPO" "$DIR"
 fi
 if [ "$DRY" -eq 0 ]; then
-  [ -f "$DIR/servers/node/src/server.ts" ] || die "$DIR does not look like an aprscaching checkout."
+  [ -f "$DIR/servers/node/src/server.ts" ] || die "$DIR does not look like an APRScaching checkout."
   info "at $(git -C "$DIR" rev-parse --short HEAD) ($(git -C "$DIR" rev-parse --abbrev-ref HEAD))"
 fi
 
