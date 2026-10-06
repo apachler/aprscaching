@@ -8,7 +8,7 @@
  * Nothing here contacts a third-party tile service: the tiles are the operator's own.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 
 export const TILES_PATH = "/tiles/offline.pmtiles";
 /** The largest range one request may read: a PMTiles directory or a run of tiles, never the whole file. */

@@ -14,7 +14,7 @@ const HEARD: Record<NonNullable<MeshcomGroupMessage["heard"]>, string> = {
 };
 
 /** A group's name: its number, or "All" for the `*` group every node reads. */
-export const groupName = (g: string) => (g === "*" ? "All (*)" : g);
+const groupName = (g: string) => (g === "*" ? "All (*)" : g);
 
 /**
  * MeshCom group chat, read only: pick one of the groups this instance's MeshCom nodes heard, and read its

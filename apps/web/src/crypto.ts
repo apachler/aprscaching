@@ -12,10 +12,9 @@ import {
   SIG_DOMAIN,
   type Authorship,
 } from "@aprscaching/shared";
-import { fromB64u, toB64u } from "./base64url.js";
+import { toB64u } from "./base64url.js";
 
-const PRIV = "acs.key.priv", // an *extractable* pkcs8 in localStorage: re-imported non-extractable, then deleted
-  PUB = "acs.key.pub"; // the public key is not secret — a base64url string in localStorage is fine
+const PUB = "acs.key.pub"; // the public key is not secret — a base64url string in localStorage is fine
 
 // The private signing key lives in IndexedDB as a NON-extractable CryptoKey — an XSS on the origin can
 // still *use* it while on the page, but (unlike an extractable pkcs8 in localStorage) cannot
@@ -65,16 +64,6 @@ async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
   const idbPriv = await idbGet(IDB_KEY).catch(() => undefined);
   if (storedPub && idbPriv) return { publicKey: storedPub, priv: idbPriv };
 
-  // An extractable key in localStorage is re-imported as NON-extractable into IndexedDB, then the
-  // extractable copy is deleted. Same key → no re-registration.
-  const legacy = localStorage.getItem(PRIV);
-  if (storedPub && legacy) {
-    const priv = await crypto.subtle.importKey("pkcs8", fromB64u(legacy), { name: "Ed25519" }, false, ["sign"]);
-    await idbPut(IDB_KEY, priv).catch(() => {});
-    localStorage.removeItem(PRIV);
-    return { publicKey: storedPub, priv };
-  }
-
   // Fresh: generate, export the public key once, then persist ONLY a non-extractable private key.
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
   const publicKey = toB64u(await crypto.subtle.exportKey("raw", kp.publicKey));
@@ -82,7 +71,6 @@ async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
   const priv = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, ["sign"]);
   await idbPut(IDB_KEY, priv).catch(() => {});
   localStorage.setItem(PUB, publicKey);
-  localStorage.removeItem(PRIV);
   return { publicKey, priv };
 }
 
@@ -99,7 +87,7 @@ async function deviceKey(): Promise<{ publicKey: string; priv: CryptoKey }> {
   return inflight;
 }
 
-export interface AuthorSig {
+interface AuthorSig {
   authorKey: string;
   authorSig: string;
   signedAt: number;
@@ -125,7 +113,7 @@ export async function devicePublicKey(): Promise<string | null> {
   }
 }
 
-export type SignedIngestHeaders = {
+type SignedIngestHeaders = {
   "x-acs-callsign": string;
   "x-acs-key": string;
   "x-acs-sig": string;

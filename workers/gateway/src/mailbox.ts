@@ -12,7 +12,7 @@
  */
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { nowS } from "./util/time.js";
 import { sessionIdentity, suspensionOf } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";

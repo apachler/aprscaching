@@ -9,7 +9,7 @@
  * authorises only the ingest plane and never operator configuration.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity, ingestOrServiceBoxOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 import { handleAdminCallsign } from "./claims.js";

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
- * The example tool under examples/station-log, which the manual's tool walkthrough and reference quote: its
- * manifest passes the real validator, and its script, run the way the sandbox's worker runs it (the body of
- * a function of `register` and `ipc`), contributes panels the host's sanitiser keeps intact.
+ * The example tool under examples/station-log: its manifest passes the real validator, and its script, run
+ * the way the sandbox's worker runs it (the body of a function of `register` and `ipc`), contributes panels
+ * the host's sanitiser keeps intact.
  */
 import { describe, expect, it } from "vitest";
 import { checkManifestSignature, sanitizePanel, validateManifest, type PanelSpec } from "../src/index.js";

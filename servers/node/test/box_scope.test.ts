@@ -16,7 +16,7 @@ import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps
 const OPS = { "x-operator-secret": "test-operator-secret" };
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const room = { fetch: async () => new Response(null, { status: 204 }) };
-const ROOMS = { idFromName: (n: string) => n, get: () => room };
+const ROOMS = { get: () => room };
 const OWN_SITE = "OE8APR-10";
 const LENDER = "OE3LND";
 const SITE = "OE3LND-10";

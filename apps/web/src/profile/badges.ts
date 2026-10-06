@@ -4,7 +4,7 @@
  * one line that says how it was earned. An id this table does not know shows as itself, so a newer
  * gateway's badge still appears.
  */
-export interface BadgeInfo {
+interface BadgeInfo {
   name: string;
   how: string;
 }

@@ -5,7 +5,7 @@ import type { StationRole } from "@aprscaching/shared";
  * `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji). The pin's colour
  * comes from the stylesheet by `role` (`button.station-pin[data-role]`, a brand-palette token per role).
  */
-export interface RoleMeta {
+interface RoleMeta {
   role: StationRole;
   label: string;
   glyph: string;

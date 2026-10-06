@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * shack.ts — M5 platform depth: a live APRS station registry + a packet inspector.
+ * shack.ts — the Shack's live APRS station registry and packet inspector.
  * Stations and weather are enriched at ingest time (see ingest.ts) using the @aprscaching/aprs
  * decoder; these read endpoints expose them, plus an on-demand decode tool for raw TNC2 lines.
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";

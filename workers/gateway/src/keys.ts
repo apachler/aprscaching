@@ -9,7 +9,7 @@
 import { b64urlToBytes } from "./util/b64.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import {
   RegisterKeyRequest,
   SIG_DOMAIN,

@@ -45,7 +45,7 @@ export async function fetchPackData(
 }
 
 /** The images a pack keeps for each cache with the chosen option: every image, or the first one's thumbnail. */
-export function imagesFor(c: PackCache, option: PackMeta["images"]): PackImage[] {
+function imagesFor(c: PackCache, option: PackMeta["images"]): PackImage[] {
   if (option === "full") return c.images;
   if (option === "thumbs") return c.images.filter((i) => i.thumbUrl).slice(0, 1);
   return [];

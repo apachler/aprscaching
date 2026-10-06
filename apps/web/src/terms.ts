@@ -43,5 +43,3 @@ export const TERMS = {
   watchlist: "The callsigns you follow. You get an alert when the network hears one of them.",
   "offline-pack": "The caches of one Maidenhead square, saved on this device for use without a signal.",
 } as const;
-
-export type Term = keyof typeof TERMS;

@@ -29,10 +29,6 @@ export const webAudioSupported = (): boolean =>
   !!navigator.mediaDevices?.getUserMedia &&
   typeof (window as unknown as { AudioContext?: unknown }).AudioContext === "function";
 
-export const webSerialSupported = (): boolean =>
-  typeof navigator !== "undefined" &&
-  typeof (navigator as { serial?: { requestPort?: unknown } }).serial?.requestPort === "function";
-
 interface SerialPortLike {
   readable: ReadableStream<Uint8Array> | null;
   writable: WritableStream<Uint8Array> | null;

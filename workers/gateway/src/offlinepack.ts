@@ -25,7 +25,7 @@ import {
   type SealedStage,
 } from "@aprscaching/shared";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { nowS } from "./util/time.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { sessionIdentity } from "./auth.js";

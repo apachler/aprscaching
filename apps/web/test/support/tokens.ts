@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 export type Theme = "dark" | "light" | "phosphor";
 /** sRGB, gamma-encoded, 0–1, with alpha. */
-export interface Rgba {
+interface Rgba {
   r: number;
   g: number;
   b: number;

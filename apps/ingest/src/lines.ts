@@ -7,7 +7,7 @@
  */
 
 /** Longest APRS-IS line kept; real lines stay far below it (APRS-IS caps a packet at 512 bytes). */
-export const LINE_MAX_BYTES = 4096;
+const LINE_MAX_BYTES = 4096;
 
 export class LineBuffer {
   private buf = "";

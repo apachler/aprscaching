@@ -26,6 +26,7 @@
     "./fedcatchup": "./src/fedcatchup.ts",
     "./fedpush": "./src/fedpush.ts",
     "./fedtransit": "./src/fedtransit.ts",
+    "./fedgaps": "./src/fedgaps.ts",
     "./fetchguard": "./src/fetchguard.ts",
     "./toolregistries": "./src/toolregistries.ts",
     "./feddiscover": "./src/feddiscover.ts",

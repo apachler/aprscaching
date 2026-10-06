@@ -22,7 +22,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { lookupApiKey, describeApiKey } from "./apikeys.js";

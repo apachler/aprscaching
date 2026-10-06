@@ -35,7 +35,7 @@ const connection = () =>
 const backoffUntil = new Map<string, number>();
 const failures = new Map<string, number>();
 
-export interface SyncReport {
+interface SyncReport {
   sent: number;
   refused: number;
   /** When a backed-off log is due again. */

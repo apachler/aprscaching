@@ -30,7 +30,7 @@
 import { baseCall } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json, asStr } from "./app.js";
+import { json, asStr } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { requireSysop, adminCalls, isSysop } from "./admin.js";
 import {

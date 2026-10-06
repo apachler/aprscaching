@@ -18,7 +18,7 @@ function setup(extra: Record<string, unknown> = {}) {
   const sqlite = new Database(":memory:");
   migrate(sqlite, MIGRATIONS);
   const room = { fetch: async () => new Response(null, { status: 204 }) };
-  const ROOMS = { idFromName: (n: string) => n, get: () => room };
+  const ROOMS = { get: () => room };
   const env = { DB: makeD1(sqlite), INGEST_SECRET: "s", ROOMS, ...extra } as unknown as Env;
   const changes = () => (sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
   return { sqlite, env, changes };

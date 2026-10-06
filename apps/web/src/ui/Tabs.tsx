@@ -12,7 +12,7 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Hint } from "./Hint.js";
 
-export interface TabItem<K extends string> {
+interface TabItem<K extends string> {
   key: K;
   label: ReactNode;
   /** extra classes on this tab (the terminal colours a channel by its station type) */

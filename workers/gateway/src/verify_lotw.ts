@@ -20,7 +20,7 @@
  * the method is unavailable. Revocation (LoTW's certificate status service) is not consulted.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { recordProof, listeningSites } from "./callsign.js";
 import {
   parseCertificate,

@@ -38,7 +38,7 @@
 import { nowS } from "./util/time.js";
 import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
 import { absorbDiscovered, blockedAt } from "./fedpeers.js";

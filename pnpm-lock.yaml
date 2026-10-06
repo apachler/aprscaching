@@ -160,9 +160,6 @@ importers:
 
   packages/packet:
     dependencies:
-      '@aprscaching/aprs':
-        specifier: workspace:*
-        version: link:../aprs
       '@aprscaching/ax25':
         specifier: workspace:*
         version: link:../ax25

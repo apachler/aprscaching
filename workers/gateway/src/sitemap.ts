@@ -12,7 +12,7 @@
  * Runtime-neutral (Node / Bun): no host-only globals.
  */
 import type { Env } from "./env.js";
-import { json, xml } from "./app.js";
+import { json, xml } from "./http.js";
 import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching/shared";
 import { escapeHtml } from "./util/html.js";
 import { trimEndChars } from "./util/text.js";

@@ -37,18 +37,16 @@ export function resolveTheme(theme: Theme, prefersDark: boolean): ResolvedTheme 
   return theme;
 }
 /** Whether the system asks for a dark colour scheme; true where it cannot say. */
-export function systemPrefersDark(): boolean {
+function systemPrefersDark(): boolean {
   try {
     return typeof matchMedia === "function" ? !matchMedia("(prefers-color-scheme: light)").matches : true;
   } catch {
     return true;
   }
 }
-/** Coerce any stored theme value to a theme, never throwing. "modern" (the name of the dark theme in the
- *  settings of older versions) is dark, "cogmind" is Phosphor's old alias, and anything unknown is dark. */
+/** Coerce any stored theme value to a theme, never throwing; anything unknown is dark. */
 export function normalizeTheme(t: unknown): Theme {
   if (t === "auto" || t === "light" || t === "dark" || t === "phosphor") return t;
-  if (t === "cogmind") return "phosphor";
   return "dark";
 }
 

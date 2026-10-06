@@ -6,7 +6,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { parsePage, keyset, paginate } from "./paging.js";

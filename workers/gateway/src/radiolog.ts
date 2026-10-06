@@ -31,7 +31,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity, baseHolder } from "./auth.js";
 import { provenanceOf, transportForPort } from "./provenance.js";
 import { attestation, sitesFor } from "./attestedsites.js";

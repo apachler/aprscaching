@@ -12,7 +12,7 @@
 import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, configProblems, flagOn, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting, settingSource } from "./siteconfig.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";

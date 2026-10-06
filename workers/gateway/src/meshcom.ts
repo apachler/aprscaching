@@ -21,7 +21,7 @@
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { meshcomBattLevel, meshcomQuality, type MeshcomMeta } from "@aprscaching/shared";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { sessionIdentity } from "./auth.js";
 import { nowS } from "./util/time.js";

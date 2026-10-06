@@ -2,7 +2,8 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
-import { json, corsAllowlist } from "./app.js";
+import { corsAllowlist } from "./app.js";
+import { json } from "./http.js";
 import { reclaimStatements } from "./claims.js";
 import {
   issueSessionCookie,

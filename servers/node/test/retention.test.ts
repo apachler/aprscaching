@@ -7,7 +7,7 @@ import { runScheduled } from "@aprscaching/gateway/app";
 import type { Env } from "@aprscaching/gateway/env";
 
 const room = { fetch: async () => new Response(null, { status: 204 }) };
-const ROOMS = { idFromName: (n: string) => n, get: () => room };
+const ROOMS = { get: () => room };
 const SECRET = { "x-ingest-secret": "test-ingest-secret" };
 const DAY = 24 * 3600;
 const now = () => Math.floor(Date.now() / 1000);

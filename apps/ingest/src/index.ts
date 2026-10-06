@@ -410,7 +410,7 @@ async function learnServiceCall(): Promise<void> {
       meshcomKiss.service = serviceCall.toUpperCase();
       meshcomKiss.link.setServiceCall(serviceCall);
     }
-    for (const w of callWarnings(env, serviceCall, sites))
+    for (const w of callWarnings(env, serviceCall, sites ?? []))
       if (!callWarned.has(w)) {
         callWarned.add(w);
         console.error(`[ingest] ${w}`);

@@ -18,8 +18,6 @@ describe("normalizeTheme", () => {
     ["light", "light"],
     ["auto", "auto"],
     ["phosphor", "phosphor"],
-    ["modern", "dark"], // the dark theme's name in older settings
-    ["cogmind", "phosphor"],
     ["sepia", "dark"],
     ["", "dark"],
     [undefined, "dark"],
@@ -118,7 +116,7 @@ describe("index.html", () => {
   it("applies the same theme before the first paint as format.ts does", () => {
     const script = /<script>\s*([\s\S]*?\bacs\.locale[\s\S]*?)<\/script>/.exec(INDEX)?.[1];
     expect(script, "index.html has no first-paint theme script").toBeTruthy();
-    const stored: unknown[] = ["dark", "light", "auto", "phosphor", "modern", "cogmind", "nonsense", undefined];
+    const stored: unknown[] = ["dark", "light", "auto", "phosphor", "nonsense", undefined];
     for (const value of stored) {
       for (const prefersDark of [true, false]) {
         const root = { dataset: {} as Record<string, string> };

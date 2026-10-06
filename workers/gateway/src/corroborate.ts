@@ -16,7 +16,7 @@ import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { syncAddresses } from "./fedtransport.js";
 import { flagOn, type Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin, type PeerRow } from "./fedpeers.js";
@@ -693,7 +693,7 @@ async function decide(
   );
   if (winner) {
     // reputation accrues ONLY for evidence that independently matches the confirmed
-    // winner — answering "yes" with fabricated evidence no longer farms rep toward promotion.
+    // winner, so answering "yes" with fabricated evidence earns no rep toward promotion.
     await creditCorroboration(
       env,
       answered.filter((a) => a.ev && evidenceMatches(a.ev, winner, COARSEN)).map((a) => a.url),

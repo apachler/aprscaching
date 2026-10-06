@@ -3,7 +3,7 @@ import type { CacheType } from "@aprscaching/shared";
 
 /** `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji);
  *  `help` = the one line a hider reads when picking the type. */
-export interface TypeMeta {
+interface TypeMeta {
   label: string;
   help: string;
   glyph: string;

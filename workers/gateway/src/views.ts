@@ -11,7 +11,7 @@
 import { nowS } from "./util/time.js";
 import { randomString } from "./util/random.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity, mayActAsOwner } from "./auth.js";
 
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";

@@ -3,7 +3,7 @@ import { nowS } from "./util/time.js";
 import { ingestOrServiceBoxOk } from "./auth.js";
 import type { Env } from "./env.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { serviceCall } from "./servicecall.js";
 import { callSuspended } from "./moderation.js";
 

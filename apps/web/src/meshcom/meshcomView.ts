@@ -78,7 +78,7 @@ export function nodeTitle(n: MeshcomNode): string {
 }
 
 /** Lines fade over this window: a link last seen at its start is barely visible. */
-export const LINK_WINDOW_S = 24 * 3600;
+const LINK_WINDOW_S = 24 * 3600;
 
 type LineFeature = {
   type: "Feature";

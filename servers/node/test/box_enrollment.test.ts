@@ -15,7 +15,7 @@ import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps
 const OPS = { "x-operator-secret": "test-operator-secret" };
 // the live WebSocket fan-out is out of scope: a room stub accepts and discards the deltas
 const room = { fetch: async () => new Response(null, { status: 204 }) };
-const ROOMS = { idFromName: (n: string) => n, get: () => room };
+const ROOMS = { get: () => room };
 
 function boxEnv(extra: Record<string, unknown> = {}): Env {
   return authEnv({ ROOMS, FIRST_PARTY_SITES: "OE8XXX,OE1ABC", ...extra });

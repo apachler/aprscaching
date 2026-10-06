@@ -49,7 +49,6 @@ function mockDb(captured: { sql: string; binds: unknown[] }[]) {
 }
 
 const rooms = {
-  idFromName: (n: string) => n,
   get: () => ({ fetch: async () => new Response("ok") }),
 };
 

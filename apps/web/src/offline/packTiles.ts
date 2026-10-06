@@ -8,7 +8,7 @@ import { addProtocol } from "maplibre-gl";
 import type { OfflineStore } from "./store.js";
 import { tileKey } from "./tiles.js";
 
-export const PACK_TILES_SCHEME = "acs-pack";
+const PACK_TILES_SCHEME = "acs-pack";
 
 /** Which pack holds each tile; rebuilt after a pack changes. */
 let index: Promise<Map<string, string>> | null = null;

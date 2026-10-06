@@ -5,7 +5,7 @@
  * suspension and its lifting, a callsign released. Each kind reads as what it is; a kind this app does not know
  * shows as a plain notice, never as another kind.
  */
-export interface AlertKindView {
+interface AlertKindView {
   label: string;
   /** The Badge kind (styles/components/data.css), or undefined for the neutral chip. */
   badge?: string;

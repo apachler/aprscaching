@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -34,7 +34,7 @@ const ADDRESSEE = /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/;
 /** An APRS message number. */
 const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
 /** The longest APRS message text. */
-export const APRS_MESSAGE_MAX = 67;
+const APRS_MESSAGE_MAX = 67;
 
 /** User transmissions an account may queue an hour. */
 export const TX_PER_HOUR = 30;

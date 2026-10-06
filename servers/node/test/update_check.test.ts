@@ -132,7 +132,7 @@ describe("the daily check", () => {
 describe("the nightly task", () => {
   it("leaves GitHub alone with UPDATE_CHECK=0", async () => {
     const room = { fetch: async () => new Response(null, { status: 204 }) };
-    const env = authEnv({ UPDATE_CHECK: "0", ROOMS: { idFromName: (n: string) => n, get: () => room } });
+    const env = authEnv({ UPDATE_CHECK: "0", ROOMS: { get: () => room } });
     const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network in tests"));
     try {
       await runScheduled(env);

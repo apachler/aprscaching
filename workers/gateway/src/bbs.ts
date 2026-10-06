@@ -9,7 +9,7 @@ import { ingestSecretOk, ingestOrServiceBoxOk, sessionIdentity, accountHoldsCall
  * typing are MBL/FBB-compatible so the connected-mode gateway bridges to real F6FBB/BPQ32 nodes.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import type { FeedServeDef } from "./federation.js";
 import { FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";

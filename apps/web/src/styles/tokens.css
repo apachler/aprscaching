@@ -18,7 +18,6 @@
     --beige: oklch(0.62 0.065 52);
 
     /* neutrals (dark) */
-    --bg: oklch(0.22 0.012 220 / 0); /* page (transparent; the map is the hero) */
     --surface: oklch(0.22 0.012 220); /* panels / sheets */
     --surface-2: oklch(0.27 0.015 225); /* raised: buttons, logform, chips */
     --field-bg: oklch(0.19 0.012 222); /* inputs */
@@ -105,9 +104,8 @@
     --award-ink: oklch(0.86 0.14 95);
     --award-line: oklch(0.42 0.05 95);
 
-    /* the landing page's two lifted surfaces */
+    /* the landing page's lifted surface */
     --elevation-hero: 0 18px 50px -22px var(--shadow); /* the terminal card */
-    --elevation-shot: 0 12px 32px -18px var(--shadow); /* screenshots */
 
     /* ---- role scales (docs/contribute/design/design-language.md) ----
        Named by what a value is for, so a heading, a card or a dialog picks its step by role. */
@@ -144,7 +142,6 @@
     --space-4xl: 64px;
     --gap-inline: var(--space-sm); /* between an icon and its label, buttons in a row */
     --gap-stack: var(--space-md); /* between rows of a list or a form */
-    --pad-control-x: var(--space-md);
     --pad-card: var(--space-lg);
     --pad-panel: var(--space-lg);
     --gap-section: var(--space-xl); /* between groups of a page */
@@ -230,7 +227,6 @@
   }
   [data-density="compact"] {
     --gap-stack: var(--space-sm);
-    --pad-control-x: var(--space-sm);
     --pad-card: var(--space-md);
     --pad-panel: var(--space-md);
     --gap-section: var(--space-lg);
@@ -246,7 +242,6 @@
   }
   :root[data-theme="light"] {
     color-scheme: light;
-    --bg: oklch(1 0 0 / 0);
     --surface: oklch(1 0 0);
     --surface-2: oklch(0.98 0.003 220);
     --field-bg: oklch(1 0 0);
@@ -288,7 +283,6 @@
     color-scheme: dark;
 
     /* phosphor base — near-black with a faint green cast */
-    --bg: oklch(0.15 0.02 155 / 0);
     --page-bg: oklch(0.15 0.02 155);
     --surface: oklch(0.19 0.028 155);
     --surface-2: oklch(0.24 0.035 155);

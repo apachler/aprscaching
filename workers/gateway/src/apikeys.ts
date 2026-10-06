@@ -14,7 +14,7 @@
  *   DELETE /api/admin/api-keys/:id   revoke any key (sysop)
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { sessionIdentity } from "./auth.js";
 import { requireSysop } from "./admin.js";

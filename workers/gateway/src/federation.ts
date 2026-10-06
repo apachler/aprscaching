@@ -19,7 +19,7 @@ import { TOOL_API_VERSION } from "@aprscaching/tools/api";
 import { nowS } from "./util/time.js";
 import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { displayCall } from "./auth.js";
 import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";

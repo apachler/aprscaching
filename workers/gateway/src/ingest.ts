@@ -6,7 +6,7 @@ import { boxPrincipal } from "./boxprincipal.js";
 import { siteAllowed } from "./boxkeys.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { IngestBatch, sanitizeMeshcomMeta } from "@aprscaching/shared";
 import {
   meshcomGroupStatement,

@@ -9,7 +9,7 @@
 // Phosphor. This scan fails the build on such leaks. Comments are ignored.
 //
 // Detection is deliberately narrow (near-zero false positives): the colour-emoji SMP block plus a
-// short blocklist of the BMP pictographs we've already replaced. Monochrome CP437/dingbat symbols we
+// short blocklist of BMP pictographs that render as colour emoji. Monochrome CP437/dingbat symbols we
 // intentionally keep (✓ ✕ ★ ♥ ♡ ⚠ ● ◆ ◊ ▲ ○ ♪ ♣ ♠ ■ ☼ ☾ ⚑ ➤ ⌕ arrows, box-drawing …) are NOT flagged.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

@@ -43,7 +43,7 @@ import {
   type ToolRegistryEntry,
 } from "@aprscaching/shared";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { sessionIdentity } from "./auth.js";
 import { actorOf, audit } from "./moderation.js";

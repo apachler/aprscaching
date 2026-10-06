@@ -14,7 +14,8 @@
  * Node and Bun drive the scheduling from servers/node/src/host.ts.
  */
 import type { Env } from "./env.js";
-import { json, runFrequentSync, type FrequentSyncResult } from "./app.js";
+import { runFrequentSync, type FrequentSyncResult } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import { pushBacklog } from "./fedpush.js";

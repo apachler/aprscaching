@@ -10,14 +10,12 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 
 const UNITS = new Set(["metric", "imperial"]);
-// Themes are "modern"/"phosphor". Also accepted so previously-stored prefs still validate:
-// "cogmind" (the phosphor theme's former id — the client folds it to phosphor) and
-// dark/light/auto (folded to modern).
-const THEMES = new Set(["modern", "phosphor", "cogmind", "dark", "light", "auto"]);
+// The Appearance choices (apps/web format.ts Theme).
+const THEMES = new Set(["auto", "light", "dark", "phosphor"]);
 const MAX_BYTES = 16_384;
 /** Installed tools kept per account, and the shape of one record (apps/web/src/tools/installed.ts). */
 const MAX_TOOLS = 40;

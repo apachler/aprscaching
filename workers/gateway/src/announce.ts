@@ -2,7 +2,7 @@
 import { nowS } from "./util/time.js";
 import { instanceHost, type Env } from "./env.js";
 import { isCallsignVerified } from "./callsign.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 import { baseCall } from "@aprscaching/aprs";
 

@@ -21,9 +21,8 @@ import { mdnsMode, startMdns } from "./mdns.js";
 /** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
   return {
-    idFromName: (n) => n,
-    get: (id) => ({
-      fetch: (req: Request) => serveRoom(req, (envelopes) => rooms.dispatch(String(id), envelopes as LiveEnvelope[])),
+    get: (region) => ({
+      fetch: (req: Request) => serveRoom(req, (envelopes) => rooms.dispatch(region, envelopes as LiveEnvelope[])),
     }),
   };
 }

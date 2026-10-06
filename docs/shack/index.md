@@ -55,7 +55,7 @@ signals, and everything runs in the browser. **Stop** ends it.
 ## Tools and plugins
 
 **Tools** runs the tools you install, from the **Registry** list or by a `tool.json` address; the app ships with
-none. The project registry, which comes with every instance, lists the packet decoder and twenty-two other tools.
+none. The project registry, which comes with every instance, lists the packet decoder and twenty-three other tools.
 Each tool runs in a sealed sandbox with only the permissions you approve, the install prompt says who signed it,
 and your installed tools follow your account. [Tools and plugins](tools.md) lists the project's tools, explains
 every permission and trust label, and shows how to pin, switch off and remove a tool.

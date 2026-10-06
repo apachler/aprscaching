@@ -26,7 +26,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { baseCall } from "@aprscaching/aprs";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity, accountHoldsCall, baseHolder, mayActAsOwner, isWithdrawnCall, displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { requireSysop } from "./admin.js";

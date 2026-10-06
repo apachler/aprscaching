@@ -2,7 +2,7 @@
 /**
  * Runtime-neutral MeshCom conformance: runs the golden fixtures and a fixed encoder/dedup corpus through
  * the core and reports every mismatch. No filesystem or runtime APIs — the caller supplies the fixtures —
- * so the same bundle runs on Node, Bun and Workers (tools/conformance/meshcom.mjs) and under vitest.
+ * so the same bundle runs on Node and Bun (tools/conformance/meshcom.mjs) and under vitest.
  */
 import { decodeMeshcom, encodeMeshcomText, MeshcomDedup, meshcomToAprs, decodeAprs } from "../../src/index.js";
 

@@ -54,15 +54,6 @@
   .newpack > .seg {
     justify-self: start;
   }
-  .newpack .slider {
-    display: grid;
-    gap: var(--space-xs);
-    font-variant-numeric: tabular-nums;
-  }
-  .newpack .slider input {
-    accent-color: var(--accent);
-    min-height: var(--hit);
-  }
   .newpack > button {
     justify-self: start;
     min-height: var(--hit);

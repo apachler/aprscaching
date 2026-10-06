@@ -11,7 +11,7 @@ import {
 } from "./location.js";
 
 /** How a request ended: a reading, a problem to show, or the user's own choice to stop or skip. */
-export type LocateOutcome = { fix: DeviceFix } | { problem: LocationProblem } | { cancelled: true } | { skipped: true };
+type LocateOutcome = { fix: DeviceFix } | { problem: LocationProblem } | { cancelled: true } | { skipped: true };
 
 interface Waiting {
   elapsedMs: number;

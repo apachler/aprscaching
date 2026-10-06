@@ -171,7 +171,7 @@ public name pinned to this host. A DNS problem then shows under [the public addr
   when it starts, and has not started on this checkout's code.
 - **Message:** `the database (<file>) is newer than this checkout (<file>)` (warn). The checkout is older
   than the running gateway.
-- **Message:** `the gateway does not report its schema (an older release)` (warn).
+- **Message:** `the gateway reports no schema (its database did not answer)` (warn). See `gateway.database`.
 - **Fix:** bring the gateway onto this checkout: `deploy/aprscaching update`. On Self-host the image carries the
   migrations, so rebuild it in `deploy/` with `docker compose up -d --build`; on the other shapes a restart applies
   them.

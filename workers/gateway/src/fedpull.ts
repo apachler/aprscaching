@@ -10,7 +10,7 @@
  * instance never mirrors itself.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
@@ -59,6 +59,8 @@ import {
   supersedeTransitPeer,
   MAX_TRANSIT_HOPS,
   ORIGIN_KINDS,
+  OWN_SEQ_KINDS,
+  type OwnSeqKind,
   type OriginKind,
   type SummaryEntry,
 } from "./fedtransit.js";
@@ -510,8 +512,8 @@ async function summaryOf(ctx: PullContext, served: boolean): Promise<SummaryEntr
     }
     // how far a trusted peer holds this instance's own records: numbering goes on above it
     if (i === 0 && ctx.trusted && page.asker?.held && typeof page.asker.held === "object") {
-      const mine: SummaryEntry["held"] = {};
-      for (const kind of ORIGIN_KINDS) {
+      const mine: Partial<Record<OwnSeqKind, number>> = {};
+      for (const kind of OWN_SEQ_KINDS) {
         const v = seqOf((page.asker.held as Record<string, unknown>)[kind]);
         if (v !== undefined) mine[kind] = v;
       }

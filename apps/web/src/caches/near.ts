@@ -9,9 +9,9 @@ import type { MapCache } from "../api.js";
 import { haversine } from "../map/geo.js";
 
 /** The radius the gateway's prompt from a radio beacon uses too. */
-export const NEAR_M = 150;
+const NEAR_M = 150;
 /** A reading less sure than this cannot say you are within the radius. */
-export const NEAR_MAX_ACCURACY_M = 100;
+const NEAR_MAX_ACCURACY_M = 100;
 
 const baseOf = (c: string) => c.toUpperCase().split("-")[0] ?? "";
 

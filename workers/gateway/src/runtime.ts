@@ -46,8 +46,7 @@ export interface MediaStore {
   delete?(key: string): Promise<void>;
 }
 
-/** Region-room namespace — the in-memory room registry (rooms-core.ts), reached by a fetch-shaped call. */
+/** Region rooms — the in-memory room registry (rooms-core.ts); a region's room is reached by a fetch-shaped call. */
 export interface RoomNamespace {
-  idFromName(name: string): unknown;
-  get(id: unknown): { fetch(req: Request): Promise<Response> };
+  get(region: string): { fetch(req: Request): Promise<Response> };
 }

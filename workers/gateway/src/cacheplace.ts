@@ -9,7 +9,7 @@
 import { haversineMeters } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { requireSysop } from "./admin.js";
 import { resealStage } from "./stages.js";

@@ -99,7 +99,7 @@ const FRAMES_KEPT = 100;
 export const TX_KEPT = 20;
 /** Forwarded frames go out in batches: one POST per this many frames, or after this long, whichever comes first. */
 export const FLUSH_FRAMES = 20;
-export const FLUSH_MS = 2000;
+const FLUSH_MS = 2000;
 
 const CANCELLED = /No port selected|chooser|cancel|User cancelled|Permission denied|NotAllowed/i;
 
