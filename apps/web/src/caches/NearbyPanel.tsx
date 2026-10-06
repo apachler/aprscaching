@@ -64,7 +64,7 @@ function AdoptionList(props: {
                   className={`ccard${a.cacheId === props.selectedId ? " active" : ""}`}
                   onClick={() => props.onPick(a.cacheId)}
                 >
-                  <span className="ccard-ico" data-ctype={a.type}>
+                  <span className="ccard-ico" data-ctype={a.type} aria-hidden="true">
                     {typeGlyph(meta, phosphor)}
                   </span>
                   <span className="ccard-b">
@@ -211,7 +211,7 @@ export function NearbyPanel(props: {
                       disabled={m.id == null}
                       onClick={() => m.id != null && props.onPick(m.id)}
                     >
-                      <span className="ccard-ico" data-ctype={m.type}>
+                      <span className="ccard-ico" data-ctype={m.type} aria-hidden="true">
                         {typeGlyph(meta, phosphor)}
                       </span>
                       <span className="ccard-b">

@@ -129,9 +129,12 @@ CI runs it in the `dev-stack` job ([Run from source](run-from-source.md#check-th
     settings search, the Shack, the sysop's first hour) by their visible controls on a phone and a desktop, with a
     screenshot per step and a log that marks every step it could not complete.
     Every render also reports layout findings: the document scrolling past the viewport (something escaping the
-    shell), and a control or its words reaching past its panel or its own edge. The views beyond the default phone
-    and desktop sweep narrow phones (`phone-320`, `phone-340`, `phone-360`), a short and a tall laptop
-    (`desktop-600`, `desktop-1000`) and a tall desktop window (`tall`, 1868×1891).
+    shell), a control or its words reaching past its panel or its own edge, and on touch a control whose hit area
+    is anchored to an ancestor because the control is not positioned. The landing also has its hero text measured
+    against the rendered photo behind it, which axe cannot see. The views beyond the default phone and desktop
+    sweep narrow phones (`phone-320`, `phone-340`, `phone-360`), a tablet with the compact rail (`tablet`,
+    820×1180), a short and a tall laptop (`desktop-600`, `desktop-1000`) and a tall desktop window (`tall`,
+    1868×1891).
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
     axe finding or a layout finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
     the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and

@@ -7,8 +7,9 @@ import { passkeyErrorText, passkeyProblem, PASSKEY_PROBLEM_TEXT } from "./passke
 /**
  * The step an account with no passkey and no confirmed email is asked to take: add one of them, or it cannot
  * sign in again once this session ends. A callsign taken over by proof of control opens such an account, and so
- * can an operator's link. The app shows it as a bar over the map (`bar`, with Later) and as a lasting warning in
- * Settings → Account (`inline`), until the account has a passkey or a confirmed email.
+ * can an operator's link. The app shows it as a bar under the top bar (`bar`, with Later, which this device
+ * remembers for a while) and as a lasting warning in Settings → Account (`inline`), until the account has a
+ * passkey or a confirmed email.
  */
 export function RecoveryPrompt(props: {
   callsign: string;

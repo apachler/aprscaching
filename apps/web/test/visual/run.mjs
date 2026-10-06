@@ -2,9 +2,10 @@
 /**
  * The visual and accessibility harness: renders the app's surfaces against the demo fixtures
  * (src/demo/fixtures.ts, `/?demo=app`) in the dark, light and Phosphor themes at a phone (390×844) and a
- * desktop (1280×800) viewport (`--views` picks others: narrow phones, short and tall desktops), saves a screenshot of each, runs axe-core (WCAG 2.0–2.2 A/AA) on each, and
- * writes an HTML index beside them. Nothing leaves the machine: the built app is served locally and every
- * third-party request is refused.
+ * desktop (1280×800) viewport (`--views` picks others: narrow phones, a tablet, short and tall desktops), saves a
+ * screenshot of each, runs axe-core (WCAG 2.0–2.2 A/AA) on each, and writes an HTML index beside them. The landing
+ * also has its hero text measured against the rendered photo behind it, which axe cannot see (heroContrast).
+ * Nothing leaves the machine: the built app is served locally and every third-party request is refused.
  *
  *   pnpm --filter @aprscaching/web build
  *   node apps/web/test/visual/run.mjs [--only map,detail] [--themes dark,light] [--views phone] [--no-shots]
@@ -44,14 +45,16 @@ const VIEWS = {
   "phone-320": { width: 320, height: 640, isMobile: true, hasTouch: true },
   "phone-340": { width: 340, height: 720, isMobile: true, hasTouch: true },
   "phone-360": { width: 360, height: 760, isMobile: true, hasTouch: true },
+  // the compact rail's range (681–1023px), on a touch screen
+  tablet: { width: 820, height: 1180, isMobile: true, hasTouch: true, kind: "tablet" },
   "desktop-600": { width: 1280, height: 600 },
   "desktop-1000": { width: 1280, height: 1000 },
   tall: { width: 1868, height: 1891 },
 };
 /** The views a run renders unless `--views` names others (CI runs these). */
 const DEFAULT_VIEWS = ["phone", "desktop"];
-/** A view's kind, for a surface's `views` list: every phone-* view is a phone, every other one a desktop. */
-const kindOf = (view) => (VIEWS[view].isMobile ? "phone" : "desktop");
+/** A view's kind, for a surface's `views` list: the tablet, every phone-* view a phone, every other one a desktop. */
+const kindOf = (view) => VIEWS[view].kind ?? (VIEWS[view].isMobile ? "phone" : "desktop");
 const THEMES = ["dark", "light", "phosphor"];
 
 /**
@@ -389,14 +392,15 @@ async function main() {
   try {
     for (const view of views) {
       for (const theme of themes) {
+        const { kind: _kind, ...device } = VIEWS[view];
         const ctx = await browser.newContext({
-          viewport: VIEWS[view],
+          viewport: { width: device.width, height: device.height },
           deviceScaleFactor: 1,
           locale: "en-US",
           timezoneId: "Europe/Vienna",
           serviceWorkers: "block",
           colorScheme: theme === "light" ? "light" : "dark",
-          ...VIEWS[view],
+          ...device,
         });
         // third-party requests never leave: the map falls back to its offline graticule
         await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
@@ -424,6 +428,7 @@ async function main() {
             await open(page, origin, s, theme);
             if (shots) await page.screenshot({ path: path.join(OUT, `${id}.png`), fullPage: !!s.fullPage });
             if (!s.fullPage) row.layout = await page.evaluate(layoutFindings);
+            if (s.name === "landing") row.layout.push(...(await heroContrast(page)));
             await page.addScriptTag({ content: AXE });
             const r = await page.evaluate(() =>
               window.axe.run(document, {
@@ -533,7 +538,108 @@ function layoutFindings() {
       );
     }
   }
+  // a touch hit extension (styles/components/hittarget.css) on a control that is not positioned anchors to the
+  // nearest positioned ancestor and covers it: taps meant for the controls beside it land on this one
+  if (matchMedia("(pointer: coarse)").matches) {
+    for (const el of document.querySelectorAll("button, a, [role=button], .sw")) {
+      const after = getComputedStyle(el, "::after");
+      if (after.content === "none" || after.position !== "absolute") continue;
+      if (getComputedStyle(el).position !== "static" || !el.getClientRects().length) continue;
+      const name = `${el.tagName.toLowerCase()}.${String(el.className).trim().split(/\s+/).join(".")}`;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push(`${name}: its touch hit area is anchored to an ancestor (the control is position: static)`);
+    }
+  }
   return out.slice(0, 12);
+}
+
+/**
+ * The landing hero's text against the photo behind it, from pixels: the text is made transparent, the page is
+ * captured, and each line box's pixels are measured against the text's own colour. A finding is a line whose
+ * 2nd-percentile contrast is under WCAG AA (4.5:1, or 3:1 for large text), so a stray bright pixel does not count
+ * but a bright band does.
+ */
+async function heroContrast(page) {
+  const vp = page.viewportSize();
+  const heroH = await page.evaluate(() => {
+    document.querySelector(".landing").scrollTop = 0;
+    return Math.ceil(document.querySelector(".landing-hero").getBoundingClientRect().bottom);
+  });
+  if (heroH > vp.height) await page.setViewportSize({ width: vp.width, height: heroH });
+  await page.waitForTimeout(300);
+  const targets = await page.evaluate(() => {
+    const out = [];
+    const sel =
+      ".landing-eyebrow, .landing-slogan, .landing-sub, .landing-nav-links a, .landing-nav > button, .landing-cta button, .landing-stats dt, .landing-stats dd";
+    for (const el of document.querySelectorAll(`.landing-hero :is(${sel})`)) {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let t = w.nextNode(); t; t = w.nextNode()) {
+        if (!t.textContent.trim()) continue;
+        const cs = getComputedStyle(t.parentElement);
+        if (cs.visibility === "hidden") continue;
+        const range = document.createRange();
+        range.selectNodeContents(t);
+        const rects = [...range.getClientRects()]
+          .filter((r) => r.width > 1 && r.height > 1)
+          .map((r) => [r.left, r.top, r.width, r.height]);
+        const px = parseFloat(cs.fontSize);
+        const large = px >= 24 || (Number(cs.fontWeight) >= 700 && px >= 18.66);
+        if (rects.length) out.push({ text: t.textContent.trim().slice(0, 30), color: cs.color, large, rects });
+      }
+    }
+    return out;
+  });
+  const hide = await page.addStyleTag({
+    content: ".landing-hero, .landing-hero * { color: transparent !important; text-shadow: none !important; }",
+  });
+  await page.waitForTimeout(150);
+  const png = (await page.screenshot()).toString("base64");
+  await hide.evaluate((n) => n.remove());
+  const found = await page.evaluate(
+    async ({ png, targets }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const c = Object.assign(document.createElement("canvas"), { width: img.width, height: img.height });
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, 0, 0);
+      const lin = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      const lum = (r, gg, b) => 0.2126 * lin(r) + 0.7152 * lin(gg) + 0.0722 * lin(b);
+      const probe = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", {
+        willReadFrequently: true,
+      });
+      const out = [];
+      for (const t of targets) {
+        probe.clearRect(0, 0, 1, 1);
+        probe.fillStyle = t.color;
+        probe.fillRect(0, 0, 1, 1);
+        const L = lum(...probe.getImageData(0, 0, 1, 1).data);
+        const ratios = [];
+        for (const [x, y, w, h] of t.rects) {
+          const x0 = Math.max(0, Math.round(x)),
+            y0 = Math.max(0, Math.round(y));
+          const ww = Math.min(c.width - x0, Math.round(w)),
+            hh = Math.min(c.height - y0, Math.round(h));
+          if (ww <= 0 || hh <= 0) continue;
+          const d = g.getImageData(x0, y0, ww, hh).data;
+          for (let i = 0; i < d.length; i += 4) {
+            const Lb = lum(d[i], d[i + 1], d[i + 2]);
+            ratios.push((Math.max(L, Lb) + 0.05) / (Math.min(L, Lb) + 0.05));
+          }
+        }
+        if (!ratios.length) continue;
+        ratios.sort((a, b) => a - b);
+        const p2 = ratios[Math.floor(ratios.length * 0.02)];
+        const min = t.large ? 3 : 4.5;
+        if (p2 < min) out.push(`hero text "${t.text}" reaches ${p2.toFixed(2)}:1 over the photo (needs ${min}:1)`);
+      }
+      return out;
+    },
+    { png, targets },
+  );
+  await page.setViewportSize(vp);
+  return found;
 }
 
 /**
@@ -544,6 +650,8 @@ function layoutFindings() {
 async function keyboardWalk(exe, origin) {
   const walks = [
     { name: "map", as: "user", query: "", view: "desktop", tabs: 30 },
+    // the compact rail: every destination a Tab stop with its name
+    { name: "map", as: "user", query: "", view: "tablet", tabs: 30 },
     { name: "nearby", as: "user", query: "?view=nearby", view: "phone", tabs: 25 },
     { name: "settings", as: "user", query: "?view=settings", view: "desktop", tabs: 30 },
     { name: "landing", as: "out", query: "", view: "desktop", tabs: 20 },
@@ -556,8 +664,9 @@ async function keyboardWalk(exe, origin) {
   for (const w of walks) {
     // Reduced motion: each stop is measured right after its Tab, and a smooth scroll (the landing's) would still
     // be moving the focused element into view, so it would read as off screen.
+    const { width, height } = VIEWS[w.view];
     const ctx = await browser.newContext({
-      viewport: VIEWS[w.view],
+      viewport: { width, height },
       locale: "en-US",
       serviceWorkers: "block",
       reducedMotion: "reduce",

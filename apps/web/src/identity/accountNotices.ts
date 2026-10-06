@@ -13,8 +13,17 @@ interface EndedNotice {
   action: "data" | "signin" | null;
 }
 
-/** What to say when a session ended for a reason the gateway gives (`/auth/session`'s `ended`). */
-export function endedNotice(e: SessionEnded, day: (unixS: number) => string): EndedNotice {
+/** Why a session ended: a reason the gateway gives (`/auth/session`'s `ended`), or the person erased the account. */
+export type EndedReason = SessionEnded | { reason: "erased" };
+
+/** What to say when a session ended. */
+export function endedNotice(e: EndedReason, day: (unixS: number) => string): EndedNotice {
+  if (e.reason === "erased")
+    return {
+      title: "Your account is erased",
+      body: "Your account, its keys and its personal data are deleted, and your finds stay on the caches without your name. You can join again at any time.",
+      action: null,
+    };
   if (e.reason === "suspended")
     return {
       title: "Your account is suspended",
@@ -86,5 +95,28 @@ export function takeReturn(store: ReturnStore, now = Date.now()): number | null 
       : null;
   } catch {
     return null;
+  }
+}
+
+/** "Later" on the recovery bar holds on this device for this long, per account; then the bar asks again. */
+export const RECOVERY_LATER_MS = 7 * 24 * 60 * 60_000;
+const laterKey = (callsign: string) => `acs.recovery.later.${callsign.toUpperCase()}`;
+
+/** Remember that this account chose Later on this device. Storage may be refused; the bar then returns next start. */
+export function rememberRecoveryLater(store: ReturnStore, callsign: string, now = Date.now()): void {
+  try {
+    store.setItem(laterKey(callsign), String(now));
+  } catch {
+    /* storage refused */
+  }
+}
+
+/** Did this account choose Later on this device within RECOVERY_LATER_MS? */
+export function recoveryLaterHolds(store: ReturnStore, callsign: string, now = Date.now()): boolean {
+  try {
+    const at = Number(store.getItem(laterKey(callsign)));
+    return Number.isFinite(at) && at > 0 && at <= now && now - at < RECOVERY_LATER_MS;
+  } catch {
+    return false;
   }
 }

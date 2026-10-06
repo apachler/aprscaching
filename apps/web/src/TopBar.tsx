@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * TopBar — the cacher/operator top chrome: logo, type filter, search, in-view count, identity chip,
- * the tablet's nav (with the manual, which the rail and the phone's More sheet carry elsewhere) and the primary
- * "Hide a cache" action. The header is identical in every app mode —
- * switching into "hide" must not reshuffle the chrome. Reused by the app and the demo harness so the
+ * TopBar — the cacher/operator top chrome: logo, type filter, search, in-view count, identity chip and the
+ * primary "Hide a cache" action. The destinations live in the nav rail (from 681px) and the phone's tab bar. The
+ * header is identical in every app mode — switching into "hide" must not reshuffle the chrome. Reused by the app and the demo harness so the
  * teaser shows the same chrome everywhere (ui-ux §6: one component, no bespoke one-offs).
  */
-import { ASSET, MANUAL_URL } from "./brand.js";
-import { Button, Hint, Icon } from "./ui/index.js";
+import { ASSET } from "./brand.js";
+import { Button, Icon } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
 import { RadioChip } from "./rf/RadioChip.js";
 import type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
@@ -32,11 +31,6 @@ export function TopBar(props: {
   onPickStation: (hit: SearchHitStation) => void;
   /** Open the search sheet: below 960px the bar shows a search button in place of the field. */
   onSearchOpen: () => void;
-  onNearby: () => void;
-  onActivity: () => void;
-  onProfile: () => void;
-  sysop?: boolean;
-  onAdmin?: () => void;
   /** Unseen watchlist alerts; the bell shows only when `onAlerts` is given (signed in). */
   alerts?: number;
   onAlerts?: () => void;
@@ -121,29 +115,6 @@ export function TopBar(props: {
           </>
         )}
       </Button>
-      <span className="nav-desktop">
-        <Button onClick={props.onNearby}>Nearby</Button>
-        <Button onClick={props.onActivity}>Activity</Button>
-        {props.sysop && props.onAdmin && (
-          <Button onClick={props.onAdmin} hint="Instance admin, for this instance's operator only" aria-label="Admin">
-            <Icon name="shield-check" cp437="ADM" className="lead-ic" />
-          </Button>
-        )}
-        <Button onClick={props.onProfile} hint="You: your profile, finds and callsigns" aria-label="You">
-          <Icon name="profile" cp437="ME" className="lead-ic" />
-        </Button>
-        <Hint text="The user manual, on its own site">
-          <a
-            className="help-ic"
-            href={MANUAL_URL}
-            target="_blank"
-            rel="noopener"
-            aria-label="Manual (opens in a new tab)"
-          >
-            <Icon name="book" size={16} cp437="?" />
-          </a>
-        </Hint>
-      </span>
       <Button variant="primary" className="hide-cta" onClick={props.onHide}>
         + Hide a cache
       </Button>

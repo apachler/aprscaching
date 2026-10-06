@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // What the app tells a person about their own account: why a session ended, when the account has no way back
-// in, where a sign-in from a cache returns to, and how each kind of alert is labelled.
+// in and how long Later holds that question off, where a sign-in from a cache returns to, and how each kind of
+// alert is labelled.
 import { describe, it, expect } from "vitest";
-import { endedNotice, needsRecovery, rememberReturn, takeReturn } from "../src/identity/accountNotices.js";
+import {
+  RECOVERY_LATER_MS,
+  endedNotice,
+  needsRecovery,
+  recoveryLaterHolds,
+  rememberRecoveryLater,
+  rememberReturn,
+  takeReturn,
+} from "../src/identity/accountNotices.js";
 import { alertKindView } from "../src/shack/alertKinds.js";
 
 const day = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
@@ -31,6 +40,11 @@ describe("a session that ended", () => {
     expect(others.body).toMatch(/^The sysop released your callsign OE6BOB from your account: licence belongs/);
     expect(others.action).toBe("signin");
   });
+  it("confirms an erasure the person asked for, and offers nothing else", () => {
+    const n = endedNotice({ reason: "erased" }, day);
+    expect(n.title).toBe("Your account is erased");
+    expect(n.action).toBeNull();
+  });
 });
 
 describe("an account with no way back in", () => {
@@ -44,6 +58,30 @@ describe("an account with no way back in", () => {
     expect(needsRecovery({ ...base, signedIn: false })).toBe(false);
     expect(needsRecovery({ ...base, offline: true })).toBe(false);
     expect(needsRecovery({ ...base, passkeys: undefined })).toBe(false);
+  });
+  it("is asked again once Later has held for its time, per account on this device", () => {
+    const m = new Map<string, string>();
+    const s = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+    expect(recoveryLaterHolds(s, "OE6ABC", 1_000)).toBe(false);
+    rememberRecoveryLater(s, "oe6abc", 1_000);
+    expect(recoveryLaterHolds(s, "OE6ABC", 2_000)).toBe(true);
+    expect(recoveryLaterHolds(s, "OE6XYZ", 2_000)).toBe(false);
+    expect(recoveryLaterHolds(s, "OE6ABC", 1_000 + RECOVERY_LATER_MS)).toBe(false);
+    const refusing = {
+      getItem: (): string | null => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+      removeItem: () => {},
+    };
+    expect(() => rememberRecoveryLater(refusing, "OE6ABC")).not.toThrow();
+    expect(recoveryLaterHolds(refusing, "OE6ABC")).toBe(false);
   });
 });
 

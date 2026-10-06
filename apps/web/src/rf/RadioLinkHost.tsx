@@ -84,6 +84,7 @@ export function RadioLinkHost(props: { callsign: string; verified: boolean }) {
         ),
         confirmLabel: "Allow",
         cancelLabel: "Receive only",
+        focus: "cancel",
       }),
     );
     return () => radioLink.setConsentAsker(null);

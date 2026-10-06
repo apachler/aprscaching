@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, getSession, logout, logoutAll, type Session } from "../api.js";
 import { forgetSession, recallSession, rememberSession, type SessionStore } from "./sessionMemory.js";
+import type { EndedReason } from "./accountNotices.js";
 import { disablePush } from "../push.js";
 
 const store: SessionStore = {
@@ -19,6 +20,8 @@ export function useSession() {
   const [s, setS] = useState<Session>({ callsign: null });
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
+  // the account was erased from this browser: the landing confirms it before anything else
+  const [erased, setErased] = useState(false);
   const refresh = useCallback(async () => {
     try {
       const fresh = await getSession();
@@ -53,9 +56,15 @@ export function useSession() {
    * subscription is touched — it ended with the session on the gateway.
    */
   const dismissEnded = useCallback(async () => {
+    setErased(false);
     setS((cur) => ({ ...cur, ended: undefined }));
     await logout().catch(() => {});
   }, []);
+  /** The account is erased: sign this browser out and say so on the landing (SessionEndedNotice). */
+  const signOutErased = useCallback(async () => {
+    await signOut();
+    setErased(true);
+  }, [signOut]);
   /** Sign out on every device; throws when the server refused, so the caller can say so. */
   const signOutEverywhere = useCallback(async () => {
     await disablePush().catch(() => {});
@@ -71,8 +80,8 @@ export function useSession() {
     /** The account's passkey count, when the gateway said (useful with `email` to tell if it can sign in again). */
     passkeys: s.passkeys,
     signedIn: !!s.callsign,
-    /** Signed out: why the session this browser held ended (a suspension, a callsign released). */
-    ended: s.callsign ? undefined : s.ended,
+    /** Signed out: why the session this browser held ended (a suspension, a callsign released, an erasure). */
+    ended: (s.callsign ? undefined : erased ? { reason: "erased" } : s.ended) as EndedReason | undefined,
     dismissEnded,
     /** The session opens only the data of an account that holds no callsign (AccountData). */
     accountData: !s.callsign && !!s.accountData,
@@ -81,6 +90,7 @@ export function useSession() {
     loading,
     refresh,
     signOut,
+    signOutErased,
     signOutEverywhere,
   };
 }

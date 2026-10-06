@@ -99,7 +99,9 @@ export function App() {
         ) : !active ? (
           <>
             <Landing onSignIn={() => setShowSignIn("signin")} onExplore={onExplore} resume={prerendered} />
-            {session.accountData && !showSignIn && <AccountData onSignOut={() => void session.signOut()} />}
+            {session.accountData && !showSignIn && (
+              <AccountData onSignOut={() => void session.signOut()} onErased={() => void session.signOutErased()} />
+            )}
             {showSignIn && (
               <SignIn
                 start={showSignIn}
@@ -120,7 +122,7 @@ export function App() {
             <Platform session={session} startTour={startTour} />
           </Suspense>
         )}
-        {/* signed out by a suspension or a released callsign: say why, wherever the person lands */}
+        {/* signed out by a suspension, a released callsign or an erasure: say why, wherever the person lands */}
         {!session.loading && session.ended && !showSignIn && (
           <SessionEndedNotice
             ended={session.ended}

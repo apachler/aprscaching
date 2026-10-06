@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * NavRail — the operator nav rail shown beside the map at ≥1024px (the denser shack context).
- * Real <nav>/<button> with the inline-SVG Icon set. Hidden below the breakpoint (CSS). The core
- * destinations come from the nav table (nav.ts); the Shack apps and tools the user has PINNED render after Shack.
+ * NavRail — the nav rail beside the map from 681px up, where the phone's tab bar ends: compact, icons only, up to
+ * 1023px, and with each icon's label from 1024px. In the compact rail the label stays the item's accessible name
+ * and shows at the head of its hint, on hover and keyboard focus (CSS). Real <nav>/<button> with the inline-SVG
+ * Icon set. The core destinations come from the nav table (nav.ts); the Shack apps and tools the user has PINNED
+ * render after Shack.
  * The Admin item shows only to this instance's operator (and every admin write is gated server-side). The
  * links outside the app (the manual) close the rail, opening in a new tab.
  */
@@ -21,19 +23,19 @@ export function NavRail(props: {
   attention: ReadonlySet<string>;
 }) {
   const item = (key: string, icon: IconName, label: string, hint: string, onClick: () => void, cls?: string) => (
-    <Button
-      key={key}
-      className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`}
-      onClick={onClick}
-      hint={hint}
-      aria-current={props.active === key ? "page" : undefined}
-      aria-describedby={props.attention.has(key) ? "rail-attn" : undefined}
-      data-tour={key === "nearby" ? "nearby" : undefined}
-    >
-      <Icon name={icon} size={21} />
-      {props.attention.has(key) && <span className="nav-dot" aria-hidden="true" />}
-      <span>{label}</span>
-    </Button>
+    <Hint key={key} text={hint} title={label}>
+      <Button
+        className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`}
+        onClick={onClick}
+        aria-current={props.active === key ? "page" : undefined}
+        aria-describedby={props.attention.has(key) ? "rail-attn" : undefined}
+        data-tour={key === "nearby" ? "nearby" : undefined}
+      >
+        <Icon name={icon} size={21} />
+        {props.attention.has(key) && <span className="nav-dot" aria-hidden="true" />}
+        <span className="rail-label">{label}</span>
+      </Button>
+    </Hint>
   );
   const core = (section: NavItem["section"]) =>
     NAV_ITEMS.filter((i) => i.section === section && (!i.sysop || props.sysop)).map((i) =>
@@ -51,10 +53,10 @@ export function NavRail(props: {
       <div className="rail-bottom">
         {core("bottom")}
         {NAV_LINKS.map((l) => (
-          <Hint key={l.key} text={l.hint}>
+          <Hint key={l.key} text={l.hint} title={l.label}>
             <a className="rail-link" href={l.href} target="_blank" rel="noopener">
               <Icon name={l.icon} size={21} />
-              <span>{l.label}</span>
+              <span className="rail-label">{l.label}</span>
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
           </Hint>

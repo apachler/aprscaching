@@ -45,7 +45,14 @@ import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
 import { RecoveryPrompt } from "./identity/RecoveryPrompt.js";
-import { needsRecovery, rememberReturn, takeReturn, type ReturnStore } from "./identity/accountNotices.js";
+import {
+  needsRecovery,
+  recoveryLaterHolds,
+  rememberRecoveryLater,
+  rememberReturn,
+  takeReturn,
+  type ReturnStore,
+} from "./identity/accountNotices.js";
 import { maidenhead, gridCenter, haversine, parseCoordinates } from "./map/geo.js";
 import { toMgrs } from "@aprscaching/aprs";
 import { MapTools } from "./map/MapTools.js";
@@ -412,8 +419,12 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (store && selectedId != null) rememberReturn(store, selectedId);
     openView(panel("signin"));
   }, [selectedId, openView]);
-  // an account with no passkey and no confirmed email is asked for one; Later hides it until the next start
+  // an account with no passkey and no confirmed email is asked for one; Later hides it on this device for a while
   const [recoveryLater, setRecoveryLater] = useState(false);
+  useEffect(() => {
+    const store = returnStore();
+    setRecoveryLater(!!store && !!session.callsign && recoveryLaterHolds(store, session.callsign));
+  }, [session.callsign]);
 
   // Leaving "hide a cache" (for any destination) drops its draft marker, so it never stays stuck on
   // top of the next panel.
@@ -941,16 +952,25 @@ export default function Platform({ session, startTour }: { session: SessionState
             onPickCache={pickCacheHit}
             onPickStation={pickStationHit}
             onSearchOpen={() => setSearchOpen(true)}
-            onNearby={() => openView(panel("nearby"))}
-            onActivity={() => openView(panel("activity"))}
-            onProfile={() => openView(panel("profile"))}
-            sysop={sysop}
-            onAdmin={() => openView(panel("admin"))}
             alerts={unseenAlerts}
             onAlerts={session.signedIn ? () => openView(panel("alerts")) : undefined}
             onRadio={session.signedIn ? openRadio : undefined}
           />
-          <div className="shell">
+          {/* in the flow under the top bar, so it never covers the map or its controls */}
+          {needsRecovery(session) && !recoveryLater && !isPanel("settings") && (
+            <RecoveryPrompt
+              variant="bar"
+              callsign={session.callsign}
+              pendingEmail={session.pendingEmail}
+              onChanged={session.refresh}
+              onLater={() => {
+                const store = returnStore();
+                if (store) rememberRecoveryLater(store, session.callsign);
+                setRecoveryLater(true);
+              }}
+            />
+          )}
+          <main className="shell">
             <NavRail
               active={activeKey(view, railKeys)}
               onNav={onNav}
@@ -1194,17 +1214,8 @@ export default function Platform({ session, startTour }: { session: SessionState
             {remote && !hiding && !isPanel("ranks") && (
               <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
             )}
-          </div>
+          </main>
 
-          {needsRecovery(session) && !recoveryLater && !isPanel("settings") && (
-            <RecoveryPrompt
-              variant="bar"
-              callsign={session.callsign}
-              pendingEmail={session.pendingEmail}
-              onChanged={session.refresh}
-              onLater={() => setRecoveryLater(true)}
-            />
-          )}
           {!hiding && (
             <TabBar
               active={activeKey(view, tabKeys)}

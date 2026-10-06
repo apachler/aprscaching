@@ -29,6 +29,10 @@
     cursor: auto;
     user-select: text;
   }
+  /* the control's own name at the head of its hint, shown only where the control hides its words (shell.css) */
+  .hint-title {
+    display: none;
+  }
   /* Without anchor positioning the hint is a bar above the bottom edge, centred; the Popover API is not needed
      for it to show (data-open is the state). */
   .hint[data-open] {

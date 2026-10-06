@@ -16,6 +16,9 @@
  * `hint` (or `title`, which means the same) is the one line that says what the button does, shown on hover and
  * keyboard focus by Hint, never as the browser's own title tooltip. A button with no words of its own (an icon)
  * and no aria-label takes it as its accessible name; any other button takes it as its description.
+ *
+ * A disabled button with a hint stays focusable (`aria-disabled` in place of `disabled`, its click ignored), so the
+ * hint that says why it is off shows on keyboard focus and is read as its description, not only on hover.
  */
 import { isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Hint } from "./Hint.js";
@@ -51,7 +54,18 @@ export function Button({
   }
   const cls = [CLASS[variant], className].filter(Boolean).join(" ");
   const label = rest["aria-label"] ?? (iconOnly || !hasWords(rest.children, childrenOf) ? text : undefined);
-  const button = <button className={cls || undefined} {...rest} aria-label={label} />;
+  const { disabled, onClick, ...own } = rest;
+  const soft = !!disabled && !!text;
+  const button = (
+    <button
+      className={cls || undefined}
+      {...own}
+      disabled={soft ? undefined : disabled}
+      aria-disabled={soft ? true : own["aria-disabled"]}
+      onClick={soft ? (e) => e.preventDefault() : onClick}
+      aria-label={label}
+    />
+  );
   if (!text) return button;
   return (
     <Hint text={text} describe={label !== text}>

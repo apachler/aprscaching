@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { deleteAccount, errorText, exportAccount } from "../api.js";
-import { Button, Panel, useConfirm, useToast } from "../ui/index.js";
+import { Button, Panel, useConfirm } from "../ui/index.js";
 
 /**
  * The data of an account that holds no callsign: its last call moved to the call's licensee. An email link opens
  * this session, which downloads a copy of the account's data or erases it, and does nothing else.
  */
-export function AccountData(props: { onSignOut: () => void }) {
+export function AccountData(props: {
+  onSignOut: () => void;
+  /** The account is erased: sign out and confirm it (SessionEndedNotice). */
+  onErased: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const confirmDialog = useConfirm();
-  const toast = useToast();
 
   async function download() {
     setBusy(true);
@@ -51,8 +54,7 @@ export function AccountData(props: { onSignOut: () => void }) {
       setBusy(false);
       return;
     }
-    toast("Your account and personal data were erased");
-    props.onSignOut();
+    props.onErased();
   }
 
   return (

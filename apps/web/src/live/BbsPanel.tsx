@@ -236,9 +236,10 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       title={
         <>
           <Icon name="message" cp437="" className="lead-ic" />
-          BBS <InfoTip text={TERMS.bbs} label="What is a BBS?" />
+          BBS
         </>
       }
+      info={<InfoTip text={TERMS.bbs} label="What is a BBS?" />}
       onClose={props.onClose}
       wide
     >

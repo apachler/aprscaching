@@ -45,16 +45,42 @@
 
   /* ---- hero ---- */
   .landing-hero {
-    /* the brand chrome in every theme: the dark values of the tokens used on it */
-    --accent-text: var(--accent);
-    --tier-a-text: oklch(0.82 0.13 145);
-    --heading: oklch(0.86 0.06 228);
+    /* the brand chrome in every theme: the tokens used on the photo take their fixed hero values */
+    --accent: var(--hero-accent);
+    --accent-text: var(--hero-accent-text);
+    --accent-ink: var(--hero-accent-ink);
+    --chrome-ink: var(--hero-ink);
+    --heading: var(--hero-heading);
+    --tier-a: var(--hero-tier-a);
+    --tier-a-text: var(--hero-tier-a-text);
+    --surface-2: var(--hero-control-bg);
+    --ink: var(--hero-control-ink);
+    --line: var(--hero-control-line);
+    --frame: var(--hero-control-line);
     position: relative;
     isolation: isolate;
     overflow: hidden;
     padding: var(--space-lg) clamp(16px, 4vw, 40px) clamp(28px, 5vw, 48px);
-    background: var(--brand);
+    background: var(--hero-bg);
     color: var(--chrome-ink);
+  }
+  /* the buttons keep the Modern fills on the photo, Phosphor's outline reskin included */
+  .landing-hero button {
+    background: var(--surface-2);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .landing-hero button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+  .landing-hero button:hover {
+    filter: brightness(1.08);
+  }
+  .landing-hero button:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
   }
   .landing-hero-photo,
   .landing-hero-photo img {
@@ -70,11 +96,7 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--brand) 80%, transparent),
-      color-mix(in oklch, var(--brand) 88%, var(--shade))
-    );
+    background: linear-gradient(180deg, var(--hero-scrim-top), var(--hero-scrim-bottom));
   }
   .landing-nav {
     display: flex;
@@ -97,11 +119,9 @@
   .landing-nav-links a {
     color: var(--chrome-ink);
     text-decoration: none;
-    opacity: 0.9;
   }
   .landing-nav-links a:hover,
   .landing-nav-links a:focus-visible {
-    opacity: 1;
     text-decoration: underline;
   }
   .landing-nav > button {

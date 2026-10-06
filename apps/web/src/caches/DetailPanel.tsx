@@ -234,7 +234,7 @@ export function DetailPanel(props: {
       )}
       <div className="detail-meta">
         <span className="typechip" data-ctype={c.type}>
-          {typeGlyph(meta, phosphor)} {meta.label}
+          <span aria-hidden="true">{typeGlyph(meta, phosphor)}</span> {meta.label}
         </span>
         <span className="srcchip">
           {c.source === "native" ? "APRScaching" : `imported · ${c.sourceName ?? c.source}`}

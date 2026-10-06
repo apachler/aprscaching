@@ -132,7 +132,8 @@ group does.
   real `<button>`-driven disclosure, never a CSS-only `:target` hack (see css.md).
 
 **Navigation**
-- **Bottom tab bar** (mobile) / **left rail** (desktop) for top-level destinations. The tab bar's **More** opens a
+- **Bottom tab bar** (phone, ≤680px) / **left rail** (from 681px: icon-only on a tablet, each name shown on hover
+  and focus; labelled from 1024px) for top-level destinations. The tab bar's **More** opens a
   sheet with every other rail destination, drawn from the same nav table (`nav.ts`), so the phone reaches all of them.
 - **Breadcrumb** inside the deeper Shack only.
 

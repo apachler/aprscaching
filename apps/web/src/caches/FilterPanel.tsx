@@ -100,7 +100,7 @@ export function FilterPanel(props: {
           const on = filters.types.includes(t);
           return (
             <ChipToggle key={t} pressed={on} onChange={() => toggle(t)}>
-              {typeGlyph(m, phosphor)} {m.label}
+              <span aria-hidden="true">{typeGlyph(m, phosphor)}</span> {m.label}
             </ChipToggle>
           );
         })}

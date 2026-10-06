@@ -4,9 +4,9 @@
  * an address confirmation, a data link or an operator link, and every outcome that does not end in the app.
  *
  * The gateway serves these pages itself, so they carry their own small stylesheet: the app's colour tokens for
- * Dark (the default) and Light, chosen by the Appearance setting the app keeps in this origin's storage, or by
- * the system preference when there is none. Phosphor shows as Dark here. Every value interpolated into a page is
- * escaped; the pages load nothing but the wordmark.
+ * Dark (the default), Light and Phosphor, chosen by the Appearance setting the app keeps in this origin's storage,
+ * or by the system preference when there is none. Every value interpolated into a page is escaped; the pages load
+ * nothing but the wordmark and the app's favicon.
  */
 import { escapeHtml } from "./util/html.js";
 
@@ -27,7 +27,8 @@ interface LinkPage {
 
 /**
  * The tokens, as in apps/web/src/styles/tokens.css: Dark on `:root`, Light under the system preference unless
- * the page names a theme, and again under `[data-theme="light"]`.
+ * the page names a theme, and again under `[data-theme="light"]`; Phosphor under `[data-theme="phosphor"]`, with
+ * its mono face and square corners.
  */
 const STYLE = `
 :root{color-scheme:dark;--page:oklch(0.17 0.012 220);--surface:oklch(0.22 0.012 220);--ink:oklch(0.94 0.006 220);
@@ -39,6 +40,12 @@ const STYLE = `
 :root[data-theme="light"]{color-scheme:light;--page:oklch(0.97 0.003 220);--surface:oklch(1 0 0);
 --ink:oklch(0.33 0.006 220);--muted:oklch(0.52 0.009 220);--line:oklch(0.92 0.004 220);--bar:oklch(0.5 0.085 232);
 --link:oklch(0.5 0.072 230);--bad:oklch(0.5 0.17 27);--focus:oklch(0.48 0.15 135)}
+:root[data-theme="phosphor"]{color-scheme:dark;--page:oklch(0.15 0.02 155);--surface:oklch(0.19 0.028 155);
+--ink:oklch(0.9 0.16 150);--muted:oklch(0.7 0.1 150);--line:oklch(0.42 0.08 150);--bar:oklch(0.13 0.02 155);
+--accent:oklch(0.86 0.19 145);--accent-ink:oklch(0.15 0.02 155);--link:oklch(0.92 0.17 150);--bad:oklch(0.78 0.15 27);
+--focus:var(--accent)}
+:root[data-theme="phosphor"] body{font-family:"Px437 IBM VGA8","IBM Plex Mono",ui-monospace,monospace}
+:root[data-theme="phosphor"] :is(.card,.primary){border-radius:0}
 *{box-sizing:border-box}
 body{margin:0;min-height:100dvh;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 header{background:var(--bar);padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top))}
@@ -58,7 +65,8 @@ form,.actions{margin:16px 0 12px}
 
 /** The Appearance setting before the first paint: the same rule as the app's head script (apps/web/index.html). */
 const THEME_SCRIPT = `(function(){try{var t=(JSON.parse(localStorage.getItem("acs.locale")||"{}")||{}).theme;
-if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;else if(t!=="auto")document.documentElement.dataset.theme="dark";}catch(e){}})();`;
+if(t==="light"||t==="dark"||t==="phosphor")document.documentElement.dataset.theme=t;
+else if(t!=="auto")document.documentElement.dataset.theme="dark";}catch(e){}})();`;
 
 function actionHtml(a: PageAction): string {
   if (a.kind === "link")
@@ -79,6 +87,7 @@ export function linkPageResponse(page: LinkPage, status = 200): Response {
   const html = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name=referrer content=same-origin><meta name=robots content=noindex>
+<link rel=icon href="/icons/favicon.ico" sizes=any><link rel=icon type=image/png sizes=32x32 href="/icons/favicon-32x32.png">
 <title>${escapeHtml(page.title)} · APRScaching</title><script>${THEME_SCRIPT}</script><style>${STYLE}</style></head>
 <body><header><img src="/brand/wordmark.png" alt="APRScaching" width=158 height=28></header>
 <main><div class="card${page.alert ? " alert" : ""}"${page.alert ? " role=alert" : ""}><h1>${escapeHtml(page.title)}</h1>${body}${

@@ -171,6 +171,23 @@ const PAIRS: Pair[] = [
   { name: "Tier A icon on a panel", fg: "var(--tier-a-text)", bg: "var(--surface)", min: 3 },
   { name: "Tier B icon on a panel", fg: "var(--tier-b-text)", bg: "var(--surface)", min: 3 },
   { name: "rail focus ring on the rail", fg: "var(--heading)", bg: "var(--rail-bg)", behind: "var(--rail-bg)", min: 3 },
+  // the landing hero: its fixed tokens over the scrim's lightest end, with a white pixel of the photo behind it (the
+  // worst case); the visual harness measures the rendered photo itself (test/visual/run.mjs heroContrast)
+  ...(
+    [
+      ["hero text over the photo", "var(--hero-ink)", 4.5],
+      ["hero eyebrow over the photo", "var(--hero-accent-text)", 4.5],
+      ["hero slogan's large accent words over the photo", "var(--hero-accent)", 3],
+      ["hero links and focus ring over the photo", "var(--hero-heading)", 4.5],
+    ] as const
+  ).map(([name, fg, min]): Pair => ({ name, fg, bg: "var(--hero-scrim-top)", behind: "oklch(1 0 0)", min })),
+  { name: "text on the hero's primary button", fg: "var(--hero-accent-ink)", bg: "var(--hero-accent)", min: 4.5 },
+  {
+    name: "text on the hero's secondary button",
+    fg: "var(--hero-control-ink)",
+    bg: "var(--hero-control-bg)",
+    min: 4.5,
+  },
 ];
 
 const THEMES: Theme[] = ["dark", "light", "phosphor"];

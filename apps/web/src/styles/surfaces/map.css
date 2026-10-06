@@ -314,6 +314,7 @@
   /* field-navigation map tools: grid / rings / ruler toggles + readouts */
   /* basemap layer switcher — top-right, opt-in raster */
   .basemap-switch {
+    grid-area: 3 / 1; /* below a map banner (shell.css .mapwrap) */
     position: absolute;
     right: var(--space-md);
     top: var(--space-md);
@@ -429,23 +430,33 @@
     align-items: center;
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
   }
-  /* live geofence prompt banner */
+  /* live geofence prompt: a strip in its own row above the map (shell.css .mapwrap), never over its controls */
   .geo-banner {
-    position: absolute;
-    top: var(--space-md);
-    left: 50%;
-    transform: translateX(-50%);
+    grid-area: 2 / 1;
+    position: relative;
     z-index: var(--z-banner);
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    max-width: calc(100% - 24px);
     background: var(--accent);
     color: var(--accent-ink);
-    padding: 9px var(--space-md) 9px var(--space-lg);
-    border-radius: var(--radius-sheet);
+    padding: var(--space-2xs) var(--space-md) var(--space-2xs) var(--space-lg);
     box-shadow: var(--elevation-floating);
     font-size: var(--text-body);
+  }
+  /* on a phone the prompt floats above the tab bar, clear of the map's controls, in thumb reach */
+  @media (max-width: 680px) {
+    .geo-banner {
+      grid-area: auto;
+      position: absolute;
+      left: 50%;
+      bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: calc(100% - 2 * var(--space-md));
+      padding-block: var(--space-xs);
+      border-radius: var(--radius-sheet);
+    }
   }
   .geo-banner .muted {
     color: color-mix(in oklch, var(--accent-ink) 70%, transparent);
@@ -556,6 +567,18 @@
     max-width: 30rem;
     margin: 0;
     text-align: start;
+  }
+  /* map markers keep their drawn size on touch (no --ctl-min-h): a 44px pin would hide its neighbours */
+  .maplibregl-marker,
+  .maplibregl-marker * {
+    --ctl-min-h: 0px;
+  }
+  /* on touch MapLibre's control stack (zoom, compass, locate) takes full touch targets */
+  @media (pointer: coarse) {
+    .maplibregl-ctrl-group button {
+      width: var(--hit);
+      height: var(--hit);
+    }
   }
   /* MapLibre's compact attribution toggle: big enough to hit (WCAG 2.5.8) */
   .maplibregl-ctrl-attrib-button {

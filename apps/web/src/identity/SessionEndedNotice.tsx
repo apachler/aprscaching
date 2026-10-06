@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { SessionEnded } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Panel } from "../ui/index.js";
-import { endedNotice } from "./accountNotices.js";
+import { endedNotice, type EndedReason } from "./accountNotices.js";
 
 /**
- * Why the person was signed out, when the gateway says: their account was suspended, or their callsign moved to
- * its licensee or was released by the sysop. Without it the app would drop them on the landing page without a
+ * Why the person was signed out: their account was suspended, or their callsign moved to its licensee or was
+ * released by the sysop (the gateway says), or they erased the account themselves. Without it the app would drop them on the landing page without a
  * word. An account left with no callsign is offered its data; one with other callsigns, a sign-in.
  */
 export function SessionEndedNotice(props: {
-  ended: SessionEnded;
+  ended: EndedReason;
   onClose: () => void;
   onSignIn: () => void;
   onData: () => void;

@@ -35,9 +35,11 @@
     gap: var(--space-xs);
     flex: none;
   }
-  /* the Shack launcher's pin button, in the row's flow beside the switch rather than in the card's corner */
+  /* the Shack launcher's pin button, in the row's flow beside the switch rather than in the card's corner;
+     relative, not static, so its touch hit area (hittarget.css) stays anchored to the button */
   .tool-ctl .shack-pin {
-    position: static;
+    position: relative;
+    inset: auto;
   }
   /* the tool a pin or link opened */
   .tool-row.open {
