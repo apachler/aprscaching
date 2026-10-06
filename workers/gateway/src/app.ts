@@ -169,7 +169,6 @@ import {
   handleRate,
 } from "./community.js";
 import {
-  handleDecode,
   handleStations,
   handleStation,
   handleStationSeries,
@@ -739,8 +738,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const profileMatch = /^\/api\/profile\/([A-Za-z0-9-]+)$/.exec(p);
   if (profileMatch && m === "GET") return handleProfile(req, env, profileMatch[1]!);
 
-  // shack: packet inspector + live station registry
-  if (p === "/api/decode" && m === "POST") return handleDecode(req);
+  // shack: live station registry
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   if (p === "/api/meshcom/nodes" && m === "GET") return handleMeshcomNodes(req, env);
   if (p === "/api/meshcom/links" && m === "GET") return handleMeshcomLinks(req, env);

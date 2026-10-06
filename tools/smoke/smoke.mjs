@@ -843,23 +843,7 @@ ok(
   JSON.stringify(act.data?.activity?.length),
 );
 
-// ---- the shack — packet inspector + live station registry ----
-const dec = await call("POST", "/api/decode", {
-  raw: "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.00N/01526.00E>088/036Going home",
-});
-ok(
-  "decode parses an uncompressed position",
-  dec.data?.ok === true && dec.data?.data?.kind === "position" && Math.abs((dec.data?.data?.lat ?? 0) - 47.0667) < 0.01,
-  JSON.stringify(dec.data?.data),
-);
-ok(
-  "decode classifies the q-construct (rf)",
-  dec.data?.frame?.heardVia === "rf" && dec.data?.frame?.igateCall === "OE8XXX",
-  JSON.stringify(dec.data?.frame),
-);
-const decBad = await call("POST", "/api/decode", { raw: "not a frame" });
-ok("decode rejects a non-frame -> 400", decBad.status === 400, `status=${decBad.status}`);
-
+// ---- the shack — live station registry ----
 // ingest a moving station + a weather station, then read them back from the registry
 const wbIngest = await call(
   "POST",
