@@ -453,7 +453,10 @@ doc_fedlink_box() {
   fi
   every="$(doc_get FED_LINK_PULL_MS)"
   every="$(( ${every:-3600000} / 60000 ))"
-  [ "$serve" != 1 ] || pass ingest.fedlink "serving federation sync over packet${call:+ on $call}${node:+, and as the node's FED command}"
+  local where=""
+  [ -z "$call" ] || where=" on $call"
+  [ -z "$node" ] || where="$where, and as the node's FED command"
+  [ "$serve" != 1 ] || pass ingest.fedlink "serving federation sync over packet$where"
   [ "$pull" != 1 ] || pass ingest.fedlink_pull "pulling from packet peers as $call, a session every $every min at most"
 }
 
