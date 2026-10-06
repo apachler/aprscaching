@@ -177,6 +177,11 @@ check "a 44Net Connect address is on the internet" eq "$(scope 44.27.132.9)" pub
 check "a LAN address is private" eq "$(scope 192.168.1.10)" private
 check "a CGNAT address is private" eq "$(scope 100.64.0.1)" private
 check "a public address is public" eq "$(scope 203.0.113.7)" public
+ampr() { bash -c ". '$DEPLOY/lib/common.sh'; ampr_scope \"\$1\"" _ "$1"; }
+check "44.0.0.0/9 is 44Net" eq "$(ampr 44.27.132.9)" 44net
+check "44.128.0.0/10 is HAMNET, not 44Net" eq "$(ampr 44.143.1.2)" hamnet
+check "44.192.0.0/10 is neither" eq "$(ampr 44.200.1.2)" other
+check "an address outside 44/8 is neither" eq "$(ampr 144.44.1.2)" other
 
 # ---- setup.sh: the federation posture ---------------------------------------------------------------------
 S="$DEPLOY/setup.sh"
@@ -199,6 +204,21 @@ if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peer
   bad "a 44Net peer is refused for FED_PEERS"
 else
   ok "a 44Net peer is refused for FED_PEERS"
+fi
+if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers 'https://gw.oe1xyz.ampr.org#AAAA-BBBB-CCCC-DDDD'; then
+  bad "a 44Net peer with a pinned fingerprint is refused for FED_PEERS"
+else
+  ok "a 44Net peer with a pinned fingerprint is refused for FED_PEERS"
+fi
+if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://44.143.1.2; then
+  bad "a HAMNET peer is refused for FED_PEERS"
+else
+  check "a HAMNET peer is refused for FED_PEERS, named as HAMNET" grep -q "is on HAMNET" "$TMP/err"
+fi
+if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://44.200.1.2; then
+  ok "an address in 44.192.0.0/10 is neither 44Net nor HAMNET"
+else
+  bad "an address in 44.192.0.0/10 is neither 44Net nor HAMNET"
 fi
 if setup --env-file "$TMP/y.env" --call OE8APR --domain a.example.net --fed-peers http://peer.example.org; then
   bad "a plain-http peer is refused"

@@ -150,7 +150,7 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 |---|---|---|---|
 | `https` | full URL | sync | The default internet path |
 | `44net` | a name under `<call>.ampr.org`, or `https://<name>` when the name has a certificate | sync | Plain HTTP on the name; with `https://`, HTTPS first, then plain HTTP on the same name. The *name* is the durable identity |
-| `hamnet` | a HAMNET name or 44.x address, optional `:port` (`http://` in front is allowed) | sync | Plain HTTP on HAMNET, which is not on the internet: tried with a 2-second timeout, so a peer without a route moves on quickly |
+| `hamnet` | a HAMNET name or address (`44.128.0.0/10`), optional `:port` (`http://` in front is allowed) | sync | Plain HTTP on HAMNET, reached only over RF links and from neither the internet nor 44Net: tried with a 2-second timeout, so a peer off HAMNET moves on quickly |
 | `ax25` | `CALLSIGN-SSID` | forward | Packet circuit via the operator's ingest box |
 | `netrom` | node alias | forward | NET/ROM-routed circuit |
 | `bbs` | `CALL@BBS.#REGION.CC.CONT` | forward | Store-and-forward over FBB forwarding |

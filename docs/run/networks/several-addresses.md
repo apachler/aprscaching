@@ -16,7 +16,9 @@ network they have a route to.
 ## How the addresses differ
 
 The scheme of each address decides what it can do: an `https://` address has a certificate, an `http://` one has
-none. Which network the address is on changes nothing else.
+none. The network decides who reaches it: the internet and 44Net addresses are reachable from the internet, the
+HAMNET address only from HAMNET hosts, over RF links. A 44Net address is not on HAMNET, and a HAMNET address is
+not on 44Net.
 
 | | Internet, https (`APP_URL`) | 44Net name, https | HAMNET, plain http |
 |---|---|---|---|
@@ -28,7 +30,7 @@ none. Which network the address is on changes nothing else.
 | Device location (Tier B finds) | Yes | Yes | No |
 | Radio in the browser (Web Serial, Web Bluetooth) | Yes | Yes | No |
 | Web push | Yes | Yes | No: push services are on the internet |
-| Federation | `https` endpoint | `44net` endpoint, https then plain http | `hamnet` endpoint, for peers with a route to HAMNET |
+| Federation | `https` endpoint | `44net` endpoint, https then plain http | `hamnet` endpoint, for peers on HAMNET |
 
 Each address keeps its own session: signing in on the HAMNET address does not sign you in on the internet one.
 The session names the address it was issued on and is honoured there alone, so a session issued over plain
@@ -52,10 +54,10 @@ address works as the table above says, whatever the combination. What changes wi
 |---|---|---|
 | Internet alone | Yes | The usual public instance |
 | 44Net alone (`APP_URL=https://aprscaching.<call>.ampr.org`) | Yes | `setup.sh --domain aprscaching.<call>.ampr.org`; the certificate comes from Caddy's challenge on the Connect address (**Unverified**) or DNS-01 by hand |
-| HAMNET alone (`APP_URL=http://<HAMNET name or 44.x address>`) | No | `setup.sh --lan-host <HAMNET name or address>`; no public CA issues a certificate inside HAMNET, so it stays plain http. Members sign in by email link (a mail server on HAMNET) or the sysop's link |
+| HAMNET alone (`APP_URL=http://<HAMNET name or address>`) | No | `setup.sh --lan-host <HAMNET name or address>`; no public CA issues a certificate inside HAMNET, so it stays plain http. Members sign in by email link (a mail server on HAMNET) or the sysop's link |
 | Internet + 44Net | Yes, on both | Passkeys belong to `APP_URL`'s host; the other one is a related origin |
 | Internet + HAMNET | Yes, on the internet address | On HAMNET: email or the sysop's link |
-| 44Net + HAMNET | Yes, on the 44Net address | The usual shape of a station without an internet name |
+| 44Net + HAMNET | Yes, on the 44Net address | A station with no other internet name: the 44Net name serves the internet, the HAMNET address serves HAMNET hosts |
 | All three | Yes, on both https addresses | The worked example below |
 
 When `APP_URL` is the plain-http HAMNET address, `RP_ID` follows the first https address in `EXTRA_ORIGINS`, so

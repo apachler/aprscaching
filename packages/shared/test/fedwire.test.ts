@@ -109,7 +109,7 @@ describe("typed peer endpoints", () => {
     expect(net44Host("aprscaching.oe8apr.ampr.org")).toBe("aprscaching.oe8apr.ampr.org");
   });
 
-  it("takes a hamnet host as a name or a 44.x address, plain http, an optional port", () => {
+  it("takes a hamnet host as a name or an IPv4 address, plain http, an optional port", () => {
     expect(validEndpointAddress("hamnet", "aprscaching.oe8xyz.hamnet.example")).toBe(true);
     expect(validEndpointAddress("hamnet", "44.143.1.2")).toBe(true);
     expect(validEndpointAddress("hamnet", "http://44.143.1.2:8080")).toBe(true);

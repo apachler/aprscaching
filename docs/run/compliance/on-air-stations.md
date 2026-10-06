@@ -71,10 +71,17 @@ to the link you turn on, but it does not choose the RF parameters for you.
 
 ## 44Net (AMPRNet) and HAMNET
 
-**44Net** is amateur IP address space and **HAMNET** is an amateur microwave IP backbone. Traffic on them is still
-amateur radio: no content encryption, callsign identification and control-operator rules all apply, as on a
-1200-baud packet channel. Where a HAMNET or 44Net segment bridges to the general internet, the amateur-service
-boundary sits at that RF or gateway edge. You are responsible for what crosses it in each direction.
+**44Net** is amateur IP address space reachable from the internet, through 44Net Connect or BGP. **HAMNET** is
+an amateur IP network reached only over RF links. They are separate networks, and the rules follow the path the
+traffic takes:
+
+- **HAMNET** traffic crosses amateur RF, so it is amateur radio: no content encryption, and callsign
+  identification and control-operator rules apply, as on a 1200-baud packet channel. Where a HAMNET segment has
+  a gateway to the internet, the amateur-service boundary sits at that gateway. You are responsible for what
+  crosses it in each direction.
+- **44Net** traffic between internet hosts, such as two 44Net Connect addresses, travels over the internet, not
+  over amateur RF; ARDC's terms for the address still apply. Where it continues onto an RF link of yours, that
+  leg is amateur radio, with the same rules.
 
 ## What APRScaching enforces, and what stays yours
 

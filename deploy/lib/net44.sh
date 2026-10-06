@@ -451,7 +451,7 @@ net44_setup() {
   if n44_full "$file"; then
     info "routing: a full tunnel, so only traffic from $v4 and replies to what comes in on $N44_IF use it; SSH and the rest stay on the internet link"
   else
-    info "routing: a split tunnel, as issued: it carries 44Net traffic only, so hosts outside 44/8 cannot reach $v4"
+    info "routing: a split tunnel, as issued: it carries 44Net traffic only, so hosts outside 44Net cannot reach $v4"
     info "  (for reachability from the whole internet, use a full-tunnel configuration; this helper keeps SSH on the internet link)"
   fi
   if [ "$fw" = 1 ]; then
@@ -612,8 +612,15 @@ net44_check() {
   v4="$( [ -f "$(n44_conf)" ] && n44_v4 "$(n44_conf)" || true)"
   case "$a" in
     '') info "FAIL A record: none; add it in the 44Net Portal${v4:+, pointing at $v4}"; bad=1 ;;
-    44.*) if [ -n "$v4" ] && [ "$a" != "$v4" ]; then info "FAIL A record: $a, but the tunnel is $v4"; bad=1; else info "ok   A record: $a"; fi ;;
-    *) info "WARN A record: $a is outside 44/8" ;;
+    44.*) if [ -n "$v4" ] && [ "$a" != "$v4" ]; then info "FAIL A record: $a, but the tunnel is $v4"; bad=1
+      else
+        case "$(ampr_scope "$a")" in
+          44net) info "ok   A record: $a" ;;
+          hamnet) info "WARN A record: $a is a HAMNET address (44.128.0.0/10): peers on the internet and on 44Net cannot reach it" ;;
+          *) info "WARN A record: $a is outside 44Net (44.0.0.0/9)" ;;
+        esac
+      fi ;;
+    *) info "WARN A record: $a is outside 44Net (44.0.0.0/9)" ;;
   esac
   txt="$(n44_identity_txt "$name")"
   if [ -n "$txt" ]; then info "ok   _aprscaching TXT: $txt"; else

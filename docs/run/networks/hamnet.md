@@ -1,13 +1,17 @@
 # HAMNET only
 
-This page lists what an instance can still do when it has no internet path: a 44.x instance reached over
-HAMNET, or an [off-grid](off-grid.md) box on a LAN. It is for the sysop. The instance runs, but everything
-that calls a service on the internet stops; the table names each one and its workaround.
+This page lists what an instance can still do when it has no internet path: an instance reached over HAMNET,
+or an [off-grid](off-grid.md) box on a LAN. It is for the sysop. The instance runs, but everything that calls a
+service on the internet stops; the table names each one and its workaround.
 
-An instance that is on the internet as well can add its HAMNET address as a third route beside its internet and
-44Net names ([One instance, several addresses](several-addresses.md)): `EXTRA_ORIGINS` lists
-`http://<HAMNET name or 44.x address>`, Caddy serves it as plain http, and members who sign in there keep a
-session over plain http.
+HAMNET is an amateur IP network reached only over RF links, with addresses in `44.128.0.0/10`. It is not
+[44Net](44net.md): a 44Net address is reachable from the internet, a HAMNET address is not, and an instance on
+one is not on the other because of it.
+
+An instance that is on the internet as well can add its HAMNET address as a further route beside its internet
+name, and its 44Net name if it has one ([One instance, several addresses](several-addresses.md)):
+`EXTRA_ORIGINS` lists `http://<HAMNET name or address>`, Caddy serves it as plain http, and members who sign in
+there keep a session over plain http.
 
 ## What works, and the workarounds
 
@@ -25,7 +29,7 @@ session over plain http.
 | Web push delivery (the browser vendor's push service) | No | The in-app watchlist |
 | APRS-IS feed and uplink (`rotate.aprs2.net` by default) | No | Set `APRSIS_HOST` to an APRS-IS server reachable on HAMNET, if your region runs one (**Unverified** per region). RF from your own TNC is unaffected |
 | RF ingest from your own radio | Yes | The [off-grid](off-grid.md) shape: the ingest box and a local gateway on one machine, `INGEST_URL=http://localhost:8787/ingest` |
-| Federation with https peers on the internet | No | Peers with a `hamnet` endpoint, or a `44net` endpoint reachable over HAMNET (**Unverified**, see [below](#hamnet-and-44net-connect)); packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md#peer-endpoints)). Discovery learns only https peers |
+| Federation with https and 44Net peers | No | Peers with a `hamnet` endpoint, which only HAMNET hosts reach; packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md#peer-endpoints)). Discovery learns only https peers |
 | Adding a peer by callsign, `ampr.org` callsign verification, the 44Net self-check | No, with the default resolvers | Set `DOH_URL` (and `AMPR_DNS_RESOLVERS`) to DNS-over-HTTPS resolvers reachable on HAMNET that can still reach ARDC's name servers; otherwise do these while connected. Verification over RF works offline |
 | Instance registry located by `FED_REGISTRY_DNS` | No | This lookup always asks Cloudflare's resolver and ignores `DOH_URL`. Set `FED_REGISTRY` to a document URL reachable on HAMNET instead; the last good document keeps binding meanwhile |
 | Source link (`/source` → `SOURCE_REPO`, GitHub by default) | The link works, the target doesn't | Point `SOURCE_REPO` at a mirror reachable on HAMNET: any forge with `<repo>/tree/<commit>` URLs (AGPL §13) |
@@ -33,11 +37,13 @@ session over plain http.
 
 ## HAMNET and 44Net Connect
 
-HAMNET is a separate amateur IP backbone, mostly `44.128.0.0/10` and not announced to the internet. ARDC:
-"A subnet reachable via Connect is not automatically part of the Mesh. A Mesh network does not automatically
-appear via BGP." ([Decentralization](https://wiki.ampr.org/wiki/Decentralization), checked 2026-09-30).
-Whether a HAMNET station can reach a Connect address, and the other way round, is **Unverified**: it
-depends on the regional HAMNET gateway, and a test from a HAMNET station settles it for your region.
+HAMNET is a separate amateur IP network in `44.128.0.0/10`, reached over RF links and not announced to the
+internet. A 44Net Connect address is on the internet and not on HAMNET. ARDC: "A subnet reachable via Connect
+is not automatically part of the Mesh. A Mesh network does not automatically appear via BGP."
+([Decentralization](https://wiki.ampr.org/wiki/Decentralization), checked 2026-09-30). So a HAMNET instance
+has no path to a 44Net or internet peer because of its address, and a 44Net instance has none to a HAMNET
+peer. An instance on both networks has two addresses, one on each, and publishes both in `FED_ENDPOINTS`: a
+`44net` endpoint and a `hamnet` endpoint.
 
 ## Next
 

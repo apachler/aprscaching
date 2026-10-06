@@ -72,7 +72,7 @@ sync, and tries the URL it added the peer under last.
 |---|---|---|---|
 | `https` | `https://aprs.example.net` | https on the internet | the usual address |
 | `44net` | `aprscaching.oe8apr.ampr.org` or `https://aprscaching.oe8apr.ampr.org` | plain http on the name; with `https://`, https first and then plain http | a name under `<call>.ampr.org`, never a raw 44.x address |
-| `hamnet` | `44.143.1.2`, `aprscaching.oe8xyz.hamnet.example`, optional `:port` | plain http | a peer without a route to HAMNET gives up after 2 seconds |
+| `hamnet` | `44.143.1.2`, `aprscaching.oe8xyz.hamnet.example`, optional `:port` | plain http | only HAMNET hosts reach it; any other peer gives up after 2 seconds |
 | `ax25`, `netrom` | `OE8APR-10`, `ACSNOD` | a [packet circuit](#packet-circuit) from the puller's ingest box | `FED_LINK_PULL` on the puller's box; an http pull never uses them |
 | `bbs` | `OE8APR@OE8XBB.#KTN.AUT.EU` | nothing dials it | a directory entry for packet operators, published with the rest |
 

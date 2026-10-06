@@ -5,6 +5,7 @@
 // its own descriptor in-process: no reachability probe, no peer rows and no trust state are ever written.
 import { describe, it, expect, afterEach, beforeAll } from "vitest";
 import {
+  amprScope,
   check44net,
   identityPlan,
   handleIdentity,
@@ -117,7 +118,7 @@ describe("identityPlan — the records to publish", () => {
 
 describe("check44net — the TXT binding", () => {
   it("passes when inst and key match this instance", async () => {
-    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.143.1.2"]) });
+    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.27.132.9"]) });
     const r = (await check44net(ctx(), dns))!;
     expect(r.callsign).toBe("OE8APR");
     expect(r.host).toBe(HOST);
@@ -129,7 +130,7 @@ describe("check44net — the TXT binding", () => {
   it("fails on a key that is not this instance's, showing the exact value and Portal name", async () => {
     const dns = fakeDns({
       [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.pub; key=${OTHER_KEY}`]),
-      [`A ${HOST}`]: ok(["44.143.1.2"]),
+      [`A ${HOST}`]: ok(["44.27.132.9"]),
     });
     const txt = line((await check44net(ctx(HOST, {}, null), dns))!.lines, "txt")!;
     expect(txt.status).toBe("fail");
@@ -141,7 +142,7 @@ describe("check44net — the TXT binding", () => {
   it("warns on an older key the descriptor still lists as active", async () => {
     const dns = fakeDns({
       [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.pub; key=${OLD_KEY}`]),
-      [`A ${HOST}`]: ok(["44.143.1.2"]),
+      [`A ${HOST}`]: ok(["44.27.132.9"]),
     });
     const txt = line((await check44net(ctx(), dns))!.lines, "txt")!;
     expect(txt.status).toBe("warn");
@@ -170,6 +171,19 @@ describe("check44net — the TXT binding", () => {
   });
 });
 
+describe("amprScope — 44Net and HAMNET are separate networks", () => {
+  it("places 44.0.0.0/9 on 44Net, 44.128.0.0/10 on HAMNET, and the rest outside both", () => {
+    expect(amprScope("44.27.132.9")).toBe("44net");
+    expect(amprScope("44.127.255.255")).toBe("44net");
+    expect(amprScope("44.128.0.1")).toBe("hamnet");
+    expect(amprScope("44.143.1.2")).toBe("hamnet");
+    expect(amprScope("44.191.255.255")).toBe("hamnet");
+    expect(amprScope("44.192.0.1")).toBe("other");
+    expect(amprScope("203.0.113.7")).toBe("other");
+    expect(amprScope("144.44.1.2")).toBe("other");
+  });
+});
+
 describe("check44net — the 44Net endpoint and its A record", () => {
   it("fails on the base name, with the default name as the fix, and looks nothing up", async () => {
     const dns = fakeDns({});
@@ -187,7 +201,22 @@ describe("check44net — the 44Net endpoint and its A record", () => {
     expect(a.fix).toContain("the Portal name is aprscaching.");
   });
 
-  it("warns on an address outside 44.0.0.0/8", async () => {
+  it("warns on a HAMNET address, which peers on the internet cannot reach", async () => {
+    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.143.1.2"]) });
+    const a = line((await check44net(ctx(), dns))!.lines, "a")!;
+    expect(a.status).toBe("warn");
+    expect(a.detail).toContain("HAMNET");
+    expect(a.fix).toContain("hamnet endpoint");
+  });
+
+  it("warns on 44.192.0.0/10, which is not amateur space", async () => {
+    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.200.1.2"]) });
+    const a = line((await check44net(ctx(), dns))!.lines, "a")!;
+    expect(a.status).toBe("warn");
+    expect(a.detail).toContain("outside 44Net");
+  });
+
+  it("warns on an address outside 44Net", async () => {
     const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["203.0.113.7"]) });
     const a = line((await check44net(ctx(), dns))!.lines, "a")!;
     expect(a.status).toBe("warn");
@@ -197,7 +226,7 @@ describe("check44net — the 44Net endpoint and its A record", () => {
   it("fails when the record sends peers to another 44Net host than the endpoint", async () => {
     const dns = fakeDns({
       [`TXT ${TXT_NAME}`]: ok([`${GOOD_TXT}; host=node.oe8apr.ampr.org`]),
-      "A node.oe8apr.ampr.org": ok(["44.143.9.9"]),
+      "A node.oe8apr.ampr.org": ok(["44.27.132.10"]),
     });
     const t = line((await check44net(ctx(), dns))!.lines, "target")!;
     expect(t.status).toBe("fail");
@@ -205,7 +234,10 @@ describe("check44net — the 44Net endpoint and its A record", () => {
   });
 
   it("an instance under its own name reads its own record first", async () => {
-    const dns = fakeDns({ [`TXT _aprscaching.${POCKET}`]: ok([GOOD_TXT], true), [`A ${POCKET}`]: ok(["44.143.9.9"]) });
+    const dns = fakeDns({
+      [`TXT _aprscaching.${POCKET}`]: ok([GOOD_TXT], true),
+      [`A ${POCKET}`]: ok(["44.27.132.10"]),
+    });
     const r = (await check44net(ctx(POCKET), dns))!;
     expect(dns.asked.indexOf(`TXT _aprscaching.${POCKET}`)).toBeLessThan(dns.asked.indexOf(`TXT ${TXT_NAME}`));
     expect(line(r.lines, "txt")).toMatchObject({
@@ -229,7 +261,7 @@ describe("check44net — the 44Net endpoint and its A record", () => {
     const dns = fakeDns({
       [`TXT _aprscaching.${POCKET}`]: ok([GOOD_TXT]),
       [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.old; key=${OTHER_KEY}; host=${POCKET}`]),
-      [`A ${POCKET}`]: ok(["44.143.9.9"]),
+      [`A ${POCKET}`]: ok(["44.27.132.10"]),
     });
     const r = (await check44net(ctx(POCKET), dns))!;
     expect(line(r.lines, "txt")?.status).toBe("pass");
@@ -240,7 +272,7 @@ describe("check44net — the 44Net endpoint and its A record", () => {
     const dns = fakeDns({
       [`TXT _aprscaching.${POCKET}`]: ok([GOOD_TXT]),
       [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.home; key=${OTHER_KEY}`]),
-      [`A ${POCKET}`]: ok(["44.143.9.9"]),
+      [`A ${POCKET}`]: ok(["44.27.132.10"]),
     });
     const r = (await check44net(ctx(POCKET), dns))!;
     expect(line(r.lines, "callsign")).toMatchObject({ status: "info", detail: expect.stringContaining(HOST) });
@@ -311,7 +343,7 @@ describe("check44net — DNSSEC, AAAA and failures", () => {
   it("reports the DNSSEC AD flag and an AAAA record as information", async () => {
     const dns = fakeDns({
       [`TXT ${TXT_NAME}`]: ok([GOOD_TXT], true),
-      [`A ${HOST}`]: ok(["44.143.1.2"]),
+      [`A ${HOST}`]: ok(["44.27.132.9"]),
       [`AAAA ${HOST}`]: ok(["2001:db8::1"]),
     });
     const r = (await check44net(ctx(), dns))!;
@@ -451,7 +483,7 @@ describe("GET /api/admin/federation/identity", () => {
         AD: false,
         Answer: [{ name: TXT_NAME, type: 16, data: `"v=acs1; inst=oe.pub; key=${publicX}"` }],
       },
-      [`A ${HOST}`]: { Status: 0, Answer: [{ name: HOST, type: 1, data: "44.143.1.2" }] },
+      [`A ${HOST}`]: { Status: 0, Answer: [{ name: HOST, type: 1, data: "44.27.132.9" }] },
     });
     const res = await handleIdentity(get("?check=1"), checkEnv(db, EP44));
     expect(res.status).toBe(200);

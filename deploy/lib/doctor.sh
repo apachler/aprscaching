@@ -634,7 +634,7 @@ fed_fingerprint() {
 desc_key() { printf '%s' "$1" | sed -n 's/.*"publicKey":"\([A-Za-z0-9_-]*\)".*/\1/p'; }
 
 doc_federation() {
-  local peers p unsafe=()
+  local peers p host scope unsafe=()
   [ -n "$DOC_BASE" ] || return 0
   # federation over FBB is experimental and off by default; reported either way, never a warning
   case "$(doc_get FED_BBS)" in
@@ -661,7 +661,13 @@ doc_federation() {
       https://*) ;;
       *) unsafe+=("peer $p is not https") ;;
     esac
-    case "${p#*://}" in *.ampr.org* | 44.*) unsafe+=("peer ${p%%#*} is on 44Net: admit it from Instance admin") ;; esac
+    host="${p#*://}"
+    host="${host%%[/:#]*}"
+    case "$host" in *.ampr.org | ampr.org) scope=44net ;; *) scope="$(ampr_scope "$host")" ;; esac
+    case "$scope" in
+      44net) unsafe+=("peer ${p%%#*} is on 44Net: admit it from Instance admin") ;;
+      hamnet) unsafe+=("peer ${p%%#*} is on HAMNET (44.128.0.0/10), not on the internet: admit it from Instance admin") ;;
+    esac
   done
   if [ -n "$(doc_get FED_SUBMIT_SECRET)" ] && [ -z "$(doc_get FED_SUBMIT_INSTANCES)" ]; then
     unsafe+=("a hub without FED_SUBMIT_INSTANCES")
@@ -799,6 +805,11 @@ doc_net44() {
     failc net44.dns "$name has no A record" "add it in the 44Net Portal${v4:+, pointing at $v4}"
   elif [ -n "$v4" ] && [ "$a" != "$v4" ]; then
     failc net44.dns "$name points at $a, but the tunnel is $v4" "correct the A record in the 44Net Portal"
+  elif [ "$(ampr_scope "$a")" = hamnet ]; then
+    warnc net44.dns "$name points at $a, a HAMNET address (44.128.0.0/10) that peers on the internet and on 44Net cannot reach" \
+      "point it at your 44Net Connect address in the 44Net Portal, and publish the HAMNET address as a hamnet endpoint"
+  elif [ "$(ampr_scope "$a")" != 44net ]; then
+    warnc net44.dns "$name points at $a, outside 44Net (44.0.0.0/9)" "point it at your 44Net Connect address in the 44Net Portal"
   else
     pass net44.dns "$name points at $a"
   fi

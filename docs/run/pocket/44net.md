@@ -138,13 +138,15 @@ bash ~/aprscaching/deploy/pocket/extras/ampr-cert.sh --host aprscaching-pocket.<
 Running it means accepting the Let's Encrypt Subscriber Agreement. The certificate names only the ampr.org name:
 hotspot visitors who open the station by address then see a name warning, and `tls.sh` switches back to the
 station certificate. Each renewal repeats the record; `status.sh` warns 14 days before the certificate expires.
-Over a HAMNET radio link plain http stays the way in, since RF carries no encryption.
+The certificate covers the 44Net name only. HAMNET is a separate network: a station that also has a HAMNET
+address serves it as plain http, since RF carries no encryption.
 [TLS on the 44Net name](../networks/several-addresses.md#get-a-certificate-for-the-44net-name) has the background.
 
 ## Check that it worked
 
 - `status.sh` shows *44Net: up* and the 44.x address; `deploy/aprscaching net44 status` and `net44 check` say
-  the same.
+  the same. A HAMNET address (`44.128.0.0/10`) shows on a line of its own: it is not a 44Net address, and the
+  internet cannot reach it.
 - From another network, `http://<44.x address>:8787/health` or `https://<your hostname>/health` answers.
 
 ## Next

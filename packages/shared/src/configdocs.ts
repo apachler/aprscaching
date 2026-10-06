@@ -269,7 +269,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`EXTRA_ORIGINS`",
-        "Further addresses of this instance, comma-separated bare origins with no path: `https://` for a name with a certificate (a 44Net name reachable from the internet), `http://` for a name or 44.x address on a network without one (HAMNET). A request on one of them gets its session cookie, sign-in links and links into the app on that address; an `https` one also takes passkeys under `RP_ID` ([`/.well-known/webauthn`](api.md#authentication)), an `http` one signs in with an email link or the sysop's link. The Docker stack's Caddy serves each with automatic TLS or as plain http ([One instance, several addresses](../run/networks/several-addresses.md)). A gateway on another host than its web app (`VITE_API_BASE`) lists its own origin here",
+        "Further addresses of this instance, comma-separated bare origins with no path: `https://` for a name with a certificate (a 44Net name reachable from the internet), `http://` for a name or address on a network without one: a HAMNET host (`44.128.0.0/10`, reached only over RF links, not from the internet) or a LAN. A request on one of them gets its session cookie, sign-in links and links into the app on that address; an `https` one also takes passkeys under `RP_ID` ([`/.well-known/webauthn`](api.md#authentication)), an `http` one signs in with an email link or the sysop's link. The Docker stack's Caddy serves each with automatic TLS or as plain http ([One instance, several addresses](../run/networks/several-addresses.md)). A gateway on another host than its web app (`VITE_API_BASE`) lists its own origin here",
         "—",
       ],
       [

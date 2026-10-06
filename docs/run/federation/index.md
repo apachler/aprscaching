@@ -131,13 +131,14 @@ when it is unsafe. A LAN instance starts with federation off.
 
 | Flag | Asks for | Writes |
 |---|---|---|
-| `--fed-peers URL[#FINGERPRINT],…` | the https peers you know, each with its key fingerprint; a 44Net peer is refused here | `FED_PEERS` |
+| `--fed-peers URL[#FINGERPRINT],…` | the https peers you know, each with its key fingerprint; a 44Net or HAMNET peer is refused here | `FED_PEERS` |
 | `--fed-submit-instances ID,…` | on a hub (`FED_SUBMIT_SECRET` set), the spokes allowed to push; required | `FED_SUBMIT_INSTANCES` |
 | `--fed-registry-key KEY` | with `FED_REGISTRY` or `FED_REGISTRY_DNS`, the registry authority's key; required | `FED_REGISTRY_KEY` |
 | `--net44-name NAME` | this instance's 44Net name, such as `aprscaching.oe8apr.ampr.org` | `FED_ENDPOINTS` (https and 44net) |
 
-A 44Net peer (a name under `ampr.org` or an address in `44/8`) never goes into `FED_PEERS`. Admit it from
-**Instance admin → Federation**, which binds it to its callsign and holds it `unvetted`.
+A 44Net peer (a name under `ampr.org` or an address in `44.0.0.0/9`) never goes into `FED_PEERS`. Admit it from
+**Instance admin → Federation**, which binds it to its callsign and holds it `unvetted`. A HAMNET peer (an
+address in `44.128.0.0/10`) is refused there too: add it by its `http://` address under **Add peer**.
 
 ## Running federation safely
 

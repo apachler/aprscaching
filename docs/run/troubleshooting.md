@@ -408,7 +408,7 @@ Each address in `EXTRA_ORIGINS`: the instance's 44Net name, a HAMNET address and
 
 ### `origins.dns`
 
-- **Tests:** the address's name resolves from this box. A 44.x address needs no lookup.
+- **Tests:** the address's name resolves from this box. An IP address needs no lookup.
 - **Message:** `<host> (<origin>) does not resolve from here` (fail).
 - **Fix:** create its record: the A record in the 44Net Portal, or the record in your region's HAMNET DNS.
 - **See:** [44Net name and identity](networks/44net-identity.md#3-name-and-identity).
@@ -479,6 +479,7 @@ Every shape with a gateway. A LAN instance gets `federation.fbb`, then `federati
 | `FED_CORROBORATION_QUORUM is below 2` | set it to `2` or more, so no single peer lifts a find to Tier A |
 | `peer <url> is not https` | use the peer's `https://` address |
 | `peer <url> is on 44Net: admit it from Instance admin` | remove it from `FED_PEERS`: a 44Net peer is admitted `unvetted`, and you promote it yourself |
+| `peer <url> is on HAMNET (44.128.0.0/10), not on the internet: admit it from Instance admin` | remove it from `FED_PEERS` and add it by its `http://` address under **Add peer** |
 | `a hub without FED_SUBMIT_INSTANCES` | list the spokes that may push to this hub |
 | `a registry without FED_REGISTRY_KEY` | pin the registry's authority key |
 
@@ -537,10 +538,14 @@ the DNS records only.
 
 ### `net44.dns`
 
-- **Tests:** the 44Net name has an A record, and it matches the tunnel's address.
+- **Tests:** the 44Net name has an A record on 44Net (`44.0.0.0/9`), and it matches the tunnel's address.
 - **Message:** `<name> has no A record` (fail).
 - **Message:** `<name> points at <address>, but the tunnel is <address>` (fail).
-- **Fix:** add or correct the A record in the 44Net Portal. Changes publish within about an hour.
+- **Message:** `<name> points at <address>, a HAMNET address (44.128.0.0/10) that peers on the internet and on
+  44Net cannot reach` (warn). HAMNET is a separate network: publish that address as a `hamnet` endpoint instead.
+- **Message:** `<name> points at <address>, outside 44Net (44.0.0.0/9)` (warn).
+- **Fix:** add or correct the A record in the 44Net Portal, pointing at your 44Net Connect address. Changes
+  publish within about an hour.
 - **See:** [Name and identity](networks/44net-identity.md#3-name-and-identity).
 
 ### `net44.txt`
@@ -570,8 +575,9 @@ One check per line of the gateway's callsign-identity self-check, read with `OPE
 gateway's fix, with the exact record to publish and its name in the Portal.
 
 - **Tests:** the records that let peers add this instance by callsign: the `44net` endpoint is a name under
-  `<call>.ampr.org` and not the base name, its A record is in 44/8, the `_aprscaching` TXT record names this
-  instance and its current key, and the record sends peers where this instance is.
+  `<call>.ampr.org` and not the base name, its A record is on 44Net (`44.0.0.0/9`, not a HAMNET address), the
+  `_aprscaching` TXT record names this instance and its current key, and the record sends peers where this
+  instance is.
 - **Fix:** publish or correct the records **Instance admin → Federation → Publish your callsign identity**
   shows, then choose **Check now** there.
 - **See:** [Name and identity](networks/44net-identity.md#3-name-and-identity).

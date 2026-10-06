@@ -15,8 +15,8 @@
 #
 # The certificate names only the ampr.org name. --use serves it on the gateway's https port instead of
 # the station certificate from tls.sh: hotspot visitors who open the station by address then see a name
-# warning. tls.sh turns the station certificate back on. Over amateur RF (a HAMNET radio link), plain http
-# stays the way in: RF carries no encryption.
+# warning. tls.sh turns the station certificate back on. HAMNET is a separate network: a station that also
+# has a HAMNET address serves it as plain http, since RF carries no encryption.
 #
 # Options:
 #   --host NAME          the station's ampr.org name, e.g. aprscaching-pocket.<call>.ampr.org

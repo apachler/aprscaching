@@ -147,10 +147,12 @@ records, so:
 - `ampr.org` callsign verification falls back to several independent resolvers agreeing
   (`AMPR_DNS_RESOLVERS`, see [Callsign verification](../day-to-day/callsign-verification.md)).
 
-The Portal accepts A records outside 44/8 only by implication: ARDC's walkthrough says "Any other reachable
+The Portal accepts A records outside 44Net only by implication: ARDC's walkthrough says "Any other reachable
 IP address is fine, too" while setting up a first name
 ([Foundations: Identity and DNS](https://wiki.ampr.org/wiki/Foundations/Identity_and_DNS)). The self-check
-warns about an address outside 44/8.
+warns about an address outside 44Net (`44.0.0.0/9`). A HAMNET address (`44.128.0.0/10`) is one of them: HAMNET
+is a separate network that peers on the internet and on 44Net cannot reach, so it belongs in a `hamnet`
+endpoint, not behind the 44Net name.
 
 A member's [callsign verification](../day-to-day/callsign-verification.md) publishes its code at a name of its
 own, `_aprscaching-verify.<call>.ampr.org`, so it never touches the identity record.
@@ -205,8 +207,8 @@ each failing one with a one-sentence fix that carries the exact value to publish
 
 - the `44net` endpoint is a name under `<call>.ampr.org`; the base name fails, with the default name as the
   fix;
-- the 44Net host peers connect to has an A record inside 44/8. A missing record fails; an address outside
-  44/8 warns;
+- the 44Net host peers connect to has an A record on 44Net, inside `44.0.0.0/9`. A missing record fails; a
+  HAMNET address (`44.128.0.0/10`) or any other address warns;
 - the identity record parses and matches this instance's `INSTANCE` and current key. An instance under a
   label reads its own `_aprscaching.<label>` record first, then the callsign's. A `verify=` record does not
   count: the check names `_aprscaching-verify.<call>.ampr.org`, where it belongs;
@@ -252,8 +254,8 @@ every peer ([Signed feeds](../../reference/federation-trust.md#signed-feeds)). A
 cannot move the pin on its own. A peer that rotates its key updates its TXT record, so peers that add it
 later pin the new key.
 
-**Plain http, signed content.** A `44net` peer is contacted at `http://<host>`: amateur IP space has no
-public certificate authority, and nothing it carries needs to be secret. Its records are signed, and
+**Plain http, signed content.** A `44net` peer is contacted at `http://<host>`, or over https first when its
+endpoint is written `https://<name>`. Nothing it carries needs to be secret. Its records are signed, and
 corroboration questions and answers are signed and bound to each other, so a middlebox on the link can
 neither forge nor replay them ([Cross-instance corroboration](../../reference/federation-trust.md#cross-instance-corroboration)).
 `FED_CORROBORATION_SECRET` is sent only to https peers, so over a `44net` link the signatures carry the whole

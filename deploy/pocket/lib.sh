@@ -259,22 +259,28 @@ local_address_for() {
 }
 
 # ---- 44Net -------------------------------------------------------------------------------------------
-# "name address" for this phone's 44Net address, e.g. the WireGuard app's tun0 with 44Net Connect: an
-# address in ARDC's amateur space, 44.0.0.0/9 or 44.128.0.0/10 (44.192.0.0/10 is not amateur space), on
-# any interface. Nothing when there is none.
-net44_address() {
-  local name cidr ip b
+# "name address" for this phone's first address in an amateur network, on any interface: 44net is
+# 44.0.0.0/9, routed on the internet (the WireGuard app's tun0 with 44Net Connect); hamnet is 44.128.0.0/10,
+# reached over RF links only. 44.192.0.0/10 is not amateur space. Nothing when there is none.
+ampr_address() {
+  local want="$1" name cidr ip b net
   while read -r name cidr; do
     [ -n "${name:-}" ] || continue
     ip="${cidr%%/*}"
     case "$ip" in 44.*) ;; *) continue ;; esac
     IFS=. read -r _ b _ _ <<<"$ip"
-    [ "${b:-255}" -lt 192 ] || continue
+    case "${b:-}" in '' | *[!0-9]*) continue ;; esac
+    if [ "$b" -lt 128 ]; then net=44net; elif [ "$b" -lt 192 ]; then net=hamnet; else continue; fi
+    [ "$net" = "$want" ] || continue
     printf '%s %s\n' "$name" "$ip"
     return 0
   done < <(list_ipv4)
   return 1
 }
+# The phone's 44Net address. A HAMNET address is not one: it gives no path from the internet.
+net44_address() { ampr_address 44net; }
+# The phone's HAMNET address. A 44Net address is not one: it gives no path over HAMNET.
+hamnet_address() { ampr_address hamnet; }
 # Whether $1 is a host name under ampr.org: lowercase labels of letters, digits and inner hyphens.
 valid_ampr_host() {
   local host="$1" label labels
