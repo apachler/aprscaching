@@ -274,6 +274,17 @@ Every shape with an ingest.
 - **See:** [Enrolling the box](radios/ingest-box.md#enrolling-the-box) and
   [Secrets and credentials](../reference/secrets.md).
 
+### `ingest.url_http`
+
+- **Tests:** `INGEST_URL` is not plain `http://` to a host beyond the box's loopback and LAN (private
+  addresses, `.local`, `.lan`, `.home.arpa` and bare names such as the Docker service `gateway` count as
+  local).
+- **Message:** `INGEST_URL is plain http to <host>: the ingest secret and the gateway's answers cross the path
+  readable` (warn).
+- **Fix:** use an `https://` `INGEST_URL`. Over plain http a reader on the path sees the shared secret, and can
+  forge the gateway's transmit answers with it.
+- **See:** [The transmit gate](radios/soundcard.md#the-transmit-gate).
+
 ### `ingest.aprsis`
 
 - **Tests:** a TCP connection to `APRSIS_HOST:APRSIS_PORT` (default `rotate.aprs2.net:14580`).

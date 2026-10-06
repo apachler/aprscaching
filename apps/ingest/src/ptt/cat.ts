@@ -39,6 +39,7 @@ export async function openCatPtt(
     `CAT ${o.path} RTS/DTR`,
   );
   await send(false);
+  let closed = false;
   return {
     label: `CAT ${o.rig} ${o.path} ${o.baud} Bd`,
     key: () => send(true),
@@ -46,10 +47,13 @@ export async function openCatPtt(
     close: async () => {
       await send(false).catch(() => {});
       await closeSerial(port);
+      closed = true;
     },
     // the port keeps the line settings serialport gave it, so a plain write reaches the radio; non-blocking, so
     // a tty waiting for carrier never stalls the exit or the watchdog
+    // after a clean close the radio is unkeyed: opening the tty again would only blip RTS and DTR
     releaseSync: () => {
+      if (closed) return;
       const fd = fsx.openSync(o.path, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOCTTY);
       try {
         fsx.writeSync(fd, bytes(false));

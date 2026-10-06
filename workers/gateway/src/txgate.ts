@@ -5,21 +5,25 @@
  * Every transmit port of an ingest box (a KISS TNC, a soundcard port) asks before it keys. A call passes when
  * its base call is control-verified AND it belongs to whoever operates this box:
  *  - the account that owns the box (`boxes`: the sysop who enrolled it, or the account it was paired with);
- *  - the operator of a receiving site this credential's frames may claim (the box's own trusted sites, or for
- *    the shared secret FIRST_PARTY_SITES and the trusted stations);
+ *  - the operator of a receiving site of the box's own: an enrolled box's trusted sites, or for the shared
+ *    secret the instance's own attested sites (FIRST_PARTY_SITES). The trusted stations a sysop adds by call
+ *    vouch for what they hear, not for this box's transmitter, so another ham's site call never passes;
  *  - for the shared INGEST_SECRET, the instance's own operator calls (ADMIN_CALLSIGNS): whoever holds the
  *    secret runs this instance's backend.
  * A verified call of somebody else therefore never opens a box's transmitter.
  *
- * The answer is authenticated: for the shared secret, an HMAC-SHA256 over the box's nonce and the body, keyed
- * with INGEST_SECRET (`x-txgate-mac`), so a plain-http hop between a box and its gateway cannot forge it. An
- * enrolled box holds no secret the gateway shares, so it accepts the answer only over https or loopback.
+ * For the shared secret the answer carries an HMAC-SHA256 over the box's nonce and the body, keyed with
+ * INGEST_SECRET (`x-txgate-mac`). That stops an attacker who can change responses on the way but cannot read
+ * requests; over plain http the request itself carries the secret, so a reader on the path can compute the
+ * MAC as well. A box whose gateway is not on loopback or its LAN uses https. An enrolled box holds no secret
+ * the gateway shares, so it accepts the answer only over https or loopback.
  */
 import { baseCall } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
 import { ingestOrBoxOk, ingestSecretOk, isAdminCall, baseHolder } from "./auth.js";
 import { boxPrincipal } from "./boxprincipal.js";
 import { attestation, sitesFor } from "./attestedsites.js";
+import { parseAttestedSites } from "./provenance.js";
 import { verificationsOf } from "./callsign.js";
 import { json } from "./http.js";
 
@@ -74,7 +78,8 @@ export async function handleTxGate(req: Request, env: Env): Promise<Response> {
           .first<{ account_id: string }>()
       )?.account_id ?? null)
     : null;
-  const siteBases = new Set([...sitesFor(await attestation(env), principal?.box ?? null)].map(baseCall));
+  const sites = principal ? sitesFor(await attestation(env), principal.box) : parseAttestedSites(env.FIRST_PARTY_SITES);
+  const siteBases = new Set([...sites].map(baseCall));
   const verified = await verificationsOf(env, calls);
 
   const out: Record<string, TxGateAnswer> = {};

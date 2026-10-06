@@ -166,6 +166,16 @@ describe("CAT PTT", () => {
     ptt.releaseSync!();
     expect(fs.readFileSync(dev, "utf8")).toBe("RX;");
   });
+
+  it("after a clean close the exit release leaves the tty alone (no RTS/DTR blip)", async () => {
+    const dev = path.join(tmpDir(), "ttyUSB2");
+    fs.writeFileSync(dev, "");
+    const m = serialMock();
+    const ptt = await openPtt(parsePttSpec(`cat:${dev}:kenwood`), { loadSerialPort: async () => m.ctor });
+    await ptt.close();
+    ptt.releaseSync!();
+    expect(fs.readFileSync(dev, "utf8")).toBe("");
+  });
 });
 
 describe("CM108 PTT", () => {

@@ -4,8 +4,14 @@
  * transmits only under station calls the gateway confirms for this box — control-verified, and held by the
  * box's own operator (`GET /ingest/txgate`, workers/gateway/src/txgate.ts). Receiving never needs it.
  *
- * The answer is authenticated: with the shared INGEST_SECRET the gateway MACs the box's nonce and the body;
- * an enrolled box (its own key, no shared secret) accepts the answer only over https or loopback.
+ * With the shared INGEST_SECRET the gateway MACs the box's nonce and the body. That stops an attacker who can
+ * change responses but cannot read requests; over plain http the request carries the secret, so a reader on
+ * the path could compute the MAC too. Use https for a gateway that is not on loopback or the box's LAN (the
+ * doctor warns otherwise). An enrolled box (its own key, no shared secret) accepts the answer only over https
+ * or loopback.
+ *
+ * A gateway without the endpoint (HTTP 404, an older version) is logged once and asked again only at the
+ * normal interval; the gate stays closed meanwhile.
  *
  * Every answer is fresh for two refresh intervals (three minutes each), so a revoked verification closes the
  * gate within minutes. Without a fresh answer a call counts as unconfirmed, and the box asks again after 30 s,
@@ -34,6 +40,9 @@ export class CallVerifier {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private failures = 0;
   private lastError: string | null = null;
+  private loggedError: string | null = null;
+  /** The gateway has no /ingest/txgate: no fast retries, one log line. */
+  private unsupported = false;
   private interval: number;
   private retry: number;
 
@@ -59,10 +68,13 @@ export class CallVerifier {
       for (const c of list) this.answers.set(c, { answer: got.get(c) ?? { ok: false, reason: "no answer" }, at });
       this.failures = 0;
       this.lastError = null;
+      this.loggedError = null;
+      this.unsupported = false;
       return true;
     } catch (e) {
       this.failures++;
       this.lastError = (e as Error).message;
+      this.unsupported = e instanceof TxGateUnsupported;
       return false;
     }
   }
@@ -72,11 +84,17 @@ export class CallVerifier {
     const tick = async () => {
       const ok = await this.refresh(calls);
       after?.();
-      const wait = ok ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
-      if (!ok)
+      const wait =
+        ok || this.unsupported ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
+      // each distinct failure is logged once, not at every retry
+      if (!ok && this.lastError !== this.loggedError) {
+        this.loggedError = this.lastError;
         this.o.log?.(
-          `[txgate] the gateway did not answer (${this.lastError}); asking again in ${Math.round(wait / 1000)} s`,
+          this.unsupported
+            ? `[txgate] ${this.lastError}; transmit stays off until the gateway is updated`
+            : `[txgate] the gateway did not answer (${this.lastError}); asking again in ${Math.round(wait / 1000)} s`,
         );
+      }
       this.timer = setTimeout(() => void tick(), wait);
       this.timer.unref?.();
     };
@@ -125,6 +143,9 @@ export function gateCheck(
   };
 }
 
+/** The gateway has no /ingest/txgate (an older version). */
+export class TxGateUnsupported extends Error {}
+
 const isLoopback = (host: string) => /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/i.test(host);
 
 /**
@@ -148,6 +169,7 @@ export function gatewayTxGateLookup(o: {
     url.searchParams.set("nonce", nonce);
     if (o.boxId) url.searchParams.set("box", o.boxId);
     const r = await f(url.toString(), { headers: { "x-ingest-secret": o.secret } });
+    if (r.status === 404) throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const body = await r.text();
     if (!o.boxKey) {
@@ -161,6 +183,26 @@ export function gatewayTxGateLookup(o: {
       Object.entries(parsed.calls ?? {}).map(([k, v]) => [k.toUpperCase(), { ok: v.ok === true, reason: v.reason }]),
     );
   };
+}
+
+/**
+ * Whether any function of the box would transmit over RF: a soundcard port with transmit on, or a KISS TNC with
+ * a transmitting function set. A receive-only box never asks the gateway about its calls.
+ */
+export function boxTransmits(env: Record<string, string | undefined>, soundcardTx: boolean): boolean {
+  if (soundcardTx) return true;
+  if (!env.KISS_TNC_HOST) return false;
+  const on = (k: string) => env[k] === "1";
+  return !!(
+    env.DIGI_CALL ||
+    on("IGATE_TX") ||
+    on("BOX_TX") ||
+    env.NETROM_CALL ||
+    env.BBS_NODE_CALL ||
+    on("BBS_FORWARD") ||
+    on("FED_LINK_SERVE") ||
+    on("FED_LINK_PULL")
+  );
 }
 
 /**

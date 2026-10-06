@@ -135,7 +135,7 @@ const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 //
 // Every one shares the call gate: the box transmits only under station calls the gateway confirms for this
 // box (control-verified, held by the box's operator; callverify.ts). RX never needs it.
-const { CallVerifier, gatewayTxGateLookup, gateCheck, stationCalls } = await import("./callverify.js");
+const { CallVerifier, boxTransmits, gatewayTxGateLookup, gateCheck, stationCalls } = await import("./callverify.js");
 const callGate = new CallVerifier(
   gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
   { log: (m) => console.error(m) },
@@ -238,7 +238,14 @@ if (soundcardSettings.length) {
 }
 // The gateway's answers for every station call, refreshed every three minutes (sooner while it cannot be
 // reached); each transmitting soundcard port says what still holds it back.
-if (radios.length)
+// A receive-only box (no port or function that transmits) never asks.
+if (
+  radios.length &&
+  boxTransmits(
+    env,
+    soundcardSettings.some((s) => s.tx),
+  )
+)
   callGate.start([...gateCalls], () => {
     for (const p of soundcardRunning) {
       const why = p.cfg.tx ? p.txRefusal() : null;

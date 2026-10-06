@@ -62,6 +62,18 @@ describe("GET /ingest/txgate", () => {
     });
   });
 
+  it("for the shared secret, a station the sysop trusts by call is not the box's: its verified call does not pass", async () => {
+    const { env } = await world();
+    await emailSignup(env, "trusted@example.test", "OE3TRU");
+    await markCallVerified(env, "OE3TRU");
+    await env.DB.prepare(
+      "INSERT INTO trusted_sites (site, trusted_by, trusted_at) VALUES ('OE3TRU-10', 'operator', 0)",
+    ).run();
+    const got = await lookup(env, { secret: SECRET })(["OE3TRU-1", "OE3SIT-7"]);
+    expect(got.get("OE3TRU-1")).toMatchObject({ ok: false, reason: "not held by this box's operator" });
+    expect(got.get("OE3SIT-7")?.ok).toBe(true); // FIRST_PARTY_SITES: the instance's own site
+  });
+
   it("for an enrolled box: the calls of the account that owns it, and no one else's", async () => {
     const { env, sysop } = await world();
     // the sysop creates the code signed in, so the box is the sysop's

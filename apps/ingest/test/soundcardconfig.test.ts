@@ -6,7 +6,15 @@ import { createHmac } from "node:crypto";
 import { encodeAx25, modulateAfsk1200 } from "@aprscaching/aprs";
 import { validateConfig } from "@aprscaching/shared";
 import { soundcardPorts } from "../src/soundcardconfig.js";
-import { CallVerifier, gateCheck, gatewayTxGateLookup, stationCalls, type TxGateLookup } from "../src/callverify.js";
+import {
+  CallVerifier,
+  TxGateUnsupported,
+  boxTransmits,
+  gateCheck,
+  gatewayTxGateLookup,
+  stationCalls,
+  type TxGateLookup,
+} from "../src/callverify.js";
 import { soundcardChecks, pttTest, type CheckDeps } from "../src/soundcardcheck.js";
 import { recordingPtt } from "./fakeaudio.js";
 
@@ -158,6 +166,41 @@ describe("the call gate", () => {
     expect(v.refusal(["OE8APR-10"])).toMatch(/^verify OE8APR-10/);
   });
 
+  it("a gateway without /ingest/txgate is logged once and asked again only at the interval", async () => {
+    vi.useFakeTimers();
+    try {
+      const asked: number[] = [];
+      const logs: string[] = [];
+      const v = new CallVerifier(
+        async () => {
+          asked.push(Date.now());
+          throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
+        },
+        { intervalMs: 180_000, retryMs: 30_000, log: (m) => logs.push(m) },
+      );
+      const t0 = Date.now();
+      v.start(["OE8APR-10"]);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(400_000);
+      v.stop();
+      expect(asked.map((t) => t - t0)).toEqual([0, 180_000, 360_000]);
+      expect(logs).toEqual([
+        "[txgate] the gateway has no /ingest/txgate (HTTP 404); transmit stays off until the gateway is updated",
+      ]);
+      expect(v.refusal(["OE8APR-10"])).toMatch(/has not confirmed/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a receive-only box does not ask at all", () => {
+    expect(boxTransmits({ KISS_TNC_HOST: "tnc", IGATE_CALL: "OE8APR-10", IGATE_PASS: "1" }, false)).toBe(false);
+    expect(boxTransmits({ KISS_TNC_HOST: "tnc", IGATE_TX: "1" }, false)).toBe(true);
+    expect(boxTransmits({ KISS_TNC_HOST: "tnc", DIGI_CALL: "OE8APR-10" }, false)).toBe(true);
+    expect(boxTransmits({ DIGI_CALL: "OE8APR-10" }, false)).toBe(false); // no transmitting port
+    expect(boxTransmits({}, true)).toBe(true); // a soundcard port with transmit on
+  });
+
   it("refreshes every interval, and retries from 30 s with backoff while the gateway is down", async () => {
     vi.useFakeTimers();
     try {
@@ -260,6 +303,16 @@ describe("the gateway lookup", () => {
     const v = new CallVerifier(lookup);
     await v.refresh(["OE8APR-10"]);
     expect(v.refusal(["OE8APR-10"])).toMatch(/has not confirmed/);
+  });
+
+  it("names an older gateway's 404 as unsupported", async () => {
+    const lookup = gatewayTxGateLookup({
+      ingestUrl: "http://gw/ingest",
+      secret: SECRET,
+      boxKey: false,
+      fetch: (async () => new Response("not found", { status: 404 })) as typeof fetch,
+    });
+    await expect(lookup(["OE8APR-10"])).rejects.toBeInstanceOf(TxGateUnsupported);
   });
 
   it("an enrolled box takes the answer only over https or loopback", async () => {

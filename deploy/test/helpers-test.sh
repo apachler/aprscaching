@@ -621,6 +621,14 @@ SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
   doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
 check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
   "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+urlhttp() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_ingest_url_http '$1'; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2"; }
+check "doctor warns on a plain-http INGEST_URL beyond the LAN" eq "$(urlhttp http://gw.example.net/ingest)" \
+  "$(printf 'warn\tingest.url_http')"
+check "  … and on a 44Net address" eq "$(urlhttp http://44.143.1.2:8080/ingest)" "$(printf 'warn\tingest.url_http')"
+check "  … not on https, loopback, a LAN address or the Docker service name" eq \
+  "$(for u in https://gw.example.net/ingest http://127.0.0.1:8787/ingest 'http://[::1]:8787/ingest' \
+    http://192.168.1.5:8787/ingest http://172.20.0.3/ingest http://gateway:8080/ingest http://pi.local/ingest; do
+    urlhttp "$u"; done)" ""
 check "  … and without a soundcard port it adds none" eq \
   "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_get() { true; }; doc_soundcard; echo \"\${#DOC_ROWS[@]}\"")" 0
 # the same key and value as workers/gateway/test/fed_fingerprint.test.ts: doctor and Instance admin agree

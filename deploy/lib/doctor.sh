@@ -420,7 +420,28 @@ doc_ingest() {
     404) warnc ingest.credentials "the gateway at $url is too old to check credentials" "update the gateway" ;;
     *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" ;;
   esac
+  doc_ingest_url_http "$DOC_INGEST"
   doc_transports
+}
+
+# doc_ingest_url_http URL: plain http to a gateway beyond this box's loopback and LAN sends the ingest secret, and
+# the gateway's answers, where a reader on the path sees them.
+doc_ingest_url_http() {
+  local url="$1" host
+  case "$url" in http://*) ;; *) return 0 ;; esac
+  host="${url#http://}"
+  host="${host%%/*}"
+  host="${host%:*}"
+  host="${host#[}"
+  host="${host%]}"
+  case "$host" in
+    localhost | 127.* | ::1 | 10.* | 192.168.* | 169.254.* | *.local | *.lan | *.home.arpa) return 0 ;;
+    172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) return 0 ;;
+    *.*) ;;
+    *) return 0 ;; # a bare name, such as the Docker service `gateway`
+  esac
+  warnc ingest.url_http "INGEST_URL is plain http to $host: the ingest secret and the gateway's answers cross the path readable" \
+    "use an https INGEST_URL for a gateway beyond this box's LAN"
 }
 
 doc_transports() {

@@ -252,9 +252,13 @@ The gateway answers `GET /ingest/txgate`, asked with the box's own credential. A
 operator when the account that owns the box holds it (an enrolled box belongs to the sysop who created its
 code, or to the account it was paired with), when it is the call of a receiving site the box's credential may
 claim, or, for the shared `INGEST_SECRET`, when it is one of the instance's `ADMIN_CALLSIGNS`. A verified call
-of someone else's never opens this box's transmitter. With the shared secret the answer carries a MAC over the
-box's nonce, so a plain-http hop cannot forge it; an enrolled box accepts the answer only over https or from
-`localhost`.
+of someone else's never opens this box's transmitter. For the shared secret, the sites are the instance's own
+(`FIRST_PARTY_SITES`); the stations a sysop trusts by call vouch for what they hear, not for this box.
+
+With the shared secret the answer carries a MAC over the box's nonce. It stops an attacker who can change the
+gateway's responses but cannot read the box's requests. Over plain http the request carries the secret, so a
+reader on the path can compute the MAC too: use https for a gateway that is not on the box's loopback or LAN
+(the doctor warns, `ingest.url_http`). An enrolled box accepts the answer only over https or from `localhost`.
 
 The box asks at start and every three minutes. An answer is good for two of those intervals: without a fresh
 one, the gate closes, and the box asks again after 30 seconds, backing off while the gateway stays
