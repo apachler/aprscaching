@@ -123,7 +123,10 @@ try {
   const session = await jsonOf(await call("/auth/session", { headers: authed }));
   step("the session cookie is honoured", session.callsign === CALL, JSON.stringify(session));
 
-  // ---- the operator: pnpm dev prints the admin call's sign-in link, and verifies the call once it is used
+  // ---- the operator: pnpm dev prints the admin call's sign-in link, and verifies the call once it is used.
+  // dev.mjs prints the link only after the gateway answers, which can come after the steps above.
+  for (let i = 0; i < 150 && !/sign in as \S+ /.test(log.replace(/\x1b\[[0-9;]*m/g, "")); i++)
+    await new Promise((r) => setTimeout(r, 100));
   const opLink = /sign in as \S+ .*?: (http\S+)/.exec(log.replace(/\x1b\[[0-9;]*m/g, ""))?.[1];
   step("pnpm dev prints the admin call's sign-in link on this origin", !!opLink?.startsWith(`${ORIGIN}/auth/`), log);
   const opVerify = await call("/auth/email/verify", {
