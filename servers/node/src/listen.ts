@@ -199,7 +199,7 @@ async function serveRequest(
   } catch (e) {
     // handle() answers its own failures; this catches the bridge's (an oversized or broken body, a client gone
     // mid-stream). The client learns the size limit and nothing else.
-    if (!(e instanceof BodyTooLarge)) console.error(`${nreq.method ?? "?"} ${nreq.url ?? "?"}:`, e);
+    if (!(e instanceof BodyTooLarge)) console.error("%s %s:", nreq.method ?? "?", nreq.url ?? "?", e);
     if (nres.headersSent) {
       nres.destroy();
       return;
