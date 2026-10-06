@@ -1175,6 +1175,9 @@ CREATE TABLE fed_peers (
 -- address.
 CREATE UNIQUE INDEX fed_peers_instance_live ON fed_peers (instance) WHERE trust != 'blocked';
 CREATE INDEX idx_fed_peers_listed ON fed_peers (listed_at) WHERE listed_at IS NOT NULL;
+-- Every row of an instance with its trust: the blocked and trusted checks per origin that the summary and the
+-- origin pages run (fedtransit.ts policySql) read this, blocked rows included, which the unique index above leaves out.
+CREATE INDEX idx_fed_peers_instance_trust ON fed_peers (instance, trust);
 
 -- The last good signed registry per authority key: `max_at` rejects a replayed older document, and
 -- `doc` keeps enforcing its bindings while the registry is unreachable.
@@ -1464,7 +1467,9 @@ CREATE TABLE fed_transit (
   lon         REAL,
   received_at INTEGER NOT NULL
 );
-CREATE INDEX idx_fed_transit_origin ON fed_transit (origin, kind, v);
+-- The hop count rides in the index, so the newest frame that may pass on (fedtransit.ts heldFor) is found
+-- walking back from the top without reading a row.
+CREATE INDEX idx_fed_transit_origin ON fed_transit (origin, kind, v, hops);
 
 -- Push-to-hub state that survives a restart.
 --
