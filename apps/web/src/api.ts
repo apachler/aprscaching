@@ -57,7 +57,7 @@ export type {
   Spot,
 };
 import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
-import { openSealedStage, type StagePayload } from "@aprscaching/shared";
+import { openSealedStage, type StagePayload, type ToolRegistryEntry } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, packSearch, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
@@ -1551,6 +1551,72 @@ export async function resetSiteSetting(key: string): Promise<SiteSettingView> {
     await call<{ setting: SiteSettingView }>(`/api/admin/settings/${encodeURIComponent(key)}`, { method: "DELETE" })
   ).setting;
 }
+// ---- tool registries (the gateway's toolregistries.ts) ----
+/** A configured tool registry as the Tools app gets it: `proxied` when its files come through this instance. */
+export type EffectiveToolRegistry = ToolRegistryEntry & { proxied: boolean };
+export interface ToolRegistryList {
+  registries: EffectiveToolRegistry[];
+  players: { allowed: boolean; signedIn: boolean; stored: number };
+  proxy: boolean;
+}
+export function listToolRegistries(): Promise<ToolRegistryList> {
+  return call(`/api/tools/registries`);
+}
+/** The instance's registries, with disabled ones (sysop). `source` is "env" while TOOL_REGISTRIES sets them. */
+export interface AdminToolRegistries {
+  source: "env" | "site";
+  registries: ToolRegistryEntry[];
+  envError?: string;
+  max: number;
+  proxy: boolean;
+  playersAllowed: boolean;
+}
+export function adminToolRegistries(): Promise<AdminToolRegistries> {
+  return call(`/api/admin/tool-registries`);
+}
+export function myToolRegistries(): Promise<{ allowed: boolean; registries: ToolRegistryEntry[]; max: number }> {
+  return call(`/api/my/tool-registries`);
+}
+/** Where a list of registries is changed: the instance's (sysop) or the player's own. */
+export type RegistryListScope = "admin" | "my";
+const registriesPath = (scope: RegistryListScope) =>
+  scope === "admin" ? `/api/admin/tool-registries` : `/api/my/tool-registries`;
+export async function addToolRegistry(
+  scope: RegistryListScope,
+  r: { spec: string; authority: string; label?: string },
+): Promise<ToolRegistryEntry> {
+  return (
+    await call<{ registry: ToolRegistryEntry }>(registriesPath(scope), { method: "POST", body: JSON.stringify(r) })
+  ).registry;
+}
+export async function updateToolRegistry(
+  scope: RegistryListScope,
+  id: string,
+  patch: { enabled?: boolean; label?: string },
+): Promise<ToolRegistryEntry> {
+  return (
+    await call<{ registry: ToolRegistryEntry }>(`${registriesPath(scope)}/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    })
+  ).registry;
+}
+export async function confirmToolRegistryKey(
+  scope: RegistryListScope,
+  id: string,
+  authority: string,
+): Promise<ToolRegistryEntry> {
+  return (
+    await call<{ registry: ToolRegistryEntry }>(`${registriesPath(scope)}/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ authority }),
+    })
+  ).registry;
+}
+export function removeToolRegistry(scope: RegistryListScope, id: string): Promise<{ removed: boolean }> {
+  return call(`${registriesPath(scope)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 /** One line of the callsign-identity self-check; `fix` is set on every warn and fail. */
 export interface Net44CheckLine {
   id: "endpoint" | "a" | "txt" | "callsign" | "target" | "operator" | "dnssec" | "aaaa";

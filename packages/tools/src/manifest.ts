@@ -17,6 +17,9 @@ export interface ToolManifest {
   remote?: boolean; // its /commands may be invoked by a REMOTE connected peer (PMS; D)
   description?: string;
   entry?: string; // imported tools: the script URL/path the sandbox runs (built-ins omit it)
+  /** Imported tools: SHA-256 of the exact bytes `entry` serves, base64. Signed with the manifest, so a swapped
+   *  script fails the check even though the manifest's signature still verifies. Required to import. */
+  entrySha256?: string;
   connect?: string[]; // the https:/wss: origins a tool granted 'network' may reach — required with 'network'
   pubkey?: string; // author's raw Ed25519 public key (base64url) — the key `signature` verifies against
   signature?: string; // optional detached Ed25519 signature over the canonical manifest
@@ -24,6 +27,8 @@ export interface ToolManifest {
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const MAX_CONNECT = 8;
+/** 32 bytes in standard base64: 43 characters and one `=`. */
+const SHA256_B64_RE = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/;
 
 /** Normalise one `connect` entry to its origin; only https: and wss: origins with no path qualify. */
 export function connectOrigin(x: unknown): string | null {
@@ -54,6 +59,8 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
     return { ok: false, error: "surfaces must be a list of known surfaces (web/terminal/bbs/node/map)" };
   if (m.entry !== undefined && typeof m.entry !== "string")
     return { ok: false, error: "entry must be a string URL/path" };
+  if (m.entrySha256 !== undefined && (typeof m.entrySha256 !== "string" || !SHA256_B64_RE.test(m.entrySha256)))
+    return { ok: false, error: "entrySha256 must be the base64 SHA-256 of the entry script" };
   if (m.pubkey !== undefined && typeof m.pubkey !== "string")
     return { ok: false, error: "pubkey must be a base64url string" };
   let connect: string[] | undefined;
@@ -81,6 +88,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
       remote: m.remote === true || undefined,
       description: typeof m.description === "string" ? m.description : undefined,
       entry: typeof m.entry === "string" ? m.entry : undefined,
+      entrySha256: typeof m.entrySha256 === "string" ? m.entrySha256 : undefined,
       connect,
       pubkey: typeof m.pubkey === "string" ? m.pubkey : undefined,
       signature: typeof m.signature === "string" ? m.signature : undefined,

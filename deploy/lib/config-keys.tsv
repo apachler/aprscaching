@@ -93,6 +93,9 @@ SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Comm
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs	
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds	
 UPDATE_CHECK	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops the daily request to GitHub that looks for a newer release	updates
+TOOL_REGISTRIES	json	gateway			0	0	selfhost,baremetal,pocket,desktop	JSON list of tool registries; set, it replaces the list kept in Instance settings	
+TOOL_REGISTRIES_PLAYERS	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops players adding tool registries of their own	tools
+TOOL_REGISTRIES_PROXY	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 lets browsers fetch tool registries directly instead of through this instance	tools
 INGEST_URL	url	ingest	http://127.0.0.1:8787/ingest		0	0	selfhost,baremetal,ingest-box,pocket	Gateway ingest endpoint the box posts packet batches to	
 BATCH_MS	int	ingest	1500		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between batch flushes to the gateway	
 INGEST_SPOOL_MAX	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Most undelivered packets kept while the gateway is unreachable (oldest dropped)	
@@ -206,8 +209,6 @@ VITE_BASEMAP	string	web			0	0	selfhost,baremetal,pocket	offline uses the self-co
 VITE_BASEMAP_STYLE	string	web			0	0	selfhost,baremetal,pocket	MapLibre style URL for the vector basemap	
 VITE_SAT_TILES	string	web			0	0	selfhost,baremetal,pocket	Satellite raster tile URL template	
 VITE_SAT_ATTRIBUTION	string	web			0	0	selfhost,baremetal,pocket	Attribution shown with the satellite layer	
-VITE_TOOL_REGISTRY	string	web	/tools/registry.json		0	0	selfhost,baremetal,pocket	URL of the signed tool registry	
-VITE_TOOL_REGISTRY_AUTHORITY	string	web	22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0		0	0	selfhost,baremetal,pocket	Ed25519 key the tool registry is verified against	
 DOMAIN	string	deploy	:80		0	0	selfhost	What Caddy serves: a hostname gets Let's Encrypt TLS, :80 serves plain HTTP	
 TUNNEL_TOKEN	string	deploy			1	0	selfhost	Cloudflare Tunnel token of a named tunnel	
 BACKUP_DIR	string	deploy			0	0	selfhost,baremetal,desktop	Local or mounted directory for database backups, off the database's disk	

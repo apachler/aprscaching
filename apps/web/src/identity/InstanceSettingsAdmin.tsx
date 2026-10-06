@@ -28,10 +28,11 @@ import {
   type Draft,
   type Link,
 } from "./instanceSettings.js";
+import { ToolRegistriesAdmin } from "./ToolRegistriesAdmin.js";
 
 /**
  * Instance admin → Instance settings: the policy values of this instance — game rules, API limits, retention,
- * imports, the imprint, donation links and the update check — grouped, searchable with the admin panel's own
+ * imports, tools and their registries, the imprint, donation links and the update check — grouped, searchable with the admin panel's own
  * search, each with its source. A value the environment sets wins and shows read-only with the reason; any
  * other is saved here (stored in the database) or reset to its default. The gateway checks and audit-logs each
  * change; infrastructure and secrets stay in the environment and never appear here.
@@ -68,6 +69,7 @@ export function InstanceSettingsAdmin(props: { q: string }) {
           {g.settings.map((s) => (
             <SettingRow key={s.key} setting={s} onSaved={replace} />
           ))}
+          {g.id === "tools" && <ToolRegistriesAdmin />}
         </Group>
       ))}
     </>

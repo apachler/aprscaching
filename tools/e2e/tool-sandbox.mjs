@@ -82,7 +82,7 @@ async function main() {
     target: "es2022",
   });
   const bundleJs = bundled.outputFiles[0].text;
-  const helloJs = readFileSync(path.join(ROOT, "apps/web/public/tools/hello/tool.js"), "utf8");
+  const helloJs = readFileSync(path.join(ROOT, "apps/web/public/tools/tools/hello/tool.js"), "utf8");
   const stationLogJs = readFileSync(path.join(ROOT, "packages/tools/examples/station-log/tool.js"), "utf8");
 
   // The peer: a second origin a network-granted tool may reach. It records the cookie header it receives.
@@ -150,7 +150,12 @@ async function main() {
 
     // 1. The hello tool works through the frame.
     const hello = await page.evaluate(async () => {
-      const sb = await window.ToolSandbox.loadSandbox("/hello.js", ["command", "monitor", "panel", "decoder"]);
+      const sb = await window.ToolSandbox.loadSandbox(await (await fetch("/hello.js")).text(), [
+        "command",
+        "monitor",
+        "panel",
+        "decoder",
+      ]);
       const r = {
         commands: sb.commands,
         cmd: await sb.runCommand("hello", "OE8APR"),
@@ -185,7 +190,11 @@ async function main() {
           return "digi";
         },
       };
-      const sb = await window.ToolSandbox.loadSandbox("/station-log.js", ["command", "panel", "ipc"], bridge);
+      const sb = await window.ToolSandbox.loadSandbox(
+        await (await fetch("/station-log.js")).text(),
+        ["command", "panel", "ipc"],
+        bridge,
+      );
       const panels = [];
       sb.onPanel((spec) => panels.push(spec));
       subs["station.seen"]?.({ call: "OE6XRR-9", type: "digi", source: "APRS" }, "station-db");
@@ -211,7 +220,7 @@ async function main() {
     const probe = (granted, connect) =>
       page.evaluate(
         async ([granted, connect, appOrigin]) => {
-          const sb = await window.ToolSandbox.loadSandbox("/probe.js", granted, undefined, {
+          const sb = await window.ToolSandbox.loadSandbox(await (await fetch("/probe.js")).text(), granted, undefined, {
             connect,
             appOrigins: [appOrigin],
           });

@@ -423,46 +423,30 @@ Imported-tool API gaps an outside author meets (each is described as it stands i
 
 Tool registry gaps a sysop meets ([The tool registry](docs/contribute/tool-registry.md)):
 
-- [ ] **The Docker image takes the web build settings** _(P2 · S)_ — `deploy/Dockerfile` builds the web
-      app with no `VITE_*` build arguments and `.env` is outside the build context, so a Docker instance
-      cannot set `VITE_TOOL_REGISTRY`, `VITE_TOOL_REGISTRY_AUTHORITY` or any other web setting. Pass them
-      as build arguments from compose (`.env`), and treat an empty value as unset in
-      `apps/web/src/tools/registry-config.ts`.
 - [ ] **Author-key revocation** _(P2 · S)_ — removing an entry stops the registry vouching, but a
       browser that accepted a leaked author key keeps showing "matches the key you trusted before" for
       anything it signs. Add a signed `revoked` list of author keys to the registry that the import
       check refuses and that clears a matching trust-on-first-use pin.
 
-Marketplace track (a separate repo on its own timeline; only the first two items touch a shipped
-build, and neither gates the release):
+Marketplace track (the `apachler/aprscaching-tools` repo on its own timeline; none gates the release):
 
-- [ ] **`entryHash` content pinning (prerequisite)** _(P1 · S)_ — a manifest signature covers the
-      manifest fields including the `entry` URL, but not the script bytes that URL serves, so whoever
-      controls the hosting can swap the payload while the signature still verifies. Add `entryHash`
-      (SHA-256 of the script) to `ToolManifest` _inside_ the signed bytes; the sandbox hashes what it
-      fetched and refuses to evaluate on mismatch; `tools/toolkey` computes it on sign; bucket CI fetches
-      and verifies it independently. A new signed field changes `manifestSigningBytes`, so the shipped
-      `hello` tool and `apps/web/public/tools/registry.json` are re-signed in the same change. Must land
-      before anyone lists — a required signed field cannot be retrofitted afterwards. Side effect worth
-      having: a script change forces a version bump and a re-signed manifest. Until it lands, **Tools**
-      shows a registry tool as "Signed · registry-listed author key" and with no "verified" badge; with it,
-      the badge can come back.
-- [ ] **Multi-pin registry authority** _(P1 · S)_ — `verifyRegistry` accepts a small allowlist of
-      authority keys instead of a single pinned one, so a rotation ships the new key alongside the old and
-      older builds keep verifying through the overlap window. Keep the list at three or fewer and cover
-      the forged-authority rejection path — the whole registry trust model rests on this function.
-- [ ] **Tool bucket repo + signed publish** _(P1 · M)_ — a public `aprscaching-tools` repo, one JSON
+- [ ] **Multi-pin registry authority** _(P1 · S)_ — a registry entry pins one authority key, so a
+      rotation shows "key changed" to every instance and player until each confirms the new key. Let an
+      entry pin a small allowlist (three or fewer), so a publisher announces the next key ahead of the
+      rotation and confirmed pins keep verifying through the overlap. Cover the forged-authority rejection
+      path — the whole registry trust model rests on `checkPinnedRegistry`.
+- [ ] **Tool bucket + signed publish** _(P1 · M)_ — in the `aprscaching-tools` repo, one JSON
       file per tool under `bucket/`, so a pull request is single-purpose and pubkey continuity is a
       one-file diff. Validation reuses `@aprscaching/tools` (MIT and dependency-free precisely so it can):
-      schema, live manifest fetch, a `valid` signature required for listing, independent `entryHash`
+      schema, live manifest fetch, a `valid` signature required for listing, independent `entrySha256`
       verification, HTTPS-only immutable `entry`, no pubkey change for an existing name outside a
       maintainer-approved rotation, and an automatic review label for the gated capabilities (`network`,
       `tx`, `beacon`, `geo`). Listed tools ship a readable, non-minified entry script so review audits the
       exact bytes the hash then freezes — human review is the enforcement, CI only flags obvious
       minification. Merge builds and signs `registry.json` from the bucket and deploys it to GitHub Pages from a
       reviewer-protected environment; an offline root key designates the online CI signing key, and its
-      custody and rotation ship documented with the repo. Listings state a license. Decide the custom
-      domain before shipping: `VITE_TOOL_REGISTRY` points at that URL permanently.
+      custody and rotation ship documented with the repo. Listings state a license. Wire
+      `tools/toolkey/bundle-registry.mjs` into the release workflow once the repo publishes tags.
 - [ ] **Built-in extraction to the bucket** _(P2 · S/M)_ — dogfood the marketplace and produce the
       authoring walkthrough by moving the self-contained built-ins out as first-party signed listings: the
       SSID reference, CTEXT macros, auto-responder, 7plus, the beacon scheduler (which also exercises a
