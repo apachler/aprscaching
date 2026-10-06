@@ -67,7 +67,7 @@ signed by another key: players see none of its tools until you ask the publisher
 
 `TOOL_REGISTRIES` in the environment replaces the list, which then shows read-only
 ([Configuration](../../reference/configuration.md#gateway-core-instance)). How registries, keys and the instance's copies work is in
-[The tool registry](../../contribute/tool-registry.md).
+[How registries work](https://apachler.github.io/aprscaching-tools/publish/); to run a registry of your own, see [Publish a registry](https://apachler.github.io/aprscaching-tools/publish/github/).
 
 ## Check that it worked
 

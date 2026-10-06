@@ -154,11 +154,11 @@ commit carries it. (Set `git config user.name`/`user.email` to your real identit
 ## Writing a Shack tool
 
 A tool (a plugin for the Shack's **Tools** app) needs no change to this repository: it is a `tool.json` and a
-script on any web server. [Write your first tool](docs/contribute/first-tool.md) builds one from the example in
-`packages/tools/examples/station-log/`, and the [Tool reference](docs/contribute/tool-reference.md) lists every
-field, message and limit. To list a tool in the project's registry, open a pull request that adds its entry to
-`apps/web/public/tools/registry.json`; [The tool registry](docs/contribute/tool-registry.md) says what the entry
-holds, who signs the file and how a sysop runs a registry of their own.
+script on any web server. The [tools site](https://apachler.github.io/aprscaching-tools/) covers writing one
+([Write your first tool](https://apachler.github.io/aprscaching-tools/write/first-tool/), [the manifest](https://apachler.github.io/aprscaching-tools/write/manifest/),
+[the sandbox API](https://apachler.github.io/aprscaching-tools/write/sandbox-api/)), publishing a registry ([Publish a registry](https://apachler.github.io/aprscaching-tools/publish/)) and listing a
+tool in the project registry, which lives in `apachler/aprscaching-tools`
+([Contribute a tool](https://apachler.github.io/aprscaching-tools/project/contribute/)).
 
 ## Licensing: inbound = outbound
 
