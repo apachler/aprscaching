@@ -203,9 +203,13 @@ gaps of an origin and kind come from frames and `gaps`; past that the mark waits
 fills within 7 days and after 5 failed asks counts as refused for good (time alone is not enough, so a clock that
 jumps ahead gives up nothing): it moves to `fed_gaps_given_up`, which **Instance admin → Federation → Records given
 up** and `doctor` list until the sysop marks them seen (`POST /federation/gaps/seen`); a record seen 30 days ago
-leaves the table. A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
+leaves the table, and one never marked seen leaves it after 90 days. A tombstone gap is never given up: a missing
+tombstone is a deletion that never arrived, so it is asked for again, once a day per neighbour, until one fills it
+(a `hops` tombstone gap, whose deletion applied here, still goes after 30 days). A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
 mesh every distant record is one, and only a shorter path fills it. It holds no mark back, counts toward no
-limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame refused for good (outside its origin's
+limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame kept for
+passing on (`fed_transit`) goes nightly once its record is deleted, superseded or tombstoned; tombstone frames
+stay. A frame refused for good (outside its origin's
 namespace, local-only, deleted, a version already held or older) settles like an applied one. Without a summary
 the consumer still asks the neighbour for its own records. When a neighbour's key handed on is replaced and the
 records only it vouched for go, both positions and the gaps of the origin go too, and a pull already under way

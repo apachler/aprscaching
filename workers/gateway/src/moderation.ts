@@ -45,8 +45,10 @@ import {
 } from "./auth.js";
 import { dropQueuedFor } from "./outbox.js";
 import { serviceCall } from "./servicecall.js";
-import { emitTombstones, type TombstoneItem } from "./tombstones.js";
-import { cacheFedVersion, cacheGid, findGid } from "./federation.js";
+import { tombstoneStatements, type TombstoneItem } from "./tombstones.js";
+import { finishMediaDeletes, queueMediaDeletes } from "./mediadeletions.js";
+import type { SqlStatement } from "./runtime.js";
+import { cacheGid, findGid } from "./federation.js";
 import { sendEmail } from "./mail.js";
 import { pushAlert } from "./notify.js";
 import { appBase } from "./sitemap.js";
@@ -362,69 +364,82 @@ function reasonOf(v: unknown): { reason: string } | { error: string } {
 
 // ---------------------------------------------------------------- removal
 
-/** Remove one located item. Returns the tombstones to emit and the media objects to delete. */
+/**
+ * The removal of one located item: the statements that remove it, the tombstones to emit and the media objects to
+ * delete. The caller runs them in one batch with the tombstones and the audit row, so a removal never commits
+ * without the tombstone that carries it to peers.
+ */
 async function removeItem(
   env: Env,
   instance: string,
   loc: Located,
   reason: string,
-): Promise<{ tombstones: TombstoneItem[]; mediaKeys: string[] }> {
+): Promise<{ stmts: SqlStatement[]; tombstones: TombstoneItem[]; mediaKeys: string[] }> {
   const id = Number(loc.id);
   const now = nowS();
   switch (loc.kind) {
     case "cache":
       // a removed cache leaves the adoption flow: its offer goes and any open request on it lapses
-      await env.DB.batch([
-        env.DB.prepare(
-          "UPDATE caches SET status='archived', removed_at=?, removed_reason=?, updated_at=? WHERE id=?",
-        ).bind(now, reason, now, id),
-        env.DB.prepare("DELETE FROM cache_adoption_offers WHERE cache_id=?").bind(id),
-        env.DB.prepare(
-          "UPDATE cache_adoption_requests SET status='cancelled', decided_at=? WHERE cache_id=? AND status='pending'",
-        ).bind(now, id),
-      ]);
-      // the tombstone covers the versions up to this removal, so a restore (a later version) federates again
       return {
-        tombstones: [
-          { kind: "cache", targetId: await cacheGid(env, instance, id), upTo: await cacheFedVersion(env, id) },
+        stmts: [
+          env.DB.prepare(
+            "UPDATE caches SET status='archived', removed_at=?, removed_reason=?, updated_at=? WHERE id=?",
+          ).bind(now, reason, now, id),
+          env.DB.prepare("DELETE FROM cache_adoption_offers WHERE cache_id=?").bind(id),
+          env.DB.prepare(
+            "UPDATE cache_adoption_requests SET status='cancelled', decided_at=? WHERE cache_id=? AND status='pending'",
+          ).bind(now, id),
         ],
+        // the tombstone covers the versions up to this removal (the version the update above gives the cache, read
+        // in the same batch), so a restore, a later version, federates again
+        tombstones: [{ kind: "cache", targetId: await cacheGid(env, instance, id), upToCache: id }],
         mediaKeys: [],
       };
     case "log": {
       // the global id is read before the row goes
       const gid = await findGid(env, instance, id);
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM corroboration_retries WHERE log_id=?").bind(id),
-        env.DB.prepare("DELETE FROM cache_logs WHERE id=?").bind(id),
-      ]);
-      return { tombstones: [{ kind: "find", targetId: gid }], mediaKeys: [] };
+      return {
+        stmts: [
+          env.DB.prepare("DELETE FROM corroboration_retries WHERE log_id=?").bind(id),
+          env.DB.prepare("DELETE FROM cache_logs WHERE id=?").bind(id),
+        ],
+        tombstones: [{ kind: "find", targetId: gid }],
+        mediaKeys: [],
+      };
     }
     case "media": {
       const m = await env.DB.prepare("SELECT media_key, thumb_key FROM cache_media WHERE id=?")
         .bind(id)
         .first<{ media_key: string; thumb_key: string | null }>();
-      await env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(id).run();
-      return { tombstones: [], mediaKeys: m ? [m.media_key, ...(m.thumb_key ? [m.thumb_key] : [])] : [] };
+      return {
+        stmts: [env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(id)],
+        tombstones: [],
+        mediaKeys: m ? [m.media_key, ...(m.thumb_key ? [m.thumb_key] : [])] : [],
+      };
     }
     case "message": {
       // a message still queued for APRS-IS is cancelled with it, so the removal also keeps it off the air
       const m = await env.DB.prepare("SELECT outbox_id FROM messages WHERE id=?")
         .bind(id)
         .first<{ outbox_id: number | null }>();
-      await env.DB.batch([
-        ...(m?.outbox_id != null
-          ? [env.DB.prepare("DELETE FROM aprs_outbox WHERE id=? AND status='queued'").bind(m.outbox_id)]
-          : []),
-        env.DB.prepare("DELETE FROM messages WHERE id=?").bind(id),
-      ]);
-      return { tombstones: [], mediaKeys: [] };
+      return {
+        stmts: [
+          ...(m?.outbox_id != null
+            ? [env.DB.prepare("DELETE FROM aprs_outbox WHERE id=? AND status='queued'").bind(m.outbox_id)]
+            : []),
+          env.DB.prepare("DELETE FROM messages WHERE id=?").bind(id),
+        ],
+        tombstones: [],
+        mediaKeys: [],
+      };
     }
     case "bbs": {
       const b = await env.DB.prepare("SELECT type, bid, origin FROM bbs_messages WHERE id=?")
         .bind(id)
         .first<{ type: string; bid: string | null; origin: string }>();
       const mirrored = !!b && b.origin !== "local" && !!b.bid;
-      await env.DB.batch([
+      const own = !!b && b.type === "B" && b.origin === "local";
+      const stmts = [
         env.DB.prepare("DELETE FROM bbs_messages WHERE id=?").bind(id),
         // a bulletin mirrored from a peer is suppressed against its origin's id, so a later sync skips it
         ...(mirrored
@@ -434,38 +449,50 @@ async function removeItem(
               ).bind(b.bid, b.origin, "bulletin", now, now),
             ]
           : []),
-      ]);
-      const own = !!b && b.type === "B" && b.origin === "local";
-      return { tombstones: own ? [{ kind: "bulletin", targetId: `${instance}:bulletin:${id}` }] : [], mediaKeys: [] };
+      ];
+      return {
+        stmts,
+        tombstones: own ? [{ kind: "bulletin", targetId: `${instance}:bulletin:${id}` }] : [],
+        mediaKeys: [],
+      };
     }
     case "mailbox": {
       // a delivery the service call still has queued for APRS-IS goes with it: `:<station>:de <call>: …{<no>`
       const m = await env.DB.prepare("SELECT delivered_to, msg_no FROM mailbox_messages WHERE id=?")
         .bind(id)
         .first<{ delivered_to: string | null; msg_no: string | null }>();
-      await env.DB.batch([
-        ...(m?.delivered_to && m.msg_no
-          ? [
-              env.DB.prepare(
-                `DELETE FROM aprs_outbox WHERE status='queued' AND kind='message' AND upper(src_call)=?
+      return {
+        stmts: [
+          ...(m?.delivered_to && m.msg_no
+            ? [
+                env.DB.prepare(
+                  `DELETE FROM aprs_outbox WHERE status='queued' AND kind='message' AND upper(src_call)=?
                    AND substr(payload, 1, 11)=? AND payload LIKE ?`,
-              ).bind(serviceCall(env), `:${m.delivered_to.toUpperCase().padEnd(9, " ")}:`, `%{${m.msg_no}`),
-            ]
-          : []),
-        env.DB.prepare("DELETE FROM mailbox_messages WHERE id=?").bind(id),
-      ]);
-      return { tombstones: [], mediaKeys: [] };
+                ).bind(serviceCall(env), `:${m.delivered_to.toUpperCase().padEnd(9, " ")}:`, `%{${m.msg_no}`),
+              ]
+            : []),
+          env.DB.prepare("DELETE FROM mailbox_messages WHERE id=?").bind(id),
+        ],
+        tombstones: [],
+        mediaKeys: [],
+      };
     }
     case "meshcom":
-      await env.DB.prepare("DELETE FROM meshcom_group_messages WHERE id=?").bind(id).run();
-      return { tombstones: [], mediaKeys: [] };
+      return {
+        stmts: [env.DB.prepare("DELETE FROM meshcom_group_messages WHERE id=?").bind(id)],
+        tombstones: [],
+        mediaKeys: [],
+      };
     case "profile":
-      await env.DB.prepare(
-        "UPDATE accounts SET display_name=NULL, bio=NULL, avatar_url=NULL, links=NULL, public_contact=NULL WHERE account_id=?",
-      )
-        .bind(loc.accountId)
-        .run();
-      return { tombstones: [], mediaKeys: [] };
+      return {
+        stmts: [
+          env.DB.prepare(
+            "UPDATE accounts SET display_name=NULL, bio=NULL, avatar_url=NULL, links=NULL, public_contact=NULL WHERE account_id=?",
+          ).bind(loc.accountId),
+        ],
+        tombstones: [],
+        mediaKeys: [],
+      };
   }
 }
 
@@ -503,14 +530,11 @@ async function handleRemove(req: Request, env: Env): Promise<Response> {
   const actor = await actorOf(req, env);
   const instance = instanceOf(env, req);
   const done = await removeItem(env, instance, loc, r.reason);
-  for (const k of done.mediaKeys)
-    try {
-      await env.MEDIA?.delete?.(k);
-    } catch {
-      /* the index row is gone either way */
-    }
-  const tombstones = await emitTombstones(env, instance, done.tombstones);
+  // the removal, its tombstones, the queue of its media objects and the audit row commit together or not at all
   await env.DB.batch([
+    ...done.stmts,
+    ...tombstoneStatements(env, instance, done.tombstones),
+    ...queueMediaDeletes(env, done.mediaKeys),
     audit(env, {
       actor,
       action: "remove",
@@ -522,6 +546,9 @@ async function handleRemove(req: Request, env: Env): Promise<Response> {
     }),
     resolveReportsOn(env, loc.kind, loc.id, actor, `removed: ${r.reason}`),
   ]);
+  const tombstones = done.tombstones.length;
+  // what the object store refuses now, the nightly job deletes later
+  await finishMediaDeletes(env, done.mediaKeys);
   if (loc.accountId)
     await notifyAccount(
       env,

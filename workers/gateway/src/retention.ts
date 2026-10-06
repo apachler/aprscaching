@@ -101,12 +101,17 @@ async function pruneRecords(env: Env, now: number): Promise<void> {
     "SELECT rowid FROM moderation_reports WHERE status = 'resolved' AND COALESCE(resolved_at, created_at) < ?",
     moderationBefore,
   );
+  // A suspension in force keeps the rows saying why, also once its account is erased and the suspension lives on
+  // the base call (the row's target is the base call the sysop suspended).
   await pruneBounded(
     env,
     "moderation_log",
     `SELECT rowid FROM moderation_log l WHERE l.at < ?
-       AND NOT (l.action = 'suspend' AND EXISTS (SELECT 1 FROM account_suspensions s WHERE s.account_id = l.target_account))`,
+       AND NOT (l.action = 'suspend' AND (
+         EXISTS (SELECT 1 FROM account_suspensions s WHERE s.account_id = l.target_account)
+         OR EXISTS (SELECT 1 FROM callsign_suspensions c WHERE c.callsign = l.target_id AND (c.until IS NULL OR c.until > ?))))`,
     moderationBefore,
+    now,
   );
   // a claim's on-air challenge is keyed `claim:<id>` and goes with it
   await pruneBounded(

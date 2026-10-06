@@ -291,7 +291,8 @@ secret; the others need a signed-in sysop.
 A suspended account signs in nowhere: the passkey finishes, the email link and the operator link answer `403`
 `{ error, suspended: { reason, until } }` and issue no session. Its existing sessions end when the sysop
 suspends it, and a request carrying one acts as signed out. Export and erasure stay open to it through a
-signed-body request. Once a suspended account is erased, registering, adding, switching to or claiming any of
+signed-body request, or through a data link: `POST /auth/email/start` with `purpose: "account-data"` mails a link
+whose session reaches `/api/account/me/export` and `/delete` and nothing else. Once a suspended account is erased, registering, adding, switching to or claiming any of
 its base calls answers `403` with `reason: "suspended"` and
 `this callsign is suspended on this instance[ until <date>]: <category>` until the suspension ends.
 

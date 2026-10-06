@@ -58,7 +58,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     .split(",")
     .map((t) => t.trim())
     .filter((t) => /^[a-z_]{1,32}$/.test(t))
-    .slice(0, 12); // the generation query repeats the list four times; this keeps it under 100 parameters
+    .slice(0, 12); // the generation query repeats the list twice; this keeps it well under 100 parameters
   const includeUnvetted = u.searchParams.get("includeUnvetted") === "1";
   const instance = env.INSTANCE ?? u.host;
   const mine = "mine" in area;
@@ -87,14 +87,15 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     "COALESCE(fp.trust, 'unvetted') != 'blocked' AND (? = 1 OR COALESCE(fp.trust, 'unvetted') = 'trusted')";
 
   // The generation: what in the area's box could change the pack. Cheap aggregates, so a refresh with no
-  // change costs no build.
+  // change costs no build. A log rewritten in place (anonymised by an erasure, removed by the sysop, edited)
+  // changes neither the count nor the highest id, so the logs' revision count (cache_log_revs) is part of it.
   const stat = await env.DB.prepare(
-    `SELECT
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0) FROM caches WHERE ${scopeSql}${typeSql}) AS c,
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_logs
-          WHERE cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql})) AS l,
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_media
-          WHERE cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql})) AS m,
+    `WITH s AS (SELECT id, updated_at FROM caches WHERE ${scopeSql}${typeSql})
+     SELECT
+       (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0) FROM s) AS c,
+       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_logs WHERE cache_id IN (SELECT id FROM s))
+         || ':' || (SELECT COALESCE(SUM(rev), 0) FROM cache_log_revs WHERE cache_id IN (SELECT id FROM s)) AS l,
+       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_media WHERE cache_id IN (SELECT id FROM s)) AS m,
        ${
          mine
            ? "'' AS r"
@@ -104,15 +105,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
            AND rc.fed_scope != 'unlisted' AND ${trustSql}) AS r`
        }`,
   )
-    .bind(
-      ...box,
-      ...types,
-      ...box,
-      ...types,
-      ...box,
-      ...types,
-      ...(mine ? [] : [...box, ...types, includeUnvetted ? 1 : 0]),
-    )
+    .bind(...box, ...types, ...(mine ? [] : [...box, ...types, includeUnvetted ? 1 : 0]))
     .first<{ c: string; l: string; m: string; r: string }>();
   const who = mine ? `${(await sessionIdentity(req, env))?.accountId}|` : "";
   const key = `${who}${u.searchParams.toString()}|${stat?.c}|${stat?.l}|${stat?.m}|${stat?.r}`;

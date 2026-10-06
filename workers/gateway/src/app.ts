@@ -152,7 +152,8 @@ import { expireDiscovered, handlePeerExchange, handlePeerFollow } from "./feddis
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleIdentity } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
-import { handleOriginSync, handleSyncSummary } from "./fedtransit.js";
+import { handleOriginSync, handleSyncSummary, purgeTransit } from "./fedtransit.js";
+import { finishMediaDeletes } from "./mediadeletions.js";
 import { handleGapsSeen } from "./fedgaps.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
@@ -365,6 +366,9 @@ export async function runScheduled(env: Env): Promise<void> {
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await purgeRelayQueue(env);
+  // frames kept for passing on go with the records they carry; uploads an erasure or a removal left queued go
+  await purgeTransit(env);
+  await finishMediaDeletes(env);
   // discovered instances no trusted peer and no announcement names any more
   try {
     await expireDiscovered(env);

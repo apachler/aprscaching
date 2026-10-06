@@ -472,6 +472,13 @@ CREATE TABLE cache_media (
   thumb_bytes  INTEGER
 );
 CREATE INDEX idx_cache_media_cache ON cache_media (cache_id);
+-- Media objects whose index rows are gone and whose objects still wait to leave the store. An erasure or a removal
+-- queues them in the same transaction that drops the rows, then deletes the objects; the nightly job finishes any a
+-- crash or a store error left behind.
+CREATE TABLE media_deletions (
+  media_key TEXT PRIMARY KEY,
+  queued_at INTEGER NOT NULL
+);
 
 -- Living-cache rendezvous: two opted-in living caches co-located within a short window both log the
 -- meeting. A social record, kept outside the A/B/C find tiers, so two colluding stations cannot farm
@@ -1368,6 +1375,25 @@ BEGIN
   UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'find';
   UPDATE cache_logs SET fed_seq = (SELECT n FROM fed_seq WHERE kind = 'find') WHERE id = NEW.id;
 END;
+-- A count per cache that every rewrite or removal of one of its logs raises: an anonymisation, a moderation removal,
+-- an edit or a later corroboration. The offline pack's generation reads it, since a rewrite in place changes neither
+-- the number of logs nor the highest id.
+CREATE TABLE cache_log_revs (
+  cache_id INTEGER PRIMARY KEY,
+  rev      INTEGER NOT NULL
+);
+CREATE TRIGGER cache_logs_rev_update AFTER UPDATE ON cache_logs
+BEGIN
+  INSERT INTO cache_log_revs (cache_id, rev) VALUES (NEW.cache_id, 1)
+    ON CONFLICT(cache_id) DO UPDATE SET rev = rev + 1;
+  INSERT INTO cache_log_revs (cache_id, rev) SELECT OLD.cache_id, 1 WHERE OLD.cache_id != NEW.cache_id
+    ON CONFLICT(cache_id) DO UPDATE SET rev = rev + 1;
+END;
+CREATE TRIGGER cache_logs_rev_delete AFTER DELETE ON cache_logs
+BEGIN
+  INSERT INTO cache_log_revs (cache_id, rev) VALUES (OLD.cache_id, 1)
+    ON CONFLICT(cache_id) DO UPDATE SET rev = rev + 1;
+END;
 CREATE TRIGGER tombstones_fed_seq AFTER INSERT ON tombstones
 WHEN NEW.fed_seq = 0
 BEGIN
@@ -1426,8 +1452,9 @@ CREATE TABLE fed_origin_gaps (
   PRIMARY KEY (origin, kind, v)
 );
 -- Gaps no neighbour filled within 7 days and 5 asks: given up, so the marks move past them, and listed for the
--- sysop until marked seen; a row seen 30 days ago goes. A record past the hop limit (`hops`, `upstream-hops`) is no
--- fault anyone can fix but by a shorter path: its gap goes silently after 30 days.
+-- sysop until marked seen; a row seen 30 days ago goes, and one never seen goes after 90 days. A missing tombstone is
+-- never given up. A record past the hop limit (`hops`, `upstream-hops`) is no fault anyone can fix but by a shorter
+-- path: its gap goes silently after 30 days.
 CREATE TABLE fed_gaps_given_up (
   origin     TEXT NOT NULL,
   kind       TEXT NOT NULL,
