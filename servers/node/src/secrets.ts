@@ -21,10 +21,10 @@ export type ResolvedSecret = { ok: true; secret: string; source: SecretSource } 
 const weak = (s: string | undefined) => !s || s === "change-me";
 
 /** `SESSION_SECRET` → `session.secret`. */
-export const secretFile = (name: string) => `${name.toLowerCase().replace(/_secret$/, "")}.secret`;
+const secretFile = (name: string) => `${name.toLowerCase().replace(/_secret$/, "")}.secret`;
 
 /** Resolve one secret: the env value, else the kept file, else a freshly generated one (then kept). */
-export function resolveSecret(
+function resolveSecret(
   name: string,
   env: Record<string, string | undefined>,
   dataDir: string,

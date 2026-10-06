@@ -34,7 +34,7 @@ const ADDRESSEE = /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/;
 /** An APRS message number. */
 const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
 /** The longest APRS message text. */
-export const APRS_MESSAGE_MAX = 67;
+const APRS_MESSAGE_MAX = 67;
 
 /** User transmissions an account may queue an hour. */
 export const TX_PER_HOUR = 30;

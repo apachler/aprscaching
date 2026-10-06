@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
- * thirdparty.ts — APRS-IS passcode + third-party (path-A) injection helpers. Pure; runs in
- * Worker/Node/browser. The passcode is NOT authorization (public hash) — see; it's here for
- * ops convenience + the direct-TX path. The third-party encapsulation is what a peer emits when gating
+ * thirdparty.ts — APRS-IS passcode + third-party injection helpers. Pure; runs in any WebCrypto runtime
+ * (Node, Bun, browser). The passcode is NOT authorization (a public hash); it's here for ops convenience
+ * and the direct-TX path. The third-party encapsulation is what a peer emits when gating
  * a *control-verified* user's traffic into APRS-IS under the user's own call.
  */
 

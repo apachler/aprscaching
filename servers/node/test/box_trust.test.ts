@@ -16,7 +16,7 @@ import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps
 const OPS = { "x-operator-secret": "test-operator-secret" };
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const room = { fetch: async () => new Response(null, { status: 204 }) };
-const ROOMS = { idFromName: (n: string) => n, get: () => room };
+const ROOMS = { get: () => room };
 const LENDER = "OE3LND";
 const SITE = "OE3LND-10";
 // the position every test packet carries: !4704.41N/01526.27E>

@@ -61,7 +61,7 @@ function instance(
   const env = instanceEnv(
     name,
     key,
-    { FIRST_PARTY_SITES: SITE, ROOMS: { idFromName: (n: string) => n, get: () => room }, ...extra },
+    { FIRST_PARTY_SITES: SITE, ROOMS: { get: () => room }, ...extra },
     DB,
   );
   return { env, sqlite, live } as Instance;

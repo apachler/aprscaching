@@ -656,7 +656,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/ws") {
     const region = liveRegionOf(url);
     if (!region) return json({ error: `unknown region; this instance serves "${LIVE_REGION}"` }, { status: 400 });
-    return env.ROOMS.get(env.ROOMS.idFromName(region)).fetch(req);
+    return env.ROOMS.get(region).fetch(req);
   }
 
   // auth (passkey + email magic-link). Sessions attribute logs and gate announce.

@@ -693,7 +693,7 @@ async function decide(
   );
   if (winner) {
     // reputation accrues ONLY for evidence that independently matches the confirmed
-    // winner — answering "yes" with fabricated evidence no longer farms rep toward promotion.
+    // winner, so answering "yes" with fabricated evidence earns no rep toward promotion.
     await creditCorroboration(
       env,
       answered.filter((a) => a.ev && evidenceMatches(a.ev, winner, COARSEN)).map((a) => a.url),

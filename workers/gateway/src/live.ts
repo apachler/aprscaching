@@ -151,7 +151,7 @@ async function settledAmong(env: Env, callsign: string, caches: NearCache[]): Pr
 /** Send envelopes to the region room (the in-memory rooms of rooms-core.ts) via its fetch entry. */
 export async function dispatchLive(env: Env, envelopes: LiveEnvelope[], region = LIVE_REGION): Promise<void> {
   if (!envelopes.length) return;
-  const room = env.ROOMS.get(env.ROOMS.idFromName(region));
+  const room = env.ROOMS.get(region);
   await room
     .fetch(
       new Request("https://room/dispatch", {

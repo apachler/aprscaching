@@ -667,6 +667,23 @@ describe("a restored origin", () => {
     expect(new Set(held.map((r) => r.global_id)).size).toBe(3);
   });
 
+  it("raises its key sequence to how far a trusted peer read its keys", async () => {
+    const [a, b] = await Promise.all([node("a"), node("b")]);
+    await follow(b, a);
+    await follow(a, b);
+    network([a, b]);
+    await a.env.DB.prepare("INSERT INTO callsign_keys (callsign, public_key, created_at) VALUES ('OE8KEY', 'K1', ?)")
+      .bind(now())
+      .run();
+    await syncAllPeers(b.env);
+    const read = (await one(b.env, "SELECT keys_cursor FROM fed_peers WHERE instance = ?", a.name))!
+      .keys_cursor as number;
+    expect(read).toBeGreaterThan(0);
+    await a.env.DB.prepare("UPDATE fed_seq SET n = 1 WHERE kind = 'key'").run();
+    await syncAllPeers(a.env);
+    expect((await one(a.env, "SELECT n FROM fed_seq WHERE kind = 'key'"))!.n).toBeGreaterThanOrEqual(read);
+  });
+
   it("takes a neighbour's word on its own numbering only when it trusts that neighbour", async () => {
     const [a, b] = await Promise.all([node("a"), node("b")]);
     await follow(b, a);

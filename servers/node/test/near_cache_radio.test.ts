@@ -75,7 +75,7 @@ async function addCache(env: Env, code: string, title: string, lat = CACHE.lat, 
 async function player(opts: { on?: boolean; verified?: boolean } = {}) {
   // the live WebSocket fan-out is out of scope here: a room stub accepts and discards the envelopes
   const room = { fetch: async () => new Response(null, { status: 204 }) };
-  const ROOMS = { idFromName: (n: string) => n, get: () => room };
+  const ROOMS = { get: () => room };
   const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR,OE1ABC", INGEST_SECRET: SECRET, FIRST_PARTY_SITES: SITE, ROOMS });
   const me = await emailSignup(env, "near@example.test", "OE1ABC");
   if (opts.verified !== false) await operatorVerify(env, "OE1ABC");

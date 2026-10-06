@@ -19,8 +19,7 @@ describe("the live region", () => {
     const opened: string[] = [];
     const env = {
       ROOMS: {
-        idFromName: (n: string) => (opened.push(n), n),
-        get: () => ({ fetch: async () => new Response(null, { status: 204 }) }),
+        get: (n: string) => (opened.push(n), { fetch: async () => new Response(null, { status: 204 }) }),
       },
     } as unknown as Env;
     const ws = (q: string) => route(new Request(`http://gw/ws${q}`), env, {} as ExecCtx);

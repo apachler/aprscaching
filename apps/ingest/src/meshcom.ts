@@ -125,7 +125,7 @@ export type MeshcomCounters = {
  * What the node told us about a frame beyond its APRS form, for the map: how it was heard, the signal of a
  * LoRa hearing, the sender's device. Display only; the gateway sanitises it again and never trusts it.
  */
-export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined): MeshcomMeta | null {
+function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined): MeshcomMeta | null {
   const p = e.provenance;
   return sanitizeMeshcomMeta({
     srcType: p.srcType,
@@ -144,7 +144,7 @@ export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined)
   });
 }
 
-export function meshcomToPacket(e: MeshcomEvent, receiverCall: string | undefined, ts: number): Packet | null {
+function meshcomToPacket(e: MeshcomEvent, receiverCall: string | undefined, ts: number): Packet | null {
   const f = meshcomToAprs(e);
   if (!f) return null;
   const hint = meshcomTransportHint(e.provenance, receiverCall);

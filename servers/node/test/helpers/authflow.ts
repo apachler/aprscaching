@@ -6,7 +6,7 @@ import type { Env } from "@aprscaching/gateway/env";
 import { instanceEnv, serve } from "./fedpeer.js";
 
 export const ORIGIN = "https://gw.test";
-export const RP_ID = "gw.test";
+const RP_ID = "gw.test";
 const enc = new TextEncoder();
 
 /** An instance with dev tokens and passkeys configured. */

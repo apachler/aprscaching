@@ -159,7 +159,7 @@ export function startForwarder(o: {
  * A connected-mode FBB link over KISS-TCP: a raw-frame KISS socket driving a `ConnectedLink` (AX.25 v2.2)
  * to the partner. Direct single-hop connect; the multi-hop connect script is logged (validate-at-deploy).
  */
-export function kissForwardLink(o: {
+function kissForwardLink(o: {
   host: string;
   port: number;
   mycall: string;

@@ -11,7 +11,7 @@ const now = () => Math.floor(Date.now() / 1000) - 60;
 
 function env(): Env {
   const room = { fetch: async () => new Response(null, { status: 204 }) };
-  return authEnv({ ROOMS: { idFromName: (n: string) => n, get: () => room } });
+  return authEnv({ ROOMS: { get: () => room } });
 }
 
 /** A MeshCom position packet at (lat, lon) with the ingest's metadata. */

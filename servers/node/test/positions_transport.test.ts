@@ -26,7 +26,7 @@ describe("positions.transport", () => {
     migrate(sqlite, MIGRATIONS);
     // the live WebSocket fan-out is out of scope here: a room stub accepts and discards the deltas
     const room = { fetch: async () => new Response(null, { status: 204 }) };
-    const ROOMS = { idFromName: (n: string) => n, get: () => room };
+    const ROOMS = { get: () => room };
     const env = { DB: makeD1(sqlite), INGEST_SECRET: "s", ROOMS } as unknown as Env;
     const ports = ["aprs-is", "kiss-tnc", "agwpe", "hostmode", "axudp", "axip", "meshcom", "meshtastic", "made-up"];
     const now = Math.floor(Date.now() / 1000);

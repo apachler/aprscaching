@@ -82,7 +82,7 @@ export function useBoxKey(k: BoxKey | null): void {
 }
 
 /** How long a gateway request may take before it is abandoned and counted as a failure. */
-export const GATEWAY_TIMEOUT_MS = 20_000;
+const GATEWAY_TIMEOUT_MS = 20_000;
 
 /**
  * fetch for gateway requests. A request carrying x-ingest-secret goes out signed instead when this box has a
