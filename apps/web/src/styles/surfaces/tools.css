@@ -186,9 +186,11 @@
   .tp-muted {
     color: var(--muted);
   }
-  .tp-accent,
+  .tp-accent {
+    color: var(--accent-text);
+  }
   .tp-fill.tp-accent {
-    color: var(--accent);
+    background: var(--accent);
   }
   .tp-ok {
     color: var(--ok-text);

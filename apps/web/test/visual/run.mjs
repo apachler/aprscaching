@@ -229,9 +229,10 @@ const SURFACES = [
     query: "?view=tools&tool=packet-decoder",
     tools: ["packet-decoder"],
     wait: ".tools-panel textarea",
+    // pressed, not clicked: on the phone sheet a click's scroll-into-view never settles under the fixed clock
     steps: [
-      ["click", "button:has-text('Use a sample')"],
-      ["click", "button:text-is('Decode')"],
+      ["press", "button:has-text('Use a sample')"],
+      ["press", "button:text-is('Decode')"],
     ],
     after: ".tool-out",
   },
@@ -351,6 +352,7 @@ async function open(page, origin, s, theme) {
   if (s.wait) await page.waitForSelector(s.wait, { timeout: 15000 });
   for (const [kind, sel, value] of s.steps ?? []) {
     if (kind === "click") await page.click(sel, { timeout: 8000 });
+    if (kind === "press") await page.locator(sel).first().press("Enter", { timeout: 8000 });
     if (kind === "fill") await page.fill(sel, value, { timeout: 8000 });
     if (kind === "scroll") await page.locator(sel).first().scrollIntoViewIfNeeded({ timeout: 8000 });
     await page.waitForTimeout(400);
