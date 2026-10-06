@@ -210,10 +210,12 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
-| `release-please.yml` — versioning + changelog, then the three below, the operator actions at the top of the notes and the release's Announcements discussion | push (main) | Release |
+| `main-pr.yml` — `head branch`: a PR into `main` comes from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch | PR into `main` | **Yes** (`main`) |
+| `scorecard.yml` — OpenSSF Scorecard: results in code scanning and on the public Scorecard API (the README badge) | push (`dev`), weekly, branch protection changes + manual | Informational |
+| `release-please.yml` — versioning + changelog, then the three below, the operator actions at the top of the notes, the release's Announcements discussion, and `sync-dev`, which brings `dev` up to `main` | push (main) | Release |
 | `desktop-release.yml` — Bun desktop binaries | called by `release-please.yml` + manual | Release |
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | called by `release-please.yml` + manual | Release |
-| `release-verify.yml` — git bundle, source archive, `pocket.sh`, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
+| `release-verify.yml` — git bundle, source archive, `pocket.sh`, the CycloneDX SBOM, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
 
 A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
 `ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
@@ -223,6 +225,11 @@ job runs only when `deploy/aprscaching`, `deploy/lib/`, `deploy/test/`, `deploy/
 When the diff cannot be read, every job runs.
 
 ### Cutting a release
+
+`main` takes pull requests from `dev`, from a `hotfix/vX.Y.Z` branch and from release-please's own branch, each
+merged with a merge commit; the `head branch` check fails any other. A release starts with a pull request from
+`dev` into `main`; the owner runs it with the `/release` skill (`.claude/skills/release/SKILL.md`), which stops for
+the owner's go-ahead before each merge into `main`.
 
 A release is cut by merging the release PR that `release-please.yml` keeps open on `main`. The merge creates the
 `vX.Y.Z` tag and the GitHub release, and the same run builds the desktop binaries and the OCI stack zip, then runs
@@ -236,6 +243,37 @@ requests: `git log --format='%B' <previous tag>..origin/main | grep -A3 '^Operat
 published, the workflow puts them at the top of its notes under **Operator actions**. To add a missing one, put a
 `BEGIN_COMMIT_OVERRIDE` block in that pull request's description (see `CONTRIBUTING.md`, Operator notes) before
 merging the release PR.
+
+release-please opens its PR with the workflow token, and GitHub starts no workflow for that token's events, so the
+`head branch` check and the rest of CI do not run on the release PR by themselves. Close and reopen the release PR
+to run them before merging it.
+
+Once the release exists, the `sync-dev` job brings `dev` up to `main`. When `dev` has not moved since it was merged
+into `main`, the job fast-forwards `dev`. Otherwise, or when a ruleset refuses the push, it opens a pull request
+from `main` into `dev`, titled `chore(release): bring dev up to vX.Y.Z`. Merge that pull request with a merge
+commit, never a squash: `dev`'s history then contains `main`'s, and the next merge into `main` does not conflict.
+
+### Releasing a hotfix
+
+A hotfix is a patch release cut from the last release tag rather than from `dev`:
+
+```mermaid
+flowchart LR
+  tag["tag v1.0.0"] --> hf["hotfix/v1.0.1<br/>fix: commits"]
+  hf -->|"PR, merge commit"| main["main"]
+  main -->|"release PR"| rel["tag v1.0.1"]
+  rel -->|"sync-dev"| dev["dev"]
+```
+
+1. Cut `hotfix/v1.0.1` from the tag `v1.0.0` and push it.
+2. Land the fixes on it, as pull requests into the hotfix branch or as signed-off commits on it. Each one is a
+   `fix:` Conventional Commit; a `feat:` makes release-please cut a minor release instead.
+3. Open a pull request from `hotfix/v1.0.1` into `main` and merge it with a merge commit.
+4. release-please walks every commit the merge brings in since the last release, not only `main`'s first
+   parents, so the `fix:` commits give it a patch bump: it opens the release PR for `v1.0.1`. A `Release-As: 1.0.1`
+   footer on a commit fixes the version when the commit types would give another.
+5. Merging the release PR releases `v1.0.1`. `sync-dev` then opens the pull request from `main` into `dev`, since
+   `dev` has moved since `v1.0.0`; merging it brings the fix to `dev`.
 
 ## Next
 

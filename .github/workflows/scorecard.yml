@@ -1,0 +1,35 @@
+name: scorecard
+
+# OpenSSF Scorecard rates the repository's supply-chain practice: pinned actions, branch protection, signed releases,
+# dependency updates, token permissions. Results go to the repository's code scanning alerts and to the public
+# Scorecard API that the README badge reads. It runs on the default branch only, as the Scorecard action requires;
+# here that is `dev`.
+on:
+  push:
+    branches: [dev]
+  schedule:
+    - cron: "41 4 * * 1"
+  branch_protection_rule:
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      # upload the results to code scanning, and sign them for the public API
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: results.sarif

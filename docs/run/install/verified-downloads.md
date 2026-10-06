@@ -11,6 +11,9 @@ Every release carries, beside the OCI stack (`aprscaching-oci-stack.zip`) and th
 - `aprscaching-<version>-source.tar.gz`: the source.
 - `pocket.sh`: the Pocket installer. It carries the release's tag and the bundle's SHA-256, so once it is
   checked, it installs only that bundle and stops when the bundle does not match.
+- `aprscaching-<version>.cdx.json`: the software bill of materials (SBOM), in CycloneDX JSON. It lists the npm
+  packages the app ships, each with its version, licence and package URL, for a vulnerability or licence scanner.
+  The Bun runtime inside the desktop binaries is not an npm package; its licence ships as `BUN-LICENSE.txt`.
 - `SHA256SUMS`: the checksum of every asset.
 
 Each asset also has a signed build-provenance attestation. It is keyless (Sigstore), and it shows that this
@@ -68,6 +71,13 @@ installation from the release bundle:
   Without the GitHub CLI it stops too, unless `--checksum-only` accepts the checksum alone. A branch, or a
   release without a bundle, installs from git, and the helper says the checkout is unverified.
 - **Pocket:** check `pocket.sh` the same way before you run it ([Install Pocket](pocket.md#install)).
+- **The SBOM** checks the same way, then goes to the scanner of your choice:
+
+    ```bash
+    curl -fsSLO https://github.com/apachler/aprscaching/releases/download/$VER/aprscaching-$VER.cdx.json
+    sha256sum -c --ignore-missing SHA256SUMS
+    gh attestation verify aprscaching-$VER.cdx.json --repo apachler/aprscaching
+    ```
 
 ## Next
 

@@ -123,12 +123,40 @@ pull request's description.
 2. Open a pull request into `dev`. It is **squash-merged**, so the PR title and description become the
    commit on `dev`: write the title as a Conventional Commit (`feat(ingest): …`, `fix(web): …`).
 3. Releases: a pull request from `dev` into `main`, merged (not squashed). release-please then opens the
-   release PR on `main`.
+   release PR on `main` (see [Releases](#releases)).
 4. After a pull request merges, its feature branch is deleted (GitHub does this on merge); delete your
    local copy too, and start follow-up work on a fresh branch from `dev`.
 
 Keep one concern per PR. If your change needs another PR that hasn't merged, wait for it, then rebase your
 branch onto the updated `dev` rather than basing it on the other branch.
+
+### Releases
+
+`main` is the release branch and takes pull requests from three branches only: `dev`, a `hotfix/vX.Y.Z` branch,
+and release-please's own release branch. The `head branch` check (`.github/workflows/main-pr.yml`) fails a pull
+request into `main` from any other branch.
+
+1. A pull request from `dev` into `main`, merged with a **merge commit**.
+2. release-please opens or updates its release PR on `main`: the version and the `CHANGELOG.md` entry, from the
+   Conventional Commits since the last release. Merging it tags `vX.Y.Z`, publishes the GitHub release and builds
+   its downloads.
+3. The release workflow then brings `dev` up to `main`. When `dev` has not moved since step 1, it fast-forwards
+   `dev`; otherwise it opens a pull request from `main` into `dev`, which is merged with a **merge commit**, never
+   a squash, so that `dev`'s history contains `main`'s.
+
+### Hotfixes
+
+A fix that cannot wait for the next release from `dev` ships as a patch release from the last release tag:
+
+1. Cut the branch from the tag, named after the version it becomes:
+   `git switch -c hotfix/v1.0.1 v1.0.0 && git push -u origin hotfix/v1.0.1`.
+2. Land the fixes on it, as pull requests into `hotfix/v1.0.1` or as commits on it. Each one is a `fix:`
+   Conventional Commit and signed off; a `feat:` makes the release a minor one.
+3. Open a pull request from `hotfix/v1.0.1` into `main`, merged with a **merge commit**.
+4. release-please reads the `fix:` commits the merge brings in and opens a release PR for `v1.0.1`. Merging it
+   releases the patch.
+5. The release workflow opens the pull request from `main` into `dev` (step 3 of [Releases](#releases)), which
+   brings the fix to `dev`. The hotfix branch is deleted once it has merged.
 
 ### Dependencies
 

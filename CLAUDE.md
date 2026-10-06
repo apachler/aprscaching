@@ -126,7 +126,14 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
   Neither commits nor PR descriptions carry tool attribution (co-author trailers, "Generated with"
   footers); the DCO workflow rejects them. `main` is the
   release branch: release-please runs on pushes to `main`, and a merged release PR tags `vX.Y.Z` and calls the desktop,
-  OCI-stack and release-verify workflows (a hand-pushed tag starts none of them).
+  OCI-stack and release-verify workflows (a hand-pushed tag starts none of them); release-verify attaches the
+  CycloneDX SBOM beside `SHA256SUMS`. After the release, `sync-dev` fast-forwards `dev` to `main`, or, when `dev`
+  has moved, opens a PR from `main` into `dev` that is merged with a merge commit, never squashed.
+- `main` takes PRs from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch only (`main-pr.yml`, the
+  `head branch` check). A hotfix branch is cut from the release tag, takes `fix:` commits, and merges into `main`
+  with a merge commit; release-please releases the patch, and `sync-dev` brings it to `dev`. `/release`
+  (`.claude/skills/release/`) walks a release; it never merges into `main` without the owner's go-ahead in the
+  conversation, and never starts a release unasked.
 - Commits are Conventional Commits (they feed release-please and `CHANGELOG.md`) and DCO signed-off
   (`git commit -s`); the DCO check runs on every PR.
 - `pnpm-workspace.yaml` sets `minimumReleaseAge: 720`: a package version younger than 12 h fails

@@ -1,0 +1,41 @@
+name: main-pr
+
+# What may be merged into `main`, the release branch: `dev` (a release), a `hotfix/vX.Y.Z` branch cut from a release
+# tag (a patch release), or release-please's own release branch. The `head branch` check fails a pull request into
+# `main` from any other branch, or from a fork, and the `main` ruleset requires it.
+#
+# release-please opens its pull request with the workflow token, and GitHub starts no workflow for an event that
+# token causes, so this check does not run on it by itself: closing and reopening the release pull request runs it.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  head-branch:
+    name: head branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: the head branch is dev, a hotfix branch or the release branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "::error::a pull request into main comes from a branch of $REPO, not from $HEAD_REPO"
+            exit 1
+          fi
+          case "$HEAD_REF" in
+            dev | release-please--branches--main*) ok=1 ;;
+            *) ok=0 ;;
+          esac
+          if [[ "$HEAD_REF" =~ ^hotfix/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then ok=1; fi
+          if [ "$ok" != 1 ]; then
+            echo "::error::$HEAD_REF cannot be merged into main: open the pull request into dev, or use a hotfix/vX.Y.Z branch cut from the release tag (CONTRIBUTING.md, Releases)"
+            exit 1
+          fi
+          echo "$HEAD_REF may be merged into main"
