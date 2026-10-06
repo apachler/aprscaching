@@ -139,7 +139,9 @@ export class AxipListener {
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
     console.log(
-      `[axip] listening IP proto/${AX25_PROTO}${this.o.bind ? ` on ${this.o.bind}` : ""} (tunnelled AX.25 — Tier C only)`,
+      "[axip] listening IP proto/%s%s (tunnelled AX.25 — Tier C only)",
+      AX25_PROTO,
+      this.o.bind ? ` on ${this.o.bind}` : "",
     );
   }
 }
@@ -200,7 +202,10 @@ export class AxipPort {
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
     console.log(
-      `[axip] port IP proto/${AX25_PROTO}${this.o.bind ? ` on ${this.o.bind}` : ""} ↔ ${this.o.peers.map((p) => p.host).join(", ") || "(no peers)"} (Tier C)`,
+      "[axip] port IP proto/%s%s ↔ %s (Tier C)",
+      AX25_PROTO,
+      this.o.bind ? ` on ${this.o.bind}` : "",
+      this.o.peers.map((p) => p.host).join(", ") || "(no peers)",
     );
   }
 

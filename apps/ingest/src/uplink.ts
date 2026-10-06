@@ -127,7 +127,8 @@ export class AprsUplink {
           if (!this.unverifiedLogged) {
             this.unverifiedLogged = true;
             console.error(
-              `[uplink] APRS-IS did not verify ${this.o.serviceCall}: check the passcode (APRSIS_SERVICE_PASS, or APRSIS_PASSCODE of the same base call). Nothing is published until it is verified.`,
+              "[uplink] APRS-IS did not verify %s: check the passcode (APRSIS_SERVICE_PASS, or APRSIS_PASSCODE of the same base call). Nothing is published until it is verified.",
+              this.o.serviceCall,
             );
           }
         }

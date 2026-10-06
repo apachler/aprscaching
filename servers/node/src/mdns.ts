@@ -152,8 +152,8 @@ export function startMdns(opts: {
   if (opts.mode === "off") return { stop: () => {} };
   const sock = opts.socket ?? (multicastDns() as unknown as MdnsSocket);
   const self = opts.mode === "announce" ? (opts.self ?? null) : null;
-  sock.on("error", (e) => console.warn(`mdns: ${e.message}`));
-  sock.on("warning", (e) => console.warn(`mdns: ${e.message}`));
+  sock.on("error", (e) => console.warn("mdns: %s", e.message));
+  sock.on("warning", (e) => console.warn("mdns: %s", e.message));
   sock.on("response", (p, rinfo) => {
     for (const f of parseAnnouncement(p, rinfo)) if (f.instance !== self?.instance) opts.onFound(f);
   });
@@ -171,7 +171,7 @@ export function startMdns(opts: {
       ask();
       announce();
     } catch (e) {
-      console.warn(`mdns: ${(e as Error).message}`);
+      console.warn("mdns: %s", (e as Error).message);
     }
   };
   tick();

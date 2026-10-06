@@ -388,7 +388,7 @@ export async function admitFrame(
     keepForTransit(env, fb, f, def.type, rec.data, gate.via ?? origin, hops).then(
       () => true,
       (e: unknown) => {
-        console.warn(`federation: ${rec.id} is mirrored but not kept for passing on: ${(e as Error).message}`);
+        console.warn("federation: %s is mirrored but not kept for passing on: %s", rec.id, (e as Error).message);
         return false;
       },
     );

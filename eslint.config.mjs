@@ -92,6 +92,23 @@ export default tseslint.config(
       ],
     },
   },
+  // Server-side logs: the first argument to console.* is a fixed format string, and the values follow it
+  // (`console.error("%s %s:", req.method, path, e)`). A template literal there would make a request path, a
+  // frame field or a peer's URL part of the format string, where a `%` in it is read as a directive.
+  {
+    files: ["workers/**/*.ts", "servers/**/*.ts", "apps/ingest/**/*.ts"],
+    ignores: ["**/*.test.ts", "**/test/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][arguments.0.type='TemplateLiteral'][arguments.0.expressions.length>0]",
+          message: 'Log with a fixed format string and pass the values after it: console.log("%s: %s", a, b).',
+        },
+      ],
+    },
+  },
   // Test files and Node scripts: relax a couple more.
   {
     files: ["**/*.test.ts", "**/test/**", "tools/**/*.mjs", "**/*.config.*"],

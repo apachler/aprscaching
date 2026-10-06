@@ -20,7 +20,7 @@ const env = process.env;
 // falling back silently to a default the operator did not choose.
 const CONFIG_PROBLEMS = validateConfig(env, "ingest");
 if (CONFIG_PROBLEMS.length) {
-  for (const p of CONFIG_PROBLEMS) console.error(`[ingest] FATAL: ${p.message}`);
+  for (const p of CONFIG_PROBLEMS) console.error("[ingest] FATAL: %s", p.message);
   console.error("[ingest] See docs/reference/configuration.md for each setting's accepted values.");
   process.exit(1);
 }
@@ -28,7 +28,7 @@ if (CONFIG_PROBLEMS.length) {
 try {
   useBoxKey(loadBoxKey(env));
 } catch (e) {
-  console.error(`[ingest] FATAL: ${(e as Error).message}`);
+  console.error("[ingest] FATAL: %s", (e as Error).message);
   process.exit(1);
 }
 // INGEST_URL names the ingest endpoint; every other gateway route hangs off its base.
@@ -84,13 +84,13 @@ async function shutdown(signal: string): Promise<void> {
   // every port is stopped before the exit, within a deadline; the exit's synchronous release runs after
   const stopped = Promise.allSettled(onShutdown.map(async (stop) => stop()));
   await Promise.race([stopped, new Promise<void>((r) => setTimeout(r, 5000).unref())]);
-  console.log(`[ingest] ${signal} — flushing pending packets…`);
+  console.log("[ingest] %s — flushing pending packets…", signal);
   delivery.add(batch);
   batch = [];
   // A flush joins one already running; the deadline keeps a dead gateway from holding up the stop.
   const deadline = new Promise<void>((r) => setTimeout(r, 5000).unref());
   await Promise.race([delivery.flush(), deadline]);
-  if (delivery.size) console.error(`[ingest] flush incomplete — dropping ${delivery.size} packet(s)`);
+  if (delivery.size) console.error("[ingest] flush incomplete — dropping %s packet(s)", delivery.size);
   else console.log("[ingest] pending packets flushed");
   process.exit(0);
 }
@@ -141,7 +141,7 @@ let txGateGrace: number;
 try {
   txGateGrace = txGateGraceMs(env.TX_GATE_GRACE);
 } catch (e) {
-  console.error(`[ingest] FATAL: ${(e as Error).message}`);
+  console.error("[ingest] FATAL: %s", (e as Error).message);
   process.exit(1);
 }
 const callGate = new CallVerifier(
@@ -181,12 +181,12 @@ if (env.KISS_TNC_HOST) {
     },
   );
   kiss.start();
-  console.log(`[kiss] enabled${siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : ""}`);
+  console.log("[kiss] enabled%s", siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : "");
   const kissOpen = gateCheck(
     callGate,
     [...gateCalls],
     () => station.tx,
-    (m) => console.log(`[kiss] ${m}`),
+    (m) => console.log("[kiss] %s", m),
   );
   radios.push({
     send: (f) => kissOpen() && kiss.send(f),
@@ -206,7 +206,7 @@ if (env.SOUNDCARD_DEVICE || env.SOUNDCARD_PORTS) {
   try {
     soundcardSettings = soundcardPorts(env);
   } catch (e) {
-    console.error(`[ingest] FATAL: ${(e as Error).message}`);
+    console.error("[ingest] FATAL: %s", (e as Error).message);
     process.exit(1);
   }
 }
@@ -260,7 +260,7 @@ if (
   callGate.start([...gateCalls], () => {
     for (const p of soundcardRunning) {
       const why = p.cfg.tx ? p.txRefusal() : null;
-      if (why) console.log(`[soundcard:${p.cfg.name}] transmit held back: ${why}`);
+      if (why) console.log("[soundcard:%s] transmit held back: %s", p.cfg.name, why);
     }
   });
 
@@ -309,8 +309,8 @@ if (primaryRadio) {
         });
       }
     }
-    console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
-    if (env.DIGI_CONNECTED === "1") console.log(`[digi-c] connected-mode digipeater enabled as ${env.DIGI_CALL}`);
+    console.log("[digi] enabled as %s (%s)", env.DIGI_CALL, [...aliases].join(","));
+    if (env.DIGI_CONNECTED === "1") console.log("[digi-c] connected-mode digipeater enabled as %s", env.DIGI_CALL);
   }
 
   // APRS IGate (RF -> APRS-IS). Needs a real callsign + passcode. The APRS-IS -> RF direction transmits, so
@@ -339,7 +339,9 @@ if (primaryRadio) {
       });
     igate.start();
     console.log(
-      `[igate] enabled as ${env.IGATE_CALL} (${igateTx ? "RF <-> APRS-IS" : "receive only; IGATE_TX=1 passes messages to RF"})`,
+      "[igate] enabled as %s (%s)",
+      env.IGATE_CALL,
+      igateTx ? "RF <-> APRS-IS" : "receive only; IGATE_TX=1 passes messages to RF",
     );
   }
 }
@@ -351,7 +353,7 @@ if (env.MESHTASTIC_HOST || env.MESHTASTIC_MQTT_URL) {
   const mesh = new MeshtasticIngest(enqueue);
   if (env.MESHTASTIC_HOST) {
     new MeshtasticTcp({ host: env.MESHTASTIC_HOST, port: portEnv("MESHTASTIC_PORT", 4403) }, mesh).start();
-    console.log(`[meshtastic] node TCP API ${env.MESHTASTIC_HOST}`);
+    console.log("[meshtastic] node TCP API %s", env.MESHTASTIC_HOST);
   }
   if (env.MESHTASTIC_MQTT_URL) {
     new MeshtasticMqtt({ url: env.MESHTASTIC_MQTT_URL, topic: env.MESHTASTIC_MQTT_TOPIC || "msh/#" }, mesh).start();
@@ -376,7 +378,7 @@ if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
     ...txLimitFromEnv("meshcom"),
   });
   meshcomTx = { nodes, send: (req) => sender.send(req) };
-  console.log(`[meshcom] transmit enabled as ${operatorCall ?? "? (set MESHCOM_TX_CALL)"}`);
+  console.log("[meshcom] transmit enabled as %s", operatorCall ?? "? (set MESHCOM_TX_CALL)");
   // the first node's KISS port, with its password: answers go out from the service call itself, and the
   // acks stations send it come back here
   const first = nodes.find((n) => n.call);
@@ -487,7 +489,7 @@ if (env.AXIP_ENABLE || env.AXIP_PEERS) {
       await new AxipListener({ bind: env.AXIP_BIND }, enqueue).start();
     }
   } catch (e) {
-    console.error(`[axip] disabled — ${(e as Error).message} (needs the optional raw-socket package + CAP_NET_RAW)`);
+    console.error("[axip] disabled — %s (needs the optional raw-socket package + CAP_NET_RAW)", (e as Error).message);
   }
 }
 
@@ -542,7 +544,7 @@ async function learnServiceCall(): Promise<void> {
     for (const w of callWarnings(env, serviceCall, sites ?? []))
       if (!callWarned.has(w)) {
         callWarned.add(w);
-        console.error(`[ingest] ${w}`);
+        console.error("[ingest] %s", w);
       }
     const login = uplinkLogin({
       serviceCall,
@@ -556,12 +558,14 @@ async function learnServiceCall(): Promise<void> {
       if (login.call.split("-")[0] !== serviceCall.toUpperCase().split("-")[0] && !uplinkWarned) {
         uplinkWarned = true;
         console.error(
-          `[uplink] APRSIS_SERVICE_CALL ${login.call} is not a call of the service call's base; answers from ${serviceCall} go out as third-party traffic, which IGates do not gate to RF`,
+          "[uplink] APRSIS_SERVICE_CALL %s is not a call of the service call's base; answers from %s go out as third-party traffic, which IGates do not gate to RF",
+          login.call,
+          serviceCall,
         );
       }
     } else if (!uplinkStarted && !uplinkWarned) {
       uplinkWarned = true;
-      console.log(`[uplink] not publishing to APRS-IS: ${login.reason}`);
+      console.log("[uplink] not publishing to APRS-IS: %s", login.reason);
     }
   } catch {
     /* the gateway is unreachable; the forwarder logs that, and the next attempt retries */
@@ -569,7 +573,7 @@ async function learnServiceCall(): Promise<void> {
 }
 void learnServiceCall();
 setInterval(() => void learnServiceCall(), 15 * 60_000);
-console.log(`[ingest] started -> ${INGEST_URL}`);
+console.log("[ingest] started -> %s", INGEST_URL);
 
 // ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
 // Opt-in: needs a frame link (KISS TNC, soundcard port or AXUDP port) + a station call. Partners + routing are
@@ -589,7 +593,7 @@ if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
     compress: env.BBS_FORWARD_COMPRESS === "1",
     ...txLimitFromEnv("bbs"),
   });
-  console.log(`[forward] FBB forwarding scheduler active as ${forwardCall}`);
+  console.log("[forward] FBB forwarding scheduler active as %s", forwardCall);
 }
 
 // ---- Federation pull over packet circuits: dial the peers that publish an ax25/netrom endpoint, one session
@@ -627,7 +631,9 @@ if (env.FED_LINK_PULL === "1") {
       maxPages: numEnv("FED_LINK_PAGES", FED_LINK_PAGES_DEFAULT, { min: 1, max: 500 }),
     }).start();
     console.log(
-      `[fedlink] packet pull active as ${fedCall}, a session every ${Math.round(intervalMs / 60_000)} min at most`,
+      "[fedlink] packet pull active as %s, a session every %s min at most",
+      fedCall,
+      Math.round(intervalMs / 60_000),
     );
   }
 }
@@ -643,7 +649,7 @@ if (env.BOX_ID) {
   try {
     boxPosition = parseBoxPosition(env.BOX_LAT, env.BOX_LON);
   } catch (e) {
-    console.error(`[ingest] FATAL: ${(e as Error).message}`);
+    console.error("[ingest] FATAL: %s", (e as Error).message);
     process.exit(1);
   }
   new BoxPoller({
@@ -662,7 +668,9 @@ if (env.BOX_ID) {
     ...txLimitFromEnv("box"),
   }).start();
   console.log(
-    `[box] remote control active as ${env.BOX_ID} (remote transmit ${env.BOX_TX === "1" ? `allowed as ${boxCall ?? "?"}` : "disabled"})`,
+    "[box] remote control active as %s (remote transmit %s)",
+    env.BOX_ID,
+    env.BOX_TX === "1" ? `allowed as ${boxCall ?? "?"}` : "disabled",
   );
 }
 
@@ -709,7 +717,7 @@ function startUplink(serviceCall: string, servicePass: string): void {
       for (const it of items ?? []) {
         if (!isPublishable(it)) {
           // Acked so the gateway drops it: the item can never be written as one APRS-IS line.
-          console.warn(`[uplink] outbox item ${it.id} refused: a field holds a line break or NUL`);
+          console.warn("[uplink] outbox item %s refused: a field holds a line break or NUL", it.id);
           sent.push(it.id);
           continue;
         }
@@ -732,14 +740,14 @@ function startUplink(serviceCall: string, servicePass: string): void {
       outboxFailing = true;
       const nowMs = Date.now();
       if (nowMs - outboxLoggedAt > 30_000) {
-        console.error(`[uplink] outbox poll failed (${(e as Error).message}); retrying`);
+        console.error("[uplink] outbox poll failed (%s); retrying", (e as Error).message);
         outboxLoggedAt = nowMs;
       }
     } finally {
       outboxPolling = false;
     }
   }, 4000);
-  console.log(`[uplink] publishing the gateway's outbox to APRS-IS as ${SERVICE_CALL}`);
+  console.log("[uplink] publishing the gateway's outbox to APRS-IS as %s", SERVICE_CALL);
 }
 // An explicit uplink starts at once; otherwise the box waits for the gateway to name its service call.
 if (env.APRSIS_SERVICE_CALL && env.APRSIS_SERVICE_PASS) startUplink(env.APRSIS_SERVICE_CALL, env.APRSIS_SERVICE_PASS);

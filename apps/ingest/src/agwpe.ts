@@ -121,12 +121,12 @@ export class AgwpeTnc {
       // register the app ('X'), enable raw-frame monitor ('k') on our radio port
       s.write(Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "X" })));
       s.write(Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "k" })));
-      console.log(`[agwpe] connected ${this.o.host}:${this.o.port}`);
+      console.log("[agwpe] connected %s:%s", this.o.host, this.o.port);
     });
     s.on("data", (chunk: Buffer) => {
       const frames = this.rx.push(chunk);
       if (!frames) {
-        console.warn(`[agwpe] frame over ${AGWPE_MAX_DATA} bytes — not an AGW Packet Engine? reconnecting`);
+        console.warn("[agwpe] frame over %s bytes — not an AGW Packet Engine? reconnecting", AGWPE_MAX_DATA);
         s.destroy();
         return;
       }

@@ -132,7 +132,7 @@ export class NetromNodeRunner {
     });
     this.circuits.push(circ);
     circ.onPacket(pkt.tp, pkt.info); // feed the ConnReq → the circuit accepts + greets
-    console.log(`[netrom] inbound circuit from ${addrStr(user)} accepted`);
+    console.log("[netrom] inbound circuit from %s accepted", addrStr(user));
   }
 
   /** A CircuitDialer that opens a NET/ROM L4 circuit to a neighbour over KISS (validate-at-deploy on RF). */
@@ -210,7 +210,7 @@ export class NetromNodeRunner {
       if (this.inp3.applyRip(r, nb, ttFromRtt(linkTt)) !== "ignored") changed++;
     }
     if (changed) {
-      console.log(`[inp3] learned ${changed} route change(s) from ${nb}`);
+      console.log("[inp3] learned %s route change(s) from %s", changed, nb);
       this.emitTriggered();
     }
   }
@@ -347,7 +347,7 @@ export class NetromNodeRunner {
         const cutoff = Math.floor(Date.now() / 1000) - staleMs / 1000;
         this.inp3!.expire((r) => (this.neighbors.get(r.neighbor)?.lastHeard ?? 0) < cutoff);
       }, bMs).unref?.();
-      console.log(`[inp3] enabled — RIF learning, L3RTT probing, triggered updates on ${this.port}`);
+      console.log("[inp3] enabled — RIF learning, L3RTT probing, triggered updates on %s", this.port);
     }
     setInterval(() => {
       for (const c of this.circuits) c.poll();
@@ -358,7 +358,7 @@ export class NetromNodeRunner {
       const cutoff = Math.floor(Date.now() / 1000) - heardTtl;
       for (const [cs, m] of this.heard) if (m.lastHeard < cutoff) this.heard.delete(cs);
     }, 3_600_000).unref?.();
-    console.log(`[netrom] node ${this.o.alias}:${this.o.mycall} active on ${this.port}`);
+    console.log("[netrom] node %s:%s active on %s", this.o.alias, this.o.mycall, this.port);
   }
 
   /** Feed a raw inbound AX.25 frame (wire this to KissTnc.onRaw). Learns from NODES broadcasts. */
@@ -391,7 +391,7 @@ export class NetromNodeRunner {
       if (f.info[0] === 0xff) {
         const learned = this.node.consume(f.info, f.src, this.port);
         if (learned) {
-          console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)} (directed)`);
+          console.log("[netrom] learned %s route(s) from %s (directed)", learned, addrStr(f.src));
           void this.mirror();
         }
         return;
@@ -415,13 +415,13 @@ export class NetromNodeRunner {
           info: encodeNetrom(decision.packet),
         });
       } else if (decision.reason !== "no-route") {
-        console.log(`[netrom] dropped transit to ${addrStr(pkt.net.dest)} (${decision.reason})`);
+        console.log("[netrom] dropped transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
       }
       return;
     }
     const learned = this.node.consume(f.info, f.src, this.port);
     if (learned) {
-      console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)}`);
+      console.log("[netrom] learned %s route(s) from %s", learned, addrStr(f.src));
       void this.mirror();
     }
     this.answerNewNode(f.src);
@@ -460,7 +460,7 @@ export class NetromNodeRunner {
       // NODES records over the link (TheNet-style connected routing exchange)
       const learned = this.node.consume(packet, neighbor, this.port);
       if (learned) {
-        console.log(`[netrom] learned ${learned} route(s) from ${addrStr(neighbor)} (link)`);
+        console.log("[netrom] learned %s route(s) from %s (link)", learned, addrStr(neighbor));
         void this.mirror();
       }
       return;
@@ -483,7 +483,7 @@ export class NetromNodeRunner {
         info: encodeNetrom(decision.packet),
       });
     } else if (decision.reason !== "no-route") {
-      console.log(`[netrom] dropped link transit to ${addrStr(pkt.net.dest)} (${decision.reason})`);
+      console.log("[netrom] dropped link transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
     }
   }
 

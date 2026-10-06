@@ -98,7 +98,7 @@ export async function runUpdateCheck(env: Env, fetchImpl: typeof fetch = fetch, 
       return;
     }
     if (!r.ok) {
-      console.debug(`update check: GitHub answered ${r.status}`);
+      console.debug("update check: GitHub answered %s", r.status);
       return;
     }
     const body = (await r.json()) as { tag_name?: unknown; html_url?: unknown; draft?: unknown; prerelease?: unknown };
@@ -114,7 +114,7 @@ export async function runUpdateCheck(env: Env, fetchImpl: typeof fetch = fetch, 
         : `https://github.com/${RELEASE_REPO}/releases/tag/${encodeURIComponent(tag!)}`;
     await writeRow(env, { tag, url, etag: r.headers.get("etag"), checked_at: now });
   } catch (e) {
-    console.debug(`update check: ${(e as Error).message}`);
+    console.debug("update check: %s", (e as Error).message);
   }
 }
 

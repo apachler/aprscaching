@@ -121,7 +121,7 @@ export class MeshtasticTcp {
       if (this.heartbeat) clearInterval(this.heartbeat);
       this.heartbeat = setInterval(() => s.write(heartbeatFrame()), this.o.heartbeatMs ?? 5 * 60_000);
       this.heartbeat.unref?.();
-      console.log(`[meshtastic] connected ${this.o.host}:${this.o.port}`);
+      console.log("[meshtastic] connected %s:%s", this.o.host, this.o.port);
     });
     s.on("data", (chunk: Buffer) => this.receive(Uint8Array.from(chunk)));
     s.on("error", () => console.log("[meshtastic] disconnected, retrying…"));

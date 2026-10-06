@@ -39,7 +39,7 @@ export async function openRigctldPtt(
       }, replyMs);
       s.once("connect", () => {
         clearTimeout(t);
-        s.on("error", (e) => console.error(`[ptt] ${where}: ${e.message}`));
+        s.on("error", (e) => console.error("[ptt] %s: %s", where, e.message));
         res(s);
       });
       s.once("error", (e) => {

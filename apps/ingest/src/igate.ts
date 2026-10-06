@@ -94,12 +94,12 @@ export class Igate {
     const addr = txIgateTarget(f, this.o.call, this.heardLocally);
     if (!addr || !(this.o.canTx?.() ?? false)) return;
     if (!this.bucket.take()) {
-      console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
+      console.warn("[igate] rate limited — message for %s not gated to RF (next in %s s)", addr, this.bucket.waitSec());
       return;
     }
     const radio = this.heardOn.get(base(addr)) ?? this.kiss;
     if (radio.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
-      console.log(`[igate] TX->RF message for ${addr}`);
+      console.log("[igate] TX->RF message for %s", addr);
   }
 
   /** Write one APRS-IS line; a line holding a CR, LF or NUL is not one line and is dropped. */

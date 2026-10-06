@@ -110,7 +110,7 @@ export async function handleAddSite(req: Request, env: Env): Promise<Response> {
     .bind(site, who, nowS())
     .run();
   forgetAttestedSites(env);
-  console.log(`receiving site ${site} trusted by ${who}`);
+  console.log("receiving site %s trusted by %s", site, who);
   return json(
     { site: (await trustedStations(env)).find((s) => s.source === "admin" && s.site === site) },
     { status: 201 },

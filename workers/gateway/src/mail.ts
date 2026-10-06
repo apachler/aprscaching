@@ -83,7 +83,7 @@ export async function deliverMail(
     t.kind === "smtp"
       ? await viaSmtp(env, t, from, to, subject, text, timeoutMs, headers)
       : await viaResend(env, from, to, subject, text, headers);
-  if (!result.ok) console.warn(`mail: ${describeTransport(t)} did not take the message: ${result.error}`);
+  if (!result.ok) console.warn("mail: %s did not take the message: %s", describeTransport(t), result.error);
   return result;
 }
 

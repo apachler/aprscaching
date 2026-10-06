@@ -50,7 +50,7 @@ const WEB_DIST = process.env.WEB_DIST ? path.resolve(process.env.WEB_DIST) : und
 // parse) stops the start instead of falling back silently to a default the operator did not choose.
 const CONFIG_PROBLEMS = validateConfig(process.env, ["gateway", "server"]);
 if (CONFIG_PROBLEMS.length) {
-  for (const p of CONFIG_PROBLEMS) console.error(`FATAL: ${p.message}`);
+  for (const p of CONFIG_PROBLEMS) console.error("FATAL: %s", p.message);
   console.error("See docs/reference/configuration.md for each setting's accepted values.");
   process.exit(1);
 }
@@ -59,15 +59,16 @@ if (CONFIG_PROBLEMS.length) {
 // the environment or generated once and kept beside the database (so a single box needs no setup).
 const SECRETS = resolveServerSecrets(process.env, path.dirname(DB_PATH));
 if (!SECRETS.ok) {
-  console.error(`FATAL: ${SECRETS.error}`);
+  console.error("FATAL: %s", SECRETS.error);
   process.exit(1);
 }
-if (SECRETS.sessionSource === "generated") console.log(`SESSION_SECRET generated and kept in ${path.dirname(DB_PATH)}`);
+if (SECRETS.sessionSource === "generated")
+  console.log("SESSION_SECRET generated and kept in %s", path.dirname(DB_PATH));
 
 // Boot guard: HTTPS_PORT needs its certificate and key; a half-configured listener must not boot as plain http.
 const TLS_CONFIG = tlsFromEnv(process.env);
 if (!TLS_CONFIG.ok) {
-  console.error(`FATAL: ${TLS_CONFIG.error}`);
+  console.error("FATAL: %s", TLS_CONFIG.error);
   process.exit(1);
 }
 const TLS = TLS_CONFIG.tls;
@@ -76,7 +77,7 @@ const TLS = TLS_CONFIG.tls;
 // would otherwise run on whatever DNS says. Refuse to start instead of failing open.
 const fedConfigError = federationConfigError(process.env as unknown as Env);
 if (fedConfigError) {
-  console.error(`FATAL: ${fedConfigError}`);
+  console.error("FATAL: %s", fedConfigError);
   process.exit(1);
 }
 
@@ -111,19 +112,19 @@ if (TLS) {
   try {
     pair = readTls(TLS);
   } catch (e) {
-    console.error(`FATAL: cannot read TLS_CERT/TLS_KEY: ${(e as Error).message}`);
+    console.error("FATAL: cannot read TLS_CERT/TLS_KEY: %s", (e as Error).message);
     process.exit(1);
   }
   env.HTTPS_LISTENER_PORT = String(TLS.port);
   secure = createGatewayServer({ ...listenerBase, tls: pair }) as https.Server;
-  secure.listen(TLS.port, () => console.log(`aprscaching node-gateway https on :${TLS.port}`));
+  secure.listen(TLS.port, () => console.log("aprscaching node-gateway https on :%s", TLS.port));
   // A re-issued certificate (a hotspot that came back on another address) loads without a restart.
   process.on("SIGHUP", () => {
     try {
       reloadTls(secure!, TLS);
       console.log("SIGHUP — TLS certificate reloaded");
     } catch (e) {
-      console.error(`SIGHUP — TLS certificate not reloaded, the previous one stays: ${(e as Error).message}`);
+      console.error("SIGHUP — TLS certificate not reloaded, the previous one stays: %s", (e as Error).message);
     }
   });
 }
@@ -131,7 +132,10 @@ const server = createGatewayServer({ ...listenerBase, httpsPort: TLS?.port });
 
 server.listen(PORT, () =>
   console.log(
-    `aprscaching node-gateway listening on :${PORT}  (db: ${DB_PATH})${WEB_DIST ? `  (web: ${WEB_DIST})` : ""}`,
+    "aprscaching node-gateway listening on :%s  (db: %s)%s",
+    PORT,
+    DB_PATH,
+    WEB_DIST ? `  (web: ${WEB_DIST})` : "",
   ),
 );
 
@@ -148,7 +152,7 @@ let shuttingDown = false;
 function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} received — closing gateway`);
+  console.log("%s received — closing gateway", signal);
   secure?.close();
   server.close(() => {
     try {

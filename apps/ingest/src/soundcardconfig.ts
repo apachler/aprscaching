@@ -118,7 +118,8 @@ function extraPort(
     const r = RANGES[f];
     if (typeof o[f] !== "number" || !Number.isFinite(n)) throw new Error(`${at}.${f}: expected a number`);
     ranged[f] = Math.min(r.max, Math.max(r.min, n));
-    if (ranged[f] !== n) console.warn(`[config] ${at}.${f}=${n} is outside ${r.min}–${r.max}; using ${ranged[f]}`);
+    if (ranged[f] !== n)
+      console.warn("[config] %s.%s=%s is outside %s–%s; using %s", at, f, n, r.min, r.max, ranged[f]);
   }
   return { name, device, playback: str("playback") ?? device, rate, tx, ptt, call, ...ranged };
 }

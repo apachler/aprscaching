@@ -39,13 +39,13 @@ const res = await fetch(`${url}/enroll`, {
   headers: { "content-type": "application/json" },
   body: JSON.stringify(enrollBody(key, code, label)),
 }).catch((e: Error) => {
-  console.error(`enroll: the gateway at ${url} does not answer (${e.message})`);
+  console.error("enroll: the gateway at %s does not answer (%s)", url, e.message);
   process.exit(1);
 });
 const body = (await res.json().catch(() => ({}))) as { error?: string; box?: string; callsign?: string | null };
 if (!res.ok) {
-  console.error(`enroll: ${body.error ?? `HTTP ${res.status}`}`);
+  console.error("enroll: %s", body.error ?? `HTTP ${res.status}`);
   process.exit(1);
 }
-console.error(`enroll: box ${body.box} enrolled${body.callsign ? ` for ${body.callsign}` : ""}`);
+console.error("enroll: box %s enrolled%s", body.box, body.callsign ? ` for ${body.callsign}` : "");
 process.stdout.write(`BOX_ID=${box}\nBOX_KEY=${boxKey}\n`);

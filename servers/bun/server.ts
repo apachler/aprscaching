@@ -164,7 +164,7 @@ export function createServer(opts: BunServerOptions): BunServer {
   const stop = (signal: string) => {
     if (stopping) return;
     stopping = true;
-    console.log(`${signal} received — closing gateway`);
+    console.log("%s received — closing gateway", signal);
     try {
       server.stop();
       db.raw.exec("PRAGMA wal_checkpoint(TRUNCATE)");
@@ -184,10 +184,10 @@ if (import.meta.main) {
   const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
   const secrets = resolveServerSecrets(process.env, dirname(DB_PATH));
   if (!secrets.ok) {
-    console.error(`FATAL: ${secrets.error}`);
+    console.error("FATAL: %s", secrets.error);
     process.exit(1);
   }
-  if (secrets.sessionSource === "generated") console.log(`SESSION_SECRET generated and kept in ${dirname(DB_PATH)}`);
+  if (secrets.sessionSource === "generated") console.log("SESSION_SECRET generated and kept in %s", dirname(DB_PATH));
   let started: BunServer;
   try {
     started = createServer({
@@ -200,10 +200,10 @@ if (import.meta.main) {
       sourceCommit: gitHead(),
     });
   } catch (e) {
-    console.error(`FATAL: ${(e as Error).message}`);
+    console.error("FATAL: %s", (e as Error).message);
     process.exit(1);
   }
   const { migrated, server } = started;
   console.log(migrated.length ? `migrations applied: ${migrated.join(", ")}` : "migrations up to date");
-  console.log(`aprscaching bun-gateway listening on :${server.port}  (db: ${DB_PATH})`);
+  console.log("aprscaching bun-gateway listening on :%s  (db: %s)", server.port, DB_PATH);
 }

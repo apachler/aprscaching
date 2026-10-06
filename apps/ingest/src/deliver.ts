@@ -132,6 +132,6 @@ export class Delivery {
   }
 
   private log(msg: string): void {
-    (this.o.log ?? ((m) => console.error(`[forward] ${m}`)))(msg);
+    (this.o.log ?? ((m) => console.error("[forward] %s", m)))(msg);
   }
 }

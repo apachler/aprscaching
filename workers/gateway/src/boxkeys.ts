@@ -227,7 +227,7 @@ export async function handleTrustBox(req: Request, env: Env, box: string): Promi
     ),
   ]);
   forgetAttestedSites(env);
-  console.log(`box ${box} trusted for ${sites.join(", ")} by ${who}`);
+  console.log("box %s trusted for %s by %s", box, sites.join(", "), who);
   return json({ box, trust: trustOf(await trustRows(env, box)) });
 }
 
@@ -263,7 +263,7 @@ export async function handleBoxServices(req: Request, env: Env, box: string): Pr
     .bind(b.services ? 1 : 0, box)
     .run();
   if (!r.meta?.changes) return json({ error: "no enrolled box with that id, or it is revoked" }, { status: 404 });
-  console.log(`box ${box} services ${b.services ? "on" : "off"} by ${await actor(req, env)}`);
+  console.log("box %s services %s by %s", box, b.services ? "on" : "off", await actor(req, env));
   return json({ box, services: b.services });
 }
 
@@ -360,7 +360,7 @@ export async function handleEnroll(req: Request, env: Env): Promise<Response> {
     await env.DB.prepare("INSERT OR IGNORE INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)")
       .bind(box, used.createdBy, now)
       .run();
-  console.log(`box ${box} enrolled by ${used.createdBy}${used.callsign ? ` for ${used.callsign}` : ""}`);
+  console.log("box %s enrolled by %s%s", box, used.createdBy, used.callsign ? ` for ${used.callsign}` : "");
   return json({ box, instance: env.INSTANCE ?? null, label: used.label, callsign: used.callsign }, { status: 201 });
 }
 

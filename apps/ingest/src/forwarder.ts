@@ -114,7 +114,7 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
 export function forwardAdmit(bucket: TokenBucket): (p: GwPartner) => boolean {
   return (p) => {
     if (bucket.take()) return true;
-    console.warn(`[forward] rate limited — session with ${p.call} deferred (next in ${bucket.waitSec()} s)`);
+    console.warn("[forward] rate limited — session with %s deferred (next in %s s)", p.call, bucket.waitSec());
     return false;
   };
 }
@@ -196,7 +196,7 @@ export function frameForwardLink(
     state: (s: LinkState) => {
       if (s === "disconnected") fireClose();
     },
-    error: (msg: string) => console.error(`[${o.tag ?? "forward"}] ${o.partnerCall} link error: ${msg}`),
+    error: (msg: string) => console.error("[%s] %s link error: %s", o.tag ?? "forward", o.partnerCall, msg),
   });
   const poll = setInterval(() => link.poll(), 1000);
   const onRaw = (b: Uint8Array) => {

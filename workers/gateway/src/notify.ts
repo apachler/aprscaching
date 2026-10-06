@@ -239,7 +239,7 @@ export async function runDigests(env: Env): Promise<void> {
     await env.DB.prepare("UPDATE watch_alerts SET notified = 1 WHERE account_id = ? AND notified = 0")
       .bind(r.acct)
       .run();
-    if (!sent) console.log(`digest (no email provider): ${alerts.length} alerts for ${r.acct}`);
+    if (!sent) console.log("digest (no email provider): %s alerts for %s", alerts.length, r.acct);
   }
 }
 

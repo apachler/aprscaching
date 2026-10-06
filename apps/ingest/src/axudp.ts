@@ -78,7 +78,7 @@ export class AxudpListener {
       if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // retry the bind once the address frees up
     });
     s.bind(this.o.port, this.o.bind, () =>
-      console.log(`[axudp] listening udp/${this.o.port} (tunnelled AX.25 — Tier C only)`),
+      console.log("[axudp] listening udp/%s (tunnelled AX.25 — Tier C only)", this.o.port),
     );
   }
 
@@ -146,7 +146,9 @@ export class AxudpPort {
     });
     s.bind(this.o.port, this.o.bind, () =>
       console.log(
-        `[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`,
+        "[axudp] port udp/%s ↔ %s (Tier C)",
+        this.o.port,
+        this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)",
       ),
     );
   }
