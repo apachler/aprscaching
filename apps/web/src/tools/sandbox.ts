@@ -14,6 +14,9 @@
  */
 import {
   isToolEvent,
+  REPLY_MAX,
+  REPLY_TTL_MS,
+  replyLine,
   TOOL_API,
   TOOL_FEATURES,
   sanitizeMapLayer,
@@ -217,10 +220,6 @@ function workerSource(): string {
 const LOAD_TIMEOUT_MS = 15_000;
 /** How long a command, a decode or a service call may take before it answers with an error. */
 const ANSWER_TIMEOUT_MS = 10_000;
-/** How long a tool may answer a connected session after the event that offered the reply, and how often. */
-export const REPLY_TTL_MS = 120_000;
-export const REPLY_MAX = 4;
-export const REPLY_TEXT_MAX = 256;
 /** A tool's bridge budget: messages per second, the size of one message, and the services and topics it holds. */
 export const MSG_PER_SEC = 200;
 export const MSG_MAX_BYTES = 64 * 1024;
@@ -434,7 +433,7 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
  */
 export function workerPayload(p: ToolEventPayload): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const k of ["surface", "source", "peerCall", "myCall", "dst", "text"]) {
+  for (const k of ["surface", "source", "peerCall", "myCall", "direction", "dst", "text"]) {
     const v = p[k];
     if (typeof v === "string") out[k] = v.slice(0, 512);
   }
@@ -449,9 +448,6 @@ export function workerPayload(p: ToolEventPayload): Record<string, unknown> {
   }
   return out;
 }
-
-/** A reply text as one line within REPLY_TEXT_MAX characters. */
-const replyText = (t: string) => t.replace(/[\r\n\0]+/g, " ").slice(0, REPLY_TEXT_MAX);
 
 /** Settle like `p`, or with `fallback` (which may throw) after `ms`, so an unanswered request never hangs its caller. */
 function within<T>(p: Promise<T>, ms: number, fallback: () => T): Promise<T> {
@@ -739,7 +735,7 @@ export class SandboxBridge {
       return;
     }
     r.left--;
-    r.fn(replyText(text));
+    r.fn(replyLine(text));
   }
 
   /** Offer a service the worker answers; callers get a promise, answered or failed within ANSWER_TIMEOUT_MS. */

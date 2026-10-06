@@ -5,9 +5,14 @@
 tool.on("on_frame", (p) =>
   tool.setPanel({ title: "Heard", nodes: [{ kind: "text", text: p.peerCall + " " + (p.text || "") }] }),
 );
+const sessions = [];
+let lastRtt = "none";
 tool.on("on_connect", (p) => {
+  sessions.push(["connect", p.surface, p.channel, p.peerCall, p.myCall, p.direction, typeof p.reply].join(" "));
   if (p.reply) p.reply("Welcome " + p.peerCall);
 });
+tool.on("on_disconnect", (p) => sessions.push(["disconnect", p.channel, p.peerCall, typeof p.reply].join(" ")));
+tool.subscribe("link.rtt", (d, from) => (lastRtt = d.ms + " " + from));
 tool.provide("echo.upper", async (a) => String(a).toUpperCase());
 register({
   colourRules: [{ srcPrefix: "DL", colorVar: "--st-user" }],
@@ -47,5 +52,12 @@ register({
     ask: async () => [String(await tool.call("echo.upper", "abc"))],
     op: () => ["operator only"],
     ping: { run: () => ["pong"], remote: true },
+    sessions: () => sessions.slice(),
+    rtt: () => [lastRtt],
+    pingreq: () => {
+      tool.emit("link.ping.request", {});
+      tool.emit("link.rtt", { ms: -1 }); // the app's alone: refused
+      return ["requested"];
+    },
   },
 });

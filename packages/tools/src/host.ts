@@ -57,8 +57,21 @@ export const TX_STATUS_MAX = 62;
 /** The longest APRS message text a tool may send, after `:ADDRESSEE:`. */
 export const TX_MESSAGE_MAX = 67;
 /** Bus service and topic names only the app may provide or publish: a tool cannot take over a host service. */
-export const RESERVED_BUS_PREFIXES = ["session.", "host."] as const;
+export const RESERVED_BUS_PREFIXES = ["session.", "host.", "link."] as const;
+/** Topics under a reserved prefix that a tool may publish: requests the app listens for and answers. */
+export const TOOL_REQUEST_TOPICS: readonly string[] = ["link.ping.request"];
 const reserved = (name: string) => RESERVED_BUS_PREFIXES.some((p) => name.startsWith(p));
+const reservedTopic = (name: string) => reserved(name) && !TOOL_REQUEST_TOPICS.includes(name);
+/** How long a tool may answer a connected session after the event that offered the reply, and how often. */
+export const REPLY_TTL_MS = 120_000;
+export const REPLY_MAX = 4;
+/** The longest line a reply, or a remote command's output line, sends on a session. */
+export const REPLY_TEXT_MAX = 256;
+/** A reply as one line within REPLY_TEXT_MAX characters. */
+export const replyLine = (t: unknown): string =>
+  String(t)
+    .replace(/[\r\n\0]+/g, " ")
+    .slice(0, REPLY_TEXT_MAX);
 /** The shortest beacon interval a tool may schedule: ten minutes, the usual floor for a fixed APRS station. */
 export const BEACON_MIN_INTERVAL_SEC = 600;
 /** The longest beacon interval: one day. */
@@ -130,9 +143,23 @@ export interface ToolEventPayload {
   myCall?: string; // the local station in use
   source?: string; // on_frame provenance label — "RF" (terminal/TNC), "APRS", …
   station?: { roles?: string[]; [k: string]: unknown } | null; // per-callsign context (account_stations)
+  direction?: SessionDirection; // on_connect/on_disconnect: who opened the session
   reply?: (text: string) => void; // send a line back on this channel (PMS/auto-answer)
   [k: string]: unknown;
 }
+
+/** Who opened a connected session: the remote station (`incoming`) or this one (`outgoing`). */
+export type SessionDirection = "incoming" | "outgoing";
+/** A connected session as a surface reports it to the tools in `on_connect` and `on_disconnect`. */
+export interface SessionInfo {
+  surface: Surface;
+  channel: number;
+  peerCall: string;
+  myCall: string;
+  direction: SessionDirection;
+}
+/** Send one line on a session for a tool: null once it is on its way, else why it was refused. */
+export type SessionSend = (text: string, tool: string) => string | null;
 
 /** A cooperative per-host string store (LinPac lp_set_var/get_var) shared by enabled tools. */
 export interface ToolStore {
@@ -386,6 +413,52 @@ export class ToolHost {
   }
 
   /**
+   * Raise `on_connect` or `on_disconnect` for a connected session. Every enabled tool on the session's surface that
+   * hooked the event gets the session, and, when the surface passes `send`, a `reply` of its own: up to REPLY_MAX
+   * lines of REPLY_TEXT_MAX characters within REPLY_TTL_MS of the event, each sent through `send` under the tool's
+   * name. A refused reply goes to the tool's log with the reason.
+   */
+  dispatchSession(event: "on_connect" | "on_disconnect", session: SessionInfo, send?: SessionSend): void {
+    for (const r of this.tools.values()) {
+      if (!r.enabled || !this.onSurface(r, session.surface)) continue;
+      const handlers = r.events.get(event);
+      if (!handlers?.length) continue;
+      const name = r.tool.manifest.name;
+      const payload: ToolEventPayload = { ...session, ...(send ? { reply: this.replyFor(name, send) } : {}) };
+      for (const h of handlers) {
+        try {
+          h(payload);
+        } catch (e) {
+          this.opts.onLog?.(name, `event error: ${(e as Error).message}`);
+        }
+      }
+    }
+  }
+
+  /** One tool's reply to one session event, held to the reply limits. */
+  private replyFor(tool: string, send: SessionSend): (text: string) => void {
+    const now = this.opts.now ?? Date.now;
+    const until = now() + REPLY_TTL_MS;
+    let left = REPLY_MAX;
+    return (text) => {
+      if (now() > until || left <= 0) {
+        this.opts.onLog?.(tool, "reply refused: the session's reply window has closed");
+        return;
+      }
+      const line = replyLine(text);
+      if (!line.trim()) return;
+      left--;
+      let why: string | null;
+      try {
+        why = send(line, tool);
+      } catch (e) {
+        why = (e as Error).message;
+      }
+      if (why) this.opts.onLog?.(tool, `reply refused: ${why}`);
+    };
+  }
+
+  /**
    * Run a registered /command (optionally scoped to `surface`); output lines, or null if none owns it.
    * `opts.remote` marks the caller as a *remote connected peer* (LinPac colon-commands D): only
    * tools whose manifest opted in with `remote: true` answer — a peer can never invoke operator-only ones.
@@ -513,7 +586,7 @@ export class ToolHost {
       emit: (topic, data) => {
         need("ipc");
         const t = this.busKey(topic);
-        if (reserved(t)) throw new Error(`topic "${t}" is reserved for the app`);
+        if (reservedTopic(t)) throw new Error(`topic "${t}" is reserved for the app`);
         this.busEmit(t, data, name);
       },
       subscribe: (topic, handler) => {
@@ -663,6 +736,10 @@ export class ToolHost {
   hostEmit(topic: string, data?: unknown): void {
     this.busEmit(this.busKey(topic), data, ToolHost.HOST);
   }
+  /** Listen on a topic from the app (a request tools publish, such as `link.ping.request`); returns the disposer. */
+  hostSubscribe(topic: string, fn: IpcHandler): () => void {
+    return this.addSub(this.busKey(topic), ToolHost.HOST, fn);
+  }
 
   /**
    * The bus for a tool that runs outside the host (a sandboxed import), under the tool's manifest name:
@@ -674,7 +751,7 @@ export class ToolHost {
     return {
       emit: (topic, data) => {
         const t = this.busKey(topic);
-        if (reserved(t)) throw new Error(`topic "${t}" is reserved for the app`);
+        if (reservedTopic(t)) throw new Error(`topic "${t}" is reserved for the app`);
         this.busEmit(t, data, name);
       },
       subscribe: (topic, handler) => this.addSub(this.busKey(topic), name, handler),

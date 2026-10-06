@@ -78,8 +78,8 @@ export function ax25Summary(f: Ax25Frame): string {
 /** An outgoing frame described for the Recent transmissions list, without its id and time. */
 export type TxNote = Omit<TxEntry, "id" | "at">;
 
-/** A frame the packet terminal sends, described for the Recent transmissions list. */
-export function terminalTxNote(f: Ax25Frame): TxNote {
+/** A frame the packet terminal sends, described for the Recent transmissions list; a tool's line names the tool. */
+export function terminalTxNote(f: Ax25Frame, feature: TxFeature = "Terminal"): TxNote {
   const dst = addrStr(f.dst);
   return {
     src: addrStr(f.src),
@@ -87,7 +87,7 @@ export function terminalTxNote(f: Ax25Frame): TxNote {
     path: (f.digis ?? []).map(addrStr),
     to: dst,
     summary: ax25Summary(f),
-    feature: "Terminal",
+    feature,
   };
 }
 
