@@ -134,6 +134,9 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
 - Dependency PRs that each touch `pnpm-lock.yaml` must be merged one at a time, each rebased onto the
   current `dev` first — GitHub merges the lockfile textually and can emit duplicate keys
   (`ERR_PNPM_BROKEN_LOCKFILE`) even while reporting the PR as clean.
+- A tool registry release reaches the app through `/bundle-tools <vX.Y.Z>` (`.claude/skills/bundle-tools/`):
+  `tools/toolkey/bundle-registry.mjs` on a `chore/bundle-tools-vX.Y.Z` branch, the gate, then a PR into `dev` that
+  waits for the owner's merge.
 
 ## Cross-cutting invariants (hold these everywhere)
 - **Identity, not call strings.** Leaderboards rank by callsign with profile aggregates per person;
