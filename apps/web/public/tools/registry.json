@@ -5,11 +5,11 @@
       "title": "Hello tool",
       "author": "OE8APR",
       "version": "1.0.0",
-      "pubkey": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "/tools/hello/tool.json",
       "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
     }
   ],
-  "authority": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
-  "sig": "r6BYLYK/doOytPnyUly48TrtwvThRLhwZsAQKTOA+RNnHlqqY/4ih/ATNHh8XQwsYhivpBJInIPYDqwg5y1BBQ=="
+  "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
+  "sig": "OdLlbf1LW0GOI2NGXjQrJOFCR+PGjZGZJrfnSfBnDdvONrKhsOTEDE/QuT3yhRdhgbA1Fi2i6skgy+nAewanDw=="
 }

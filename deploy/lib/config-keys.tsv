@@ -198,7 +198,7 @@ VITE_BASEMAP_STYLE	string	web			0	0	selfhost,baremetal,pocket	MapLibre style URL
 VITE_SAT_TILES	string	web			0	0	selfhost,baremetal,pocket	Satellite raster tile URL template	
 VITE_SAT_ATTRIBUTION	string	web			0	0	selfhost,baremetal,pocket	Attribution shown with the satellite layer	
 VITE_TOOL_REGISTRY	string	web	/tools/registry.json		0	0	selfhost,baremetal,pocket	URL of the signed tool registry	
-VITE_TOOL_REGISTRY_AUTHORITY	string	web	J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink		0	0	selfhost,baremetal,pocket	Ed25519 key the tool registry is verified against	
+VITE_TOOL_REGISTRY_AUTHORITY	string	web	22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0		0	0	selfhost,baremetal,pocket	Ed25519 key the tool registry is verified against	
 DOMAIN	string	deploy	:80		0	0	selfhost	What Caddy serves: a hostname gets Let's Encrypt TLS, :80 serves plain HTTP	
 TUNNEL_TOKEN	string	deploy			1	0	selfhost	Cloudflare Tunnel token of a named tunnel	
 BACKUP_DIR	string	deploy			0	0	selfhost,baremetal,desktop	Local or mounted directory for database backups, off the database's disk	

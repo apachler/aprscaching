@@ -7,6 +7,6 @@
   "surfaces": ["web", "terminal"],
   "description": "Example signed tool: a command, colour rule, panel and a ROT13 decoder.",
   "entry": "tool.js",
-  "pubkey": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
-  "signature": "qRBeRg0P2QljgiX9JwA/xZUgRPEuJ4og+wdkxTbnwC5ZREIphm/2UQPL/kwM3SIU37TKeqwTyiE1ualXDQraBA=="
+  "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+  "signature": "NjuG7xXx1l8ZcoXLy61QiICw2jc+GScNebHmMOz2pSfiemDfAARDb+Hig9n7qQ9aCK5t7x+c6gA+slSiJ8ccCw=="
 }

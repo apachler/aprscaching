@@ -10,4 +10,4 @@ export const TOOL_REGISTRY_URL: string = import.meta.env.VITE_TOOL_REGISTRY ?? "
 // The project's registry authority — the public half of the key apps/web/public/tools/registry.json is signed with.
 // Rotate by generating a key (tools/toolkey/genkey.mjs), re-signing the registry, and updating this constant.
 export const TOOL_REGISTRY_AUTHORITY: string =
-  import.meta.env.VITE_TOOL_REGISTRY_AUTHORITY ?? "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink";
+  import.meta.env.VITE_TOOL_REGISTRY_AUTHORITY ?? "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0";
