@@ -13,11 +13,11 @@ import { haversineMeters } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
 
 /** How long after its lease a beacon's hearings arrive: digipeated copies and APRS-IS copies take minutes. */
-export const BEACON_ECHO_S = 15 * 60;
+const BEACON_ECHO_S = 15 * 60;
 /** Allowance before the lease for a hearing's own timestamp (the box's clock and the ingest's differ). */
 const BEACON_SKEW_S = 60;
 /** How near the position the box reported a hearing lies to be the beacon; APRS positions round to ~18 m. */
-export const BEACON_MATCH_M = 500;
+const BEACON_MATCH_M = 500;
 
 interface CommandedBeacon {
   from: number;
