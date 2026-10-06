@@ -10,7 +10,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 
 const UNITS = new Set(["metric", "imperial"]);

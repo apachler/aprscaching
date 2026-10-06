@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createTransport } from "nodemailer";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { normalEmail } from "./email.js";
 

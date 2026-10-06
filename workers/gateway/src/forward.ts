@@ -10,7 +10,7 @@ import { boxPrincipal } from "./boxprincipal.js";
  * `rf-fbb` partner over an RF link is validate-at-deploy — this is the routing brain.
  */
 import type { Env } from "./env.js";
-import { json, asStr } from "./app.js";
+import { json, asStr } from "./http.js";
 import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";

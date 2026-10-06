@@ -26,7 +26,7 @@
  * read, and the code at one name is never mistaken for the binding at the other.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { recordProof } from "./callsign.js";
 import { resolveTxt, resolveTxtAt, amprResolvers, acsFields, amprNames, NXDOMAIN, type TxtAnswer } from "./doh.js";
 import {

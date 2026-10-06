@@ -18,7 +18,7 @@
  * back, counts toward no cap, and goes silently after 30 days.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { nowS } from "./util/time.js";
 import { requireSysop } from "./admin.js";
 

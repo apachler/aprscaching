@@ -18,7 +18,7 @@ import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { escapeHtml } from "./util/html.js";
 import { nowS } from "./util/time.js";
 import { instanceHost, type Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import { sendEmail } from "./mail.js";
 import { purposeMac, sessionIdentity, timingSafeEqual } from "./auth.js";

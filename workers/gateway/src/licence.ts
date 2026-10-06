@@ -20,7 +20,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
-import { json, asStr } from "./app.js";
+import { json, asStr } from "./http.js";
 import { operatorSecretOk } from "./auth.js";
 import { readGate } from "./readapi.js";
 

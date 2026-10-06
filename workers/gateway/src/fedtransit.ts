@@ -46,7 +46,7 @@
  * every receiver refuses them (fedapply.ts), and no origin page serves them.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { nowS } from "./util/time.js";
 import { setting } from "./siteconfig.js";
 import { encodeFedSyncPage, type FedFrame } from "@aprscaching/shared";

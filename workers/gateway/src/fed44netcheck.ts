@@ -33,7 +33,7 @@
  * itself, and nothing written — no peer rows and no trust state.
  */
 import { applyDerivedDefaults, type Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { activeFedKeys, handleWellKnown, type FedPublicKey } from "./federation.js";
 import { amprCallOf, parse44netTxt, webOrigin, type AcsBinding } from "./fed44net.js";

@@ -10,7 +10,7 @@ import { b64urlToBytes } from "./util/b64.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { accountActionMessage, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";

@@ -34,7 +34,7 @@ import { nowS } from "./util/time.js";
 import { bytesToB64url } from "./util/b64.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { baseCall } from "@aprscaching/aprs";
 import {
   sessionIdentity,

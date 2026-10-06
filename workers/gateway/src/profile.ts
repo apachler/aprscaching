@@ -9,7 +9,7 @@
  * (GET /api/profile/:call is extended in community.ts to surface the public fields.)
  */
 import type { Env } from "./env.js";
-import { json, asStr } from "./app.js";
+import { json, asStr } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
 import { stripTags } from "./util/html.js";

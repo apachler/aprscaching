@@ -3,7 +3,7 @@ import { nowS } from "../util/time.js";
 import { requireSysop } from "../admin.js";
 /** Import engine: upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
-import { json } from "../app.js";
+import { json } from "../http.js";
 import { setting } from "../siteconfig.js";
 import { haversineMeters } from "@aprscaching/aprs";
 import { webLink } from "@aprscaching/shared";

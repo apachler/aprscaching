@@ -16,7 +16,7 @@
 import { nowS } from "./util/time.js";
 import { flagOn, type Env } from "./env.js";
 import { jsonObjectSetting } from "./util/config.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 import {
   type Spot,

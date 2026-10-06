@@ -15,7 +15,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { encodeFedPayload, type FedRecord, type FedRecordKind } from "@aprscaching/shared";
 import { signRaw } from "./federation.js";
 import { fedSigningBytes, encodeFedFrame } from "@aprscaching/shared";

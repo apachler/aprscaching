@@ -12,7 +12,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { xml } from "./app.js";
+import { xml } from "./http.js";
 import { userFeedPath } from "@aprscaching/shared";
 import { gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
 import { requestOrigin } from "./origins.js";

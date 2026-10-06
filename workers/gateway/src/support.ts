@@ -17,7 +17,7 @@ import { operatorSecretOk, sessionIdentity } from "./auth.js";
  *   POST /api/support/confirm       (ingest secret) webhook/manual confirm → tier + a ledger entry
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
 
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;

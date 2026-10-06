@@ -27,7 +27,7 @@ import { secretOk } from "./auth.js";
  * goes unanswered returns to the queue.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";

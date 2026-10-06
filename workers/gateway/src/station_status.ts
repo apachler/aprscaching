@@ -10,7 +10,7 @@
  * Sysop or OPERATOR_SECRET only: message bodies are the operator's own mail, and nothing here is public.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { isCallsignVerified } from "./callsign.js";

@@ -6,7 +6,7 @@
  * identity and admits the frames through the same path as a pull (handleFederationSubmit).
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { secretOk } from "./auth.js";
 import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";

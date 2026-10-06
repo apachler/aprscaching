@@ -5,6 +5,7 @@
  * This module touches no runtime-specific globals; each server supplies the bindings in `Env`.
  */
 import { nowS } from "./util/time.js";
+import { json } from "./http.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { POSITION_RETENTION_S, pruneBounded, pruneOperational, retentionFrom } from "./retention.js";
@@ -860,31 +861,6 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (importedPlace && m === "DELETE") return handleRemoveImportedPlace(req, env, Number(importedPlace[1]));
 
   return new Response("not found", { status: 404 });
-}
-
-export function json(data: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(data), {
-    ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
-  });
-}
-
-/**
- * Coerce an untrusted request-body field to a string. Primitives stringify as usual; an object (or
- * null/undefined/symbol) becomes "" — a malformed body `{call: {}}` can never inject "[object Object]"
- * into a stored/echoed value. Use this at every request-body boundary instead of `String(x ?? "")`.
- */
-export function asStr(v: unknown): string {
-  const t = typeof v;
-  return t === "string" || t === "number" || t === "boolean" || t === "bigint" ? String(v) : "";
-}
-
-/** XML/RSS/text responses (sitemap, RSS feeds, robots.txt) — content-type defaults to XML. */
-export function xml(body: string, init: ResponseInit = {}): Response {
-  return new Response(body, {
-    ...init,
-    headers: { "content-type": "application/xml; charset=utf-8", ...(init.headers ?? {}) },
-  });
 }
 
 /** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —

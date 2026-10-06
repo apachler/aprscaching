@@ -10,7 +10,7 @@
  * Self-hosters who MODIFY the code MUST set SOURCE_REPO (and SOURCE_COMMIT) to *their* published fork.
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { trimEndChars } from "./util/text.js";
 
 const UPSTREAM_REPO = "https://github.com/apachler/aprscaching";

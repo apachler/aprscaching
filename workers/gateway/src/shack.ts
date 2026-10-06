@@ -6,7 +6,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";

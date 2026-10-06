@@ -3,7 +3,7 @@ import { boxPrincipal } from "./boxprincipal.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { randomChallenge, verifyRegistration, verifyAssertion } from "./webauthn.js";
 import { bytesToB64, bytesToB64url, b64urlToBytes } from "./util/b64.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { displayCall } from "./auth.js";
 import { listedOrOwn } from "./caches.js";
 import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from "@aprscaching/shared";

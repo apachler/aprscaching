@@ -27,7 +27,7 @@ import {
 } from "@aprscaching/shared";
 import { CONFIG_HINTS, RETENTION_FIELD_LABELS, SITE_GROUP_TITLES, SITE_TEXT } from "@aprscaching/shared/configdocs";
 import type { Env } from "./env.js";
-import { json } from "./app.js";
+import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { actorOf, audit } from "./moderation.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
