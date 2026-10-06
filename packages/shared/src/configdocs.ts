@@ -421,7 +421,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`WEB_DIST`",
-        "Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front",
+        "Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front. Text assets go out brotli- or gzip-compressed when the browser accepts it",
         "—",
       ],
     ],

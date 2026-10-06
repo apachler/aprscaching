@@ -224,6 +224,8 @@ export interface MapCache {
   lat: number | null;
   lon: number | null;
   origin: string; // originating instance id
+  /** A mirrored cache's home instance address (its federation peer URL), where the cache is logged. */
+  originUrl?: string | null;
   mirrored: boolean;
   originTrust: "native" | "trusted" | "unvetted"; // first-party, or the origin peer's trust tier (blocked never surfaced)
   source: string; // "native" or an import source ("sota","pota",…)
@@ -324,13 +326,16 @@ export interface CacheStage {
 // ---- enriched search: as-you-type suggestions across caches + stations ----
 export interface SearchHitCache {
   kind: "cache";
-  id: number;
+  /** The local id; null for a cache mirrored from another instance (`remote` holds it). */
+  id: number | null;
   code: string;
   title: string;
   ownerCall: string;
   type: CacheType;
   lat: number | null;
   lon: number | null;
+  /** A cache that lives on another instance: its home instance names it, since codes repeat across instances. */
+  remote?: MapCache;
 }
 export interface SearchHitStation {
   kind: "station";

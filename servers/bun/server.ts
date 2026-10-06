@@ -55,7 +55,7 @@ export interface BunServerOptions {
   /** The running commit or tag, for the AGPL §13 source link. */
   sourceCommit?: string;
   /** Serves every request no gateway route claims — the desktop app's embedded SPA. */
-  spa?: (pathname: string) => Response;
+  spa?: (pathname: string, req: Request) => Response | Promise<Response>;
   /** This gateway is the desktop app: the update notice says to replace the binary. */
   desktop?: boolean;
 }
@@ -143,7 +143,7 @@ export function createServer(opts: BunServerOptions): BunServer {
         if (srv.upgrade(req, { data: { region } })) return undefined;
         return new Response("websocket upgrade failed", { status: 400 });
       }
-      if (opts.spa && !isGatewayPath(url.pathname)) return opts.spa(url.pathname);
+      if (opts.spa && !isGatewayPath(url.pathname)) return opts.spa(url.pathname, req);
       // the socket address is the client identity for rate limits: overwrite any client-supplied
       // x-real-ip and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared
       const headers = new Headers(req.headers);

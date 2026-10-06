@@ -33,6 +33,7 @@
             sessionStorage.getItem("acs.explore") === "1" ||
             q.has("view") ||
             q.has("v") ||
+            q.has("cache") ||
             q.has("demo");
           if (off) document.documentElement.dataset.prerender = "off";
         } catch (e) {

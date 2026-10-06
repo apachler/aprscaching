@@ -128,7 +128,7 @@ export function SearchSuggest(props: {
         <ul className="search-pop" id={`${ids}-listbox`} role="listbox" aria-label="Search results">
           {hits.map((h, i) => (
             <li
-              key={h.kind === "cache" ? `c${h.id}` : `s${h.callsign}`}
+              key={h.kind === "cache" ? (h.remote ? `r${h.remote.globalId}` : `c${h.id}`) : `s${h.callsign}`}
               id={`${ids}-opt-${i}`}
               role="option"
               aria-selected={i === active}
@@ -143,7 +143,10 @@ export function SearchSuggest(props: {
                 <>
                   <span className="so-kind cache">{h.code}</span>
                   <span className="so-title">{h.title}</span>
-                  <span className="so-meta mono">{h.ownerCall}</span>
+                  <span className="so-meta mono">
+                    {h.ownerCall}
+                    {h.remote && <> · {h.remote.origin}</>}
+                  </span>
                 </>
               ) : (
                 <>

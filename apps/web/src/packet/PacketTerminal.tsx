@@ -443,13 +443,8 @@ export function PacketTerminal(props: {
             }))}
           />
         )}
-        {portOpen ? (
-          <Button onClick={closePort}>Close TNC</Button>
-        ) : (
-          <Button variant="primary" onClick={openPort} hint={TERMS.kiss}>
-            Open KISS TNC…
-          </Button>
-        )}
+        {/* closed, the one way in is the empty state's primary action below */}
+        {portOpen && <Button onClick={closePort}>Close TNC</Button>}
       </div>
       {!portOpen && !props.makeTransport && missingLink && <p className="muted">{LINK_MISSING[missingLink]}</p>}
       {err && <p className="error">{err}</p>}
@@ -486,7 +481,7 @@ export function PacketTerminal(props: {
       {!portOpen && (
         <EmptyState
           action={
-            <Button variant="primary" onClick={openPort}>
+            <Button variant="primary" onClick={openPort} hint={TERMS.kiss}>
               Open KISS TNC…
             </Button>
           }

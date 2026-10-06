@@ -594,9 +594,12 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
               </p>
               {prompt.listedBy && <p className="tool-surfaces">listed by: {prompt.listedBy}</p>}
               <p className="muted fine">
-                It runs in a sealed frame, apart from your session, passkeys and stored keys. It reaches the network
-                only with the <code>network</code> capability, and then only the origins listed above. A tool transmits
-                only with your verified callsign and the consent you give this tab, at most once a minute.
+                It runs in a sealed frame, apart from your session, passkeys and stored keys.{" "}
+                {prompt.manifest.connect?.length
+                  ? "It reaches the network only with the network capability, and then only the origins under connects to."
+                  : "It names no origin to connect to, so it cannot reach the network."}{" "}
+                A tool transmits only with your verified callsign and the consent you give this tab, at most once a
+                minute.
               </p>
               <div className="row gap-2 end">
                 <Button onClick={() => setPrompt(null)}>Cancel</Button>

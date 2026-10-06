@@ -149,6 +149,7 @@ export function AdminPanel(props: { onClose: () => void }) {
       }
       onClose={props.onClose}
       density="compact"
+      broad
     >
       <p className="muted">
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}
@@ -3265,10 +3266,18 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
           </div>
         ))
       )}
-      <h4 className="set-subh">TAK / CoT feed</h4>
+      <h4 className="set-subh" id="cot-feed-h">
+        TAK / CoT feed
+      </h4>
       <p className="muted">Add this as a data feed in ATAK/WinTAK to see this instance's APRS stations as CoT:</p>
       <div className="row">
-        <input className="mono" readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
+        <input
+          className="mono"
+          readOnly
+          aria-labelledby="cot-feed-h"
+          value={feedUrl}
+          onFocus={(e) => e.currentTarget.select()}
+        />
         <Button
           onClick={() => {
             void copyText(feedUrl).then((ok) =>

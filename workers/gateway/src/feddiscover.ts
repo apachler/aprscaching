@@ -55,6 +55,7 @@ import {
 import {
   DISCOVERED_PREFIX,
   PeerAddRefused,
+  auditPeer,
   blockedAt,
   lookUpPeer,
   ours,
@@ -460,6 +461,13 @@ export async function handlePeerFollow(req: Request, env: Env): Promise<Response
         row.url,
       )
       .run();
+    await auditPeer(
+      req,
+      env,
+      "follow",
+      { url: found.url, instance: row.instance },
+      `${wantTrust ? "trusted" : "unvetted"}, key ${fingerprint}`,
+    );
     return json({ ok: true, peer: { ...preview, trust: wantTrust ? "trusted" : "unvetted" } });
   } catch (e) {
     if (e instanceof PeerAddRefused)

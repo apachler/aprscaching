@@ -34,4 +34,34 @@ describe("search suggestions", () => {
     ]);
     expect(hits.map((h) => (h.kind === "cache" ? h.code : h.callsign))).toEqual(["AC-1", "AC-2", "oe8apr"]);
   });
+
+  it("keep a peer's cache beside a local one with the same code", () => {
+    const peer: SearchHitCache = {
+      ...cache(0, "AC-1"),
+      id: null,
+      remote: {
+        globalId: "peer.example:cache:1",
+        id: null,
+        code: "AC-1",
+        ownerCall: "OE3ABC",
+        title: "Schlossberg",
+        type: "traditional",
+        status: "active",
+        difficulty: 1,
+        terrain: 1,
+        lat: 48,
+        lon: 16,
+        origin: "peer.example",
+        mirrored: true,
+        originTrust: "trusted",
+        source: "native",
+        sourceName: null,
+        sourceUrl: null,
+        country: null,
+        tags: [],
+      },
+    };
+    const hits = uniqueHits([cache(1, "AC-1"), peer, peer]);
+    expect(hits.map((h) => (h.kind === "cache" ? (h.remote?.origin ?? "here") : ""))).toEqual(["here", "peer.example"]);
+  });
 });

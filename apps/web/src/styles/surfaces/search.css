@@ -107,6 +107,11 @@
       animation-duration: 2s;
     }
   }
+  /* the top bar is its own stacking context: while its suggestions are open it rises above the shell, so the
+     list drops over the offline banner, the map overlays and the panels instead of under them */
+  .topbar:has(.search-pop) {
+    z-index: var(--z-popover);
+  }
   /* suggestion listbox */
   .search-pop {
     position: absolute;

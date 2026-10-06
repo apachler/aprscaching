@@ -24,6 +24,8 @@ describe("words", () => {
     expect(kindName("media")).toBe("photo or file");
     expect(kindName("weird")).toBe("weird");
     expect(actionName("unsuspend")).toBe("lifted the suspension of");
+    expect(actionName("block")).toBe("blocked");
+    expect(actionName("add-peer")).toBe("added");
     expect(actionName("other")).toBe("other");
   });
   it("lists the five report categories the server takes", () => {

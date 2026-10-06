@@ -9,6 +9,7 @@ import { AccountData } from "./identity/AccountData.js";
 import { SessionEndedNotice } from "./identity/SessionEndedNotice.js";
 import { ASSET } from "./brand.js";
 import { UpdateNotice } from "./shell/UpdateNotice.js";
+import { opensPlatform } from "./deeplink.js";
 
 // The signed-in / explore platform owns MapLibre (~1 MB) plus all the map code. Lazy-load it so the
 // signed-out marketing landing paints without ever fetching the map bundle: the
@@ -44,9 +45,8 @@ export function App() {
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
   const [explored, setExplored] = useState(() => {
     try {
-      // a deep link into the platform (?view=…, ?v=…) is a visit to it, signed in or not
-      const q = new URLSearchParams(location.search);
-      return sessionStorage.getItem("acs.explore") === "1" || q.has("view") || q.has("v");
+      // a deep link into the platform (?view=…, ?v=…, a shared ?cache=…) is a visit to it, signed in or not
+      return sessionStorage.getItem("acs.explore") === "1" || opensPlatform(location.search);
     } catch {
       return false;
     }

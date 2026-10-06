@@ -71,7 +71,7 @@ export function ApiKeys() {
   return (
     <>
       <p className="muted fine">
-        The read API is free with or without a key; a key lets an app or script make more requests. See the{" "}
+        A key lets an app or script make more requests. See the{" "}
         <ManualLink page="reference/api" anchor="public-read-api">
           read API
         </ManualLink>

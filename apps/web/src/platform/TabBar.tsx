@@ -12,7 +12,8 @@ export function TabBar(props: {
   active: string;
   onNav: (key: NavItem["key"]) => void;
   onFab: () => void;
-  fabLabel: "Log" | "Hide";
+  /** Log a find, post a note (an open cache that takes no find from this player: their own, or an inactive one), or hide one. */
+  fabLabel: "Log" | "Note" | "Hide";
   onMore: () => void;
   /** One of More's destinations is open. */
   moreActive: boolean;
@@ -40,8 +41,8 @@ export function TabBar(props: {
       <Button className="fab" onClick={props.onFab}>
         <span className="ic">
           <Icon
-            name={props.fabLabel === "Log" ? "check" : "plus"}
-            cp437={props.fabLabel === "Log" ? "√" : "+"}
+            name={props.fabLabel === "Log" ? "check" : props.fabLabel === "Note" ? "edit" : "plus"}
+            cp437={props.fabLabel === "Log" ? "√" : props.fabLabel === "Note" ? "¶" : "+"}
             size={26}
           />
         </span>

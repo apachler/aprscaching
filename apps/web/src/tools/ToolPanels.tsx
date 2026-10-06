@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { CSSProperties } from "react";
 import type { ToolHost, PanelNode, Surface } from "@aprscaching/tools";
+import { fieldLabel } from "./fieldLabel.js";
 
 /**
  * ToolPanels — the host-side renderer for `panel`-capability tools. A tool emits a declarative
@@ -34,7 +35,9 @@ function Node({ n }: { n: PanelNode }) {
         </div>
       );
     }
-    case "table":
+    case "table": {
+      // a decoder's field list names its fields by their data names: the first column reads as words
+      const fields = n.head[0] === "Field";
       return (
         <table className="tp-table">
           <thead>
@@ -48,13 +51,14 @@ function Node({ n }: { n: PanelNode }) {
             {n.rows.map((r, ri) => (
               <tr key={ri}>
                 {r.map((c, ci) => (
-                  <td key={ci}>{c}</td>
+                  <td key={ci}>{fields && ci === 0 ? fieldLabel(c) : c}</td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
       );
+    }
     case "blocks":
       // CP437/ANSI cell grid (GP GIP). A monospace grid of spans; colour from the ANSI token when set.
       return (

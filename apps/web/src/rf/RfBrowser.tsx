@@ -200,11 +200,6 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   return (
     <>
-      <p className="muted">
-        Hear your own radio in this browser — no server needed. The radio stays connected while you use the rest of the
-        app, until you disconnect it or close the page.
-      </p>
-
       <div className="row gap-2">
         {link ? (
           <Button variant="danger" onClick={() => void radioLink.disconnect()}>

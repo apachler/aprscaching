@@ -24,7 +24,8 @@ A cache sends strangers to a place. Make sure they are welcome there and safe.
 ## Hide your first cache
 
 You need to be signed in with a [verified callsign](../glossary.md#verified-callsign): an owner answers for the
-place and for every log on it. Until your callsign is verified, the panel says so and **Hide cache** stays off.
+place and for every log on it. Until your callsign is verified, the panel says why and offers **Verify** *your
+call*, which opens Settings, where you verify it.
 Stand at the spot, or know its coordinates.
 
 Each account hides at most 5 new caches in 24 hours. Your sysop can change that number. Past it, the panel

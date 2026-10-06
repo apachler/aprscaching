@@ -1591,8 +1591,9 @@ CREATE TABLE moderation_log (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   at             INTEGER NOT NULL,
   actor_call     TEXT NOT NULL,                    -- the sysop's call, or OPERATOR for a scripted action
-  action         TEXT NOT NULL,                    -- remove | restore | suspend | unsuspend | resolve | reopen
-  target_kind    TEXT NOT NULL,                    -- as moderation_reports, plus account and report
+  action         TEXT NOT NULL,                    -- remove | restore | suspend | unsuspend | resolve | reopen; set | reset (a setting);
+                                                   -- add-peer | follow | remove-peer | trust | unvet | block | unblock (a peer)
+  target_kind    TEXT NOT NULL,                    -- as moderation_reports, plus account, report, setting, tool-registry and peer
   target_id      TEXT NOT NULL,
   target_label   TEXT,
   target_account TEXT,

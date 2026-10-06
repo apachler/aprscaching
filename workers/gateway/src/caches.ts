@@ -219,6 +219,7 @@ export interface RemoteCacheRow {
   external_id: string | null;
   min_trust: string | null;
   origin_trust: string; // joined from fed_peers: 'trusted' | 'unvetted' (blocked is filtered out)
+  origin_url?: string | null; // joined from fed_peers: the home instance's address, where one is known
 }
 
 export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
@@ -245,6 +246,23 @@ export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     tags: splitTags(r.tags),
   };
 }
+/** The longest peer address a mirrored cache links to; a longer one is no address a sysop entered. */
+const ORIGIN_URL_MAX = 2048;
+
+/**
+ * A peer's address as the link to a mirrored cache's home page: an http(s) URL without trailing slashes, else
+ * null. It is parsed without a regular expression and capped in length, so a hostile peer row costs linear time.
+ */
+export function originWebUrl(url: string | null | undefined): string | null {
+  if (!url || url.length > ORIGIN_URL_MAX) return null;
+  const lower = url.slice(0, 8).toLowerCase();
+  const scheme = lower.startsWith("https://") ? 8 : lower.startsWith("http://") ? 7 : 0;
+  if (!scheme) return null;
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return end > scheme ? url.slice(0, end) : null;
+}
+
 export function remoteMapCache(r: RemoteCacheRow): MapCache {
   return {
     globalId: r.global_id,
@@ -259,6 +277,8 @@ export function remoteMapCache(r: RemoteCacheRow): MapCache {
     lat: r.lat,
     lon: r.lon,
     origin: r.origin,
+    // only a web address becomes the link to the cache's home page
+    originUrl: originWebUrl(r.origin_url),
     mirrored: true,
     originTrust: r.origin_trust === "trusted" ? "trusted" : "unvetted",
     source: r.source,
@@ -333,7 +353,7 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
     .all<CacheDbRow & { st_lat: number | null; st_lon: number | null }>();
   // origin trust defaults to 'unvetted' when the origin peer is unknown (e.g. removed) — hidden by default.
   const remote = await env.DB.prepare(
-    `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust
+    `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust, fp.url AS origin_url
        FROM remote_caches rc
        LEFT JOIN fed_peers fp ON fp.instance = rc.origin
       WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived' AND rc.fed_scope != 'unlisted'

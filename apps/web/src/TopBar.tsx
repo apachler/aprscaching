@@ -16,7 +16,8 @@ export function TopBar(props: {
   verified: boolean;
   onAccount: () => void;
   onHide: () => void;
-  count: number;
+  /** Caches in view; null until the map has read them (no "0 caches" while it loads). */
+  count: number | null;
   /** The offline sync's status line ("2 logs waiting · pack “JN77sb” 3 days old"), empty when all is synced. */
   syncLine: string;
   /** Queued logs the instance refused, waiting for the user's choice. */
@@ -66,10 +67,12 @@ export function TopBar(props: {
       >
         <Icon name="search" size={16} />
       </Button>
-      <span className="muted">
-        · {props.count} {props.count === 1 ? "cache" : "caches"}
-        {props.filtered ? " (filtered)" : " in view"}
-      </span>
+      {props.count != null && (
+        <span className="muted">
+          · {props.count} {props.count === 1 ? "cache" : "caches"}
+          {props.filtered ? " (filtered)" : " in view"}
+        </span>
+      )}
       {props.syncLine && (
         <Button
           variant="quiet"

@@ -8,8 +8,8 @@ when the signal returns.
 
 1. **Open the app once with a connection**, on the phone you take, and sign in. From then on it opens without
    one too. Add it to the home screen: the phone then keeps the app and its data more reliably.
-2. **Log once with signal** on a new phone, so its device key is registered with the instance. A find made
-   offline is signed with that key.
+2. **Sign in with signal** on a new phone. Signing in, and making a pack, registers the phone's device key
+   with the instance. A find made offline is signed with that key.
 3. **Make an offline pack** of where you are going: open **Offline** (or **Offline packs** in **Nearby**).
 
 ### Offline packs
@@ -79,9 +79,14 @@ A find without a device signature, from a browser that cannot sign, counts from 
 phone clock matters too. A time more than a minute ahead, or before you registered the device, is not taken,
 and the find counts from its arrival.
 
+When the connection returns, the **Offline** banner on the map goes and the live map comes back. A cache
+page that said **Saved** follows the log: **Sent** once the instance takes it, **Not sent** with the reason
+if it refuses it.
+
 **Nothing is lost.** If the instance refuses a log when it syncs, for example because the cache was deleted,
-the log moves to **Needs attention** with the reason. There you retry it, edit its comment, or discard it. A
-log goes only to the instance it was made on; signed in to another, it waits and says so.
+a message says so with the reason, and the log moves to **Needs attention**. There you retry it, edit its
+comment, or discard it. A log goes only to the instance it was made on; signed in to another, it waits and
+says so.
 
 A cache archived or disabled while your find waited refuses it when it syncs: the find lands under **Needs
 attention**, with the reason.

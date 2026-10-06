@@ -99,6 +99,15 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
     setMsg(null);
   }
 
+  /** An empty list's next action: Compose, set for personal mail or a bulletin to ALL. */
+  function compose(kind: "P" | "B") {
+    setType(kind);
+    setReplyTo(null);
+    if (kind === "B" && !to.trim()) setTo("ALL");
+    setSelected(null);
+    setTab("compose");
+  }
+
   async function send() {
     if (!to.trim() || !body.trim() || !signedIn) {
       setMsg("Set your callsign, a recipient and a message.");
@@ -267,7 +276,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             err ? (
               <ErrorState onRetry={load} />
             ) : (
-              <EmptyState>No messages for {props.callsign}.</EmptyState>
+              <EmptyState action={<Button onClick={() => compose("P")}>Write a message</Button>}>
+                No messages for {props.callsign}. Mail sent to your callsign over a BBS or this instance lands here.
+              </EmptyState>
             )
           ) : (
             <div className="bbs-body" data-sel={selected ? "1" : "0"}>
@@ -283,7 +294,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             err ? (
               <ErrorState onRetry={load} />
             ) : (
-              <EmptyState>You haven't sent any mail yet.</EmptyState>
+              <EmptyState action={<Button onClick={() => compose("P")}>Write a message</Button>}>
+                You haven't sent any mail yet.
+              </EmptyState>
             )
           ) : (
             <ul className="logs">
@@ -304,7 +317,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             err ? (
               <ErrorState onRetry={load} />
             ) : (
-              <EmptyState>No bulletins.</EmptyState>
+              <EmptyState action={signedIn && <Button onClick={() => compose("B")}>Post a bulletin</Button>}>
+                No bulletins yet. A bulletin goes to everyone, addressed to ALL or a BLN topic.
+              </EmptyState>
             )
           ) : (
             <div className="bbs-body" data-sel={selected ? "1" : "0"}>

@@ -35,6 +35,14 @@ const ACTION_NAMES: Record<string, string> = {
   // an Instance settings change: "OE8APR changed setting HIDE_DAILY_LIMIT"
   set: "changed",
   reset: "reset",
+  // a federation trust change: "OE8APR blocked peer peer.example (https://peer.example)"
+  trust: "trusted",
+  unvet: "moved to unvetted",
+  block: "blocked",
+  unblock: "unblocked",
+  "add-peer": "added",
+  "remove-peer": "removed",
+  follow: "followed",
 };
 /** An audit row as a verb phrase: "OE8APR removed". */
 export const actionName = (a: string): string => ACTION_NAMES[a] ?? a;

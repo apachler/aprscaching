@@ -199,6 +199,7 @@
     --panel-w: 348px; /* floating drawer */
     --dock-w: 340px; /* docked left column */
     --dock-w-detail: 392px; /* docked right (detail) column */
+    --dock-w-broad: 640px; /* docked column of a dense configuration surface (Instance admin) */
     --hit: 44px; /* minimum touch target */
     --ctl-min-h: 0px; /* the least height of a button, field or select: the touch target on a coarse pointer */
 

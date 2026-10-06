@@ -130,8 +130,8 @@ export function ProfilePanel(props: {
           )}
           {profile && (
             <p>
-              <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts ·{" "}
-              <strong>{profile.hides}</strong> hidden
+              <strong>{profile.finds}</strong> {profile.finds === 1 ? "find" : "finds"} ·{" "}
+              <strong>{profile.points}</strong> pts · <strong>{profile.hides}</strong> hidden
               {profile.lastFind && <span className="muted"> · last find {fmt.date(profile.lastFind)}</span>}
               {profile.homeInstance && (
                 <span className="muted">
@@ -156,7 +156,7 @@ export function ProfilePanel(props: {
               <Badge kind="tierA" title="Finds your receiving stations heard on the air and made Radio-verified">
                 ⇅ Infrastructure
               </Badge>{" "}
-              <strong>{profile.corroborations}</strong> finds corroborated{" "}
+              <strong>{profile.corroborations}</strong> {profile.corroborations === 1 ? "find" : "finds"} corroborated{" "}
               <InfoTip text={TERMS.corroboration} label="What is corroboration?" />
             </p>
           )}

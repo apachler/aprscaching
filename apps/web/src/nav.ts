@@ -219,7 +219,8 @@ export function sameView(a: View, b: View): boolean {
 /** `search` with the view's `?view=` parameters in place of any it carried; other parameters stay. */
 export function viewQuery(view: View, search: string): string {
   const p = new URLSearchParams(search);
-  for (const k of ["view", "call", "tool"]) p.delete(k);
+  // `cache` is a one-shot share link (cacheFromQuery): once the platform has read it, it leaves the address
+  for (const k of ["view", "call", "tool", "cache"]) p.delete(k);
   if (view.kind === "panel") p.set("view", view.key);
   else if (view.kind === "app") {
     p.set("view", view.id);

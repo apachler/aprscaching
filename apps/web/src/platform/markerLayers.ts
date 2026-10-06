@@ -5,7 +5,7 @@
  * never rebuilds every marker. DOM markers are overlays, not style layers, so they survive a basemap
  * style swap. Click handlers are read through a ref: a fresh closure does not rebuild the layer.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { MapCache, MeshcomNode, StationSummary, Spot } from "../api.js";
 import { nodePinClass, nodeTitle } from "../meshcom/meshcomView.js";
@@ -13,6 +13,7 @@ import { typeMeta } from "../cacheTypes.js";
 import { roleMeta } from "../stationRoles.js";
 import { aprsGlyph } from "../aprsGlyph.js";
 import { ASSET } from "../brand.js";
+import { CLUSTER_RADIUS_PX, CLUSTER_UNTIL_ZOOM, boundsOf, clusterByScreen } from "../map/cluster.js";
 
 /** Keep `fn` current without making it an effect dependency. */
 function useLatest<T>(fn: T) {
@@ -33,20 +34,54 @@ function prune(markers: Map<string, maplibregl.Marker>, seen: Set<string>) {
   }
 }
 
-/** Cache pins (living caches use the beacon icon); `phosphor` swaps each type glyph for its CP437 one. */
+/**
+ * Cache pins (living caches use the beacon icon); `phosphor` swaps each type glyph for its CP437 one. Zoomed out,
+ * pins that would overlap gather under a count marker that zooms in on them (map/cluster.ts); the open cache
+ * (`selected`, a global id) always keeps its own pin.
+ */
 export function useCacheMarkers(
   map: maplibregl.Map | null,
   caches: MapCache[],
   phosphor: boolean,
   onPick: (c: MapCache) => void,
+  selected: string | null = null,
 ): void {
   const markers = useRef(new Map<string, maplibregl.Marker>());
   const pick = useLatest(onPick);
+  // the groups depend on the zoom only: they are worked out again when a zoom ends
+  const [zoomEpoch, setZoomEpoch] = useState(0);
+  useEffect(() => {
+    if (!map) return;
+    const bump = () => setZoomEpoch((n) => n + 1);
+    map.on("zoomend", bump);
+    return () => {
+      map.off("zoomend", bump);
+    };
+  }, [map]);
   useEffect(() => {
     if (!map) return;
     const seen = new Set<string>();
-    for (const c of caches) {
-      if (c.lat == null || c.lon == null) continue;
+    const placed = caches.filter((c): c is MapCache & { lat: number; lon: number } => c.lat != null && c.lon != null);
+    const zoom = map.getZoom();
+    const groups =
+      zoom >= CLUSTER_UNTIL_ZOOM
+        ? placed.map((c) => [c])
+        : [
+            ...placed.filter((c) => c.globalId === selected).map((c) => [c]),
+            ...clusterByScreen(
+              placed.filter((c) => c.globalId !== selected),
+              (c) => map.project([c.lon, c.lat]),
+              CLUSTER_RADIUS_PX,
+            ),
+          ];
+    for (const group of groups) {
+      if (group.length > 1) {
+        const key = `cluster:${group[0]!.globalId}`;
+        seen.add(key);
+        placeCluster(map, markers.current, key, group);
+        continue;
+      }
+      const c = group[0]!;
       seen.add(c.globalId);
       const meta = typeMeta(c.type);
       let el: HTMLElement;
@@ -95,7 +130,7 @@ export function useCacheMarkers(
     }
     prune(markers.current, seen);
     focusOnlyVisible(map, markers.current);
-  }, [map, caches, phosphor, pick]);
+  }, [map, caches, phosphor, pick, selected, zoomEpoch]);
   // Keyboard focus reaches only the pins on screen: a pin outside the view is not something to land on
   // (WCAG 2.4.3), and the Nearby list reaches every cache anyway.
   useEffect(() => {
@@ -106,6 +141,35 @@ export function useCacheMarkers(
       map.off("moveend", sync);
     };
   }, [map]);
+}
+
+/** A count marker for caches that would overlap at this zoom: choosing it zooms in until they part. */
+function placeCluster(
+  map: maplibregl.Map,
+  markers: Map<string, maplibregl.Marker>,
+  key: string,
+  group: (MapCache & { lat: number; lon: number })[],
+): void {
+  const box = boundsOf(group);
+  const centre: [number, number] = [(box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2];
+  let mk = markers.get(key);
+  if (!mk) {
+    const btn = document.createElement("button");
+    btn.className = "cache-cluster";
+    mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat(centre).addTo(map);
+    markers.set(key, mk);
+  } else mk.setLngLat(centre);
+  const el = mk.getElement();
+  el.textContent = String(group.length);
+  const label = `${group.length} caches here: zoom in`;
+  el.title = label;
+  el.setAttribute("aria-label", label);
+  el.onclick = (ev) => {
+    ev.stopPropagation();
+    const spread = box[0][0] !== box[1][0] || box[0][1] !== box[1][1];
+    if (spread) map.fitBounds(box, { padding: 80, maxZoom: CLUSTER_UNTIL_ZOOM + 1 });
+    else map.easeTo({ center: centre, zoom: CLUSTER_UNTIL_ZOOM });
+  };
 }
 
 function focusOnlyVisible(map: maplibregl.Map, markers: Map<string, maplibregl.Marker>): void {

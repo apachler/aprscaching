@@ -19,9 +19,11 @@ at the end you stand at the cache with its sheet open, ready to log.
 tab. A dot marks one that needs you: a new message, or a callsign still to verify. The same dot shows on **More**
 and on the left rail.
 
-The centre button shows **Log** while a cache is open and **Hide** otherwise. On a computer, **Manual** sits at the
-foot of the left rail. A tablet shows the left rail as icons only: rest on an icon, or move to it with the
-keyboard, to see its name. Rest the pointer on a control, or move to it with the keyboard, to see a one-line hint of
+The centre button shows **Log** while a cache is open and **Hide** otherwise; it brings the cache's log form into
+view. On a cache you own, or one that is archived or disabled, it shows **Note** and says why: such a cache
+takes notes, not finds. On a computer, **Manual** sits at the foot of the left rail. A tablet shows the left rail
+as icons only: rest on an icon, or move to it with the keyboard, to see its name. Rest the pointer on a control,
+or move to it with the keyboard, to see a one-line hint of
 what it does; the small **i** beside a term explains it on a tap. The bell in the top bar opens your alerts
 ([Alerts and the watchlist](community.md#alerts-and-the-watchlist)).
 
@@ -62,7 +64,9 @@ direction. The line above it says what it measures from:
 
 ## Open the cache sheet
 
-Tap a marker, a row in **Nearby**, or a search result. The cache sheet shows:
+Tap a marker, a row in **Nearby**, or a search result. Zoomed out, caches close together share one round marker
+with their number: tap it to zoom in until they part. The map moves the open cache into view beside its sheet,
+above it on a phone. The cache sheet shows:
 
 - the title, the type, where the cache comes from (**APRScaching**, or **imported** from a programme such as
   SOTA), the code and the owner;
@@ -136,14 +140,17 @@ You get one message per cache a day, and at most four an hour.
 
 ## Caches from other instances
 
-Your instance can show caches from other instances in its network. Their sheet says **mirrored from** the
-other instance and shows the type, difficulty, terrain and owner. You cannot log them here: log your find on
-the cache's home instance. It shows here once that instance publishes it.
+Your instance can show caches from other instances in its network, and search finds them too. Their sheet
+names the home instance beside the code, since two instances can each have an `AC-0001`, and shows the type,
+difficulty, terrain, owner and coordinates. **Navigate** hands the coordinates to a maps app. You cannot log
+them here: **Open AC-0001 on** *its instance* takes you to the cache's page there, where you log your find. It
+shows here once that instance publishes it.
 
 ## Share caches and views
 
-- **Copy link** copies a link to the cache.
-- **▦ QR** shows a QR code that opens the cache. **download SVG** saves it for printing.
+- **Copy link** copies a link to the cache. The link opens the map on the cache, signed in or not.
+- **▦ QR** shows a QR code that opens the cache. **download SVG** saves it for printing: a visitor who scans
+  it at the site lands on the cache's page.
 - **Search & filter** → **Share this view** copies a link to the current map, with its layers and filters.
 
 ## Hunt without signal

@@ -870,7 +870,7 @@ export const supportUrl = `${API_BASE}/support`;
 
 // ---- browser-direct RF ingest — forward Web Serial KISS frames to a gateway ----
 import type { Packet } from "@aprscaching/shared";
-import { signIngest } from "./crypto.js";
+import { devicePublicKey, signIngest } from "./crypto.js";
 /**
  * Forward decoded RF packets to a gateway's /ingest. Authenticated by the ingest secret, so this is
  * the operator-local / self-host path (the rule's blessed single-operator case): the operator points
@@ -911,9 +911,12 @@ export async function ingestSigned(
   return res.json() as Promise<{ ok: boolean; stored: number }>;
 }
 
-/** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
-export function cotUrl(bbox: BBox): string {
-  return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
+/**
+ * Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed): absolute, since a TAK client
+ * knows nothing of this page's origin, with the box rounded to about 10 m.
+ */
+export function cotUrl(bbox: BBox, origin: string = location.origin): string {
+  return new URL(`${API_BASE}/api/cot?bbox=${bbox.map((v) => +v.toFixed(4)).join(",")}`, origin).href;
 }
 
 /** A federation peer with its health metrics (operator observability). */
@@ -1038,8 +1041,20 @@ export function followPeer(
   });
 }
 /** Operator: remove a peer and its pinned key. */
+/**
+ * The window event that says the map's caches changed on the instance (a federation pull brought mirrored caches,
+ * or a peer's trust moved, which shows or hides its caches): the map reads its caches again, without a reload.
+ */
+export const CACHES_EVENT = "acs-caches";
+function cachesChanged<T>(r: T): T {
+  window.dispatchEvent(new Event(CACHES_EVENT));
+  return r;
+}
+
 export function removePeer(url: string): Promise<{ ok: boolean }> {
-  return call(`/federation/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" });
+  return call<{ ok: boolean }>(`/federation/peers?url=${encodeURIComponent(url)}`, { method: "DELETE" }).then(
+    cachesChanged,
+  );
 }
 
 /** What one peer's Sync now brought: the records per feed, or the pull's error, and its last pull times. */
@@ -1064,7 +1079,9 @@ interface PeerSyncResult {
 
 /** Sync now, one peer: pull from it at once (sysop, rate limited per peer). */
 export function syncPeerNow(url: string): Promise<PeerSyncResult> {
-  return call(`/federation/peers/sync`, { method: "POST", body: JSON.stringify({ url }) });
+  return call<PeerSyncResult>(`/federation/peers/sync`, { method: "POST", body: JSON.stringify({ url }) }).then(
+    cachesChanged,
+  );
 }
 
 /** How pushing to the hub stands (a spoke) and when each spoke last submitted (a hub). */
@@ -1093,7 +1110,11 @@ export function getFederationSync(): Promise<FederationSync> {
 }
 /** Operator: pull from the peers and push to the hub now (runs in the background). */
 export function syncFederationNow(): Promise<{ ok: boolean; started: boolean }> {
-  return call(`/api/admin/federation/sync`, { method: "POST" });
+  return call<{ ok: boolean; started: boolean }>(`/api/admin/federation/sync`, { method: "POST" }).then((r) => {
+    // the sync runs in the background on the instance: the map reads its caches again once it has had time
+    setTimeout(() => cachesChanged(null), 4000);
+    return r;
+  });
 }
 /**
  * Operator: promote/demote/quarantine a federation peer (sysop-gated). Trusting takes the fingerprint the sysop
@@ -1104,7 +1125,10 @@ export function setPeerTrust(
   trust: "trusted" | "unvetted" | "blocked",
   fingerprint?: string,
 ): Promise<{ ok: boolean }> {
-  return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust, fingerprint }) });
+  return call<{ ok: boolean }>(`/federation/peers/trust`, {
+    method: "POST",
+    body: JSON.stringify({ url, trust, fingerprint }),
+  }).then(cachesChanged);
 }
 
 export interface Fed44netResolved {
@@ -1884,10 +1908,29 @@ export function deleteCacheMedia(cacheId: number, mediaId: number): Promise<{ ok
   return call(`/api/caches/${cacheId}/media/${mediaId}`, { method: "DELETE" });
 }
 
+/**
+ * The local id of the cache a share link names (`/?cache=AC-0001`), from the read API, or from an offline pack
+ * without a connection; null when this instance holds no such cache.
+ */
+export async function cacheIdByCode(code: string): Promise<number | null> {
+  try {
+    const r = await call<{ cache: { id: number } }>(`/api/v1/caches/${encodeURIComponent(code)}`);
+    return r.cache.id;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    if (!isOffline(e)) throw e;
+    const hit = (await packSearch(await offlineReady(), code, 20)).find((h) => h.code.toUpperCase() === code);
+    return hit?.id ?? null;
+  }
+}
+
 // ---- per-cache share funnel: print a QR on your station so visitors can find it ----
-/** The public deep-link a QR encodes (opens the cache in the app — the current origin). */
+/**
+ * The public deep link a QR encodes (opens the cache in the app — the current origin). The embed, the feeds and the
+ * sysop's reports make the same `/?cache=CODE` form, which the platform opens (deeplink.ts cacheFromQuery).
+ */
 export const cacheShareUrl = (code: string): string =>
-  `${typeof window !== "undefined" ? window.location.origin : ""}/?cache=${encodeURIComponent(code)}`;
+  `${typeof window !== "undefined" ? window.location.origin : ""}/?cache=${encodeURIComponent(code.toUpperCase())}`;
 /** An SVG QR for the cache's share link, served by the gateway embed surface. */
 export const cacheQrUrl = (code: string, size = 256): string =>
   `${API_BASE}/embed/qr.svg?cache=${encodeURIComponent(code)}&size=${size}`;
@@ -2071,8 +2114,13 @@ export function flushLogQueue(): Promise<FlushResult> {
   return withQueueLock(flushUnlocked);
 }
 async function flushUnlocked(): Promise<FlushResult> {
-  if (!(await queuedLogs()).length) return { sent: 0, refused: 0 };
+  const queue = await queuedLogs();
+  if (!queue.length) return { sent: 0, refused: 0 };
   const instance = (await getInstance()) || undefined;
+  // a signed log is taken only once its key is registered to the logger's call: register it first, where it can
+  if (navigator.onLine)
+    for (const cs of new Set(queue.filter((q) => q.body.author).map((q) => q.body.loggerCall)))
+      await ensureDeviceKey(cs);
   const res = await flush<QueueBody>(
     queueStore,
     async (it) => {
@@ -2160,6 +2208,57 @@ export async function discardAttentionLog(index: number): Promise<void> {
 
 export function registerKey(body: { callsign: string; publicKey: string; label?: string }): Promise<{ ok: boolean }> {
   return call(`/keys/register`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** The calls this browser's device key is known to be registered to, as `CALL key` lines. */
+const KEY_REGISTERED = "acs.key.registered";
+const registeredPairs = (): string[] => {
+  try {
+    return (localStorage.getItem(KEY_REGISTERED) ?? "").split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Register this browser's device key to `callsign` once, while there is a connection: a find logged offline is
+ * signed with the key, and the instance takes it on sync only when the key is registered to the logger's call.
+ * It runs at sign-in, before a pack download and before every flush of the log queue. Resolves true when the
+ * key is registered (now or before); false when the browser cannot sign, there is no connection or the instance
+ * refused it (signed out, a call the account does not hold).
+ */
+export async function ensureDeviceKey(callsign: string): Promise<boolean> {
+  const cs = callsign.trim().toUpperCase();
+  if (cs.length < 3) return false;
+  const key = await devicePublicKey();
+  if (!key) return false;
+  const pair = `${cs} ${key}`;
+  const known = registeredPairs();
+  if (known.includes(pair)) return true;
+  try {
+    await registerKey({ callsign: cs, publicKey: key });
+  } catch {
+    return false;
+  }
+  try {
+    localStorage.setItem(KEY_REGISTERED, [...known.filter((p) => !p.startsWith(`${cs} `)), pair].join("\n"));
+  } catch {
+    /* storage blocked: the next call registers again, which the instance answers the same */
+  }
+  return true;
+}
+
+/** The refusal an offline log meets when its signing key never reached the instance. */
+const KEY_REFUSAL = "author key not registered to callsign";
+
+/**
+ * A refused log's reason as the person reads it: what happened and what to do. The instance's own words stay
+ * for every reason this does not know.
+ */
+export function refusalAdvice(reason: string): string {
+  if (reason === KEY_REFUSAL)
+    return "This device's signing key is not registered to your call. Sign in on this device while online, then tap Retry under Logs to sync.";
+  return reason;
 }
 
 /**
