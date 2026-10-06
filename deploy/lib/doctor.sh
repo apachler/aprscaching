@@ -536,13 +536,13 @@ doc_network() {
 }
 
 # ---- further addresses (EXTRA_ORIGINS) ----------------------------------------------------------------------
-# origin_scope ADDRESS: where an IPv4 address lies — hamnet (44.128.0.0/10, not on the internet), private (a LAN,
-# loopback or CGNAT range), or public (the internet, 44Net Connect included).
+# origin_scope ADDRESS: where an IPv4 address lies — 44net (44Net space, see ampr_scope: a HAMNET address or one
+# the internet reaches, which the range cannot tell apart), private (a LAN, loopback or CGNAT range), or public.
 origin_scope() {
   local a b
   IFS=. read -r a b _ _ <<<"$1"
   case "$a" in '' | *[!0-9]*) echo public; return 0 ;; esac
-  if [ "$a" = 44 ] && [ "${b:-0}" -ge 128 ] && [ "${b:-0}" -le 191 ]; then echo hamnet
+  if [ "$(ampr_scope "$1")" = 44net ]; then echo 44net
   elif [ "$a" = 10 ] || [ "$a" = 127 ] || { [ "$a" = 192 ] && [ "$b" = 168 ]; } ||
     { [ "$a" = 172 ] && [ "$b" -ge 16 ] && [ "$b" -le 31 ]; } || { [ "$a" = 169 ] && [ "$b" = 254 ]; } ||
     { [ "$a" = 100 ] && [ "$b" -ge 64 ] && [ "$b" -le 127 ]; }; then echo private
@@ -606,7 +606,10 @@ doc_origins() {
           scope="$(origin_scope "$ip")"
           if [ "$scope" = public ]; then
             warnc origins.http "$o is plain http on an internet address ($ip): sign-ins and sessions cross the internet unencrypted" \
-              "list it as https://$hostport instead; plain http suits HAMNET (44.128.0.0/10) and a LAN"
+              "list it as https://$hostport instead; plain http suits HAMNET and a LAN"
+            break
+          elif [ "$scope" = 44net ]; then
+            pass origins.http "$o is plain http on a 44Net address ($ip): right for a HAMNET address; if its subnet is routed on the internet, list it as https instead"
             break
           fi
         done
@@ -657,16 +660,22 @@ doc_federation() {
   case "$(doc_get FED_AUTO_PROMOTE)" in 0 | "") ;; *) unsafe+=("FED_AUTO_PROMOTE is not 0") ;; esac
   case "$(doc_get FED_CORROBORATION_QUORUM)" in 0 | 1) unsafe+=("FED_CORROBORATION_QUORUM is below 2") ;; esac
   for p in ${peers//,/ }; do
-    case "$p" in
-      https://*) ;;
-      *) unsafe+=("peer $p is not https") ;;
-    esac
     host="${p#*://}"
     host="${host%%[/:#]*}"
-    case "$host" in *.ampr.org | ampr.org) scope=44net ;; *) scope="$(ampr_scope "$host")" ;; esac
-    case "$scope" in
-      44net) unsafe+=("peer ${p%%#*} is on 44Net: admit it from Instance admin") ;;
-      hamnet) unsafe+=("peer ${p%%#*} is on HAMNET (44.128.0.0/10), not on the internet: admit it from Instance admin") ;;
+    case "$p" in
+      https://*)
+        # a 44Net peer is admitted by callsign from Instance admin, where DNS attests its name
+        case "$host" in *.ampr.org | ampr.org) scope=44net ;; *) scope="$(ampr_scope "$host")" ;; esac
+        [ "$scope" != 44net ] || unsafe+=("peer ${p%%#*} is on 44Net: admit it from Instance admin")
+        ;;
+      http://*)
+        if printf '%s' "${p%%#*}" | grep -Eq '^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?/?$'; then
+          pass "federation.hamnet.$host" "peer ${p%%#*} is a HAMNET or LAN peer over plain http"
+        else
+          unsafe+=("peer ${p%%#*} is plain http with a path: a HAMNET or LAN peer is http://<name or address>[:port]")
+        fi
+        ;;
+      *) unsafe+=("peer $p is neither https nor a plain-http HAMNET peer") ;;
     esac
   done
   if [ -n "$(doc_get FED_SUBMIT_SECRET)" ] && [ -z "$(doc_get FED_SUBMIT_INSTANCES)" ]; then
@@ -702,7 +711,11 @@ doc_federation() {
         pass "federation.peer.${p#*://}" "peer $p answers; its key fingerprint is ${fp:-missing (it signs nothing)}"
       fi
     else
-      warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator"
+      case "$p" in
+        http://*) warnc "federation.peer.${p#*://}" "peer $p does not answer from here" \
+          "a HAMNET peer answers only where this host has a route to HAMNET; otherwise check the URL, or ask its operator" ;;
+        *) warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator" ;;
+      esac
     fi
   done
 }
@@ -805,13 +818,13 @@ doc_net44() {
     failc net44.dns "$name has no A record" "add it in the 44Net Portal${v4:+, pointing at $v4}"
   elif [ -n "$v4" ] && [ "$a" != "$v4" ]; then
     failc net44.dns "$name points at $a, but the tunnel is $v4" "correct the A record in the 44Net Portal"
-  elif [ "$(ampr_scope "$a")" = hamnet ]; then
-    warnc net44.dns "$name points at $a, a HAMNET address (44.128.0.0/10) that peers on the internet and on 44Net cannot reach" \
-      "point it at your 44Net Connect address in the 44Net Portal, and publish the HAMNET address as a hamnet endpoint"
+  elif [ "$(ampr_scope "$a")" = sold ]; then
+    warnc net44.dns "$name points at $a, in 44.192.0.0/10, which ARDC sold in 2019 and is not 44Net" \
+      "point it at your 44Net address in the 44Net Portal"
   elif [ "$(ampr_scope "$a")" != 44net ]; then
-    warnc net44.dns "$name points at $a, outside 44Net (44.0.0.0/9)" "point it at your 44Net Connect address in the 44Net Portal"
+    warnc net44.dns "$name points at $a, outside 44Net (44.0.0.0/9 and 44.128.0.0/10)" "point it at your 44Net address in the 44Net Portal"
   else
-    pass net44.dns "$name points at $a"
+    pass net44.dns "$name points at $a, a 44Net address; reachability from the internet depends on how the subnet is routed (BGP, Connect, IPIP)"
   fi
   # the gateway's own check (doc_identity) compares the record with this instance's id and key; without it, the
   # record's presence is what this host can see

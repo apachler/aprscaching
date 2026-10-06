@@ -270,7 +270,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`EXTRA_ORIGINS`",
-        "Further addresses of this instance, comma-separated bare origins with no path: `https://` for a name with a certificate (a 44Net name reachable from the internet), `http://` for a name or address on a network without one: a HAMNET host (`44.128.0.0/10`, reached only over RF links, not from the internet) or a LAN. A request on one of them gets its session cookie, sign-in links and links into the app on that address; an `https` one also takes passkeys under `RP_ID` ([`/.well-known/webauthn`](api.md#authentication)), an `http` one signs in with an email link or the sysop's link. The Docker stack's Caddy serves each with automatic TLS or as plain http ([One instance, several addresses](../run/networks/several-addresses.md)). A gateway on another host than its web app (`VITE_API_BASE`) lists its own origin here",
+        "Further addresses of this instance, comma-separated bare origins with no path: `https://` for a name with a certificate (a 44Net name reachable from the internet), `http://` for a name or address on a network without one: a HAMNET host (not on the internet; the scheme declares it, since no address range tells HAMNET from 44Net) or a LAN. A request on one of them gets its session cookie, sign-in links and links into the app on that address; an `https` one also takes passkeys under `RP_ID` ([`/.well-known/webauthn`](api.md#authentication)), an `http` one signs in with an email link or the sysop's link. The Docker stack's Caddy serves each with automatic TLS or as plain http ([One instance, several addresses](../run/networks/several-addresses.md)). A gateway on another host than its web app (`VITE_API_BASE`) lists its own origin here",
         "—",
       ],
       [
@@ -541,7 +541,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_PEERS`",
-        "Comma-separated peer base URLs to sync from. An entry starts `unvetted`. `<url>#<fingerprint>` pins the peer's key fingerprint (16 hex digits, from its sysop or `node tools/fedkey/fingerprint.mjs`): a peer whose key matches starts `trusted`, one whose key does not is refused",
+        "Comma-separated peer base URLs to sync from. An entry starts `unvetted`. `<url>#<fingerprint>` pins the peer's key fingerprint (16 hex digits, from its sysop or `node tools/fedkey/fingerprint.mjs`): a peer whose key matches starts `trusted`, one whose key does not is refused. An `http://<name or address>[:port]` entry is a HAMNET peer, dialled like a `hamnet` endpoint with a 2-second timeout, unless its address is loopback, private or CGNAT (a LAN peer) ([HAMNET peers in FED_PEERS](../run/federation/index.md#hamnet-peers-in-fed_peers))",
         "—",
       ],
       [

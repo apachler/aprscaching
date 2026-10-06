@@ -15,13 +15,22 @@
  * https and then plain http, a `hamnet` host with a short timeout, since most peers have no route to
  * HAMNET — and keeps the first that answers. The row's `url`, the address the peer was added under, is
  * always among them: last, unless the endpoint set lists it. A peer without an endpoint set (a FED_PEERS URL, a
- * discovered or submitted peer before its first sync) is reached at its `url` alone.
+ * discovered or submitted peer before its first sync) is reached at its `url` alone. A plain `http://` url is a
+ * HAMNET peer the sysop declared, dialled like a `hamnet` endpoint, unless it names a LAN or loopback address:
+ * no address range tells a HAMNET host from one on the internet, so the scheme the sysop wrote decides.
  *
  * The endpoint set comes from DNS (a peer added by callsign, fed44net.ts), from the `addresses` of the peer's
  * own descriptor (fedpull.ts) or from its presence beacon (fedapply.ts); {@link mergeEndpoints} folds what a
  * peer says about itself into the stored set without dropping what DNS attested or the row's own address.
  */
-import { endpointBaseUrls, parseEndpoints, type FedEndpoint, type FedTransportKind } from "@aprscaching/shared";
+import {
+  endpointBaseUrls,
+  parseEndpoints,
+  validEndpointAddress,
+  type FedEndpoint,
+  type FedTransportKind,
+} from "@aprscaching/shared";
+import { isLocalHost } from "./fetchguard.js";
 
 const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
 /** A HAMNET host either routes from here or not at all: a short wait, then the next address. */
@@ -54,6 +63,19 @@ export function storedEndpoints(raw: string | null | undefined): FedEndpoint[] {
   }
 }
 
+/**
+ * The transport a peer row's own `url` is dialled as: a plain-http base with no path is `hamnet`, with the short
+ * timeout, unless its host is a LAN or loopback address; anything else keeps the full timeout.
+ */
+export function urlTransport(url: string): FedTransportKind {
+  if (!/^http:\/\//i.test(url) || !validEndpointAddress("hamnet", url)) return "https";
+  try {
+    return isLocalHost(new URL(url).hostname) ? "https" : "hamnet";
+  } catch {
+    return "https";
+  }
+}
+
 /** A peer's typed endpoint set, priority-ordered, with its `url` last unless the set lists it. */
 function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
   const list = storedEndpoints(p.endpoints);
@@ -61,7 +83,7 @@ function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
   // validated it, and may be plain http on a LAN or HAMNET peer, so it is taken as given.
   const url = p.url && /^https?:\/\//.test(p.url) ? p.url : null;
   if (url && !list.some((e) => endpointBaseUrls(e).includes(url)))
-    list.push({ transport: "https", address: url, priority: 100 });
+    list.push({ transport: urlTransport(url), address: url, priority: 100 });
   return list;
 }
 

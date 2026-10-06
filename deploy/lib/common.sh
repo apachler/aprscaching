@@ -92,16 +92,15 @@ json_str() {
 # The usage block of a script: the comment lines after the shebang, up to the first line that is not one.
 script_usage() { awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$1"; }
 
-# ampr_scope ADDRESS: the amateur network an IPv4 address lies on. 44net is 44.0.0.0/9, routed on the internet
-# through 44Net Connect or BGP; hamnet is 44.128.0.0/10, reached over RF links only; other is everything else,
-# 44.192.0.0/10 (not amateur space) included. The two are separate networks: an address on one says nothing
-# about a path to the other.
+# ampr_scope ADDRESS: where an IPv4 address lies. 44net is 44Net, ARDC's amateur space: 44.0.0.0/9 and
+# 44.128.0.0/10. sold is 44.192.0.0/10, sold to Amazon in 2019 and not amateur space. other is the rest. The
+# range says nothing about reachability: the internet reaches a 44Net subnet when it is announced in BGP, served
+# through 44Net Connect or reached over the IPIP mesh, and HAMNET uses 44Net addresses that are not announced.
+# No range tells a HAMNET address from an internet-reachable 44Net one.
 ampr_scope() {
   local a b
   IFS=. read -r a b _ _ <<<"$1"
   case "$a" in 44) ;; *) echo other; return 0 ;; esac
   case "$b" in '' | *[!0-9]*) echo other; return 0 ;; esac
-  if [ "$b" -lt 128 ]; then echo 44net
-  elif [ "$b" -lt 192 ]; then echo hamnet
-  else echo other; fi
+  if [ "$b" -lt 192 ]; then echo 44net; else echo sold; fi
 }

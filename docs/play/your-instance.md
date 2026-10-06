@@ -26,7 +26,7 @@ An instance can be reachable in several ways. Your sysop decides which ones it o
 |---|---|---|
 | **Internet name** | An `https://` address, such as `https://aprscaching.net` | Everything |
 | **44Net name** | A name ending in `ampr.org`, in the amateur-radio part of the internet ([44Net](../glossary.md#44net)). Often plain `http://` | The map, finds and logs; some phone features need https |
-| **HAMNET** | An amateur-radio IP network reached only over radio links ([HAMNET](../glossary.md#hamnet)). It needs no internet, and the internet and 44Net cannot reach it | The map, finds and logs, without the internet |
+| **HAMNET** | An amateur-radio IP network reached over radio links, not over the internet ([HAMNET](../glossary.md#hamnet)). It needs no internet | The map, finds and logs, without the internet |
 | **Radio** | APRS or [MeshCom](../glossary.md#meshcom) messages to the instance's service call | Logging finds and verifying your callsign, not browsing |
 
 ```mermaid

@@ -643,7 +643,13 @@ const IDENTITY: CallsignIdentity = {
       label: "44net endpoint",
       detail: "aprscaching.oe8apr.ampr.org — callsign OE8APR",
     },
-    { id: "a", status: "pass", label: "Address record", detail: "aprscaching.oe8apr.ampr.org → 44.27.132.9" },
+    {
+      id: "a",
+      status: "pass",
+      label: "Address record",
+      detail:
+        "aprscaching.oe8apr.ampr.org → 44.27.132.9: the name points into 44Net; reachability from the internet depends on how the subnet is routed (BGP, 44Net Connect, IPIP)",
+    },
     {
       id: "txt",
       status: "pass",

@@ -259,28 +259,30 @@ local_address_for() {
 }
 
 # ---- 44Net -------------------------------------------------------------------------------------------
-# "name address" for this phone's first address in an amateur network, on any interface: 44net is
-# 44.0.0.0/9, routed on the internet (the WireGuard app's tun0 with 44Net Connect); hamnet is 44.128.0.0/10,
-# reached over RF links only. 44.192.0.0/10 is not amateur space. Nothing when there is none.
-ampr_address() {
-  local want="$1" name cidr ip b net
+# "name address" for this phone's 44Net address, e.g. the WireGuard app's tun0 with 44Net Connect: an address
+# in 44Net, ARDC's amateur space, 44.0.0.0/9 or 44.128.0.0/10 (44.192.0.0/10 was sold in 2019 and is not
+# 44Net), on any interface. Nothing when there is none. The range says nothing about who reaches the address:
+# that depends on how its subnet is routed, and a HAMNET address is a 44Net address too.
+net44_address() {
+  local name cidr ip b
   while read -r name cidr; do
     [ -n "${name:-}" ] || continue
     ip="${cidr%%/*}"
     case "$ip" in 44.*) ;; *) continue ;; esac
     IFS=. read -r _ b _ _ <<<"$ip"
     case "${b:-}" in '' | *[!0-9]*) continue ;; esac
-    if [ "$b" -lt 128 ]; then net=44net; elif [ "$b" -lt 192 ]; then net=hamnet; else continue; fi
-    [ "$net" = "$want" ] || continue
+    [ "$b" -lt 192 ] || continue
     printf '%s %s\n' "$name" "$ip"
     return 0
   done < <(list_ipv4)
   return 1
 }
-# The phone's 44Net address. A HAMNET address is not one: it gives no path from the internet.
-net44_address() { ampr_address 44net; }
-# The phone's HAMNET address. A 44Net address is not one: it gives no path over HAMNET.
-hamnet_address() { ampr_address hamnet; }
+# The address of the hamnet endpoint FED_ENDPOINTS declares, or nothing. HAMNET is what the sysop declares:
+# no address range tells a HAMNET address from an internet-reachable 44Net one.
+hamnet_endpoint() {
+  env_get FED_ENDPOINTS | tr '{}' '\n\n' | grep '"transport":"hamnet"' | head -n 1 |
+    sed -n 's/.*"address":"\([^"]*\)".*/\1/p'
+}
 # Whether $1 is a host name under ampr.org: lowercase labels of letters, digits and inner hyphens.
 valid_ampr_host() {
   local host="$1" label labels

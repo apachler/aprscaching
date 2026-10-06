@@ -150,7 +150,7 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 |---|---|---|---|
 | `https` | full URL | sync | The default internet path |
 | `44net` | a name under `<call>.ampr.org`, or `https://<name>` when the name has a certificate | sync | Plain HTTP on the name; with `https://`, HTTPS first, then plain HTTP on the same name. The *name* is the durable identity |
-| `hamnet` | a HAMNET name or address (`44.128.0.0/10`), optional `:port` (`http://` in front is allowed) | sync | Plain HTTP on HAMNET, reached only over RF links and from neither the internet nor 44Net: tried with a 2-second timeout, so a peer off HAMNET moves on quickly |
+| `hamnet` | a HAMNET name or IPv4 address, optional `:port` (`http://` in front is allowed) | sync | Plain HTTP on HAMNET, which is not on the internet: tried with a 2-second timeout, so a peer off HAMNET moves on quickly. The publisher declares the kind; no address range tells a HAMNET address from an internet-reachable 44Net one |
 | `ax25` | `CALLSIGN-SSID` | forward | Packet circuit via the operator's ingest box |
 | `netrom` | node alias | forward | NET/ROM-routed circuit |
 | `bbs` | `CALL@BBS.#REGION.CC.CONT` | forward | Store-and-forward over FBB forwarding |
@@ -159,7 +159,9 @@ Sync transports (request/response) try the peer's addresses in priority order an
 answers for the rest of the sync: an address that fails to connect, refuses its certificate or times out
 gives way to the next. A `44net` endpoint with `https://` counts as two addresses, its https one first. The
 peer's `url`, the address it was added under, is always tried last unless the set lists it, and a peer that
-stores no endpoint set is reached there alone. Corroboration questions go to the same addresses in the same
+stores no endpoint set is reached there alone. A plain `http://` `url` with no path is tried as a `hamnet`
+address, with the 2-second timeout, unless it names a loopback, private or CGNAT address: that is how a HAMNET
+peer listed in `FED_PEERS` is reached. Corroboration questions go to the same addresses in the same
 order. Records are signed either way, so the fall back to plain http changes no trust. Forward transports are fire-and-forget carriers whose
 limits are operator configuration — frames apply idempotently on arrival, whatever path they took.
 

@@ -172,16 +172,18 @@ check "a .env with only the ingest link is an ingest box" eq "$(probe)" "ingest-
 
 # ---- doctor: where a further address lies ---------------------------------------------------------------------
 scope() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'; . '$DEPLOY/lib/doctor.sh'; origin_scope \"\$1\"" _ "$1"; }
-check "a 44.128/10 address is HAMNET" eq "$(scope 44.143.1.2)" hamnet
-check "a 44Net Connect address is on the internet" eq "$(scope 44.27.132.9)" public
+check "an address in 44.128.0.0/10 is 44Net, never HAMNET by range" eq "$(scope 44.143.1.2)" 44net
+check "an address in 44.0.0.0/9 is 44Net" eq "$(scope 44.27.132.9)" 44net
+check "an address in 44.192.0.0/10 is public, not 44Net" eq "$(scope 44.200.1.2)" public
 check "a LAN address is private" eq "$(scope 192.168.1.10)" private
 check "a CGNAT address is private" eq "$(scope 100.64.0.1)" private
 check "a public address is public" eq "$(scope 203.0.113.7)" public
 ampr() { bash -c ". '$DEPLOY/lib/common.sh'; ampr_scope \"\$1\"" _ "$1"; }
 check "44.0.0.0/9 is 44Net" eq "$(ampr 44.27.132.9)" 44net
-check "44.128.0.0/10 is HAMNET, not 44Net" eq "$(ampr 44.143.1.2)" hamnet
-check "44.192.0.0/10 is neither" eq "$(ampr 44.200.1.2)" other
-check "an address outside 44/8 is neither" eq "$(ampr 144.44.1.2)" other
+check "44.128.0.0/10 is 44Net" eq "$(ampr 44.143.1.2)" 44net
+check "  … an internet-announced subnet in it as well" eq "$(ampr 44.135.208.1)" 44net
+check "44.192.0.0/10 was sold and is not 44Net" eq "$(ampr 44.200.1.2)" sold
+check "an address outside 44/8 is not 44Net" eq "$(ampr 144.44.1.2)" other
 
 # ---- setup.sh: the federation posture ---------------------------------------------------------------------
 S="$DEPLOY/setup.sh"
@@ -210,20 +212,36 @@ if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peer
 else
   ok "a 44Net peer with a pinned fingerprint is refused for FED_PEERS"
 fi
-if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://44.143.1.2; then
-  bad "a HAMNET peer is refused for FED_PEERS"
-else
-  check "a HAMNET peer is refused for FED_PEERS, named as HAMNET" grep -q "is on HAMNET" "$TMP/err"
-fi
+for a in 44.27.132.9 44.143.1.2; do
+  if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers "https://$a"; then
+    bad "an https peer at the 44Net address $a is refused for FED_PEERS"
+  else
+    check "an https peer at the 44Net address $a is refused for FED_PEERS" grep -q "is on 44Net" "$TMP/err"
+  fi
+done
 if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://44.200.1.2; then
-  ok "an address in 44.192.0.0/10 is neither 44Net nor HAMNET"
+  ok "an address in 44.192.0.0/10 is not 44Net"
 else
-  bad "an address in 44.192.0.0/10 is neither 44Net nor HAMNET"
+  bad "an address in 44.192.0.0/10 is not 44Net"
 fi
-if setup --env-file "$TMP/y.env" --call OE8APR --domain a.example.net --fed-peers http://peer.example.org; then
-  bad "a plain-http peer is refused"
+HN="$TMP/hamnet.env"
+check "a HAMNET peer at a plain http address, with a port and a pinned fingerprint, is taken" \
+  setup --env-file "$HN" --call OE8APR --domain a.example.net \
+  --fed-peers 'http://44.143.1.2:8080#3f2a9c01bb7e4d10,http://gw.oe8xyz.ampr.org,https://peer.example.org'
+check "  … and written as given" eq "$(env_file_get "$HN" FED_PEERS)" \
+  "http://44.143.1.2:8080#3f2a9c01bb7e4d10,http://gw.oe8xyz.ampr.org,https://peer.example.org"
+check "  … with no warning about it" bash -c "! grep -q 'WARN: FED_PEERS' '$TMP/out'"
+check "a LAN peer at a plain http address is taken" setup --env-file "$TMP/lan-peer.env" --call OE8APR \
+  --domain a.example.net --fed-peers http://10.0.0.5:8787
+if setup --env-file "$TMP/y.env" --call OE8APR --domain a.example.net --fed-peers http://peer.example.org/aprs; then
+  bad "a plain-http peer with a path is refused"
 else
-  ok "a plain-http peer is refused"
+  check "a plain-http peer with a path is refused" grep -q "http://<name or address>" "$TMP/err"
+fi
+if setup --env-file "$TMP/y.env" --call OE8APR --domain a.example.net --fed-peers ftp://peer.example.org; then
+  bad "a peer that is neither https nor http is refused"
+else
+  ok "a peer that is neither https nor http is refused"
 fi
 cp "$P" "$TMP/hub.env"
 echo "FED_SUBMIT_SECRET=s" >>"$TMP/hub.env"

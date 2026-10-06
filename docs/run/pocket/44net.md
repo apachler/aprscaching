@@ -145,8 +145,9 @@ address serves it as plain http, since RF carries no encryption.
 ## Check that it worked
 
 - `status.sh` shows *44Net: up* and the 44.x address; `deploy/aprscaching net44 status` and `net44 check` say
-  the same. A HAMNET address (`44.128.0.0/10`) shows on a line of its own: it is not a 44Net address, and the
-  internet cannot reach it.
+  the same. A 44Net address is one in `44.0.0.0/9` or `44.128.0.0/10`; whether the internet reaches it depends
+  on how its subnet is routed, and a Connect address is reachable. When `FED_ENDPOINTS` declares a `hamnet`
+  endpoint, `status.sh` names it on a line of its own: HAMNET is a separate network, not on the internet.
 - From another network, `http://<44.x address>:8787/health` or `https://<your hostname>/health` answers.
 
 ## Next

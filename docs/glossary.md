@@ -82,11 +82,14 @@ explains it in full.
 :   A LoRa mesh system; APRScaching shows only nodes in licensed mode, which carry a callsign.
 
 <span id="44net"></span><span id="amprnet"></span><span id="hamnet"></span>44Net, AMPRNet and HAMNET
-:   **44Net** (AMPRNet) is amateur IPv4 space administered by ARDC and reachable from the internet, through
-    44Net Connect or BGP; `<call>.ampr.org` names live in it ([44Net address](run/networks/44net.md)).
-    **HAMNET** is an amateur IP network reached only over RF links, in `44.128.0.0/10`
-    ([HAMNET only](run/networks/hamnet.md)). The two are separate: a 44Net instance is not on HAMNET, and a
-    HAMNET instance has no 44Net or internet path because of its address.
+:   **44Net** (AMPRNet) is amateur IPv4 space administered by ARDC: `44.0.0.0/9` and `44.128.0.0/10`;
+    `<call>.ampr.org` names live in it ([44Net address](run/networks/44net.md)). The internet reaches a 44Net
+    subnet when it is announced in BGP, served through 44Net Connect or reached over the IPIP mesh; most of
+    44Net is not on the internet. In this manual, a 44Net address is one the internet reaches.
+    **HAMNET** is an amateur IP network that is not on the internet. It is reached over RF links, and licensed
+    hams also reach it through HAMNET VPN access ([HAMNET only](run/networks/hamnet.md)). European HAMNET uses
+    addresses from `44.128.0.0/10`, so no address range tells a HAMNET address from an internet-reachable 44Net
+    one: the sysop declares which it is. Having one says nothing about the other.
 
 <span id="lotw"></span>LoTW
 :   Logbook of The World, ARRL's contest and award log. Its callsign certificate can prove you hold a call

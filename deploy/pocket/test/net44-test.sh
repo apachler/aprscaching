@@ -37,15 +37,19 @@ fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" \
   "30: wlan0    inet 192.168.43.1/24 brd 192.168.43.255 scope global wlan0" \
   "41: tun0    inet 44.27.132.9/32 scope global tun0"
 check "44Net: the tunnel address" "$(net44_address)" "tun0 44.27.132.9"
-check "HAMNET: a 44Net address is not one" "$(yes_no hamnet_address)" no
-fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" "40: tun0    inet 44.130.1.2/32 scope global tun0"
-check "44Net: 44.128.0.0/10 is HAMNET, not 44Net" "$(yes_no net44_address)" no
-check "HAMNET: 44.128.0.0/10 counts" "$(hamnet_address)" "tun0 44.130.1.2"
+fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" "40: tun0    inet 44.135.208.1/32 scope global tun0"
+check "44Net: 44.128.0.0/10 counts" "$(net44_address)" "tun0 44.135.208.1"
 fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" "40: tun0    inet 44.200.1.2/32 scope global tun0"
-check "44Net: 44.192.0.0/10 is not amateur space" "$(yes_no net44_address)" no
-check "HAMNET: 44.192.0.0/10 is not amateur space" "$(yes_no hamnet_address)" no
+check "44Net: 44.192.0.0/10 is not 44Net" "$(yes_no net44_address)" no
 fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" "30: wlan0    inet 10.44.0.5/24 scope global wlan0"
 check "44Net: none without a 44.x address" "$(yes_no net44_address)" no
+
+# ---- the HAMNET endpoint: what FED_ENDPOINTS declares, never inferred from an address ------------------
+ENV_FILE="$WORK/hamnet.env"
+printf '%s\n' "FED_ENDPOINTS='[{\"transport\":\"https\",\"address\":\"https://p.example\",\"priority\":10},{\"transport\":\"hamnet\",\"address\":\"44.143.1.2:8080\",\"priority\":30}]'" >"$ENV_FILE"
+check "HAMNET: the declared endpoint" "$(hamnet_endpoint)" "44.143.1.2:8080"
+printf '%s\n' "FED_ENDPOINTS='[{\"transport\":\"44net\",\"address\":\"pocket.oe8apr.ampr.org\",\"priority\":10}]'" >"$ENV_FILE"
+check "HAMNET: none without a hamnet endpoint" "$(hamnet_endpoint)" ""
 
 # ---- ampr.org host names -----------------------------------------------------------------------------
 check "host: <call>.ampr.org" "$(yes_no valid_ampr_host oe8apr.ampr.org)" yes

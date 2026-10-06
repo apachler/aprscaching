@@ -171,14 +171,15 @@ describe("check44net — the TXT binding", () => {
   });
 });
 
-describe("amprScope — 44Net and HAMNET are separate networks", () => {
-  it("places 44.0.0.0/9 on 44Net, 44.128.0.0/10 on HAMNET, and the rest outside both", () => {
+describe("amprScope — 44Net is 44.0.0.0/9 and 44.128.0.0/10", () => {
+  it("places both halves in 44Net, and 44.192.0.0/10 and the rest outside it", () => {
     expect(amprScope("44.27.132.9")).toBe("44net");
     expect(amprScope("44.127.255.255")).toBe("44net");
-    expect(amprScope("44.128.0.1")).toBe("hamnet");
-    expect(amprScope("44.143.1.2")).toBe("hamnet");
-    expect(amprScope("44.191.255.255")).toBe("hamnet");
-    expect(amprScope("44.192.0.1")).toBe("other");
+    expect(amprScope("44.128.0.1")).toBe("44net");
+    expect(amprScope("44.135.208.1")).toBe("44net");
+    expect(amprScope("44.191.255.255")).toBe("44net");
+    expect(amprScope("44.192.0.1")).toBe("sold");
+    expect(amprScope("44.255.0.1")).toBe("sold");
     expect(amprScope("203.0.113.7")).toBe("other");
     expect(amprScope("144.44.1.2")).toBe("other");
   });
@@ -201,19 +202,23 @@ describe("check44net — the 44Net endpoint and its A record", () => {
     expect(a.fix).toContain("the Portal name is aprscaching.");
   });
 
-  it("warns on a HAMNET address, which peers on the internet cannot reach", async () => {
-    const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.143.1.2"]) });
-    const a = line((await check44net(ctx(), dns))!.lines, "a")!;
-    expect(a.status).toBe("warn");
-    expect(a.detail).toContain("HAMNET");
-    expect(a.fix).toContain("hamnet endpoint");
+  it("passes an address in either half of 44Net, without claiming the internet reaches it", async () => {
+    for (const ip of ["44.27.132.9", "44.135.208.1", "44.143.1.2"]) {
+      const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok([ip]) });
+      const a = line((await check44net(ctx(), dns))!.lines, "a")!;
+      expect(a.status).toBe("pass");
+      expect(a.detail).toContain("points into 44Net");
+      expect(a.detail).toMatch(/depends on how the subnet is routed/);
+      expect(a.detail).not.toMatch(/HAMNET/);
+    }
   });
 
-  it("warns on 44.192.0.0/10, which is not amateur space", async () => {
+  it("warns on 44.192.0.0/10, which is not 44Net", async () => {
     const dns = fakeDns({ [`TXT ${TXT_NAME}`]: ok([GOOD_TXT]), [`A ${HOST}`]: ok(["44.200.1.2"]) });
     const a = line((await check44net(ctx(), dns))!.lines, "a")!;
     expect(a.status).toBe("warn");
-    expect(a.detail).toContain("outside 44Net");
+    expect(a.detail).toContain("44.192.0.0/10");
+    expect(a.detail).toContain("not 44Net");
   });
 
   it("warns on an address outside 44Net", async () => {

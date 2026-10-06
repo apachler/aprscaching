@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The addresses one instance answers on: its main origin (APP_URL) and the further ones in EXTRA_ORIGINS — a
- * 44Net name over https, a HAMNET name or address (44.128.0.0/10) over plain http. Each request is answered
- * for the address it came on: its session cookie, the sign-in links it starts and the links into the app it
- * builds name that address, so a member on HAMNET stays on HAMNET. APP_URL stays the canonical address for what is
+ * 44Net name over https, a HAMNET name or address over plain http. Each request is answered for the address it
+ * came on: its session cookie, the sign-in links it starts and the links into the app it builds name that
+ * address, so a member on HAMNET stays on HAMNET. APP_URL stays the canonical address for what is
  * not tied to a request (the sitemap, the digest mail, the federation descriptor's identity).
  *
  * The request's address is read from its Host and the scheme a TLS-terminating proxy reports, and is believed
