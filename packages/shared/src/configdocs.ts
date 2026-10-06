@@ -125,6 +125,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   HOSTMODE_PORT: "TCP port of the WA8DED host-mode TNC",
   HOSTMODE_MYCALL: "Callsign the host-mode TNC is set to",
   HOSTMODE_RADIO_PORT: "Host-mode radio channel to use (0 is the first)",
+  TX_GATE_GRACE: "How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)",
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
   SOUNDCARD_RATE: "Sample rate of the soundcard port's audio",
@@ -751,6 +752,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ["KISS TNC (gates digi/node/BBS/IGate)", "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`)"],
       ["AGWPE", "`AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`)"],
       ["WA8DED hostmode", "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT`"],
+      [
+        "Transmit gate (every RF transmit port: KISS TNC, soundcard)",
+        "`TX_GATE_GRACE` (`6` minutes; a plain number is minutes, or `30m`, `2h`; clamped to 6 minutes to 24 hours): how long the gateway's last confirmation of a station call keeps counting while the gateway cannot be reached. A call the gateway says is not verified, or not this box's operator's, closes the gate at once — [Transmit gate](../run/radios/rf-ingest.md#transmit-gate)",
+      ],
       [
         "Soundcard port (1200-baud AFSK in the box; carries digi/node/BBS/IGate without a TNC)",
         "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",

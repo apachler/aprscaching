@@ -260,6 +260,7 @@ export const CONFIG_KEYS = {
   HOSTMODE_PORT: { type: "int", units: ["ingest"], default: "3694" },
   HOSTMODE_MYCALL: { type: "call", units: ["ingest"] },
   HOSTMODE_RADIO_PORT: { type: "int", units: ["ingest"], default: "0" },
+  TX_GATE_GRACE: { type: "string", units: ["ingest"], default: "6" },
   SOUNDCARD_DEVICE: { type: "string", units: ["ingest"] },
   SOUNDCARD_PLAYBACK: { type: "string", units: ["ingest"] },
   SOUNDCARD_RATE: { type: "enum", units: ["ingest"], default: "48000", values: ["44100", "48000"] },

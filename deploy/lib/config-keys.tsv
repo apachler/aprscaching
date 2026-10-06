@@ -113,6 +113,7 @@ HOSTMODE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of t
 HOSTMODE_PORT	int	ingest	3694		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the WA8DED host-mode TNC	
 HOSTMODE_MYCALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to	
 HOSTMODE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	Host-mode radio channel to use (0 is the first)	
+TX_GATE_GRACE	string	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)	
 SOUNDCARD_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port	
 SOUNDCARD_PLAYBACK	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA playback device of the soundcard port (blank: the capture device)	
 SOUNDCARD_RATE	enum	ingest	48000	44100|48000	0	0	selfhost,baremetal,ingest-box,pocket	Sample rate of the soundcard port's audio	

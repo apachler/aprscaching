@@ -10,12 +10,13 @@
  * doctor warns otherwise). An enrolled box (its own key, no shared secret) accepts the answer only over https
  * or loopback.
  *
- * A gateway without the endpoint (HTTP 404, an older version) is logged once and asked again only at the
- * normal interval; the gate stays closed meanwhile.
- *
- * Every answer is fresh for two refresh intervals (three minutes each), so a revoked verification closes the
- * gate within minutes. Without a fresh answer a call counts as unconfirmed, and the box asks again after 30 s,
- * backing off to the interval while the gateway stays unreachable.
+ * The box asks every three minutes. An answer that a call is not verified, or not this box's operator's,
+ * closes the gate for that call at once. While the gateway cannot be reached (a network error, a timeout, a
+ * 5xx, a 404 from a gateway without the endpoint, an answer without a valid MAC), the last confirmed answer
+ * keeps counting for the grace the sysop sets (`TX_GATE_GRACE`, 6 minutes to 24 hours, default 6 minutes);
+ * past it the gate closes until the gateway answers again. Meanwhile the box asks again after 30 s, backing
+ * off to the interval, and logs each distinct failure once. A gateway that refuses the box's credential
+ * (401, 403) closes the gate at once.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { gatewayFetch } from "./gatewayauth.js";
@@ -26,9 +27,31 @@ export interface GateAnswer {
 }
 export type TxGateLookup = (calls: string[]) => Promise<Map<string, GateAnswer>>;
 
+/** `TX_GATE_GRACE`: the default, and the bounds it is clamped to. */
+const GRACE_MIN = 6;
+const GRACE_MAX = 24 * 60;
+
+/**
+ * `TX_GATE_GRACE` in ms: minutes as a plain number (`30`), or with a unit (`30m`, `2h`). Blank is the default,
+ * six minutes; a value outside 6 minutes to 24 hours is clamped with a warning. Throws on anything else.
+ */
+export function txGateGraceMs(raw: string | undefined, warn: (m: string) => void = console.warn): number {
+  const v = (raw ?? "").trim();
+  if (!v) return GRACE_MIN * 60_000;
+  const m = /^(\d+)\s*(m|min|h)?$/i.exec(v);
+  if (!m) throw new Error(`TX_GATE_GRACE: expected minutes, such as 30, 30m or 2h`);
+  const minutes = Number(m[1]) * (m[2]?.toLowerCase() === "h" ? 60 : 1);
+  const clamped = Math.min(GRACE_MAX, Math.max(GRACE_MIN, minutes));
+  if (clamped !== minutes)
+    warn(`[config] TX_GATE_GRACE=${v} is outside 6 minutes to 24 hours; using ${clamped} minutes`);
+  return clamped * 60_000;
+}
+
 export interface CallVerifierOpts {
-  /** Between refreshes while the gateway answers (default 3 min); an answer is fresh for two of them. */
+  /** Between refreshes while the gateway answers (default 3 min). */
   intervalMs?: number;
+  /** How long the last confirmed answer counts while the gateway cannot be reached (default 6 min). */
+  graceMs?: number;
   /** The first retry after a failed refresh (default 30 s), doubling up to the interval. */
   retryMs?: number;
   now?: () => number;
@@ -41,9 +64,10 @@ export class CallVerifier {
   private failures = 0;
   private lastError: string | null = null;
   private loggedError: string | null = null;
-  /** The gateway has no /ingest/txgate: no fast retries, one log line. */
+  /** The gateway has no /ingest/txgate: said once, in its own words. */
   private unsupported = false;
   private interval: number;
+  private grace: number;
   private retry: number;
 
   constructor(
@@ -51,6 +75,7 @@ export class CallVerifier {
     private o: CallVerifierOpts = {},
   ) {
     this.interval = o.intervalMs ?? 180_000;
+    this.grace = o.graceMs ?? GRACE_MIN * 60_000;
     this.retry = o.retryMs ?? 30_000;
   }
 
@@ -75,6 +100,11 @@ export class CallVerifier {
       this.failures++;
       this.lastError = (e as Error).message;
       this.unsupported = e instanceof TxGateUnsupported;
+      // a refused credential is an answer, not an outage: it closes the gate at once
+      if (e instanceof TxGateRefused) {
+        const at = this.now();
+        for (const c of list) this.answers.set(c, { answer: { ok: false, reason: this.lastError }, at });
+      }
       return false;
     }
   }
@@ -84,8 +114,7 @@ export class CallVerifier {
     const tick = async () => {
       const ok = await this.refresh(calls);
       after?.();
-      const wait =
-        ok || this.unsupported ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
+      const wait = ok ? this.interval : Math.min(this.interval, this.retry * 2 ** (this.failures - 1));
       // each distinct failure is logged once, not at every retry
       if (!ok && this.lastError !== this.loggedError) {
         this.loggedError = this.lastError;
@@ -113,7 +142,8 @@ export class CallVerifier {
     for (const raw of calls) {
       const c = raw.toUpperCase();
       const a = this.answers.get(c);
-      if (!a || now - a.at > 2 * this.interval)
+      // a positive answer lasts the grace; a negative one stands until the gateway says otherwise
+      if (!a || (a.answer.ok && now - a.at > this.grace))
         return `the gateway has not confirmed ${c} recently${this.lastError ? ` (${this.lastError})` : ""}`;
       if (a.answer.ok) continue;
       return a.answer.reason === "not control-verified"
@@ -143,8 +173,10 @@ export function gateCheck(
   };
 }
 
-/** The gateway has no /ingest/txgate (an older version). */
+/** The gateway has no /ingest/txgate (an older version): counted as unreachable. */
 export class TxGateUnsupported extends Error {}
+/** The gateway refused the box's credential (401, 403): the gate closes at once. */
+export class TxGateRefused extends Error {}
 
 const isLoopback = (host: string) => /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/i.test(host);
 
@@ -170,6 +202,8 @@ export function gatewayTxGateLookup(o: {
     if (o.boxId) url.searchParams.set("box", o.boxId);
     const r = await f(url.toString(), { headers: { "x-ingest-secret": o.secret } });
     if (r.status === 404) throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
+    if (r.status === 401 || r.status === 403)
+      throw new TxGateRefused(`the gateway refused this box's credential (HTTP ${r.status})`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const body = await r.text();
     if (!o.boxKey) {

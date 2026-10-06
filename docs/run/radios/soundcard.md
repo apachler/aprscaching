@@ -260,9 +260,11 @@ gateway's responses but cannot read the box's requests. Over plain http the requ
 reader on the path can compute the MAC too: use https for a gateway that is not on the box's loopback or LAN
 (the doctor warns, `ingest.url_http`). An enrolled box accepts the answer only over https or from `localhost`.
 
-The box asks at start and every three minutes. An answer is good for two of those intervals: without a fresh
-one, the gate closes, and the box asks again after 30 seconds, backing off while the gateway stays
-unreachable. A revoked verification closes the gate within minutes.
+The box asks at start and every three minutes. A "not verified" or "not this box's operator's" answer closes
+the gate at once. While the gateway cannot be reached, the last confirmation counts for `TX_GATE_GRACE`
+(default 6 minutes, up to 24 hours), and the box asks again after 30 seconds, backing off
+([Transmit gate](rf-ingest.md#transmit-gate)). A verification revoked while the gateway answers closes the
+gate within three minutes.
 
 The KISS TNC passes the same call gate and the transmit switch; the TNC's firmware does the rest.
 

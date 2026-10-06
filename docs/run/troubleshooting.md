@@ -285,6 +285,16 @@ Every shape with an ingest.
   forge the gateway's transmit answers with it.
 - **See:** [The transmit gate](radios/soundcard.md#the-transmit-gate).
 
+### `ingest.tx_gate_grace`
+
+- **Tests:** on a box with a transmit port (`KISS_TNC_HOST`, `SOUNDCARD_DEVICE` or `SOUNDCARD_PORTS`), the
+  `TX_GATE_GRACE` in effect: how long the gateway's last confirmation of a call keeps counting while the
+  gateway cannot be reached. It passes and shows the minutes.
+- **Message:** `a revoked call keeps transmitting up to <min> min while the gateway is unreachable (TX_GATE_GRACE)`
+  (warn), above an hour.
+- **Message:** `TX_GATE_GRACE=<value> is not a duration` (fail). Set minutes, such as `30`, `30m` or `2h`.
+- **See:** [Transmit gate](radios/rf-ingest.md#transmit-gate).
+
 ### `ingest.aprsis`
 
 - **Tests:** a TCP connection to `APRSIS_HOST:APRSIS_PORT` (default `rotate.aprs2.net:14580`).

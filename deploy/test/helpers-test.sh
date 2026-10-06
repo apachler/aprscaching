@@ -621,6 +621,17 @@ SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
   doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
 check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
   "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+grace() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; tx_gate_grace_min '$1'"; }
+check "TX_GATE_GRACE reads minutes and hours, as the ingest does" eq \
+  "$(grace ''),$(grace 30),$(grace 45m),$(grace 2H),$(grace 1),$(grace 48h)" "6,30,45,120,6,1440"
+check "  … and refuses anything else" bash -c ". '$DEPLOY/lib/doctor.sh'; ! tx_gate_grace_min soon && ! tx_gate_grace_min 2d"
+gracerow() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
+  doc_get() { case \"\$1\" in KISS_TNC_HOST) echo tnc ;; TX_GATE_GRACE) echo '$1' ;; esac; true; }
+  doc_tx_gate_grace; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,3"; }
+check "doctor shows the grace in effect" eq "$(gracerow 30m)" \
+  "$(printf 'pass\tthe TX gate keeps a confirmed call for 30 min while the gateway is unreachable')"
+check "  … and warns above an hour" eq "$(gracerow 2h)" \
+  "$(printf 'warn\ta revoked call keeps transmitting up to 120 min while the gateway is unreachable (TX_GATE_GRACE)')"
 urlhttp() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_ingest_url_http '$1'; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2"; }
 check "doctor warns on a plain-http INGEST_URL beyond the LAN" eq "$(urlhttp http://gw.example.net/ingest)" \
   "$(printf 'warn\tingest.url_http')"

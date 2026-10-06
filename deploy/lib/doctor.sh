@@ -421,7 +421,39 @@ doc_ingest() {
     *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" ;;
   esac
   doc_ingest_url_http "$DOC_INGEST"
+  doc_tx_gate_grace
   doc_transports
+}
+
+# The TX gate's grace (TX_GATE_GRACE) on a box with a transmit port: how long a confirmed call keeps counting
+# while the gateway cannot be reached. The same parsing and clamp as apps/ingest/src/callverify.ts.
+doc_tx_gate_grace() {
+  local raw min
+  [ -n "$(doc_get KISS_TNC_HOST)$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)" ] || return 0
+  raw="$(doc_get TX_GATE_GRACE)"
+  raw="${raw// /}"
+  min="$(tx_gate_grace_min "$raw")" || {
+    failc ingest.tx_gate_grace "TX_GATE_GRACE=$raw is not a duration" "set minutes, such as 30, 30m or 2h"
+    return 0
+  }
+  if [ "$min" -gt 60 ]; then
+    warnc ingest.tx_gate_grace "a revoked call keeps transmitting up to $min min while the gateway is unreachable (TX_GATE_GRACE)" \
+      "lower TX_GATE_GRACE to an hour or less unless the link to the gateway drops out for longer"
+  else
+    pass ingest.tx_gate_grace "the TX gate keeps a confirmed call for $min min while the gateway is unreachable"
+  fi
+}
+
+# tx_gate_grace_min VALUE: whole minutes, clamped to 6..1440; fails on a malformed value.
+tx_gate_grace_min() {
+  local v="${1:-6}" n
+  v="${v,,}"
+  [[ "$v" =~ ^([0-9]+)(m|min|h)?$ ]] || return 1
+  n="$((10#${BASH_REMATCH[1]}))"
+  case "${BASH_REMATCH[2]}" in h) n=$((n * 60)) ;; esac
+  [ "$n" -ge 6 ] || n=6
+  [ "$n" -le 1440 ] || n=1440
+  printf '%s' "$n"
 }
 
 # doc_ingest_url_http URL: plain http to a gateway beyond this box's loopback and LAN sends the ingest secret, and

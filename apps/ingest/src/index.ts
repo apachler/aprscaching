@@ -135,10 +135,18 @@ const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 //
 // Every one shares the call gate: the box transmits only under station calls the gateway confirms for this
 // box (control-verified, held by the box's operator; callverify.ts). RX never needs it.
-const { CallVerifier, boxTransmits, gatewayTxGateLookup, gateCheck, stationCalls } = await import("./callverify.js");
+const { CallVerifier, boxTransmits, gatewayTxGateLookup, gateCheck, stationCalls, txGateGraceMs } =
+  await import("./callverify.js");
+let txGateGrace: number;
+try {
+  txGateGrace = txGateGraceMs(env.TX_GATE_GRACE);
+} catch (e) {
+  console.error(`[ingest] FATAL: ${(e as Error).message}`);
+  process.exit(1);
+}
 const callGate = new CallVerifier(
   gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
-  { log: (m) => console.error(m) },
+  { log: (m) => console.error(m), graceMs: txGateGrace },
 );
 const gateCalls = new Set(stationCalls(env));
 interface TxRadio {

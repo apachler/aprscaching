@@ -8,11 +8,13 @@ import { validateConfig } from "@aprscaching/shared";
 import { soundcardPorts } from "../src/soundcardconfig.js";
 import {
   CallVerifier,
+  TxGateRefused,
   TxGateUnsupported,
   boxTransmits,
   gateCheck,
   gatewayTxGateLookup,
   stationCalls,
+  txGateGraceMs,
   type TxGateLookup,
 } from "../src/callverify.js";
 import { soundcardChecks, pttTest, type CheckDeps } from "../src/soundcardcheck.js";
@@ -166,7 +168,7 @@ describe("the call gate", () => {
     expect(v.refusal(["OE8APR-10"])).toMatch(/^verify OE8APR-10/);
   });
 
-  it("a gateway without /ingest/txgate is logged once and asked again only at the interval", async () => {
+  it("a gateway without /ingest/txgate counts as unreachable: logged once, retried with backoff", async () => {
     vi.useFakeTimers();
     try {
       const asked: number[] = [];
@@ -183,7 +185,7 @@ describe("the call gate", () => {
       await vi.advanceTimersByTimeAsync(0);
       await vi.advanceTimersByTimeAsync(400_000);
       v.stop();
-      expect(asked.map((t) => t - t0)).toEqual([0, 180_000, 360_000]);
+      expect(asked.map((t) => t - t0)).toEqual([0, 30_000, 90_000, 210_000, 390_000]);
       expect(logs).toEqual([
         "[txgate] the gateway has no /ingest/txgate (HTTP 404); transmit stays off until the gateway is updated",
       ]);
@@ -191,6 +193,87 @@ describe("the call gate", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe("TX_GATE_GRACE", () => {
+    const answers = (m: Record<string, { ok: boolean; reason?: string }>) => new Map(Object.entries(m));
+    /** A verifier on a fake clock whose gateway answers `state`: ok, not verified, or unreachable. */
+    const gate = (graceMs: number) => {
+      const t = { clock: 0, state: "ok" as "ok" | "revoked" | "down" | "404" | "401" };
+      const v = new CallVerifier(
+        async () => {
+          if (t.state === "down") throw new Error("connect ETIMEDOUT");
+          if (t.state === "404") throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
+          if (t.state === "401") throw new TxGateRefused("the gateway refused this box's credential (HTTP 401)");
+          return answers({
+            "OE8APR-10": t.state === "ok" ? { ok: true } : { ok: false, reason: "not control-verified" },
+          });
+        },
+        { graceMs, now: () => t.clock },
+      );
+      return { v, t };
+    };
+
+    it("parses minutes and units, defaults to 6 minutes and clamps to 6 minutes to 24 hours", () => {
+      const warned: string[] = [];
+      const w = (m: string) => warned.push(m);
+      expect(txGateGraceMs(undefined, w)).toBe(6 * 60_000);
+      expect(txGateGraceMs("", w)).toBe(6 * 60_000);
+      expect(txGateGraceMs("30", w)).toBe(30 * 60_000);
+      expect(txGateGraceMs("45m", w)).toBe(45 * 60_000);
+      expect(txGateGraceMs("2h", w)).toBe(120 * 60_000);
+      expect(warned).toEqual([]);
+      expect(txGateGraceMs("1", w)).toBe(6 * 60_000);
+      expect(txGateGraceMs("48h", w)).toBe(24 * 60 * 60_000);
+      expect(warned).toHaveLength(2);
+      expect(() => txGateGraceMs("soon", w)).toThrow(/TX_GATE_GRACE: expected minutes/);
+      expect(() => txGateGraceMs("2d", w)).toThrow(/TX_GATE_GRACE/);
+    });
+
+    it("an unreachable gateway within the grace keeps a confirmed call open", async () => {
+      const { v, t } = gate(60 * 60_000);
+      await v.refresh(["OE8APR-10"]);
+      t.state = "down";
+      t.clock += 59 * 60_000;
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toBeNull();
+      t.state = "404"; // a gateway without the endpoint counts as unreachable too
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toBeNull();
+    });
+
+    it("past the grace the gate closes, and opens again once the gateway confirms", async () => {
+      const { v, t } = gate(60 * 60_000);
+      await v.refresh(["OE8APR-10"]);
+      t.state = "down";
+      t.clock += 60 * 60_000 + 1;
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toBe("the gateway has not confirmed OE8APR-10 recently (connect ETIMEDOUT)");
+      t.state = "ok";
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toBeNull();
+    });
+
+    it("a 'not verified' answer closes the gate at once, even within a long grace", async () => {
+      const { v, t } = gate(24 * 60 * 60_000);
+      await v.refresh(["OE8APR-10"]);
+      t.clock += 60_000;
+      t.state = "revoked";
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toMatch(/^verify OE8APR-10 to transmit/);
+      // and the gateway going away afterwards does not reopen it
+      t.state = "down";
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toMatch(/^verify OE8APR-10 to transmit/);
+    });
+
+    it("a refused credential closes the gate at once, whatever the grace", async () => {
+      const { v, t } = gate(24 * 60 * 60_000);
+      await v.refresh(["OE8APR-10"]);
+      t.state = "401";
+      await v.refresh(["OE8APR-10"]);
+      expect(v.refusal(["OE8APR-10"])).toMatch(/refused this box's credential/);
+    });
   });
 
   it("a receive-only box does not ask at all", () => {
