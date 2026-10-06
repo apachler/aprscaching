@@ -41,7 +41,7 @@ await page
   .catch(() => {});
 await page.waitForSelector(".tools-panel textarea", { timeout: 15000 });
 await page.click(".tool-sub button:has-text('Use a sample')");
-await page.click(".tool-sub button:has-text('Decode')");
+await page.click("button:text-is('Decode')");
 await page.waitForSelector(".tool-out", { timeout: 8000 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: OUT + "07-shack.png" });

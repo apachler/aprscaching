@@ -231,7 +231,7 @@ const SURFACES = [
     wait: ".tools-panel textarea",
     steps: [
       ["click", "button:has-text('Use a sample')"],
-      ["click", ".tool-sub button:has-text('Decode')"],
+      ["click", "button:text-is('Decode')"],
     ],
     after: ".tool-out",
   },

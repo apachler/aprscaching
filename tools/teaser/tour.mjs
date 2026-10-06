@@ -550,7 +550,7 @@ for (const v of VIEWS) {
     }
     await page.waitForSelector(".tools-panel textarea", { timeout: 15000 }).catch(() => {});
     await clickAny(page, [".tool-sub button:has-text('Use a sample')"]);
-    await clickAny(page, [".tool-sub button:has-text('Decode')"]);
+    await clickAny(page, ["button:text-is('Decode')"]);
     await page.waitForTimeout(500);
     await shot(page, v.id, "decoder", "Packet decoder — raw AX.25 / APRS");
   });

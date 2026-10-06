@@ -58,6 +58,11 @@
     display: grid;
     gap: var(--space-xs);
   }
+  /* the player's installed tools, above the sections their tools contribute */
+  .tools-mine {
+    display: grid;
+    gap: var(--space-xs);
+  }
   /* one registry's group in the Registry list: its name, whose it is and its pinned key */
   .reg-head {
     display: flex;

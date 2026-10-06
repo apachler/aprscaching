@@ -371,8 +371,10 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
         <p className="muted fine">Your callsign isn&apos;t verified yet — TX/beacon tools stay gated until it is.</p>
       )}
 
-      <div className="tool-sub">
-        <div className="ulabel">Your tools</div>
+      <section className="tools-mine" aria-labelledby="tools-mine-h">
+        <div className="ulabel" id="tools-mine-h">
+          Your tools
+        </div>
         {installed.length === 0 ? (
           <EmptyState
             action={
@@ -387,7 +389,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
         ) : (
           <div className="tools-list">{installed.map(row)}</div>
         )}
-      </div>
+      </section>
 
       {/* panels contributed by running `panel`-tools that target this (web) console */}
       <ToolPanels host={host} surface="web" />
