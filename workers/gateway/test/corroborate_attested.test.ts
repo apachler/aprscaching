@@ -26,7 +26,7 @@ describe("federation corroboration vouches only through attested sites", () => {
     const sites = parseAttestedSites("OE8XXX");
     const isCopy = { ...near("OE8XXX", "aprs-is"), path: "WIDE1-1,qAR,OE8XXX" };
     expect(pickLocalEvidence([isCopy], Q, none, sites)).toBeNull();
-    expect(pickLocalEvidence([{ ...isCopy, transport: null }], Q, none, sites)).toBeNull(); // legacy row
+    expect(pickLocalEvidence([{ ...isCopy, transport: null }], Q, none, sites)).toBeNull(); // a row without a transport
   });
 
   it("does not answer from a site this instance does not attest", () => {
