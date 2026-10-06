@@ -169,7 +169,7 @@ The box asks the gateway every three minutes. An answer that a call is not verif
 this box's operator's, closes the gate for that call at once. While the gateway cannot be reached (no network, a timeout, a server
 error, a gateway without the endpoint), the last confirmation keeps counting for `TX_GATE_GRACE`: 6 minutes by
 default, up to 24 hours (`30`, `30m` or `2h`; a plain number is minutes). Past it the box stops transmitting
-until the gateway answers again, and it asks every 30 seconds or so meanwhile. Raise the grace for a link that
+until the gateway answers again, and meanwhile it asks again after 30 seconds, doubling the wait up to every three minutes. Raise the grace for a link that
 drops out, such as a HAMNET or mobile-data link; keep it short where you can, since a call revoked during an
 outage keeps transmitting for up to the grace. The doctor shows it (`ingest.tx_gate_grace`) and warns above an
 hour.
