@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Example imported tool — demonstrates the full contribution set across the Worker bridge:
 // a command, a declarative colour rule, an initial panel, and a decoder. Runs sandboxed; no host access.
 register({

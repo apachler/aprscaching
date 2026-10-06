@@ -92,7 +92,9 @@ and goes when you switch the tool off or remove it.
    **Import a tool** and select **Import…**.
 2. Read the prompt: who wrote the tool, the permissions it asks for, where it appears, the addresses it may
    reach, and its trust label.
-3. Select **Approve + run** to start it, or **Cancel**.
+3. Select **Approve + run** to start it, or **Cancel**. The app fetches the tool's code and runs it only when the
+   code matches the hash in the signed manifest; otherwise it says **the tool's code does not match its signed
+   manifest** and runs nothing.
 
 The tool appears under **Import a tool** with its own switch, pin and **Remove** button. It runs until you remove
 it or reload the page; after a reload, import it again.
@@ -131,16 +133,56 @@ panels, decoders, other tools and the network.
 | **Signed · registry-listed author key** | The registry lists this tool at this address, and the author key it lists signed the manifest. | Import if the permissions fit the job. |
 | **Signed · matches the key you trusted before** | You accepted this author's key before, from another tool or an earlier import. | Import if the permissions fit the job. |
 | **Signed · unknown author key (trust-on-first-use)** | Signed, but nobody vouches for the key. Approving remembers it for this author. | Import only if you trust where the address came from. |
-| **Unsigned · you're trusting the URL only** | No signature. Whoever runs that server decides what you get. | Import only from a server you trust. |
+| **Unsigned — refused** | No signature. | Blocked. Ask the author for a signed release. |
 | **Author key CHANGED since you last trusted it — refused** | The author's key is not the one you accepted, or not the one the registry lists. | Blocked. Ask the author, through a channel you trust, whether they changed their key. |
 | **Signature INVALID — refused** | The manifest was changed after it was signed. | Blocked. Do not look for another copy; tell the author. |
 
-A signature covers the manifest, including the script's address, but not the script itself. A label vouches for
-who signed the manifest, not for what the script does; the permissions are what limit it.
+A signature covers the manifest, and through its `entrySha256` the exact bytes of the script. A label vouches for
+who signed the tool, not for what the script does; the permissions are what limit it.
 
 After a key-change warning, the app keeps refusing that author's new key. If the author confirms the change,
 remove the old key: clear this site's data in your browser's settings. That also clears your pins, settings
 and offline areas on this device.
+
+## The Registry list
+
+**Registry** lists the tools of every registry switched on for you, one group per registry. Each group shows the
+registry's name, whose it is (**instance**: set up by the sysop; **yours**: added by you, not checked by this
+instance) and the fingerprint of its key. A group can show:
+
+| State | Meaning |
+|---|---|
+| A list of tools | The registry verified under its pinned key. |
+| **The registry's host can't be reached; this is the copy this instance kept** | The instance serves its last good copy. |
+| **Couldn't load …** with **Retry** | The registry can't be fetched now. The other groups are not affected. |
+| **… failed its signature check** | The file was changed without its key. Its tools stay hidden. |
+| **Key changed** | The registry is now signed by another key. Its tools stay hidden until whoever added it compares and confirms the new key. |
+
+A tool that several registries list shows once, under the first, with **Listed by** naming each.
+
+## Add a registry
+
+When the sysop allows it, you can add registries of your own: a club's tools, or a friend's. You need to be signed
+in, and you can add up to ten.
+
+1. Open **Your registries** below the Registry list.
+2. Enter the registry's address: `github:owner/repo`, `github:owner/repo@v1.0.0` for one tagged release, a GitHub
+   Pages address, or any `https://` address. Add a label if you like.
+3. Select **Fetch and show its key**. The app shows the key's fingerprint, how many tools the registry lists and a
+   few of their titles.
+4. Compare the fingerprint with the one the publisher gives: in their README, on their site, or in person. Select
+   **It matches: pin and add** only if every digit matches.
+
+The registry's group appears under **Registry**, marked **yours**. Your registries are kept with your account, so
+they follow you to another device, and they are part of your account's data export and erasure. Switch one off, or
+**Remove** it, in **Your registries**.
+
+If the group shows **Key changed**, the publisher signed with a new key, or someone else did. Ask the publisher,
+through a channel you trust, for the new fingerprint, then select **Compare and confirm the new key…** and confirm
+only if it matches.
+
+If the sysop stops players adding registries, yours are hidden and not fetched, but kept until you remove them or
+the sysop allows them again.
 
 ## Switch off or remove a plugin
 
@@ -150,21 +192,28 @@ and offline areas on this device.
 
 ## Where tools keep data
 
-Everything stays in this browser:
+Tools keep their data in this browser; only your pins and your own registries go with your account:
 
 - A tool's own notes (watched calls, heard stations, away notes) live in memory and end with the page.
 - Your pins live in this browser and, when you are signed in, with your account.
 - The author keys you accepted live in this browser's storage. Clearing this site's data removes them.
+- The registries you added live with your account, in its data export and erasure.
 
 ## Stay safe
+
+Tools run in your browser, sandboxed, never on the instance. A tool reaches what you grant it and nothing else:
+`tx`, `beacon`, `network` and `geo` each need your approval, and transmitting also needs your verified callsign and
+your transmit consent for the tab. A registry, even one the sysop set up, vouches for who signed a tool, not for
+what it does.
 
 - Grant only the permissions a tool needs for its job. A unit converter has no reason to ask for `network`.
 - Check every address under **connects to**. A tool can send what it sees to those addresses.
 - Prefer registry-listed tools, and import others only from an author you know.
+- Add a registry only after comparing its fingerprint with the publisher's.
 - Take a key-change warning seriously: it is the one sign that someone else may be signing as the author.
 - Remove a tool you no longer use.
 
 ## Next
 
 - [Packet terminal & BBS](packet-and-bbs.md): where most tools show their colours and commands.
-- [The tool registry](../contribute/tool-registry.md): how the registry works, for authors and sysops.
+- [The tool registry](../contribute/tool-registry.md): how registries work and how to publish one.

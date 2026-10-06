@@ -98,6 +98,9 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SUPPORT_LINKS: "JSON array of donation links [{label,url}] shown on /support",
   SOURCE_REPO: "Published source URL (AGPL §13); a modified fork must set its own",
   UPDATE_CHECK: "0 stops the daily request to GitHub that looks for a newer release",
+  TOOL_REGISTRIES: "JSON list of tool registries; set, it replaces the list kept in Instance settings",
+  TOOL_REGISTRIES_PLAYERS: "0 stops players adding tool registries of their own",
+  TOOL_REGISTRIES_PROXY: "0 lets browsers fetch tool registries directly instead of through this instance",
   OPERATOR_NAME: "Person or entity operating this instance, shown on /imprint and /privacy",
   OPERATOR_ADDRESS: "Operator's postal address; commas separate the lines",
   OPERATOR_EMAIL: "Operator's contact address, also the privacy contact",
@@ -218,8 +221,6 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   VITE_BASEMAP_STYLE: "MapLibre style URL for the vector basemap",
   VITE_SAT_TILES: "Satellite raster tile URL template",
   VITE_SAT_ATTRIBUTION: "Attribution shown with the satellite layer",
-  VITE_TOOL_REGISTRY: "URL of the signed tool registry",
-  VITE_TOOL_REGISTRY_AUTHORITY: "Ed25519 key the tool registry is verified against",
   DOMAIN: "What Caddy serves: a hostname gets Let's Encrypt TLS, :80 serves plain HTTP",
   TUNNEL_TOKEN: "Cloudflare Tunnel token of a named tunnel",
   BACKUP_DIR: "Local or mounted directory for database backups, off the database's disk",
@@ -331,6 +332,21 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "`UPDATE_CHECK`",
         "Once a day the gateway asks GitHub (`api.github.com`) for the newest APRScaching release, so **Instance admin** and `deploy/aprscaching doctor` can say when one is out ([Updates](../run/day-to-day/updates.md#how-you-hear-about-a-new-release)). The request names the instance in its User-Agent and carries nothing about a member. `0` stops it, for an off-grid instance or one that should not contact GitHub",
+        "on",
+      ],
+      [
+        "`TOOL_REGISTRIES`",
+        'The tool registries the **Tools** app lists, as a JSON array; set, it replaces the list kept in **Instance settings**, which then shows it read-only. An item is `"builtin"` (the project registry bundled with the app) or `{"url", "authority", "label", "enabled"}`: `url` is an `https://` address, `github:owner/repo[/path][@ref]`, or a path on this instance; `authority` is the registry\'s pinned Ed25519 public key in base64url ([Tool registries](../run/day-to-day/instance-settings.md#tool-registries))',
+        "the project registry",
+      ],
+      [
+        "`TOOL_REGISTRIES_PLAYERS`",
+        "Players may add tool registries of their own, each pinned to its key and kept with their account. `0` hides and stops fetching them; they stay stored until the player removes them or the setting is on again",
+        "on",
+      ],
+      [
+        "`TOOL_REGISTRIES_PROXY`",
+        "The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. The browser still checks every signature. `0` lets browsers fetch registries directly",
         "on",
       ],
       [
@@ -808,8 +824,6 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "Satellite raster layer URL + attribution",
         "EOxCloudless 2016 layer (EOX; free for non-commercial use)",
       ],
-      ["`VITE_TOOL_REGISTRY`", "Signed tool-registry URL", "`/tools/registry.json`"],
-      ["`VITE_TOOL_REGISTRY_AUTHORITY`", "Pinned Ed25519 authority key the registry is verified against", "(built-in)"],
     ],
   },
   {
@@ -900,6 +914,7 @@ export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
   retention: "Privacy & retention",
   imports: "Imports & data sources",
   federation: "Federation",
+  tools: "Tools",
   imprint: "Imprint & contact",
   support: "Support links",
   updates: "Updates",
@@ -951,6 +966,14 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   FED_RESERVE: {
     label: "Pass on peers' records",
     hint: "Which mirrored caches, finds and deletions this instance serves on to its peers, each signed by its home",
+  },
+  TOOL_REGISTRIES_PLAYERS: {
+    label: "Players may add tool registries",
+    hint: "Each player's own registries, pinned to their key and marked as not checked by this instance",
+  },
+  TOOL_REGISTRIES_PROXY: {
+    label: "Fetch tool registries through this instance",
+    hint: "Players' browsers reach registries only through this instance, and cached copies work offline",
   },
   UPDATE_CHECK: { label: "Look for new releases", hint: "Ask GitHub once a day whether a newer release is out" },
   HIDE_DAILY_LIMIT: { label: "Hides per day", hint: "New caches one account may hide in 24 hours; 0 lifts the limit" },

@@ -1,35 +1,68 @@
 # The tool registry
 
-This page explains the tool registry end to end: what the file is, where it lives, how a tool gets listed, and how
-a sysop runs a registry of their own. It is for tool authors, the registry's keeper and sysops who build the app.
-At the end you know which file to edit, which key signs it, and what a listing does and does not promise.
+This page explains tool registries end to end: what a registry file is, how an instance and its players choose
+which ones the Tools app lists, how a registry's key is pinned, and how to host a registry on GitHub. It is for
+tool authors and anyone who publishes a registry. At the end you can publish a signed registry and know what a
+listing does and does not promise.
 
-## What the registry is
+## What a registry is
 
-The registry is one signed JSON file: a list of tools, each with the author key that signs it and the address of
-its `tool.json`. The **Tools** app fetches the file, checks its signature against an authority key built into the
-app, and shows the entries under **Registry**. A tool imported from an entry's address and signed by the key the
-entry lists shows as **Signed · registry-listed author key** in the import prompt.
+A registry is one signed JSON file: a list of tools, each with the author key that signs it and the address of
+its `tool.json`. The **Tools** app lists the tools of every registry the instance and the player switched on. A
+tool imported from an entry's address and signed by the key the entry lists shows as **Signed · registry-listed
+author key** in the import prompt.
 
 ```mermaid
 flowchart LR
-  A["Author signs tool.json<br/>(author key)"] --> E["Entry: name, pubkey, entry URL"]
-  E --> K["Keeper signs registry.json<br/>(authority key)"]
-  K --> B["App build pins<br/>the authority public key"]
-  B --> V["Tools: verify registry,<br/>list entries"]
+  A["Author signs tool.json<br/>(author key, script hash)"] --> E["Entry: name, pubkey, entry URL"]
+  E --> K["Publisher signs registry.json<br/>(authority key)"]
+  K --> P["Sysop or player adds the registry<br/>and pins the authority key"]
+  P --> V["Tools: verify against the pin,<br/>list entries"]
   V --> I["Import from the entry URL:<br/>registry-listed"]
 ```
 
-Two settings, both read when the web app is built, decide which registry an instance shows:
+## Which registries the Tools app lists
 
-| Setting | Meaning | Default |
+| Registry | Who adds it | Shown as |
 |---|---|---|
-| `VITE_TOOL_REGISTRY` | The registry's URL, absolute or relative to the app | `/tools/registry.json`, served with the app |
-| `VITE_TOOL_REGISTRY_AUTHORITY` | The authority's Ed25519 public key, base64url, that must have signed the registry | The project's key, `22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0` |
+| The project registry | Bundled with every release, served by the instance at `/tools/registry.json`. The sysop can switch it off. | **instance** |
+| The instance's registries | The sysop, in **Instance settings → Tools** ([Tool registries](../run/day-to-day/instance-settings.md#tool-registries)), or `TOOL_REGISTRIES` in the environment | **instance** |
+| A player's own registries | The player, in the Tools app ([Add a registry](../shack/tools.md#add-a-registry)), while the sysop allows it | **yours**: added by the player, not checked by the instance |
 
-The app fetches the registry without cookies each time **Tools** opens. It shows nothing under **Registry** when
-the URL answers 404, an error with **Retry** when it cannot load it, and "failed its signature check" when the
-file's `authority` is not the pinned key or the signature does not verify.
+The app loads each registry on its own: one that fails, is unreachable or has a changed key shows its own state
+and does not hold up the others. A tool listed by several registries shows once, under the first that lists it,
+with every registry that lists it.
+
+## Pinning a registry's key
+
+The app trusts a registry only under the key someone confirmed for it, never under the key the file names:
+
+1. Whoever adds a registry gives its address. The app fetches the file once and shows the fingerprint of its
+   authority key (four groups of four hex digits, `3f2a 9c01 bb7e 4d10`), how many tools it lists, and a few titles.
+2. They compare the fingerprint with the one the publisher gives, in the repository's README, on a website or in
+   person, and confirm only when every digit matches. The key is then pinned to the entry.
+3. Every later load verifies the file against the pinned key. A file signed by another key shows as **key
+   changed** and lists nothing until the same person compares and confirms the new key.
+
+A publisher states the fingerprint wherever people find the registry. The fingerprint of a key is the first 64 bits
+of SHA-256 over the raw Ed25519 key, the same form federation keys use.
+
+## Fetched through the instance
+
+While **Fetch tool registries through this instance** (`TOOL_REGISTRIES_PROXY`) is on, the gateway fetches each added
+registry, the manifests its entries name and the scripts those name, and serves them from the instance's own
+address:
+
+- A player's address never reaches the registry's host.
+- The gateway keeps each file for an hour and serves the last good copy while the host is unreachable, so tools
+  keep importing without internet.
+- It fetches without cookies, refuses private and LAN addresses unless the federation policy allows them
+  (`FED_ALLOW_PRIVATE`), and fetches only files the registry leads to. A registry file may hold 256 KB, a manifest
+  64 KB, a script 512 KB, and one registry's files 4 MB together.
+- A player's own registry is fetched for that player alone, and counts against a limit of 60 fetches an hour.
+
+The gateway is only a carrier: the browser verifies every signature against the pinned key and every script against
+its manifest's hash. With the setting off, the browser fetches each registry from its publisher.
 
 ## The file format
 
@@ -42,12 +75,12 @@ file's `authority` is not the pinned key or the signature does not verify.
       "author": "OE8APR",
       "version": "1.0.0",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-      "entry": "/tools/hello/tool.json",
+      "entry": "tools/hello/tool.json",
       "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
     }
   ],
   "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
-  "sig": "OdLlbf1LW0GOI2NGXjQrJOFCR+PGjZGZJrfnSfBnDdvONrKhsOTEDE/QuT3yhRdhgbA1Fi2i6skgy+nAewanDw=="
+  "sig": "…"
 }
 ```
 
@@ -58,128 +91,123 @@ file's `authority` is not the pinned key or the signature does not verify.
 | `entries[].title`, `author`, `version`, `description` | What the **Registry** list shows; keep them equal to the manifest |
 | `entries[].pubkey` | The author's Ed25519 public key, base64url, exactly as in the signed manifest |
 | `entries[].entry` | The `tool.json` address. A relative address resolves against the registry's own URL |
-| `authority` | The public key that signed the file. It must equal the app's `VITE_TOOL_REGISTRY_AUTHORITY` |
+| `authority` | The public key that signed the file. It must equal the key pinned for the registry |
 | `sig` | An Ed25519 signature, base64, over the `entries` array serialised with object keys sorted |
 
 The signature covers `entries` only: any change to an entry, its order included, needs a new signature.
-`authority` and `sig` sit outside what is signed.
+`authority` and `sig` sit outside what is signed. Use relative entries: they resolve the same wherever the
+registry is served, and a manifest's relative `entry` script resolves against the manifest's own URL.
 
-## Where the project's registry lives
+## Host a registry on GitHub
 
-The project's registry is [`apps/web/public/tools/registry.json`](https://github.com/apachler/aprscaching/blob/dev/apps/web/public/tools/registry.json).
-The web build copies it to `/tools/registry.json`, so every instance built from the repository serves the
-project's registry from its own address. It lists the example `hello-tool`, whose files sit beside it in
-`apps/web/public/tools/hello/`.
+A GitHub repository serves a registry with no server of your own. Both `raw.githubusercontent.com` and GitHub
+Pages send `Access-Control-Allow-Origin: *`, so the app can fetch from either.
 
-A change to the file reaches users with the next app build: a self-hosted instance shows it after its sysop
-updates and rebuilds, and the Desktop app with its next release. Until then each instance keeps the registry it
-was built with.
+1. Lay the repository out with the registry at the root and each tool in a folder of its own:
 
-### Get your tool listed
+    ```text
+    registry.json
+    tools/hello/tool.json
+    tools/hello/tool.js
+    ```
 
-1. Host and sign your tool ([Write your first tool](first-tool.md#package-and-host-it)). Serve it over `https://`
-   with `Access-Control-Allow-Origin: *`.
-2. Open a pull request that adds your entry to `apps/web/public/tools/registry.json`: `name`, `title`, `author`,
-   `version`, `pubkey`, `entry` (the absolute `https://` address of your `tool.json`) and `description`. Leave `sig`
-   as it is.
-3. The keeper reviews the tool ([What a reviewer checks](first-tool.md#what-a-reviewer-checks)), signs the file
-   again and merges it.
-
-The keeper checks that the manifest at `entry` validates, that its signature verifies with the `pubkey` you give,
-and that the script does what the description says with no more permissions than it needs.
-
-### Sign the registry (the keeper)
-
-The maintainer keeps the authority's private key offline; it is never in the repository and never in CI. To sign
-after editing the entries:
-
-```bash
-TOOL_PRIVATE_KEY=<authority private value> node tools/toolkey/sign.mjs registry apps/web/public/tools/registry.json
-```
-
-`sign.mjs` reads `entries` (or a bare array), writes `authority` and `sig`, and saves the file in place. Commit
-the signed file. A file signed by any other key fails the app's check.
-
-## Run your own registry (sysop)
-
-An instance can show its own registry instead of the project's: a club's tools, or the project's entries plus
-your own.
-
-1. Make an authority key on a computer you trust:
+2. Make an authority key on a computer you trust, and keep its private value offline:
 
     ```bash
     node tools/toolkey/genkey.mjs
     ```
 
-    It prints a private value and a public key. Keep the private value offline: whoever holds it decides what
-    your users see as registry-listed.
-
-2. Write `registry.json` with your entries (the format above). To include the project's tools, copy their
-   entries; your signature then vouches for them.
-3. Sign it:
+3. Sign each tool's manifest (with the author's key), list each tool in `registry.json` with a relative `entry`
+   such as `tools/hello/tool.json`, then sign the registry with the authority key:
 
     ```bash
-    TOOL_PRIVATE_KEY=<your private value> node tools/toolkey/sign.mjs registry registry.json
+    TOOL_PRIVATE_KEY=<author key> node tools/toolkey/sign.mjs manifest tools/hello/tool.json
+    TOOL_PRIVATE_KEY=<authority key> node tools/toolkey/sign.mjs registry registry.json
     ```
 
-4. Host the file. Next to the app, replace `apps/web/public/tools/registry.json` in your checkout before you build.
-   Elsewhere, serve it over `https://` with `Access-Control-Allow-Origin` allowing your app's origin, and point
-   `VITE_TOOL_REGISTRY` at its URL; then you update the file without rebuilding.
-5. Build the web app with your key and URL, and deploy that build:
+4. Commit, push and tag a release (`git tag v1.0.0`).
+5. Publish the authority key's fingerprint in the README. The app shows it when the registry is added.
 
-    ```bash
-    VITE_TOOL_REGISTRY_AUTHORITY=<your public key> \
-    VITE_TOOL_REGISTRY=https://tools.example.org/registry.json \
-    pnpm --filter @aprscaching/web build
-    ```
+People add the registry by one of these addresses:
 
-    Bare metal and Pocket serve `apps/web/dist`. The Desktop build script builds the app the same way, so set the
-    two variables in its environment.
+| Address | Serves |
+|---|---|
+| `github:owner/repo@v1.0.0` | The tag's `registry.json`, from `raw.githubusercontent.com` |
+| `github:owner/repo/path/to/registry.json@main` | A file on a branch |
+| `github:owner/repo` | `registry.json` on the default branch |
+| `https://owner.github.io/repo/registry.json` | GitHub Pages, when the repository publishes one |
 
-6. Open **Shack → Tools**. Your entries show under **Registry**.
+A `@tag` pins one release: the list changes only when people switch to a newer tag. A branch follows every push.
+The signatures protect either way: a file changed by anyone without the authority key fails, and a script changed
+without a new manifest signature fails its hash.
 
-!!! warning "The Docker image ignores these settings"
-    The Self-host Docker image builds the web app inside the image, and its build receives no `VITE_` settings:
-    `.env` stays out of the build context and the Dockerfile passes no build arguments. A Docker instance always
-    shows the project's registry. Building a custom image is the only way around it today.
+## The project registry
 
-Every change to the authority key, and to the URL, needs a new build. A change to the file itself needs one only
-when the file ships with the app.
+The project registry lives in its own repository,
+[apachler/aprscaching-tools](https://github.com/apachler/aprscaching-tools). Its `CONTRIBUTING.md` covers
+submitting a tool, and its `MAINTAINERS.md` covers signing and releases.
+
+### Bundled with each release
+
+Each APRScaching release bundles a tagged snapshot of the project registry in `apps/web/public/tools/`, so every
+instance serves it from its own address and it works offline. The snapshot keeps the repository's layout:
+`/tools/registry.json` lists `tools/hello/tool.json`, which resolves to `/tools/tools/hello/tool.json`. Nothing in
+the files is rewritten. To take a new release into the app:
+
+```bash
+node tools/toolkey/bundle-registry.mjs v1.0.0
+```
+
+The script fetches the tag from GitHub and checks the registry's signature against the project key pinned in
+`packages/shared/src/toolregistries.ts`, each manifest's signature against the author key its entry lists, and each
+script against its manifest's `entrySha256`. It writes nothing when any check fails, and verifies the bundled
+registry again once it is written.
+
+To follow the project registry between releases, add it as a GitHub registry as well
+(`github:apachler/aprscaching-tools@<tag>`). A tool listed by both shows once.
 
 ## What "registry-listed" covers
 
 - A tool counts as registry-listed only when its manifest was fetched from the exact address its entry names (a
   relative entry resolved against the registry's URL) and signed by the key the entry lists. The **Import…** button
-  beside an entry uses that address.
+  beside an entry uses that address. The import prompt names the registry that lists it.
 - A copy of a listed manifest served from any other address is not registry-listed, even when the listed key signed
   it: its script would come from the other site. It gets the trust-on-first-use labels.
 - If the manifest at the listed address is signed by another key than the entry's, the import is refused as
   **Author key CHANGED**.
-- The signature covers the manifest, including the script's address, but not the script's bytes. Whoever controls
-  the server behind `entry` can change the script without breaking any signature. Pinning the script's hash
-  (`entryHash`) is tracked in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
+- The manifest's signature covers `entrySha256`, the hash of the script's bytes, and the app runs a script only
+  when its bytes match. A listing vouches for the signer, and the hash ties the code to that signature.
 
 [Signing and trust](tool-reference.md#signing-and-trust) lists every label and when it applies.
 
+## What keeps players safe
+
+- **Tools never run on the instance.** The instance lists registries and may carry their files; every tool runs in
+  the player's browser, in a sealed sandbox apart from their session, passkeys and stored keys.
+- **The browser decides trust.** It checks each registry against its pinned key, each manifest against its author's
+  signature, and each script against its signed hash. Nothing the instance or a registry's host serves can widen
+  that.
+- **Gated abilities need the player's grant.** A tool gets `tx`, `beacon`, `network` and `geo` only when the player
+  approves them in the import prompt.
+- **Transmitting needs more.** A tool that asks to transmit also needs the player's verified callsign and their
+  transmit consent for the tab.
+
 ## Rotate or revoke a key
 
-| Event | What works today |
+| Event | What happens |
 |---|---|
-| An author changes their key | The author signs the manifest with the new key; the keeper updates the entry's `pubkey` and signs the registry again. Imports from the listed address then show as registry-listed again: the registry's key wins over the key a browser accepted before. A copy elsewhere shows **Author key CHANGED** to users who accepted the old key. |
-| An author's key leaks | The keeper removes the entry, or lists the new key, and signs again. There is no revocation list: a browser that accepted the leaked key still shows **Signed · matches the key you trusted before** for a manifest it signs from an address the registry does not list. |
-| A tool must go | Remove its entry and sign again. Users who imported it keep it until they reload the page. |
-| The authority key changes | Sign the registry with the new key and build the app with the new `VITE_TOOL_REGISTRY_AUTHORITY`. Builds with the old key reject the new file as failing its signature check until they are rebuilt; there is no overlap window. |
-| The authority key leaks | As above. Builds that pin the leaked key accept anything it signs until they are rebuilt. |
+| An author changes their key | The author signs the manifest with the new key; the registry's publisher updates the entry's `pubkey` and signs the registry again. Imports from the listed address show as registry-listed again. A copy elsewhere shows **Author key CHANGED** to players who accepted the old key. |
+| An author's key leaks | The publisher removes the entry, or lists the new key, and signs again. There is no revocation list: a browser that accepted the leaked key still shows **Signed · matches the key you trusted before** for a manifest it signs from an address no registry lists. |
+| A tool must go | Remove its entry and sign again. Players who imported it keep it until they reload the page. |
+| A registry's authority key changes | Sign the registry with the new key and publish the new fingerprint. Every instance and player that pinned the old key sees **key changed** until they compare and confirm the new one. |
+| A registry's authority key leaks | As above, and tell everyone who pinned it: until they confirm a new key, the leaked key still signs what they see. |
 
 ## Limits
 
-- **One authority per build.** The app pins a single key, set at build time. A multi-key allowlist for overlapping
-  rotations is tracked in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
-- **Settings need a rebuild.** `VITE_TOOL_REGISTRY` and `VITE_TOOL_REGISTRY_AUTHORITY` are read when the web app
-  is built, and the Docker image does not pass them in.
-- **One registry per instance.** Users cannot add a registry of their own.
-- **No script pinning.** The listing vouches for the manifest and its signer, not for the bytes of the script.
-- **No revocation list.** A removed entry stops vouching; keys browsers accepted stay accepted.
+- **One key per registry.** A registry is pinned to one authority key; a rotation needs everyone to confirm the new
+  key.
+- **No revocation list.** A removed entry stops vouching; author keys browsers accepted stay accepted.
+- **Ten registries per player**, twenty per instance beside the project registry.
 
 ## Next
 

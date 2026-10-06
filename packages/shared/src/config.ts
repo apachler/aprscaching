@@ -60,6 +60,7 @@ export const SITE_GROUPS = [
   "retention",
   "imports",
   "federation",
+  "tools",
   "imprint",
   "support",
   "updates",

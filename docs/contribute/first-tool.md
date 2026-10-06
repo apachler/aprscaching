@@ -159,7 +159,8 @@ pnpm run e2e:tools
 
 ## Package and host it
 
-A tool is its two files on a web server. The app fetches both from the user's browser, so the server must:
+A tool is its two files on a web server. The app fetches both from the user's browser (or through the instance,
+for a registry it carries), so the server must:
 
 - serve them over `https://` (a browser blocks `http://` from an `https://` page);
 - send `Access-Control-Allow-Origin: *`. GitHub Pages does this for every file;
@@ -169,7 +170,8 @@ Put the manifest's URL somewhere users find it. Anyone can import the tool by th
 
 ## Sign it
 
-Signing proves the manifest was not changed since you signed it, and lets a registry vouch for your key.
+The app imports only signed tools. Signing proves the manifest and its script were not changed since you signed
+them, and lets a registry vouch for your key.
 
 1. Make a key pair once, in the checkout, and keep the private value secret:
 
@@ -177,38 +179,36 @@ Signing proves the manifest was not changed since you signed it, and lets a regi
     node tools/toolkey/genkey.mjs
     ```
 
-2. Sign the manifest. The signer adds your `pubkey` and the `signature`:
+2. Sign the manifest. The signer hashes the script `entry` names next to the manifest into `entrySha256`, then
+   adds your `pubkey` and the `signature`. When `entry` is an absolute address, give the script's file as a third
+   argument:
 
     ```bash
     TOOL_PRIVATE_KEY=<private value> node tools/toolkey/sign.mjs manifest ~/my-tool/tool.json
     ```
 
-3. Sign again after every change to the manifest, a new `version` included.
+3. Sign again after every change to the manifest or the script, with a new `version`.
 
-The signature covers the manifest, including the `entry` URL, but not the script's bytes. Serve the script from a
-URL you never reuse for different code, such as one with the version in its path.
+The app refuses a script whose bytes differ from `entrySha256`, so host exactly the file you signed.
 
 ## List it in a registry
 
-The **Registry** list in the Tools app shows one signed file per build of the app: `VITE_TOOL_REGISTRY`
-(`/tools/registry.json` by default), verified against the authority key `VITE_TOOL_REGISTRY_AUTHORITY`. The
-project's builds ship `apps/web/public/tools/registry.json`; a sysop who builds the app can point both settings at
-a registry of their own. [The tool registry](tool-registry.md) covers the file, the keys and running your own.
-
-To be listed, give the registry's keeper the entry for your tool:
+A registry is a signed list of tools that the **Tools** app shows under **Registry**. Anyone can publish one, for
+example on GitHub ([Host a registry on GitHub](tool-registry.md#host-a-registry-on-github)); a sysop or a player
+adds it by its address and pins its key. To be listed, give the registry's keeper the entry for your tool:
 
 | Field | Value |
 |---|---|
 | `name`, `title`, `author`, `version`, `description` | As in your manifest |
 | `pubkey` | Your public key, exactly as in the signed manifest |
-| `entry` | The URL of your `tool.json` |
+| `entry` | The address of your `tool.json`, absolute or relative to the registry |
 
-The keeper adds the entry and signs the registry again with
-`TOOL_PRIVATE_KEY=<authority key> node tools/toolkey/sign.mjs registry registry.json`. Once an app built with the
-new registry is deployed, your tool shows under **Registry**, and importing it from the entry's URL shows **Signed ·
-registry-listed author key**. A copy imported from any other URL gets the trust-on-first-use label. For the
-project's registry, open a pull request that adds your entry; the maintainers sign it
-([Get your tool listed](tool-registry.md#get-your-tool-listed)).
+Importing the tool from the entry's address then shows **Signed · registry-listed author key**. A copy imported from
+any other address gets the trust-on-first-use label.
+
+The project registry lives in its own repository, [apachler/aprscaching-tools](https://github.com/apachler/aprscaching-tools):
+its `CONTRIBUTING.md` covers submitting a tool and its `MAINTAINERS.md` covers signing and releases. Each
+APRScaching release bundles a tagged snapshot of it.
 
 ### What a reviewer checks
 

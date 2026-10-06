@@ -99,6 +99,31 @@
     display: grid;
     gap: var(--space-xs);
   }
+  /* one registry's group in the Registry list: its name, whose it is and its pinned key */
+  .reg-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-xs) var(--space-sm);
+  }
+  .reg-fp {
+    font-size: var(--text-caption);
+    color: var(--muted);
+  }
+  .reg-fp-big {
+    font-size: var(--text-data);
+    letter-spacing: 0.06em;
+  }
+  .reg-url {
+    overflow-wrap: anywhere;
+  }
+  .reg-add {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .reg-add input {
+    width: 100%;
+  }
   .tool-sub textarea,
   .tool-sub input {
     width: 100%;

@@ -143,9 +143,13 @@ Sign tool plugins and the tool registry so the app can verify them (see
 node tools/toolkey/genkey.mjs                                   # a tool-author keypair
 TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs manifest tool.json   # sign a tool manifest
 TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs registry registry.json  # sign a registry's entries
+node tools/toolkey/bundle-registry.mjs v1.0.0                   # bundle a release of the project registry
 ```
 
-The signer writes your public key into the manifest and signs it with its keys sorted.
+The signer hashes the manifest's entry script into `entrySha256`, writes your public key into the manifest and
+signs it with its keys sorted. `bundle-registry.mjs` copies a tagged release of the project registry into
+`apps/web/public/tools/`, after checking every signature and script hash
+([Bundled with each release](../contribute/tool-registry.md#bundled-with-each-release)).
 [Signing and trust](../contribute/tool-reference.md#signing-and-trust) says what the app checks, and the case in
 which it refuses a signed manifest.
 

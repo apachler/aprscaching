@@ -28,6 +28,7 @@ import {
 import { verificationOf, verificationsOf } from "./callsign.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
+import { eraseAccountRegistries, exportAccountRegistries } from "./toolregistries.js";
 
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
@@ -380,6 +381,8 @@ async function accountExport(
       "SELECT target_kind, target_label, category, text, status, created_at FROM moderation_reports WHERE reporter_account=? ORDER BY id",
       acct,
     ),
+    // the tool registries the person added for themselves
+    toolRegistries: acct ? await exportAccountRegistries(env, acct) : [],
   };
 }
 
@@ -637,6 +640,7 @@ async function eraseAccount(env: Env, accountId: string | null, emails: string[]
       env.DB.prepare("UPDATE callsign_events SET to_account=NULL WHERE to_account=?").bind(accountId),
       env.DB.prepare("UPDATE callsign_claims SET holder_id=NULL WHERE holder_id=?").bind(accountId),
     );
+  if (accountId) stmts.push(...eraseAccountRegistries(env, accountId));
   if (accountId)
     for (const table of [
       "credentials",

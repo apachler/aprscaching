@@ -4,15 +4,11 @@ import {
   sanitizePanel,
   checkManifestSignature,
   decodeAprsLine,
-  registryEntryFor,
   resolveTrust,
-  verifyRegistry,
   PACKET_DECODER,
   type AprsDecodeResult,
   type Capability,
   type Colouriser,
-  type RegistryEntry,
-  type SignedRegistry,
   type Tool,
   type ToolManifest,
   type ToolTrust,
@@ -29,12 +25,13 @@ import {
   importedTools,
   removeImported,
 } from "./host.js";
-import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
+import { carrierFor, DIRECT, fetchToolScript, listingFor, type Carrier, type Listing } from "./registries.js";
+import { MyRegistries, RegistryGroups, useReconfirm, useToolRegistries } from "./RegistryViews.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { PacketDecode, PACKET_SAMPLE } from "./PacketDecode.js";
 import { toolIcon } from "./toolIcons.js";
 import { toolPin, unpin, usePins } from "../shack/apps.js";
-import { Button, Badge, Icon, Switch, ErrorState, useToast, useModalDialog } from "../ui/index.js";
+import { Button, Badge, Icon, Switch, useToast, useModalDialog } from "../ui/index.js";
 
 // ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
 const TOFU_KEY = "acs.tool.keys";
@@ -67,7 +64,7 @@ function trustInfo(t: ToolTrust): { label: string; kind: "found" | "warn" | "dnf
     case "self-signed":
       return { label: "Signed · unknown author key (trust-on-first-use)", kind: "warn", blocked: false };
     case "unsigned":
-      return { label: "Unsigned · you're trusting the URL only", kind: "warn", blocked: false };
+      return { label: "Unsigned — refused", kind: "dnf", blocked: true };
     case "key-changed":
       return { label: "Author key CHANGED since you last trusted it — refused", kind: "dnf", blocked: true };
     case "invalid":
@@ -120,9 +117,6 @@ const BUILTIN_DECODER: Readonly<Record<string, string>> = {
   sevenplus: "7plus",
 };
 
-/** The registry's own address, for resolving an entry's relative `entry` URL against it. */
-const registryBase = (): string => new URL(TOOL_REGISTRY_URL, location.href).href;
-
 /**
  * ToolsPanel — manage the sandboxed, capability-gated Tools. It drives the ONE
  * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
@@ -147,41 +141,19 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
   const [cmdOut, setCmdOut] = useState<string[]>([]);
   const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer
   const [importUrl, setImportUrl] = useState("");
-  const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string; trust: ToolTrust } | null>(null);
-  const [registry, setRegistry] = useState<RegistryEntry[]>([]); // verified marketplace entries (empty until loaded)
+  const [prompt, setPrompt] = useState<{
+    manifest: ToolManifest;
+    base: string;
+    trust: ToolTrust;
+    carrier: Carrier;
+    listedBy?: string;
+  } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const promptRef = useRef<HTMLDivElement>(null);
   useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
-
-  // the registry load: an instance without one (404) shows no Registry section; a failed or forged one says so
-  const [registryState, setRegistryState] = useState<"loading" | "ok" | "none" | "failed" | "forged">("loading");
-  const [registryTry, setRegistryTry] = useState(0);
-
-  // Load + verify the signed tool registry. We trust ONLY the pinned authority key — a forged or
-  // re-hosted registry (wrong authority / edited entries) fails verifyRegistry and is dropped.
-  useEffect(() => {
-    let live = true;
-    setRegistryState("loading");
-    (async () => {
-      try {
-        const res = await fetch(TOOL_REGISTRY_URL, { credentials: "omit" });
-        if (res.status === 404) {
-          if (live) setRegistryState("none");
-          return;
-        }
-        if (!res.ok) throw new Error(`registry ${res.status}`);
-        const doc = (await res.json()) as SignedRegistry;
-        const ok = await verifyRegistry(doc, TOOL_REGISTRY_AUTHORITY);
-        if (!live) return;
-        if (ok) setRegistry(doc.entries);
-        setRegistryState(ok ? "ok" : "forged");
-      } catch {
-        if (live) setRegistryState("failed");
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [registryTry]);
+  // every configured registry, each loaded and checked against its pinned key on its own
+  const registries = useToolRegistries();
+  const reconfirm = useReconfirm("my", registries.reload);
 
   // imported tools live beside the host (they outlive this screen); their on/off state is the host's
   const imported = importedTools();
@@ -295,11 +267,13 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       }
     setCmdOut([`no such command "${word}"`]);
   }
-  async function startImport(url = importUrl) {
+  /** Import from a manifest's upstream address; `carrier` fetches it (through this instance for a carried registry). */
+  async function startImport(url = importUrl, carrier: Carrier = DIRECT) {
     if (!url.trim()) return;
-    const r = await fetchToolManifest(url.trim());
+    setImportError(null);
+    const r = await fetchToolManifest(url.trim(), carrier);
     if (!r.ok) {
-      toast(r.error);
+      setImportError(r.error);
       return;
     }
     // The bus names an imported tool by its manifest name, so it may not take a loaded tool's name.
@@ -312,24 +286,34 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       );
       return;
     }
-    // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
+    // Verify the signature (integrity) and resolve overall trust against the registries + TOFU pin (identity).
     const sig = await checkManifestSignature(r.raw);
     // Registry-listed only when fetched from the entry's own URL: the script resolves against that URL.
-    const regEntry = registryEntryFor(registry, r.manifest.name, r.base, registryBase());
+    const listed = listingFor(registries.loaded, r.manifest.name, r.base, location.href);
     const trust = resolveTrust(sig, {
-      registryPubkey: regEntry?.pubkey,
+      registryPubkey: listed?.entry.pubkey,
       pinnedPubkey: tofuMap()[r.manifest.author.toUpperCase()],
       pubkey: r.manifest.pubkey,
     });
     if (trustInfo(trust).blocked) {
-      toast(`Refused: ${trustInfo(trust).label}`);
+      setImportError(`Refused: ${trustInfo(trust).label}`);
       return;
     } // never even prompt
-    setPrompt({ manifest: r.manifest, base: r.base, trust });
+    if (!r.manifest.entrySha256) {
+      setImportError("Refused: the manifest pins no hash of its code (entrySha256), so its code can't be checked.");
+      return;
+    }
+    setPrompt({
+      manifest: r.manifest,
+      base: r.base,
+      trust,
+      carrier,
+      listedBy: listed && `${listed.from.reg.label}${listed.from.reg.scope === "account" ? " (yours)" : ""}`,
+    });
   }
   async function approveImport() {
     if (!prompt) return;
-    const { manifest, base, trust } = prompt;
+    const { manifest, base, trust, carrier } = prompt;
     if (trustInfo(trust).blocked) {
       setPrompt(null);
       return;
@@ -339,11 +323,17 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
     setPrompt(null);
     try {
       const scriptUrl = new URL(manifest.entry ?? "tool.js", base).href;
+      // the code runs only when its bytes are the ones the signed manifest pins
+      const code = await fetchToolScript(manifest, scriptUrl, carrier);
+      if (!code.ok) {
+        setImportError(`Refused: ${code.error}.`);
+        return;
+      }
       // Bridge the sandboxed tool to the shared bus — only if it was granted 'ipc'. The host routes
       // emit/subscribe/call under the tool's own name and checks its grants on every service call; the
       // worker never holds a host or another-tool reference.
       const bridge = host.toolBus(manifest.name, manifest.permissions);
-      const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge, {
+      const sandbox = await loadSandbox(code.script, manifest.permissions, bridge, {
         connect: manifest.connect,
         appOrigins: [location.origin, new URL(API_BASE || location.origin, location.href).origin],
       });
@@ -368,7 +358,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
         .join(", ");
       toast(`Imported ${manifest.title} (${sandbox.commands.length} commands${extras ? `, ${extras}` : ""}).`);
     } catch (e) {
-      toast(`Import failed: ${(e as Error).message}`);
+      setImportError(`Import failed: ${(e as Error).message}`);
     }
   }
 
@@ -530,51 +520,32 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
         </div>
       )}
 
-      {registryState === "loading" && (
-        <p className="muted fine" aria-busy="true">
-          Loading the tool registry…
+      <div className="tool-sub">
+        <div className="ulabel">Registry</div>
+        <p className="muted fine">
+          Signed lists of tools. Each registry is pinned to its publisher&apos;s key; a tool listed by several shows
+          once.
         </p>
-      )}
-      {registryState === "failed" && (
-        <ErrorState onRetry={() => setRegistryTry((n) => n + 1)}>
-          Couldn&apos;t load the tool registry. You can still import a tool by its URL below.
-        </ErrorState>
-      )}
-      {registryState === "forged" && (
-        <ErrorState>
-          The tool registry failed its signature check, so its tools are not listed. Tell the instance&apos;s sysop.
-        </ErrorState>
-      )}
-      {registryState === "ok" && registry.length === 0 && (
-        <p className="muted fine">The tool registry lists no tools yet.</p>
-      )}
-      {registry.length > 0 && (
-        <div className="tool-sub">
-          <div className="ulabel">
-            Registry <span className="muted fine">(signed marketplace — {registry.length})</span>
-          </div>
-          {registry.map((e) => (
-            <div key={e.name} className="tool-row">
-              <div className="tool-meta">
-                <strong>{e.title}</strong>{" "}
-                <span className="muted fine">
-                  v{e.version} · {e.author}
-                </span>
-                {e.description && <div className="muted fine">{e.description}</div>}
-              </div>
-              <Button
-                onClick={() => {
-                  const url = new URL(e.entry, registryBase()).href;
-                  setImportUrl(url);
-                  startImport(url);
-                }}
-              >
-                Import…
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+        {registries.listError && (
+          <p className="muted fine">
+            This instance can&apos;t be asked for its registries ({registries.listError}); showing the one bundled with
+            the app.
+          </p>
+        )}
+        {registries.list && registries.loaded.length === 0 && (
+          <p className="muted fine">No registry is switched on. You can still import a tool by its address below.</p>
+        )}
+      </div>
+      <RegistryGroups
+        loaded={registries.loaded}
+        onImport={(x: Listing) => {
+          setImportUrl(x.manifestUrl);
+          void startImport(x.manifestUrl, carrierFor(x.from.reg, API_BASE));
+        }}
+        onRetry={registries.retry}
+        onReconfirm={(reg, authority, fp) => void reconfirm(reg, authority, fp)}
+      />
+      {registries.list?.players.signedIn && <MyRegistries list={registries.list} onChanged={registries.reload} />}
 
       <div className="tool-sub">
         <div className="ulabel">
@@ -590,9 +561,15 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
           <Button onClick={() => startImport()}>Import…</Button>
         </div>
         <p className="muted fine">
-          Signed tools are verified against their author key; unsigned tools import with a warning. An invalid signature
-          or a changed author key is refused. An imported tool stays until you remove it or reload the page.
+          A tool must be signed by its author, and its code must match the hash its signed manifest pins. An unsigned
+          tool, an invalid signature, a changed author key or changed code is refused. An imported tool stays until you
+          remove it or reload the page.
         </p>
+        {importError && (
+          <p className="error fine" role="alert">
+            {importError}
+          </p>
+        )}
         {imported.length > 0 && (
           <div className="tools-list">
             {imported.map((im) =>
@@ -640,6 +617,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
               <p>
                 <Badge kind={ti.kind}>{ti.label}</Badge>
               </p>
+              {prompt.listedBy && <p className="tool-surfaces">listed by: {prompt.listedBy}</p>}
               <p className="muted fine">
                 It runs in a sealed frame, apart from your session, passkeys and stored keys. It reaches the network
                 only with the <code>network</code> capability, and then only the origins listed above. TX still requires

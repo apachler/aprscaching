@@ -12,14 +12,20 @@
  * decoders) round-trip to the worker asynchronously. Every message from the frame is shape-checked here.
  */
 import { validateManifest, type ToolManifest, type Capability, type ToolBus } from "@aprscaching/tools";
+import { DIRECT, type Carrier } from "./registries.js";
 
+/**
+ * Fetch and validate a tool's manifest. `url` is its upstream address, which `base` keeps for resolving the
+ * script and for the registry match; `carrier` decides where the bytes come from (this instance or the publisher).
+ */
 export async function fetchToolManifest(
   url: string,
+  carrier: Carrier = DIRECT,
 ): Promise<
   { ok: true; manifest: ToolManifest; raw: Record<string, unknown>; base: string } | { ok: false; error: string }
 > {
   try {
-    const res = await fetch(url, { credentials: "omit" });
+    const res = await fetch(carrier.fetchUrl(new URL(url, location.href).href), carrier.init);
     if (!res.ok) return { ok: false, error: `manifest ${res.status}` };
     const raw = (await res.json()) as Record<string, unknown>;
     const v = validateManifest(raw);
@@ -258,17 +264,17 @@ export interface SandboxOptions {
 }
 
 /**
- * Load a tool script into a worker inside a sandboxed frame. `granted` are the user-approved
+ * Load a tool script into a worker inside a sandboxed frame. `script` is the code, already checked against the
+ * manifest's signed `entrySha256` (registries.ts fetchToolScript). `granted` are the user-approved
  * capabilities; `bridge` (supplied only when 'ipc' was granted) wires the worker's emit/subscribe/call to
  * the host bus. `destroy()` removes the frame, which ends its worker.
  */
 export async function loadSandbox(
-  scriptUrl: string,
+  script: string,
   granted: Capability[],
   bridge?: IpcBridge,
   opts: SandboxOptions = {},
 ): Promise<Sandbox> {
-  const script = await (await fetch(scriptUrl, { credentials: "omit" })).text();
   const network = granted.includes("network");
   const csp = frameCsp(connectSources(granted, opts.connect, opts.appOrigins ?? [location.origin]));
   const frame = document.createElement("iframe");

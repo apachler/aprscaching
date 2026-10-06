@@ -1,8 +1,8 @@
 # Instance settings
 
 This page is for the sysop. It shows how to change the policy values of your instance in the app: the game
-rules, the API limits, how long data is kept, imports and spots, the imprint, donation links and the update
-check. At the end the new value applies at once, with no restart.
+rules, the API limits, how long data is kept, imports and spots, tools and their registries, the imprint, donation
+links and the update check. At the end the new value applies at once, with no restart.
 
 ## Before you start
 
@@ -30,7 +30,7 @@ with what each accepts, is in [Configuration → Instance settings](../../refere
 
 1. Open **Admin** in the navigation rail, then the **Instance settings** group.
 2. Find the setting: open its group (**Game rules**, **Accounts & API**, **Privacy & retention**, **Imports &
-   data sources**, **Imprint & contact**, **Support links**, **Updates**), or type a word into **Search admin
+   data sources**, **Federation**, **Tools**, **Imprint & contact**, **Support links**, **Updates**), or type a word into **Search admin
    sections**, such as `imprint` or `retention`. The search opens every group it matches.
 3. Change the value:
 
@@ -42,6 +42,32 @@ with what each accepts, is in [Configuration → Instance settings](../../refere
    confirms it. A value outside the setting's range shows the reason under the field, and nothing is saved.
 
 To go back to the default, select **Reset to default** under the setting and confirm.
+
+## Tool registries
+
+The **Tools** group decides which tool registries every player's **Tools** app lists. Tools run sandboxed in each
+player's browser and never on the instance; a registry only says which signed tools to offer.
+
+| Setting | What it does |
+|---|---|
+| **Registries** | The registries every player sees. The project registry, bundled with each release, comes first; switch it off to offer only your own. |
+| **Players may add tool registries** | Players add their own registries, marked as not checked by this instance. Switched off, those are hidden and not fetched, and stay stored until each player removes them or you switch it on again. |
+| **Fetch tool registries through this instance** | The gateway fetches added registries and their tools and serves them from this instance: players' addresses never reach the registry's host, and cached copies keep working offline. Switched off, browsers fetch registries directly. |
+
+To add a registry:
+
+1. In **Tools → Registries**, enter its address: `github:owner/repo@v1.0.0`, a GitHub Pages address or any
+   `https://` address, and an optional label.
+2. Select **Fetch and show its key**, and compare the fingerprint with the one the publisher gives.
+3. Select **It matches: pin and add** only if every digit matches.
+
+Each row shows whether the registry's file verifies under its pinned key. **Key changed** means the file is now
+signed by another key: players see none of its tools until you ask the publisher for the new fingerprint and select
+**Compare and confirm…**. Every change lands in the audit log.
+
+`TOOL_REGISTRIES` in the environment replaces the list, which then shows read-only
+([Configuration](../../reference/configuration.md#gateway-core-instance)). How registries, keys and the instance's copies work is in
+[The tool registry](../../contribute/tool-registry.md).
 
 ## Check that it worked
 

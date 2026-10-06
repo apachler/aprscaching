@@ -62,6 +62,8 @@ change. It travels with the database, so a backup carries it. The tables below m
 | Poll interval | `SPOTS_TTL_SEC` | Imports & data sources | a whole number, 60–86400 s |
 | List trusted peers | `FED_PEER_EXCHANGE` | Federation | on or off |
 | Pass on peers' records | `FED_RESERVE` | Federation | one of `trusted`, `all`, `off` |
+| Players may add tool registries | `TOOL_REGISTRIES_PLAYERS` | Tools | on or off |
+| Fetch tool registries through this instance | `TOOL_REGISTRIES_PROXY` | Tools | on or off |
 | Operator name | `OPERATOR_NAME` | Imprint & contact | one line of text, up to 120 characters |
 | Postal address | `OPERATOR_ADDRESS` | Imprint & contact | one line of text, up to 300 characters |
 | Contact email | `OPERATOR_EMAIL` | Imprint & contact | an email address |
@@ -94,6 +96,9 @@ change. It travels with the database, so a backup carries it. The tables below m
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
 | `UPDATE_CHECK` | Once a day the gateway asks GitHub (`api.github.com`) for the newest APRScaching release, so **Instance admin** and `deploy/aprscaching doctor` can say when one is out ([Updates](../run/day-to-day/updates.md#how-you-hear-about-a-new-release)). The request names the instance in its User-Agent and carries nothing about a member. `0` stops it, for an off-grid instance or one that should not contact GitHub · *[Instance setting](#instance-settings)* | on |
+| `TOOL_REGISTRIES` | The tool registries the **Tools** app lists, as a JSON array; set, it replaces the list kept in **Instance settings**, which then shows it read-only. An item is `"builtin"` (the project registry bundled with the app) or `{"url", "authority", "label", "enabled"}`: `url` is an `https://` address, `github:owner/repo[/path][@ref]`, or a path on this instance; `authority` is the registry's pinned Ed25519 public key in base64url ([Tool registries](../run/day-to-day/instance-settings.md#tool-registries)) | the project registry |
+| `TOOL_REGISTRIES_PLAYERS` | Players may add tool registries of their own, each pinned to its key and kept with their account. `0` hides and stops fetching them; they stay stored until the player removes them or the setting is on again · *[Instance setting](#instance-settings)* | on |
+| `TOOL_REGISTRIES_PROXY` | The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. The browser still checks every signature. `0` lets browsers fetch registries directly · *[Instance setting](#instance-settings)* | on |
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign)) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning. `OPERATOR_EMAIL` also receives each player report when mail is configured ([Moderation](../run/day-to-day/moderation.md)) · *[Instance setting](#instance-settings)* | — |
 | `SECURITY_CONTACT` | Where a security report goes: the `Contact:` lines of `/.well-known/security.txt` (RFC 9116), comma-separated `mailto:` or `https:` URIs (a bare address becomes `mailto:`). With neither this nor `OPERATOR_EMAIL` set, the file answers 404 · *[Instance setting](#instance-settings)* | `mailto:` + `OPERATOR_EMAIL` |
@@ -294,8 +299,6 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 | `VITE_BASEMAP` | `offline` uses the self-contained graticule; else the online vector basemap | online |
 | `VITE_BASEMAP_STYLE` | MapLibre style URL for the vector basemap (self-hosted tiles, commercial provider) | OpenFreeMap `liberty` |
 | `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOxCloudless 2016 layer (EOX; free for non-commercial use) |
-| `VITE_TOOL_REGISTRY` | Signed tool-registry URL | `/tools/registry.json` |
-| `VITE_TOOL_REGISTRY_AUTHORITY` | Pinned Ed25519 authority key the registry is verified against | (built-in) |
 <!-- /config-table -->
 
 ## Deploy scripts

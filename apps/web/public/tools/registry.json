@@ -6,10 +6,19 @@
       "author": "OE8APR",
       "version": "1.0.0",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-      "entry": "/tools/hello/tool.json",
+      "entry": "tools/hello/tool.json",
       "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
+    },
+    {
+      "name": "station-log",
+      "title": "Station log",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
+      "entry": "tools/station-log/tool.json",
+      "description": "Lists the stations the Station DB tool hears, with /seen and /whois commands."
     }
   ],
   "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
-  "sig": "OdLlbf1LW0GOI2NGXjQrJOFCR+PGjZGZJrfnSfBnDdvONrKhsOTEDE/QuT3yhRdhgbA1Fi2i6skgy+nAewanDw=="
+  "sig": "LoUnalCxaHaMq+yj63x8Zo1bRVtXPI63tV4igZOsYJwP0L9cv1xCAF3C2TTSGe88bGgeU40bBHYE1HRE+FiEBg=="
 }

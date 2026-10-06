@@ -54,7 +54,7 @@ function load(withIpc: boolean) {
 const keepsShape = (spec: unknown) => expect(sanitizePanel(spec)).toEqual(spec as PanelSpec);
 
 describe("example tool: station-log", () => {
-  it("its manifest passes the validator and imports as unsigned", async () => {
+  it("its manifest passes the validator, and stays unsigned until its author signs it", async () => {
     const v = validateManifest(manifestJson);
     expect(v.ok).toBe(true);
     if (!v.ok) return;

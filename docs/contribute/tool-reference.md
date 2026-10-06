@@ -9,10 +9,12 @@ write a tool; [Write your first tool](first-tool.md) walks through one from star
 | File | Content |
 |---|---|
 | `tool.json` | The manifest (below). The user imports a tool by this file's URL. |
-| The entry script | The JavaScript the sandbox runs, named by the manifest's `entry` (`tool.js` when left out), relative to the manifest's URL. |
+| The entry script | The JavaScript the sandbox runs, named by the manifest's `entry` (`tool.js` when left out), relative to the manifest's URL. Its SHA-256 is pinned in the signed manifest (`entrySha256`). |
 
-Both are fetched by the app's page without cookies (`credentials: "omit"`). When they live on another origin
-than the app, their server answers with an `Access-Control-Allow-Origin` header that allows the app's origin.
+The app's page fetches both without cookies (`credentials: "omit"`). A tool listed in a registry the instance
+carries reaches the browser through the instance instead ([Fetched through the instance](tool-registry.md#fetched-through-the-instance)).
+When the browser fetches from another origin than the app, the server answers with an
+`Access-Control-Allow-Origin` header that allows the app's origin.
 
 ## Manifest fields
 
@@ -30,9 +32,10 @@ error it reports.
 | `remote` | boolean | no | `true` marks the tool's commands as callable by a remote connected station. Any other value counts as not set. | none |
 | `description` | string | no | One line for the registry and the import prompt. Any other type is dropped. | none |
 | `entry` | string | no | The script's URL or path, resolved against the manifest's URL. | `entry must be a string URL/path` |
+| `entrySha256` | string | to import | The SHA-256 of the exact bytes `entry` serves, base64 (44 characters). `sign.mjs` sets it. | `entrySha256 must be the base64 SHA-256 of the entry script` |
 | `connect` | string array | with `network` | At most 8 `https://` or `wss://` origins, with no path, query, fragment or credentials; normalised to `scheme://host[:port]`. | `connect must be a list of at most 8 origins`, `connect entries must be https:// or wss:// origins, without a path` |
-| `pubkey` | string | to sign | The author's raw Ed25519 public key, base64url. | `pubkey must be a base64url string` |
-| `signature` | string | to sign | A detached Ed25519 signature, base64, over the [signing bytes](#signing-and-trust). | none |
+| `pubkey` | string | to import | The author's raw Ed25519 public key, base64url. | `pubkey must be a base64url string` |
+| `signature` | string | to import | A detached Ed25519 signature, base64, over the [signing bytes](#signing-and-trust). | none |
 
 A tool that asks for `network` without a `connect` list fails with `a tool asking for network lists the origins it
 reaches in connect`. Fields the validator does not know are dropped.
@@ -212,6 +215,9 @@ sequenceDiagram
 | `manifest <status>` | The manifest URL answered with an HTTP error. |
 | `Failed to fetch` (in Chromium) | The manifest's server is unreachable, or its answer lacks the CORS header. |
 | A validation error | See [manifest fields](#manifest-fields). |
+| `Refused: Unsigned — refused` | The manifest has no `signature` or no `pubkey`. |
+| `Refused: the manifest pins no hash of its code (entrySha256), …` | The signed manifest has no `entrySha256`. Sign it again with `sign.mjs`. |
+| `Refused: the tool's code does not match its signed manifest.` | The script's bytes differ from `entrySha256`: the script changed after the manifest was signed, or someone serves other code. |
 | `Refused: Signature INVALID — refused` | The signature does not match the manifest. |
 | `Refused: Author key CHANGED since you last trusted it — refused` | The key differs from the registry's entry or from the one the user accepted before. |
 | `Import failed: the tool did not start in time` | The frame and worker did not report `loaded` within 15 seconds. |
@@ -260,9 +266,12 @@ entry carries its own `version`, which is what the **Registry** list shows.
 
 ## Signing and trust
 
-A tool may carry `pubkey` and `signature`. The signature covers the canonical manifest: every field except
-`signature`, with object keys sorted, as `manifestSigningBytes()` in `@aprscaching/tools` builds it.
-[`tools/toolkey`](../reference/cli.md#toolkey) makes a key pair and signs a manifest.
+An imported tool carries `pubkey`, `signature` and `entrySha256`. The signature covers the canonical manifest:
+every field except `signature`, with object keys sorted, as `manifestSigningBytes()` in `@aprscaching/tools`
+builds it. `entrySha256` is one of those fields, so the signature covers the script's bytes too: after the prompt,
+the app fetches the script, hashes it (`checkEntryHash()`), and runs it only when the hash matches. Whoever serves
+the script (the author's server, a mirror, the instance carrying a registry) cannot change it without the tool
+being refused. [`tools/toolkey`](../reference/cli.md#toolkey) makes a key pair and signs a manifest.
 
 The app decides one of six trust labels before it shows the import prompt:
 
@@ -271,7 +280,7 @@ The app decides one of six trust labels before it shows the import prompt:
 | **Signed · registry-listed author key** | The signature is valid, the manifest was fetched from the URL the registry lists for this `name`, and `pubkey` equals the key the registry lists for it. |
 | **Signed · matches the key you trusted before** | Valid, not registry-listed, and the key equals the one this browser accepted for this author before. |
 | **Signed · unknown author key (trust-on-first-use)** | Valid, not registry-listed, and this browser does not know the key. |
-| **Unsigned · you're trusting the URL only** | No `signature` or no `pubkey`. |
+| **Unsigned — refused** | No `signature` or no `pubkey`. The import stops. |
 | **Author key CHANGED since you last trusted it — refused** | Valid, but the key differs from the registry's or the accepted one. The import stops. |
 | **Signature INVALID — refused** | The signature does not verify. The import stops. |
 
@@ -279,21 +288,20 @@ Approving a signed tool stores its key for its author in this browser, under `ac
 
 ### What "registry-listed" covers
 
-The registry is a JSON document of entries (`name`, `title`, `author`, `version`, `pubkey`, `entry`,
-`description`), signed by an authority key the app pins at build time (`VITE_TOOL_REGISTRY_AUTHORITY`); the app
-reads it from `VITE_TOOL_REGISTRY`, `/tools/registry.json` by default. A registry with another authority key or
-a broken signature is ignored, and the **Registry** list stays empty. [The tool registry](tool-registry.md) explains
-the file, who signs it and how a sysop runs their own.
+A registry is a JSON document of entries (`name`, `title`, `author`, `version`, `pubkey`, `entry`,
+`description`), signed by an authority key. The sysop configures the instance's registries and a player may add
+their own; each is pinned to its authority key when it is added. A registry signed by another key shows as **key
+changed** and lists nothing until its key is confirmed again; one whose signature fails lists nothing.
+[The tool registry](tool-registry.md) explains the file, the pinning and how to host one.
 
 - The **registry-listed** label in the import prompt means the manifest was fetched from the URL the registry
-  lists for its name and signed by the key the registry lists for it. A relative script `entry` resolves against
+  lists for its name and signed by the key the registry lists for it. The prompt names the registry, and marks
+  one the player added as theirs. A relative script `entry` resolves against
   that URL, so the script comes from the listed site.
 - A copy of a listed manifest served from any other URL is not registry-listed, even with a valid signature by
   the listed key: its relative `entry` resolves against the copy's site and runs that site's script. It gets
   the trust-on-first-use labels above and the normal import prompt.
-- It does not cover the script. The signature covers the `entry` URL, not the bytes served there, so whoever
-  controls that server can change the script without breaking the signature. Pinning the script's hash in the
-  manifest is planned (`entryHash` in [TODO.md](https://github.com/apachler/aprscaching/blob/dev/TODO.md)).
+- The script is covered through the signed `entrySha256`, whichever server delivers it.
 
 ## Next
 

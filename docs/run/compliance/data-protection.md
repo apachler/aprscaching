@@ -25,7 +25,8 @@ or erase someone else's account.
 `POST /api/account/<call>/export` returns a full, machine-readable copy of the account's data, whichever held
 call names it. It covers every base call the account holds and every SSID of them: the email address (and one
 waiting for confirmation), the profile and preferences, caches, finds, positions, the APRS messages the person
-sent or was sent with their delivery state, keys, stations, mail and the rest of the account-scoped rows.
+sent or was sent with their delivery state, keys, stations, mail, the tool registries they added and the rest of
+the account-scoped rows.
 Secrets such as passkey public keys and push keys stay out of it.
 
 It also carries what moderation holds about the person: the sysop's actions on their account and content
@@ -88,6 +89,7 @@ signed account-move record points attribution at the new instance across the net
 | Callsign claims and the holder-change trail | 1 year after the claim ends or the change | fixed |
 | Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
+| A member's own tool registries, and the copies of their files the instance fetched for them | until the member removes them or is erased; a copy is refreshed hourly while in use | `TOOL_REGISTRIES_PLAYERS`, `TOOL_REGISTRIES_PROXY` |
 
 `RETENTION` is JSON naming only what you change, for example `{"packetsHours":6,"sensorDays":90}`
 ([Configuration](../../reference/configuration.md)). What the instance keeps beyond accounts is public ham
