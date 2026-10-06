@@ -34,6 +34,7 @@ import {
   gitHead,
   guardFederationFetches,
   logStrayErrors,
+  relayPollInterval,
   roomNamespace,
   startSchedules,
 } from "../node/src/host.ts";
@@ -118,7 +119,7 @@ export function createServer(opts: BunServerOptions): BunServer {
     websocket: roomHandlers(rooms),
   });
 
-  startSchedules(env, fedSyncInterval(opts.environment));
+  startSchedules(env, fedSyncInterval(opts.environment), relayPollInterval(opts.environment));
 
   // 24/7 resilience: log stray errors; a stop signal closes the listener and checkpoints SQLite (WAL)
   // so a service stop or a window-manager quit is never data-lossy.

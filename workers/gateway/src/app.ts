@@ -127,7 +127,7 @@ import { handleFederationPeers, handlePeerAdd, handlePeerRemove, handlePeerTrust
 import { handleOfflinePack } from "./offlinepack.js";
 import { TILES_PATH, handleOfflineTiles, handleTileArchive } from "./tiles.js";
 import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
-import { handleFederationSubmit, handleSubmitMarks, pushToHub, type PushResult } from "./fedpush.js";
+import { handleFederationSubmit, handleSubmitMarks, pushSoon, pushToHub, type PushResult } from "./fedpush.js";
 import {
   pruneMeshcom,
   handleMeshcomNodes,
@@ -135,7 +135,7 @@ import {
   handleMeshcomGroups,
   handleMeshcomGroupMessages,
 } from "./meshcom.js";
-import { retryCorroborations } from "./corroborate_retry.js";
+import { collectRelayedCorroborations, retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications, handleAdminCallsigns } from "./admin.js";
 import { handleClaimStart, handleClaimStatus } from "./claims.js";
 import { handleMyApiKeys, handleRevokeMyApiKey, handleAdminApiKeys, handleAdminRevokeApiKey } from "./apikeys.js";
@@ -237,10 +237,21 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   await loadSiteSettings(env);
   const res = await route(req, env, ctx);
+  const path = new URL(req.url).pathname;
   // gossip ping: a successful federated write coalesces into one "come pull" to our peers
-  if (res.ok && isFederatedWrite(req.method, new URL(req.url).pathname))
-    ctx.waitUntil(notifyPeers(env).catch(() => {}));
+  if (res.ok && isFederatedWrite(req.method, path)) ctx.waitUntil(notifyPeers(env).catch(() => {}));
+  // a spoke pushes to its hub a few seconds after a local write; a push with nothing new sends nothing
+  if (res.ok && isLocalWrite(req.method, path)) pushSoon(env);
   return withCors(res, req, env);
+}
+
+/**
+ * A request that may change a record the federation feeds carry: a member's or the sysop's write through
+ * the API, a callsign key, a callsign verification. Ingest and federation traffic is not one: neither
+ * creates a record this instance publishes.
+ */
+function isLocalWrite(method: string, path: string): boolean {
+  return method !== "GET" && method !== "HEAD" && /^\/(?:api|keys|verify)\//.test(path);
 }
 
 /**
@@ -280,12 +291,35 @@ async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<F
   } catch (e) {
     console.error("corroboration retry:", (e as Error).message);
   }
+  await runRelayTick(env);
+  return { push };
+}
+
+/**
+ * The relay's quick cadence (`FED_RELAY_POLL_MS`, 15 s, and every frequent sync): a spoke collects and
+ * answers the queries its hub holds for it, and an asker reads the answers to corroboration questions it
+ * left at a hub. Each half costs nothing without its configuration or a waiting question.
+ */
+export function runRelayTick(env: Env): Promise<void> {
+  relayTick ??= relayTickOnce(env).finally(() => {
+    relayTick = null;
+  });
+  return relayTick;
+}
+let relayTick: Promise<void> | null = null;
+
+async function relayTickOnce(env: Env): Promise<void> {
+  applyDerivedDefaults(env);
   try {
     await relayPoll(env);
   } catch (e) {
     console.error("relay poll:", (e as Error).message);
   }
-  return { push };
+  try {
+    await collectRelayedCorroborations(env);
+  } catch (e) {
+    console.error("relayed corroboration:", (e as Error).message);
+  }
 }
 
 /**

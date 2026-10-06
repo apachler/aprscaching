@@ -316,6 +316,7 @@ export const CONFIG_KEYS = {
     site: { group: "game", min: 0, max: 1000, unit: "caches" },
   },
   FED_SYNC_INTERVAL_MS: { type: "int", units: ["server"], default: "300000" },
+  FED_RELAY_POLL_MS: { type: "int", units: ["server"], default: "15000" },
   WEB_DIST: { type: "string", units: ["server", "desktop"] },
   HTTPS_PORT: { type: "int", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },
   TLS_CERT: { type: "string", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },

@@ -12,11 +12,11 @@ NAT, pushes its records to a hub you run. How push, catch-up and the relay work 
 
 ## Reaching firewalled peers
 
-A peer that can't be dialled inbound still contributes in two ways: it pushes its records to a hub, or it
-answers feed queries through a relay on the hub. Neither lets peers ask it to confirm a find: a corroboration
-question needs an address the asking instance can dial
+A peer that can't be dialled inbound still takes a full part: it pushes its records to a hub, and through a
+relay on the hub it answers feed queries and confirms finds logged elsewhere with its own receivers
 ([How a find gets confirmed across instances](how-it-works.md#how-a-find-gets-confirmed-across-instances)). A
-Cloudflare Tunnel or a 44Net address gives a firewalled instance one ([Choose how to connect](choose.md)).
+direct address answers faster: a Cloudflare Tunnel or a 44Net address gives a firewalled instance one
+([Choose how to connect](choose.md)).
 
 ### Push to a hub
 
@@ -51,6 +51,9 @@ Restart both. What happens then:
   accepts a page, so a restart never sends its history again. The hub returns where each spoke's feeds stand; a
   spoke reads that when it starts and after an outage, so a backup restored on either side resumes from what
   the hub holds.
+- **Every feed, soon after each write.** The spoke pushes all its records the pull serves: caches, finds, keys,
+  bulletins, account moves and deletions. A write goes out 3 seconds after it, a burst of writes in one cycle,
+  and the scheduled cycle and **Sync now** push too.
 - **Back-off after an outage.** After a network failure a Self-host, Desktop or Pocket spoke probes the hub's
   `/health?live` after 30 s, doubling up to 10 minutes, and pushes the moment it answers. While more pages wait
   than one cycle sends, the next cycle follows a few seconds later.
@@ -87,8 +90,9 @@ A home the hub trusts later has its earlier records passed on at the receivers' 
 ### Rendezvous relay
 
 The relay is a mailbox on the hub: a requester leaves a query for a firewalled spoke, the spoke collects it on its
-own outbound connection and answers with a page of its signed caches, finds or keys, and the requester collects
-the answer. The relay is transport only: the answer is verified like a pulled page
+own outbound connection and answers it, and the requester collects the answer. A query asks for a page of the
+spoke's signed caches, finds or keys, or asks the spoke's receivers to confirm a find. The relay is transport
+only: a page is verified like a pulled one, and a confirmation like a direct answer
 ([Rendezvous relay](transports.md#rendezvous-relay)).
 
 On the hub, in its `.env`:
@@ -106,11 +110,17 @@ FED_RELAY_SECRET=<any value>                   # turns collecting on; the spoke 
 
 Restart both. What happens then:
 
-- **The spoke collects its queries** in every scheduled cycle (`FED_SYNC_INTERVAL_MS`, 5 minutes) and answers each
-  from its own database. It signs each request with its federation key, and the hub checks that key against the
-  one it holds for the spoke: from a push, a pull or the registry. No spoke can collect or answer for another.
-- **A requester** is a script or tool holding the hub's `FED_RELAY_SECRET`. No instance asks through the relay on
-  its own. A requester reads only its own results, by the ticket it got, and may hold 50 queries at once.
+- **The spoke collects its queries** every 15 seconds (`FED_RELAY_POLL_MS`; `0` leaves it to the scheduled
+  cycle, every 5 minutes) and answers each from its own database. It signs each request with its federation
+  key, and the hub checks that key against the one it holds for the spoke: from a push, a pull or the registry.
+  No spoke can collect or answer for another.
+- **Finds are confirmed through the hub.** A find logged on the hub, or on an instance the hub knows (a peer it
+  pulls from or a spoke that pushes to it), that trusts the spoke asks it through the relay; the spoke must push
+  to the hub. The answer lifts the find within about 15 seconds while the spoke is online
+  ([How a find gets confirmed across instances](how-it-works.md#how-a-find-gets-confirmed-across-instances)).
+- **A requester** is a script or tool holding the hub's `FED_RELAY_SECRET`, or an instance asking a spoke to
+  confirm a find, which signs its question and its read with its own key. A requester reads only its own
+  results, by the ticket it got, and may hold 50 queries at once.
 - **An unanswered query** returns to the queue 5 minutes after the spoke collected it.
 
 A spoke with no internet path at all can take its queries as packet mail instead:

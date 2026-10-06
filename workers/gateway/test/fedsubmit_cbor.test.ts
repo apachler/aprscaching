@@ -11,7 +11,8 @@ import {
   fedSigningBytes,
   type FedRecord,
 } from "@aprscaching/shared";
-import { handleFederationSubmit, pushToHub } from "../src/fedpush.js";
+import { handleFederationSubmit, pushToHub, PUSH_FEEDS } from "../src/fedpush.js";
+import { SYNC_DEFS } from "../src/fedapply.js";
 import { feedSource } from "../src/relay.js";
 import type { Env } from "../src/env.js";
 
@@ -202,6 +203,12 @@ describe("pushToHub speaks the CBOR wire only", () => {
     const r = await pushToHub(env, fetchFn);
     expect(r?.pushed).toBe(0);
     expect(cts).toEqual(["application/cbor"]); // one attempt, no second body of any kind
+  });
+});
+
+describe("the feeds a spoke pushes", () => {
+  it("are every feed the pull serves, in the pull's order", () => {
+    expect(PUSH_FEEDS.map((d) => d.type)).toEqual(SYNC_DEFS.map((d) => d.type));
   });
 });
 

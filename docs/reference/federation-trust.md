@@ -130,7 +130,8 @@ lend it any trust. `FED_RESERVE` decides what it passes on: by default the recor
 - **The origin's trust, never the hub's.** A passed-on record lands under its origin, so the receiver shows it
   with its own trust in that origin: hidden while the origin is `unvetted`, never shown when it is blocked. A
   trusted hub lifts nothing.
-- **No new voice.** The corroboration quorum asks reachable trusted peers only; a passed-on record is never an
+- **No new voice.** The corroboration quorum asks only trusted peers this instance follows itself, directly or
+  through a hub's relay for one nobody can dial; a passed-on record is never an
   answer, and an origin known only through a hub is never asked.
 - **Deletes reach every hop.** A tombstone passes on like any record, and a hub stops passing on what a
   tombstone removed. A bounded tombstone (`upTo`) passes on too, so a restored cache follows it at its higher
@@ -166,6 +167,14 @@ calls and stations travel with the question as exclusions.
 - **Who is answered.** The shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted `https` peers,
   and an answerer that sets it answers only the peers holding it. `FED_CORROBORATION_REQUIRE_KNOWN=1` answers
   only peers whose key is known, `unvetted` ones included.
+- **Through a hub's relay.** A trusted peer nobody can dial, such as a push spoke, gets the same signed
+  question through its hub's relay, and its signed answer comes back the same way. The hub queues a question
+  only from an instance whose key it holds and whose signature verifies, within the relay's per-requester
+  caps, and only for one of its own push spokes; the answer is read only by that instance, signing its read,
+  with the ticket the hub gave it. The hub sees the coarsened question and the signed answer and can delay or
+  drop them, never change them. A relayed question stays answerable for an hour. The secret cannot ride the
+  relay, so a spoke that sets `FED_CORROBORATION_SECRET` answers relayed questions only from askers it knows.
+  The quorum counts the spoke's identity once, whichever path its answer took.
 - **Reputation.** Peers carry a reputation (`rep_confirmed` / `rep_failed`). A peer that denies a
   corroboration the quorum confirmed accrues a contradiction and is penalised. With `FED_AUTO_PROMOTE`, an
   unvetted peer becomes trusted after that many confirmed corroborations.
@@ -179,6 +188,8 @@ one, six and 24 hours after the find, and never past 72 hours.
 - Evidence already in hand carries over, but counts only while its peer is still trusted.
 - The quorum, the exclusions and the logger's own-track check are the same as when the find was logged.
 - A verified "no" from a trusted peer ends it at once; no later attempt follows one.
+- An answer through a hub's relay is read as soon as it arrives (`FED_RELAY_POLL_MS`, 15 s), not at the next
+  attempt. A relayed question still unanswered after an hour goes to the next attempt like a peer not reached.
 - A find lifted this way shows *confirmed later* and keeps the time (`corroborated_later_at`). Peers that
   mirrored the find keep the tier they first saw, since the finds feed carries each log once.
 

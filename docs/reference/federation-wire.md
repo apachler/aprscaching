@@ -254,8 +254,12 @@ submission is one key — a second key smuggled into the batch is rejected; the 
 The submitted key must be one the hub already verified for that instance under any peer row (and the
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
 `unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
-moves the spoke's pin only along them, by the same rules as a pulled peer. Relay feed answers carry
-a CBOR page (`pageB64`, a base64 fedwire page). Every mirrored record travels as a signed fedwire
+moves the spoke's pin only along them, by the same rules as a pulled peer. A spoke pushes every feed the
+pull serves, in the pull's order. Relay feed answers carry
+a CBOR page (`pageB64`, a base64 fedwire page). A relayed corroboration question carries the asker's signed
+`corroborationQuery` frame verbatim (`params.question`, base64url), and its answer is
+`{ status, frameB64 }`: the spoke's signed `corroboration` frame and the HTTP status a direct answer would
+have had (a 429 or 5xx is a peer not reached). Every mirrored record travels as a signed fedwire
 frame; the stableStringify signing base exists only for standalone signed documents (the registry,
 key-rotation records, account operations), never for feed records.
 

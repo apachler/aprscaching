@@ -33,6 +33,7 @@ import {
   gitHead,
   guardFederationFetches,
   logStrayErrors,
+  relayPollInterval,
   roomNamespace,
   startSchedules,
 } from "./host.js";
@@ -133,7 +134,7 @@ server.listen(PORT, () =>
   ),
 );
 
-startSchedules(env, fedSyncInterval(process.env));
+startSchedules(env, fedSyncInterval(process.env), relayPollInterval(process.env));
 
 // ---- 24/7 process resilience ----
 // One stray rejection must not kill an unattended gateway (there is no supervisor on a Pi by

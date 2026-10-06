@@ -1039,10 +1039,11 @@ export async function scoreFind(
     };
     const asked = await askPeers(env, query);
     const ev = asked.winner;
-    // Short of quorum only because trusted peers were not reached, and no trusted peer said no: the
-    // same question goes to those peers again later (corroborate_retry.ts).
-    if (!ev && !asked.denied && asked.unreachable.length)
-      retry = { query, unreachable: asked.unreachable, hits: asked.hits };
+    // Short of quorum only because trusted peers were not reached or answer through a hub's relay, and
+    // no trusted peer said no: the same question goes to those peers again later, and relayed answers
+    // are collected as they arrive (corroborate_retry.ts).
+    if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
+      retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
     if (ev && plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";

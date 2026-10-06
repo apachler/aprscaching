@@ -188,6 +188,7 @@ MEDIA_DIR	string	server,pocket			0	0	selfhost,baremetal,pocket	Directory for upl
 MEDIA_QUOTA_MB	int	gateway	1024		0	0	selfhost,baremetal,pocket,desktop	Megabytes of cache media the instance stores in all; uploads stop there	
 HIDE_DAILY_LIMIT	int	gateway	5		0	0	selfhost,baremetal,pocket,desktop	New caches one account may hide in 24 hours; 0 lifts the limit	game
 FED_SYNC_INTERVAL_MS	int	server	300000		0	0	selfhost,baremetal,pocket,desktop	Federation peer-sync interval in milliseconds; 0 turns it off	
+FED_RELAY_POLL_MS	int	server	15000		0	0	selfhost,baremetal,pocket,desktop	Relay round interval in milliseconds (spoke queries, relayed answers); 0 leaves it to the sync	
 WEB_DIST	string	server,desktop			0	0	selfhost,baremetal,pocket,desktop	Built web app directory, served on the same origin as the API	
 HTTPS_PORT	int	server,pocket			0	0	selfhost,baremetal,pocket	Port of the optional https listener; needs TLS_CERT and TLS_KEY	
 TLS_CERT	string	server,pocket			0	0	selfhost,baremetal,pocket	PEM certificate, with its chain, for the https listener	
