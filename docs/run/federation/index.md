@@ -126,7 +126,7 @@ peer's key does not match the fingerprint its entry pins. Compare again after ei
 ## What the installer sets
 
 On a public instance `deploy/setup.sh` writes the safe posture out, so you see it in `.env`:
-`FED_AUTO_PROMOTE=0`, `FED_CORROBORATION_QUORUM=2` and `FED_DISCOVER=0`. A value you chose stays, with a warning
+`FED_AUTO_PROMOTE=0` and `FED_CORROBORATION_QUORUM=2`. A value you chose stays, with a warning
 when it is unsafe. A LAN instance starts with federation off.
 
 | Flag | Asks for | Writes |
@@ -170,7 +170,7 @@ The defaults are safe. These settings decide how much a stranger can do.
 | Setting | Safe choice | Secure by default |
 |---|---|---|
 | `FED_PEERS` | List the peers you know, each with its key fingerprint: `https://`, or `http://` for a [HAMNET peer](#hamnet-peers-in-fed_peers). Only a matching key starts `trusted`. | yes |
-| `FED_DISCOVER` | `1` lists the instances your trusted peers trust, switched off and unvetted until you follow one. | yes (off) |
+| `FED_DISCOVER` | On: the instances your trusted peers trust are listed, switched off and unvetted until you follow one. `0` stops it. | yes (nothing is pulled until you follow) |
 | `FED_PEER_EXCHANGE` | On: your trusted peers, never an unvetted or blocked one, are listed to your peers with their fingerprints and public addresses. `0` keeps the list to yourself. | yes (trusted only) |
 | `FED_MDNS` | `listen` lists instances on your local network; `announce` tells them about yours too. Neither pulls anything until you follow. | yes (off; `listen` on Pocket and Desktop) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
@@ -263,8 +263,8 @@ hub stays hidden on the map, until you follow and trust it.
 - **What your instance lists.** It serves its trusted peers at `/federation/exchange`: each one's instance id,
   key fingerprint and addresses, less any on a LAN. An unvetted or blocked peer is never listed. **Instance
   admin → Instance settings → List trusted peers** (`FED_PEER_EXCHANGE`, on by default) stops the list.
-- **What it learns.** With `FED_DISCOVER=1` it reads the list of each trusted peer once an hour, when it pulls
-  from that peer. It never reads the list of an unvetted or blocked peer.
+- **What it learns.** It reads the list of each trusted peer once an hour, when it pulls
+  from that peer. It never reads the list of an unvetted or blocked peer. `FED_DISCOVER=0` stops it.
 - **Bounds.** At most 200 discovered instances wait at once. A listing goes 14 days after the last trusted peer
   named it, and at once when the peer that named it is no longer trusted.
 

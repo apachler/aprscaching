@@ -50,7 +50,7 @@ export const CONFIG_KEYS = {
     site: { group: "game", min: 0, max: 100000, unit: "m" },
   },
   FED_PEERS: { type: "list", units: ["gateway", "pocket"] },
-  FED_DISCOVER: { type: "enum", units: ["gateway"], default: "0", values: ["0", "1", "false", "true", "no", "yes"] },
+  FED_DISCOVER: { type: "enum", units: ["gateway"], default: "1", values: ["0", "1", "false", "true", "no", "yes"] },
   FED_PEER_EXCHANGE: {
     type: "enum",
     units: ["gateway"],
