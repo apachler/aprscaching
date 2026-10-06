@@ -14,7 +14,7 @@ to a tool inside **Tools**, puts it on the left rail; on a phone, pinned apps an
 1. [Your radio in the browser](my-radio.md): connect a TNC, a Mobilinkd or a soundcard.
 2. [The live map](live-map.md): stations, spots and MeshCom nodes as they are heard.
 3. [Packet terminal & BBS](packet-and-bbs.md): connect to nodes, read and send mail.
-4. [Tools and plugins](tools.md): decode packets, CW and PSK31, run built-in tools and import plugins.
+4. [Tools and plugins](tools.md): install tools from the registry to decode packets, CW and PSK31, and more.
 5. [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
 6. [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
 7. [On-air etiquette and rules](on-air.md): before you transmit.
@@ -27,7 +27,7 @@ to a tool inside **Tools**, puts it on the left rail; on a phone, pinned apps an
 |---|---|---|---|
 | **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over a [KISS](../glossary.md#kiss) TNC on USB or Bluetooth. | everyone | [Connect to a BBS or node](packet-and-bbs.md#connect-to-a-bbs-or-node) |
 | **BBS** | Store-and-forward mail, bulletins and threads on the instance's [BBS](../glossary.md#bbs). Bulletins are open to everyone; your mail needs you signed in as your callsign. | everyone | [Use the instance's BBS](packet-and-bbs.md#use-the-instances-bbs) |
-| **Tools** | Built-in tools and plugins: the packet decoder for raw [APRS](../glossary.md#aprs) and [AX.25](../glossary.md#ax25) lines, CW and PSK31 from your microphone, macros, panels and more. Each tool can be pinned to the rail. | everyone | [Tools and plugins](tools.md) |
+| **Tools** | Signed plugins you install from a registry: the packet decoder for raw [APRS](../glossary.md#aprs) and [AX.25](../glossary.md#ax25) lines, CW and PSK31 from your microphone, macros, panels and more. Each tool can be pinned to the rail. | everyone | [Tools and plugins](tools.md) |
 | **Rig control** | Tune your radio over USB ([CAT](../glossary.md#cat)). | everyone | [CAT rig control](rig-weather.md#cat-rig-control) |
 | **[NET/ROM](../glossary.md#netrom) node** | The instance's node: routing table, [digipeater](../glossary.md#digipeater), [sysop](../glossary.md#sysop) console. | sysop | [Packet: BBS & NET/ROM node](../run/radios/packet-node.md) |
 | **Remote box** | Send commands to the instance's [ingest box](../glossary.md#ingest-box) without opening a port on it. | sysop | [Remote control of your box](../run/radios/remote-box.md) |
@@ -54,9 +54,10 @@ signals, and everything runs in the browser. **Stop** ends it.
 
 ## Tools and plugins
 
-**Tools** holds the packet decoder and twenty-one other built-in tools, and runs plugins you import from the
-**Registry** list or by a `tool.json` address. Each plugin runs in a sealed sandbox with only the permissions you
-approve, and the import prompt says who signed it. [Tools and plugins](tools.md) lists the built-in tools, explains
+**Tools** runs the tools you install, from the **Registry** list or by a `tool.json` address; the app ships with
+none. The project registry, which comes with every instance, lists the packet decoder and twenty-two other tools.
+Each tool runs in a sealed sandbox with only the permissions you approve, the install prompt says who signed it,
+and your installed tools follow your account. [Tools and plugins](tools.md) lists the project's tools, explains
 every permission and trust label, and shows how to pin, switch off and remove a tool.
 
 ## Next

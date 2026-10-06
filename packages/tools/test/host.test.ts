@@ -491,7 +491,7 @@ describe("Inter-tool IPC bus — the host routes, never interprets", () => {
   });
 });
 
-describe("The bus for an imported tool — its own sender name, its own grants", () => {
+describe("The bus for a sandboxed tool — its own sender name, its own grants", () => {
   const listener = (sink: string[]): Tool => ({
     manifest: { name: "listen", title: "L", author: "X", version: "1", permissions: ["ipc"], surfaces: ["web"] },
     activate(ctx) {
@@ -500,7 +500,7 @@ describe("The bus for an imported tool — its own sender name, its own grants",
     },
   });
 
-  it("emit from an imported tool carries the tool's manifest name, not (host)", () => {
+  it("emit from a sandboxed tool carries the tool's manifest name, not (host)", () => {
     const sink: string[] = [];
     const host = new ToolHost();
     host.register(listener(sink));
@@ -509,7 +509,7 @@ describe("The bus for an imported tool — its own sender name, its own grants",
     expect(sink).toEqual(["imported-x:hi"]);
   });
 
-  it("subscribers of an imported tool see each sender's own name", () => {
+  it("subscribers of a sandboxed tool see each sender's own name", () => {
     const host = new ToolHost();
     const seen: string[] = [];
     const off = host.toolBus("imported-x", ["ipc"]).subscribe("topic.b", (data, from) => seen.push(`${from}:${data}`));
@@ -548,14 +548,14 @@ describe("The bus for an imported tool — its own sender name, its own grants",
     expect(sink).toEqual(["emitter:b", "(host):h"]);
   });
 
-  it("an imported tool calls a service that requires nothing with ipc alone", () => {
+  it("a sandboxed tool calls a service that requires nothing with ipc alone", () => {
     const host = new ToolHost();
     host.register(listener([]));
     host.setEnabled("listen", true);
     expect(host.toolBus("imported-x", ["ipc"]).call("whoami")).toBe("listen");
   });
 
-  it("session.script is refused to an imported tool without 'tx' and served with it", () => {
+  it("session.script is refused to a sandboxed tool without 'tx' and served with it", () => {
     const host = new ToolHost();
     const got: unknown[] = [];
     host.registerHostService(

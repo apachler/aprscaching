@@ -56,7 +56,7 @@ const str = (x: unknown, cap = 240): string =>
   ).slice(0, cap);
 
 /**
- * Coerce an untrusted panel (from an imported tool) into a safe PanelSpec — bounds strings/rows, drops
+ * Coerce an untrusted panel (from a sandboxed tool) into a safe PanelSpec — bounds strings/rows, drops
  * unknown node kinds. An in-process tool may build a PanelSpec directly; this guards the sandboxed path.
  */
 export function sanitizePanel(input: unknown): PanelSpec {

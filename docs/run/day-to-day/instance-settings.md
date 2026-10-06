@@ -50,7 +50,7 @@ player's browser and never on the instance; a registry only says which signed to
 
 | Setting | What it does |
 |---|---|
-| **Registries** | The registries every player sees. The project registry, bundled with each release, comes first; switch it off to offer only your own. |
+| **Registries** | The registries every player sees. The project registry, bundled with each release, comes first and lists the project's own tools; switch it off to offer only your own. The app ships no tools, so players install every tool from these. |
 | **Players may add tool registries** | Players add their own registries, marked as not checked by this instance. Switched off, those are hidden and not fetched, and stay stored until each player removes them or you switch it on again. |
 | **Fetch tool registries through this instance** | The gateway fetches added registries and their tools and serves them from this instance: players' addresses never reach the registry's host, and cached copies keep working offline. Switched off, browsers fetch registries directly. |
 

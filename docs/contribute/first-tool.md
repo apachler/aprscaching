@@ -45,11 +45,12 @@ and list in a registry.
 
 ### Read the script
 
-`tool.js` is the body of a function the sandbox calls with two arguments: `register` and `ipc`. It has no
-`import`; everything is in this one file.
+`tool.js` is the body of a function the sandbox calls with three arguments: `register`, `ipc` and `tool`. It has
+no `import`; everything is in this one file. This example uses `register` and `ipc`; `tool` holds the rest of the
+API: events, the map, colours and transmitting ([Tool reference](tool-reference.md#tool)).
 
-1. It subscribes to `station.seen`, which the built-in **Station DB (NAMES.GP)** tool publishes for every station
-   the app hears, and redraws its panel with `ipc.setPanel()`:
+1. It subscribes to `station.seen`, which the **Station DB (NAMES.GP)** tool from the project registry publishes
+   for every station the app hears, and redraws its panel with `ipc.setPanel()`:
 
     ```js
     if (ipc) {
@@ -100,19 +101,26 @@ Change the panel's title to `My station log` so you can tell your copy from the 
     pnpm dev:web
     ```
 
-3. Open `http://localhost:5173/?demo=app&net=1&view=tools`. `demo=app` runs the whole app on built-in sample
-   data with no gateway, `net=1` lets it reach your server, and `view=tools` opens **Shack → Tools**.
-4. Turn on **Station DB (NAMES.GP)** in the list of tools.
-5. Under **Import a tool**, enter `http://127.0.0.1:8790/tool.json` and select **Import…**.
+3. The app installs only signed tools. Make a key and sign your copy, as [Sign it](#sign-it) shows:
+
+    ```bash
+    node tools/toolkey/genkey.mjs
+    TOOL_PRIVATE_KEY=<private value> node tools/toolkey/sign.mjs manifest ~/my-tool/tool.json
+    ```
+
+4. Open `http://localhost:5173/?demo=app&net=1&view=tools&tools=station-db`. `demo=app` runs the whole app on
+   sample data with no gateway, `net=1` lets it reach your server, `view=tools` opens **Shack → Tools**, and
+   `tools=station-db` installs **Station DB (NAMES.GP)** from the project registry the app bundles.
+5. Under **Install by address**, enter `http://127.0.0.1:8790/tool.json` and select **Install…**.
 
     The prompt shows **My station log by `<your callsign>` requests: command, panel, ipc** and the label
-    **Unsigned · you're trusting the URL only**.
+    **Signed · unknown author key (trust-on-first-use)**.
 
-6. Select **Approve + run**. A toast says the tool was imported, and the **My station log** panel appears.
+6. Select **Approve and install**. A toast says the tool was installed, and the **My station log** panel appears.
 7. Under **Run a tool command**, enter `/whois OE6XRR-9` and select **Run**.
 
-To load a change to the script, reload the page and import the tool again: an imported tool lasts until the page
-reloads.
+To load a change to the script, sign the manifest again and reload the page: the app starts your installed tools
+again, and runs the new script once its hash matches the signed manifest.
 
 ## Check that it worked
 
@@ -137,12 +145,12 @@ Two tests keep the tool honest. The repository runs both for the example; copy t
     expect(v.ok).toBe(true);
     ```
 
-2. **The script runs the way the sandbox runs it.** Evaluate it with stand-ins for `register` and `ipc`, then
-   call its commands and deliver bus messages:
+2. **The script runs the way the sandbox runs it.** Evaluate it with stand-ins for `register`, `ipc` and `tool`,
+   then call its commands and deliver bus messages:
 
     ```ts
     let reg;
-    new Function("register", "ipc", script)((t) => (reg = t), fakeIpc);
+    new Function("register", "ipc", "tool", script)((t) => (reg = t), fakeIpc, fakeTool);
     expect(reg.commands.seen("")).toEqual(["No stations heard yet."]);
     ```
 
@@ -166,11 +174,11 @@ for a registry it carries), so the server must:
 - send `Access-Control-Allow-Origin: *`. GitHub Pages does this for every file;
 - serve the script as one readable file. A reviewer reads the bytes you host.
 
-Put the manifest's URL somewhere users find it. Anyone can import the tool by that URL.
+Put the manifest's URL somewhere users find it. Anyone can install the tool by that URL.
 
 ## Sign it
 
-The app imports only signed tools. Signing proves the manifest and its script were not changed since you signed
+The app installs only signed tools. Signing proves the manifest and its script were not changed since you signed
 them, and lets a registry vouch for your key.
 
 1. Make a key pair once, in the checkout, and keep the private value secret:
@@ -203,8 +211,8 @@ adds it by its address and pins its key. To be listed, give the registry's keepe
 | `pubkey` | Your public key, exactly as in the signed manifest |
 | `entry` | The address of your `tool.json`, absolute or relative to the registry |
 
-Importing the tool from the entry's address then shows **Signed · registry-listed author key**. A copy imported from
-any other address gets the trust-on-first-use label.
+Installing the tool from the entry's address then shows **Signed · registry-listed author key**. A copy installed
+from any other address gets the trust-on-first-use label.
 
 The project registry lives in its own repository, [apachler/aprscaching-tools](https://github.com/apachler/aprscaching-tools):
 its `CONTRIBUTING.md` covers submitting a tool and its `MAINTAINERS.md` covers signing and releases. Each
