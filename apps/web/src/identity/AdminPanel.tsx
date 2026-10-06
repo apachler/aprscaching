@@ -2190,6 +2190,8 @@ function PeerRow(props: {
     p.last_push_in ? `pushed here ${fmt.ago(p.last_push_in)}` : null,
     p.last_push_out ? `last push to it ${fmt.ago(p.last_push_out)}` : null,
   ].filter(Boolean);
+  const pk = p.packet;
+  const packetFailed = !!pk?.lastError; // a session that completes clears it
   return (
     <li className="fed-peer">
       <div className="row">
@@ -2226,6 +2228,14 @@ function PeerRow(props: {
         {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
         {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
       </div>
+      {pk && (
+        <div className="comment">
+          packet pull over {pk.transport} <span className="mono">{pk.address}</span>
+          {pk.lastOk ? ` · last ${fmt.ago(pk.lastOk)}` : " · never completed"}
+          {packetFailed && ` · last try failed ${fmt.ago(pk.lastAttempt)}`}
+        </div>
+      )}
+      {packetFailed && pk?.lastError && <div className="comment error">{pk.lastError}</div>}
       {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
       <div className="row">
         {waiting && (

@@ -957,6 +957,14 @@ export interface FedPeer {
   /** when this peer last pushed to us (a spoke), and when we last pushed to it (our hub) */
   last_push_in: number | null;
   last_push_out: number | null;
+  /** the last pull over a packet circuit, which the ingest box dials: the endpoint it used and how it went */
+  packet: {
+    transport: "ax25" | "netrom";
+    address: string;
+    lastAttempt: number;
+    lastOk: number | null;
+    lastError: string | null;
+  } | null;
 }
 export function listFederationPeers(): Promise<{
   /** This instance and its own key fingerprint (null when it signs nothing) */

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Two full aprscaching stacks (gateway + ingest) crosslinked over AXUDP — the interop
-// environment's smallest end-to-end: NET/ROM NODES broadcasts learned in both directions, and an
+// environment's smallest end-to-end: NET/ROM NODES broadcasts learned in both directions, an
 // FBB forwarding session (our scheduler dialling our SID-gated BBS responder) carrying a message
-// A→B over real AX.25 connected mode on the UDP wire. No Docker, no kernel AX.25 — the same code
+// A→B over real AX.25 connected mode on the UDP wire, and A's ingest pulling B's signed federation
+// feed over an AX.25 circuit to B's ingest. No Docker, no kernel AX.25 — the same code
 // paths a BPQ/FBB peer will exercise in the compose environment.
 //
 //   A=http://127.0.0.1:9601 B=http://127.0.0.1:9602 node tools/interop/local-loop.mjs
@@ -150,6 +151,61 @@ if (process.env.FED_BBS === "1") {
     JSON.stringify(offered.data),
   );
 }
+
+// ---- federation over an AX.25 circuit: A's ingest pulls B's signed feed from B's ingest ----
+// A adds B the usual way, which pins B's key after its sysop compares the fingerprint, and trusts it. A learns B's
+// ax25 endpoint from B's presence beacon, posted here as A's ingest would after hearing it. A never pulls over
+// http in this loop, so a cache of B's on A's map came over the circuit.
+const preview = await call(A, "POST", "/federation/peers", { url: B });
+ok("A: looked up B's descriptor", !!preview.data?.preview?.fingerprint, JSON.stringify(preview.data));
+const added = await call(A, "POST", "/federation/peers", { url: B, fingerprint: preview.data?.preview?.fingerprint });
+ok("A: added B as a peer", added.status === 201, JSON.stringify(added.data));
+const trusted = await call(A, "POST", "/federation/peers/trust", {
+  url: B,
+  trust: "trusted",
+  fingerprint: preview.data?.preview?.fingerprint,
+});
+ok("A: trusts B", trusted.data?.ok === true, JSON.stringify(trusted.data));
+const beacon = new Uint8Array(await (await fetch(`${B}/federation/beacon`)).arrayBuffer());
+const heard = await fetch(`${A}/federation/beacon`, {
+  method: "POST",
+  headers: { "content-type": "application/octet-stream", "x-ingest-secret": SECRET },
+  body: beacon,
+});
+ok("A: took B's presence beacon", (await heard.json()).applied === 1);
+const packetPeers = await call(A, "GET", "/federation/packet/peers");
+ok(
+  "A: lists B for packet pull at its ax25 endpoint",
+  packetPeers.data?.peers?.[0]?.endpoints?.[0]?.address === "OE1BBB-9",
+  JSON.stringify(packetPeers.data),
+);
+
+const CACHE_TITLE = `Packet circuit ${Date.now()}`;
+const made = await call(B, "POST", "/api/caches", {
+  title: CACHE_TITLE,
+  type: "traditional",
+  lat: 48.2082,
+  lon: 16.3738,
+  difficulty: 2,
+  terrain: 2,
+  ownerCall: "OE1BBB",
+});
+ok("B: created a cache", made.status === 201, JSON.stringify(made.data));
+const mirrored = await until("B's cache appears on A", 180000, async () => {
+  const r = await call(A, "GET", "/api/caches?bbox=16,48,16.6,48.5");
+  return (r.data?.caches ?? []).find((c) => c.title === CACHE_TITLE);
+});
+ok("A: B's cache arrived over the AX.25 circuit", !!mirrored);
+const status = await call(A, "GET", "/federation/packet/peers");
+const pb = status.data?.peers?.[0];
+ok("A: the packet session is recorded", !!pb?.lastOk && !pb?.lastError, JSON.stringify(pb));
+const peerList = await call(A, "GET", "/federation/peers");
+const bRow = (peerList.data?.peers ?? []).find((p) => p.url === B);
+ok(
+  "A: Instance admin shows the packet pull, and no http pull ran",
+  bRow?.packet?.transport === "ax25" && !bRow?.last_sync,
+  JSON.stringify(bRow),
+);
 
 console.log(failures ? `\nINTEROP LOCAL LOOP FAILED (${failures})` : "\nINTEROP LOCAL LOOP PASSED");
 process.exit(failures ? 1 : 0);

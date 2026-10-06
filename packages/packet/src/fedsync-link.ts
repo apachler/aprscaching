@@ -8,7 +8,7 @@
  *
  *   server greets:  ACSL1 H <b64(cbor caps)>          both ends intersect caps deterministically
  *   client:         ACSL1 H <b64(cbor caps)>
- *   client:         ACSL1 R <b64(cbor {1 type, 2 since, 3 limit})>
+ *   client:         ACSL1 R <b64(cbor {1 type, 2 since, 3 limit, 4 sinceId?})>
  *   server:         ACSL1 P <b64(page bytes)>         one page per request — half-duplex-friendly
  *   either:         ACSL1 E <text>                    protocol error, human-readable
  *
@@ -38,8 +38,16 @@ export interface LinkPayloadCodec {
   decompress(payload: Uint8Array): Uint8Array | null;
 }
 
-/** Serve one page of signed sync frames: the raw CBOR page bytes, or null for an unknown feed. */
-export type FedPageSource = (type: string, since: number, limit: number) => Promise<Uint8Array | null>;
+/**
+ * Serve one page of signed sync frames: the raw CBOR page bytes, or null for an unknown feed. `sinceId` is the
+ * tie-breaker of a composite `(cursor, id)` position, for feeds whose cursor (a timestamp) can repeat.
+ */
+export type FedPageSource = (
+  type: string,
+  since: number,
+  limit: number,
+  sinceId?: number,
+) => Promise<Uint8Array | null>;
 
 const b64encode = (bytes: Uint8Array): string => {
   let s = "";
@@ -59,7 +67,8 @@ const b64decode = (text: string): Uint8Array | null => {
 
 const K_TYPE = 1,
   K_SINCE = 2,
-  K_LIMIT = 3;
+  K_LIMIT = 3,
+  K_SINCE_ID = 4;
 
 function capsLine(caps: LinkCaps): string {
   return `${MAGIC} H ${b64encode(cborEncode(toCborValue(caps)))}`;
@@ -121,7 +130,7 @@ export class FedSyncApp implements LineApp {
       if (!req) return { lines: [`${MAGIC} E bad request`] };
       let limit = Math.min(req.limit, this.negotiated.batchMax);
       for (;;) {
-        const page = await this.source(req.type, req.since, limit);
+        const page = await this.source(req.type, req.since, limit, req.sinceId);
         if (!page) return { lines: [`${MAGIC} E unknown feed '${req.type}'`] };
         const payload =
           pageCompression(this.negotiated) === FED_DEFLATE_DICT_ID && this.codec ? this.codec.compress(page) : page;
@@ -135,7 +144,7 @@ export class FedSyncApp implements LineApp {
     return { lines: [`${MAGIC} E unknown command`] };
   }
 
-  private parseReq(b64: string): { type: string; since: number; limit: number } | null {
+  private parseReq(b64: string): { type: string; since: number; limit: number; sinceId?: number } | null {
     const bytes = b64decode(b64);
     if (!bytes) return null;
     try {
@@ -143,14 +152,36 @@ export class FedSyncApp implements LineApp {
       if (!(m instanceof Map)) return null;
       const type = m.get(K_TYPE),
         since = m.get(K_SINCE),
-        limit = m.get(K_LIMIT);
+        limit = m.get(K_LIMIT),
+        sinceId = m.get(K_SINCE_ID);
       if (typeof type !== "string" || typeof since !== "number" || typeof limit !== "number") return null;
       if (since < 0 || limit < 1 || limit > 10000) return null;
-      return { type, since, limit };
+      if (sinceId !== undefined && (typeof sinceId !== "number" || !Number.isSafeInteger(sinceId))) return null;
+      return { type, since, limit, ...(sinceId !== undefined && { sinceId }) };
     } catch {
       return null;
     }
   }
+}
+
+/**
+ * Give a node's command surface a `FED` application command: a station connected to the node CLI (over
+ * AX.25 or a NET/ROM circuit) types `FED` and the session becomes the sync service, which greets with its
+ * caps. Every other line goes to the node CLI until then; afterwards every line goes to the sync service.
+ */
+export function withFedSyncCommand(node: LineApp, makeFed: () => LineApp, command = "FED"): LineApp {
+  let fed: LineApp | null = null;
+  return {
+    greeting: () => node.greeting(),
+    handle(input: string): LineReply | Promise<LineReply> {
+      if (fed) return fed.handle(input);
+      if (input.trim().toUpperCase() === command) {
+        fed = makeFed();
+        return { lines: fed.greeting() };
+      }
+      return node.handle(input);
+    },
+  };
 }
 
 // ---------------------------------------------------------------- client side
@@ -183,8 +214,11 @@ export class FedSyncLinkClient {
     });
   }
 
-  /** Pull one page of signed sync frames (raw CBOR page bytes — the gateway verifies them). */
-  pull(type: string, since: number, limit: number): Promise<Uint8Array> {
+  /**
+   * Pull one page of signed sync frames (raw CBOR page bytes — the gateway verifies them). `sinceId` resumes a
+   * composite feed strictly after `(since, sinceId)`, the `nextId` of the page before.
+   */
+  pull(type: string, since: number, limit: number, sinceId?: number): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
       if (!this.negotiated) return reject(new Error("fedsync-link: hello first"));
       if (this.pageWaiter) return reject(new Error("fedsync-link: one request at a time"));
@@ -194,8 +228,20 @@ export class FedSyncLinkClient {
         [K_SINCE, since],
         [K_LIMIT, limit],
       ]);
+      if (sinceId !== undefined) req.set(K_SINCE_ID, sinceId);
       this.io.sendLine(`${MAGIC} R ${b64encode(cborEncode(req))}`);
     });
+  }
+
+  /** The circuit closed: fail whatever is still waiting for an answer. */
+  close(reason = "circuit closed"): void {
+    const err = new Error(`fedsync-link: ${reason}`);
+    const hw = this.helloWaiter,
+      pw = this.pageWaiter;
+    this.helloWaiter = null;
+    this.pageWaiter = null;
+    hw?.reject(err);
+    pw?.reject(err);
   }
 
   /** Feed one received line from the circuit. */
@@ -237,14 +283,6 @@ export class FedSyncLinkClient {
       w.resolve(page);
       return;
     }
-    if (msg.t === "E") {
-      const err = new Error(`fedsync-link: peer error: ${msg.payload}`);
-      const hw = this.helloWaiter,
-        pw = this.pageWaiter;
-      this.helloWaiter = null;
-      this.pageWaiter = null;
-      hw?.reject(err);
-      pw?.reject(err);
-    }
+    if (msg.t === "E") this.close(`peer error: ${msg.payload}`);
   }
 }

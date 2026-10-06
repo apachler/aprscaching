@@ -331,6 +331,8 @@ if (env.HOSTMODE_HOST) {
 // the NET/ROM CLI over the live routing table + broadcasts/consumes NODES; the BBS runs the FBB
 // command interpreter over a per-caller gateway mail snapshot.
 if (!serviceLink && axudpPort) serviceLink = axudpPort;
+if (env.FED_LINK_SERVE === "1" && !serviceLink)
+  console.error("[fedlink] FED_LINK_SERVE=1 needs a frame link (KISS_TNC_HOST or AXUDP_PEERS)");
 if (serviceLink) {
   const { startConnectedServices } = await import("./connected.js");
   await startConnectedServices({
@@ -459,6 +461,44 @@ if (env.BBS_FORWARD === "1" && forwardCall && (env.KISS_TNC_HOST || axudpPort)) 
     ...txLimitFromEnv("bbs"),
   });
   console.log(`[forward] FBB forwarding scheduler active as ${forwardCall}`);
+}
+
+// ---- Federation pull over packet circuits: dial the peers that publish an ax25/netrom endpoint, one session
+// per FED_LINK_PULL_MS, and hand each page to the gateway's trust-gated /federation/frames. Opt-in: needs a
+// frame link (KISS TNC or AXUDP port) and FED_LINK_CALL, the call the box dials as.
+if (env.FED_LINK_PULL === "1") {
+  if (!env.FED_LINK_CALL || !serviceLink) {
+    console.error("[fedlink] FED_LINK_PULL=1 needs FED_LINK_CALL and a frame link (KISS_TNC_HOST or AXUDP_PEERS)");
+  } else {
+    const { FedLinkPuller, gatewayPacketApi, FED_LINK_PULL_DEFAULT_MS, FED_LINK_PULL_MIN_MS, FED_LINK_PAGES_DEFAULT } =
+      await import("./fedlink.js");
+    const { frameForwardLink } = await import("./forwarder.js");
+    const pipe = serviceLink;
+    const fedCall = env.FED_LINK_CALL;
+    const intervalMs = numEnv("FED_LINK_PULL_MS", FED_LINK_PULL_DEFAULT_MS, {
+      min: FED_LINK_PULL_MIN_MS,
+      max: 7 * 86_400_000,
+    });
+    new FedLinkPuller({
+      ...gatewayPacketApi(GATEWAY_BASE, SECRET),
+      dial: (plan) =>
+        frameForwardLink(pipe, {
+          mycall: fedCall,
+          partnerCall: plan.target,
+          connectScript: plan.connectScript,
+          tag: "fedlink",
+        }),
+      gatewayBase: GATEWAY_BASE,
+      secret: SECRET,
+      canTransmit: () => station.tx,
+      entryNode: env.FED_LINK_NODE || undefined,
+      intervalMs,
+      maxPages: numEnv("FED_LINK_PAGES", FED_LINK_PAGES_DEFAULT, { min: 1, max: 500 }),
+    }).start();
+    console.log(
+      `[fedlink] packet pull active as ${fedCall}, a session every ${Math.round(intervalMs / 60_000)} min at most`,
+    );
+  }
 }
 
 // ---- Remote control: lease commands the operator queued in the web app and execute them.

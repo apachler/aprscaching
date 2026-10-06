@@ -3,7 +3,7 @@
 // negotiated from the greeting, pages pulled request/response, compression applied only when both
 // ends negotiated it, and the page limit self-halving under the line budget.
 import { describe, it, expect } from "vitest";
-import { FedSyncApp, FedSyncLinkClient, type LinkPayloadCodec } from "../src/fedsync-link.js";
+import { FedSyncApp, FedSyncLinkClient, withFedSyncCommand, type LinkPayloadCodec } from "../src/fedsync-link.js";
 import { makeLineDriver, type LineApp, type LineReply } from "../src/link-app.js";
 import { encodeFedSyncPage, FED_DEFLATE_DICT_ID, type LinkCaps } from "@aprscaching/shared";
 
@@ -111,6 +111,47 @@ describe("fedsync link protocol", () => {
     const pulling = client.pull("cache", 0, 5);
     client.onLine("Welcome to OE8XBB node. Type ? for help.");
     expect([...(await pulling)]).toEqual([...served]);
+  });
+});
+
+describe("fedsync link cursors and the node command", () => {
+  it("carries a composite cursor's id to the page source", async () => {
+    const asked: [number, number | undefined][] = [];
+    const app = new FedSyncApp(
+      CAPS_VHF,
+      async (_t, since, _l, sinceId) => {
+        asked.push([since, sinceId]);
+        return page([]);
+      },
+      flip,
+    );
+    const { client, helloDone } = loop(app, CAPS_VHF, flip);
+    await helloDone;
+    await client.pull("cache", 100, 5, 42);
+    await client.pull("find", 7, 5);
+    expect(asked).toEqual([
+      [100, 42],
+      [7, undefined],
+    ]);
+  });
+
+  it("a closed circuit fails the pending pull", async () => {
+    const app = new FedSyncApp(CAPS_VHF, () => new Promise<Uint8Array>(() => {}), flip);
+    const { client, helloDone } = loop(app, CAPS_VHF, flip);
+    await helloDone;
+    const pulling = client.pull("cache", 0, 5);
+    client.close("link down");
+    await expect(pulling).rejects.toThrow(/link down/);
+  });
+
+  it("the node's FED command turns the session into the sync service", async () => {
+    const node: LineApp = { greeting: () => ["node>"], handle: (i) => ({ lines: [`node: ${i}`] }) };
+    const app = withFedSyncCommand(node, () => new FedSyncApp(CAPS_VHF, async () => page([]), flip));
+    expect(app.greeting()).toEqual(["node>"]);
+    expect((await app.handle("N")).lines).toEqual(["node: N"]);
+    const switched = await app.handle("fed");
+    expect(switched.lines[0]).toMatch(/^ACSL1 H /);
+    expect((await app.handle("N")).lines[0]).toContain("ACSL1 E"); // now the sync service answers
   });
 });
 

@@ -12,10 +12,12 @@ flowchart TD
   q1{"Can peers dial your instance<br/>on a public https URL?"}
   q2{"Can you give it one?<br/>Cloudflare Tunnel or 44Net"}
   q3{"Do you and the peer share<br/>44Net or HAMNET?"}
+  q5{"Is there a packet radio path<br/>to the peer's station or node?"}
   q4{"Do you forward packet mail<br/>with the peer's BBS?"}
   pull["Pull, both ways<br/>add each other by URL or callsign"]
   amprpull["Pull over 44Net or HAMNET<br/>publish the address in FED_ENDPOINTS"]
   push["Push to a hub you can reach<br/>and pull from it"]
+  packet["Packet circuit<br/>your ingest box pulls"]
   fbb["FBB store-and-forward<br/>experimental, partners only"]
   q1 -->|yes| pull
   q1 -->|no| q2
@@ -23,7 +25,9 @@ flowchart TD
   q2 -->|no| q3
   q3 -->|yes| amprpull
   q3 -->|no| push
-  push -.->|no IP path at all| q4
+  push -.->|no IP path at all| q5
+  q5 -->|yes| packet
+  q5 -->|no| q4
   q4 -->|yes| fbb
 ```
 
@@ -42,6 +46,7 @@ shares its caches and finds with its hub, but nobody can ask it to confirm a fin
 | Others need to read a firewalled spoke's feed directly | The hub's [rendezvous relay](transports.md#rendezvous-relay) | hub: `FED_RELAY_SECRET`; spoke: `FED_HUB_URL` and `FED_RELAY_SECRET` | an answer within one sync interval of the spoke, 5 min | not carried by the relay |
 | A 44Net address under your callsign | [Pull over 44Net](transports.md#addresses-https-44net-and-hamnet); peers add you by callsign | a `44net` entry in `FED_ENDPOINTS` and the `_aprscaching` TXT record ([44Net name and identity](../networks/44net-identity.md)) | as pull | both ways, with peers that reach 44Net |
 | HAMNET only, no internet | [Pull over HAMNET](transports.md#addresses-https-44net-and-hamnet) with peers that route to HAMNET | a `hamnet` entry in `FED_ENDPOINTS`; peers add `http://<HAMNET address>` ([HAMNET only](../networks/hamnet.md)) | as pull, among HAMNET peers | among HAMNET peers |
+| No IP path for the records, but a packet radio path to the peer's station or node | A [packet circuit](transports.md#packet-circuit), pulled by your ingest box | the peer: `FED_LINK_SERVE=1` and `FED_LINK_CALL` on its box, an `ax25` or `netrom` entry in `FED_ENDPOINTS`; you: `FED_LINK_PULL=1` and `FED_LINK_CALL` on your box, the peer added once with its key compared | one session per `FED_LINK_PULL_MS`, 1 h | none: questions need an IP path |
 | No IP path at all, but FBB forwarding with the peer's BBS | [FBB store-and-forward](transports.md#fbb-store-and-forward), experimental, off by default | `FED_BBS=1` on both, the partner marked for federation, batches queued by hand or timer ([Federation over FBB](fbb.md)) | hours to days | none: questions need an IP path |
 | A club hub with many spokes | One reachable hub; each spoke pushes to it and pulls from it | as push; the hub's sysop trusts each spoke | the hub sees every spoke within 5 min; each spoke sees the hub's records and the other spokes', at its next pull from the hub | the hub asks its reachable peers; spokes are not asked |
 | A field station: Pocket or Desktop on a trip | Follow your home instance and push to it; sync before you go | `FED_PEERS` and `FED_HUB_URL` both pointing home, `FED_SYNC_REGION` for your area ([Before a trip](../pocket/trips.md)) | pulled on Wi-Fi before the trip; pushed when the phone is back online, within 30 s to 10 min | the phone asks while it has a connection |
@@ -55,6 +60,7 @@ shares its caches and finds with its hub, but nobody can ask it to confirm a fin
 | **Sync now** | at once: pulls from every peer and pushes to the hub | **Instance admin → Federation** |
 | Push after an outage | 30 s after the failure, doubling up to 10 min, then at once | none |
 | Find confirmation | when the find is logged, 3 s per peer; retried 1, 6 and 24 h later | `FED_CORROBORATION_QUORUM` |
+| Packet circuit pull | one session per interval, one peer at a time | `FED_LINK_PULL_MS` (1 h) |
 | FBB batch | at the next forwarding sessions: hours to days | `FED_BBS` |
 
 ## Next

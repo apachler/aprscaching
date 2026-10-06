@@ -149,6 +149,12 @@ BBS_FORWARD_SID	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	SID the
 BBS_FORWARD_COMPRESS	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 offers LZHUF-B1 compressed forwarding	
 BBS_FORWARD_BURST	int	ingest	4		0	0	selfhost,baremetal,ingest-box,pocket	Forwarding sessions allowed at once before pacing applies	
 BBS_FORWARD_REFILL_SEC	number	ingest	300		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one forwarding session	
+FED_LINK_SERVE	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 answers federation pull-sync over packet: on FED_LINK_CALL and as the node's FED command	
+FED_LINK_PULL	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 pulls federation records from peers with an ax25 or netrom endpoint, over packet	
+FED_LINK_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign-SSID the box answers and dials federation sync on	
+FED_LINK_PULL_MS	int	ingest	3600000		0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds between packet pull sessions; at least 60000, default one hour	
+FED_LINK_PAGES	int	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	Pages one packet pull session may fetch, 25 records each at most	
+FED_LINK_NODE	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Node the box enters through to reach a peer's netrom endpoint	
 IGATE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the IGate; set with IGATE_PASS to enable it	
 IGATE_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode of the IGate callsign	
 IGATE_FILTER	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS filter for traffic the IGate may gate to RF	
