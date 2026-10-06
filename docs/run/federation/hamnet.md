@@ -30,13 +30,16 @@ never guesses: you declare a HAMNET address, as a `hamnet` endpoint or an `http:
 
     A HAMNET name works as well as an address. An instance that is on the internet too lists its `https` address
     beside it ([One instance, several addresses](../networks/several-addresses.md)).
+
 2. **Exchange addresses and fingerprints** with the other sysop, over the air or by phone. Your key fingerprint
    is under **Instance admin → Federation → Your key fingerprint**.
+
 3. **Add the peer** by its HAMNET address, either way:
     - in `FED_PEERS`, as `http://<name or address>[:port]#<fingerprint>`: it starts `trusted` once its key matches
       ([HAMNET peers in FED_PEERS](index.md#hamnet-peers-in-fed_peers));
     - under **Instance admin → Federation → Add peer**, as `http://<name or address>[:port]`: compare the
       fingerprint the look-up shows, add it unvetted, then choose **Trust**.
+
 4. **The other sysop adds you** the same way.
 
 The `http://` scheme is your declaration that the peer is on HAMNET. Your instance dials it like a `hamnet`
