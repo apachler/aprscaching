@@ -104,7 +104,7 @@ const TYPE_ROLES: [role: string, sample: string, font?: string][] = [
 
 const SPACE = ["2xs", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl"];
 const RADII = ["tick", "chip", "control", "card", "sheet", "pill"];
-const ELEVATIONS = ["flat", "raised", "floating", "floating-up", "overlay"];
+const ELEVATIONS = ["raised", "floating", "floating-up", "overlay"];
 
 /** A colour expression (var(), color-mix(), OKLCH) as the browser computes it, through a probe element. */
 function resolveColour(css: string): string {

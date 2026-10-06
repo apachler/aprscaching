@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * shack.ts — the Shack's live APRS station registry and packet inspector.
+ * shack.ts — the Shack's live APRS station registry.
  * Stations and weather are enriched at ingest time (see ingest.ts) using the @aprscaching/aprs
- * decoder; these read endpoints expose them, plus an on-demand decode tool for raw TNC2 lines.
+ * decoder; these read endpoints expose them.
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
-import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";
 import { sessionIdentity, displayCall } from "./auth.js";
@@ -15,29 +14,6 @@ import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall } from "./servicecall.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
-
-// ------------------------------------------------------------- packet inspector
-export async function handleDecode(req: Request): Promise<Response> {
-  const body = (await req.json().catch(() => ({}))) as { raw?: string };
-  const raw = (body.raw ?? "").trim();
-  if (!raw) return json({ ok: false, error: "raw TNC2 line required" }, { status: 400 });
-  const frame = parseTNC2(raw);
-  if (!frame) return json({ ok: false, error: "not a TNC2 frame" }, { status: 400 });
-  const q = classifyQ(frame.path);
-  const data = decodeAprs(frame);
-  return json({
-    ok: true,
-    frame: {
-      src: frame.src,
-      dst: frame.dst,
-      path: frame.path,
-      payload: frame.payload,
-      heardVia: q.heardVia,
-      igateCall: q.igateCall,
-    },
-    data,
-  });
-}
 
 // ------------------------------------------------------------- station registry
 function bbox(u: URL): { sql: string; binds: number[] } {

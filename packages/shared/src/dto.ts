@@ -399,7 +399,7 @@ export interface ActivityItem {
   cacheTitle: string;
 }
 
-// ---- shack: live APRS stations + packet inspector ----
+// ---- shack: live APRS stations ----
 export interface StationSummary {
   callsign: string;
   lat: number;
@@ -464,13 +464,6 @@ export interface OperatedStation {
   wx?: StationWxKey; // on the reply that adds a weather station: its push key, issued with it
   /** The living caches riding this station, in the list only; absent when there are none. */
   livingCaches?: { id: number; code: string; title: string; rendezvous: boolean }[];
-}
-/** Result of POST /api/decode — the parsed frame plus the typed APRS data. */
-export interface DecodedPacket {
-  ok: boolean;
-  frame?: { src: string; dst: string; path: string[]; payload: string; heardVia: string; igateCall?: string };
-  data?: Record<string, unknown> & { kind: string };
-  error?: string;
 }
 
 // ---- interop: transports + messaging ----

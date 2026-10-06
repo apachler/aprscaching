@@ -420,7 +420,7 @@ export function getMeshcomGroupMessages(
   return call(`/api/meshcom/groups/${encodeURIComponent(group)}/messages?${q.toString()}`);
 }
 
-// ---- shack: live stations + packet inspector ----
+// ---- shack: live stations ----
 export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }> {
   return call(`/api/stations?bbox=${bbox.join(",")}`);
 }

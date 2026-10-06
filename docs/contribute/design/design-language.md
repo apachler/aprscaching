@@ -100,8 +100,6 @@ Spacing is picked by role, and the roles follow the density:
 | Between an icon and its label, buttons in a row | `--gap-inline` | 8 | 8 |
 | Between rows of a list or a form | `--gap-stack` | 12 | 8 |
 | Inside a card | `--pad-card` | 16 | 12 |
-| Inside a panel | `--pad-panel` | 16 | 12 |
-| Between groups of a page | `--gap-section` | 24 | 16 |
 
 ## Shape and depth
 
@@ -116,7 +114,6 @@ Spacing is picked by role, and the roles follow the density:
 
 | Elevation role | Token | Used for |
 |---|---|---|
-| Flat | `--elevation-flat` | Everything that sits in a panel |
 | Raised | `--elevation-raised` | Map pins, a card that lifts off its panel |
 | Floating | `--elevation-floating`, `--elevation-floating-up` | Panels and sheets over the map, toasts, map cards, the top bar; the tab bar casts upward |
 | Overlay | `--elevation-overlay` | Dialogs, popovers, the tour |
@@ -141,7 +138,7 @@ Motion explains a change; it never decorates.
 | `--motion-base` | 200 ms | Sheets, panels, disclosures |
 | `--motion-slow` | 320 ms | The landing page's one entrance |
 
-Easing is `--ease-standard` going in and `--ease-exit` going out. Only `transform` and `opacity` animate over the
+Easing is `--ease-standard`. Only `transform` and `opacity` animate over the
 map (`css.md`). When the system asks for reduced motion, every duration is zero. The landing page has a budget:
 one entrance and the terminal card's short sequence, nothing on scroll.
 
