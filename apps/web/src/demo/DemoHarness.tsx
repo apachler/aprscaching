@@ -59,9 +59,6 @@ function AppShell({
         onSearchSubmit={noop}
         onPickCache={noop}
         onPickStation={noop}
-        onNearby={noop}
-        onActivity={noop}
-        onProfile={noop}
       />
       <div className="shell">
         <NavRail active={active} onNav={noop} pinned={[]} onOpen={noop} sysop={false} attention={NO_ATTENTION} />

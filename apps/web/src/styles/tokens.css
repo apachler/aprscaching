@@ -106,6 +106,22 @@
 
     /* the landing page's lifted surface */
     --elevation-hero: 0 18px 50px -22px var(--shadow); /* the terminal card */
+    /* the landing hero's photo and what sits on it: the Dark values, fixed in every theme so the brand
+       treatment holds. The scrim is opaque enough that the text clears AA over a white pixel of the photo,
+       which the contrast test measures; the accent as text is lifted for the small eyebrow. */
+    --hero-bg: oklch(0.6 0.085 232); /* the brand blue, behind the photo while it loads */
+    --hero-scrim-top: color-mix(in oklch, oklch(0.28 0.06 234) 82%, transparent);
+    --hero-scrim-bottom: color-mix(in oklch, oklch(0.28 0.06 234) 92%, transparent);
+    --hero-ink: oklch(1 0 0);
+    --hero-accent: oklch(0.73 0.18 128); /* the slogan's large words and the primary fill */
+    --hero-accent-text: oklch(0.84 0.15 128); /* the accent as small text */
+    --hero-accent-ink: oklch(0.2 0.012 220);
+    --hero-heading: oklch(0.86 0.06 228);
+    --hero-tier-a: oklch(0.7 0.15 145);
+    --hero-tier-a-text: oklch(0.82 0.13 145);
+    --hero-control-bg: oklch(0.27 0.015 225); /* a secondary button */
+    --hero-control-ink: oklch(0.94 0.006 220);
+    --hero-control-line: oklch(0.42 0.02 225);
 
     /* ---- role scales (docs/contribute/design/design-language.md) ----
        Named by what a value is for, so a heading, a card or a dialog picks its step by role. */
@@ -179,10 +195,12 @@
     --topbar-h: 50px;
     --tabbar-h: 60px;
     --rail-w: 72px;
+    --rail-w-compact: 56px; /* the icon-only rail on a tablet */
     --panel-w: 348px; /* floating drawer */
     --dock-w: 340px; /* docked left column */
     --dock-w-detail: 392px; /* docked right (detail) column */
     --hit: 44px; /* minimum touch target */
+    --ctl-min-h: 0px; /* the least height of a button, field or select: the touch target on a coarse pointer */
 
     /* density — comfortable is the default (cacher surfaces). [data-density="compact"] (Shack apps,
        instance admin) swaps in the compact set below. */
@@ -216,6 +234,11 @@
       --motion-fast: 0ms;
       --motion-base: 0ms;
       --motion-slow: 0ms;
+    }
+  }
+  @media (pointer: coarse) {
+    :root {
+      --ctl-min-h: var(--hit);
     }
   }
   [data-density="compact"] {

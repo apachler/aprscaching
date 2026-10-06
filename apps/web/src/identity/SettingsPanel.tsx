@@ -144,11 +144,10 @@ export function SettingsPanel(props: {
       setGdpr(errorText(e));
       return;
     }
-    // the account is gone: end this browser's session and its push subscription with it
+    // the account is gone: end this browser's session and its push subscription with it; the landing confirms it
     setGdpr(null);
-    await session.signOut();
+    await session.signOutErased();
     props.onClose();
-    toast("Your account and personal data were erased");
   }
   const [q, setQ] = useState("");
   const radioAsk = props.radioAsk ?? 0;

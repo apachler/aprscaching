@@ -23,6 +23,9 @@ export function Panel(props: {
   density?: "compact";
   /** As a phone's bottom sheet, open at half height so the map stays in view; the grip expands it. */
   peek?: boolean;
+  /** An InfoTip beside the title: it sits in the heading, but the heading and the panel take only the title as
+   *  their name. */
+  info?: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
   const titleId = useId();
@@ -69,7 +72,16 @@ export function Panel(props: {
         />
       )}
       <div className="row between">
-        <h2 id={titleId}>{props.title}</h2>
+        {props.info ? (
+          <h2 aria-labelledby={titleId}>
+            <span id={titleId} className="panel-title">
+              {props.title}
+            </span>
+            {props.info}
+          </h2>
+        ) : (
+          <h2 id={titleId}>{props.title}</h2>
+        )}
         <span className="spacer" />
         {props.actions}
         {onClose && (

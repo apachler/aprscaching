@@ -71,6 +71,9 @@ export function Hint(props: {
   toggle?: boolean;
   /** Open below the element rather than above it, for a control whose field or text sits right above. */
   below?: boolean;
+  /** The control's own name, shown at the head of the hint where the control hides its words (the compact rail);
+   * hidden from assistive tech, which already reads it as the name. */
+  title?: string;
 }) {
   const id = useId();
   const anchor = hintAnchor(id);
@@ -144,6 +147,11 @@ export function Hint(props: {
         e.preventDefault();
       }}
     >
+      {props.title && (
+        <span className="hint-title" aria-hidden="true">
+          {props.title}
+        </span>
+      )}
       {props.text}
     </span>
   );

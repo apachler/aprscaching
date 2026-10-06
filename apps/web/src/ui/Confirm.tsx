@@ -4,7 +4,7 @@
  * destructive actions confirm, and every path is cancellable). Replaces window.confirm so
  * confirmations are themed, focus-trapped, and can present a real choice set. A provider holds the
  * pending request; useConfirm() resolves true/false, useChoice() resolves the picked value or null
- * on cancel/Escape — cancel never commits anything.
+ * on cancel/Escape — cancel never commits anything. A destructive decision opens with the focus on cancel.
  */
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useModalDialog } from "./useModalDialog.js";
@@ -16,6 +16,11 @@ interface ConfirmOpts {
   cancelLabel?: string;
   /** Style the primary as destructive (red). */
   danger?: boolean;
+  /**
+   * The button focused on open: the safe choice (cancel) for a destructive or consequential decision, so a
+   * reflexive Enter never commits it. Defaults to cancel when `danger`, else to the primary.
+   */
+  focus?: "confirm" | "cancel";
 }
 interface ChoiceOpts {
   title?: string;
@@ -206,6 +211,11 @@ function ConfirmDialog(props: { pending: Pending; onSettle: (v: boolean | string
   useModalDialog(ref, () => props.onSettle(null));
   const { pending } = props;
   const title = pending.opts.title ?? "Are you sure?";
+  // the safe choice takes the focus on a destructive or consequential decision (useModalDialog: data-autofocus)
+  const safeFirst =
+    pending.kind === "confirm"
+      ? (pending.opts.focus ?? (pending.opts.danger ? "cancel" : "confirm")) === "cancel"
+      : pending.opts.choices.some((c) => c.danger);
   return (
     <div className="confirm-backdrop" onClick={() => props.onSettle(null)}>
       <div
@@ -236,7 +246,9 @@ function ConfirmDialog(props: { pending: Pending; onSettle: (v: boolean | string
               </button>
             ))
           )}
-          <button onClick={() => props.onSettle(null)}>{pending.opts.cancelLabel ?? "Cancel"}</button>
+          <button data-autofocus={safeFirst || undefined} onClick={() => props.onSettle(null)}>
+            {pending.opts.cancelLabel ?? "Cancel"}
+          </button>
         </div>
       </div>
     </div>

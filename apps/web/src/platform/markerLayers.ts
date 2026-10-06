@@ -76,7 +76,7 @@ export function useCacheMarkers(
           const btn = document.createElement("button");
           btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
           btn.dataset.ctype = c.type;
-          btn.innerHTML = `<span>${phosphor ? meta.cog : meta.glyph}</span>`;
+          btn.innerHTML = `<span aria-hidden="true">${phosphor ? meta.cog : meta.glyph}</span>`;
           el = btn;
         }
         markers.current.set(
@@ -132,7 +132,7 @@ export function useStationMarkers(
       if (!mk) {
         const btn = document.createElement("button");
         btn.className = "station-pin";
-        btn.innerHTML = "<span></span>";
+        btn.innerHTML = `<span aria-hidden="true"></span>`;
         btn.onclick = (ev) => {
           ev.stopPropagation();
           pick.current(s.callsign);
@@ -194,7 +194,7 @@ export function useMeshcomMarkers(
       if (!mk) {
         const btn = document.createElement("button");
         btn.className = nodePinClass(n);
-        btn.innerHTML = "<span></span>";
+        btn.innerHTML = `<span aria-hidden="true"></span>`;
         btn.onclick = (ev) => {
           ev.stopPropagation();
           pick.current(n.callsign);
@@ -229,7 +229,7 @@ export function useSpotMarkers(map: maplibregl.Map | null, spots: Spot[], onPick
       if (!mk) {
         const btn = document.createElement("button");
         btn.className = "spot-pin";
-        btn.innerHTML = "<span>◎</span>";
+        btn.innerHTML = `<span aria-hidden="true">◎</span>`;
         mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(map);
         markers.current.set(s.id, mk);
       } else {

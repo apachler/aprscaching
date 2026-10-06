@@ -341,8 +341,9 @@ export function HidePanel(props: {
             ))}
           </div>
         )}
-        <h4 className="set-subh">
-          Verification, rating &amp; federation <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
+        <h4 className="set-subh" aria-labelledby="hide-verif-title">
+          <span id="hide-verif-title">Verification, rating &amp; federation</span>{" "}
+          <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
         </h4>
         <Row
           label="Radio-verified finds only"

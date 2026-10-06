@@ -53,6 +53,13 @@
   button:hover {
     filter: brightness(1.08);
   }
+  /* on a coarse pointer every button, field and select is a full touch target (--ctl-min-h); controls that keep
+     a small visual size extend their hit area instead (hittarget.css), and map markers stay as drawn (map.css) */
+  button,
+  select,
+  input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="file"], [type="color"]) {
+    min-height: var(--ctl-min-h);
+  }
   input,
   select,
   textarea {

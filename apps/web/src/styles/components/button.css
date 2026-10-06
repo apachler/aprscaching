@@ -11,9 +11,16 @@
   button.primary:hover {
     filter: brightness(1.06);
   }
-  button.primary:disabled {
+  /* off: dimmed, no hover. A button whose hint says why it is off is aria-disabled, so it keeps its focus (Button) */
+  button:is(:disabled, [aria-disabled="true"]) {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  button:is(:disabled, [aria-disabled="true"]):hover {
+    filter: none;
+  }
+  button.primary:is(:disabled, [aria-disabled="true"]) {
     opacity: 0.5;
-    cursor: default;
   }
   button.icon {
     border: none;

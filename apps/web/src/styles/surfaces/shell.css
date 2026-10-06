@@ -20,21 +20,27 @@
     position: relative;
     display: flex;
   }
+  /* the map area: a banner over the map (offline, near a cache) takes a row of its own above it, so it never covers
+     the map's controls; the map and its top controls sit in the last row, the rest overlays the whole area */
   .mapwrap {
     flex: 1;
     min-width: 0;
     position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
   /* MapLibre stamps `.maplibregl-map { position: relative }` onto this same element; a bare `.map`
    selector ties it on specificity, leaving the winner to bundle CSS order. The parent-qualified
    selector outranks it, so the map fills `.mapwrap` regardless of stylesheet order. */
   .mapwrap > .map {
+    grid-area: 3 / 1;
     position: absolute;
     inset: 0;
   }
   .rail {
     display: none;
-  } /* operator nav rail — revealed at ≥1024px */
+  } /* the nav rail: compact from 681px (where the tab bar ends), labelled from 1024px */
   /* top bar — dark chrome with the white wordmark; it grows by the top safe-area inset and keeps its
      content clear of a notch or rounded corner (viewport-fit=cover) */
   .topbar {
@@ -95,23 +101,6 @@
   }
   .topbar button.icon {
     color: var(--chrome-ink);
-  }
-  /* the manual: a link out of the app, in the look of the top bar's icon buttons */
-  .topbar .help-ic {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: var(--hit);
-    min-height: var(--hit);
-    border-radius: var(--radius-control);
-    color: var(--chrome-ink);
-  }
-  .topbar .help-ic:hover {
-    background: var(--chrome-hover-bg);
-  }
-  .topbar .help-ic:focus-visible {
-    outline: 2px solid var(--chrome-ink);
-    outline-offset: 2px;
   }
   /* the alert bell (TopBar.tsx): the unseen count on the accent, over the icon's corner */
   .topbar .bell-ic {
@@ -239,7 +228,7 @@
       margin: 1px 0;
     }
   }
-  @media (min-width: 1024px) {
+  @media (min-width: 681px) {
     .rail {
       display: flex;
       flex: 0 0 var(--rail-w);
@@ -251,6 +240,53 @@
       border-right: 1px solid var(--hair);
       z-index: var(--z-rail);
     }
+  }
+  /* the compact rail (681–1023px): icons only, each a full touch target. The label stays the item's accessible
+     name, visually hidden, and heads its hint on hover and keyboard focus; the floating drawers open beside the
+     rail, not over it */
+  @media (min-width: 681px) and (max-width: 1023px) {
+    .rail {
+      --rail-w: var(--rail-w-compact);
+      padding-block: var(--space-sm);
+    }
+    .rail button,
+    .rail .rail-link {
+      min-height: var(--hit);
+      padding: var(--space-2xs);
+    }
+    .rail .rail-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .rail .hint-title {
+      display: block;
+      color: var(--heading);
+      font-weight: var(--weight-strong);
+    }
+    /* the hint opens beside the rail, where it covers neither the next item nor its own icon */
+    @supports (anchor-name: --x) {
+      .rail .hint[data-open] {
+        position-area: right;
+        position-try-fallbacks:
+          right span-bottom,
+          right span-top;
+      }
+    }
+    .rail .rail-div {
+      width: calc(var(--rail-w) - 2 * var(--space-md));
+    }
+    .shell > .panel.left {
+      left: calc(var(--rail-w-compact) + var(--space-md));
+    }
+    .shell > .panel {
+      max-width: calc(100% - var(--rail-w-compact) - 2 * var(--space-md));
+    }
+  }
+  @media (min-width: 1024px) {
     /* side panels become in-flow docked columns instead of floating drawers */
     .shell > .panel {
       position: static;
@@ -429,17 +465,7 @@
   .tabbar {
     display: none;
   }
-  .topbar .nav-desktop {
-    display: contents;
-  }
-  /* at ≥1024px the nav rail replaces the top-bar destinations (placed after the base rule so it
-   wins on source order); the +Hide primary stays in the top bar (the rail has no Hide). */
-  @media (min-width: 1024px) {
-    .topbar .nav-desktop {
-      display: none;
-    }
-  }
-  /* tablet (681–1023px): the row carries nav + Hide + identity, so drop the secondary "N caches in
+  /* tablet (681–1023px): the row carries search + Hide + identity, so drop the secondary "N caches in
    view" / queued counts to give the search box usable width (they return on the roomy desktop rail). */
   @media (max-width: 1023px) {
     .topbar > .muted {
@@ -447,9 +473,6 @@
     }
   }
   @media (max-width: 680px) {
-    .topbar .nav-desktop {
-      display: none;
-    }
     .topbar .hide-cta {
       display: none;
     } /* the FAB handles Hide on mobile */
@@ -594,10 +617,6 @@
     .panel .sheet-grip:focus-visible {
       outline: 2px solid var(--heading);
       outline-offset: -4px;
-    }
-    .geo-banner {
-      top: auto;
-      bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
     }
     /* a sheet rises from the same edge: the prompt waits until it closes, so it never covers the sheet's action */
     .app:has(.panel) .geo-banner {

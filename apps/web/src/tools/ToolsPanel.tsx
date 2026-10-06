@@ -452,11 +452,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
             placeholder={decoder.placeholder ?? "text to decode"}
             className="mono"
           />
-          {decodeOut != null && (
-            <pre className="tool-out mono" aria-live="polite">
-              {decodeOut}
-            </pre>
-          )}
+          {/* the region stays mounted, so a screen reader announces each result as it lands */}
+          <div aria-live="polite">{decodeOut != null && <pre className="tool-out mono">{decodeOut}</pre>}</div>
         </div>
       )}
 
@@ -481,7 +478,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
             <input type="checkbox" checked={asRemote} onChange={(e) => setAsRemote(e.target.checked)} /> as a remote
             peer (only <code>remote</code> tools answer)
           </label>
-          {cmdOut.length > 0 && <pre className="tool-out mono">{cmdOut.join("\n")}</pre>}
+          <div aria-live="polite">{cmdOut.length > 0 && <pre className="tool-out mono">{cmdOut.join("\n")}</pre>}</div>
         </div>
       )}
 

@@ -47,6 +47,7 @@ never kept as a second hand-made colour. Every colour has one role:
 | Status | `--ok`, `--warn`, `--bad` (fills); `--ok-text`, `--warn-text`, `--bad-text` | Success, warning, error and danger |
 | Destructive action | `--danger-fill` (fill), `--danger-ink` (text on the fill) | The confirm button of a delete, archive or remove |
 | Map controls | `--map-control-ink` | Glyphs on MapLibre's control stack, which is white in every theme |
+| Landing hero | `--hero-*` | The photo's scrim and what sits on it: the Dark values in every theme |
 
 **The accent has two roles.** The brand green fills the primary button, with dark ink on it. As text, a link or an
 icon on a light surface, the same green is too light to read, so text uses `--accent-text`: a darker green in
@@ -163,7 +164,9 @@ in every theme.
 - WCAG 2.2 AA in every theme, measured: the contrast test in CI and axe on the UI kit and the main surfaces.
 - Real elements first (`button`, `a`, `dialog`, `nav`, lists), ARIA only to fill a gap.
 - Every control works with a keyboard. Focus is always visible and never hidden behind a sheet or the top bar.
-- Touch targets are at least 44 px, and never under 24 px with spacing.
+- Touch targets are at least 44 px, and never under 24 px with spacing. On a coarse pointer every button, field
+  and select is at least `--ctl-min-h` (44 px) tall; a control drawn smaller extends its hit area instead, and map
+  pins stay as drawn.
 - The map is never the only way to reach something: Nearby, search and the zoom buttons work without dragging.
 - Help is one step away everywhere: a control shows a one-line hint on hover and keyboard focus, the small
   **i** explains a term on a tap, and **Manual** in the nav opens the published manual in a new tab.

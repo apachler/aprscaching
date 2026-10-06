@@ -65,23 +65,17 @@
       }
     }
   }
-  /* an account with no way back in: a card under the top bar until it has a passkey or a confirmed email */
+  /* an account with no way back in: a strip in the flow under the top bar, so it pushes the map down rather than
+     covering its controls, until the account has a passkey or a confirmed email */
   .recovery-notice {
-    position: fixed;
-    top: calc(var(--topbar-h) + var(--space-sm) + env(safe-area-inset-top));
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: var(--z-banner);
+    flex: none;
     display: grid;
     gap: var(--space-xs);
-    width: min(32rem, calc(100vw - 2 * var(--space-md)));
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-sm) max(var(--space-md), calc((100% - 40rem) / 2));
     background: var(--surface-2);
     color: var(--ink);
-    border: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
     border-left: 3px solid var(--bad);
-    border-radius: var(--radius-sheet);
-    box-shadow: var(--elevation-floating);
     font-size: var(--text-data);
   }
   /* the same step inside Settings → Account: the stronger inline alert, its lines and actions stacked */

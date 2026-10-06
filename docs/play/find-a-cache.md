@@ -20,7 +20,8 @@ tab. A dot marks one that needs you: a new message, or a callsign still to verif
 and on the left rail.
 
 The centre button shows **Log** while a cache is open and **Hide** otherwise. On a computer, **Manual** sits at the
-foot of the left rail. Rest the pointer on a control, or move to it with the keyboard, to see a one-line hint of
+foot of the left rail. A tablet shows the left rail as icons only: rest on an icon, or move to it with the
+keyboard, to see its name. Rest the pointer on a control, or move to it with the keyboard, to see a one-line hint of
 what it does; the small **i** beside a term explains it on a tap. The bell in the top bar opens your alerts
 ([Alerts and the watchlist](community.md#alerts-and-the-watchlist)).
 

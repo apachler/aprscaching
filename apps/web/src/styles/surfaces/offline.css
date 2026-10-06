@@ -1,22 +1,20 @@
 /* Offline: the map's offline banner and the Offline panel (packs, new pack). */
 @layer surfaces {
-  /* over the map while it shows pack data: where the caches came from, and the way to the packs */
+  /* above the map while it shows pack data: where the caches came from, and the way to the packs. A strip in its
+     own row (shell.css .mapwrap), so it never covers the map's controls */
   .offline-banner {
-    position: absolute;
-    top: var(--space-sm);
-    left: 50%;
-    transform: translateX(-50%);
+    grid-area: 1 / 1;
+    position: relative;
     z-index: var(--z-map-ui);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-sm);
-    max-width: calc(100% - 2 * var(--space-sm));
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--hair);
+    justify-content: space-between;
+    gap: 0 var(--space-sm);
+    padding: 0 var(--space-sm);
+    border-bottom: 1px solid var(--hair);
     border-left: 3px solid var(--warn);
-    border-radius: var(--radius-control);
-    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    background: var(--surface);
     color: var(--ink);
     font-size: var(--text-data);
   }
