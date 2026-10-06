@@ -165,7 +165,7 @@ already in hand still count, as long as their peer is still trusted. A find lift
 later*. A verified "no" from a trusted peer ends the retries.
 
 **Which instances can answer.** A peer reachable at an address the asking instance can dial (its https URL,
-its 44Net name or its HAMNET address) gets the question directly. A trusted peer nobody can dial, such as a
+its 44Net name, or its HAMNET address when the asker is on HAMNET too) gets the question directly. A trusted peer nobody can dial, such as a
 phone or a box behind a carrier's NAT that pushes to a hub, gets it through the hub's
 [relay](transports.md#rendezvous-relay): the asking instance leaves the signed question with the hub, the spoke
 collects it on its own outbound connection and answers from its own receivers, and the asking instance reads
