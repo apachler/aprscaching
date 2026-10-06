@@ -13,6 +13,9 @@
  *
  * The check runs before the fetch and again before every redirect hop; a resolver that answers
  * differently the second time (DNS rebinding) is outside what a pre-flight check can see.
+ *
+ * The tool-registry carrier fetches addresses that players and the sysop type in, so it has a guard of its own
+ * (toolFetch, TOOL_FETCH_GUARD) with none of those exceptions: https only, never a private address.
  */
 
 /** Resolve a hostname to its addresses (Node's dns.lookup with `all: true`, Bun's equivalent). */
@@ -148,6 +151,58 @@ export async function fedFetch(
   throw new Error("refused: too many redirects");
 }
 const MAX_REDIRECTS = 3;
+
+/**
+ * Why a tool-registry fetch did not happen, worded for the person who asked. A refused host, a name that does
+ * not resolve and a host that does not answer read the same, so the answer reveals nothing about how this
+ * instance resolves names or what its network holds.
+ */
+export class ToolFetchRefused extends Error {}
+const UNREACHABLE = "its host is unreachable from this instance";
+
+/**
+ * The fetch the tool-registry carrier makes on a player's or the sysop's behalf. The address comes from whoever
+ * adds a registry, so it gets none of the federation guard's exceptions: every hop is https, never a loopback,
+ * private, link-local or `localhost` host (checked here, so a runtime without a resolver refuses those too), and
+ * passes the runtime's TOOL_FETCH_GUARD, which resolves the name and refuses a private answer whatever
+ * FED_ALLOW_PRIVATE, FED_PEERS, FED_HUB_URL or mDNS discovery allow federation. Redirects are followed by hand,
+ * at most MAX_REDIRECTS of them. Throws ToolFetchRefused with a generic reason.
+ */
+export async function toolFetch(
+  env: { TOOL_FETCH_GUARD?: FetchGuard },
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  let target = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let u: URL;
+    try {
+      u = new URL(target);
+    } catch {
+      throw new ToolFetchRefused("it is not a URL");
+    }
+    if (u.protocol !== "https:") throw new ToolFetchRefused(hop ? "it redirects off https" : "it is not https");
+    if (isLocalHost(u.hostname)) throw new ToolFetchRefused(UNREACHABLE);
+    let res: Response;
+    try {
+      await env.TOOL_FETCH_GUARD?.(target);
+      res = await fetch(target, { ...init, redirect: "manual" });
+    } catch (e) {
+      if ((e as Error).name === "TimeoutError" || (e as Error).name === "AbortError")
+        throw new ToolFetchRefused("its host did not answer in time");
+      throw new ToolFetchRefused(UNREACHABLE);
+    }
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) return res;
+    await res.body?.cancel().catch(() => {});
+    try {
+      target = new URL(location, target).toString();
+    } catch {
+      throw new ToolFetchRefused("it redirects to an address that is not a URL");
+    }
+  }
+  throw new ToolFetchRefused("it redirects too many times");
+}
 
 /** A URL without its trailing slashes (a plain loop: linear on any input, unlike a `/+$` regex). */
 export function trimTrailingSlashes(s: string): string {

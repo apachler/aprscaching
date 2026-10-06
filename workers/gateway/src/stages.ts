@@ -8,6 +8,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
+import { readCappedBody } from "./fetchguard.js";
 import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -266,8 +267,8 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
 
   const ct = mediaType(req.headers.get("content-type"));
   if (!AUDIO_TYPES.has(ct)) return json({ error: "an audio clue is a sound (MP3, Ogg, WAV, M4A)" }, { status: 415 });
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (!bytes.length || bytes.length > MEDIA_LIMITS.audio)
+  const bytes = await readCappedBody(req, MEDIA_LIMITS.audio);
+  if (!bytes?.length)
     return json({ error: `an audio clue is at most ${mediaMB(MEDIA_LIMITS.audio)}` }, { status: 413 });
   const full = await mediaRefusal(env, cacheId, owner, bytes.length, before.media_bytes ?? 0);
   if (full) return json({ error: full }, { status: 413 });
@@ -586,9 +587,9 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
       { error: "media must be a photo or a sound (JPEG, PNG, WebP, GIF, AVIF, MP3, Ogg, WAV, M4A)" },
       { status: 415 },
     );
-  const bytes = new Uint8Array(await req.arrayBuffer());
   const max = MEDIA_LIMITS[kind];
-  if (!bytes.length || bytes.length > max)
+  const bytes = await readCappedBody(req, max);
+  if (!bytes?.length)
     return json({ error: `${kind === "image" ? "a photo" : "a sound"} is at most ${mediaMB(max)}` }, { status: 413 });
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_media WHERE cache_id=?")
     .bind(cacheId)
@@ -645,9 +646,8 @@ export async function handlePutMediaThumb(req: Request, env: Env, cacheId: numbe
   const ct = (req.headers.get("content-type") ?? "").split(";")[0]!.trim();
   if (ct !== "image/jpeg" && ct !== "image/webp")
     return json({ error: "a thumbnail is image/jpeg or image/webp" }, { status: 415 });
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (!bytes.length || bytes.length > THUMB_LIMIT)
-    return json({ error: `a thumbnail is at most ${THUMB_LIMIT / 1000} kB` }, { status: 413 });
+  const bytes = await readCappedBody(req, THUMB_LIMIT);
+  if (!bytes?.length) return json({ error: `a thumbnail is at most ${THUMB_LIMIT / 1000} kB` }, { status: 413 });
   const key = `cache/${cacheId}/media/${crypto.randomUUID()}.thumb.${ct === "image/webp" ? "webp" : "jpeg"}`;
   await env.MEDIA.put(key, bytes, ct);
   await env.DB.prepare("UPDATE cache_media SET thumb_key=?, thumb_bytes=? WHERE id=?")

@@ -25,6 +25,11 @@ export type Env = {
   INGEST_SECRET: string;
   /** Installed by Node/Bun: refuses federation fetches to private networks. */
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
+  /**
+   * Installed by Node/Bun: refuses tool-registry fetches to private networks, with none of the federation
+   * guard's exceptions (operator origins, FED_ALLOW_PRIVATE, mDNS instances).
+   */
+  TOOL_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   /** Installed by the Node server while its https listener runs: that listener's port (visitor.ts). */
   HTTPS_LISTENER_PORT?: string;
   /** Installed by the desktop launcher: this gateway is the desktop app, which updates by replacing its binary. */

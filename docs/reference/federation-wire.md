@@ -138,8 +138,10 @@ neither take a new record for one they hold nor suppress it with a deletion of a
 ```
 
 - It lists the instance itself, with the top of each of its own sequences, and every origin whose records the
-  `FED_RESERVE` policy passes on. The asker (`for`) is left out. Origins come in instance-id order, 500 a page;
-  `next` is the `after` of the next page.
+  `FED_RESERVE` policy passes on. The asker (`for`) is left out. Origins come in instance-id order, 100 a page
+  (the summary answers anyone, so one page stays cheap to build); `next` is the `after` of the next page.
+- `for` counts only when it names an instance this one holds a peer row for and has not blocked. Any other value
+  is ignored and the answer is the one a request without `for` gets, so naming an instance learns nothing about it.
 - Per kind, `held` is how far the instance holds the origin whole for the asker's `bbox`, and `top` the highest
   record it can pass on. A kind it holds none of is left out of either. `held` stops before the first record kept
   at the hop limit, and is left out where the instance read the origin's caches under a region the asker's does not

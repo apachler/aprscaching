@@ -81,14 +81,16 @@ describe("sitemap (manifest-driven)", () => {
     expect(body).toContain("Allow: /");
   });
 
-  it("gatewayBase: the address the request came on when listed, with the proxy's scheme; APP_URL otherwise", () => {
+  it("gatewayBase: the address the request came on when listed, with a declared proxy's scheme; APP_URL otherwise", () => {
     // same-host deployment (Caddy / Docker): the gateway answers on the app's host
     expect(gatewayBase(new Request("http://app.example/robots.txt"), env)).toBe("https://app.example");
     // split deployment (Pages + API host)
     expect(gatewayBase(new Request("https://api.example/robots.txt"), env)).toBe("https://api.example");
-    // a TLS-terminating proxy in front of the Node server, which only sees http
+    // a TLS-terminating proxy in front of the Node server, which only sees http: its scheme counts once declared
     const proxied = new Request("http://api.example/robots.txt", { headers: { "x-forwarded-proto": "https" } });
-    expect(gatewayBase(proxied, env)).toBe("https://api.example");
+    expect(gatewayBase(proxied, { ...env, TRUST_PROXY: "1" } as Env)).toBe("https://api.example");
+    // without TRUST_PROXY anyone can send the header: the request is the plain-http one it is
+    expect(gatewayBase(proxied, env)).toBe("https://app.example");
     // no APP_URL: a self-hosted instance links to itself, not to the canonical public host
     expect(gatewayBase(new Request("http://192.168.1.10:8080/robots.txt"), {} as Env)).toBe("http://192.168.1.10:8080");
     // a header raises the scheme of a proxied request, never lowers an https one
@@ -104,6 +106,7 @@ describe("sitemap (manifest-driven)", () => {
     const upgraded = new Request("http://aprscaching.oe8xyz.hamnet.example/x", {
       headers: { "x-forwarded-proto": "https" },
     });
-    expect(gatewayBase(upgraded, hamnet)).toBe("https://app.example");
+    expect(gatewayBase(upgraded, { ...hamnet, TRUST_PROXY: "1" } as Env)).toBe("https://app.example");
+    expect(gatewayBase(upgraded, hamnet)).toBe("http://aprscaching.oe8xyz.hamnet.example");
   });
 });

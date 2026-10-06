@@ -30,9 +30,10 @@ import { fileTiles } from "../node/src/tiles.ts";
 import { migrationsFromDir } from "../node/src/migrate.ts";
 import { resolveServerSecrets, type ServerSecrets } from "../node/src/secrets.ts";
 import {
+  BODY_MAX_BYTES,
   fedSyncInterval,
   gitHead,
-  guardFederationFetches,
+  guardOutboundFetches,
   logStrayErrors,
   relayPollInterval,
   roomNamespace,
@@ -68,14 +69,39 @@ export interface BunServer {
 }
 
 /**
+ * The Node server's own https listener (HTTPS_PORT, TLS_CERT, TLS_KEY, TLS_CA_CERT) has no Bun counterpart.
+ * The Bun server refuses to start while any of them is set rather than serve plain http to someone who asked
+ * for https; TLS in front of it comes from a reverse proxy or a tunnel.
+ */
+export function bunTlsRefusal(env: Record<string, string | undefined>): string | null {
+  const set = ["HTTPS_PORT", "TLS_CERT", "TLS_KEY", "TLS_CA_CERT"].filter((k) => env[k]?.trim());
+  if (!set.length) return null;
+  return (
+    `${set.join(", ")} ${set.length > 1 ? "are" : "is"} read by the Node server only: the Bun server and the ` +
+    `desktop app have no https listener of their own. Unset ${set.length > 1 ? "them" : "it"} and put TLS in ` +
+    `front (a reverse proxy or a tunnel), or run the Node server`
+  );
+}
+
+/** What a request that failed outside the gateway's own handling gets: no stack, no message. */
+const internalErrorResponse = () =>
+  new Response(JSON.stringify({ error: "internal error" }), {
+    status: 500,
+    headers: { "content-type": "application/json" },
+  });
+
+/**
  * Start the gateway on Bun: migrate the database, build the runtime-neutral env, serve HTTP and the
  * live WebSocket rooms, start the scheduled jobs, and stop cleanly (WAL checkpointed) on SIGINT/SIGTERM.
  * Refuses a malformed setting and a federation registry whose authority key is not pinned, as the Node
- * server does.
+ * server does, and the https listener settings only the Node server reads (bunTlsRefusal). A request body
+ * stops at the Node server's BODY_MAX_BYTES, and a failure answers a generic JSON 500, never Bun's error page.
  */
 export function createServer(opts: BunServerOptions): BunServer {
   const configProblems = validateConfig(opts.environment, ["gateway", "server"]);
   if (configProblems.length) throw new Error(configProblems.map((p) => p.message).join("; "));
+  const tlsRefusal = bunTlsRefusal(opts.environment);
+  if (tlsRefusal) throw new Error(tlsRefusal);
   const fedConfigError = federationConfigError(opts.environment as unknown as Env);
   if (fedConfigError) throw new Error(fedConfigError);
 
@@ -97,11 +123,18 @@ export function createServer(opts: BunServerOptions): BunServer {
     SOURCE_COMMIT: opts.environment.SOURCE_COMMIT ?? opts.sourceCommit,
     ...(opts.desktop ? { DESKTOP_APP: true as const } : {}),
   };
-  guardFederationFetches(env);
+  guardOutboundFetches(env);
 
   const server = Bun.serve<WsData, undefined>({
     hostname: opts.hostname,
     port: opts.port,
+    maxRequestBodySize: BODY_MAX_BYTES,
+    // Bun's development mode answers a thrown error with an HTML page carrying the stack
+    development: false,
+    error(e) {
+      console.error("request:", e);
+      return internalErrorResponse();
+    },
     async fetch(req, srv) {
       const url = new URL(req.url);
       if (url.pathname === "/ws") {

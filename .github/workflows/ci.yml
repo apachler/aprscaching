@@ -243,6 +243,8 @@ jobs:
       # The MeshCom core is bundled once and run on Node and Bun; both must agree.
       - run: pnpm run conformance:meshcom
         env: { CONFORMANCE_REQUIRE_BUN: "1" }
+      # The Bun server's own limits: body cap, generic 500, refused https settings, the tool-registry guard.
+      - run: bun test servers/bun/test
       - name: start bun-gateway + smoke
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
