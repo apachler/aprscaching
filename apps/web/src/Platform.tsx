@@ -38,6 +38,7 @@ import { FormatContext, makeFormatters, loadSettings, saveSettings, type LocaleS
 import { applyTheme, watchSystemTheme } from "./shell/theme.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import { setToolTxVerified, feedHeard } from "./tools/host.js";
+import { claimTools } from "./tools/toolOwner.js";
 import { ToolMapLayers } from "./tools/ToolMapLayers.js";
 import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
@@ -208,9 +209,13 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     setToolTxVerified(verified);
   }, [verified]);
-  // The player's installed tools start once per page, and again when an account sync brings new ones. The sandbox
-  // code loads only when there is a tool to run.
+  // Installed tools belong to the signed-in identity: claiming them for this session stops and clears another
+  // identity's (a sign-out, another account on a shared computer) before anything starts or syncs. Then this
+  // identity's tools start, and again when an account sync brings new ones; the sandbox code loads only when there
+  // is a tool to run. The account's own settings are pulled after the claim.
   useEffect(() => {
+    if (session.loading) return;
+    claimTools(session.callsign);
     const boot = () => {
       try {
         if (!localStorage.getItem("acs.tools")?.startsWith("[{")) return;
@@ -220,9 +225,10 @@ export default function Platform({ session, startTour }: { session: SessionState
       void import("./tools/installed.js").then((m) => m.startInstalledTools());
     };
     boot();
+    if (session.signedIn) void pullPrefs(session.callsign);
     window.addEventListener(PREFS_EVENT, boot);
     return () => window.removeEventListener(PREFS_EVENT, boot);
-  }, []);
+  }, [session.loading, session.signedIn, session.callsign]);
   const [view, setView] = useState<View>(MAP);
   const isPanel = (key: PanelKey) => view.kind === "panel" && view.key === key;
   const attention = useAttention({
@@ -307,12 +313,9 @@ export default function Platform({ session, startTour }: { session: SessionState
     notePrefChange();
   }, []);
 
-  // Account UI-prefs sync: on sign-in, pull the account's theme/units/pins/basemap and
-  // apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
+  // Account UI-prefs sync: on sign-in (above, after the tools are claimed), pull the account's theme/units/pins/
+  // basemap/tools and apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
   // untouched (the endpoint is session-gated). localStorage stays the source of truth.
-  useEffect(() => {
-    if (session.signedIn) void pullPrefs();
-  }, [session.signedIn]);
   // Instance-operator (sysop) check — reveals the admin surface only for the ham who deployed this instance.
   useEffect(() => {
     if (!session.signedIn) {

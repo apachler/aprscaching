@@ -12,13 +12,7 @@ import {
   type Transport,
   type AnsiLine,
 } from "@aprscaching/packet";
-import {
-  expand as expandMacros,
-  withNow,
-  ScriptRunner,
-  type ScriptSession,
-  type SessionStep,
-} from "@aprscaching/tools";
+import { expand as expandMacros, withNow, ScriptRunner, validateSteps, type ScriptSession } from "@aprscaching/tools";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { BleKissTransport } from "./bleKiss.js";
@@ -212,13 +206,18 @@ export function PacketTerminal(props: {
       };
       const runner = new ScriptRunner(port);
       runnerRef.current = runner;
-      // A session script connects and sends over the TNC, so a calling tool must hold 'tx'.
+      // A session script connects and sends over the TNC, so a calling tool must hold 'tx'. The steps are checked,
+      // one script runs at a time, and each load draws on the calling tool's transmit budget (one a minute, six an
+      // hour), like any other transmission of that tool. A new script closes the channel the last one held.
       disposeScriptSvc.current = host.registerHostService(
         "session.script",
-        (a) => {
-          const steps = (a as { steps?: unknown }).steps;
-          if (!Array.isArray(steps)) return null;
-          runner.load(steps as SessionStep[], Date.now());
+        (a, caller) => {
+          const steps = validateSteps((a as { steps?: unknown } | null)?.steps);
+          if (typeof steps === "string") throw new Error(steps);
+          if (runner.busy()) throw new Error("a session script is already running");
+          const held = host.takeTx(caller);
+          if (held) throw new Error(`session script held: ${held}`);
+          runner.load(steps, Date.now());
           return { ok: true };
         },
         { requires: "tx" },

@@ -115,12 +115,11 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
   const installedNames = new Set(installed.map((v) => v.record.name));
 
   function toggle(v: InstalledView, on: boolean) {
-    const r = setInstalledOn(v.record.name, on);
-    if (!r.ok) toast(r.error ?? "couldn't switch it on");
-    else if (!on) unpin(toolPin(v.record.name)); // a switched-off tool leaves the rail
+    setInstalledOn(v.record.name, on);
+    if (!on) unpin(toolPin(v.record.name)); // a switched-off tool leaves the rail
   }
   async function remove(v: InstalledView) {
-    const title = v.tool?.manifest.title ?? v.record.name;
+    const title = v.tool?.manifest.title ?? v.record.title;
     const ok = await confirm({
       title: `Remove ${title}?`,
       message: "It stops, leaves the rail and is no longer installed. You can install it again from the registry.",
@@ -154,8 +153,12 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
     }
     setMissing(null);
     const v = installed.find((x) => x.record.name === name);
-    if (!v?.tool) return; // still starting: this runs again once it is loaded
-    if (!v.on) toggle(v, true);
+    if (!v) return;
+    if (!v.on) {
+      toggle(v, true); // it loads; this runs again once it is
+      return;
+    }
+    if (!v.tool) return; // still starting: this runs again once it is loaded
     const dec = v.tool.sandbox.decoders[0]?.id;
     if (dec) setDecodeKind(dec);
     const raf = requestAnimationFrame(() => {
@@ -298,7 +301,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
   const row = (v: InstalledView) => {
     const m = v.tool?.manifest;
     const name = v.record.name;
-    const title = m?.title ?? name;
+    const title = m?.title ?? v.record.title;
     const pin = toolPin(name);
     const pinned = pins.includes(pin);
     const open = props.tool === name;
@@ -354,7 +357,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
           >
             <Icon name={pinned ? "pin-off" : "pin"} size={16} />
           </Button>
-          <Switch checked={v.on} disabled={!v.tool} onChange={(on) => toggle(v, on)} label={title} />
+          <Switch checked={v.on} disabled={v.starting} onChange={(on) => toggle(v, on)} label={title} />
         </div>
       </div>
     );
@@ -565,6 +568,15 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
                 requests:
               </p>
               <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
+              {(prompt.manifest.permissions.includes("tx") || prompt.manifest.permissions.includes("beacon")) && (
+                <p>
+                  <strong>May transmit status and messages under your callsign</strong>, at most once a minute and six
+                  times an hour.
+                </p>
+              )}
+              {prompt.manifest.remote && (
+                <p className="tool-surfaces">Stations connected to you may run its remote commands.</p>
+              )}
               <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
               {prompt.manifest.connect?.length ? (
                 <p className="tool-surfaces">

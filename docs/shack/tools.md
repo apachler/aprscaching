@@ -64,15 +64,20 @@ the registry says **Installed**.
 
 Your installed tools stay installed: they start again when you reload the page, and when you are signed in they
 follow your account to another device. Each start checks the tool again: its signature under the author key you
-approved, its code against the signed hash, and its permissions against the ones you approved. A tool that fails a
-check stays in **Your tools** with **Not running** and the reason. If its author signed with a new key, or the tool
-now asks for more permissions, install it again from the registry to approve the change.
+approved, its code against the signed hash, and its permissions, network addresses and remote use against the
+ones you approved. A tool that fails a check stays in **Your tools** with **Not running** and the reason. If its
+author signed with a new key, or the tool now asks for more, install it again from the registry to approve the
+change.
+
+Installed tools belong to you. When you sign out, or someone else signs in on the same browser, your tools stop and
+leave that browser; your account keeps them for your next sign-in.
 
 ## Switch a tool on or off
 
 Turn the switch on a tool's row. A tool switched on shows its panel, decoder or commands: decoders and commands in
 the **Decode** and **Run a tool command** sections, panels under **Your tools**, monitor colours in the packet
-terminal. A tool switched off stops, and its pin leaves the rail. The app remembers the switch.
+terminal. A tool switched off does not run at all: it stops, its beacon ends and its pin leaves the rail. The app
+remembers the switch.
 
 ## Decode a packet
 
@@ -126,10 +131,13 @@ Transmitting is gated three ways. The tool needs the `tx` or `beacon` permission
 callsign is [verified](../play/join.md#verify-your-callsign) each time the tool asks; and the frame goes out only
 over the radio you connected in [**My radio**](my-radio.md), with your
 [consent for this tab](my-radio.md#allow-transmitting-for-this-tab).
-A tool never asks for that consent itself: without it, the tool's transmission is held and the app says so. Every
-frame a tool sends shows in **Recent transmissions** under the tool's name and flashes the transmit indicator. The
-app lets each tool transmit at most once a minute, and a beacon at most every 10 minutes. A scheduled query
-connects through the packet terminal's TNC, under that terminal's consent.
+A tool never asks for that consent itself: without it, the tool's transmission is held and the app says so. A tool
+transmits only APRS status and messages, which the install prompt states: **May transmit status and messages under
+your callsign**. Every frame a tool sends shows in **Recent transmissions** under the tool's name and flashes the
+transmit indicator. The app lets each tool transmit at most once a minute and six times an hour, beacons and
+scheduled queries included, and a beacon at most every 10 minutes. A beacon ends when you disconnect the radio, your
+consent ends, you sign out or change callsign or SSID; the tool has to schedule it again. A scheduled query connects
+through the packet terminal's TNC, under that terminal's consent.
 
 ## The trust labels
 

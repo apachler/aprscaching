@@ -39,7 +39,7 @@ if (demo === "app") {
     installAppFixtures(persona, params.get("net") === "1");
     // `&tools=a,b` installs those project tools from the bundled registry, as a player would
     const tools = params.get("tools");
-    if (tools) void import("./demo/demoTools.js").then((m) => m.installDemoTools(tools.split(",")));
+    if (tools) void import("./demo/demoTools.js").then((m) => m.installDemoTools(tools.split(","), true));
     root.render(
       <React.StrictMode>
         <ErrorBoundary>

@@ -54,13 +54,25 @@ describe("account UI-prefs sanitizer", () => {
     expect(out.tools).toEqual([
       {
         name: "mheard",
+        title: "mheard",
         url: good.url,
         pubkey: key,
         grants: ["monitor"],
+        connect: [],
+        remote: false,
         on: true,
         via: { id: "builtin", account: false },
       },
     ]);
+    expect(
+      (
+        sanitizePrefs({
+          tools: [
+            { ...good, title: "MHeard", connect: ["https://a.example", "http://b", "https://c/x"], remote: true },
+          ],
+        }).tools as Record<string, unknown>[]
+      )[0],
+    ).toMatchObject({ title: "MHeard", connect: ["https://a.example"], remote: true });
   });
 
   it("returns an empty object for junk / non-object input", () => {

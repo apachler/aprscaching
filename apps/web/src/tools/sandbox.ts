@@ -157,8 +157,8 @@ function workerSource(): string {
       const c = (t && t.commands) || {};
       for (const w of Object.keys(c)) {
         const v = c[w];
-        if (typeof v === "function") commands[w] = { run: v, remote: true };
-        else if (v && typeof v.run === "function") commands[w] = { run: v.run, remote: v.remote !== false };
+        if (typeof v === "function") commands[w] = { run: v, remote: false };
+        else if (v && typeof v.run === "function") commands[w] = { run: v.run, remote: v.remote === true };
       }
       colourRules = Array.isArray(t && t.colourRules) ? t.colourRules.slice(0, 40) : [];
       if (t && t.panel !== undefined) panel = t.panel;
@@ -215,6 +215,14 @@ export const ANSWER_TIMEOUT_MS = 10_000;
 export const REPLY_TTL_MS = 120_000;
 export const REPLY_MAX = 4;
 export const REPLY_TEXT_MAX = 256;
+/** A tool's bridge budget: messages per second, the size of one message, and the services and topics it holds. */
+export const MSG_PER_SEC = 200;
+export const MSG_MAX_BYTES = 64 * 1024;
+export const MAX_SERVICES = 16;
+export const MAX_TOPICS = 32;
+const LINES_MAX = 200;
+const LINE_MAX = 1000;
+const DECODE_OUT_MAX = 20_000;
 const MAX_LIST = 200;
 const LOG_MAX = 300;
 
@@ -351,9 +359,13 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
         decoders: listOf(m.decoders, decoderMeta),
       };
     case "cmdResult":
-      return isId(m.id) && Array.isArray(m.lines) ? { type: "cmdResult", id: m.id, lines: m.lines.map(String) } : null;
+      return isId(m.id) && Array.isArray(m.lines)
+        ? { type: "cmdResult", id: m.id, lines: m.lines.slice(0, LINES_MAX).map((l) => String(l).slice(0, LINE_MAX)) }
+        : null;
     case "decodeResult":
-      return isId(m.id) && isStr(m.out) ? { type: "decodeResult", id: m.id, out: m.out } : null;
+      return isId(m.id) && isStr(m.out)
+        ? { type: "decodeResult", id: m.id, out: m.out.slice(0, DECODE_OUT_MAX) }
+        : null;
     case "panel":
       return { type: "panel", spec: m.spec };
     case "map":
@@ -470,6 +482,51 @@ export class SandboxBridge {
     return (this.opts.now ?? Date.now)();
   }
 
+  private windowStart = 0;
+  private windowCount = 0;
+  private overReported = false;
+  private changeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Admit one raw message from the worker against the tool's budget: at most MSG_PER_SEC a second and
+   * MSG_MAX_BYTES each (as JSON). A message over budget is dropped, and the tool log says so once a second.
+   */
+  admit(raw: unknown): boolean {
+    const now = this.now();
+    if (now - this.windowStart >= 1000) {
+      this.windowStart = now;
+      this.windowCount = 0;
+      this.overReported = false;
+    }
+    let size = Infinity;
+    try {
+      size = JSON.stringify(raw)?.length ?? 0;
+    } catch {
+      /* not plain data: over budget */
+    }
+    const why =
+      ++this.windowCount > MSG_PER_SEC
+        ? `more than ${MSG_PER_SEC} messages a second`
+        : size > MSG_MAX_BYTES
+          ? `a message over ${MSG_MAX_BYTES} bytes`
+          : null;
+    if (!why) return true;
+    if (!this.overReported) {
+      this.overReported = true;
+      this.ctx?.log(`dropped: ${why}`);
+    }
+    return false;
+  }
+
+  /** Tell the host's surfaces to re-read, at most once per 100 ms. */
+  private changed(): void {
+    if (this.changeTimer) return;
+    this.changeTimer = setTimeout(() => {
+      this.changeTimer = null;
+      this.opts.onChange?.();
+    }, 100);
+  }
+
   /** Take what the tool registered while it loaded. */
   loaded(m: Extract<FrameMessage, { type: "loaded" }>): void {
     this.commands = m.commands;
@@ -530,7 +587,7 @@ export class SandboxBridge {
       case "colours":
         if (!this.granted.includes("monitor")) return ctx?.log("colours: permission 'monitor' not granted");
         this.setRules(m.rules);
-        if (ctx) this.opts.onChange?.(); // the monitor re-reads its colours
+        if (ctx) this.changed(); // the monitor re-reads its colours
         return;
       case "log":
         ctx?.log(m.msg);
@@ -542,11 +599,13 @@ export class SandboxBridge {
         return;
       case "provide":
         if (this.services.has(m.name)) return;
+        if (this.services.size >= MAX_SERVICES) return ctx?.log(`provide: at most ${MAX_SERVICES} services`);
         this.services.add(m.name);
         if (ctx) guard(`service ${m.name}`, () => this.provide(ctx, m.name));
         return;
       case "subscribe":
         if (this.topics.has(m.topic)) return;
+        if (this.topics.size >= MAX_TOPICS) return ctx?.log(`subscribe: at most ${MAX_TOPICS} topics`);
         this.topics.add(m.topic);
         if (ctx) guard(`topic ${m.topic}`, () => this.subscribe(ctx, m.topic));
         return;
@@ -725,7 +784,7 @@ export async function loadSandbox(script: string, granted: Capability[], opts: S
       onLoad?.(m);
       return;
     }
-    bridge.receive(m);
+    if (bridge.admit(ev.data)) bridge.receive(m);
   };
 
   const destroy = () => {

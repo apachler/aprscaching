@@ -9,6 +9,10 @@ import {
   MAX_EXACT_RULES,
   MAX_SCAN_RULES,
   parseFrameMessage,
+  MAX_SERVICES,
+  MAX_TOPICS,
+  MSG_MAX_BYTES,
+  MSG_PER_SEC,
   REPLY_MAX,
   REPLY_TEXT_MAX,
   REPLY_TTL_MS,
@@ -235,7 +239,8 @@ describe("SandboxBridge — every request goes through the tool's own context", 
     bridge.receive({ type: "tx", id: 3, info: ">again at once" });
     bridge.receive({ type: "tx", id: 4, info: "}DL1X>APRS:>spoofed" });
     await flush();
-    expect(sent.filter((m) => m.type === "callResult").map((m) => m.result)).toEqual([false, true, false, false]);
+    const byId = Object.fromEntries(sent.filter((m) => m.type === "callResult").map((m) => [m.id, m.result]));
+    expect(byId).toEqual({ 1: false, 2: true, 3: false, 4: false });
     expect(transmit).toHaveBeenCalledOnce();
     expect(transmit).toHaveBeenCalledWith("sb", ">status");
   });
@@ -272,7 +277,7 @@ describe("SandboxBridge — every request goes through the tool's own context", 
     expect(last(sent, "callResult")).toEqual({ type: "callResult", id: 3, error: "the tool is switched off" });
   });
 
-  it("draws the map layer and the colour rules it was granted, sanitised", () => {
+  it("draws the map layer and the colour rules it was granted, sanitised", async () => {
     const onChange = vi.fn();
     const host = new ToolHost();
     const sent: unknown[] = [];
@@ -306,7 +311,8 @@ describe("SandboxBridge — every request goes through the tool's own context", 
     ]);
     bridge.receive({ type: "colours", rules: [{ src: "OE8APR", colorVar: "--warn" }] });
     expect(host.colourisers("terminal")[0]!({ src: "OE8APR", dst: "", text: "" })?.colorVar).toBe("--warn");
-    expect(onChange).toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 150)); // colour updates reach the surfaces coalesced
+    expect(onChange).toHaveBeenCalledOnce();
   });
 
   it("contributes no map layer or colours without their grants", () => {
@@ -371,5 +377,35 @@ describe("SandboxBridge — every request goes through the tool's own context", 
 
   it("rejects the worker's call promise when the answer carries an error", () => {
     expect(frameSource("default-src 'none'")).toContain("p.rej(new Error(m.error))");
+  });
+});
+
+describe("SandboxBridge — a tool's budget", () => {
+  it("drops messages beyond the rate and size budget, and logs it once", () => {
+    const onLog = vi.fn();
+    const { bridge, tick } = sandboxed(["ipc"], { onLog });
+    for (let i = 0; i < MSG_PER_SEC; i++) expect(bridge.admit({ type: "emit", topic: "t", data: i })).toBe(true);
+    expect(bridge.admit({ type: "emit", topic: "t" })).toBe(false);
+    expect(bridge.admit({ type: "emit", topic: "t" })).toBe(false);
+    expect(onLog).toHaveBeenCalledOnce();
+    tick(1000);
+    expect(bridge.admit({ type: "emit", topic: "t" })).toBe(true);
+    expect(bridge.admit({ type: "emit", topic: "t", data: "x".repeat(MSG_MAX_BYTES) })).toBe(false);
+  });
+
+  it("holds at most MAX_SERVICES services and MAX_TOPICS topics", () => {
+    const { host, bridge } = sandboxed(["ipc"]);
+    for (let i = 0; i < MAX_SERVICES + 5; i++) bridge.receive({ type: "provide", name: `svc.${i}` });
+    for (let i = 0; i < MAX_TOPICS + 5; i++) bridge.receive({ type: "subscribe", topic: `topic.${i}` });
+    expect(host.ipcServices()).toHaveLength(MAX_SERVICES);
+    expect(host.ipcTopics()).toHaveLength(MAX_TOPICS);
+  });
+
+  it("cannot provide a reserved host service", () => {
+    const onLog = vi.fn();
+    const { host, bridge } = sandboxed(["ipc"], { onLog });
+    bridge.receive({ type: "provide", name: "session.script" });
+    expect(host.ipcServices()).toEqual([]);
+    expect(onLog).toHaveBeenCalledWith("sb", expect.stringMatching(/reserved for the app/));
   });
 });

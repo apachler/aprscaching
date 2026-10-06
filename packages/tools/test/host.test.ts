@@ -10,6 +10,7 @@ import {
   txInfoProblem,
   normalizeBeacon,
   TOOL_TX_MIN_GAP_MS,
+  TOOL_TX_PER_HOUR,
   BEACON_MIN_INTERVAL_SEC,
   BEACON_MAX_INTERVAL_SEC,
   TX_INFO_MAX,
@@ -125,21 +126,29 @@ describe("ToolHost — capability enforcement + dispatch", () => {
 describe("Transmit and beacons — gated, checked and rate-limited by the host", () => {
   const txTool = (onCtx: (ctx: ToolContext) => void) => mk("tx-tool", ["command", "tx", "beacon"], onCtx);
 
-  it("requestTx is refused while the gate is closed and transmits once it opens", () => {
+  it("requestTx is refused while the gate is closed and transmits once it opens", async () => {
     let open = false;
-    const transmit = vi.fn();
+    const transmit = vi.fn(() => true);
     let ctx!: ToolContext;
     const host = new ToolHost({ txGate: () => open, transmit });
     host.register(txTool((c) => (ctx = c)));
     host.setEnabled("tx-tool", true);
-    expect(ctx.requestTx(">on the air")).toBe(false);
+    expect(await ctx.requestTx(">on the air")).toBe(false);
     expect(transmit).not.toHaveBeenCalled();
     open = true;
-    expect(ctx.requestTx(">on the air")).toBe(true);
+    expect(await ctx.requestTx(">on the air")).toBe(true);
     expect(transmit).toHaveBeenCalledWith("tx-tool", ">on the air");
   });
 
-  it("one transmission per TOOL_TX_MIN_GAP_MS for each tool", () => {
+  it("reports the radio's real outcome", async () => {
+    let ctx!: ToolContext;
+    const host = new ToolHost({ txGate: () => true, transmit: () => Promise.resolve(false) });
+    host.register(txTool((c) => (ctx = c)));
+    host.setEnabled("tx-tool", true);
+    expect(await ctx.requestTx(">held by the radio")).toBe(false);
+  });
+
+  it("one transmission per TOOL_TX_MIN_GAP_MS, and TOOL_TX_PER_HOUR sustained, for each tool", async () => {
     let now = 1_000_000;
     const transmit = vi.fn();
     const onLog = vi.fn();
@@ -147,25 +156,54 @@ describe("Transmit and beacons — gated, checked and rate-limited by the host",
     const host = new ToolHost({ txGate: () => true, transmit, onLog, now: () => now });
     host.register(txTool((c) => (ctx = c)));
     host.setEnabled("tx-tool", true);
-    expect(ctx.requestTx(">one")).toBe(true);
+    expect(await ctx.requestTx(">one")).toBe(true);
     now += TOOL_TX_MIN_GAP_MS - 1;
-    expect(ctx.requestTx(">two")).toBe(false);
-    expect(onLog).toHaveBeenCalledWith("tx-tool", expect.stringMatching(/transmit held/));
+    expect(await ctx.requestTx(">two")).toBe(false);
+    expect(onLog).toHaveBeenCalledWith("tx-tool", expect.stringMatching(/transmit held: one transmission per/));
     now += 1;
-    expect(ctx.requestTx(">three")).toBe(true);
-    expect(transmit).toHaveBeenCalledTimes(2);
+    expect(await ctx.requestTx(">three")).toBe(true);
+    for (let i = 0; i < TOOL_TX_PER_HOUR; i++) {
+      now += TOOL_TX_MIN_GAP_MS;
+      await ctx.requestTx(">more");
+    }
+    expect(transmit).toHaveBeenCalledTimes(TOOL_TX_PER_HOUR); // the bucket is spent within the hour
+    expect(onLog).toHaveBeenLastCalledWith("tx-tool", expect.stringMatching(/at most 6 transmissions an hour/));
+    now += 10 * 60_000; // one token refills every ten minutes
+    expect(await ctx.requestTx(">later")).toBe(true);
+    // the budget belongs to the tool's name: switching it off and on again does not refill it
+    host.setEnabled("tx-tool", false);
+    host.setEnabled("tx-tool", true);
+    now += TOOL_TX_MIN_GAP_MS;
+    expect(await ctx.requestTx(">again")).toBe(false);
   });
 
-  it("refuses an empty, multi-line, oversized or third-party frame", () => {
+  it("transmits only an APRS status or message", async () => {
     const transmit = vi.fn();
     let ctx!: ToolContext;
-    const host = new ToolHost({ txGate: () => true, transmit });
+    let now = 0;
+    const host = new ToolHost({ txGate: () => true, transmit, now: () => (now += 3_600_000) });
     host.register(txTool((c) => (ctx = c)));
     host.setEnabled("tx-tool", true);
-    for (const bad of ["", "  ", ">a\r\nb", "x".repeat(TX_INFO_MAX + 1), "}OE1XYZ>APRS:>spoof", 42 as never])
-      expect(ctx.requestTx(bad)).toBe(false);
+    for (const bad of [
+      "",
+      "  ",
+      ">a\r\nb",
+      ">" + "x".repeat(63),
+      "x".repeat(TX_INFO_MAX + 1),
+      "}OE1XYZ>APRS:>spoof",
+      "!4704.41N/01526.27E>position",
+      ";OBJECT   *111111z4704.41N/01526.27E>",
+      ")ITEM!4704.41N/01526.27E>",
+      "T#001,1,2,3,4,5,00000000",
+      ":         :no addressee",
+      ":OE1XYZ   :pipe | inside",
+      42 as never,
+    ])
+      expect(await ctx.requestTx(bad)).toBe(false);
     expect(transmit).not.toHaveBeenCalled();
-    expect(txInfoProblem(">fine")).toBeNull();
+    for (const good of [">QRV on 2m", ":OE1XYZ   :hello there{12", ":OE1XYZ   :ack12"])
+      expect(txInfoProblem(good)).toBeNull();
+    expect(await ctx.requestTx(":OE1XYZ   :ack12")).toBe(true);
   });
 
   it("requestTx and scheduleBeacon need their own permissions", () => {
@@ -206,6 +244,56 @@ describe("Transmit and beacons — gated, checked and rate-limited by the host",
     expect(long.comment).toHaveLength(62);
     for (const bad of [null, {}, { comment: "" }, { comment: "x" }, { comment: "}spoof", intervalSec: 900 }])
       expect(typeof normalizeBeacon(bad)).toBe("string");
+  });
+});
+
+describe("The host ends a beacon and guards its own services", () => {
+  it("endBeacon ends a tool's beacon from the host's side and logs why", () => {
+    const onBeacon = vi.fn();
+    const onLog = vi.fn();
+    let ctx!: ToolContext;
+    const host = new ToolHost({ txGate: () => true, onBeacon, onLog });
+    host.register(mk("b", ["beacon"], (c) => (ctx = c)));
+    host.setEnabled("b", true);
+    ctx.scheduleBeacon({ comment: "QRV", intervalSec: 900 });
+    expect(host.beaconTools()).toEqual(["b"]);
+    host.endBeacon("b", "the transmit consent ended");
+    expect(onBeacon).toHaveBeenLastCalledWith("b", null);
+    expect(onLog).toHaveBeenCalledWith("b", "beacon ended: the transmit consent ended");
+    expect(host.beaconTools()).toEqual([]);
+    host.setEnabled("b", false); // nothing left to end: no second null
+    expect(onBeacon).toHaveBeenCalledTimes(2);
+  });
+
+  it("a tool cannot take over a service another provider holds, nor a reserved name", () => {
+    const host = new ToolHost();
+    host.registerHostService("session.script", () => ({ ok: true }), { requires: "tx" });
+    host.register(mk("owner", ["ipc"], (ctx) => ctx.provideService("station.type", () => "digi")));
+    host.register(mk("thief", ["ipc"], (ctx) => ctx.provideService("station.type", () => "spoofed")));
+    host.register(mk("hijack", ["ipc"], (ctx) => ctx.provideService("session.script", () => ({ ok: true }))));
+    host.register(mk("hostname", ["ipc"], (ctx) => ctx.provideService("host.anything", () => 1)));
+    host.register(mk("fake", ["ipc"], (ctx) => ctx.emit("session.progress", { status: "done" })));
+    expect(host.setEnabled("owner", true).ok).toBe(true);
+    expect(host.setEnabled("thief", true).error).toMatch(/"station.type" is already provided by owner/);
+    expect(host.setEnabled("hijack", true).error).toMatch(/"session.script" is reserved for the app/);
+    expect(host.setEnabled("hostname", true).error).toMatch(/"host.anything" is reserved/);
+    expect(host.setEnabled("fake", true).error).toMatch(/topic "session.progress" is reserved/);
+    expect(() => host.toolBus("x", ["ipc"]).emit("session.progress", {})).toThrow(/reserved/);
+    expect(host.toolBus("caller", ["ipc"]).call("station.type")).toBe("digi");
+    expect(host.toolBus("caller", ["ipc", "tx"]).call("session.script", {})).toEqual({ ok: true });
+    // the provider may replace its own service, and once it is off the name is free again
+    host.setEnabled("owner", false);
+    expect(host.setEnabled("thief", true).ok).toBe(true);
+  });
+
+  it("a host service learns which tool calls it", () => {
+    const host = new ToolHost();
+    const callers: string[] = [];
+    host.registerHostService("session.script", (_a, caller) => callers.push(caller));
+    host.toolBus("sched-query", ["ipc"]).call("session.script", {});
+    host.register(mk("inproc", ["ipc"], (ctx) => void ctx.callService("session.script", {})));
+    host.setEnabled("inproc", true);
+    expect(callers).toEqual(["sched-query", "inproc"]);
   });
 });
 

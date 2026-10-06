@@ -48,8 +48,17 @@ export interface BeaconSpec {
   intervalSec: number;
 }
 
-/** The shortest gap between two transmissions one tool asks for with `requestTx`. */
+/** The shortest gap between two transmissions of one tool: its requests, its beacon and its session scripts. */
 export const TOOL_TX_MIN_GAP_MS = 60_000;
+/** The sustained transmit budget of one tool: a bucket of this many transmissions, refilled over an hour. */
+export const TOOL_TX_PER_HOUR = 6;
+/** The longest APRS status text a tool may send (`>` and up to 62 characters). */
+export const TX_STATUS_MAX = 62;
+/** The longest APRS message text a tool may send, after `:ADDRESSEE:`. */
+export const TX_MESSAGE_MAX = 67;
+/** Bus service and topic names only the app may provide or publish: a tool cannot take over a host service. */
+export const RESERVED_BUS_PREFIXES = ["session.", "host."] as const;
+const reserved = (name: string) => RESERVED_BUS_PREFIXES.some((p) => name.startsWith(p));
 /** The shortest beacon interval a tool may schedule: ten minutes, the usual floor for a fixed APRS station. */
 export const BEACON_MIN_INTERVAL_SEC = 600;
 /** The longest beacon interval: one day. */
@@ -60,9 +69,10 @@ export const TX_INFO_MAX = 256;
 export const BEACON_COMMENT_MAX = 62;
 
 /**
- * Why an APRS information field a tool asks to transmit is refused, or null when it may go out. One line of text,
- * not empty, at most TX_INFO_MAX characters, and never third-party traffic (`}`), which would carry another
- * station's callsign as its source.
+ * Why an APRS information field a tool asks to transmit is refused, or null when it may go out. A tool transmits
+ * an APRS status (`>text`) or an APRS message (`:ADDRESSEE:text`, an acknowledgement included) and nothing else:
+ * no position, object, item, telemetry or third-party traffic (`}`), which would carry another station's callsign
+ * as its source. One line of text, within the status or message length.
  */
 export function txInfoProblem(info: unknown): string | null {
   if (typeof info !== "string") return "the frame must be text";
@@ -70,7 +80,18 @@ export function txInfoProblem(info: unknown): string | null {
   if (info.length > TX_INFO_MAX) return `the frame is longer than ${TX_INFO_MAX} characters`;
   if (/[\r\n\0]/.test(info)) return "the frame must be one line";
   if (info.startsWith("}")) return "a tool may not send third-party traffic";
-  return null;
+  if (info.startsWith(">")) {
+    if (info.length - 1 > TX_STATUS_MAX) return `a status holds at most ${TX_STATUS_MAX} characters`;
+    return null;
+  }
+  const msg = /^:([^:]{9}):(.*)$/.exec(info);
+  if (msg) {
+    if (!msg[1]!.trim()) return "a message needs an addressee";
+    if (/[|~{]/.test(msg[2]!.replace(/\{[A-Za-z0-9]{1,5}\}?$/, ""))) return "a message may not hold | ~ or {";
+    if (msg[2]!.length > TX_MESSAGE_MAX + 6) return `a message holds at most ${TX_MESSAGE_MAX} characters`;
+    return null;
+  }
+  return "a tool may transmit only an APRS status (>) or message (:ADDRESSEE:text)";
 }
 
 /** Bring an untrusted beacon request into bounds: one-line comment, interval clamped. An error string if unusable. */
@@ -128,13 +149,15 @@ export interface ToolContext {
   /** 'beacon' + TX gate. Replaces this tool's schedule; `null` ends it. Throws when the gate is closed. The host
    *  clamps the interval to BEACON_MIN_INTERVAL_SEC…BEACON_MAX_INTERVAL_SEC. */
   scheduleBeacon(spec: BeaconSpec | null): void;
-  /** 'tx' + TX gate: transmit one APRS information field. False when refused, when the gate is closed, or when the
-   *  tool transmitted less than TOOL_TX_MIN_GAP_MS ago. */
-  requestTx(info: string): boolean;
+  /** 'tx' + TX gate: transmit one APRS status or message. Resolves true once it went out; false when refused, when
+   *  the gate is closed, when the tool's budget (TOOL_TX_MIN_GAP_MS, TOOL_TX_PER_HOUR) is spent, or when the
+   *  radio failed. */
+  requestTx(info: string): Promise<boolean>;
   // ---- inter-tool IPC ('ipc'): the host ROUTES, it never interprets the payload ----
   emit(topic: string, data?: unknown): void; // publish to every subscriber of `topic`
   subscribe(topic: string, handler: IpcHandler): void; // receive opaque payloads on `topic`
-  provideService(name: string, fn: (args: unknown) => unknown): void; // offer a named request/response service
+  /** Offer a named request/response service; refused for a name another provider holds or a reserved one. */
+  provideService(name: string, fn: (args: unknown) => unknown): void;
   callService(name: string, args?: unknown): unknown; // call another tool's service (undefined if none)
   /** Cooperative shared key/value scratch (LinPac vars) — no capability needed; bounded by the host. */
   store: ToolStore;
@@ -150,8 +173,9 @@ export interface ToolHostOpts {
   /** Returns true when transmitting is currently allowed (a control-verified callsign and the operator's consent). */
   txGate?: () => boolean;
   onLog?: (tool: string, msg: string) => void;
-  /** Actually transmit an info string (wired to the radio link); checked, gated and rate-limited by the host. */
-  transmit?: (tool: string, info: string) => void;
+  /** Actually transmit an info string (wired to the radio link); checked, gated and rate-limited by the host. The
+   *  result (or its promise) says whether it went out. */
+  transmit?: (tool: string, info: string) => boolean | void | Promise<boolean | void>;
   /** Set (a spec) or end (null) a tool's beacon schedule; checked and gated by the host. A tool switched off ends it. */
   onBeacon?: (tool: string, spec: BeaconSpec | null) => void;
   /** A tool replaced its panel or map layer: a UI showing contributions re-reads them. */
@@ -163,7 +187,8 @@ export interface ToolHostOpts {
 /** A named bus service: its provider, and the capability a caller must hold to reach it. */
 interface BusService {
   tool: string;
-  fn: (args: unknown) => unknown;
+  /** The service; `caller` is the calling tool's name, or `(host)` for the app. */
+  fn: (args: unknown, caller: string) => unknown;
   requires?: Capability;
 }
 
@@ -193,7 +218,6 @@ interface Registered {
   subs: string[]; // IPC topics this tool subscribed (for teardown)
   svcs: string[]; // IPC service names this tool provided (for teardown)
   beacon: boolean; // a beacon schedule is set (ended on teardown)
-  lastTx?: number; // when the tool last transmitted (the rate limit)
 }
 
 /** Why the TX gate refuses a tool. */
@@ -201,6 +225,8 @@ export const TX_CLOSED = "transmit needs a control-verified callsign and this ta
 
 export class ToolHost {
   private tools = new Map<string, Registered>();
+  // Each tool's transmit budget, by name: it outlives switching the tool off or removing and installing it again.
+  private txBudget = new Map<string, { tokens: number; at: number; last?: number }>();
   private vars = new Map<string, string>(); // cooperative shared store (LinPac vars); bounded below
   // Inter-tool bus. The host only ROUTES between tools; payloads are opaque to it.
   private busSubs = new Map<string, { tool: string; fn: IpcHandler }[]>(); // topic → subscribers
@@ -424,22 +450,25 @@ export class ToolHost {
         const why = txInfoProblem(info);
         if (why) {
           this.opts.onLog?.(name, `transmit refused: ${why}`);
-          return false;
+          return Promise.resolve(false);
         }
-        if (!(this.opts.txGate?.() ?? false)) return false;
-        const now = (this.opts.now ?? Date.now)();
-        if (r.lastTx !== undefined && now - r.lastTx < TOOL_TX_MIN_GAP_MS) {
-          this.opts.onLog?.(name, `transmit held: one transmission per ${TOOL_TX_MIN_GAP_MS / 1000} s`);
-          return false;
+        if (!(this.opts.txGate?.() ?? false)) return Promise.resolve(false);
+        const held = this.takeTx(name);
+        if (held) {
+          this.opts.onLog?.(name, `transmit held: ${held}`);
+          return Promise.resolve(false);
         }
-        r.lastTx = now;
-        this.opts.transmit?.(name, info);
-        return true;
+        return Promise.resolve(this.opts.transmit?.(name, info)).then(
+          (sent) => sent !== false,
+          () => false,
+        );
       },
       // ---- inter-tool bus: the host is a blind router; it never reads `data`/`args`/`result` ----
       emit: (topic, data) => {
         need("ipc");
-        this.busEmit(this.busKey(topic), data, name);
+        const t = this.busKey(topic);
+        if (reserved(t)) throw new Error(`topic "${t}" is reserved for the app`);
+        this.busEmit(t, data, name);
       },
       subscribe: (topic, handler) => {
         need("ipc");
@@ -450,8 +479,11 @@ export class ToolHost {
       provideService: (svc, fn) => {
         need("ipc");
         const n = this.busKey(svc);
-        this.busSvcs.set(n, { tool: name, fn });
-        r.svcs.push(n);
+        if (reserved(n)) throw new Error(`service "${n}" is reserved for the app`);
+        const held = this.busSvcs.get(n);
+        if (held && held.tool !== name) throw new Error(`service "${n}" is already provided by ${held.tool}`);
+        this.busSvcs.set(n, { tool: name, fn: (args) => fn(args) });
+        if (!r.svcs.includes(n)) r.svcs.push(n);
       },
       callService: (svc, args) => {
         need("ipc");
@@ -496,13 +528,46 @@ export class ToolHost {
     }
     this.busDepth++;
     try {
-      return svc.fn(args);
+      return svc.fn(args, caller?.name ?? ToolHost.HOST);
     } catch (e) {
       this.opts.onLog?.(svc.tool, `ipc service "${name}" error: ${(e as Error).message}`);
       return undefined;
     } finally {
       this.busDepth--;
     }
+  }
+
+  /**
+   * Take one transmission from a tool's budget: at most one per TOOL_TX_MIN_GAP_MS, and TOOL_TX_PER_HOUR an hour
+   * sustained (a bucket that refills over the hour). Requests, beacons and session scripts all draw on it. Null
+   * when the tool may transmit now, else why it is held.
+   */
+  takeTx(tool: string): string | null {
+    const now = (this.opts.now ?? Date.now)();
+    const b = this.txBudget.get(tool) ?? { tokens: TOOL_TX_PER_HOUR, at: now };
+    b.tokens = Math.min(TOOL_TX_PER_HOUR, b.tokens + ((now - b.at) / 3_600_000) * TOOL_TX_PER_HOUR);
+    b.at = now;
+    this.txBudget.set(tool, b);
+    if (b.last !== undefined && now - b.last < TOOL_TX_MIN_GAP_MS)
+      return `one transmission per ${TOOL_TX_MIN_GAP_MS / 1000} s`;
+    if (b.tokens < 1) return `at most ${TOOL_TX_PER_HOUR} transmissions an hour`;
+    b.tokens -= 1;
+    b.last = now;
+    return null;
+  }
+
+  /** End a tool's beacon from the host's side (the consent or the callsign it was set under is gone). */
+  endBeacon(name: string, why: string): void {
+    const r = this.tools.get(name);
+    if (!r?.beacon) return;
+    r.beacon = false;
+    this.opts.onBeacon?.(name, null);
+    this.opts.onLog?.(name, `beacon ended: ${why}`);
+  }
+
+  /** The tools whose beacon is set. */
+  beaconTools(): string[] {
+    return [...this.tools.values()].filter((r) => r.beacon).map((r) => r.tool.manifest.name);
   }
 
   /** Introspection for the Tools console: currently-live bus topics + service names. */
@@ -524,7 +589,11 @@ export class ToolHost {
    * Offer a service from the app. `requires` names the capability a calling tool must hold: a service that
    * makes the radio transmit requires `tx`, so a tool granted only `ipc` cannot key the transmitter.
    */
-  registerHostService(name: string, fn: (args: unknown) => unknown, opts: { requires?: Capability } = {}): () => void {
+  registerHostService(
+    name: string,
+    fn: (args: unknown, caller: string) => unknown,
+    opts: { requires?: Capability } = {},
+  ): () => void {
     const n = this.busKey(name);
     const entry: BusService = { tool: ToolHost.HOST, fn, requires: opts.requires };
     this.busSvcs.set(n, entry);
@@ -544,7 +613,11 @@ export class ToolHost {
   toolBus(name: string, permissions: readonly Capability[]): ToolBus {
     const caller: BusCaller = { name, has: (c) => permissions.includes(c) };
     return {
-      emit: (topic, data) => this.busEmit(this.busKey(topic), data, name),
+      emit: (topic, data) => {
+        const t = this.busKey(topic);
+        if (reserved(t)) throw new Error(`topic "${t}" is reserved for the app`);
+        this.busEmit(t, data, name);
+      },
       subscribe: (topic, handler) => this.addSub(this.busKey(topic), name, handler),
       call: (svc, args) => this.busCall(this.busKey(svc), args, caller),
     };

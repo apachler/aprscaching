@@ -9,10 +9,11 @@
  * A tool's transmit goes to the browser radio link, as the app's own features do: only with a control-verified
  * callsign, a transmit-capable radio and the consent the operator gave this tab, and every frame lands in Recent
  * transmissions and flashes the TX indicator. A tool never asks for consent itself; without a live grant its
- * transmission is held. The host rate-limits each tool (`TOOL_TX_MIN_GAP_MS`) and clamps its beacon interval.
+ * transmission is held. A tool sends only APRS status and messages; the host rate-limits each tool (one a minute, six
+ * an hour, beacons and session scripts included) and clamps its beacon interval.
  */
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { ToolHost, TOOL_TX_MIN_GAP_MS, type BeaconSpec } from "@aprscaching/tools";
+import { ToolHost, type BeaconSpec } from "@aprscaching/tools";
 import { TOAST_EVENT } from "../ui/Toast.js";
 import { radioLink } from "../rf/RadioLinkHost.js";
 
@@ -21,6 +22,7 @@ import { radioLink } from "../rf/RadioLinkHost.js";
 let txVerified = false;
 export function setToolTxVerified(v: boolean): void {
   txVerified = v;
+  checkToolBeacons();
 }
 
 /** The destination and path a tool's frame goes out with: the app's own tocall, one hop. */
@@ -40,21 +42,15 @@ const toast = (msg: string) => {
 /** The gate a tool's transmission passes: a verified callsign and a live transmit grant for this tab's radio. */
 export const toolTxOpen = (): boolean => txVerified && radioLink.canTransmit();
 
-/** When each tool last transmitted: its requests and its beacons share the one-a-minute limit. */
-const lastTx = new Map<string, number>();
-
-/** Send one APRS information field for a tool over the radio link, under the callsign the grant covers. */
+/**
+ * Send one APRS information field for a tool over the radio link, under the callsign the grant covers. The host
+ * checked the frame and the tool's budget already; the answer says whether the radio sent it.
+ */
 async function transmitFor(tool: string, info: string): Promise<boolean> {
   if (!toolTxOpen()) {
     toast(`${titleOf(tool)}: transmission held, no transmit consent for this tab`);
     return false;
   }
-  const now = Date.now();
-  if (now - (lastTx.get(tool) ?? -Infinity) < TOOL_TX_MIN_GAP_MS) {
-    toast(`${titleOf(tool)}: transmission held, one a minute`);
-    return false;
-  }
-  lastTx.set(tool, now);
   try {
     await radioLink.transmit(
       { src: radioLink.txCall(), dst: TOOL_DST, path: TOOL_PATH, payload: info },
@@ -67,20 +63,42 @@ async function transmitFor(tool: string, info: string): Promise<boolean> {
   }
 }
 
-/** One timer per tool with a beacon: the first beacon goes out at once, then every interval while the gate is open. */
-const beacons = new Map<string, ReturnType<typeof setInterval>>();
+/**
+ * One timer per tool with a beacon, and the callsign it was scheduled under. The first beacon goes out at once, then
+ * one every interval, each drawing on the tool's transmit budget. A beacon holds only under the consent and the
+ * callsign it was set under: a disconnect, an ended consent, a sign-out or another callsign or SSID ends every tool
+ * beacon, and the tool must schedule it again.
+ */
+const beacons = new Map<string, { timer: ReturnType<typeof setInterval>; call: string; key: string }>();
 function setBeacon(tool: string, spec: BeaconSpec | null): void {
-  const t = beacons.get(tool);
-  if (t) clearInterval(t);
+  const prev = beacons.get(tool);
+  if (prev) clearInterval(prev.timer);
   beacons.delete(tool);
   if (!spec) return;
   const send = () => {
-    if (toolTxOpen()) void transmitFor(tool, `>${spec.comment}`);
+    if (!toolTxOpen()) return;
+    const held = toolHost.takeTx(tool);
+    if (held) console.log(`[tool:${tool}]`, `beacon held: ${held}`);
+    else void transmitFor(tool, `>${spec.comment}`);
   };
-  beacons.set(tool, setInterval(send, spec.intervalSec * 1000));
-  toast(`${titleOf(tool)}: beacon every ${Math.round(spec.intervalSec / 60)} min`);
+  const key = `${spec.intervalSec}\u0001${spec.comment}`;
+  beacons.set(tool, { timer: setInterval(send, spec.intervalSec * 1000), call: radioLink.txCall(), key });
+  // the same schedule set again says nothing new
+  if (prev?.key !== key) toast(`${titleOf(tool)}: beacon every ${Math.round(spec.intervalSec / 60)} min`);
   send();
 }
+
+/** End every tool beacon whose consent or callsign is gone. */
+export function checkToolBeacons(): void {
+  const open = toolTxOpen();
+  const call = radioLink.txCall();
+  for (const [tool, b] of [...beacons]) {
+    if (open && b.call === call) continue;
+    toolHost.endBeacon(tool, open ? "the callsign changed" : "the transmit consent ended");
+    toast(`${titleOf(tool)}: beacon ended; schedule it again to resume`);
+  }
+}
+if (typeof window !== "undefined") radioLink.subscribe(checkToolBeacons);
 
 let changePending = false;
 
@@ -89,7 +107,7 @@ export const toolHost = new ToolHost({
   txGate: toolTxOpen,
   onLog: (t, m) => console.log(`[tool:${t}]`, m),
   onBeacon: setBeacon,
-  transmit: (t, info) => void transmitFor(t, info),
+  transmit: transmitFor,
   // A burst of panel/layer updates (a frame that several tools react to) coalesces into one re-read.
   onChange: () => {
     if (changePending) return;

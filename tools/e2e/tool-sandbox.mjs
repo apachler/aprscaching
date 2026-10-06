@@ -80,7 +80,8 @@ const apiTool = `
     wp: () => { tool.setMapLayer({ id: "wp", points: [{ lat: 47, lon: 15, label: "home" }] }); return ["ok"]; },
     colours: () => { tool.setColourRules([{ src: "OE8APR", colorVar: "--warn" }]); return ["ok"]; },
     ask: async () => [String(await tool.call("echo.upper", "abc"))],
-    op: { run: () => ["operator only"], remote: false },
+    op: () => ["operator only"],
+    ping: { run: () => ["pong"], remote: true },
   } });
 `;
 // A tool that reaches for what it was not granted.
@@ -328,7 +329,10 @@ async function main() {
       return r;
     });
     console.log("the whole API", JSON.stringify(api));
-    expect(api.remoteOff.join(",") === "op", "lists the commands it keeps from remote peers");
+    expect(
+      api.remoteOff.includes("op") && !api.remoteOff.includes("ping"),
+      "keeps a command from remote peers unless it opts in",
+    );
     expect(api.heard === "OE8XBM-7 >hi", "hears frames with their text and sets its panel");
     expect(api.replies[0] === "Welcome OE3ABC", "answers a connected session through its reply");
     expect(api.later[0] === "later x", "awaits an async command");

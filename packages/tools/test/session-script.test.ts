@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { parseScript, ScriptRunner, type ScriptSession } from "../src/session-script.js";
+import {
+  parseScript,
+  ScriptRunner,
+  SCRIPT_MAX_STEPS,
+  validateSteps,
+  type ScriptSession,
+} from "../src/session-script.js";
 
 /** A controllable fake connection: connect flips to "connected" after `connectAfter` ticks; feed() pushes RX. */
 function fakeSession() {
@@ -88,5 +94,46 @@ describe("ScriptRunner", () => {
     r.load(parseScript("connect X-1"), 0);
     r.tick(1); // connecting…
     expect(r.tick(2)).toBeNull(); // still connecting, no state change
+  });
+});
+
+describe("validateSteps — what a tool may hand the session.script service", () => {
+  it("keeps a well-formed script and upper-cases its callsign", () => {
+    expect(validateSteps(parseScript("connect hb9w-8; waitfor Cluster 20; send sh/dx; wait 5; disconnect"))).toEqual([
+      { op: "connect", call: "HB9W-8" },
+      { op: "waitfor", text: "Cluster", timeoutSec: 20 },
+      { op: "send", text: "sh/dx" },
+      { op: "wait", sec: 5 },
+      { op: "disconnect" },
+    ]);
+  });
+  it("refuses anything else", () => {
+    const connect = { op: "connect", call: "HB9W-8" };
+    for (const bad of [
+      null,
+      [],
+      "connect X",
+      [{ op: "send", text: "no connect first" }],
+      [{ op: "connect", call: "NOT A CALL" }],
+      [connect, { op: "send", text: "two\nlines" }],
+      [connect, { op: "send", text: "x".repeat(257) }],
+      [connect, { op: "waitfor", text: "x", timeoutSec: 99_999 }],
+      [connect, { op: "wait", sec: -1 }],
+      [connect, { op: "format c:" }],
+      Array.from({ length: SCRIPT_MAX_STEPS + 1 }, () => connect),
+    ])
+      expect(typeof validateSteps(bad)).toBe("string");
+  });
+});
+
+describe("ScriptRunner.load", () => {
+  it("closes the channel a running script holds before it starts the next one", () => {
+    const { session, chans } = fakeSession();
+    const r = new ScriptRunner(session);
+    r.load(parseScript("connect A1A; send x"), 0);
+    r.tick(1);
+    expect(r.busy()).toBe(true);
+    r.load(parseScript("connect B2B"), 2);
+    expect(chans.get(1)!.state).toBe("disconnected");
   });
 });

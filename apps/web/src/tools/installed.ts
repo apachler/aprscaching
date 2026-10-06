@@ -2,14 +2,17 @@
 /**
  * installed.ts — the tools a player installed. A fresh player has none: each tool is installed on demand from a
  * registry (or by its address), after the player approves its permissions, and from then on it is part of the
- * player's own setup. The record of each install (the manifest's address, the author key and the grants approved,
- * and whether it is switched on) lives in localStorage under `acs.tools` and follows the account like the rail pins
- * do (prefs.ts), so a reload or a second device starts the same tools again.
+ * player's own setup. The record of each install (the manifest's address, the author key, the permissions,
+ * network origins and remote use approved, and whether it is switched on) lives in localStorage under `acs.tools`
+ * and follows the account like the rail pins do (prefs.ts), so a reload or a second device starts the same tools
+ * again. The installs belong to one identity (toolOwner.ts): a sign-out or another account stops them and clears
+ * them.
  *
  * Starting a recorded tool checks it again every time: the manifest's signature must verify under the author key
- * recorded at install, the manifest may ask for no permission beyond those approved, and the script must match the
+ * recorded at install, the manifest may ask for nothing beyond what was approved, and the script must match the
  * hash the signed manifest pins. A tool that fails a check stays installed but does not run, and the Tools app says
- * why; installing it again is how the player approves a new key or new permissions.
+ * why; installing it again is how the player approves a new key or a wider reach. A tool switched off does not run
+ * at all: its sandbox closes, and switching it on loads it again.
  */
 import { useEffect, useReducer } from "react";
 import { checkManifestSignature, type ToolManifest } from "@aprscaching/tools";
@@ -20,21 +23,36 @@ import { carrierVia, fetchToolScript, type Carrier, type RegistryVia } from "./r
 import {
   INSTALLED_KEY,
   MAX_INSTALLED,
+  beyondApproval,
+  fitsBudget,
   normalizeInstalled,
+  recordFor,
   withRecord,
   type InstalledRecord,
 } from "./installedRecords.js";
+import { OWNER_KEY, onToolOwnerChange, toolOwner } from "./toolOwner.js";
 import { notifyToolsChanged, onToolsChanged, setToolEnabled, toolHost } from "./host.js";
 
-export function readInstalled(): InstalledRecord[] {
+/** The stored installs, when they belong to this page's identity. */
+function readStored(): InstalledRecord[] {
   try {
+    if (localStorage.getItem(OWNER_KEY) !== toolOwner()) return [];
     return normalizeInstalled(JSON.parse(localStorage.getItem(INSTALLED_KEY) || "[]"));
   } catch {
     return [];
   }
 }
 
-function writeInstalled(list: InstalledRecord[]): void {
+/** Installs made for this page only (the demo's), never stored or synced. */
+const ephemeral = new Map<string, InstalledRecord>();
+
+/** Every install this page knows: the stored ones, then the page-only ones. */
+export function readInstalled(): InstalledRecord[] {
+  const stored = readStored();
+  return [...stored, ...[...ephemeral.values()].filter((e) => !stored.some((s) => s.name === e.name))];
+}
+
+function writeStored(list: InstalledRecord[]): void {
   try {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(list));
   } catch {
@@ -42,6 +60,17 @@ function writeInstalled(list: InstalledRecord[]): void {
   }
   notePrefChange(); // mirror to the account (if signed in)
   notifyToolsChanged();
+}
+
+/** Change one install's record, wherever it is kept. */
+function updateRecord(name: string, patch: Partial<InstalledRecord>): void {
+  const e = ephemeral.get(name);
+  if (e) {
+    ephemeral.set(name, { ...e, ...patch });
+    notifyToolsChanged();
+    return;
+  }
+  writeStored(readStored().map((x) => (x.name === name ? { ...x, ...patch } : x)));
 }
 
 // ---- what runs in this page: the loaded sandboxes, the tools starting, and why a recorded tool did not start ----
@@ -55,7 +84,7 @@ const loaded = new Map<string, LoadedTool>();
 const starting = new Set<string>();
 const problems = new Map<string, string>();
 
-/** Stop a running tool: its frame closes and the host forgets it, so its name is free again. */
+/** Stop a running tool: its frame closes and the host forgets it (its beacon ends), so its name is free again. */
 function stop(name: string): void {
   const t = loaded.get(name);
   if (!t) return;
@@ -63,6 +92,16 @@ function stop(name: string): void {
   loaded.delete(name);
   toolHost.unregister(name);
 }
+
+/** Stop every tool and forget the page-only installs: the identity they belonged to is gone. */
+function stopAll(): void {
+  for (const name of [...loaded.keys()]) stop(name);
+  ephemeral.clear();
+  starting.clear();
+  problems.clear();
+  notifyToolsChanged();
+}
+onToolOwnerChange(stopAll);
 
 /** Run a checked manifest: fetch its script (refused unless it matches the signed hash), sandbox it, register it. */
 async function run(manifest: ToolManifest, base: string, carrier: Carrier): Promise<string | null> {
@@ -84,7 +123,7 @@ async function run(manifest: ToolManifest, base: string, carrier: Carrier): Prom
   return null;
 }
 
-/** Start one recorded tool, checking its manifest, key, grants and code again. Null on success, else why not. */
+/** Start one recorded tool, checking its manifest, key, reach and code again. Null on success, else why not. */
 async function start(rec: InstalledRecord): Promise<string | null> {
   const carrier = carrierVia(rec.via, API_BASE);
   const r = await fetchToolManifest(rec.url, carrier);
@@ -92,13 +131,14 @@ async function start(rec: InstalledRecord): Promise<string | null> {
   if (r.manifest.name !== rec.name) return "its manifest names another tool";
   if ((await checkManifestSignature(r.raw)) !== "valid") return "its signature does not verify";
   if (r.manifest.pubkey !== rec.pubkey) return "it is signed by another key now; install it again to check the new key";
-  const extra = r.manifest.permissions.filter((p) => !rec.grants.includes(p));
+  const extra = beyondApproval(r.manifest, rec);
   if (extra.length) return `it asks for ${extra.join(", ")} now; install it again to approve`;
   return run(r.manifest, r.base, carrier);
 }
 
 async function startRecorded(rec: InstalledRecord): Promise<void> {
-  if (loaded.has(rec.name) || starting.has(rec.name)) return;
+  if (!rec.on || loaded.has(rec.name) || starting.has(rec.name)) return;
+  const owner = toolOwner();
   starting.add(rec.name);
   problems.delete(rec.name);
   notifyToolsChanged();
@@ -109,70 +149,83 @@ async function startRecorded(rec: InstalledRecord): Promise<void> {
     why = (e as Error).message || "it did not start";
   }
   starting.delete(rec.name);
-  if (why) problems.set(rec.name, why);
-  else if (rec.on) setToolEnabled(rec.name, true);
+  if (toolOwner() !== owner) {
+    stop(rec.name); // the identity changed while it loaded: it belongs to nobody here now
+  } else if (why) problems.set(rec.name, why);
+  else setToolEnabled(rec.name, true);
   notifyToolsChanged();
 }
 
 /**
- * Bring this page in line with the records: start each recorded tool that is not running, and stop each running
- * tool that is no longer recorded (removed on another device). Runs at start-up and after an account sync.
+ * Bring this page in line with the records: start each recorded tool that is switched on and not running, and stop
+ * each running tool that is no longer recorded or is switched off (changed on another device). Runs at start-up and
+ * after an account sync.
  */
 export function syncInstalled(): Promise<void> {
   const recs = readInstalled();
-  for (const name of [...loaded.keys()]) if (!recs.some((r) => r.name === name)) stop(name);
+  for (const name of [...loaded.keys()]) if (!recs.some((r) => r.name === name && r.on)) stop(name);
   return Promise.all(recs.filter((r) => !problems.has(r.name)).map(startRecorded)).then(() => undefined);
 }
 
-let syncing = false;
-/** Start the player's tools once per page, and again whenever an account sync rewrites the records. */
+let listening = false;
+/** Start the player's tools, and again whenever an account sync rewrites the records. Needs a claimed identity. */
 export function startInstalledTools(): void {
-  if (syncing || typeof window === "undefined") return;
-  syncing = true;
-  window.addEventListener(PREFS_EVENT, () => {
-    problems.clear();
-    void syncInstalled();
-  });
+  if (typeof window === "undefined" || toolOwner() === null) return;
+  if (!listening) {
+    listening = true;
+    window.addEventListener(PREFS_EVENT, () => {
+      problems.clear();
+      void syncInstalled();
+    });
+  }
   void syncInstalled();
 }
 
 /**
- * Install an approved tool: run it, then record it switched on. `base` is the manifest's address and `pubkey` the
- * key its signature verified under. Null on success, else why it did not install.
+ * Install an approved tool: run it, then record it switched on. `base` is the manifest's address. With `persist:
+ * false` the install lasts for this page only and is never stored or synced (the demo's). Null on success, else
+ * why it did not install.
  */
 export async function installTool(opts: {
   manifest: ToolManifest;
   base: string;
   carrier: Carrier;
   via?: RegistryVia;
+  persist?: boolean;
 }): Promise<string | null> {
-  const { manifest, base, carrier, via } = opts;
+  const { manifest, base, carrier, via, persist = true } = opts;
   if (!manifest.pubkey) return "the manifest is unsigned";
-  if (readInstalled().length >= MAX_INSTALLED && !readInstalled().some((r) => r.name === manifest.name))
-    return `at most ${MAX_INSTALLED} tools can be installed`;
-  stop(manifest.name); // installing again replaces the running copy (a new key or new permissions approved)
+  if (persist && toolOwner() === null) return "the session is not known yet";
+  const rec = recordFor(manifest, base, via);
+  const stored = readStored();
+  const next = withRecord(stored, rec);
+  if (persist && next.length > MAX_INSTALLED) return `at most ${MAX_INSTALLED} tools can be installed`;
+  if (persist && !fitsBudget(next)) return "your installed tools fill the space your settings have; remove one first";
+  stop(manifest.name); // installing again replaces the running copy (a new key or a wider reach approved)
   problems.delete(manifest.name);
   const why = await run(manifest, base, carrier);
   if (why) return why;
-  writeInstalled(
-    withRecord(readInstalled(), {
-      name: manifest.name,
-      url: base,
-      pubkey: manifest.pubkey,
-      grants: manifest.permissions,
-      on: true,
-      ...(via ? { via } : {}),
-    }),
-  );
+  if (persist) writeStored(withRecord(readStored(), rec));
+  else {
+    ephemeral.set(rec.name, rec);
+    notifyToolsChanged();
+  }
   setToolEnabled(manifest.name, true);
   return null;
 }
 
-/** Switch an installed tool on or off, and remember it. */
-export function setInstalledOn(name: string, on: boolean): { ok: boolean; error?: string } {
-  const r = setToolEnabled(name, on);
-  if (r.ok) writeInstalled(readInstalled().map((x) => (x.name === name ? { ...x, on } : x)));
-  return r;
+/** Switch an installed tool on (it loads and starts) or off (its sandbox closes), and remember it. */
+export function setInstalledOn(name: string, on: boolean): void {
+  const rec = readInstalled().find((r) => r.name === name);
+  if (!rec) return;
+  updateRecord(name, { on });
+  if (!on) {
+    stop(name);
+    notifyToolsChanged();
+  } else {
+    problems.delete(name);
+    void startRecorded({ ...rec, on: true });
+  }
 }
 
 /** Try a tool that did not start once more. */
@@ -188,7 +241,8 @@ export function removeInstalled(name: string): void {
   stop(name);
   problems.delete(name);
   starting.delete(name);
-  writeInstalled(readInstalled().filter((r) => r.name !== name));
+  if (ephemeral.delete(name)) notifyToolsChanged();
+  else writeStored(readStored().filter((r) => r.name !== name));
 }
 
 /** One installed tool as the Tools app shows it. */
@@ -204,16 +258,10 @@ export interface InstalledView {
 export function useInstalled(): InstalledView[] {
   const [, force] = useReducer((n) => n + 1, 0);
   useEffect(() => onToolsChanged(force), []);
-  const enabled = new Set(
-    toolHost
-      .list()
-      .filter((t) => t.enabled)
-      .map((t) => t.manifest.name),
-  );
   return readInstalled().map((record) => ({
     record,
     tool: loaded.get(record.name),
-    on: enabled.has(record.name),
+    on: record.on,
     starting: starting.has(record.name),
     problem: problems.get(record.name),
   }));

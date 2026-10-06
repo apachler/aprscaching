@@ -36,7 +36,7 @@ const CAPABILITIES = new Set([
   "geo",
 ]);
 
-/** One installed tool: its manifest address, the author key and grants approved, and whether it is switched on. */
+/** One installed tool: its manifest address, the author key, grants, origins and remote use approved, the switch. */
 function sanitizeTool(x: unknown): Record<string, unknown> | null {
   if (!x || typeof x !== "object") return null;
   const t = x as Record<string, unknown>;
@@ -44,7 +44,22 @@ function sanitizeTool(x: unknown): Record<string, unknown> | null {
   if (typeof t.url !== "string" || !/^https?:\/\//.test(t.url) || t.url.length > 500) return null;
   if (typeof t.pubkey !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(t.pubkey)) return null;
   const grants = Array.isArray(t.grants) ? t.grants.filter((g): g is string => CAPABILITIES.has(String(g))) : [];
-  const out: Record<string, unknown> = { name: t.name, url: t.url, pubkey: t.pubkey, grants, on: t.on === true };
+  const connect = Array.isArray(t.connect)
+    ? t.connect
+        .filter((o): o is string => typeof o === "string" && /^(https|wss):\/\/[^/\s]+$/.test(o) && o.length <= 120)
+        .slice(0, 8)
+    : [];
+  const title = typeof t.title === "string" ? t.title.slice(0, 80) : t.name;
+  const out: Record<string, unknown> = {
+    name: t.name,
+    title,
+    url: t.url,
+    pubkey: t.pubkey,
+    grants,
+    connect,
+    remote: t.remote === true,
+    on: t.on === true,
+  };
   const via = t.via as Record<string, unknown> | undefined;
   if (via && typeof via === "object" && typeof via.id === "string" && via.id.length <= 64)
     out.via = { id: via.id, account: via.account === true };

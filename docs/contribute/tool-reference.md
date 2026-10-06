@@ -94,7 +94,7 @@ read at load; `tool.setPanel()` and `tool.setColourRules()` change the others la
 
 | Field | Type | Content | Limits |
 |---|---|---|---|
-| `commands` | `{ [word]: handler \| { run: handler, remote?: false } }` | One handler per `/word`; `handler(args: string)` returns a string, a string array or a `Promise` of one, and its value becomes the output lines. `{ run, remote: false }` keeps a command from remote peers in a `remote` tool. | The word is matched exactly as typed, so use lower case. An answer later than 10 seconds reads `error: the tool did not answer`. |
+| `commands` | `{ [word]: handler \| { run: handler, remote?: true } }` | One handler per `/word`; `handler(args: string)` returns a string, a string array or a `Promise` of one, and its value becomes the output lines (at most 200 lines of 1000 characters). A command is the operator's alone unless it says `{ run, remote: true }` and the manifest says `remote: true`; then connected peers may run it too. | The word is matched exactly as typed, so use lower case. An answer later than 10 seconds reads `error: the tool did not answer`. |
 | `colourRules` | `ColourRule[]` | Recolour or hide monitor lines ([below](#colour-rules)). Needs `monitor`. | 40 rules |
 | `panel` | `PanelSpec` | The tool's first panel ([below](#panel-nodes)). Needs `panel`. | See [panel nodes](#panel-nodes) |
 | `decoders` | `{ id, label, kind, decode(input), sample?, placeholder? }[]` | Text decoders the **Decode** box offers. `decode` returns a string or a `Promise` of one. `sample` is a line the **Use a sample** button fills in; `placeholder` shows in the empty box. | `sample` 2000, `placeholder` 120 characters |
@@ -150,15 +150,24 @@ A tool transmits only through the app's browser radio link, the way the app's ow
   that consent itself; without it, the transmission is held and the app says so. The packet terminal's own TNC
   port is not a tool's to use, except through the `session.script` service.
 
+A tool transmits APRS status and messages, and nothing else: `info` is a status (`>text`, at most 62 characters)
+or a message (`:ADDRESSEE:text`, an addressee of nine characters padded with spaces, at most 67 characters of text
+and an optional `{id}`, acknowledgements included). The app refuses positions, objects, items, telemetry,
+third-party traffic (`}`) and anything else, as well as an empty field or more than one line. The install prompt
+says so: **May transmit status and messages under your callsign**.
+
 Every frame goes out from the callsign the consent covers, to `APZACG` via `WIDE1-1`, shows in **Recent
-transmissions** under the tool's title and flashes the transmit indicator. The app refuses an information field
-that is empty, longer than 256 characters, more than one line, or third-party traffic (starting with `}`). It lets
-each tool transmit once a minute (`TOOL_TX_MIN_GAP_MS`), its beacon included; a request inside that minute answers
-`false`.
+transmissions** under the tool's title and flashes the transmit indicator. `requestTx()` resolves once the radio
+sent it, `false` when anything held it. Each tool has a transmit budget: one transmission a minute
+(`TOOL_TX_MIN_GAP_MS`) and six an hour sustained (`TOOL_TX_PER_HOUR`, a bucket that refills over the hour). Its
+requests, its beacon and its session scripts all draw on it, and switching the tool off and on, or installing it
+again, does not refill it.
 
 A beacon transmits its comment as an APRS status (`>comment`), at once and then every `intervalSec` seconds while
 the gate is open. The app clamps the interval to 10 minutes through one day and the comment to one line of 62
-characters. A tool has one beacon; a new `scheduleBeacon()` replaces it, and switching the tool off ends it.
+characters. A tool has one beacon; a new `scheduleBeacon()` replaces it. A beacon holds only under the consent and
+the callsign it was scheduled under: switching the tool off, a disconnect, an ended consent, a sign-out, or
+another callsign or SSID ends it, and the tool must schedule it again.
 
 ### Colour rules
 
@@ -195,6 +204,10 @@ nests deeper than 16.
 The sender name a subscriber receives is the emitting tool's manifest `name`; the app itself sends as `(host)`. A
 player cannot install a second tool under a name an installed tool already has.
 
+A tool cannot take over a service: `provide` is refused for a name another tool or the app holds, and the names
+and topics that start with `session.` or `host.` are the app's alone, for a tool to call or listen to but never to
+provide or publish.
+
 A service that makes the radio transmit needs `tx` as well as `ipc`. A call from a tool without `tx` is refused
 with the error `service "<name>" needs the 'tx' permission, which <tool> does not hold`, and the service does not
 run. Holding `tx` does not open the transmit gate: the packet terminal still transmits only while the player's
@@ -208,7 +221,7 @@ The app and the project's tools use these names:
 | `station.type` | service | the **Station DB (NAMES.GP)** tool, while it is on | `ipc` | Takes a callsign; answers its station type, or `""` when it has not heard it |
 | `render.blocks` | topic | listened to by the **Block art (GIP)** tool | `ipc` | `{ text }`, or `{ cols, cells }` as in a `blocks` node, shown in its panel |
 | `session.progress` | topic | the packet terminal, while a TNC is open | `ipc` | The state of a running session script: `{ status, step, total, captured, note }` |
-| `session.script` | service | the packet terminal, while a TNC is open | `ipc` and `tx` | Takes `{ steps }`, a connected-mode script that connects and sends over the TNC; answers `{ ok: true }` |
+| `session.script` | service | the packet terminal, while a TNC is open | `ipc` and `tx` | Takes `{ steps }`, a connected-mode script of at most 20 steps (`connect` first, then `send`, `waitfor`, `wait`, `disconnect`, each one line); one script runs at a time, each draws on the calling tool's transmit budget, and a new one closes the channel the last one held. Answers `{ ok: true }` |
 | `link.ping.request` | topic | the **Link ping (RTT)** tool's `/ping` | `ipc` | `{}` |
 | `link.rtt` | topic | listened to by the **Link ping (RTT)** tool | `ipc` | `{ ms }` |
 
@@ -317,6 +330,8 @@ connect-src <the connect origins, or 'none'>; base-uri 'none'; form-action 'none
   cannot load code from a server; `import` is a syntax error in the script.
 - **Answers within 10 seconds.** A command, a decoder, a service and a bus call may answer with a promise; one
   that has not settled after 10 seconds answers with an error.
+- **A message budget.** The app takes at most 200 messages a second from one tool, each at most 64 KB as JSON, and
+  drops the rest with a line in the tool log. A tool holds at most 16 services and 32 topics.
 
 ## Lifecycle
 
@@ -328,16 +343,20 @@ connect-src <the connect origins, or 'none'>; base-uri 'none'; form-action 'none
 5. The tool's panel, colour rules and map layer appear on its surfaces; its commands and decoders appear in the
    Tools app; its events, bus messages and transmit requests reach the app's host.
 
-An installed tool keeps running while the Tools app is closed. Its row has a switch, which turns it off and on, a
-pin for the rail, and **Remove**, which closes its frame, frees its `name` and uninstalls it. Switching it off or
-removing it also takes its pin off the rail and ends its beacon.
+An installed tool keeps running while the Tools app is closed. Its row has a switch, a pin for the rail, and
+**Remove**, which closes its frame, frees its `name` and uninstalls it. A tool switched off does not run at all: its
+frame closes, its pin leaves the rail and its beacon ends; switching it on loads it again.
 
-The app records each install in the player's settings (`acs.tools`: the manifest's address, the author key and
-the grants approved, the switch), which follow the account like the rail pins. At every page load the app starts
-each recorded tool again and checks it anew: the signature must verify under the recorded author key, the
-manifest may ask for no permission beyond the recorded grants, and the script must match `entrySha256`. A tool
-that fails a check stays installed with the reason and does not run; installing it again approves a new key or new
-permissions.
+The app records each install in the player's settings (`acs.tools`: the manifest's address, the author key, the
+permissions, `connect` origins and remote use approved, and the switch), which follow the account like the rail
+pins. At every page load the app starts each recorded tool that is switched on and checks it anew: the signature
+must verify under the recorded author key, the manifest may ask for no permission, origin or remote use beyond
+the approval, and the script must match `entrySha256`. A tool that fails a check stays installed with the reason
+and does not run; installing it again approves a new key or a wider reach.
+
+The installs belong to the identity that made them. Signing out, or another account signing in on the same
+browser, stops every tool, ends its beacon and clears the installs on that browser; the account keeps its own.
+An account's settings never take the installs a browser held before that account signed in.
 
 ## Versioning
 
