@@ -97,7 +97,7 @@ function identityOf(operator: string | undefined, key: string): string {
   return operator ? `operator:${operator.toUpperCase()}` : `key:${key}`;
 }
 function newNonce(): string {
-  return hexOf(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
+  return hexOf(crypto.getRandomValues(new Uint8Array(16)).buffer);
 }
 
 /**

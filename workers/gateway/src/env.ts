@@ -57,7 +57,7 @@ export function stringEnvFrom(src: Record<string, string | undefined>): Partial<
     const v = src[k];
     if (v !== undefined) out[k] = v;
   }
-  return out as Partial<Env>;
+  return out;
 }
 
 const blank = (v: string | undefined): boolean => typeof v !== "string" || v.trim() === "";

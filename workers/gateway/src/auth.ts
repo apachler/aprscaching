@@ -1074,7 +1074,7 @@ async function verifySession(token: string, req: Request, env: Env): Promise<Ses
     // a token without an account (any other shape) is never valid
     const parts = payload.split(".");
     if (parts.length !== 7 || parts[0] !== SESSION_VERSION) return null;
-    const [, accountId, gen, callsign, minted, o, scope] = parts as string[];
+    const [, accountId, gen, callsign, minted, o, scope] = parts;
     if (!accountId || !callsign || !gen || !o || !/^\d+$/.test(gen)) return null;
     if (scope !== "full" && scope !== "data") return null;
     if (sessionExpired(Number(minted), env, Date.now())) return null;

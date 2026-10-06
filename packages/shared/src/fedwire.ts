@@ -198,7 +198,7 @@ export function encodeFedSyncPage(
     [P_INSTANCE, instance],
     [P_NEXT, nextCursor],
     [P_COMPLETE, complete],
-    [P_FRAMES, frames as CborValue[]],
+    [P_FRAMES, frames],
   ]);
   if (nextId !== undefined) m.set(P_NEXT_ID, nextId);
   if (hops !== undefined) {

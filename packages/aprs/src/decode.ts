@@ -30,7 +30,7 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   if (ew === "W") lon = -lon;
   if (!isValidLatLon(lat, lon)) return null;
   const fix: DecodedPosition = { lat: round(lat), lon: round(lon), symbol: lookupSymbol(table!, code!), ambiguity };
-  return { fix, rest: s.slice(whole!.length) };
+  return { fix, rest: s.slice(whole.length) };
 }
 
 /** Course/speed "CSE/SPD", altitude "/A=dddddd", and PHG out of a comment string. */

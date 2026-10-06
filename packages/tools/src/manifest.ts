@@ -79,8 +79,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
   }
   if ((m.permissions as unknown[]).includes("network") && !connect?.length)
     return { ok: false, error: "a tool asking for network lists the origins it reaches in connect" };
-  const surfaces =
-    Array.isArray(m.surfaces) && m.surfaces.length ? [...new Set(m.surfaces as Surface[])] : (["web"] as Surface[]);
+  const surfaces = Array.isArray(m.surfaces) && m.surfaces.length ? [...new Set(m.surfaces)] : (["web"] as Surface[]);
   return {
     ok: true,
     manifest: {
@@ -89,7 +88,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
       author: m.author.trim().toUpperCase(),
       version: m.version.trim(),
       api: m.api as string,
-      permissions: [...new Set(m.permissions as Capability[])],
+      permissions: [...new Set(m.permissions)],
       surfaces,
       remote: m.remote === true || undefined,
       description: typeof m.description === "string" ? m.description : undefined,

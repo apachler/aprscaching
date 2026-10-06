@@ -113,7 +113,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
           source: "sota",
           externalId: String(s.summitCode),
           code: String(s.summitCode),
-          type: "sota" as CacheType,
+          type: "sota",
           title: s.name || s.summitCode,
           lat: num(s.latitude),
           lon: num(s.longitude),
@@ -141,7 +141,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
           source: "pota",
           externalId: r.reference ?? "",
           code: r.reference ?? "",
-          type: "pota" as CacheType,
+          type: "pota",
           title: r.name || r.reference || "",
           lat: num(r.latitude),
           lon: num(r.longitude),
@@ -173,7 +173,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
           source: "wwff",
           externalId: r.reference ?? "",
           code: r.reference ?? "",
-          type: "wwff" as CacheType,
+          type: "wwff",
           title: r.name || r.reference || "",
           lat: num(r.latitude),
           lon: num(r.longitude),
@@ -195,13 +195,13 @@ export const SOURCES: Record<string, SourceAdapter> = {
         await fetchText(env, `https://api.wwbota.org/bunkers/?format=GEOJSON&bbox=${w},${s},${e},${n}`),
       );
       return feats
-        .map((f) => {
+        .map((f): ImportedCache => {
           const ref = str(f.props.reference) || str(f.props.ref);
           return {
             source: "bunker",
             externalId: ref,
             code: ref,
-            type: "bunker" as CacheType,
+            type: "bunker",
             title: str(f.props.name) || ref,
             lat: f.lat,
             lon: f.lon,
@@ -346,7 +346,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
       const data = JSON.parse(
         await fetchText(env, `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(ql)}`),
       );
-      const type = (scope.type ?? "traditional") as CacheType;
+      const type = scope.type ?? "traditional";
       return (data?.elements ?? [])
         .filter((el: any) => el.lat != null && el.lon != null && el.tags?.name)
         .map((el: any) => ({
@@ -381,7 +381,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
       const data = JSON.parse(
         await fetchText(env, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`),
       );
-      const type = (scope.type ?? "traditional") as CacheType;
+      const type = scope.type ?? "traditional";
       return (data?.results?.bindings ?? [])
         .map((b: any) => {
           const qurl = b.item?.value ?? "";
@@ -411,7 +411,7 @@ export const SOURCES: Record<string, SourceAdapter> = {
       if (!scope.url) throw new Error("geojson: scope.url required");
       const sourceName = scope.sourceName ?? "GeoJSON";
       const source = scope.source ?? "geojson";
-      const type = (scope.type ?? "traditional") as CacheType;
+      const type = scope.type ?? "traditional";
       return parseGeoJsonFeatures(await fetchText(env, scope.url)).map((f, i) => {
         // A non-scalar reference/ref/id must not become the externalId (every such feature would
         // collide on "[object Object]"); fall through to the per-feature index, which is always unique.

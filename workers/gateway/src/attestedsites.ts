@@ -61,7 +61,7 @@ async function trustedRows(env: Env): Promise<Trusted> {
 
 /** Drop the kept copy after a trust change, so this process answers with the new set at once. */
 export function forgetAttestedSites(env: Env): void {
-  kept.delete(env.DB as unknown as object);
+  kept.delete(env.DB);
 }
 
 /** The attested sites split by who may claim them. */

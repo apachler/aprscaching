@@ -24,14 +24,13 @@ export function serveNetromApp(
     onConnect?: (dest: string, relay: RelayController) => void;
   },
 ): NetromCircuit {
-  // eslint-disable-next-line prefer-const -- the driver closes over `circuit` before it is assigned
-  let circuit: NetromCircuit;
+  // the driver's io closes over `circuit`, declared below; makeLineDriver calls none of it while building
   const driver = makeLineDriver(app, {
     send: (b) => circuit.send(b),
     disconnect: () => circuit.disconnect(),
     onConnect: opts.onConnect,
   });
-  circuit = new NetromCircuit(
+  const circuit: NetromCircuit = new NetromCircuit(
     {
       send: (p) => opts.send(p),
       deliver: (info) => driver.onData(info),

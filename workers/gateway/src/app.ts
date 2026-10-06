@@ -569,7 +569,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
   if (p === "/api/admin/settings") return handleAdminSettings(req, env);
   const settingKey = /^\/api\/admin\/settings\/([A-Za-z0-9_]{1,64})$/.exec(p);
-  if (settingKey) return handleAdminSettings(req, env, settingKey[1]!);
+  if (settingKey) return handleAdminSettings(req, env, settingKey[1]);
   // tool registries: the effective list and the carrier, the sysop's list, and a player's own
   if (p === "/api/tools/registries" || p.startsWith("/api/tools/registries/"))
     return handleToolRegistries(req, env, p.slice("/api/tools/registries".length));
