@@ -36,6 +36,7 @@ import {
   logStrayErrors,
   relayPollInterval,
   roomNamespace,
+  startFieldDiscovery,
   startSchedules,
 } from "../node/src/host.ts";
 
@@ -120,6 +121,8 @@ export function createServer(opts: BunServerOptions): BunServer {
   });
 
   startSchedules(env, fedSyncInterval(opts.environment), relayPollInterval(opts.environment));
+  // the desktop app listens for instances on its network unless FED_MDNS says otherwise
+  void startFieldDiscovery(env, Number(server.port), !!opts.desktop);
 
   // 24/7 resilience: log stray errors; a stop signal closes the listener and checkpoints SQLite (WAL)
   // so a service stop or a window-manager quit is never data-lossy.

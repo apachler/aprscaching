@@ -41,7 +41,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
-import { blockedAt } from "./fedpeers.js";
+import { absorbDiscovered, blockedAt } from "./fedpeers.js";
 import { resolveTxt, acsFields, amprNames } from "./doh.js";
 import { net44Host, parseEndpoints } from "@aprscaching/shared";
 
@@ -331,6 +331,8 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
       },
       { status: 409 },
     );
+  // a row only discovery brought gives way to the verified binding
+  await absorbDiscovered(env, resolved.instance);
   const bound = await env.DB.prepare(
     "SELECT url, instance FROM fed_peers WHERE (url = ? AND instance IS NOT NULL AND instance != ?) OR (url != ? AND instance = ? AND trust != 'blocked')",
   )

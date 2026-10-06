@@ -32,6 +32,8 @@ export const TERMS = {
   federation: "How instances share caches, finds and keys as signed records; a peer is one instance yours trusts.",
   "peer-trust":
     "Trusted peers show on the map and count toward Tier A; unvetted ones are mirrored but hidden; blocked are ignored.",
+  "discovered-instance":
+    "An instance a trusted peer lists, or one on your network. Listed off and unvetted until you follow it.",
   "fbb-federation":
     "Federation records sent as packet mail to a partner BBS marked for it. Experimental; ask its sysop first.",
   "key-fingerprint":

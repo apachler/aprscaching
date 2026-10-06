@@ -934,7 +934,7 @@ export interface FedPeer {
   /** The pinned key's fingerprint (four groups of four hex digits); null until a signed sync pins a key */
   fingerprint: string | null;
   trust: "trusted" | "unvetted" | "blocked";
-  added_via?: string | null; // manual | admin | registry | discovered | submitted | 44net | transit
+  added_via?: string | null; // manual | admin | registry | discovered | mdns | submitted | 44net | transit
   /** When corroboration raised it to trusted on its own (FED_AUTO_PROMOTE); null once the sysop decides */
   auto_promoted_at?: number | null;
   /** 0 for a discovered peer the operator has not enabled yet: it is listed but never synced */
@@ -957,6 +957,8 @@ export interface FedPeer {
   /** when this peer last pushed to us (a spoke), and when we last pushed to it (our hub) */
   last_push_in: number | null;
   last_push_out: number | null;
+  /** How discovery heard of it: a trusted peer's list or an mDNS announcement; null when nothing lists it */
+  discovery: FedDiscovery | null;
   /** the last pull over a packet circuit, which the ingest box dials: the endpoint it used and how it went */
   packet: {
     transport: "ax25" | "netrom";
@@ -966,9 +968,31 @@ export interface FedPeer {
     lastError: string | null;
   } | null;
 }
+/** The sources that listed a peer, with the key fingerprint each gave, and the addresses learned. */
+export interface FedDiscovery {
+  /** `via` is the listing peer's instance id, or `mdns` for an announcement on this network */
+  sightings: { via: string; fingerprint: string | null; at: number; address?: string }[];
+  addresses: string[];
+  onThisNetwork: boolean;
+  /** a source gave a fingerprint other than the pinned key's, or two sources disagree */
+  keyMismatch: boolean;
+}
+/** A row only discovery brought: listed, switched off and unvetted until the sysop follows it. */
+export function isDiscoveredPeer(p: FedPeer): boolean {
+  return (
+    p.trust === "unvetted" &&
+    !Number(p.enabled) &&
+    (p.url.startsWith("discovered:") || (p.added_via === "transit" && !!p.discovery))
+  );
+}
 export function listFederationPeers(): Promise<{
   /** This instance and its own key fingerprint (null when it signs nothing) */
-  self: { instance: string | null; fingerprint: string | null };
+  self: {
+    instance: string | null;
+    fingerprint: string | null;
+    /** FED_DISCOVER, FED_PEER_EXCHANGE and the mDNS mode this server runs */
+    discovery?: { learn: boolean; lists: boolean; mdns: "off" | "listen" | "announce" };
+  };
   peers: FedPeer[];
 }> {
   return call(`/federation/peers`);
@@ -991,6 +1015,19 @@ export function addPeer(
   fingerprint: string,
 ): Promise<{ ok: boolean; peer: FedPeerPreview & { trust: string } }> {
   return call(`/federation/peers`, { method: "POST", body: JSON.stringify({ url, fingerprint }) });
+}
+/**
+ * Operator: follow a discovered instance. The gateway fetches its key and refuses one that differs from what its
+ * sources listed or from a key already pinned. With `fingerprint`, the sysop compared it and it is trusted at once.
+ */
+export function followPeer(
+  url: string,
+  fingerprint?: string,
+): Promise<{ ok: boolean; peer: FedPeerPreview & { trust: string } }> {
+  return call(`/federation/peers/follow`, {
+    method: "POST",
+    body: JSON.stringify({ url, ...(fingerprint && { trust: true, fingerprint }) }),
+  });
 }
 /** Operator: remove a peer and its pinned key. */
 export function removePeer(url: string): Promise<{ ok: boolean }> {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Replay and robustness of the federation layer over real instances: records only move forward,
-// sync pages carry only their own record type, notify can't be used to drive syncs, discovery can't
-// reach private networks or grow without bound, carrier ids can't be squatted, bodies are capped,
-// and relay spokes are isolated by their own keys.
+// sync pages carry only their own record type, notify can't be used to drive syncs, an endpoint's
+// address fits its transport, carrier ids can't be squatted, bodies are capped, and relay spokes are
+// isolated by their own keys. Discovery's bounds are in fed_discovery.test.ts.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { encodeFedSyncPage, encodeFedBbsBatch } from "@aprscaching/shared";
 import { syncAllPeers, applyFedFrames } from "@aprscaching/gateway/federation_sync";
@@ -10,16 +10,7 @@ import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import { gossipDue } from "@aprscaching/gateway/gossip";
 import { validEndpointAddress } from "@aprscaching/shared";
 import { makeFetchGuard } from "../src/fetchguard.js";
-import {
-  newFedKey,
-  instanceEnv,
-  addCache,
-  serve,
-  stubFetch,
-  peerRow,
-  type FedKey,
-  type Serve,
-} from "./helpers/fedpeer.js";
+import { newFedKey, instanceEnv, addCache, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => {
@@ -195,69 +186,10 @@ describe("notify", () => {
   });
 });
 
-describe("discovery", () => {
+describe("typed endpoints", () => {
   it("an https endpoint must be https", () => {
     expect(validEndpointAddress("https", "https://a.example")).toBe(true);
     expect(validEndpointAddress("https", "http://a.example")).toBe(false);
-  });
-
-  it("learns only https peers from trusted peers, adds them disabled, and caps the total", async () => {
-    const { a, hub } = await pair({ FED_DISCOVER: "1" });
-    const advertised = [
-      "https://ok.example",
-      "http://10.0.0.1",
-      "javascript:alert(1)",
-      ...Array.from({ length: 400 }, (_, i) => `https://p${i}.example`),
-    ];
-    const inner = serve(a);
-    stubFetch({
-      [A]: async (req) => {
-        const res = await inner(req);
-        if (new URL(req.url).pathname !== "/.well-known/aprscaching") return res;
-        return Response.json({ ...((await res.json()) as object), peers: advertised });
-      },
-    });
-    await syncAllPeers(hub);
-    await syncAllPeers(hub);
-    const rows = (
-      await hub.DB.prepare("SELECT url, enabled FROM fed_peers WHERE added_via = 'discovered'").all<{
-        url: string;
-        enabled: number;
-      }>()
-    ).results;
-    expect(rows.some((r) => r.url === "https://ok.example")).toBe(true);
-    expect(rows.some((r) => !r.url.startsWith("https://"))).toBe(false);
-    expect(rows.every((r) => r.enabled === 0)).toBe(true);
-    expect(rows.length).toBeLessThanOrEqual(200);
-  });
-
-  it("FED_DISCOVER=0 learns nothing", async () => {
-    const { a, hub } = await pair({ FED_DISCOVER: "0" });
-    const inner = serve(a);
-    stubFetch({
-      [A]: async (req) => {
-        const res = await inner(req);
-        if (new URL(req.url).pathname !== "/.well-known/aprscaching") return res;
-        return Response.json({ ...((await res.json()) as object), peers: ["https://learned.example"] });
-      },
-    });
-    await syncAllPeers(hub);
-    expect(await peerRow(hub, "https://learned.example")).toBeNull();
-  });
-
-  it("an unvetted peer's advertised peers are ignored", async () => {
-    const { a, hub } = await pair({ FED_DISCOVER: "1" });
-    await hub.DB.prepare("UPDATE fed_peers SET trust = 'unvetted' WHERE url = ?").bind(A).run();
-    const inner = serve(a);
-    stubFetch({
-      [A]: async (req) => {
-        const res = await inner(req);
-        if (new URL(req.url).pathname !== "/.well-known/aprscaching") return res;
-        return Response.json({ ...((await res.json()) as object), peers: ["https://learned.example"] });
-      },
-    });
-    await syncAllPeers(hub);
-    expect(await peerRow(hub, "https://learned.example")).toBeNull();
   });
 });
 

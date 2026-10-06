@@ -31,7 +31,7 @@ there keep a session over plain http.
 | Web push delivery (the browser vendor's push service) | No | The in-app watchlist |
 | APRS-IS feed and uplink (`rotate.aprs2.net` by default) | No | Set `APRSIS_HOST` to an APRS-IS server reachable on HAMNET, if your region runs one (**Unverified** per region). RF from your own TNC is unaffected |
 | RF ingest from your own radio | Yes | The [off-grid](off-grid.md) shape: the ingest box and a local gateway on one machine, `INGEST_URL=http://localhost:8787/ingest` |
-| Federation with https and 44Net peers | No | Peers on HAMNET: list one in `FED_PEERS` as `http://<name or address>[:port]`, optionally with `#<fingerprint>` ([Join the network](../federation/index.md#hamnet-peers-in-fed_peers)), or add it under **Add peer**; publish your own address as a `hamnet` endpoint. Packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md#peer-endpoints)). Discovery learns only https peers |
+| Federation with https and 44Net peers | No | Peers on HAMNET: list one in `FED_PEERS` as `http://<name or address>[:port]`, optionally with `#<fingerprint>` ([Join the network](../federation/index.md#hamnet-peers-in-fed_peers)), or add it under **Add peer**; publish your own address as a `hamnet` endpoint ([Federation over HAMNET](../federation/hamnet.md)). Trusted HAMNET peers' lists name further HAMNET instances ([Discovery](../federation/index.md#discovery)). Packet carriers (AX.25, NET/ROM, FBB) need no IP at all ([wire format](../../reference/federation-wire.md#peer-endpoints)) |
 | Adding a peer by callsign, `ampr.org` callsign verification, the 44Net self-check | No, with the default resolvers | Set `DOH_URL` (and `AMPR_DNS_RESOLVERS`) to DNS-over-HTTPS resolvers reachable on HAMNET that can still reach ARDC's name servers; otherwise do these while connected. Verification over RF works offline |
 | Instance registry located by `FED_REGISTRY_DNS` | No | This lookup always asks Cloudflare's resolver and ignores `DOH_URL`. Set `FED_REGISTRY` to a document URL reachable on HAMNET instead; the last good document keeps binding meanwhile |
 | Source link (`/source` → `SOURCE_REPO`, GitHub by default) | The link works, the target doesn't | Point `SOURCE_REPO` at a mirror reachable on HAMNET: any forge with `<repo>/tree/<commit>` URLs (AGPL §13) |
@@ -54,5 +54,6 @@ range. An instance on both networks has two addresses, one on each, and publishe
 
 ## Next
 
+- [Federation over HAMNET](../federation/hamnet.md): peers on HAMNET, and records between HAMNET and the internet.
 - [Join the network](../federation/index.md): peers, trust and running federation safely.
 - [Off-grid and LAN](off-grid.md): run the whole instance on one box with no internet.

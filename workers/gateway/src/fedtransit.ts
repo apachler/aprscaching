@@ -310,7 +310,9 @@ export async function learnTransitKeys(
         accept_keys: string | null;
         trust: string;
       }>();
-    if (row && (row.added_via !== "transit" || row.trust === "blocked")) continue;
+    // an origin only discovery listed takes the hub's key on the same row, which becomes its `transit:` row
+    const listed = !!row && row.url.startsWith("discovered:");
+    if (row && ((row.added_via !== "transit" && !listed) || row.trust === "blocked")) continue;
     if (!registryKeyAllowed(registry.get(b.instance), b.publicKey)) continue;
     const rotations = Array.isArray(b.rotations) ? b.rotations.slice(-MAX_ROTATIONS) : [];
     const keys = await resolvePeerKeys({
@@ -324,8 +326,17 @@ export async function learnTransitKeys(
     });
     if (!keys.ok || !keys.pin) continue; // a key that moved without a proof keeps the first one
     if (row) {
-      await env.DB.prepare("UPDATE fed_peers SET public_key = ?, accept_keys = ?, rotations = ? WHERE url = ?")
-        .bind(keys.pin, JSON.stringify(keys.accept), rotationsJson(rotations), row.url)
+      await env.DB.prepare(
+        `UPDATE fed_peers SET public_key = ?, accept_keys = ?, rotations = ?, url = ?, added_via = 'transit'
+          WHERE url = ?`,
+      )
+        .bind(
+          keys.pin,
+          JSON.stringify(keys.accept),
+          rotationsJson(rotations),
+          listed ? `transit:${b.instance}` : row.url,
+          row.url,
+        )
         .run();
       continue;
     }

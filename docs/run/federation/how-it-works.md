@@ -103,6 +103,11 @@ An arrow starts at the instance that opens the connection.
 [Choose how to connect](choose.md) matches each situation to a path, and [Federation transports](transports.md)
 explains every transport step by step, with who starts it, what it sends, when and what to configure.
 
+**How instances find each other.** Mostly, two sysops exchange addresses and fingerprints. An instance can also
+hear of others: its trusted peers list the instances they trust, and instances on one Wi-Fi network or hotspot
+announce themselves by mDNS. What it hears of is listed, switched off and unvetted, and nothing is pulled from it
+until the sysop follows it ([Discovery](index.md#discovery)).
+
 A hub passes on the records of the instances it trusts, on its transit feed
 ([A hub passes its spokes' records on](hubs-and-relays.md#a-hub-passes-its-spokes-records-on)). The hub signs
 nothing of them and lends them none of its trust: your instance checks each record against its home instance's

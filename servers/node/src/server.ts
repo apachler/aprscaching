@@ -35,6 +35,7 @@ import {
   logStrayErrors,
   relayPollInterval,
   roomNamespace,
+  startFieldDiscovery,
   startSchedules,
 } from "./host.js";
 
@@ -135,6 +136,8 @@ server.listen(PORT, () =>
 );
 
 startSchedules(env, fedSyncInterval(process.env), relayPollInterval(process.env));
+// a Pocket station sets FED_MDNS in its .env; a server shape leaves it off
+void startFieldDiscovery(env, PORT, false);
 
 // ---- 24/7 process resilience ----
 // One stray rejection must not kill an unattended gateway (there is no supervisor on a Pi by

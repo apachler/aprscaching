@@ -180,8 +180,62 @@ A peer's stored endpoint set comes from one of three places (`fed_peers.endpoint
 - `announce`: a verified presence beacon (a `peer` record). A beacon trimmed to fit one datagram carries
   `partial: true` and only adds; a whole list replaces what the peer said before.
 
+- `discovered`: a trusted peer's [peer list](#peer-exchange), on a row that has no address of its own yet (one
+  only discovery brought, or an origin known through a hub). It only adds, and the peer's own descriptor
+  replaces it once the peer is followed.
+
 Whatever the peer says, an endpoint DNS attested and the row's own `url` stay, an incoming endpoint never carries
 an attestation, and a row keeps at most 16 endpoints.
+
+## Peer exchange
+
+`GET /federation/exchange` lists, as JSON, the instances the serving instance trusts:
+
+```json
+{
+  "instance": "hub.example",
+  "peers": [
+    {
+      "instance": "a.example",
+      "fingerprint": "630d cd29 66c4 3366",
+      "addresses": [{ "transport": "https", "address": "https://a.example", "priority": 10 }]
+    }
+  ]
+}
+```
+
+- **Who is listed.** Peers at trust level `trusted` with a pinned key, at most 200. A peer that is `unvetted`, or
+  blocked under any of its addresses, is never listed.
+- **Which addresses.** The peer's endpoint set and its `url`, less any http address on a loopback, private or
+  CGNAT network; an entry left without an address is left out. Packet endpoints (`ax25`, `netrom`, `bbs`) travel
+  as they are.
+- **No keys.** An entry names the key by its fingerprint only. The listing is a directory, never a key binding.
+- **Advertised** as the `peer-exchange` capability and the `exchange` entry of the descriptor's `endpoints`
+  while `FED_PEER_EXCHANGE` is on; otherwise the path answers 404.
+
+A reader takes an entry only from a peer it trusts, with `FED_DISCOVER` on, at most once an hour per peer, and
+reads at most 512 KiB and 200 entries. It needs a valid instance id, a fingerprint and an address off a LAN, and
+it skips itself, the listing peer and any instance it blocked. The entry becomes a sighting on that instance's
+one peer row (`fed_peers.discovered`, JSON `[{via, fp, at}]`): a new instance gets an unfollowed
+`discovered:<instance>` row, `unvetted`, `enabled = 0`, never pulled. A sighting never sets a key. An origin a hub
+later hands a key for turns that row into its `transit:<instance>` row.
+
+## mDNS announcement
+
+An instance with `FED_MDNS=announce` answers DNS-SD questions on the local network (multicast DNS, port 5353)
+for the service type `_aprscaching._tcp.local`:
+
+| Record | Name | Data |
+|---|---|---|
+| PTR | `_aprscaching._tcp.local` | `<label>._aprscaching._tcp.local`, the label being the instance id with its dots as hyphens |
+| SRV | `<label>._aprscaching._tcp.local` | the plain-http port (`PORT`), target `<label>.local` |
+| TXT | `<label>._aprscaching._tcp.local` | `id=<instance id>`, `fp=<key fingerprint, 16 hex digits>`, `path=/.well-known/aprscaching` |
+| A | `<label>.local` | the host's IPv4 addresses |
+
+A listener (`listen` or `announce`) asks for the PTR record every 5 minutes. It takes the address the answer came
+from, never an A record, with the SRV port and the part of `path` before `/.well-known/aprscaching`, and records
+an `mdns` sighting with that address. The TXT fingerprint is a claim: it is compared with the key the instance
+serves when the sysop follows it, and nothing more.
 
 ## Link capabilities
 

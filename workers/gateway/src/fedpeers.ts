@@ -8,7 +8,8 @@
  * by address it starts `unvetted` with its key pinned, and raising it to `trusted` is a separate step; a
  * FED_PEERS entry starts `trusted` only when it pins the fingerprint its key then matches.
  */
-import type { Env } from "./env.js";
+import { flagOn, type Env } from "./env.js";
+import { peerExchangeOn } from "./feddiscover.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
@@ -26,6 +27,8 @@ import {
   type RegistryEntry,
 } from "./federation.js";
 import { forgetTransitPeer, requeuePeer, supersedeTransitPeer } from "./fedtransit.js";
+import { storedEndpoints } from "./fedtransport.js";
+import { endpointBaseUrls } from "@aprscaching/shared";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -58,6 +61,48 @@ export interface PeerRow {
   pin_matched_key?: string | null; // the key that pin matched; its verified successors keep matching it
   endpoints_source?: string | null; // where `endpoints` came from: dns | descriptor | announce
   auto_promoted_at?: number | null; // when corroboration raised it to trusted on its own
+  discovered?: string | null; // how discovery heard of it (JSON sightings) — see feddiscover.ts
+  listed_at?: number | null; // the newest sighting
+}
+
+/** The `url` prefix of a row only discovery brought, which the sysop has not followed. */
+export const DISCOVERED_PREFIX = "discovered:";
+
+/**
+ * One source that listed a peer: a trusted peer's peer exchange (`via` its instance id) or an mDNS announcement
+ * on the local network (`via` = `mdns`, with the address that announced it). `fp` is the key fingerprint that
+ * source gave; it is shown to the sysop and compared with the pinned key, never pinned itself.
+ */
+export interface Sighting {
+  via: string;
+  fp: string | null;
+  at: number;
+  addr?: string;
+}
+
+/** A stored sighting list, tolerating a missing or malformed column. */
+export function parseSightings(s: string | null | undefined): Sighting[] {
+  try {
+    const v = s ? (JSON.parse(s) as unknown) : [];
+    return Array.isArray(v)
+      ? (v as Sighting[]).filter((x) => x && typeof x.via === "string" && Number.isFinite(x.at))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A row for `instance` that only discovery brought gives way to a peer the sysop or the network binds directly
+ * (an add by address, FED_PEERS, 44Net, a hub push, the registry): the one-row-per-instance rule holds, and the
+ * next listing annotates the direct row instead. A blocked row stays: it is the sysop's block.
+ */
+export async function absorbDiscovered(env: Env, instance: string, exceptUrl = ""): Promise<void> {
+  await env.DB.prepare(
+    `DELETE FROM fed_peers WHERE instance = ? AND url LIKE '${DISCOVERED_PREFIX}%' AND trust != 'blocked' AND url != ?`,
+  )
+    .bind(instance, exceptUrl)
+    .run();
 }
 
 /**
@@ -105,7 +150,9 @@ export async function seedPeers(env: Env): Promise<void> {
   }
   for (const e of registry.values()) {
     const u = e.url ? trimTrailingSlashes(e.url.trim()) : undefined;
-    if (u && isInstanceId(e.instance) && e.instance !== ours(env))
+    if (u && isInstanceId(e.instance) && e.instance !== ours(env)) {
+      if (!(await env.DB.prepare("SELECT 1 FROM fed_peers WHERE url = ?").bind(u).first()))
+        await absorbDiscovered(env, e.instance);
       await env.DB.prepare(
         `INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via)
          SELECT ?, ?, ?, 'unvetted', 'registry'
@@ -113,6 +160,7 @@ export async function seedPeers(env: Env): Promise<void> {
       )
         .bind(u, e.instance, e.key ?? null, e.instance)
         .run();
+    }
   }
 }
 
@@ -190,7 +238,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       `SELECT url, instance, public_key, public_key IS NOT NULL AS signed, trust, added_via, approved_at, auto_promoted_at,
             pinned_fingerprint, rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor,
             tombstones_cursor, moves_cursor, enabled, last_sync, last_ok, last_error, sync_ok, sync_err,
-            mirrored_total, last_counts,
+            mirrored_total, last_counts, discovered, listed_at, endpoints,
             (SELECT MAX(m.submitted_at) FROM fed_submit_marks m WHERE m.instance = fed_peers.instance) AS last_push_in,
             (SELECT h.last_ok_at FROM fed_hub_status h WHERE h.hub = fed_peers.url) AS last_push_out,
             (SELECT json_object('transport', k.transport, 'address', k.address, 'lastAttempt', k.last_attempt,
@@ -202,7 +250,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   const configured = new Set(parseFedPeers(env.FED_PEERS).map((p) => p.url));
   // derive a health signal + error rate so an operator scans state without doing the math.
   const peers = await Promise.all(
-    rows.map(async ({ public_key, packet_sync, ...p }) => {
+    rows.map(async ({ public_key, packet_sync, discovered, endpoints, ...p }) => {
       const okN = Number(p.sync_ok ?? 0),
         errN = Number(p.sync_err ?? 0);
       const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
@@ -210,9 +258,11 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       // a peer reached only over packet takes its health from its last packet session
       const packetHealth = !packet ? "new" : packet.lastError ? "error" : "ok";
       const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? packetHealth : lastErrored ? "error" : "ok";
+      const fingerprint = await keyFingerprint(public_key);
       return {
         ...p,
-        fingerprint: await keyFingerprint(public_key),
+        fingerprint,
+        discovery: discoveryView(discovered as string | null, endpoints as string | null, fingerprint),
         configured: configured.has(p.url), // listed in FED_PEERS: removed there, not here
         lastCounts: p.last_counts ? JSON.parse(p.last_counts as string) : null,
         packet, // the last packet-circuit session
@@ -221,7 +271,40 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
       };
     }),
   );
-  return json({ self: { instance: ours(env), fingerprint: await ownKeyFingerprint(env) }, peers });
+  return json({
+    self: {
+      instance: ours(env),
+      fingerprint: await ownKeyFingerprint(env),
+      // how this instance discovers others, for the Discovered group's empty state
+      discovery: { learn: flagOn(env.FED_DISCOVER), lists: peerExchangeOn(env), mdns: env.FED_MDNS ?? "off" },
+    },
+    peers,
+  });
+}
+
+/**
+ * How discovery heard of a peer, for Instance admin: each source with the fingerprint it gave, the addresses
+ * learned, and whether those fingerprints disagree with each other or with the pinned key. Null when no source
+ * lists it.
+ */
+function discoveryView(raw: string | null, endpoints: string | null, pinnedFp: string | null) {
+  const sightings = parseSightings(raw);
+  if (!sightings.length) return null;
+  const fps = new Set(sightings.map((s) => s.fp).filter((f): f is string => !!f));
+  const addresses = [
+    ...new Set([
+      ...sightings.flatMap((s) => (s.addr ? [s.addr] : [])),
+      ...storedEndpoints(endpoints).flatMap((e) => (endpointBaseUrls(e).length ? endpointBaseUrls(e) : [e.address])),
+    ]),
+  ];
+  return {
+    sightings: sightings.map((s) => ({ via: s.via, fingerprint: s.fp, at: s.at, ...(s.addr && { address: s.addr }) })),
+    addresses,
+    onThisNetwork: sightings.some((s) => s.via === "mdns"),
+    // a source vouching for another key than the pinned one, or two sources that disagree: never resolved
+    // automatically, the pinned key stays
+    keyMismatch: fps.size > 1 || (!!pinnedFp && [...fps].some((f) => f !== pinnedFp)),
+  };
 }
 
 /** A descriptor fetch gives up after this long. */
@@ -238,7 +321,7 @@ interface PeerPreview {
   operator: string | null;
 }
 
-class PeerAddRefused extends Error {
+export class PeerAddRefused extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -263,7 +346,7 @@ function peerBaseUrl(raw: unknown): string | null {
 }
 
 /** Fetch a would-be peer's descriptor and read who it says it is and the key it signs with. */
-async function lookUpPeer(
+export async function lookUpPeer(
   env: Env,
   url: string,
 ): Promise<{ instance: string; publicKey: string; operator: string | null }> {
@@ -329,8 +412,11 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
     };
     // one row per instance id: a second URL for a known instance is a stale address or an impostor, and a
     // blocked instance stays blocked under any address. A key a hub handed on gives way to the peer's own.
+    // (a row only discovery brought gives way too, carrying nothing: its sightings return with the next listing)
     const holder = await env.DB.prepare(
-      "SELECT url, trust, added_via FROM fed_peers WHERE instance = ? ORDER BY trust = 'blocked' DESC LIMIT 1",
+      `SELECT url, trust, added_via FROM fed_peers
+        WHERE instance = ? AND (url NOT LIKE '${DISCOVERED_PREFIX}%' OR trust = 'blocked')
+        ORDER BY trust = 'blocked' DESC LIMIT 1`,
     )
       .bind(d.instance)
       .first<{ url: string; trust: TrustLevel; added_via: string | null }>();
@@ -358,6 +444,7 @@ export async function handlePeerAdd(req: Request, env: Env): Promise<Response> {
         preview,
       );
     await supersedeTransitPeer(env, d.instance, [d.publicKey]);
+    await absorbDiscovered(env, d.instance);
     try {
       await env.DB.prepare(
         `INSERT INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via, enabled)
@@ -437,6 +524,11 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
     .bind(url)
     .first<{ url: string; instance: string | null; public_key: string | null }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
+  if (trust !== "blocked" && url.startsWith(DISCOVERED_PREFIX))
+    return json(
+      { ok: false, error: "a discovered instance is followed first: Follow fetches its key and compares it" },
+      { status: 409 },
+    );
   if (trust === "trusted") {
     if (!exists.public_key)
       return json(

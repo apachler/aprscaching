@@ -33,7 +33,9 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
   CACHE_MOVE_LIMIT_M: "Metres an owner may move a cache from where it was first found (0 keeps it there)",
   FED_PEERS: "Comma-separated base URLs of federation peers to sync from; <url>#<fingerprint> pins a peer's key",
-  FED_DISCOVER: "1 learns the peers that trusted peers advertise",
+  FED_DISCOVER: "1 lists the instances trusted peers trust, switched off until you follow one",
+  FED_PEER_EXCHANGE: "0 stops serving peers the list of instances this one trusts",
+  FED_MDNS: "Find instances on the local network by mDNS: off, listen, or announce (listens too)",
   FED_CORROBORATION_QUORUM: "Distinct corroborating identities required to promote a find to Tier A",
   FED_AUTO_PROMOTE: "Confirmed corroborations that promote an unvetted peer to trusted (0 = off)",
   FED_CORROBORATION_SECRET: "Shared secret corroboration questions must carry (x-fed-secret)",
@@ -556,8 +558,18 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`FED_DISCOVER`",
-        "Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200)",
+        "Read each trusted peer's list of the instances it trusts (peer exchange), at most hourly, and list them in Instance admin → Federation → **Discovered**: switched off, unvetted and never pulled until you follow one (at most 200; a listing expires 14 days after no trusted peer names it) ([Discovery](../run/federation/index.md#discovery))",
         "off",
+      ],
+      [
+        "`FED_PEER_EXCHANGE`",
+        "Serve `/federation/exchange`: the instances this one trusts, each with its key fingerprint and its non-LAN addresses. Never a blocked or unvetted one. `0` stops it. Also an instance setting ([Discovery](../run/federation/index.md#discovery))",
+        "on",
+      ],
+      [
+        "`FED_MDNS`",
+        "mDNS on the local network (Node and Bun server): `listen` finds instances announcing `_aprscaching._tcp` and lists them under **Discovered**, marked *on this network*; `announce` also announces this one (its instance id, key fingerprint and port). It runs under Node and Bun alike ([Field discovery on a LAN](../run/federation/index.md#field-discovery-on-a-lan))",
+        "`off`; `listen` on Pocket and the Desktop app",
       ],
       [
         "`FED_ALLOW_PRIVATE`",
@@ -931,6 +943,10 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   SECURITY_CONTACT: {
     label: "Security contacts",
     hint: "Email or https addresses in security.txt; none uses the contact email",
+  },
+  FED_PEER_EXCHANGE: {
+    label: "List trusted peers",
+    hint: "Let peers learn the instances you trust: each one's id, key fingerprint and addresses",
   },
   FED_RESERVE: {
     label: "Pass on peers' records",

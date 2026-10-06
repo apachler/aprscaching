@@ -90,10 +90,17 @@ describe("a block covers the instance on every path", () => {
     expect(await peerRow(hub, A2)).toBeNull();
   });
 
-  it("a discovered address that serves a blocked instance is refused once enabled", async () => {
+  it("a trusted peer's listing of a blocked instance adds no row for it", async () => {
     const pKey = await newFedKey();
-    const p = instanceEnv("p.example", pKey, { FED_PEERS: A2 }); // advertises A2 in its descriptor
-    const { routes, hub } = await blockedAtA({ FED_DISCOVER: "1" });
+    const p = instanceEnv("p.example", pKey);
+    const { key, routes, hub } = await blockedAtA({ FED_DISCOVER: "1" });
+    // p trusts a.example at another address and lists it to its peers
+    await insertPeer(p, A2, {
+      instance: "a.example",
+      public_key: key.pub,
+      trust: "trusted",
+      added_via: "admin",
+    });
     routes["https://p.example"] = serve(p);
     await insertPeer(hub, "https://p.example", {
       instance: "p.example",
@@ -103,11 +110,8 @@ describe("a block covers the instance on every path", () => {
       added_via: "manual",
     });
     await syncAllPeers(hub);
-    expect(await peerRow(hub, A2)).toMatchObject({ added_via: "discovered", enabled: 0 });
-    expect((await req(hub, "POST", "/federation/peers/trust", { url: A2, trust: "unvetted" })).status).toBe(200);
-    const r = await syncAllPeers(hub);
-    expect(r.errors.join()).toMatch(/blocked here/);
-    expect((await peerRow(hub, A2))?.instance).toBeNull();
+    expect(await peerRow(hub, "discovered:a.example")).toBeNull();
+    expect(await peerRow(hub, A)).toMatchObject({ trust: "blocked", discovered: null });
     expect(await remoteCacheCount(hub, "a.example")).toBe(0);
   });
 

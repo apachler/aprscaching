@@ -186,6 +186,11 @@ explains it in full.
     channel they already trust before either one trusts the other
     ([Joining the network](run/federation/index.md#joining-the-network)).
 
+<span id="discovered-instance"></span>Discovered instance
+:   An instance your instance heard of without you adding it: a trusted peer lists it, or it announces itself
+    on your local network. It is listed switched off and unvetted, and nothing is pulled from it until you
+    follow it ([Discovery](run/federation/index.md#discovery)).
+
 <span id="fbb-federation"></span>Federation over FBB
 :   An experimental way to carry federation records as packet mail, through the forwarding partners a sysop
     marks for it, for instances with no internet path between them. Off unless the sysop turns it on; the mail

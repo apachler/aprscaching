@@ -3,7 +3,13 @@
 import { lookup } from "node:dns/promises";
 import { createFetchGuard, type FetchGuard } from "@aprscaching/gateway/fetchguard";
 
-export function makeFetchGuard(opts: { allowedOrigins?: string[]; allowPrivate?: boolean } = {}): FetchGuard {
+export function makeFetchGuard(
+  opts: {
+    allowedOrigins?: string[];
+    allowPrivate?: boolean;
+    allowLocalOrigin?: (origin: string) => Promise<boolean>;
+  } = {},
+): FetchGuard {
   return createFetchGuard({
     ...opts,
     resolve: async (host) => (await lookup(host, { all: true })).map((a) => a.address),

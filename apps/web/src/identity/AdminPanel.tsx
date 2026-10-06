@@ -12,6 +12,8 @@ import {
   addPeer,
   removePeer,
   syncPeerNow,
+  followPeer,
+  isDiscoveredPeer,
   type FedPeerPreview,
   add44netPeer,
   ApiError,
@@ -2018,7 +2020,10 @@ function FederationAdmin() {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const list = useLoad(() => listFederationPeers(), []);
-  const peers = list.data?.peers;
+  const all = list.data?.peers;
+  // what only discovery brought has its own group; the list below is the peers this instance follows
+  const peers = all?.filter((p) => !isDiscoveredPeer(p));
+  const discovered = all?.filter(isDiscoveredPeer);
   const self = list.data?.self;
   const refresh = list.reload;
   const [adding, setAdding] = useState(false);
@@ -2153,6 +2158,36 @@ function FederationAdmin() {
           ))}
         </ul>
       )}
+      <Group
+        title="Discovered"
+        status={discoveredStatus(discovered)}
+        help={
+          <>
+            Instances your trusted peers list, and instances on your local network. Each is listed switched off and
+            unvetted: nothing is pulled from it until you follow it.{" "}
+            <InfoTip text={TERMS["discovered-instance"]} label="What is a discovered instance?" />{" "}
+            <ManualLink page="run/federation/index" anchor="discovery">
+              Discovery
+            </ManualLink>
+          </>
+        }
+        defaultOpen={false}
+      >
+        {list.error ? (
+          <ErrorState onRetry={refresh}>Couldn&apos;t load the discovered instances.</ErrorState>
+        ) : discovered === undefined ? (
+          <p className="muted" role="status">
+            Loading…
+          </p>
+        ) : (
+          <DiscoveredPeers
+            peers={discovered}
+            discovery={self?.discovery}
+            onChanged={refresh}
+            onBlock={(p) => trust(p, "blocked", `${p.instance ?? p.url} blocked`)}
+          />
+        )}
+      </Group>
       <Disclosure label="Add a peer by callsign">
         <Fed44netWizard onAdmitted={refresh} />
       </Disclosure>
@@ -2160,6 +2195,200 @@ function FederationAdmin() {
         <CallsignIdentityPanel />
       </Disclosure>
     </>
+  );
+}
+
+/** The Discovered group's header status: how many wait, how many are on this network, how many disagree on a key. */
+function discoveredStatus(list: FedPeer[] | undefined): string {
+  if (!list) return "loading";
+  if (!list.length) return "none";
+  const lan = list.filter((p) => p.discovery?.onThisNetwork).length;
+  const mismatch = list.filter((p) => p.discovery?.keyMismatch).length;
+  return [
+    `${list.length} listed`,
+    lan ? `${lan} on this network` : null,
+    mismatch ? `${mismatch} key ${mismatch === 1 ? "mismatch" : "mismatches"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Where a sighting came from, in words. */
+const sightingSource = (via: string) => (via === "mdns" ? "on this network" : `listed by ${via}`);
+
+/** The discovered instances, or why there are none. */
+function DiscoveredPeers(props: {
+  peers: FedPeer[];
+  discovery?: { learn: boolean; lists: boolean; mdns: "off" | "listen" | "announce" };
+  onChanged: () => void;
+  onBlock: (p: FedPeer) => Promise<void>;
+}) {
+  const d = props.discovery;
+  if (!props.peers.length)
+    return (
+      <EmptyState>
+        {d && !d.learn && d.mdns === "off"
+          ? "Discovery is off: FED_DISCOVER=1 lists the instances your trusted peers trust, and FED_MDNS=listen finds instances on your local network."
+          : "No instance discovered yet. Trusted peers' lists are read once an hour; instances on your network appear when they announce themselves."}
+      </EmptyState>
+    );
+  return (
+    <ul className="logs">
+      {props.peers.map((p) => (
+        <DiscoveredRow key={p.url} peer={p} onChanged={props.onChanged} onBlock={props.onBlock} />
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One discovered instance: where it was heard, the fingerprint each source gave, its addresses, and Follow, Trust
+ * and Block. Sources that disagree on its key, or a key other than the one pinned, are flagged and block Follow
+ * and Trust: the sysop compares fingerprints and adds the instance by its address.
+ */
+function DiscoveredRow(props: { peer: FedPeer; onChanged: () => void; onBlock: (p: FedPeer) => Promise<void> }) {
+  const fmt = useFmt();
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const [busy, setBusy] = useState<"follow" | "trust" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const p = props.peer;
+  const d = p.discovery;
+  const name = p.instance ?? p.url;
+  const mismatch = !!d?.keyMismatch;
+  const fps = [...new Set((d?.sightings ?? []).map((s) => s.fingerprint).filter((f): f is string => !!f))];
+  const listedFp = p.fingerprint ?? fps[0] ?? null;
+  // an origin a hub passes records on for already has its key pinned: trusting it needs no route to it, which an
+  // instance reachable only over HAMNET or behind a firewall never offers
+  const viaHub = p.added_via === "transit" && !!p.fingerprint;
+  const follow = async (trust: boolean) => {
+    if (trust) {
+      if (!listedFp) return;
+      const ok = await confirmDialog({
+        title: viaHub ? `Trust ${name}?` : `Follow and trust ${name}?`,
+        message: (
+          <>
+            <p>{name} is listed with the key fingerprint</p>
+            <p className="mono">{listedFp}</p>
+            <p>
+              <strong>Did you compare this fingerprint with its sysop?</strong> Read it to each other over a channel you
+              already trust, such as a phone call or on the air.
+            </p>
+            <p className="muted">
+              {viaHub
+                ? "Its records keep reaching this instance through the hub; they then show on the map and count toward Radio-verified finds."
+                : "This instance then fetches its key, checks it against that fingerprint, pulls from it, shows its caches on the map and counts it toward Radio-verified finds."}
+            </p>
+          </>
+        ),
+        confirmLabel: "Yes, they match: trust it",
+      });
+      if (!ok) return;
+    }
+    setBusy(trust ? "trust" : "follow");
+    setError(null);
+    try {
+      if (trust && viaHub) await setPeerTrust(p.url, "trusted", p.fingerprint ?? undefined);
+      else await followPeer(p.url, trust ? (listedFp ?? undefined) : undefined);
+      toast(trust ? `${name} trusted` : `${name} followed, unvetted`);
+      props.onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const blockedReason = mismatch
+    ? "Its sources disagree about its key: compare fingerprints with its sysop and add it by its address"
+    : null;
+  return (
+    <li className="fed-peer">
+      <div className="row">
+        <Badge kind="warn" title="Listed only: nothing is pulled from it until you follow it">
+          not followed
+        </Badge>
+        <span className="mono">{name}</span>
+        {d?.onThisNetwork && (
+          <Badge title="It announced itself on this instance's local network (mDNS)">on this network</Badge>
+        )}
+        {mismatch && (
+          <Badge kind="dnf" title="A source gave a key fingerprint other than another source's or the pinned key's">
+            key mismatch
+          </Badge>
+        )}
+      </div>
+      <div className="comment">
+        {(d?.sightings ?? []).map((s) => `${sightingSource(s.via)} ${fmt.ago(s.at)}`).join(" · ")}
+        {p.added_via === "transit" ? " · its records reach this instance through a hub" : ""}
+      </div>
+      {fps.length === 1 && !mismatch ? (
+        <Fingerprint value={fps[0]!} label={`the key fingerprint listed for ${name}`} />
+      ) : (
+        (d?.sightings ?? [])
+          .filter((s) => s.fingerprint)
+          .map((s) => (
+            <div className="comment" key={s.via}>
+              {sightingSource(s.via)}: <span className="mono">{s.fingerprint}</span>
+            </div>
+          ))
+      )}
+      {p.fingerprint && mismatch && (
+        <div className="comment">
+          pinned here: <span className="mono">{p.fingerprint}</span> (it stays)
+        </div>
+      )}
+      {d && d.addresses.length > 0 && (
+        <div className="comment">
+          at <span className="mono">{d.addresses.join(", ")}</span>
+        </div>
+      )}
+      {mismatch && (
+        <div className="comment error" role="alert">
+          Its sources give different keys. The pinned key stays; compare fingerprints with its sysop, then add it by its
+          address.
+        </div>
+      )}
+      {error && (
+        <div className="comment error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="row">
+        <Button
+          variant="primary"
+          disabled={!!busy || mismatch}
+          aria-busy={busy === "follow"}
+          aria-label={`Follow ${name}`}
+          hint={blockedReason ?? "Fetch its key, check it against the listed fingerprint, then pull from it, unvetted"}
+          onClick={() => void follow(false)}
+        >
+          {busy === "follow" ? "Following…" : "Follow"}
+        </Button>
+        <Button
+          disabled={!!busy || mismatch || !listedFp}
+          aria-busy={busy === "trust"}
+          aria-label={`Follow and trust ${name}`}
+          hint={
+            blockedReason ??
+            (viaHub
+              ? "Compare its fingerprint with its sysop, then show what reaches you through the hub"
+              : "Compare its fingerprint with its sysop, then follow it and show it on the map")
+          }
+          onClick={() => void follow(true)}
+        >
+          {busy === "trust" ? "Trusting…" : "Trust"}
+        </Button>
+        <Button
+          variant="danger"
+          disabled={!!busy}
+          aria-label={`Block ${name}`}
+          hint="Never list, pull or show anything it signs"
+          onClick={() => void props.onBlock(p)}
+        >
+          Block
+        </Button>
+      </div>
+    </li>
   );
 }
 
@@ -2215,6 +2444,16 @@ function PeerRow(props: {
         <Fingerprint value={p.fingerprint} label={`the key fingerprint of ${name}`} />
       ) : (
         <div className="comment">No key pinned yet: it is pinned on the first sync.</div>
+      )}
+      {p.discovery?.keyMismatch && (
+        <div className="comment error" role="alert">
+          Listed with another key:{" "}
+          {p.discovery.sightings
+            .filter((s) => s.fingerprint && s.fingerprint !== p.fingerprint)
+            .map((s) => `${sightingSource(s.via)} gives ${s.fingerprint}`)
+            .join(", ")}
+          . The pinned key stays; ask its sysop.
+        </div>
       )}
       {p.pinned_fingerprint && p.fingerprint !== p.pinned_fingerprint && (
         <div className="comment">
