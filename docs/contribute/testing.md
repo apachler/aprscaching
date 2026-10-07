@@ -247,11 +247,12 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, every Mermaid diagram in the repository's Markdown parsed, then `mkdocs build --strict` (a missing page or heading fails it) | docs and Markdown changes, the theme's sources, `apps/web/package.json` (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
+| `oci-cli.yml` — the hash-pinned OCI CLI installs and `pip check` passes on Ubuntu 24.04's Python on aarch64, as on the Oracle Cloud VM | PR changing `deploy/oci/oci-cli-requirements.txt` or `.python-version`; called by `oci-stack.yml` | Yes (the OCI CLI set) |
 | `main-pr.yml` — `head branch`: a PR into `main` comes from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch | PR into `main` | Optional (`main` may require it) |
 | `scorecard.yml` — OpenSSF Scorecard: results in code scanning and on the public Scorecard API (the README badge) | push (`dev`), weekly, branch protection changes + manual | Informational |
 | `release-please.yml` — versioning + changelog, then the three below, the operator actions at the top of the notes, the release's Announcements discussion, and `sync-dev`, which opens the pull request that brings `dev` up to `main` | push (main) | Release |
 | `desktop-release.yml` — Bun desktop binaries | called by `release-please.yml` + manual | Release |
-| `oci-stack.yml` — the Oracle Cloud one-click stack zip | called by `release-please.yml` + manual | Release |
+| `oci-stack.yml` — the Oracle Cloud one-click stack zip, after `oci-cli.yml` | called by `release-please.yml` + manual | Release |
 | `release-verify.yml` — git bundle, source archive, `pocket.sh`, the CycloneDX SBOM, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
 
 `ci.yml` runs only the jobs a change can affect. Its `changed paths` job reads the diff and sorts each path into

@@ -46,18 +46,20 @@ updates:
     commit-message:
       prefix: "docs(deps)"
 
-  # The OCI stack's CLI (deploy/oci/oci-cli-requirements.txt), every package pinned by hash. Dependabot bumps each
-  # pin on its own, for the Python in deploy/oci/.python-version (the VM image's, 3.12 on Ubuntu 24.04); an
-  # oci-cli bump that needs a newer oci is regenerated with the command in that file's header.
+  # The OCI stack's CLI (deploy/oci/oci-cli-requirements.txt), every package pinned by hash, resolved for the
+  # Python in deploy/oci/.python-version (the VM image's, 3.12 on Ubuntu 24.04). An oci-cli bump that needs other
+  # pins to move is regenerated with the command in that file's header.
   - package-ecosystem: pip
     directory: "/deploy/oci"
     target-branch: dev
     schedule:
       interval: weekly
       day: monday
-    groups:
-      oci-cli:
-        patterns: ["*"]
+    # oci-cli pins most of its dependencies to exact versions, so a bump of any other package in the set breaks
+    # the install. Only oci-cli itself is proposed; the rest follows it when the set is regenerated, and
+    # oci-cli.yml installs the proposed set on the pull request.
+    allow:
+      - dependency-name: "oci-cli"
     commit-message:
       prefix: "chore(deps)"
 
