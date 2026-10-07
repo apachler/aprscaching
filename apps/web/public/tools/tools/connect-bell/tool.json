@@ -2,7 +2,7 @@
   "name": "connect-bell",
   "title": "Connect bell",
   "author": "OE8APR",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": "1.0",
   "permissions": [
     "event",
@@ -15,7 +15,7 @@
   ],
   "description": "Rings (logs a notice) when a station connects.",
   "entry": "tool.js",
-  "entrySha256": "+SY1XAhA/Of8vn38UUkCVYtWwUSWe3vo46U5M+dpgfQ=",
+  "entrySha256": "qWJDrDiRdStZowV51aNAEQMQGCcw4gkZpbPeFiuddsk=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "86yOrwsfaWH9MPV6tGNU6Zl6Z4pBdgsA8lSHMBx+CNSqacpvjA7mbafCgYSDLWZxPbotpGp1TpiV96b9D+C7BQ=="
+  "signature": "H72baHSCDQvsBmoTse7QbauHK6fjdUbAUDe9HRQA0iU3kWlt0QmoBpseLMB+gZjxzs3OkB9kbNL6dci+K73qBQ=="
 }

@@ -2,7 +2,7 @@
   "name": "station-db",
   "title": "Station DB (NAMES.GP)",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "monitor",
@@ -15,7 +15,7 @@
   ],
   "description": "Classifies heard stations (NAMES.GP) and shares them on the inter-tool bus.",
   "entry": "tool.js",
-  "entrySha256": "QflofvTeqCknbc1jlsBqY2MSfeNrh/5qe8IF+qoBcJA=",
+  "entrySha256": "0kxkfE8FBmQ4k/7L91AKh2ibqTEh+8NnoYL2YJo+VPE=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "HWDsiUuo9meSyisIxmmMyHOyPGzJhcAPEpFbW/AUFgoJVuZt6CEAHcU8dJ5i2+QmzQFgDsYIMHJuZIYH8IHuAg=="
+  "signature": "KsYK82XBw7ikJ66oUsfkMdtsw+l5BL9/12+6zdWkt87cZoSo+NOMUX53Bn4jLuC7ndEXCuGFp8l0fpFqmgxXDQ=="
 }

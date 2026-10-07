@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// PSK31 + CW decoders 1.0.0, built by scripts/build.mjs from tools/digimode-decoders/src, lib/ and the
+// PSK31 + CW decoders 1.0.1, built by scripts/build.mjs from tools/digimode-decoders/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // vendor/aprscaching/packages/tools/src/decoders/morse.ts
@@ -157,7 +157,7 @@
   // tools/digimode-decoders/src/index.js
   register({
     decoders: [
-      { id: "cw", label: "CW (Morse)", kind: "cw", decode: decodeMorse, placeholder: "…. . .-.. .-.. ---" },
+      { id: "cw", label: "CW (Morse)", kind: "cw", decode: decodeMorse, placeholder: ".... . .-.. .-.. ---" },
       { id: "psk31", label: "PSK31", kind: "psk31", decode: decodeVaricode, placeholder: "00…11…00 varicode bits" }
     ]
   });

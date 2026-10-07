@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Station DB (NAMES.GP) 1.1.0, built by scripts/build.mjs from tools/station-db/src, lib/ and the
+// Station DB (NAMES.GP) 1.1.1, built by scripts/build.mjs from tools/station-db/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // vendor/aprscaching/packages/packet/src/names.ts
@@ -54,7 +54,7 @@
   tool.on("on_frame", (p) => {
     const call = callOf(p.peerCall);
     if (!call) return;
-    const type = registry.classify(call, { payload: asStr(p.text) });
+    const type = registry.classify(call, { dest: asStr(p.dst), payload: asStr(p.text) });
     heard.delete(call);
     heard.set(call, type);
     if (heard.size > KEPT) heard.delete(heard.keys().next().value);

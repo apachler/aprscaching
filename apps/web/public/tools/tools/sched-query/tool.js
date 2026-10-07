@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Scheduled query (GPAUTO) 1.0.0, built by scripts/build.mjs from tools/sched-query/src, lib/ and the
+// Scheduled query (GPAUTO) 1.0.1, built by scripts/build.mjs from tools/sched-query/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // vendor/aprscaching/packages/tools/src/session-script.ts
@@ -33,12 +33,14 @@
   }
 
   // tools/sched-query/src/index.js
+  var MIN_MINUTES = 10;
+  var NO_STEPS = "No steps. e.g. /gpauto connect HB9W-8; waitfor Cluster; send sh/dx; disconnect";
   var script = "";
   var everyMin = 0;
   var ticks = 0;
   async function runOnce(text) {
     const steps = parseScript(text);
-    if (!steps.length) return "No steps. e.g. /gpauto connect HB9W-8; waitfor Cluster; send sh/dx; disconnect";
+    if (!steps.length) return NO_STEPS;
     let ok;
     try {
       ok = await tool.call("session.script", { steps });
@@ -77,23 +79,25 @@
         }
         const every = a.match(/^every\s+(\d+)\s+([\s\S]+)$/i);
         if (every) {
-          everyMin = Math.max(1, Number(every[1]));
+          if (!parseScript(every[2]).length) return [NO_STEPS];
+          everyMin = Math.max(MIN_MINUTES, Number(every[1]));
           script = every[2];
           ticks = 0;
-          return [`Scheduled every ${every[1]} min. ${await runOnce(script)}`];
+          return [`Scheduled every ${everyMin} min. ${await runOnce(script)}`];
         }
-        if (a.toLowerCase() === "run") return [script ? await runOnce(script) : "No stored script — /gpauto <steps> first."];
+        if (a.toLowerCase() === "run")
+          return [script ? await runOnce(script) : "No stored script — /gpauto <steps> first."];
         script = a;
         return [await runOnce(a)];
       }
     }
   });
-  tool.on("on_tick", () => {
-    if (everyMin <= 0) return;
+  tool.on("on_tick", async () => {
+    if (everyMin <= 0 || !script) return;
     ticks++;
     if (ticks < everyMin) return;
     ticks = 0;
-    if (script) void runOnce(script);
+    tool.log(`scheduled run: ${await runOnce(script)}`);
   });
   render();
 })();

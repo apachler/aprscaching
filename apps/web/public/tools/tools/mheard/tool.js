@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// MHeard 1.0.0, built by scripts/build.mjs from tools/mheard/src, lib/ and the
+// MHeard 1.0.1, built by scripts/build.mjs from tools/mheard/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // lib/text.js
@@ -13,8 +13,12 @@
   // tools/mheard/src/index.js
   var SHOWN = 14;
   var KEPT = 500;
+  var REDRAW_MS = 1e3;
   var heard = /* @__PURE__ */ new Map();
+  var timer = null;
   function rebuild() {
+    clearTimeout(timer);
+    timer = null;
     const rows = [...heard].sort((a, b) => b[1].ts - a[1].ts).slice(0, SHOWN).map(([call, h]) => [call, h.src || "—", `${ago(h.ts)} ago`]);
     tool.setPanel({
       title: "MHeard",
@@ -27,7 +31,7 @@
     heard.delete(call);
     heard.set(call, { ts: Date.now(), src: asStr(p.source) });
     if (heard.size > KEPT) heard.delete(heard.keys().next().value);
-    rebuild();
+    timer ??= setTimeout(rebuild, REDRAW_MS);
   });
   tool.on("on_tick", rebuild);
   rebuild();

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Auto-status 1.1.0, built by scripts/build.mjs from tools/auto-status/src, lib/ and the
+// Auto-status 1.1.1, built by scripts/build.mjs from tools/auto-status/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // tools/auto-status/src/index.js
@@ -12,11 +12,13 @@
     commands: {
       autostatus: (args) => {
         const parts = args.trim().split(/\s+/);
-        if (parts[0] === "off" || !parts[0]) {
+        if (parts[0].toLowerCase() === "off") {
           everyMin = 0;
           return ["Auto-status off."];
         }
-        everyMin = Math.max(MIN_MINUTES, Math.round(Number(parts[0]) || MIN_MINUTES));
+        const minutes = Number(parts[0]);
+        if (!parts[0] || !Number.isFinite(minutes)) return ["Usage: /autostatus <minutes> <text>  |  /autostatus off"];
+        everyMin = Math.max(MIN_MINUTES, Math.round(minutes));
         text = (parts.slice(1).join(" ") || "APRScaching").slice(0, STATUS_MAX);
         ticks = 0;
         return [`Auto-status every ${everyMin} min: "${text}" (TX-gated).`];

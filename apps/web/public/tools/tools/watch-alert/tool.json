@@ -2,7 +2,7 @@
   "name": "watch-alert",
   "title": "Watch & alert",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "command",
@@ -15,7 +15,7 @@
   ],
   "description": "Highlight + log heard callsigns you /watch (any source); see hits in a panel.",
   "entry": "tool.js",
-  "entrySha256": "7uE6QG+Zr0eD1PW2ZaPnvZI0VK5pu5lk3dbEVbDG6sQ=",
+  "entrySha256": "9puUnZla78qwJLXgEybkAdS4cXslG39PgKujZ2wWkGw=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "p+N4AqzkQQ0/bdJ5ZqbO0dye7ssN28G4s2rZLDELG+QrZiaXmfDafYxfziDA51Mk1PVToIImFkf2RYxoTelMDw=="
+  "signature": "sWxFc8qHYZqSVWow428PyON2GstluaMnaVzsUI1+ODCfhQyRFpP1TYRyRYcC1jn47g8HhQSpXgSqlb5SU6zvAA=="
 }

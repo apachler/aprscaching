@@ -8,7 +8,7 @@
       "version": "1.0.0",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/hello/tool.json",
-      "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
+      "description": "Example signed tool: a command, colour rule, panel and a ROT13 decoder."
     },
     {
       "name": "station-log",
@@ -23,7 +23,7 @@
       "name": "monitor-colouriser",
       "title": "Monitor colouriser",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/monitor-colouriser/tool.json",
       "description": "Colours heard traffic by NAMES.GP station type."
@@ -50,7 +50,7 @@
       "name": "beacon-scheduler",
       "title": "Beacon scheduler",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/beacon-scheduler/tool.json",
       "description": "/beacon <min> <comment> — a periodic status beacon, every 10 min or more (TX-gated); /beacon off."
@@ -68,7 +68,7 @@
       "name": "digimode-decoders",
       "title": "PSK31 + CW decoders",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/digimode-decoders/tool.json",
       "description": "Decode PSK31 varicode + CW (Morse) — the audio-cache decoders."
@@ -86,7 +86,7 @@
       "name": "watch-alert",
       "title": "Watch & alert",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/watch-alert/tool.json",
       "description": "Highlight + log heard callsigns you /watch (any source); see hits in a panel."
@@ -95,7 +95,7 @@
       "name": "mheard",
       "title": "MHeard",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/mheard/tool.json",
       "description": "Rolling recently-heard stations, aggregated across sources (RF terminal, APRS, …)."
@@ -104,7 +104,7 @@
       "name": "auto-status",
       "title": "Auto-status",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/auto-status/tool.json",
       "description": "/autostatus <min> <text> — periodically transmit a status (TX-gated)."
@@ -122,16 +122,16 @@
       "name": "sevenplus",
       "title": "7PLUS reassembler",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/sevenplus/tool.json",
-      "description": "Parse + reassemble multi-part 7plus messages (file / part / completeness)."
+      "description": "Collect multi-part 7plus messages: the file, the parts found and the parts still missing."
     },
     {
       "name": "unit-convert",
       "title": "Unit converter",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/unit-convert/tool.json",
       "description": "/conv <value> <from> <to> — km/mi/m/ft/yd/kn/kmh/nm + c/f."
@@ -149,7 +149,7 @@
       "name": "station-db",
       "title": "Station DB (NAMES.GP)",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/station-db/tool.json",
       "description": "Classifies heard stations (NAMES.GP) and shares them on the inter-tool bus."
@@ -158,7 +158,7 @@
       "name": "info-responder",
       "title": "Info / menu responder",
       "author": "OE8APR",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/info-responder/tool.json",
       "description": "Answers a peer's INFO / MENU / WHOIS <call> (GP gpserv/gpdir)."
@@ -176,7 +176,7 @@
       "name": "connect-bell",
       "title": "Connect bell",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/connect-bell/tool.json",
       "description": "Rings (logs a notice) when a station connects."
@@ -194,7 +194,7 @@
       "name": "sched-query",
       "title": "Scheduled query (GPAUTO)",
       "author": "OE8APR",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
       "entry": "tools/sched-query/tool.json",
       "description": "/gpauto <steps> — run/schedule a connect/waitfor/send/disconnect batch (GP GPAUTO)."
@@ -219,5 +219,5 @@
     }
   ],
   "authority": "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0",
-  "sig": "jYcilu9kH7r2chud8SgmDssx17YmdSfluJzZ2haiWV0yY3rtRvMuBWBabFduV170pGW64mBj9seiBbQAdVZRAw=="
+  "sig": "FGRWFpKcdtSv+p4rN9LoNitQMCAmYOwW2LqslJx1Bj0YqYD1mlt2brni/P0L+zNV4bmTvGFNh95VPTykT9WPAA=="
 }
