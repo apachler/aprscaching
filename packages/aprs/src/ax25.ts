@@ -158,6 +158,17 @@ function encodeAddr(callWithSsid: string, last: boolean, cOrH = false): number[]
   return out;
 }
 
+/**
+ * Bytes to text, one character per byte (ISO-8859-1), the inverse of `encodeAx25`'s `charCode & 0xff`.
+ * `TextDecoder("latin1")` is windows-1252 under the WHATWG encoding standard: it maps 0x80–0x9F to other code
+ * points, so a frame re-encoded for an IGate or a digipeater would no longer carry the bytes that were heard.
+ */
+function latin1(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i += 4096) s += String.fromCharCode(...b.subarray(i, i + 4096));
+  return s;
+}
+
 /** Decode a raw AX.25 UI frame into the same shape parseTNC2 produces. null if malformed. */
 export function decodeAx25(bytes: Uint8Array): ParsedFrame | null {
   if (bytes.length < 16) return null;
@@ -175,7 +186,7 @@ export function decodeAx25(bytes: Uint8Array): ParsedFrame | null {
   const control = bytes[off]!,
     pid = bytes[off + 1]!;
   if (control !== 0x03 || pid !== 0xf0) return null; // only UI / no-layer-3
-  const payload = new TextDecoder("latin1").decode(bytes.slice(off + 2));
+  const payload = latin1(bytes.subarray(off + 2));
   const dst = addrs[0]!.call;
   const src = addrs[1]!.call;
   const path = addrs.slice(2).map((a) => a.call + (a.repeated ? "*" : ""));

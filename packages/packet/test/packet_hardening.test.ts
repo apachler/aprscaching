@@ -13,6 +13,7 @@ import { ConnectSequencer } from "../src/netrom-connect-through.js";
 import { FbbSession, type FbbMessage, type FbbStore } from "../src/fbb-session.js";
 import { SessionStore } from "../src/fbb-scheduler.js";
 import { CachedBbsStore, type CachedBbsBackend } from "../src/cached-bbs-store.js";
+import { hostmodeData } from "../src/hostmode.js";
 import type { Ax25Address, Ax25Frame } from "@aprscaching/ax25";
 
 const A = (call: string, ssid = 0): Ax25Address => ({ call, ssid });
@@ -229,5 +230,35 @@ describe("FBB loop suppression via a real BID set", () => {
     // accepting a BID marks it held so it isn't re-accepted within the session
     store.accept({ type: "P", from: "X", at: "WW", to: "Y", bid: "NEW_1", title: "t", body: "b" });
     expect(store.hasBid("NEW_1")).toBe(true);
+  });
+});
+
+describe("wire edge cases found by the property tests", () => {
+  const recorder = () => {
+    const lines: string[] = [];
+    let dropped = false;
+    const app: LineApp = { greeting: () => [], handle: (l) => (lines.push(l), { lines: [] }) };
+    const d = makeLineDriver(app, { send: () => {}, disconnect: () => (dropped = true) });
+    return { lines, d, dropped: () => dropped };
+  };
+
+  it("the line driver decodes a UTF-8 character split across two frames", () => {
+    const r = recorder();
+    const b = new TextEncoder().encode("Grüße\r");
+    r.d.onData(b.subarray(0, 3)); // ends inside the two bytes of "ü"
+    r.d.onData(b.subarray(3));
+    expect(r.lines).toEqual(["Grüße"]);
+  });
+
+  it("the line driver keeps a session whose one read holds more than 8 KiB of whole lines", () => {
+    const r = recorder();
+    const lines = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`);
+    r.d.onData(new TextEncoder().encode(lines.map((l) => `${l}\r`).join("")));
+    expect(r.dropped()).toBe(false);
+    expect(r.lines).toEqual(lines);
+  });
+
+  it("host-mode info with no bytes is no frame, not one announcing 256 bytes", () => {
+    expect(hostmodeData(1, new Uint8Array(0)).length).toBe(0);
   });
 });

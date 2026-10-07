@@ -3,7 +3,7 @@
 # the distributor and ships a native build. Fallback: the author's direct download (freeware for
 # amateur use, never redistributed by this repo), which is a 32-bit x86 binary needing the i386
 # loader. Pin the fallback via --build-arg LINBPQ_URL / LINBPQ_SHA256.
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 ARG LINBPQ_URL=https://www.cantab.net/users/john.wiseman/Downloads/Beta/linbpq
 ARG LINBPQ_SHA256=
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -25,7 +25,7 @@ echo "==> deps (teaser)"
 ( cd "$HERE" && if [ ! -d node_modules ]; then
     # a prebuilt Chromium (PW_CHROMIUM) means we don't need Playwright's own download
     [ -n "${PW_CHROMIUM:-}" ] && export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-    npm install
+    npm ci --no-audit --no-fund
   fi )
 
 echo "==> build web (offline grid basemap)"

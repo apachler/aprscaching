@@ -36,8 +36,12 @@ export function hostmodeCommand(chan: number, cmd: string): Uint8Array {
   out[2 + c.length] = 0;
   return out;
 }
-/** Host → TNC: up to 256 bytes of info to transmit on a channel (caller splits longer payloads). */
+/**
+ * Host → TNC: up to 256 bytes of info to transmit on a channel (caller splits longer payloads). No info is
+ * no frame: the length byte holds len-1, so a zero-length frame would announce 256 bytes it does not carry.
+ */
 export function hostmodeData(chan: number, data: Uint8Array): Uint8Array {
+  if (!data.length) return new Uint8Array(0);
   const n = Math.min(data.length, 256);
   const out = new Uint8Array(3 + n);
   out[0] = chan & 0xff;

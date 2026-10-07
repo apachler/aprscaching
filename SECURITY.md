@@ -11,6 +11,7 @@ federation traffic from peers we don't control. We take reports seriously.
 | < 1.0   | ❌ pre-release, unsupported |
 
 No version is released yet. Until 1.0.0 is tagged, report against the `dev` branch; fixes land there.
+Security fixes are published as GitHub security advisories and named in that release's notes.
 
 Self-hosters: run a supported version, and because the app is AGPL, keep your published source
 (`SOURCE_REPO`) current so your users can see what you're running.

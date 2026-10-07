@@ -151,3 +151,14 @@ describe("toCborValue / fromCborValue — the JSON-like bridge", () => {
     expect(() => toCborValue({ lat: 47.083 })).toThrow(/scale to an integer/);
   });
 });
+
+describe("a __proto__ key from a peer (found by the property tests)", () => {
+  it("comes back as an own field and leaves the prototype alone", () => {
+    const m: CborMap = new Map<string, CborValue>([["__proto__", new Map<string, CborValue>([["admin", true]])]]);
+    const o = fromCborValue(cborDecode(cborEncode(m))) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(o)).toBe(Object.prototype);
+    expect((o as { admin?: unknown }).admin).toBeUndefined();
+    expect(Object.keys(o)).toEqual(["__proto__"]);
+    expect(Object.getOwnPropertyDescriptor(o, "__proto__")?.value).toEqual({ admin: true });
+  });
+});

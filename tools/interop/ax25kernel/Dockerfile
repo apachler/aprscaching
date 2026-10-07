@@ -3,13 +3,13 @@
 # connects), and axkit taps the third to log every frame on the wire. ax25d answers connects to OE9KRN-2.
 # REQUIRES the ax25 and mkiss modules on the HOST (sudo modprobe ax25 mkiss), a privileged container and
 # the host network: AF_AX25 sockets and AX.25 devices exist only in the initial network namespace.
-FROM ubuntu:noble AS build
+FROM ubuntu:noble@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS build
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev linux-libc-dev \
   && rm -rf /var/lib/apt/lists/*
 COPY axkit.c /src/axkit.c
 RUN gcc -O2 -Wall -Wextra -Werror -o /axkit /src/axkit.c
 
-FROM ubuntu:noble
+FROM ubuntu:noble@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 RUN apt-get update && apt-get install -y --no-install-recommends ax25-tools ax25-apps socat kmod iproute2 \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /axkit /usr/local/bin/axkit

@@ -19,6 +19,7 @@
     "e2e:offline": "node tools/e2e/offline-shell.mjs",
     "e2e:tools": "node tools/e2e/tool-sandbox.mjs",
     "verify": "tools/dev/verify.sh",
+    "coverage": "vitest run --config vitest.coverage.config.mjs --coverage",
     "dev": "node tools/dev/dev.mjs",
     "dev:preview": "node tools/dev/dev.mjs --preview",
     "dev:peer": "node tools/dev/dev.mjs --peer",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "5.0.2",
     "axe-core": "^4.13.0",
     "esbuild": "0.28.2",
     "eslint": "^10.11.0",
@@ -44,6 +46,7 @@
     "playwright-core": "^1.63.0",
     "prettier": "^3.9.9",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.0"
+    "typescript-eslint": "^8.71.0",
+    "vitest": "5.0.2"
   }
 }

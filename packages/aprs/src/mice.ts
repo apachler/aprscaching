@@ -117,14 +117,19 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   if (dd.west) lon = -lon;
   if (!isValidLatLon(lat, lon)) return null;
 
-  // speed (knots) + course (deg) from info bytes 4..6
+  // speed (knots) + course (deg) from info bytes 4..6, each 0x1c–0x7f on the wire. A byte outside that
+  // range carries no speed or course, and a course past 360° is not a heading.
   const sp = info.charCodeAt(4) - 28,
     dc = info.charCodeAt(5) - 28,
     se = info.charCodeAt(6) - 28;
-  let speedKn = sp * 10 + Math.floor(dc / 10);
-  let course = (dc % 10) * 100 + se;
-  if (speedKn >= 800) speedKn -= 800;
-  if (course >= 400) course -= 400;
+  let speedKn: number | undefined, course: number | undefined;
+  if ([sp, dc, se].every((v) => v >= 0 && v <= 99)) {
+    speedKn = sp * 10 + Math.floor(dc / 10);
+    course = (dc % 10) * 100 + se;
+    if (speedKn >= 800) speedKn -= 800;
+    if (course >= 400) course -= 400;
+    if (course > 360) course = undefined;
+  }
 
   const code = info[7] ?? "/";
   const table = info[8] ?? "/";

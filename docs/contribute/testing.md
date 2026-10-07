@@ -28,6 +28,30 @@ pnpm --filter @aprscaching/packet test              # one workspace
 pnpm --filter @aprscaching/packet exec vitest run test/lzhuf.test.ts   # one file
 ```
 
+### Property tests
+
+Each parser that reads radio, socket or federation input has a `test/properties.test.ts` written with
+[fast-check](https://fast-check.dev/): `packages/aprs` (TNC2, every APRS data type, AX.25 UI frames, KISS),
+`packages/ax25` (frames of every type in both moduli, the AXIP trailer), `packages/packet` (NET/ROM, INP3,
+AGWPE, host mode, LZHUF and the FBB block stream, the line driver) and `packages/shared` (CBOR and the fedwire
+envelopes). Each property holds for any generated input: the parser returns a value or its documented error,
+finishes fast, keeps its output fields within bounds, gives the same result however a stream is split into
+reads, and decodes what its encoder wrote. They run in the normal suites with a few hundred cases each;
+`FUZZ_RUNS` raises that for a deeper local run:
+
+```bash
+FUZZ_RUNS=100000 pnpm --filter @aprscaching/aprs exec vitest run test/properties.test.ts
+```
+
+A failing property prints the shrunk counterexample and its seed. The fix lands with that counterexample as an
+ordinary regression test beside it.
+
+### Coverage
+
+`pnpm run coverage` runs every unit suite in one vitest run (`vitest.coverage.config.mjs`) under V8 coverage
+and writes `coverage/` (html, lcov, json-summary). The `unit test coverage` CI job runs it and uploads the
+report as an artifact. No threshold applies; the number is measured, not gated.
+
 `servers/bun` intentionally has no vitest: the Bun **conformance** job (below) covers it. `apps/web`
 runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse
 check under jsdom: data loading, polling, navigation history) beside its typecheck + build and three guards:
@@ -216,7 +240,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme (pull requests and `main`) · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · unit test coverage (reported as an artifact, never failing on a number) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme (pull requests and `main`) · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |
@@ -248,6 +272,7 @@ skipped, which a required check accepts. `lint + format` always runs.
 | Job | Runs for |
 |---|---|
 | unit tests + builds | any path but docs, Markdown, the Pocket scripts, the other workflows and repository metadata |
+| unit test coverage | the same paths as unit tests + builds |
 | lint (type-aware) | all, gateway, packages: it type-checks `workers/gateway/src` and `packages/*/src` |
 | conformance (Node, Bun, federation) | all, gateway, packages |
 | e2e (live mic decode) | all, audio, packages, e2e |

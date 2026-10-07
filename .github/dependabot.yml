@@ -3,6 +3,7 @@ updates:
   # npm / pnpm workspace — one PR set for the whole monorepo, grouped to cut noise.
   - package-ecosystem: npm
     directory: "/"
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -21,6 +22,7 @@ updates:
   # GitHub Actions — keep the pinned SHAs current (Dependabot bumps the SHA + the # vX comment).
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -30,9 +32,11 @@ updates:
     commit-message:
       prefix: "ci(deps)"
 
-  # The manual's build (docs/requirements.txt): MkDocs and Material for MkDocs.
+  # The manual's build: MkDocs and Material for MkDocs (docs/requirements.in), compiled with hashes into
+  # docs/requirements.txt; Dependabot updates both.
   - package-ecosystem: pip
     directory: "/docs"
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -41,3 +45,38 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "docs(deps)"
+
+  # The OCI stack's CLI (deploy/oci/oci-cli-requirements.txt), every package pinned by hash. Dependabot bumps each
+  # pin on its own; an oci-cli bump that needs a newer oci is regenerated with the command in that file's header.
+  - package-ecosystem: pip
+    directory: "/deploy/oci"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      oci-cli:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Docker base images, pinned by tag and multi-arch index digest. Dependabot refreshes the digest as the tag
+  # moves; a new major (Node 26, a newer Ubuntu) is a deliberate change, not a weekly bump.
+  - package-ecosystem: docker
+    directories:
+      - "/deploy"
+      - "/servers/node"
+      - "/apps/ingest"
+      - "/tools/interop/*"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      docker-images:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
