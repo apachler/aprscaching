@@ -53,9 +53,6 @@ gh attestation verify pocket.sh --repo apachler/aprscaching   # pkg install gh; 
 bash pocket.sh --call <YOURCALL>
 ```
 
-**Known issue:** until the first release, the release URLs answer 404. Download `pocket.sh` from the `dev`
-branch's raw URL instead, read it, and pass `--branch dev` to install the development branch.
-
 `pocket.sh` upgrades Termux (`apt-get update && apt-get dist-upgrade`, after `termux-change-repo` when no mirror is
 chosen yet and a terminal is attached), runs `install.sh` from the same branch with the options passed on, starts the station and
 prints its URLs (on the phone and on the hotspot) and a one-time sign-in link. The link is the way in where

@@ -4,7 +4,7 @@ site_name: APRScaching
 site_description: >-
   The manual for APRScaching — an APRS geocaching game and a full ham-radio Shack.
 # Where the manual is published. Set so page metadata, the sitemap and canonical links resolve;
-# .github/workflows/docs.yml deploys here from the default branch.
+# .github/workflows/docs.yml deploys here from main, so the site matches the latest release.
 site_url: https://apachler.github.io/aprscaching/
 repo_url: https://github.com/apachler/aprscaching
 edit_uri: edit/dev/docs/

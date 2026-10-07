@@ -77,12 +77,6 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     `--branch dev` installs a branch instead, straight from GitHub with nothing to check. It says so and asks
     first; `--unverified` answers for a script.
 
-    !!! warning "While no release is published"
-        Without a published release, the release URLs above answer 404 and there is nothing signed to check.
-        Download the script from `dev`, read it, then install that branch (it asks you to confirm the
-        unverified install):
-        `curl -fsSLO https://raw.githubusercontent.com/apachler/aprscaching/dev/deploy/pocket/pocket.sh && less pocket.sh && bash pocket.sh --call <YOURCALL> --branch dev`
-
 3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
    `apt update && apt full-upgrade -y` first.
 4. Answer the **setup questions**, which `pocket.sh` offers after a first install. They run any time with
