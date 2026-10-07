@@ -1,4 +1,4 @@
-# Portable aprscaching gateway — Node + SQLite, no Cloudflare.
+# Portable APRScaching gateway — Node + SQLite, no Cloudflare.
 # Build from the REPO ROOT:
 #   docker build -f servers/node/Dockerfile -t aprscaching-node .
 #   docker run -p 8787:8787 -v aprscaching-data:/data -e INGEST_SECRET=... aprscaching-node

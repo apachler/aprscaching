@@ -215,14 +215,14 @@ CHECK="start.sh: the notify window with Termux:API" check grep -qxF notify <<<"$
 bash "$HERE/extras/notify.sh" --once
 call="$(grep -m1 '^termux-notification ' "$WORK/api-calls" || true)"
 CHECK="notify.sh: an ongoing notification with the station's id" check grep -q -- "--id aprscaching --ongoing" <<<"$call"
-CHECK="notify.sh: running, stations heard, battery" check grep -qE "aprscaching: running.*stations heard in the last hour.*battery 80%" <<<"$call"
+CHECK="notify.sh: running, stations heard, battery" check grep -qE "APRScaching: running.*stations heard in the last hour.*battery 80%" <<<"$call"
 CHECK="notify.sh: Stop, Restart and Open map" check grep -qE "button1 Stop.*button2 Restart.*button3 Open map" <<<"$call"
 CHECK="station-status: operator secret required" check test "$(curl -s -o /dev/null -w '%{http_code}' "$(gateway_base)/api/admin/station-status")" = 403
 
 export APRSCACHING_SHORTCUTS_DIR="$WORK/shortcuts" APRSCACHING_BACKUP_DIR="$WORK/backups"
 bash "$HERE/extras/setup.sh" --shortcuts --scheduled-backup >/dev/null
 CHECK="extras/setup.sh: five shortcuts" check test "$(find "$WORK/shortcuts" -type f -perm -u+x | wc -l)" -eq 5
-CHECK="extras/setup.sh: background shortcuts under tasks/" check test -x "$WORK/shortcuts/tasks/aprscaching Start"
+CHECK="extras/setup.sh: background shortcuts under tasks/" check test -x "$WORK/shortcuts/tasks/APRScaching Start"
 CHECK="extras/setup.sh: a daily job while charging" check grep -qE "termux-job-scheduler --job-id 4287 --script .* --period-ms 86400000 --charging true" "$WORK/api-calls"
 job="$RUN_DIR/scheduled-backup-job.sh"
 bash "$job" && ok_backup=1 || ok_backup=0
@@ -244,7 +244,7 @@ bash "$HERE/extras/battery.sh" --once >/dev/null
 CHECK="battery.sh: saver below 20 % on battery" check grep -q "^APRSIS_FILTER='b/N0CALL\*'" "$SAVER_ENV"
 sleep 2
 CHECK="battery.sh: the station restarted into the saver profile" check test "$(state_get ingest restarts)" -gt "$ing"
-CHECK="battery.sh: one notification" check grep -q "aprscaching-battery --title aprscaching: battery saver on" "$WORK/api-calls"
+CHECK="battery.sh: one notification" check grep -q "aprscaching-battery --title APRScaching: battery saver on" "$WORK/api-calls"
 CHECK="status.sh: battery saver ON" check grep -q "battery saver: ON" <<<"$(bash "$HERE/status.sh" 2>&1 || true)"
 battery 25 UNPLUGGED
 bash "$HERE/extras/battery.sh" --once >/dev/null

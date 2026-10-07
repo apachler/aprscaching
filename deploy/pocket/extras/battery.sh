@@ -76,7 +76,7 @@ current() { if [ -f "$SAVER_ENV" ]; then echo saver; else echo normal; fi; }
 
 notify_once() {
   if have termux-notification; then
-    termux_api termux-notification --id aprscaching-battery --title "aprscaching: $1" --content "$2" >/dev/null || true
+    termux_api termux-notification --id aprscaching-battery --title "APRScaching: $1" --content "$2" >/dev/null || true
   fi
 }
 

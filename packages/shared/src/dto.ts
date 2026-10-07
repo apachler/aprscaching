@@ -114,7 +114,7 @@ export const CreateCacheRequest = z.object({
   minTrust: MinTrust.optional(),
   fedScope: FedScope.default("public"), // how far this cache federates
   code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
-  driveIn: z.boolean().optional(), // car-accessible cache (original APRSCaching "Drive-In")
+  driveIn: z.boolean().optional(), // car-accessible cache (original APRScaching "Drive-In")
   country: z.union([z.literal(""), DxccPrefix]).optional(), // a DXCC prefix; "" clears it
   tags: CacheTags.optional(),
   ratingPolicy: RatingPolicy.optional(), // who may rate; default 'finders'
@@ -205,7 +205,7 @@ export interface CacheSummary {
   sourceAttribution: AttributionPart[] | null;
   minTrust: "A" | "B" | null;
   fedScope: FedScope; // owner's federation scope
-  driveIn: boolean; // car-accessible (original APRSCaching "Drive-In")
+  driveIn: boolean; // car-accessible (original APRScaching "Drive-In")
   country: string | null; // the DXCC prefix of the country (owner-set)
   tags: string[]; // free-form tags
 }

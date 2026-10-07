@@ -1,6 +1,6 @@
 # @aprscaching/node-gateway — portable self-host runtime
 
-The aprscaching gateway running on **Node + SQLite**. It serves the runtime-neutral gateway app
+The APRScaching gateway running on **Node + SQLite**. It serves the runtime-neutral gateway app
 (`workers/gateway`, imported as `@aprscaching/gateway/app`) and supplies the interfaces the app is written
 against (`workers/gateway/src/runtime.ts`); the Bun server (`servers/bun`) reuses these host modules:
 

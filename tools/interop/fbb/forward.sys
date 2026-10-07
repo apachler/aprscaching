@@ -1,5 +1,5 @@
 #
-# Interop forward file: one partner, OE1ACS (aprscaching)
+# Interop forward file: one partner, OE1ACS (APRScaching)
 # on the telnet port (TNC 2 in port.sys = port B).
 # No connect script: FBB never dials out. OE1ACS
 # connects and FBB reverse-forwards in its session.

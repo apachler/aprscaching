@@ -105,6 +105,14 @@ around the diagram carries the explanation.
 
 ---
 
+## The product name
+
+Wherever a reader meets the product as a name, it is the wordmark **APRScaching**: docs, comments, UI copy, emails,
+page titles, log lines, help text and descriptions. Never `aprscaching`, `Aprscaching`, `APRS caching` or
+`APRS-caching`. The lowercase form is a literal only: a domain or URL, a package (`@aprscaching/*`), a path or
+file (`deploy/aprscaching`), a command, a system user, an image or unit name, an env key, a DNS record
+(`_aprscaching`), a JSON value or an identifier. In prose such a literal sits in a code span.
+
 ## Enforced in CI
 
 `tools/checks/docs.mjs` (run in the `lint + format` job) fails on the codes and story phrases above in the
@@ -113,7 +121,8 @@ manual, the root documents and the READMEs, on configuration keys missing from
 links outside the manual, on box-drawing diagrams in fenced blocks, and on any reference to a manual page or
 heading that does not exist: a `docs/…` path in code, scripts or comments, a published-manual URL, a web-app
 `manualUrl("…")` / `<ManualLink page="…">` link or a doctor hint; and on a list item MkDocs would render as paragraph text, for want of a blank
-line before it (a list right after a paragraph, or the item after one that holds a blank line). Pages move without redirects, so a move updates every reference in the same
+line before it (a list right after a paragraph, or the item after one that holds a blank line); and on the product
+name in lowercase or another spelling outside a code span, link target or URL. Pages move without redirects, so a move updates every reference in the same
 change. The web app's `test/diagrams.test.ts` parses every ```` ```mermaid ```` block. It cannot judge subtler story-telling or code comments; review still does.
 
 ## Applies to NEW code

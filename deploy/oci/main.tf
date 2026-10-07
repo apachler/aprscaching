@@ -408,7 +408,7 @@ resource "oci_identity_dynamic_group" "vm" {
   provider       = oci.home
   compartment_id = var.tenancy_ocid
   name           = "aprscaching-${local.name_suffix}"
-  description    = "The aprscaching VM, for its backups"
+  description    = "The APRScaching VM, for its backups"
   matching_rule  = "ALL {instance.id = '${oci_core_instance.this.id}'}"
 }
 
@@ -417,7 +417,7 @@ resource "oci_identity_policy" "vm" {
   provider       = oci.home
   compartment_id = var.compartment_ocid
   name           = "aprscaching-${local.name_suffix}"
-  description    = "The aprscaching VM writes its backups to its own bucket; Object Storage expires them"
+  description    = "The APRScaching VM writes its backups to its own bucket; Object Storage expires them"
   statements = [
     "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
     "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read buckets in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",

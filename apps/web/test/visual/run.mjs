@@ -733,7 +733,7 @@ function indexHtml(results, shots) {
         `<section><h2>${esc(r.id)}</h2>${r.error ? `<p class=err>${esc(r.error)}</p>` : ""}${shots && !r.error ? `<img loading=lazy src="${esc(r.id)}.png" alt="${esc(r.surface)} in the ${esc(r.theme)} theme at the ${esc(r.view)} size">` : ""}<ul>${r.violations.map((v) => `<li><b>${esc(v.impact)}</b> ${esc(v.id)} — ${esc(v.help)} (${v.count}): <code>${esc(v.nodes.join(" | "))}</code></li>`).join("")}</ul></section>`,
     )
     .join("\n");
-  return `<!doctype html><meta charset=utf-8><title>aprscaching visual + axe harness</title><style>body{font:14px system-ui;margin:16px;background:#111;color:#eee}img{max-width:100%;max-height:70vh;border:1px solid #444}section{margin:0 0 32px}.err{color:#f88}code{color:#9cf}</style><h1>Visual + axe harness</h1>${rows}`;
+  return `<!doctype html><meta charset=utf-8><title>APRScaching visual + axe harness</title><style>body{font:14px system-ui;margin:16px;background:#111;color:#eee}img{max-width:100%;max-height:70vh;border:1px solid #444}section{margin:0 0 32px}.err{color:#f88}code{color:#9cf}</style><h1>Visual + axe harness</h1>${rows}`;
 }
 
 await main();

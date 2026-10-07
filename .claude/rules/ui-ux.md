@@ -14,7 +14,7 @@ Keywords: **MUST / MUST NOT / SHOULD / SHOULD NOT / MAY** (RFC 2119).
 
 ## 0. North star — power without overwhelm
 
-aprscaching is feature-rich (caching + the Shack, a full ham-radio platform), but **a user MUST be able to
+APRScaching is feature-rich (caching + the Shack, a full ham-radio platform), but **a user MUST be able to
 operate any surface without being overwhelmed.** Capability is revealed progressively; the default
 view is simple; depth is one clear step away. Two density contexts coexist:
 

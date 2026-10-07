@@ -1,4 +1,4 @@
-# CLAUDE.md — aprscaching
+# CLAUDE.md — APRScaching
 
 ## Rules (read before building/changing the relevant area)
 @.claude/rules/ui-ux.md

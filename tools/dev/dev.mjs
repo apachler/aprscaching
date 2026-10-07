@@ -252,7 +252,7 @@ async function run() {
   console.log(
     [
       "",
-      `  aprscaching dev      ${appUrl}`,
+      `  APRScaching dev      ${appUrl}`,
       `  admin call           ${adminCall}`,
       `  settings             ${shown(envFile)}${created ? "  (new)" : ""}`,
       `  data                 ${shown(lay.data)}`,

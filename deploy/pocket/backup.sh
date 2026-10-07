@@ -64,7 +64,7 @@ pocket_paths
 case "$KEEP" in '' | *[!0-9]* | 0) die "--keep takes a number of archives, at least 1 (got '$KEEP')." ;; esac
 
 have node || die "node is missing." "Run deploy/pocket/install.sh first."
-[ -d "$DIR/servers/node" ] || die "$DIR is not an aprscaching checkout." "Pass --dir PATH."
+[ -d "$DIR/servers/node" ] || die "$DIR is not an APRScaching checkout." "Pass --dir PATH."
 DB="$(env_get DB_PATH)"
 DB="${DB:-$DATA/aprscaching.db}"
 DB_DIR="$(dirname "$DB")"
@@ -213,7 +213,7 @@ if [ -d "$MEDIA" ] && [ "$MEDIA_MODE" != no ]; then
 fi
 
 {
-  printf 'aprscaching Pocket backup\n'
+  printf 'APRScaching Pocket backup\n'
   printf 'created: %s\n' "$TS"
   printf 'commit: %s\n' "$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   printf 'database: %s (%s tables)\n' "$DB" "$tables"

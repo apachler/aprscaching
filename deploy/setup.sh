@@ -191,7 +191,7 @@ unset_var() {
 }
 
 # ---- questions ---------------------------------------------------------------------------------------
-echo "=== aprscaching setup wizard ==="
+echo "=== APRScaching setup wizard ==="
 existing_admin="$(current ADMIN_CALLSIGNS)"
 existing_is_call="$(current APRSIS_CALLSIGN)"
 [ "$existing_is_call" = "N0CALL" ] && existing_is_call=""
@@ -378,7 +378,7 @@ MAIL="${MAIL:-keep}"
 case "$MAIL" in
   smtp | resend)
     from_default="$(unquoted EMAIL_FROM)"
-    [ -n "$from_default" ] || [ "$MODE" = lan ] || from_default="aprscaching <noreply@$DOMAIN_IN>"
+    [ -n "$from_default" ] || [ "$MODE" = lan ] || from_default="APRScaching <noreply@$DOMAIN_IN>"
     ask MAIL_FROM "Sender address (EMAIL_FROM)" "${MAIL_FROM:-$from_default}"
     [ -n "$MAIL_FROM" ] || { echo "A sender address is required (--email-from)." >&2; exit 2; }
     ;;

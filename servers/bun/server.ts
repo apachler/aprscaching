@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * aprscaching bun-gateway — the Bun-runtime self-host core, and the server the desktop single binary
+ * APRScaching bun-gateway — the Bun-runtime self-host core, and the server the desktop single binary
  * wraps (deploy/desktop/launcher.ts).
  *
  * Same handlers as the Node server (imported from @aprscaching/gateway/app),
@@ -205,5 +205,5 @@ if (import.meta.main) {
   }
   const { migrated, server } = started;
   console.log(migrated.length ? `migrations applied: ${migrated.join(", ")}` : "migrations up to date");
-  console.log("aprscaching bun-gateway listening on :%s  (db: %s)", server.port, DB_PATH);
+  console.log("APRScaching bun-gateway listening on :%s  (db: %s)", server.port, DB_PATH);
 }

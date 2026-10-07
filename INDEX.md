@@ -1,4 +1,4 @@
-# aprscaching — project map
+# APRScaching — project map
 
 The APRScaching-first web app, by OE8APR. This file is a map of the repository.
 

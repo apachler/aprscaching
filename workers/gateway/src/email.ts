@@ -141,8 +141,8 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   const sent = await sendEmail(
     env,
     e,
-    "Your aprscaching sign-in link",
-    `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`,
+    "Your APRScaching sign-in link",
+    `Sign in to APRScaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`,
   );
   return linkSent(env, e, purpose, token, link, sent);
 }
@@ -190,8 +190,8 @@ async function startAccountData(
   const sent = await sendEmail(
     env,
     e,
-    "Your aprscaching data",
-    `Open your aprscaching account's data to download a copy or erase it:\n${link}\n\n` +
+    "Your APRScaching data",
+    `Open your APRScaching account's data to download a copy or erase it:\n${link}\n\n` +
       "The link opens your data and nothing else, and expires in 15 minutes. If you didn't request it, ignore this email.",
   );
   return linkSent(env, e, ACCOUNT_DATA_PURPOSE, token, link, sent);
@@ -567,8 +567,8 @@ export async function sendEmailConfirmation(
   const sent = await sendEmail(
     env,
     email,
-    "Confirm your aprscaching email address",
-    `Confirm this address for the aprscaching account of ${callsign}:\n${link}\n\nOnce confirmed, it signs you in and recovers the account. The link expires in 24 hours. If you did not create this account, ignore this email: the address is not used until it is confirmed.`,
+    "Confirm your APRScaching email address",
+    `Confirm this address for the APRScaching account of ${callsign}:\n${link}\n\nOnce confirmed, it signs you in and recovers the account. The link expires in 24 hours. If you did not create this account, ignore this email: the address is not used until it is confirmed.`,
   );
   if (sent) return { sent };
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {

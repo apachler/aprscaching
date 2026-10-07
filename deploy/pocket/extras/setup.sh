@@ -9,8 +9,8 @@
 #   bash ~/aprscaching/deploy/pocket/extras/setup.sh --remove
 #
 # Shortcuts, in ~/.shortcuts/ (Termux:Widget lists them; add its widget to the home screen):
-#   aprscaching Status     opens a terminal with status.sh (and a toast of the headline)
-#   tasks/: aprscaching Start, Stop, Open map, Backup, Sync before trip — run in the background, report
+#   APRScaching Status     opens a terminal with status.sh (and a toast of the headline)
+#   tasks/: APRScaching Start, Stop, Open map, Backup, Sync before trip — run in the background, report
 #           with a toast
 #
 # Options:
@@ -45,8 +45,8 @@ pocket_paths
 
 SC_DIR="${APRSCACHING_SHORTCUTS_DIR:-$HOME/.shortcuts}"
 JOB_ID=4287
-NAMES=("aprscaching Status" "tasks/aprscaching Start" "tasks/aprscaching Stop" "tasks/aprscaching Open map"
-  "tasks/aprscaching Backup" "tasks/aprscaching Sync before trip")
+NAMES=("APRScaching Status" "tasks/APRScaching Start" "tasks/APRScaching Stop" "tasks/APRScaching Open map"
+  "tasks/APRScaching Backup" "tasks/APRScaching Sync before trip")
 
 cancel_job() { if have termux-job-scheduler; then termux_api termux-job-scheduler --cancel --job-id "$JOB_ID" >/dev/null || true; fi; }
 
@@ -81,24 +81,24 @@ toast_cmd() { printf 'if command -v termux-toast >/dev/null; then timeout 8 term
 write_shortcut() {
   local name=$1 body=$2 file="$SC_DIR/$1"
   mkdir -p "$(dirname "$file")"
-  printf '#!/data/data/com.termux/files/usr/bin/bash\n# aprscaching shortcut: %s\n%s\n%s\n' "${name##*/}" "$ENVS" "$body" >"$file"
+  printf '#!/data/data/com.termux/files/usr/bin/bash\n# APRScaching shortcut: %s\n%s\n%s\n' "${name##*/}" "$ENVS" "$body" >"$file"
   chmod 700 "$file"
 }
 
 if [ "${SHORTCUTS:-0}" = 1 ]; then
   step "Home-screen shortcuts in $SC_DIR"
-  write_shortcut "aprscaching Status" "out=\"\$(bash $(q "$HERE/status.sh") 2>&1)\"
+  write_shortcut "APRScaching Status" "out=\"\$(bash $(q "$HERE/status.sh") 2>&1)\"
 printf '%s\\n' \"\$out\"
 if command -v termux-toast >/dev/null; then
   printf '%s\\n' \"\$out\" | grep -m1 -E '^ +gateway ' | sed 's/^ *//' | timeout 8 termux-toast -s
 fi
 read -r -p 'Enter closes this window. ' _"
-  write_shortcut "tasks/aprscaching Start" "if bash $(q "$HERE/start.sh") --no-attach >/dev/null 2>&1; then $(toast_cmd "'aprscaching started'"); else $(toast_cmd "'aprscaching did not start: run status.sh'"); fi"
-  write_shortcut "tasks/aprscaching Stop" "bash $(q "$HERE/stop.sh") >/dev/null 2>&1; $(toast_cmd "'aprscaching stopped'")"
-  write_shortcut "tasks/aprscaching Open map" "termux-open-url http://localhost:$(gateway_port)"
-  write_shortcut "tasks/aprscaching Backup" "if bash $(q "$HERE/backup.sh") >/dev/null 2>&1; then date +%s > $(q "$RUN_DIR/last-backup"); $(toast_cmd "'aprscaching backup done'"); else $(toast_cmd "'aprscaching backup failed: run backup.sh in Termux'"); fi"
+  write_shortcut "tasks/APRScaching Start" "if bash $(q "$HERE/start.sh") --no-attach >/dev/null 2>&1; then $(toast_cmd "'APRScaching started'"); else $(toast_cmd "'APRScaching did not start: run status.sh'"); fi"
+  write_shortcut "tasks/APRScaching Stop" "bash $(q "$HERE/stop.sh") >/dev/null 2>&1; $(toast_cmd "'APRScaching stopped'")"
+  write_shortcut "tasks/APRScaching Open map" "termux-open-url http://localhost:$(gateway_port)"
+  write_shortcut "tasks/APRScaching Backup" "if bash $(q "$HERE/backup.sh") >/dev/null 2>&1; then date +%s > $(q "$RUN_DIR/last-backup"); $(toast_cmd "'APRScaching backup done'"); else $(toast_cmd "'APRScaching backup failed: run backup.sh in Termux'"); fi"
   # The sync reports through its own notification; the toast covers a phone without one.
-  write_shortcut "tasks/aprscaching Sync before trip" "if bash $(q "$HERE/extras/sync-now.sh") >/dev/null 2>&1; then $(toast_cmd "'aprscaching synced'"); else $(toast_cmd "'aprscaching sync failed or not on Wi-Fi: run extras/sync-now.sh in Termux'"); fi"
+  write_shortcut "tasks/APRScaching Sync before trip" "if bash $(q "$HERE/extras/sync-now.sh") >/dev/null 2>&1; then $(toast_cmd "'APRScaching synced'"); else $(toast_cmd "'APRScaching sync failed or not on Wi-Fi: run extras/sync-now.sh in Termux'"); fi"
   info "Status, Start, Stop, Open map, Backup, Sync before trip. Add the Termux:Widget widget to the home"
   info "screen to use them."
   have termux-toast || termux_api_hint "toasts from the shortcuts"

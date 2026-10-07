@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/* aprscaching service worker — the offline app shell and Web Push.
+/* APRScaching service worker — the offline app shell and Web Push.
 
    App shell: the build (vite-sw.ts) writes the list of files the app needs to start — the hashed
    bundles, index.html, the fonts, icons and images the app references — into PRECACHE, and a version

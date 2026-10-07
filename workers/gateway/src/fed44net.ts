@@ -157,7 +157,7 @@ class AmbiguousBinding extends Error {
     name: string,
     readonly candidates: { instance: string; host: string | null; web: string | null }[],
   ) {
-    super(`${name} carries ${candidates.length} aprscaching records: add one of them by its host`);
+    super(`${name} carries ${candidates.length} APRScaching records: add one of them by its host`);
   }
 }
 
@@ -183,7 +183,7 @@ async function resolveAt(env: Env, callsign: string, recordHost: string): Promis
   if (bindings[0]) return { callsign, ...bindings[0], dnssec: ans.dnssec };
   const verifyOnly = ans.txts.some((t) => acsFields(t)?.has("verify"));
   throw new NoBinding(
-    `no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…", with any host= under ${amprNames(callsign).host} and any web= an https origin)` +
+    `no valid APRScaching TXT at ${name} (expect "v=acs1; inst=…; key=…", with any host= under ${amprNames(callsign).host} and any web= an https origin)` +
       (verifyOnly ? `; a verify= record belongs at ${amprNames(callsign).verify}` : ""),
   );
 }

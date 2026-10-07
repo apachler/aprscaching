@@ -47,7 +47,7 @@ trap 'kill $pid 2>/dev/null' TERM INT
 # Register the telnet users through the xfbbC sysop console, once per data volume. FBB's telnet
 # gate admits only known callsigns with modem access (flag M) and a password (W):
 #   OE1TST — the sysop (fbb.conf), a plain mailbox user: the addressee the forward test reads as
-#   OE1ACS — the aprscaching forwarding partner: flag B, so FBB answers it as a BBS (SID + FBB protocol)
+#   OE1ACS — the APRScaching forwarding partner: flag B, so FBB answers it as a BBS (SID + FBB protocol)
 # The console callsign is created on connect, so EU on OE1TST first answers "Delete? N"; EU on the
 # unknown OE1ACS first answers "Create? Y". Each answer waits for the console to settle.
 if [ ! -e /var/ax25/fbb/.registered ]; then

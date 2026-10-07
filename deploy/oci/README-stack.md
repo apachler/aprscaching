@@ -52,7 +52,7 @@ cloud-init runs `firstboot.sh` (in the zip) once, as root:
 4. starts the stack, waits for the gateway, and runs `deploy/aprscaching doctor`.
 
 Everything it prints goes to `/var/log/aprscaching-firstboot.log` and to the serial console (*Compute → Instances
-→ aprscaching → Console connection*), so you can watch the boot without SSH. Running it again changes nothing that
+→ `aprscaching` → Console connection*), so you can watch the boot without SSH. Running it again changes nothing that
 is there: the checkout stays at its commit, `.env` keeps its values and secrets, and the data stays in its Docker
 volumes. Update with `deploy/aprscaching update`.
 
@@ -191,7 +191,7 @@ Tenancy administrators have all of these already. Check the verbs against
 for your tenancy.
 
 **Break-glass.** If the Bastion or the agent misbehaves, the VM's **serial console** still reaches it: *Compute →
-Instances → aprscaching → Console connection → Launch Cloud Shell connection*. Cloud Shell in the console also
+Instances → `aprscaching` → Console connection → Launch Cloud Shell connection*. Cloud Shell in the console also
 has the OCI CLI, and can run `bastion-ssh.sh` from a clone.
 
 ## 44Net
@@ -238,7 +238,7 @@ What Oracle states, as of 1 October 2026 — check the linked pages, they change
   instance created above the new allowance may run on but not be re-creatable.
 - **Idle instances are reclaimed.** Oracle may stop an Always Free A1 instance when, over seven days, its CPU
   use (95th percentile), its network use and its memory use all stay under 20 %
-  ([Free Tier FAQ](https://www.oracle.com/cloud/free/faq/)). A quiet aprscaching instance can fall under that.
+  ([Free Tier FAQ](https://www.oracle.com/cloud/free/faq/)). A quiet APRScaching instance can fall under that.
   Pay As You Go tenancies are exempt.
 - **Idle accounts.** A free account with no sign-in or activity for 30 days may be suspended (same FAQ).
 - **The home region is permanent.** You choose it at sign-up, and Always Free resources live there.

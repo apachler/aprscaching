@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Two full aprscaching stacks (gateway + ingest) crosslinked over AXUDP — the interop
+// Two full APRScaching stacks (gateway + ingest) crosslinked over AXUDP — the interop
 // environment's smallest end-to-end: NET/ROM NODES broadcasts learned in both directions, an
 // FBB forwarding session (our scheduler dialling our SID-gated BBS responder) carrying a message
 // A→B over real AX.25 connected mode on the UDP wire, and A's ingest pulling B's signed federation
