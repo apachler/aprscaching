@@ -36,11 +36,6 @@ always-on instance, use [Self-host](self-host-docker.md).
     On Windows, compare `Get-FileHash aprscaching-windows-x64.exe` (PowerShell) with the file's line in
     `SHA256SUMS`, and run the same `gh attestation verify` with the `.exe`.
 
-    !!! warning "While no release is published"
-        Without a published release, the release URLs answer 404 and there is nothing signed to check. Build
-        the binaries from a checkout instead, with Bun and pnpm: `bash deploy/desktop/build-exe.sh` writes every
-        system's binary under `dist/desktop/` ([Run from source](../../contribute/run-from-source.md)).
-
 3. Start it with your callsign as the operator. On Linux and macOS, from the download directory:
 
     ```bash
