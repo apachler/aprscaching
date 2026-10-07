@@ -2,7 +2,7 @@
   "name": "sevenplus",
   "title": "7PLUS reassembler",
   "author": "OE8APR",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": "1.0",
   "permissions": [
     "decoder"
@@ -10,9 +10,9 @@
   "surfaces": [
     "web"
   ],
-  "description": "Parse + reassemble multi-part 7plus messages (file / part / completeness).",
+  "description": "Collect multi-part 7plus messages: the file, the parts found and the parts still missing.",
   "entry": "tool.js",
-  "entrySha256": "0YBQKHb7auA6dSjv33R5p/4VcIvLn+457iDFisdFZmA=",
+  "entrySha256": "6ZUcx/ZPrHxV0pwwnK5sDhjj/a4aOEYAd7usuGVIThc=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "L1GTkfQoM0EAME312BedA0pqP1KtwVAzk3+ODpM6Hs8CXWwQQXmJ8ZtoKtfRJPHL2SCxT+RsStNfX7UDl4fXCA=="
+  "signature": "qWDL6FJqNc79H/yKkqht4Mz9Vi75Rl9dHePZYpPjvA+tUsSSxgkp9X/+V4u3GGCIc7IaeY5/HDXlhPTqJGE9Bg=="
 }

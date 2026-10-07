@@ -2,7 +2,7 @@
   "name": "unit-convert",
   "title": "Unit converter",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "command"
@@ -16,7 +16,7 @@
   "remote": true,
   "description": "/conv <value> <from> <to> — km/mi/m/ft/yd/kn/kmh/nm + c/f.",
   "entry": "tool.js",
-  "entrySha256": "tdCZGdzQf0FEQo7T9wFg50bSqEQ9b1aqyu6aPMsNgSc=",
+  "entrySha256": "Zxwmh7C8VU1EM6oIRrpCGhJGLjjdLMVLu/l7eJ/itHA=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "WQsSJxmzipoEH5MnkvGGy1NvTPiEcVHwR+dK4EDeCsDMPvzPwDzfeI9grWpi1V6Vs1HmgQAW5kFn0nQF76kdDQ=="
+  "signature": "/7q5htl5zz9HRbkvQGMwQa36NOeNoXaZF03elnPSHZw8GNzDKh8q84naj0VDmC/iseIQDVPQOMhlhEosfvRPBQ=="
 }

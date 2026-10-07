@@ -2,7 +2,7 @@
   "name": "auto-status",
   "title": "Auto-status",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "command",
@@ -14,7 +14,7 @@
   ],
   "description": "/autostatus <min> <text> — periodically transmit a status (TX-gated).",
   "entry": "tool.js",
-  "entrySha256": "91cQsecrZM0/lIfpt26osFIazhGRRMcDh0otNLw+suI=",
+  "entrySha256": "hQ5MXBSk8FMsWKBkyFzzL6u9j9yE/9T9SehYBONBxbc=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "SSk/ae2MSRBd2fylRz3pjVc2wCMO4fKfKNKGC8tIHjdqHw9Ra80J2suQwNll3r3yVNkLAXPEjrssz4Gu8fXDDA=="
+  "signature": "xo0vWCFrWEwCf3T4EwdEruXfcCpzfjURoBkFb+V0c+1YWaaeSAWuFzXpx3r87DXn+GUviA07yFyZ5iXwOj/bBA=="
 }

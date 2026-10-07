@@ -2,7 +2,7 @@
   "name": "info-responder",
   "title": "Info / menu responder",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "command",
@@ -17,7 +17,7 @@
   "remote": true,
   "description": "Answers a peer's INFO / MENU / WHOIS <call> (GP gpserv/gpdir).",
   "entry": "tool.js",
-  "entrySha256": "aoKnZ2dA5gfFyPrgX2Zo5olwGS3SqpW3M4xyZw946ns=",
+  "entrySha256": "JIfTCV+dScytMq6b3NknXyRgmKHQzEWcA/nbfmIYoDs=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "JrGMOyYtor2m/7VBFTtDujQpY3Z/Y2TrhelcmGaMeQOvPkXvHgM9di9DocferXoqCA2XBz0P8bnt+pK4d4opBQ=="
+  "signature": "nv4RqBeCugYfGGfqY2HNhbhNHuaI4/fZQEmGY20EgPyr6iXJlakGzzx7GUy2VVhF4UwRKYhsBulB5ty28OxSAQ=="
 }

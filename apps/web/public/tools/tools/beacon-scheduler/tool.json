@@ -2,7 +2,7 @@
   "name": "beacon-scheduler",
   "title": "Beacon scheduler",
   "author": "OE8APR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": "1.0",
   "permissions": [
     "command",
@@ -13,7 +13,7 @@
   ],
   "description": "/beacon <min> <comment> — a periodic status beacon, every 10 min or more (TX-gated); /beacon off.",
   "entry": "tool.js",
-  "entrySha256": "sLn1+SMgFPvDFonFUyvCMS9FRNHmY+seb/nFlFQnlzA=",
+  "entrySha256": "Hc7kqw1XmAs1akT87hqh9thuLRc/+GqM2MKHJ//BqDQ=",
   "pubkey": "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc",
-  "signature": "sE1gnyQ53BJvvHmG0gLMcbTgYfT1adRingcj3gL7KtR24Shgh5HYhsWH2fFitwwHn7UCcM1aPMSXtoKLNLc4AQ=="
+  "signature": "RXRDQpsnoYYxxSGEpr2z4aE60ToY4LEckP0kjI31Rt9I+DahQTtybfj8bwz32iVdBzX6Ka3R4yLcndLuWjaZAw=="
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Info / menu responder 1.1.0, built by scripts/build.mjs from tools/info-responder/src, lib/ and the
+// Info / menu responder 1.1.1, built by scripts/build.mjs from tools/info-responder/src, lib/ and the
 // aprscaching libraries lib.lock pins. Edit the sources, not this file.
 (() => {
   // lib/text.js
@@ -21,17 +21,20 @@
   register({
     commands: {
       info: { remote: true, run: () => [info()] },
-      menu: { remote: true, run: () => ["Commands: INFO  MENU  WHOIS <call>  GRID <loc> [loc]  CONV <n> <from> <to>"] },
-      whois: { remote: true, run: async (args) => {
-        const c = args.trim().toUpperCase();
-        if (!c) return ["Usage: WHOIS <CALL>"];
-        let type = "";
-        try {
-          type = asStr(await tool.call("station.type", c));
-        } catch {
+      menu: { remote: true, run: () => ["Commands: INFO  MENU  WHOIS <call>"] },
+      whois: {
+        remote: true,
+        run: async (args) => {
+          const c = args.trim().toUpperCase();
+          if (!c) return ["Usage: WHOIS <CALL>"];
+          let type = "";
+          try {
+            type = asStr(await tool.call("station.type", c));
+          } catch {
+          }
+          return [type ? `${c}: ${type}` : `${c}: not heard yet (enable Station DB to classify).`];
         }
-        return [type ? `${c}: ${type}` : `${c}: not heard yet (enable Station DB to classify).`];
-      } },
+      },
       // the operator's alone: a command without `remote: true` never answers a peer
       setinfo: {
         run: (args) => {
