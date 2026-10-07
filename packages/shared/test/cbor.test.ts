@@ -104,6 +104,14 @@ describe("cborDecode — canonical round-trip + hostile-input rejection", () => 
     expect(cborDecode(bytes)).toEqual(v);
   });
 
+  it("keeps a leading U+FEFF in text strings and map keys", () => {
+    const v: CborValue = m([
+      ["\uFEFF", "\uFEFFtext"],
+      ["", m([["\uFEFF", []]])],
+    ]);
+    expect(cborDecode(cborEncode(v))).toEqual(v);
+  });
+
   const reject = (hexBytes: string, why: RegExp) => {
     expect(() => cborDecode(fromHex(hexBytes))).toThrow(why);
   };
