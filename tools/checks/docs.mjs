@@ -413,9 +413,10 @@ for (const f of WORDMARK_DOCS) {
         span = true;
       }
       const prose = line
-        .replace(/\]\([^)]*\)/g, "]")
-        .replace(/<[^>]*>/g, "")
-        .replace(/https?:\/\/\S+/g, "");
+        // each removed part becomes a space, so nothing joins up across it; the text is only read, never rendered
+        .replace(/\]\([^)]*\)/g, "] ")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/https?:\/\/\S+/g, " ");
       const m = prose.match(LOWER) ?? prose.match(VARIANT);
       if (m)
         fail(f, i + 1, `the product is written APRScaching, not "${m[0]}" (a path or command goes in a code span)`);
