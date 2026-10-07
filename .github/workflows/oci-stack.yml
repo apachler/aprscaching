@@ -21,22 +21,11 @@ permissions:
   contents: read
 
 jobs:
-  # The VM installs the hash-pinned OCI CLI with Ubuntu 24.04's own Python 3.12 on aarch64, and this runner is
-  # the same, so a pin set that would not install or would not resolve fails here instead of on a first boot.
+  # The pinned OCI CLI installs on the VM's Python and architecture before the stack is built (oci-cli.yml).
   oci-cli:
-    runs-on: ubuntu-24.04-arm
-    env:
-      TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { ref: "${{ env.TAG }}" }
-      - run: sudo apt-get update -q && sudo apt-get install -y -q python3-venv
-      - run: |
-          /usr/bin/python3 -m venv "$RUNNER_TEMP/oci-cli"
-          "$RUNNER_TEMP/oci-cli/bin/pip" install --quiet --require-hashes --only-binary :all: \
-            -r deploy/oci/oci-cli-requirements.txt
-          "$RUNNER_TEMP/oci-cli/bin/pip" check
-          "$RUNNER_TEMP/oci-cli/bin/oci" --version
+    uses: ./.github/workflows/oci-cli.yml
+    with:
+      ref: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
 
   build:
     needs: oci-cli
