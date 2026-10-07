@@ -74,7 +74,7 @@ pair on the fixed ports `:8801` and `:8802`.
 `pnpm run e2e:audio` (`tools/e2e/audio-mic.mjs`) exercises the **live microphone decode path** in a
 real headless Chromium: it bundles the actual web-app decoder code, synthesises a PSK31 WAV of
 "cq de test", feeds it in as a fake microphone, and asserts the decoded text. Skips cleanly (exit 0)
-when no Chromium is available; CI installs one in the `e2e-audio` job.
+when no Chromium is available, and fails in CI without one; CI installs one in the `e2e-audio` job.
 
 `pnpm run e2e:tools` (`tools/e2e/tool-sandbox.mjs`) loads tools into the real plugin sandbox, wired to the tool
 host, in headless Chromium and asserts what they reach: the example tools' commands, decoder and bus work; a tool
@@ -142,7 +142,8 @@ signed-out visitor reaches them too. It skips without a Chromium, fails in CI wi
     820×1180), a short and a tall laptop (`desktop-600`, `desktop-1000`) and a tall desktop window (`tall`,
     1868×1891).
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
-    axe finding or a layout finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
+    axe finding or a layout finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches the web app
+    or a package it bundles, one shard per theme and width (`--themes`, `--views`), under the one `axe` check;
     the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and
     keeps them as an artifact.
 
@@ -215,12 +216,12 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme (pull requests and `main`) · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
-| `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `docs.yml` — Vale (the house style), the theme drift check, every Mermaid diagram in the repository's Markdown parsed, then `mkdocs build --strict` (a missing page or heading fails it) | docs and Markdown changes, the theme's sources, `apps/web/package.json` (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `main-pr.yml` — `head branch`: a PR into `main` comes from `dev`, a `hotfix/vX.Y.Z` branch or release-please's branch | PR into `main` | Optional (`main` may require it) |
 | `scorecard.yml` — OpenSSF Scorecard: results in code scanning and on the public Scorecard API (the README badge) | push (`dev`), weekly, branch protection changes + manual | Informational |
@@ -229,12 +230,36 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | called by `release-please.yml` + manual | Release |
 | `release-verify.yml` — git bundle, source archive, `pocket.sh`, the CycloneDX SBOM, `SHA256SUMS`, attestations | called by `release-please.yml` + manual | Release |
 
-A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
-`ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
-and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/`, `deploy/lib/` or `ci.yml` changes. The Deploy helpers
-job runs only when `deploy/aprscaching`, `deploy/lib/`, `deploy/test/`, `deploy/setup.sh`, `deploy/systemd/`,
-`deploy/.env.example`, `deploy/oci/`, `docs/reference/cli.md` or `ci.yml` changes.
-When the diff cannot be read, every job runs.
+`ci.yml` runs only the jobs a change can affect. Its `changed paths` job reads the diff and sorts each path into
+scopes (`.github/scripts/changed-scopes.sh` holds the lists); a job outside every scope the change touches reports as
+skipped, which a required check accepts. `lint + format` always runs.
+
+| Scope | Paths |
+|---|---|
+| all | `ci.yml`, the scopes script, `.github/actions/`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, a `tsconfig`, an ESLint config |
+| gateway | `workers/`, `servers/`, `db/`, `tools/smoke/`, `tools/conformance/`, `tools/fedkey/`, `.bun-version` |
+| web | `apps/web/` (its unit tests excepted), `workers/gateway/src/paths.ts` (the Vite config imports it) |
+| ingest | `apps/ingest/` |
+| packages | `packages/`: the gateway, the web app and the ingest import every one |
+| audio | `apps/web/src/rf/`, `apps/web/src/tools/`, `apps/web/public/tools/`, and the audio and tool-sandbox scripts and fixtures under `tools/e2e/` |
+| e2e | `tools/e2e/` |
+| devtools | `tools/dev/` (`docs-theme.mjs` excepted), `tools/webauthn/` |
+
+| Job | Runs for |
+|---|---|
+| unit tests + builds | any path but docs, Markdown, the Pocket scripts, the other workflows and repository metadata |
+| lint (type-aware) | all, gateway, packages: it type-checks `workers/gateway/src` and `packages/*/src` |
+| conformance (Node, Bun, federation) | all, gateway, packages |
+| e2e (live mic decode) | all, audio, packages, e2e |
+| e2e (offline app shell) | all, web, packages, e2e: the built app, against a stand-in gateway |
+| dev stack | all, web, gateway, packages, devtools |
+| axe | all, web, packages, on pull requests and pushes to `main`: a push to `dev` skips it, since its pull request ran it and `visual.yml` runs the whole pass nightly |
+| Pocket scripts | `deploy/pocket/`, `deploy/lib/`, `ci.yml` |
+| Deploy helpers | `deploy/aprscaching`, `deploy/lib/`, `deploy/test/`, the top-level `deploy/*.sh`, `deploy/desktop/*.sh`, `deploy/cloudflare/*.sh`, `deploy/systemd/`, `deploy/.env.example`, `deploy/oci/`, `docs/reference/cli.md`, `ci.yml` |
+
+When the diff cannot be read, every job runs. Each job that drives Chromium restores the browser the locked
+`playwright-core` expects from the Actions cache (`.github/actions/playwright-chromium`) and installs its system
+libraries.
 
 ### Cutting a release
 

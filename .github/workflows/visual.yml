@@ -27,7 +27,7 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @aprscaching/web... build
-      - run: pnpm exec playwright-core install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
       - run: node apps/web/test/visual/run.mjs --keyboard
       - run: pnpm --filter @aprscaching/web journeys
       - if: always()

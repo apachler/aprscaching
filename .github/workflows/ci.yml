@@ -16,51 +16,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # What the change touches. A change to docs only (docs/, mkdocs.yml, Markdown) or to the Pocket scripts only
-  # (deploy/pocket/) skips the type-aware lint, the unit tests, the conformance legs and the e2e run: none of
-  # them reads those files. Skipped jobs report as skipped, which a required check accepts. When the diff
+  # What the change touches, in scopes (.github/scripts/changed-scopes.sh holds the path lists):
+  #   all       ci.yml, the scopes script, .github/actions/, package.json, pnpm-lock.yaml, pnpm-workspace.yaml, a
+  #             tsconfig or an ESLint config: every job below runs
+  #   gateway   workers/, servers/, db/, tools/smoke/, tools/conformance/, tools/fedkey/, .bun-version
+  #   web       apps/web/ (its unit tests excepted) and workers/gateway/src/paths.ts, which the Vite config imports
+  #   ingest    apps/ingest/
+  #   packages  packages/, imported by the gateway, the web app and the ingest alike
+  #   audio     what the audio and tool-sandbox e2e scripts bundle or serve: apps/web/src/rf/, apps/web/src/tools/,
+  #             apps/web/public/tools/ and their own files under tools/e2e/
+  #   e2e       tools/e2e/
+  #   devtools  tools/dev/ (docs-theme.mjs excepted) and tools/webauthn/, which pnpm dev:check runs
+  # and the jobs each scope runs:
+  #   unit tests + builds   any path but docs, Markdown, the Pocket scripts, the other workflows and repo metadata
+  #   lint (type-aware)     gateway, packages: it type-checks workers/gateway/src and packages/*/src
+  #   conformance (3 legs)  gateway, packages
+  #   e2e-audio             audio, packages, e2e
+  #   e2e-offline           web, packages, e2e: the built app, against a stand-in gateway
+  #   dev-stack             web, gateway, packages, devtools
+  #   axe                   web, packages; never on a push to dev (pull requests run it, visual.yml nightly)
+  #   Pocket scripts        deploy/pocket/, deploy/lib/, ci.yml
+  #   Deploy helpers        the deploy/ helper scripts and their tests, docs/reference/cli.md, ci.yml
+  # `lint + format` always runs. A skipped job reports as skipped, which a required check accepts. When the diff
   # cannot be read, everything runs.
   changes:
     name: changed paths
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.paths.outputs.code }}
+      types: ${{ steps.paths.outputs.types }}
+      conformance: ${{ steps.paths.outputs.conformance }}
+      audio: ${{ steps.paths.outputs.audio }}
+      offline: ${{ steps.paths.outputs.offline }}
+      devstack: ${{ steps.paths.outputs.devstack }}
+      axe: ${{ steps.paths.outputs.axe }}
       pocket: ${{ steps.paths.outputs.pocket }}
       helpers: ${{ steps.paths.outputs.helpers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 2 }
       - id: paths
+        # an explicit bash runs with pipefail, so a failing scopes script fails the job instead of skipping the rest
+        shell: bash
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ] \
             && git fetch --quiet --depth=1 origin "$BASE" && files=$(git diff --name-only "$BASE" HEAD); then
-            code=false
-            pocket=false
-            helpers=false
-            while IFS= read -r f; do
-              [ -n "$f" ] || continue
-              case "$f" in
-                deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
-              esac
-              case "$f" in
-                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/*.sh | deploy/desktop/*.sh | deploy/cloudflare/*.sh | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/oci/test/* | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
-              esac
-              case "$f" in
-                docs/* | mkdocs.yml | overrides/* | *.md | deploy/pocket/*) ;;
-                *) code=true ;;
-              esac
-            done <<< "$files"
+            bash .github/scripts/changed-scopes.sh <<< "$files" | tee -a "$GITHUB_OUTPUT"
           else
-            code=true
-            pocket=true
-            helpers=true
+            bash .github/scripts/changed-scopes.sh --all | tee -a "$GITHUB_OUTPUT"
           fi
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "pocket=$pocket" >> "$GITHUB_OUTPUT"
-          echo "helpers=$helpers" >> "$GITHUB_OUTPUT"
-          echo "code=$code pocket=$pocket helpers=$helpers"
 
   lint:
     name: lint + format
@@ -124,7 +130,7 @@ jobs:
   lint-types:
     name: lint (type-aware, slow)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.types == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -156,7 +162,7 @@ jobs:
   conformance-node:
     name: conformance (Node + SQLite)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.conformance == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,7 +193,7 @@ jobs:
   conformance-federation:
     name: conformance (federation — 2 instances)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.conformance == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -230,7 +236,7 @@ jobs:
   conformance-bun:
     name: conformance (Bun + bun:sqlite)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.conformance == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -264,7 +270,7 @@ jobs:
   e2e-audio:
     name: e2e (live mic decode — Chromium fake-audio)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.audio == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -272,21 +278,28 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      # playwright-core drives an existing browser; fetch a matching Chromium into ~/.cache/ms-playwright
-      # so audio-mic.mjs (which resolves via chromium.executablePath()) finds it. Version pinned to match.
-      - run: npx --yes playwright@1.61.1 install --with-deps chromium
+      # playwright-core drives an existing browser: the Chromium revision the locked playwright-core expects,
+      # where chromium.executablePath() finds it (both scripts fail in CI without one)
+      - uses: ./.github/actions/playwright-chromium
       - run: node tools/e2e/audio-mic.mjs
       # the imported-tool sandbox: what a tool reaches from its frame, with and without the network grant
       - run: node tools/e2e/tool-sandbox.mjs
 
   # axe on every fixture surface (the demo harness: /?demo=app and /?demo=ui), in Dark, Light and Phosphor, at a
-  # phone and a desktop width. A serious or critical finding fails the job; axe.json is kept either way.
-  a11y:
-    name: axe (fixture surfaces, every theme)
+  # phone and a desktop width: one shard per theme and width, in parallel. A serious or critical finding fails the
+  # shard; each shard keeps its axe.json either way. A push to dev skips it: the pull request ran it, and
+  # visual.yml runs the whole pass nightly.
+  a11y-shard:
+    name: axe (${{ matrix.theme }}, ${{ matrix.view }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.axe == 'true' && !(github.event_name == 'push' && github.ref_name == 'dev')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        theme: [dark, light, phosphor]
+        view: [phone, desktop]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -294,19 +307,36 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @aprscaching/web... build
-      - run: pnpm exec playwright-core install --with-deps chromium
-      - run: node apps/web/test/visual/run.mjs --no-shots --strict
+      - uses: ./.github/actions/playwright-chromium
+      - run: node apps/web/test/visual/run.mjs --no-shots --strict --themes "$THEME" --views "$VIEW"
+        env:
+          THEME: ${{ matrix.theme }}
+          VIEW: ${{ matrix.view }}
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: axe
+          name: axe-${{ matrix.theme }}-${{ matrix.view }}
           path: apps/web/test/visual/out/axe.json
           if-no-files-found: ignore
+
+  # The one check that stands for the shards, under the axe job's name: it fails when any shard failed or was
+  # cancelled, and is skipped when the shards are.
+  a11y:
+    name: axe (fixture surfaces, every theme)
+    needs: [changes, a11y-shard]
+    if: ${{ !cancelled() && needs.changes.outputs.axe == 'true' && !(github.event_name == 'push' && github.ref_name == 'dev') }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULT: ${{ needs.a11y-shard.result }}
+        run: |
+          echo "axe shards: $RESULT"
+          [ "$RESULT" = success ]
 
   e2e-offline:
     name: e2e (offline app shell — Chromium)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.offline == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -316,15 +346,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # the built app with its service worker, opened once online, then again with the connection cut
       - run: pnpm --filter @aprscaching/web... build
-      # playwright-core drives an existing browser; its own CLI fetches the Chromium revision it expects into
-      # ~/.cache/ms-playwright, where chromium.executablePath() finds it (the lockfile pins the version)
-      - run: pnpm exec playwright-core install --with-deps chromium
+      # playwright-core drives an existing browser: the Chromium revision the locked playwright-core expects
+      - uses: ./.github/actions/playwright-chromium
       - run: node tools/e2e/offline-shell.mjs
 
   dev-stack:
     name: dev stack (pnpm dev — one origin, sign-in, live socket, passkey)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.devstack == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -333,5 +362,5 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright-core install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
       - run: pnpm dev:check
