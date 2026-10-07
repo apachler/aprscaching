@@ -19,8 +19,8 @@ from `v1.2.0` deploys `v1.2.0`, not whatever `main` holds later.
 
 ## What you fill in
 
-The stack creates its own VCN, subnet, internet gateway and security list, and resolves the Ubuntu
-aarch64 image itself, so it never asks for an OCID you would have to go and find. What it does ask for:
+The stack creates its own VCN, subnet, internet gateway and security list, and resolves the newest
+Canonical Ubuntu 24.04 LTS aarch64 image itself, so it never asks for an OCID you would have to go and find. What it does ask for:
 
 | Field | Notes |
 |-------|-------|
@@ -47,9 +47,12 @@ cloud-init runs `firstboot.sh` (in the zip) once, as root:
    `9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88`;
 2. clones the release. A stack from a release names its tag's commit, and the boot stops if the tag points
    anywhere else; another `repo_ref` (a branch) deploys unverified, and the log says so;
-3. writes `/opt/aprscaching/deploy/.env` with `deploy/aprscaching init selfhost`, which generates
+3. with backups on, installs the OCI CLI into its own venv, `/opt/oci-cli`, from `oci-cli-requirements.txt`: every
+   package pinned by hash, wheels only, resolved for Ubuntu 24.04's Python 3.12. Ubuntu 24.04 keeps the system
+   Python to its own packages (PEP 668), so nothing goes into it;
+4. writes `/opt/aprscaching/deploy/.env` with `deploy/aprscaching init selfhost`, which generates
    `INGEST_SECRET` and `OPERATOR_SECRET` on the VM;
-4. starts the stack, waits for the gateway, and runs `deploy/aprscaching doctor`.
+5. starts the stack, waits for the gateway, and runs `deploy/aprscaching doctor`.
 
 Everything it prints goes to `/var/log/aprscaching-firstboot.log` and to the serial console (*Compute → Instances
 → `aprscaching` → Console connection*), so you can watch the boot without SSH. Running it again changes nothing that
@@ -277,4 +280,4 @@ bash scripts/build-oci-stack.sh          # -> dist/oci/aprscaching-oci-stack.zip
 Resource Manager reads `main.tf` and `schema.yaml` from the zip root, so the files are staged flat
 rather than under `deploy/oci/`. `tools/checks/oci-stack.mjs` runs in CI and fails the build if the
 Terraform variables, the stack UI schema, the cloud-init placeholders and the packaging script drift
-apart — a mismatch there would otherwise only show up as a failed Plan in someone else's tenancy.
+apart, or if the OCI CLI's pins stop matching the Python of the VM image — a mismatch there would otherwise only show up as a failed Plan in someone else's tenancy.

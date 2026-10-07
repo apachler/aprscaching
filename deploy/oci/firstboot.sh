@@ -42,6 +42,16 @@ else
 fi
 
 say() { printf 'aprscaching-firstboot: %s\n' "$*"; }
+# Ubuntu's apt-daily and unattended-upgrades run in a fresh VM's first minutes and hold apt's locks. An install
+# waits for the dpkg lock; `apt-get update` does not wait for the lists lock, so a failed call is tried again.
+apt_get() {
+  local try=1
+  until apt-get -o DPkg::Lock::Timeout=600 "$@"; do
+    [ "$try" -lt 10 ] || return 1
+    try=$((try + 1))
+    sleep 30
+  done
+}
 stop() {
   say "STOPPED: $1"
   shift
@@ -85,9 +95,9 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
   say "Docker is installed; kept"
 else
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -q
+  apt_get update -q
   # wireguard-tools and nftables serve deploy/aprscaching net44 (a 44Net Connect tunnel), if the operator adds one
-  apt-get install -y -q ca-certificates curl gnupg git wireguard-tools nftables
+  apt_get install -y -q ca-certificates curl gnupg git wireguard-tools nftables
   tmp="$(mktemp -d)"
   curl -fsSL --retry 5 -o "$tmp/docker.asc" https://download.docker.com/linux/ubuntu/gpg ||
     stop "could not download Docker's signing key"
@@ -102,12 +112,12 @@ else
   codename="$(. /etc/os-release && printf '%s' "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
   printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/ubuntu %s stable\n' \
     "$(dpkg --print-architecture)" "$KEYRING" "$codename" >"$APT_LIST"
-  apt-get update -q
-  apt-get install -y -q "${DOCKER_PACKAGES[@]}"
+  apt_get update -q
+  apt_get install -y -q "${DOCKER_PACKAGES[@]}"
   systemctl enable --now docker
   say "Docker installed from download.docker.com (key $DOCKER_KEY_FPR)"
 fi
-command -v git >/dev/null 2>&1 || apt-get install -y -q git
+command -v git >/dev/null 2>&1 || apt_get install -y -q git
 
 # ---- the code ------------------------------------------------------------------------------------------------
 if [ -d "$DIR/.git" ]; then
@@ -129,13 +139,16 @@ else
 fi
 
 # ---- the OCI CLI, for the backups ---------------------------------------------------------------------------
-# Every package pinned by hash (deploy/oci/oci-cli-requirements.txt), wheels only. The `oci` on PATH signs in as
-# this VM (instance principal), which the stack's policy lets write to its bucket and read its own VNIC.
+# Every package pinned by hash (deploy/oci/oci-cli-requirements.txt), wheels only, in its own venv: Ubuntu 24.04
+# marks the system Python as externally managed (PEP 668), and the CLI's dependencies stay apart from the OS's.
+# pip resolves the pinned set against itself, so a pin that breaks a declared dependency fails the install. The
+# `oci` on PATH signs in as this VM (instance principal), which the stack's policy lets write to its bucket and
+# read its own VNIC.
 if [ -n "$BUCKET" ]; then
   if [ ! -x "$OCI_VENV/bin/oci" ]; then
-    apt-get install -y -q python3-venv
+    apt_get install -y -q python3-venv
     if python3 -m venv "$OCI_VENV" &&
-      "$OCI_VENV/bin/pip" install --quiet --require-hashes --no-deps --only-binary :all: \
+      "$OCI_VENV/bin/pip" install --quiet --require-hashes --only-binary :all: \
         -r "$DIR/deploy/oci/oci-cli-requirements.txt"; then
       say "installed the OCI CLI from hash-pinned wheels"
     else
@@ -233,8 +246,8 @@ say "doctor:"
 "$DIR/deploy/aprscaching" doctor || say "doctor reported problems (above); fix them, then run deploy/aprscaching doctor"
 
 # ---- keep the stack's settings out of the disk -----------------------------------------------------------
-# cloud-init keeps the user data (and with it the APRS-IS passcode) under $CLOUD_DIR and writes it again on
-# every boot, so a unit removes the copies after each boot. The instance metadata service and the stack's
+# cloud-init keeps the user data (and with it the APRS-IS passcode) under $CLOUD_DIR, as received and as the
+# cloud-config it parsed, and writes it again on every boot, so a unit removes the copies after each boot. The instance metadata service and the stack's
 # Terraform state still hold them; README-stack.md says so.
 cat >"$UNIT_DIR/aprscaching-scrub-userdata.service" <<UNIT
 [Unit]
@@ -243,7 +256,7 @@ After=cloud-final.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'rm -f $CLOUD_DIR/instances/*/user-data.txt $CLOUD_DIR/instances/*/user-data.txt.i $CLOUD_DIR/instances/*/obj.pkl'
+ExecStart=/bin/sh -c 'rm -f $CLOUD_DIR/instances/*/user-data.txt $CLOUD_DIR/instances/*/user-data.txt.i $CLOUD_DIR/instances/*/cloud-config.txt $CLOUD_DIR/instances/*/obj.pkl'
 
 [Install]
 WantedBy=multi-user.target
@@ -251,5 +264,5 @@ UNIT
 systemctl daemon-reload || true
 systemctl enable aprscaching-scrub-userdata.service || true
 if [ "$SETTINGS" != /dev/null ]; then shred -u "$SETTINGS" 2>/dev/null || rm -f "$SETTINGS"; fi
-rm -f "$CLOUD_DIR"/instances/*/user-data.txt "$CLOUD_DIR"/instances/*/user-data.txt.i
+rm -f "$CLOUD_DIR"/instances/*/user-data.txt "$CLOUD_DIR"/instances/*/user-data.txt.i "$CLOUD_DIR"/instances/*/cloud-config.txt
 say "done"

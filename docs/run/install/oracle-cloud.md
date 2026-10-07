@@ -5,8 +5,8 @@ at the end the instance answers on a free Always Free VM and you continue with [
 
 The one-click stack is an Oracle Resource Manager stack. It starts the same Docker stack as
 [Self-host with Docker](self-host-docker.md), the gateway, the RF ingest and Caddy, on one Always Free Ampere A1
-VM, and does the setup for you. The RF ingest on the VM carries an APRS-IS feed; a radio joins through an
-[ingest box](../radios/ingest-box.md) next to it or the browser.
+VM running Ubuntu 24.04 LTS, and does the setup for you. The RF ingest on the VM carries an APRS-IS feed; a radio
+joins through an [ingest box](../radios/ingest-box.md) next to it or the browser.
 
 ## Before you start
 
@@ -33,8 +33,8 @@ more unless you set **Allow beyond Always Free**.
 1. Open the
    [one-click stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
    and sign in to Oracle Cloud.
-2. Fill in the stack's fields. It creates its own network and finds the Ubuntu image itself, so it asks for no
-   OCID:
+2. Fill in the stack's fields. It creates its own network and finds the newest Ubuntu 24.04 LTS image itself,
+   so it asks for no OCID:
 
     | Field | What to enter |
     |---|---|
@@ -55,8 +55,9 @@ more unless you set **Allow beyond Always Free**.
 5. Wait a few minutes for the first boot. It installs Docker from Docker's signed apt repository, clones the
    release and stops when the tag points at another commit than the release names. It then runs
    `deploy/aprscaching init selfhost`, which generates the secrets on the VM, starts the stack, runs `doctor` and
-   makes the first backup. The serial console (**Compute → Instances → `aprscaching` → Console connection**) and
-   `/var/log/aprscaching-firstboot.log` show its progress.
+   makes the first backup. For the backups it installs the OCI CLI from hash-pinned packages into its own Python
+   environment, `/opt/oci-cli`. The serial console (**Compute → Instances → `aprscaching` → Console
+   connection**) and `/var/log/aprscaching-firstboot.log` show its progress.
 6. For a shell on the VM, use the Bastion: port 22 is closed to the internet. From a checkout of the repository,
    with the OCI CLI set up:
 

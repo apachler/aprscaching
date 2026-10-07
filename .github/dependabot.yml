@@ -47,7 +47,8 @@ updates:
       prefix: "docs(deps)"
 
   # The OCI stack's CLI (deploy/oci/oci-cli-requirements.txt), every package pinned by hash. Dependabot bumps each
-  # pin on its own; an oci-cli bump that needs a newer oci is regenerated with the command in that file's header.
+  # pin on its own, for the Python in deploy/oci/.python-version (the VM image's, 3.12 on Ubuntu 24.04); an
+  # oci-cli bump that needs a newer oci is regenerated with the command in that file's header.
   - package-ecosystem: pip
     directory: "/deploy/oci"
     target-branch: dev
@@ -75,6 +76,11 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Ubuntu images stay on an LTS release and take digest refreshes only: a minor bump would be an interim
+      # release (24.10, 25.04, …) with nine months of support. Moving to the next LTS (26.04) is a deliberate
+      # change, made by hand.
+      - dependency-name: "ubuntu"
+        update-types: ["version-update:semver-minor"]
     groups:
       docker-images:
         patterns: ["*"]

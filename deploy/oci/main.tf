@@ -189,15 +189,24 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.tenancy_ocid
 }
 
-# Newest Canonical Ubuntu 22.04 image that boots on the A1 (aarch64) shape.
+# Newest Canonical Ubuntu 24.04 LTS image that boots on the A1 (aarch64) shape. 24.04 ships Python 3.12, which
+# the hash-pinned OCI CLI (oci-cli-requirements.txt) is compiled for. "24.04" alone excludes the Minimal images,
+# which OCI lists as "24.04 Minimal".
 data "oci_core_images" "ubuntu" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Canonical Ubuntu"
-  operating_system_version = "22.04"
+  operating_system_version = "24.04"
   shape                    = "VM.Standard.A1.Flex"
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
   state                    = "AVAILABLE"
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.images) > 0
+      error_message = "OCI lists no Canonical Ubuntu 24.04 image for VM.Standard.A1.Flex in this region."
+    }
+  }
 }
 
 locals {
