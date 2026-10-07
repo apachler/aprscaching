@@ -1,0 +1,35 @@
+name: oci-cli
+# The Oracle Cloud VM installs the hash-pinned OCI CLI (deploy/oci/oci-cli-requirements.txt) with Ubuntu 24.04's
+# own Python 3.12 on aarch64, and this runner is the same. A pin set that does not install or does not resolve
+# fails here: on the pull request that changes it, and again in oci-stack.yml before a release builds the stack.
+on:
+  pull_request:
+    paths:
+      - "deploy/oci/oci-cli-requirements.txt"
+      - "deploy/oci/.python-version"
+      - ".github/workflows/oci-cli.yml"
+  workflow_call:
+    inputs:
+      ref:
+        description: The ref to check out (the release tag); empty checks out the calling commit
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: OCI CLI installs
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "${{ inputs.ref || '' }}" }
+      - run: sudo apt-get update -q && sudo apt-get install -y -q python3-venv
+      - run: |
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/oci-cli"
+          "$RUNNER_TEMP/oci-cli/bin/pip" install --quiet --require-hashes --only-binary :all: \
+            -r deploy/oci/oci-cli-requirements.txt
+          "$RUNNER_TEMP/oci-cli/bin/pip" check
+          "$RUNNER_TEMP/oci-cli/bin/oci" --version
