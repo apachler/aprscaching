@@ -37,7 +37,7 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
 function applyExtensions(fix: DecodedPosition, comment: string): void {
   const cs = /^(\d{3})\/(\d{3})/.exec(comment);
   if (cs) {
-    fix.course = Number(cs[1]);
+    if (Number(cs[1]) <= 360) fix.course = Number(cs[1]); // three digits past 360 are not a heading
     fix.speedKn = Number(cs[2]);
     comment = comment.slice(7);
   }
@@ -59,7 +59,7 @@ function parseWeather(s: string): DecodedWeather {
   };
   const head = /^[/_]?(\d{3})\/(\d{3})/.exec(s) ?? /^(\d{3})\/(\d{3})/.exec(s);
   if (head) {
-    wx.windDirDeg = Number(head[1]);
+    if (Number(head[1]) <= 360) wx.windDirDeg = Number(head[1]); // past 360 is not a direction
     wx.windKn = Number(head[2]);
   }
   const g = num(/g(\d{3})/);
@@ -232,13 +232,15 @@ function decodeTelemetry(p: string): AprsData {
   let i = s[0] === "#" ? 1 : 0;
   const seqStart = i;
   while (i < s.length && s.charCodeAt(i) >= 48 && s.charCodeAt(i) <= 57) i++;
-  const seq = i > seqStart ? Number(s.slice(seqStart, i)) : undefined;
+  // a digit run too long for an exact integer is no sequence number (and a value of `1e999` no reading)
+  const seqNum = Number(s.slice(seqStart, i));
+  const seq = i > seqStart && Number.isSafeInteger(seqNum) ? seqNum : undefined;
   if (s[i] === ",") i++;
   const parts = s.slice(i).split(",");
   const analog = parts
     .slice(0, 5)
     .map(Number)
-    .filter((n) => !Number.isNaN(n));
+    .filter((n) => Number.isFinite(n));
   const bits = parts[5] ?? "";
   const digital = /^[01]{1,8}$/.test(bits) ? [...bits].map((b) => b === "1") : [];
   return { kind: "telemetry", seq, analog, digital };

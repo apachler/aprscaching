@@ -7,6 +7,8 @@ import { formatPosition, parsePosition } from "../src/position.js";
 import { decodeMicE } from "../src/mice.js";
 import { isValidLatLon } from "../src/geo.js";
 import { toMgrs } from "../src/mgrs.js";
+import { parseCompressed } from "../src/compressed.js";
+import { decodeAx25, encodeAx25 } from "../src/ax25.js";
 
 const frame = (payload: string) => ({ src: "OE8APR", dst: "APRS", path: [] as string[], payload, raw: "" });
 
@@ -102,5 +104,50 @@ describe("a position outside the globe decodes to no position", () => {
       [null, 15],
     ])
       expect(isValidLatLon(lat, lon), `${lat},${lon}`).toBe(false);
+  });
+});
+
+describe("decoded fields stay within their bounds (cases found by the property tests)", () => {
+  it("a Mic-E course past 360° is dropped, and speed and course bytes outside 0x1c–0x7f carry neither", () => {
+    const past = decodeMicE("S32U6T", "'4703.500");
+    expect(past).not.toBeNull();
+    expect(past?.course).toBeUndefined();
+    const low = decodeMicE("S32U6T", "`(_f\x01Oj/]");
+    expect(low).not.toBeNull();
+    expect(low?.course).toBeUndefined();
+    expect(low?.speedKn).toBeUndefined();
+    expect(decodeMicE("S32U6T", '`(_fn"Oj/]')?.speedKn).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a compressed cs pair outside base-91 carries no speed, course or altitude", () => {
+    const neg = parseCompressed("/5L!!<*e7>7\u00000");
+    expect(neg).not.toBeNull();
+    expect(neg?.speedKn).toBeUndefined();
+    const huge = parseCompressed("/092340000\u{1f4e1}W");
+    expect(huge).not.toBeNull();
+    expect(huge?.altitudeM).toBeUndefined();
+    expect(parseCompressed("/5L!!<*e7>7P[")?.speedKn).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a CSE/SPD course or a wind direction past 360 is dropped", () => {
+    const pos = decodeAprs(frame("=4703.50N/01524.00E>490/010")) as { course?: number; speedKn?: number };
+    expect(pos.course).toBeUndefined();
+    expect(pos.speedKn).toBe(10);
+    const wx = decodeAprs(frame("=4703.50N/01524.00E_999/004g005t077")) as { kind: string; windDirDeg?: number };
+    expect(wx.kind).toBe("weather");
+    expect(wx.windDirDeg).toBeUndefined();
+  });
+
+  it("telemetry keeps only finite readings and an exact sequence number", () => {
+    const d = decodeAprs(frame(`T#${"9".repeat(400)},1e999,Infinity,3,4,5,1`));
+    expect(d).toMatchObject({ kind: "telemetry", analog: [3, 4, 5] });
+    expect((d as { seq?: number }).seq).toBeUndefined();
+  });
+
+  it("an AX.25 payload byte from 0x80 to 0x9F decodes to the same code point and re-encodes unchanged", () => {
+    const bytes = encodeAx25({ src: "OE8APR", dst: "APRS", payload: ">\x80\x9f\xff" });
+    const f = decodeAx25(bytes);
+    expect(f?.payload).toBe(">\x80\x9f\xff");
+    expect(encodeAx25(f!)).toEqual(bytes);
   });
 });

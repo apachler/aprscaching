@@ -265,7 +265,15 @@ export function toCborValue(v: unknown): CborValue {
 export function fromCborValue(v: CborValue): unknown {
   if (v instanceof Map) {
     const out: Record<string, unknown> = {};
-    for (const [k, val] of v.entries()) out[String(k)] = fromCborValue(val);
+    // Defined, not assigned: a peer's `__proto__` key is an own field like any other, where an assignment
+    // would swap the object's prototype and drop the field.
+    for (const [k, val] of v.entries())
+      Object.defineProperty(out, String(k), {
+        value: fromCborValue(val),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     return out;
   }
   if (Array.isArray(v)) return v.map(fromCborValue);

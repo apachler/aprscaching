@@ -46,7 +46,10 @@ export function parseCompressed(s: string): CompressedFix | null {
     t = s[12]!;
   const fix: CompressedFix = { lat, lon, table, code };
 
-  if (c !== " ") {
+  // The cs bytes are base-91 digits: one outside 0–90 carries no altitude, course, speed or range, which
+  // keeps every derived value finite and non-negative.
+  const csDigits = d(c) >= 0 && d(c) <= 90 && d(cc) >= 0 && d(cc) <= 90;
+  if (c !== " " && csDigits) {
     const tByte = t.charCodeAt(0) - 33;
     if ((tByte & 0x18) === 0x10) {
       // altitude: cs = altitude in feet as 1.002^(c*91+cc)

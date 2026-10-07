@@ -45,11 +45,12 @@ export interface RelayController {
 }
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
-const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
 /** A single un-terminated "line" must not grow the receive buffer without bound. A real
  *  command line is a handful of bytes; 8 KiB with no CR/LF is a hostile/broken peer → drop the link. */
 const MAX_LINE_BUF = 8 * 1024;
+/** Terminated lines queue while an async `handle` runs; a peer that outpaces it by this much is dropped. */
+const MAX_PENDING_BUF = 64 * 1024;
 
 /** The transport-agnostic side of a line session: feed bytes/up/down, it drives the app. */
 export interface LineDriver {
@@ -73,6 +74,8 @@ export function makeLineDriver(
   },
 ): LineDriver {
   let buf = "";
+  // One streaming decoder per session: a UTF-8 character split across two frames decodes whole.
+  let decoder = new TextDecoder();
   let greeted = false;
   let relaySink: ((bytes: Uint8Array) => void) | null = null;
   const push = (lines: string[]) => {
@@ -83,6 +86,7 @@ export function makeLineDriver(
     attach: (sink) => {
       relaySink = sink;
       buf = "";
+      decoder = new TextDecoder();
     },
     detach: () => {
       relaySink = null;
@@ -133,13 +137,16 @@ export function makeLineDriver(
         relaySink(info);
         return;
       } // transparent relay (connect-through) — no line-splitting
-      buf += dec(info);
-      if (buf.length > MAX_LINE_BUF) {
-        buf = "";
-        io.disconnect(); // no line terminator in 8 KiB → hostile/garbage stream, tear down
-        return;
-      }
+      buf += decoder.decode(info, { stream: true });
       pump();
+      // Whole lines are handled first, however many one read carries; what is left is the unterminated
+      // tail, plus the lines still queued behind an async `handle`.
+      const tail = buf.length - 1 - Math.max(buf.lastIndexOf("\r"), buf.lastIndexOf("\n"));
+      if (tail > MAX_LINE_BUF || buf.length > MAX_PENDING_BUF) {
+        buf = "";
+        // no line terminator in 8 KiB, or lines far faster than an async app answers: tear down
+        io.disconnect();
+      }
     },
     onUp() {
       if (!greeted) {
@@ -150,6 +157,7 @@ export function makeLineDriver(
     onDown() {
       greeted = false;
       buf = "";
+      decoder = new TextDecoder();
       relaySink = null;
       busy = false;
       gen++;
