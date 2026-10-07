@@ -27,8 +27,10 @@ const MT_UINT = 0,
   MT_SIMPLE = 7;
 
 const textEncoder = new TextEncoder();
-// fatal: a signed payload with invalid UTF-8 must be rejected, not silently replaced.
-const textDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
+// fatal: a signed payload with invalid UTF-8 must be rejected, not silently replaced. ignoreBOM keeps a leading
+// U+FEFF as text: a text string decodes to exactly the code points it encodes, so canonical input re-encodes to
+// the same bytes.
+const textDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 class ByteWriter {
   private buf = new Uint8Array(256);
