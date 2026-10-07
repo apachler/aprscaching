@@ -1,0 +1,12 @@
+# Advisories reviewed and accepted, read by osv-scanner and by OpenSSF Scorecard's Vulnerabilities check.
+# Each entry carries the reason it does not reach this code and a date to look at it again.
+
+[[IgnoredVulns]]
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2027-04-07T00:00:00Z
+reason = "node-forge RSA PKCS#1 v1.5 signature verification. apps/web uses node-forge only to decrypt a LoTW PKCS#12 file (identity/lotw.ts) and never verifies an RSA signature with it. No fixed version is published."
+
+[[IgnoredVulns]]
+id = "GHSA-238p-pmpm-9mq7"
+ignoreUntil = 2027-04-07T00:00:00Z
+reason = "KaTeX, pulled in by mermaid, a dev dependency of apps/web: the diagram parse test and the static manual, which draws only the repository's own diagrams and no math from outside input. Mermaid has no release on a fixed KaTeX yet."
