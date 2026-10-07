@@ -18,7 +18,7 @@
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/tools": "workspace:*",
-    "maplibre-gl": "^6.11.2",
+    "maplibre-gl": "^6.12.0",
     "node-forge": "^1.4.0",
     "pmtiles": "^4.5.0",
     "react": "^19.3.0",
