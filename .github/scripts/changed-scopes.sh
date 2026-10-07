@@ -19,7 +19,8 @@
 #   e2e       tools/e2e/
 #   devtools  tools/dev/ (docs-theme.mjs excepted) and tools/webauthn/, which pnpm dev:check runs
 #
-#   code         (unit tests + builds)  anything but docs, Markdown, the Pocket scripts and repository metadata
+#   code         (unit tests + builds)  anything but docs, Markdown, the Pocket scripts and repository metadata;
+#                                       unit test coverage runs on the same flag
 #   types        (lint, type-aware)     all, gateway, packages: it type-checks workers/gateway/src and packages/*/src
 #   conformance  (the three legs)       all, gateway, packages
 #   audio        (e2e-audio)            all, audio, packages, e2e

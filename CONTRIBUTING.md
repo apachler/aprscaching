@@ -51,10 +51,13 @@ federating peer and the production build.
 | `tools/dev/smoke.sh federation` | the two-instance federation e2e CI runs (a publisher and a subscriber) |
 | `pnpm verify` | the full pre-PR gate: `check` then `smoke` |
 | `pnpm --filter <package> exec vitest run test/foo.test.ts -t "name"` | one file or one test |
+| `pnpm run coverage` | every unit suite under V8 coverage; the report lands in `coverage/` |
+| `FUZZ_RUNS=100000 pnpm --filter <package> exec vitest run test/properties.test.ts` | a deep run of a parser's property tests |
 | `pnpm dev` | run the instance: gateway and web app on `http://localhost:5173`, reloading on every edit |
 | `pnpm dev:check` | prove the dev stack: sign-in, sessions, the live socket and a passkey through its one origin |
 
 Run **`pnpm verify` before you open a PR**, and `tools/dev/smoke.sh federation` too for federation changes.
+New functionality ships with automated tests: unit, conformance or e2e, as fits the change.
 [Testing & verification](docs/contribute/testing.md) maps every suite and CI job.
 
 ## Linting & formatting

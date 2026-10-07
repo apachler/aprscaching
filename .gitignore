@@ -44,3 +44,6 @@ __pycache__/
 
 # the development instance's data (pnpm dev); its settings are .env.dev, covered by .env.* above
 /.dev/
+
+# the coverage report (pnpm run coverage)
+/coverage/
