@@ -27,8 +27,12 @@ mock() { # mock NAME BODY
   printf '#!/usr/bin/env bash\necho "%s $*" >>"$MOCK_LOG"\n%s\n' "$1" "$2" >"$TMP/bin/$1"
   chmod +x "$TMP/bin/$1"
 }
-# apt-get: installing docker-ce makes `docker compose version` succeed from then on
-mock apt-get 'case "$*" in *docker-ce*) mkdir -p "$MOCK_STATE" && : >"$MOCK_STATE/docker" ;; esac'
+# apt-get: installing docker-ce makes `docker compose version` succeed from then on; with MOCK_APT_LOCKED the first
+# update fails as it does while apt-daily holds the lists lock
+mock apt-get 'case "$*" in *docker-ce*) mkdir -p "$MOCK_STATE" && : >"$MOCK_STATE/docker" ;; esac
+case "$*" in *" update "* | *" update") if [ -n "${MOCK_APT_LOCKED:-}" ] && [ ! -e "$MOCK_STATE/unlocked" ]; then
+  mkdir -p "$MOCK_STATE" && : >"$MOCK_STATE/unlocked"; echo "E: Could not get lock /var/lib/apt/lists/lock" >&2; exit 100
+fi ;; esac'
 mock curl 'case "$*" in *opc/v2/vnics*) echo "[{\"vnicId\":\"ocid1.vnic.oc1..vm\"}]"; exit 0 ;; esac
 while [ $# -gt 0 ]; do [ "$1" = -o ] && { echo key >"$2"; shift; }; shift; done'
 mock gpg 'case "$*" in
@@ -69,6 +73,7 @@ setup() {
   printf 'CALL=OE8APR\nPASSCODE=%s\nFILTER=r/47.07/15.42/300 b/OE8*\nDOMAIN=%s\nREPO_URL=https://github.com/apachler/aprscaching\nREPO_REF=v1.0.0\nPINNED_COMMIT=%s\nBUCKET=%s\n' \
     "${3:-}" "${4:-:80}" "${2:-}" "${5:-}" >"$R/etc/firstboot.env"
   echo "user data with ${3:-nothing}" >"$R/cloud/instances/i-1/user-data.txt"
+  echo "cloud-config with ${3:-nothing}" >"$R/cloud/instances/i-1/cloud-config.txt"
   : >"$MOCK_LOG"
   rm -rf "$MOCK_STATE"
 }
@@ -85,15 +90,17 @@ called() { grep -q -- "$1" "$MOCK_LOG"; }
 setup release "$HEAD_SHA" 24680
 check "a release first boot succeeds" run
 check "  … installs Docker from download.docker.com behind the pinned key" \
-  bash -c "grep -q 'signed-by=$R/keyrings/docker.gpg\] https://download.docker.com/linux/ubuntu' '$R/docker.list' && grep -q 'apt-get install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin' '$MOCK_LOG'"
+  bash -c "grep -q 'signed-by=$R/keyrings/docker.gpg\] https://download.docker.com/linux/ubuntu' '$R/docker.list' && grep -q 'apt-get -o DPkg::Lock::Timeout=600 install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin' '$MOCK_LOG'"
 check "  … never pipes a script into a shell" bash -c "! grep -q 'get.docker.com' '$SCRIPT'"
 check "  … verifies the checkout against the stamped commit" logged "verified: v1.0.0 is $HEAD_SHA"
 check "  … runs init selfhost with the stack's values" \
   called "aprscaching init selfhost --non-interactive --call OE8APR --no-tunnel --no-network --no-next-steps --passcode 24680 --filter r/47.07/15.42/300 b/OE8\* --lan-host 10.0.1.5"
 check "  … starts the stack with its commit, then runs doctor" bash -c "grep -q 'docker compose up -d --build' '$MOCK_LOG' && grep -q 'aprscaching doctor' '$MOCK_LOG'"
 check "  … records SOURCE_REPO" grep -q '^SOURCE_REPO=https://github.com/apachler/aprscaching$' "$R/opt/deploy/.env"
-check "  … removes its settings and cloud-init's copy" bash -c "[ ! -e '$R/etc/firstboot.env' ] && [ ! -e '$R/cloud/instances/i-1/user-data.txt' ]"
-check "  … installs the unit that removes the copy after every boot" grep -q "rm -f $R/cloud/instances/\*/user-data.txt" "$R/units/aprscaching-scrub-userdata.service"
+check "  … removes its settings and cloud-init's copies" \
+  bash -c "[ ! -e '$R/etc/firstboot.env' ] && [ ! -e '$R/cloud/instances/i-1/user-data.txt' ] && [ ! -e '$R/cloud/instances/i-1/cloud-config.txt' ]"
+check "  … installs the unit that removes the copies after every boot" \
+  bash -c "grep -q 'rm -f $R/cloud/instances/\*/user-data.txt ' '$R/units/aprscaching-scrub-userdata.service' && grep -q '$R/cloud/instances/\*/cloud-config.txt' '$R/units/aprscaching-scrub-userdata.service'"
 check "  … keeps the passcode out of its log" bash -c "! grep -q 24680 '$R/firstboot.log'"
 check "  … keeps its log owner-only" bash -c "[ \"\$(stat -c %a '$R/firstboot.log')\" = 600 ]"
 
@@ -112,7 +119,7 @@ check "  … and without a bucket installs no OCI CLI and no backup timer" bash 
 setup bucket "$HEAD_SHA" "" ":80" aprscaching-backups-1a2b3c4d
 check "with a bucket the first boot succeeds" run
 check "  … installs the OCI CLI from hash-pinned wheels only" \
-  called "pip install --quiet --require-hashes --no-deps --only-binary :all: -r $R/opt/deploy/oci/oci-cli-requirements.txt"
+  called "pip install --quiet --require-hashes --only-binary :all: -r $R/opt/deploy/oci/oci-cli-requirements.txt"
 check "  … whose oci signs in as the instance" bash -c "'$R/bin-oci' os ns get && grep -q '^oci\[instance_principal\] os ns get' '$MOCK_LOG'"
 check "  … serves :80 on the public address from the API" called "--lan-host 203.0.113.7"
 check "  … sets OCI_BUCKET" grep -qx 'OCI_BUCKET=aprscaching-backups-1a2b3c4d' "$R/opt/deploy/.env"
@@ -124,6 +131,10 @@ setup nocli "$HEAD_SHA" "" ":80" aprscaching-backups-1a2b3c4d
 check "an OCI CLI that does not install still brings the instance up" env MOCK_PIP_FAIL=1 bash -c "$(declare -f run); SCRIPT='$SCRIPT' R='$R' run"
 check "  … says there are no backups, and sets no timer" bash -c "grep -q 'WARNING: the OCI CLI did not install' '$R/firstboot.log' && [ ! -e '$R/units/aprscaching-backup.timer' ]"
 check "  … and falls back to the private address" called "--lan-host 10.0.1.5"
+
+setup aptlock "$HEAD_SHA"
+check "apt's lists lock held at first boot does not stop it" env MOCK_APT_LOCKED=1 bash -c "$(declare -f run); SCRIPT='$SCRIPT' R='$R' run"
+check "  … the update is tried again" bash -c "[ \"\$(grep -c 'apt-get -o DPkg::Lock::Timeout=600 update' '$MOCK_LOG')\" -ge 3 ] && grep -q 'apt-get -o DPkg::Lock::Timeout=600 install -y -q docker-ce' '$MOCK_LOG'"
 
 setup branch ""
 check "a branch deploys" run

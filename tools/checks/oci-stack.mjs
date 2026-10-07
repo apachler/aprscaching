@@ -4,7 +4,7 @@
 //
 // The stack ships as a zip release artifact that a "Deploy to Oracle Cloud" button hands straight to
 // Resource Manager, so a mismatch inside it surfaces to an operator as a failed Plan on a fresh
-// tenancy rather than as a test failure here. The four ways it can drift are all mechanical:
+// tenancy rather than as a test failure here. The ways it can drift are all mechanical:
 //
 //   • a variable added to main.tf but never prompted for in schema.yaml (Plan asks for nothing and
 //     fails on a missing required value), or the reverse — a schema entry for a variable that no
@@ -13,7 +13,9 @@
 //   • an output rendered in the console that main.tf does not emit,
 //   • the repo_ref default or the release_ref / release_commit locals losing the line shape
 //     scripts/build-oci-stack.sh rewrites, which would silently publish a release stack that tracks main
-//     instead of pinning its tag, or that deploys its tag without checking the commit.
+//     instead of pinning its tag, or that deploys its tag without checking the commit,
+//   • the hash-pinned OCI CLI (oci-cli-requirements.txt) compiled for another Python than the VM image ships,
+//     resolved through an override, or holding a click without the PYSEC-2026-2132 fix.
 //
 // Terraform's own `validate` covers syntax and provider schema; it cannot see any of the above,
 // because schema.yaml and the build script are outside its world.
@@ -144,6 +146,40 @@ else {
     if (!packaged.has(required)) fail(`the stack zip would not contain ${required}`);
 }
 
+// ---- the OCI CLI's pins ↔ the VM image ----
+// firstboot.sh installs oci-cli-requirements.txt with the image's own python3, so the set must be compiled for
+// the Python that image ships, resolve without overrides (pip resolves it against itself), and keep click at
+// the release that fixes PYSEC-2026-2132.
+const ociReqs = read("deploy/oci/oci-cli-requirements.txt");
+const UBUNTU_PYTHON = new Map([["24.04", "3.12"]]);
+const imageVersion = /^\s*operating_system_version\s*=\s*"([^"]+)"/m.exec(mainTf)?.[1];
+const python = UBUNTU_PYTHON.get(imageVersion);
+if (!python)
+  fail(`main.tf's image is Ubuntu ${imageVersion ?? "(none)"}; add its Python to UBUNTU_PYTHON in this guard`);
+else {
+  if (!ociReqs.includes(`(Ubuntu ${imageVersion}, aarch64, Python ${python})`))
+    fail(`oci-cli-requirements.txt's header does not name Ubuntu ${imageVersion} and Python ${python}`);
+  if (!ociReqs.includes(`--python-version ${python}`))
+    fail(`oci-cli-requirements.txt's regenerate command does not compile for Python ${python}`);
+  // Dependabot resolves its bumps for the Python this file names
+  if (read("deploy/oci/.python-version").trim() !== python)
+    fail(`deploy/oci/.python-version does not name Python ${python}, so Dependabot would resolve for another one`);
+}
+if (/--override/.test(ociReqs)) fail("oci-cli-requirements.txt resolves through an --override; recompile it without");
+const pins = [...ociReqs.matchAll(/^([A-Za-z0-9._-]+)==(\S+) \\\n((?: {4}--hash=sha256:[0-9a-f]{64}(?: \\)?\n)+)/gm)];
+const pinLines = ociReqs.split("\n").filter((l) => /^[A-Za-z0-9._-]+==/.test(l));
+if (!pins.length || pins.length !== pinLines.length)
+  fail(`oci-cli-requirements.txt: ${pinLines.length - pins.length} of ${pinLines.length} pins carry no sha256 hash`);
+const click = pins.find((m) => m[1].toLowerCase() === "click")?.[2];
+const atLeast = (v, min) => {
+  const a = v.split(".").map(Number);
+  const b = min.split(".").map(Number);
+  for (let i = 0; i < b.length; i++) if ((a[i] ?? 0) !== b[i]) return (a[i] ?? 0) > b[i];
+  return true;
+};
+if (!click || !atLeast(click, "8.3.3"))
+  fail(`oci-cli-requirements.txt pins click ${click ?? "(none)"}; PYSEC-2026-2132 is fixed in 8.3.3`);
+
 if (problems.length) {
   console.error(
     `oci-stack guard: ${problems.length} inconsistenc${problems.length === 1 ? "y" : "ies"} in deploy/oci:`,
@@ -152,5 +188,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `oci-stack guard: ${tfVariables.size} variables and ${tfOutputs.size} outputs match schema.yaml; the release zip pins its ref.`,
+  `oci-stack guard: ${tfVariables.size} variables and ${tfOutputs.size} outputs match schema.yaml; the release zip pins its ref; ${pins.length} OCI CLI pins fit Python ${python}.`,
 );
