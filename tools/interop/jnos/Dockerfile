@@ -1,7 +1,7 @@
 # JNOS 2.0 — a third independent FBB-forwarding implementation (and NOS-lineage NET/ROM), built
 # from source. Userspace AXUDP; no privileges. Pin the source via --build-arg JNOS_URL (+
 # JNOS_SHA256 for the tarball).
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 ARG JNOS_URL=https://www.langelaar.net/jnos2/downloads/jnos2.0m.5.tar.gz
 # community full-source mirror on GitHub (VE4KLM/N5KNX/KA9Q lineage) — reliable CI infrastructure
 # when the primary site's TLS chain or availability wobbles

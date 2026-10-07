@@ -15,9 +15,11 @@ copyright: >-
 
 docs_dir: docs
 
-# The docs LICENSE file lives beside the pages but is not itself a manual page.
+# The docs LICENSE file and the build's requirements live beside the pages but are not manual pages.
 exclude_docs: |
   LICENSE
+  requirements.in
+  requirements.txt
 
 # Dated review records: built and linkable, but kept out of the manual's navigation so a reader of the
 # manual never mistakes a point-in-time review for documentation of the current state.

@@ -116,7 +116,7 @@ out/teaser.png      the composed poster (hero)
 - Chromium for Playwright under `/opt/pw-browsers`: `run-tour.sh` (and so `run-docs.sh`) sets
   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` and picks the Chromium it finds there as `PW_CHROMIUM`. On a
   machine without it, install it to that path once:
-  `cd tools/teaser && npm install && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright install chromium`.
+  `cd tools/teaser && npm ci && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright install chromium`.
 - Video assembly needs **no ffmpeg** — it composes in Chromium (the same browser the tour uses).
 
 ## Knobs

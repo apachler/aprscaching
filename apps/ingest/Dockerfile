@@ -1,7 +1,7 @@
 # Standalone ingest image — build from the REPO ROOT:
 #   docker build -f apps/ingest/Dockerfile -t aprscaching-ingest .
 # Node 24 matches CI; corepack activates the pnpm pinned in package.json.
-FROM node:24-slim
+FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 WORKDIR /app
 RUN corepack enable
 COPY . .

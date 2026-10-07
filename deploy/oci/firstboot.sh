@@ -154,8 +154,10 @@ fi
 # The public address of this VM, through the OCI API (the guest only sees its private one). A reserved IP is
 # attached after the VM starts, and the policy may take a while, so it asks for a while.
 public_ip() {
-  local vnic ip waited=0
-  vnic="$(curl -fsS -H 'Authorization: Bearer Oracle' "$IMDS/vnics/" 2>/dev/null |
+  local vnics vnic ip waited=0
+  # the metadata is data: fetched into a variable, then parsed, never piped from the fetch into an interpreter
+  vnics="$(curl -fsS -H 'Authorization: Bearer Oracle' "$IMDS/vnics/" 2>/dev/null)" || return 1
+  vnic="$(printf '%s' "$vnics" |
     python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["vnicId"])' 2>/dev/null)" || return 1
   while [ "$waited" -lt "$IP_WAIT_S" ]; do
     ip="$("$OCI_BIN" network vnic get --vnic-id "$vnic" --query 'data."public-ip"' --raw-output 2>/dev/null || true)"

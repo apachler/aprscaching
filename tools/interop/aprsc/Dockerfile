@@ -1,7 +1,7 @@
 # aprsc (OH7LZB/hessu) — the core APRS-IS server the real network runs on. Built from the GitHub
 # release tarball; the interop environment points the acs ingest's APRS-IS client at it, so the
 # login/filter/stream protocol is exercised against the reference implementation.
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 ARG APRSC_URL=https://github.com/hessu/aprsc/archive/refs/tags/release/2.1.15.tar.gz
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates curl build-essential libevent-dev libssl-dev telnet \

@@ -3,7 +3,7 @@
 # Build context = repo root:  docker build -f deploy/Dockerfile -t aprscaching:local ..
 # Node 24 matches CI (the repo's engines field requires >=22); corepack activates the exact pnpm
 # pinned in package.json ("packageManager"), so image builds use the same toolchain as CI.
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ ca-certificates git \
  && rm -rf /var/lib/apt/lists/*
@@ -12,7 +12,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm -r build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
 WORKDIR /app
 # pnpm is fetched into a shared COREPACK_HOME at build time, so the unprivileged user runs it without a
 # writable home cache and a container starts without network access.

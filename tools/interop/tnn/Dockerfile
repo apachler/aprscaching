@@ -3,7 +3,7 @@
 # identical L2/L3 wire behaviour, which is what this environment asserts). The classic ham tarball
 # (dl5mcg.de) stays a --build-arg override; its TLS stack predates OpenSSL 3 defaults, so the
 # fetch ladder keeps a relaxed-handshake attempt for that override. Userspace only, no privileges.
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 # pinned to an immutable commit archive — the commit hash IS the version pin; bumps are
 # deliberate and re-run the conformance suite (TNN_SHA256 stays an operator override)
 ARG TNN_URL=https://github.com/DeltaLima/TheNetNode-CB/archive/b9f6bc2d5bd2ce8a08d318d795a6466d2aa6b13f.tar.gz

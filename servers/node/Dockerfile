@@ -4,7 +4,7 @@
 #   docker run -p 8787:8787 -v aprscaching-data:/data -e INGEST_SECRET=... aprscaching-node
 # better-sqlite3 compiles from source (v13 ships no prebuilt binaries), so the build stage
 # carries the node-gyp toolchain; the runtime stage stays slim.
-FROM node:24-slim AS build
+FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
 ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH"
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
@@ -15,7 +15,7 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @aprscaching/node-gateway...
 
-FROM node:24-slim
+FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH" COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 WORKDIR /app
 COPY --from=build /app /app
