@@ -1,7 +1,7 @@
 name: docs
 
-# Builds the MkDocs manual with --strict (no broken links / bad nav) on every change, and publishes
-# it to GitHub Pages from the default branch. The manual is the support surface SUPPORT.md and the
+# Builds the MkDocs manual with --strict (no broken links / bad nav) on every change, parses every Mermaid
+# diagram in the repository's Markdown, and publishes the manual to GitHub Pages from the default branch. The manual is the support surface SUPPORT.md and the
 # issue templates point people at, so it has to be reachable without a git checkout.
 on:
   push:
@@ -9,6 +9,8 @@ on:
     paths: &paths
       - "docs/**"
       - "mkdocs.yml"
+      # Mermaid diagrams live in Markdown across the repository (apps/web/test/diagrams.test.ts parses them all)
+      - "**/*.md"
       - "overrides/**"
       - ".github/workflows/docs.yml"
       # the manual's theme and Mermaid build come from the web app (tools/dev/docs-theme.mjs)
@@ -16,7 +18,9 @@ on:
       - "apps/web/src/styles/fonts.css"
       - "apps/web/public/fonts/**"
       - "tools/dev/docs-theme.mjs"
-      - "pnpm-lock.yaml"
+      # Mermaid, which the theme step copies from node_modules, is pinned to an exact version there, so moving it
+      # changes this file; a lockfile-only change cannot
+      - "apps/web/package.json"
       # the house style (docs/contribute/style-guide.md)
       - ".vale.ini"
       - ".vale/**"
@@ -55,6 +59,8 @@ jobs:
       # the committed theme must match the app's tokens; then write it, with Mermaid, for the build
       - run: node tools/dev/docs-theme.mjs --check
       - run: node tools/dev/docs-theme.mjs
+      # every Mermaid block in the repository's Markdown parses with that same Mermaid build
+      - run: pnpm --filter @aprscaching/web exec vitest run test/diagrams.test.ts
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"

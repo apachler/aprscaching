@@ -11,8 +11,8 @@
  *   3. Launch Chromium with the fake device, call the real `listenDecode('psk31', ...)`, wait, stop.
  *   4. Assert the decoded text contains the message.
  *
- * Portable + safe to run anywhere: if no Chromium is found it prints SKIP and exits 0 (so Node-only CI is
- * never broken); the dedicated `e2e-audio` CI job installs a browser so the real assertion runs.
+ * Portable + safe to run anywhere: if no Chromium is found it prints SKIP and exits 0, and fails in CI (`CI`
+ * set), where the `e2e-audio` job installs the browser playwright-core expects so the real assertion runs.
  * Browser resolution: $CHROMIUM_PATH, then /opt/pw-browsers/chromium-*, then playwright-core's registry.
  */
 import { chromium } from "playwright-core";
@@ -87,7 +87,9 @@ function findChromium() {
 async function main() {
   const exe = findChromium();
   if (!exe) {
-    console.log("SKIP: no Chromium available (set CHROMIUM_PATH or `npx playwright install chromium`)");
+    if (process.env.CI)
+      throw new Error("no Chromium in CI: install it with pnpm exec playwright-core install --with-deps chromium");
+    console.log("SKIP: no Chromium available (set CHROMIUM_PATH or `pnpm exec playwright-core install chromium`)");
     process.exit(0);
   }
 

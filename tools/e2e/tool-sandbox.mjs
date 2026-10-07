@@ -17,7 +17,7 @@
  *   4. a tool with the network grant reaches its `connect` origin, without the page's cookie, and not the
  *      app's own origin.
  *
- * If no Chromium is found it prints SKIP and exits 0, like the other e2e scripts.
+ * If no Chromium is found it prints SKIP and exits 0, like the other e2e scripts, and fails in CI (`CI` set).
  * Browser resolution: $CHROMIUM_PATH, then /opt/pw-browsers/chromium-*, then playwright-core's registry.
  */
 import { chromium } from "playwright-core";
@@ -78,7 +78,9 @@ const greedyTool = readFileSync(path.join(ROOT, "tools/e2e/fixtures/tool-api-1.0
 async function main() {
   const exe = findChromium();
   if (!exe) {
-    console.log("SKIP: no Chromium available (set CHROMIUM_PATH or `npx playwright install chromium`)");
+    if (process.env.CI)
+      throw new Error("no Chromium in CI: install it with pnpm exec playwright-core install --with-deps chromium");
+    console.log("SKIP: no Chromium available (set CHROMIUM_PATH or `pnpm exec playwright-core install chromium`)");
     process.exit(0);
   }
 
