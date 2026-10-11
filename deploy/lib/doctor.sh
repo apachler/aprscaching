@@ -640,12 +640,51 @@ origin_scope() {
   else echo public; fi
 }
 
+# doc_rp_id: the passkey relying party's host, as the gateway derives it (env.ts applyDerivedDefaults): RP_ID,
+# else APP_URL's host when APP_URL is a secure page, else the first https address of EXTRA_ORIGINS.
+doc_rp_id() {
+  local rp app o
+  rp="$(doc_get RP_ID | tr '[:upper:]' '[:lower:]')"
+  if [ -n "$rp" ]; then printf '%s' "$rp"; return 0; fi
+  app="$(doc_get APP_URL | tr '[:upper:]' '[:lower:]')"
+  rp="${app#*://}"
+  rp="${rp%%/*}"
+  rp="${rp%%:*}"
+  case "$app" in
+    https://*) printf '%s' "$rp"; return 0 ;;
+    http://localhost* | http://127.0.0.1*) printf '%s' "$rp"; return 0 ;;
+  esac
+  for o in $(doc_get EXTRA_ORIGINS | tr ',' ' ' | tr '[:upper:]' '[:lower:]'); do
+    case "$o" in https://*) o="${o#https://}"; printf '%s' "${o%%[:/]*}"; return 0 ;; esac
+  done
+  printf '%s' "$rp"
+}
+
+# doc_related_origin ORIGIN HOST RP: an https address outside the relying party's domain takes passkeys only as a
+# related origin, so the browser there fetches https://<RP>/.well-known/webauthn and needs ORIGIN listed in it.
+# An address inside RP's domain needs no file.
+doc_related_origin() {
+  local o="$1" host="$2" rp="$3" body
+  [ -n "$rp" ] || return 0
+  if [ "$host" = "$rp" ] || [[ "$host" == *".$rp" ]]; then return 0; fi
+  if ! body="$(curl -fsS --max-time 10 "https://$rp/.well-known/webauthn" 2>/dev/null)" || [ -z "$body" ]; then
+    failc origins.webauthn "https://$rp/.well-known/webauthn does not answer: passkeys made on $rp do not sign in on $o" \
+      "the relying party's address (RP_ID) must reach this gateway; check its DNS, certificate and firewall"
+  elif [[ "$body" == *"\"$o\""* ]]; then
+    pass origins.webauthn "$o is a related origin of $rp: passkeys made there sign in here"
+  else
+    failc origins.webauthn "https://$rp/.well-known/webauthn does not list $o" \
+      "RP_ID's address must be served by this instance, with $o in EXTRA_ORIGINS; restart the gateway after changing either"
+  fi
+}
+
 # Each further address of the instance: listed once, resolves, answers from here as this gateway, a valid
-# certificate on an https one, and no plain http on the internet.
+# certificate on an https one, passkeys through the related-origins file, and no plain http on the internet.
 doc_origins() {
-  local list o seen="," host hostport port ip ips health end end_s now days scope
+  local list o seen="," host hostport port ip ips health end end_s now days scope rp
   list="$(doc_get EXTRA_ORIGINS)"
   [ -n "${list//[[:space:],]/}" ] || return 0
+  rp="$(doc_rp_id)"
   for o in ${list//,/ }; do
     o="$(printf '%s' "${o%/}" | tr '[:upper:]' '[:lower:]')"
     case "$o" in https://* | http://*) ;; *) continue ;; esac # config.value.EXTRA_ORIGINS names a malformed one
@@ -691,6 +730,7 @@ doc_origins() {
           elif [ "$days" -lt 14 ]; then warnc origins.tls "the certificate of $o expires in $days days" "check Caddy's renewal (docker compose logs caddy)"
           else pass origins.tls "the certificate of $o is valid for $days more days"; fi
         fi
+        doc_related_origin "$o" "$host" "$rp"
         ;;
       http://*)
         for ip in $ips; do
