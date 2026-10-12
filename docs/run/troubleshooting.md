@@ -506,6 +506,19 @@ Each address in `EXTRA_ORIGINS`: the instance's 44Net name, a HAMNET address and
   reachable on the address.
 - **See:** [Get a certificate for the 44Net name](networks/several-addresses.md#get-a-certificate-for-the-44net-name).
 
+### `origins.webauthn`
+
+- **Tests:** an `https://` address outside the passkey domain (`RP_ID`) is listed in
+  `https://<RP_ID>/.well-known/webauthn`, so a passkey made on `RP_ID` signs in there. An address inside
+  `RP_ID`'s domain is not tested: it needs no file.
+- **Message:** `https://<RP_ID>/.well-known/webauthn does not answer` (fail). The browser asks `RP_ID`'s own
+  address, so while it is unreachable passkeys fail on the other address too.
+- **Message:** `https://<RP_ID>/.well-known/webauthn does not list <origin>` (fail). `RP_ID` points at another
+  instance, or the gateway has not read the changed settings.
+- **Fix:** let `RP_ID` default to `APP_URL`'s host, list the address in `EXTRA_ORIGINS`, and restart the stack
+  (`docker compose up -d` in `deploy/`). Members still sign in by email link meanwhile.
+- **See:** [Passkeys on every https address](networks/several-addresses.md#passkeys-on-every-https-address).
+
 ### `origins.http`
 
 - **Tests:** an `http://` address is not on a public internet address. A LAN address passes. A 44Net address

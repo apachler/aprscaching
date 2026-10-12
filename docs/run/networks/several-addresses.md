@@ -142,6 +142,43 @@ On a plain-http address the sign-in panel shows passkeys as unavailable and says
 email link or the sysop's [one-time link](../day-to-day/sign-in-links.md#off-grid-sign-in); the sysop's
 [`signin-link.mjs`](../../reference/cli.md#signin-link) names the HAMNET address with `--link-origin`.
 
+## When one path is down
+
+An internet name on the box's own public IP and a 44Net name over the Connect tunnel are two paths to one box.
+Either keeps the instance reachable while the other is down:
+
+| | Tunnel down | Internet line down |
+|---|---|---|
+| Internet name (`APP_URL`) | Everything works | Unreachable |
+| 44Net name | Unreachable | The app works; passkeys fail, email sign-in works |
+
+Passkeys fail on the 44Net name while the internet line is down because the browser fetches the
+related-origins file from `RP_ID`'s own address, which is then unreachable. Put `APP_URL`, and with it
+`RP_ID`, on the path that is up most and that most members type. A passkey belongs to `RP_ID` for good, so
+settle it before the first member registers one.
+
+- Each path needs its own way in: a port forward of TCP 80 and 443 (and UDP 443 for HTTP/3) to the box for
+  the public IP, the tunnel for the 44Net name. A full tunnel routes only traffic from the 44.x address
+  through it, so replies on the public IP leave over the line ([44Net address](44net.md)).
+- A public IP that changes needs dynamic DNS with a short TTL. Behind CGNAT there is no public IP to forward;
+  the tunnel is then the only path.
+- Two paths do not protect the box itself, its disk or its power: keep [backups](../day-to-day/backups.md).
+- Sessions belong to the address they were issued on: a member who switches address signs in again.
+
+## Redirect your other domains
+
+A further domain that should only lead to the instance (a `.com` beside the `.net`) is a redirect, not an
+address: never list it in `EXTRA_ORIGINS` or `CORS_ORIGINS`, which would make it a sign-in address of its own.
+
+- Set the redirect at the domain's DNS provider or registrar, as URL forwarding or a redirect rule, to
+  `https://<APP_URL host>`, keeping the path and the query: `https://example.com/?cache=AC-1` opens
+  `https://example.net/?cache=AC-1`. DNS records alone cannot redirect: the provider answers the request with
+  its own server.
+- Redirect `www.` to the same target, not to `www.` of the main address, which saves a hop.
+- Use `302` until the instance is settled, then `301`: browsers keep a permanent redirect for a long time.
+- The instance's box needs no certificate and no record for the redirected domain, and the redirect keeps
+  answering while the box is down.
+
 ## Federation over several addresses
 
 Peers that added this instance by URL, from `FED_PEERS`, the registry or discovery learn the addresses of
@@ -160,8 +197,8 @@ Records are signed whatever the path, so neither the fall back to plain http nor
 ## Check that it worked
 
 - `deploy/aprscaching doctor` checks each address: it is listed once, it resolves, its `/health` answers from
-  this box as this gateway, an https one has a valid certificate, and an http one is not on the internet
-  ([troubleshooting](../troubleshooting.md#originsdns)).
+  this box as this gateway, an https one has a valid certificate and is listed in `RP_ID`'s related-origins
+  file, and an http one is not on the internet ([troubleshooting](../troubleshooting.md#originsdns)).
 - From a device on each network, open the address, sign in, and reload: you stay signed in.
 - `curl -fsS https://aprs.example.net/.well-known/webauthn` lists the https addresses.
 

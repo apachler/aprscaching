@@ -188,6 +188,26 @@ check "  … an internet-announced subnet in it as well" eq "$(ampr 44.135.208.1
 check "44.192.0.0/10 was sold and is not 44Net" eq "$(ampr 44.200.1.2)" sold
 check "an address outside 44/8 is not 44Net" eq "$(ampr 144.44.1.2)" other
 
+# ---- doctor: passkeys on a further address --------------------------------------------------------------------
+rpid() { env -i PATH="$PATH" "$@" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/doctor.sh'; doc_rp_id"; }
+check "the relying party is RP_ID when it is set" eq "$(rpid RP_ID=Example.NET APP_URL=https://aprs.example.org)" example.net
+check "  … else APP_URL's host" eq "$(rpid APP_URL=https://aprscaching.net/)" aprscaching.net
+check "  … else, under a plain-http APP_URL, the first https further address" \
+  eq "$(rpid APP_URL=http://44.143.1.2 EXTRA_ORIGINS=http://lan.example,https://aprscaching.oe8apr.ampr.org)" aprscaching.oe8apr.ampr.org
+# related ORIGIN HOST RP BODY: the check's status with the related-origins file stubbed (BODY empty: no answer)
+related() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; DOCS_URL=x
+  curl() { [ -n \"\$BODY\" ] || return 22; printf '%s' \"\$BODY\"; }
+  doc_related_origin \"\$1\" \"\$2\" \"\$3\"; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2" _ "$1" "$2" "$3"; }
+ROR='{"origins":["https://aprscaching.net","https://aprscaching.oe8apr.ampr.org"]}'
+check "a further address listed in RP_ID's related-origins file passes" \
+  eq "$(BODY="$ROR" related https://aprscaching.oe8apr.ampr.org aprscaching.oe8apr.ampr.org aprscaching.net)" $'pass\torigins.webauthn'
+check "  … one missing from it fails" \
+  eq "$(BODY='{"origins":["https://aprscaching.net"]}' related https://aprscaching.oe8apr.ampr.org aprscaching.oe8apr.ampr.org aprscaching.net)" $'fail\torigins.webauthn'
+check "  … as does a file that does not answer" \
+  eq "$(BODY='' related https://aprscaching.oe8apr.ampr.org aprscaching.oe8apr.ampr.org aprscaching.net)" $'fail\torigins.webauthn'
+check "an address inside RP_ID's domain needs no file" \
+  eq "$(BODY='' related https://www.aprscaching.net www.aprscaching.net aprscaching.net)" ""
+
 # ---- setup.sh: the federation posture ---------------------------------------------------------------------
 S="$DEPLOY/setup.sh"
 setup() { "$S" --non-interactive --no-network "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
