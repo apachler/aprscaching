@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/multicast-dns": "^7.2.4",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
