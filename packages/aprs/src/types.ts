@@ -59,5 +59,10 @@ export type AprsData =
   | ({ kind: "weather" } & DecodedWeather & Partial<DecodedPosition>)
   | ({ kind: "telemetry" } & DecodedTelemetry)
   | ({ kind: "message" } & DecodedMessage)
-  | { kind: "status"; text: string }
+  | { kind: "status"; text: string; timestamp?: string }
+  /**
+   * Third-party traffic (`}`): a packet another station or gateway carries for its sender. `inner` is that
+   * packet's header and `data` its decoded content, attributed to `inner.src`, never to the carrier.
+   */
+  | { kind: "thirdparty"; inner: ParsedFrame; data: AprsData }
   | { kind: "other" };
