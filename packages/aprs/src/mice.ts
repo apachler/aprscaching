@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * mice.ts — MIC-E decode (APRS101 §10 "Mic-E Data Format").
+ * mice.ts — MIC-E decode (APRS 1.2 chapter 10, "Mic-E Data Format").
  * MIC-E packs latitude + message bits into the AX.25 *destination* address, and
  * longitude + speed + course + symbol into the information field. Implemented from the
  * published algorithm (not derived from any third-party source).
@@ -10,6 +10,7 @@
  *   'A'-'J' -> digit 0-9, custom message bit (1C); sign bits "don't care"
  *   'K','L','Z' -> position ambiguity (space)
  *   'P'-'Y' -> digit 0-9, sign bits 1 (North / +100 / West)
+ * 'A'-'K' carry only message bits, so they appear in the first three characters alone.
  */
 import { isValidLatLon } from "./geo.js";
 
@@ -29,11 +30,14 @@ export interface MicEFix {
 // standard message table, indexed by the 3 message bits (A,B,C) read as a 3-bit number
 const STD_MSG = ["Emergency", "Priority", "Special", "Committed", "Returning", "In Service", "En Route", "Off Duty"];
 const CUSTOM_MSG = ["Emergency", "Custom-6", "Custom-5", "Custom-4", "Custom-3", "Custom-2", "Custom-1", "Custom-0"];
+/** The message type when the three message bits mix Standard 1s and Custom 1s. */
+const UNKNOWN_MSG = "Unknown";
 
 function decodeDest(dest: string): {
   digits: number[];
   mbits: number[];
   custom: boolean;
+  mixed: boolean;
   north: boolean;
   lonOffset: boolean;
   west: boolean;
@@ -44,6 +48,7 @@ function decodeDest(dest: string): {
   const digits: number[] = [],
     mbits: number[] = [];
   let custom = false,
+    standard = false,
     ambiguity = 0;
   // sign bits come from chars 3,4,5
   let north = false,
@@ -58,12 +63,10 @@ function decodeDest(dest: string): {
     if (c >= "0" && c <= "9") {
       digit = c.charCodeAt(0) - 48;
       // mbit stays 0 (the declaration default) for the 0–9 digit case.
-    } else if (c >= "A" && c <= "J") {
-      digit = c.charCodeAt(0) - 65;
-      mbit = 1;
-      custom = true;
-    } else if (c === "K") {
-      space = true;
+    } else if (c >= "A" && c <= "K") {
+      if (i >= 3) return null; // a message-bit-only character where a sign bit belongs
+      if (c === "K") space = true;
+      else digit = c.charCodeAt(0) - 65;
       mbit = 1;
       custom = true;
     } else if (c === "L") {
@@ -73,10 +76,12 @@ function decodeDest(dest: string): {
       digit = c.charCodeAt(0) - 80;
       mbit = 1;
       high = true;
+      if (i < 3) standard = true;
     } else if (c === "Z") {
       space = true;
       mbit = 1;
       high = true;
+      if (i < 3) standard = true;
     } else return null;
     if (space) ambiguity++;
     digits.push(digit);
@@ -85,7 +90,7 @@ function decodeDest(dest: string): {
     if (i === 4) lonOffset = high;
     if (i === 5) west = high;
   }
-  return { digits, mbits, custom, north, lonOffset, west, ambiguity };
+  return { digits, mbits, custom, mixed: custom && standard, north, lonOffset, west, ambiguity };
 }
 
 /**
@@ -111,8 +116,13 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   else if (lonDeg >= 190 && lonDeg <= 199) lonDeg -= 190;
   let lonMin = info.charCodeAt(2) - 28;
   if (lonMin >= 60) lonMin -= 60;
-  const lonHund = info.charCodeAt(3) - 28;
+  let lonHund = info.charCodeAt(3) - 28;
   if (lonDeg < 0 || lonMin < 0 || lonHund < 0 || lonHund > 99 || lonMin + lonHund / 100 >= 60) return null;
+  // the latitude's ambiguity applies to the longitude: its last digits are dropped the same way
+  if (dd.ambiguity >= 1) lonHund -= lonHund % 10;
+  if (dd.ambiguity >= 2) lonHund = 0;
+  if (dd.ambiguity >= 3) lonMin -= lonMin % 10;
+  if (dd.ambiguity >= 4) lonMin = 0;
   let lon = lonDeg + (lonMin + lonHund / 100) / 60;
   if (dd.west) lon = -lon;
   if (!isValidLatLon(lat, lon)) return null;
@@ -128,14 +138,15 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
     course = (dc % 10) * 100 + se;
     if (speedKn >= 800) speedKn -= 800;
     if (course >= 400) course -= 400;
-    if (course > 360) course = undefined;
+    // 0 is an unknown course and 360 due north; past 360 is not a heading
+    if (course === 0 || course > 360) course = undefined;
   }
 
   const code = info[7] ?? "/";
   const table = info[8] ?? "/";
 
   const msgNum = (dd.mbits[0]! << 2) | (dd.mbits[1]! << 1) | dd.mbits[2]!;
-  const messageType = (dd.custom ? CUSTOM_MSG : STD_MSG)[msgNum]!;
+  const messageType = dd.mixed ? UNKNOWN_MSG : (dd.custom ? CUSTOM_MSG : STD_MSG)[msgNum]!;
 
   const fix: MicEFix = {
     lat: round(lat),
@@ -148,17 +159,33 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
     ambiguity: dd.ambiguity,
   };
 
-  // trailing comment may carry altitude as "xxx}" (base-91, metres above -10000m datum)
-  const rest = info.slice(9);
-  const altM = /(.)(.)(.)}/.exec(rest);
-  if (altM && rest.indexOf("}") === 3) {
-    const a = (altM[1]!.charCodeAt(0) - 33) * 8281 + (altM[2]!.charCodeAt(0) - 33) * 91 + (altM[3]!.charCodeAt(0) - 33);
-    fix.altitudeM = a - 10000;
-    fix.comment = rest.slice(4).trim() || undefined;
-  } else if (rest.trim()) {
-    fix.comment = rest.trim();
-  }
+  const text = statusText(info.slice(9));
+  if (text.altitudeM !== undefined) fix.altitudeM = text.altitudeM;
+  if (text.comment) fix.comment = text.comment;
   return fix;
+}
+
+/**
+ * The Mic-E status text: an optional device prefix (`>` `]` for Kenwood, `` ` `` `'` for other makers), then
+ * an optional altitude "xxx}" (base-91 metres above a datum 10 km below sea level), then the comment, then
+ * the device's suffix (one character after a Kenwood prefix, two after the others). Prefix and suffix name
+ * the radio and are not part of the comment.
+ */
+function statusText(rest: string): { altitudeM?: number; comment?: string } {
+  const prefix = /^[>\]`']/.test(rest) ? rest[0]! : "";
+  let text = rest.slice(prefix.length);
+  let altitudeM: number | undefined;
+  const alt = /^([!-{])([!-{])([!-{])\}/.exec(text);
+  if (alt) {
+    const v = (alt[1]!.charCodeAt(0) - 33) * 8281 + (alt[2]!.charCodeAt(0) - 33) * 91 + (alt[3]!.charCodeAt(0) - 33);
+    altitudeM = v - 10000;
+    text = text.slice(4);
+  }
+  if (prefix === ">") text = text.replace(/[=^&]$/, "");
+  else if (prefix === "]") text = text.replace(/=$/, "");
+  else if (prefix) text = text.replace(/[_|].$/, "");
+  const comment = text.trim();
+  return { ...(altitudeM !== undefined ? { altitudeM } : {}), ...(comment ? { comment } : {}) };
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
