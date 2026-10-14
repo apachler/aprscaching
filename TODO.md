@@ -450,6 +450,96 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       client↔backend protocol so an orphaned HamClock can point `-b` at an instance. Parked: revisit only
       if the community backends falter and the feed proxy already covers most of the data products.
 
+## APRS practice & protocol alignment
+
+What the APRS community's own references ask of a client, digipeater and IGate, measured against what the
+gateway, the ingest and the browser bridge do today. The sources are the
+[how.aprs.works resource list](https://how.aprs.works/00-aprs-resources/) and the pages it links: WB2OSZ's
+consolidated specification ([`wb2osz/aprsspec`](https://github.com/wb2osz/aprsspec)), the device-identification
+database ([`aprsorg/aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid)), the LoRa APRS series and the
+online APRS viewers. Items are listed in start order (`step 1` first): the protocol checks come before features
+built on the parser, and each step names what it waits on. Already in place, so not listed: third-party packet
+unwrapping (`packages/aprs/src/thirdparty.ts`), the digipeater's duplicate key of source, destination and info
+(`dedupeKey`), the `NEAR` radio command, geofence prompts, CSMA on the ingest soundcard port, BLE KISS for
+Mobilinkd and LoRa trackers, and MeshCom signal reports. The tocall request is the launch-list item above.
+
+- [ ] **Parser against APRS 1.2** _(P1 · M · step 1)_ — APRS101 (2000) lacks two decades of corrections; the
+      consolidated drafts `APRS12b.pdf`/`APRS12c.pdf` and `APRS-Digipeater-Algorithm.pdf` in `wb2osz/aprsspec`
+      replace it. Check `packages/aprs` (decode, Mic-E, objects and items, paths, `digipeat()`) against them:
+      one `*` in a path, every address before it counts as used, `WIDE1-N` for fill-in and `WIDE2-N` for
+      wide-area digis, `RELAY`/`WIDE` obsolete. Cite 1.2, not APRS101, in comments and the manual. Each
+      divergence found is a fix with its test. _Depends on:_ —
+- [ ] **Gateway duplicate check against the APRS-IS rule** _(P1 · S · step 2)_ — APRS-IS treats packets as
+      duplicates when source with SSID, destination without SSID and info match within 30 s, ignoring the path;
+      a key without the destination merges moving Mic-E reports, whose destination changes. The digipeater's key
+      already includes the destination; confirm the gateway's ingest dedup does too, and that a receive path
+      never dedups before forwarding to APRS-IS (an IGate passes every frame on, byte for byte). _Depends on:_
+      step 1.
+- [ ] **KISS timing on browser transmit** _(P1 · S · step 3)_ — the Web Serial and BLE KISS transmit paths in
+      `apps/web/src/rf` send no KISS parameters, so the TNC's own defaults decide channel access. Send TXDELAY
+      30, PERSIST 63 and SLOTTIME 10 (WB2OSZ, _Minimizing APRS Collisions_) on connect, adjustable under My
+      radio → Advanced; the manual advises against VOX keying (a 250–500 ms VOX tail collides). Transmit
+      stays gated on callsign control-verification. _Depends on:_ —
+- [ ] **Sending device by tocall** _(P2 · S · step 4)_ — name the device behind a packet ("Kenwood TM-D710",
+      "Dire Wolf") in the decoder, station details and the live map, from `tocalls.dense.json` in
+      `aprsorg/aprs-deviceid`. Check its licence before bundling it in `packages/aprs` (MIT-clean); otherwise the
+      gateway fetches and caches it. Mic-E device types are not in that database. _Depends on:_ step 1.
+- [ ] **LoRa APRS port in the ingest** _(P1 · M · step 5)_ — the common LoRa APRS firmware (CA2RXU, SQ2CPA)
+      frames a packet as `0x3C 0xFF 0x01` followed by a TNC2 text line, not AX.25; the ingest reads MeshCom but
+      not this. A port that strips the prefix and parses TNC2, attested like a TNC port when the box's own radio
+      heard it. Presets: Standard BW125 SF9 CR4:7, Fast BW125 SF8 CR4:6, Custom; 433.775 MHz in IARU Region 1
+      (the OE experimenters' frequency), 439.9125 MHz in the UK. Keep per-packet RSSI, SNR and frequency offset
+      as receiver metadata for display; receiving never lifts trust. The port's status header shows the settings
+      and the computed airtime. _Depends on:_ step 1.
+- [ ] **Dire Wolf as the reference TNC** _(P2 · S · step 6)_ — test the ingest's KISS-TCP client against Dire
+      Wolf with several channels, each KISS channel its own attested receiver port, and document the
+      `direwolf.conf` that pairs with an ingest box. Dire Wolf's FX.25 frames stay AX.25-compatible; IL2P does
+      not, so the manual says which to enable. _Depends on:_ —
+- [ ] **Packet route on find and station detail** _(P1 · M · step 7)_ — draw the path a packet took: radio,
+      each digipeater, the IGate or the instance's own receiver, APRS-IS. It shows on screen why one find is
+      Tier A (heard by an attested site's own receiver) and another Tier C (through APRS-IS, `qAR` included).
+      None of the public APRS viewers explains trust; this is where the platform differs. _Depends on:_ step 1.
+- [ ] **HF port preset** _(P3 · S · step 8)_ — 30 m APRS at 300 baud: an empty path (HF has no digipeating;
+      an empty path saves 14 bytes), beacons every 10–15 min, Mic-E, the comment on every fourth beacon, 5–10
+      message retries, and the dial frequency named together with mode and tones (10.1476 MHz USB). HF heard
+      through someone else's IGate is APRS-IS and stays Tier C. _Depends on:_ step 6.
+- [ ] **Frequency by country in My radio** _(P2 · S · step 9)_ — suggest the APRS frequency from the
+      operator's locale or position: 144.800 MHz in Region 1, 144.390 MHz in North America, the Region 3 and
+      South American exceptions, 433.775 MHz for LoRa, 145.825 MHz for the ISS digipeater. A data table in
+      `packages/shared`, shown as a hint, never set on the radio without the operator's action. _Depends on:_ —
+- [ ] **Ingest health in the Shack** _(P2 · S · step 10)_ — packets per second, parse rate and invalid
+      packets per port at the port's status header, the figures the public viewers show for their feeds.
+      _Depends on:_ —
+- [ ] **Coverage for hiders** _(P2 · M · step 11)_ — PHG range circles and digipeater and IGate coverage on
+      the hide form's map, so a hider places a cache where RF hears the finder; a hint warns where only APRS-IS
+      reaches, since finds there stop at Tier C. _Depends on:_ step 7.
+- [ ] **APRScaching Thursday** _(P2 · S · step 12)_ — join #APRSThursday (every Thursday, 00:00–23:59 UTC,
+      tracked by aprs.world, aprs.to and aprslive): a weekly find event with a leaderboard ranked by callsign,
+      per the identity rule. Folds into the **Weekly #CacheNet** item above, which supplies the messaging net.
+      _Depends on:_ —
+- [ ] **Station-health feed on the read API** _(P2 · M · step 13)_ — a "last heard" webhook or event stream
+      per watched callsign, so Node-RED and IoT setups watch a station without scraping APRS-IS. Free with the
+      read API's per-IP limits and keys; an owner sees only public data. _Depends on:_ —
+- [ ] **Caches as APRS objects on air** _(P3 · M · step 14)_ — opt-in per instance, sysop-gated: send a cache
+      as an object with the point-of-interest symbol `\i`, so it shows on any APRS radio or map nearby. A low
+      rate, local reach only (never a wide path), and the transmit gate as today; _APRS Worst Practices_ is the
+      checklist of what not to do. _Depends on:_ steps 1 and 3.
+- [ ] **LoRa hop signal block** _(P3 · M · step 15)_ — a proposed format appends `{rssi snr foff}` as three
+      base-91 characters per LoRa digipeater hop. Parse it out of the comment in `packages/aprs` and draw
+      link-quality lines on the map. A proposal, not a standard: build it once LoRa traffic carries it.
+      _Depends on:_ step 5.
+- [ ] **Outreach to the APRS community** _(P2 · S · step 16, no code)_ — submit APRScaching to the APRS
+      Foundation as a documented use case; ask WB2OSZ to list it under _New Developments_ on how.aprs.works; link
+      his _How to Get Started in APRS_ guide from the manual instead of rewriting it. After the launch list's
+      third-party contacts. _Depends on:_ the public instance answering.
+
+Considered and not planned:
+
+- **On-air message authentication** — the published work lists candidate methods and chooses none. Trust comes
+  from corroboration; a token in a message would not change a find's tier.
+- **APRStt (DTMF) find logging** — a DTMF tone sequence identifies its sender weakly, so a find logged this way
+  reaches Tier C at most, which the APRS-IS path already gives.
+
 ## Future ideas
 
 - [ ] **Visiting finds: log another instance's cache from your home instance** _(P1 · L)_ — a mirrored cache
