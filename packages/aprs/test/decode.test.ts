@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { decodeAprs, parseCompressed, decodeMicE, lookupSymbol } from "../src/index.js";
+import { decodeAprs, parseCompressed, decodeMicE, lookupSymbol, encodeAprsWeather } from "../src/index.js";
 import type { ParsedFrame } from "../src/index.js";
 
 const frame = (payload: string, dst = "APRS"): ParsedFrame => ({ src: "TEST", dst, path: [], payload, raw: "" });
@@ -135,11 +135,59 @@ describe("weather", () => {
     const d = decodeAprs(frame("@092345z4903.50N/07201.75W_220/004g005t077r000p000P000h50b09900")) as any;
     expect(d.kind).toBe("weather");
     expect(d.windDirDeg).toBe(220);
-    expect(d.windKn).toBe(4);
-    expect(d.gustKn).toBe(5);
+    expect(d.windKn).toBe(3.5); // 4 mph: APRS weather reports wind and gust in mph
+    expect(d.gustKn).toBe(4.3); // 5 mph
     expect(d.tempC).toBeCloseTo(25, 0);
     expect(d.humidity).toBe(50);
     expect(d.pressureHpa).toBeCloseTo(990, 0);
+  });
+  it("decodes a positionless report with the c…s… wind fields (the spec's example)", () => {
+    const d = decodeAprs(frame("_10090556c220s004g005t077r000p000P000h50b09900wRSW")) as any;
+    expect(d).toMatchObject({ kind: "weather", windDirDeg: 220, windKn: 3.5, gustKn: 4.3, humidity: 50 });
+    expect(d.tempC).toBeCloseTo(25, 0);
+  });
+  it("reads dots or spaces as unknown, and still decodes the report", () => {
+    const d = decodeAprs(frame("!4903.50N/07201.75W_.../...g...t050")) as any;
+    expect(d.kind).toBe("weather");
+    expect(d.windDirDeg).toBeUndefined();
+    expect(d.windKn).toBeUndefined();
+    expect(d.gustKn).toBeUndefined();
+    expect(d.tempC).toBe(10);
+  });
+  it("decodes its own weather beacon back", () => {
+    const d = decodeAprs(frame(encodeAprsWeather(49, 7, { windKn: 10, gustKn: 20, tempC: 20 }))) as any;
+    expect(d).toMatchObject({ kind: "weather", tempC: 20 });
+    // the report carries whole mph, so a speed comes back within half an mph
+    expect(Math.abs(d.windKn - 10)).toBeLessThan(0.5);
+    expect(Math.abs(d.gustKn - 20)).toBeLessThan(0.5);
+  });
+  it("decodes a compressed weather report, wind from the course and speed", () => {
+    const d = decodeAprs(frame("@092345z/5L!!<*e7_7P[g005t077r000p000P000h50b09900wRSW")) as any;
+    expect(d).toMatchObject({ kind: "weather", windDirDeg: 88, gustKn: 4.3, humidity: 50 });
+    expect(d.windKn).toBeCloseTo(36.2, 1);
+  });
+  it("reads no temperature from a 't' in the comment after an unknown one", () => {
+    const d = decodeAprs(frame("!4903.50N/07201.75W_220/004g005t...h50b09900 temp sensor t123")) as any;
+    expect(d.tempC).toBeUndefined();
+    expect(d.humidity).toBe(50);
+  });
+});
+
+describe("objects per APRS 1.2", () => {
+  it("keeps an object's position and weather when its symbol is the weather station", () => {
+    const d = decodeAprs(frame(";BRENDA   *092345z4903.50N/07201.75W_220/004g005b0990")) as any;
+    expect(d).toMatchObject({ kind: "object", name: "BRENDA", alive: true, windDirDeg: 220, timestamp: "092345z" });
+    expect(d.lat).toBeCloseTo(49.0583, 3);
+  });
+  it("decodes an object sent without its timestamp at the right position", () => {
+    const d = decodeAprs(frame(";BRENDA   *4903.50N/07201.75W>moving")) as any;
+    expect(d.lat).toBeCloseTo(49.0583, 3);
+    expect(d.lon).toBeCloseTo(-72.0292, 3);
+  });
+  it("takes only '*' or '_' after the name, and keeps leading spaces in it", () => {
+    expect(decodeAprs(frame(";LEADER   X092345z4903.50N/07201.75W>x")).kind).toBe("other");
+    expect(decodeAprs(frame(";LEADER   _092345z4903.50N/07201.75W>x"))).toMatchObject({ alive: false });
+    expect(decodeAprs(frame("; LEAD    *092345z4903.50N/07201.75W>x"))).toMatchObject({ name: " LEAD" });
   });
 });
 
@@ -168,6 +216,35 @@ describe("objects, items, messages, status, telemetry", () => {
     const d = decodeAprs(frame(":OE8APR   :ack007")) as any;
     expect(d.ack).toBe(true);
     expect(d.msgNo).toBe("007");
+  });
+  it("reads a reply-ack message number: MM is the number, AA acks ours", () => {
+    const d = decodeAprs(frame(":WU2Z     :Testing{AB}CD")) as any;
+    expect(d).toMatchObject({ text: "Testing", msgNo: "AB", replyAck: "CD" });
+    const open = decodeAprs(frame(":WU2Z     :Testing{AB}")) as any;
+    expect(open).toMatchObject({ text: "Testing", msgNo: "AB" });
+    expect(open.replyAck).toBeUndefined();
+  });
+  it("takes the acknowledged number out of an ack of a reply-ack number", () => {
+    const d = decodeAprs(frame(":WU2Z     :ackAB}CD")) as any;
+    expect(d).toMatchObject({ ack: true, msgNo: "AB", text: "" });
+  });
+  it("reads text that only starts with ack or rej as a message", () => {
+    for (const text of ["acknowledged, thanks", "rejoice!"]) {
+      const d = decodeAprs(frame(`:N0CALL   :${text}`)) as any;
+      expect(d.ack ?? d.rej).toBeUndefined();
+      expect(d.text).toBe(text);
+    }
+    const numbered = decodeAprs(frame(":N0CALL   :ack ok see you{12")) as any;
+    expect(numbered).toMatchObject({ text: "ack ok see you", msgNo: "12" });
+    expect(numbered.ack).toBeUndefined();
+  });
+  it("decodes a rej", () => {
+    expect(decodeAprs(frame(":OE8APR   :rej003"))).toMatchObject({ rej: true, msgNo: "003" });
+  });
+  it("takes no message number longer than five characters", () => {
+    const d = decodeAprs(frame(":WU2Z     :Hi{1234567")) as any;
+    expect(d.msgNo).toBeUndefined();
+    expect(d.text).toBe("Hi{1234567");
   });
   it("flags a bulletin", () => {
     const d = decodeAprs(frame(":BLN1     :Net tonight 8pm")) as any;

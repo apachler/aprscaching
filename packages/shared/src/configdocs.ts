@@ -164,7 +164,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   AXIP_PEERS: "AXIP peer hosts, comma-separated; set it to enable AXIP",
   AXIP_BIND: "Local IPv4 address AXIP takes datagrams on; blank takes every address",
   DIGI_CALL: "Callsign of the RF digipeater; set it to enable digipeating",
-  DIGI_ALIASES: "Aliases the digipeater answers to, comma-separated",
+  DIGI_ALIASES: "Digipeater aliases, comma-separated: n-N prefixes (WIDE2) or exact (RELAY)",
   DIGI_CONNECTED: "1 also digipeats connected-mode AX.25 frames",
   DIGI_VISCOUS_MS: "Milliseconds (0-10000) the connected-mode digipeater waits, so a better-placed digi repeats first",
   NETROM_CALL: "Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it",
