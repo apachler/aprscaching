@@ -21,9 +21,11 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   const m = UNCOMP_RE.exec(s);
   if (!m) return null;
   const [whole, latDeg, latMin, ns, table, lonDeg, lonMin, ew, code] = m;
-  const ambiguity = (latMin!.match(/ /g)?.length ?? 0) + (lonMin!.match(/ /g)?.length ?? 0);
+  // The latitude's spaces set the ambiguity, and the same digits are dropped from the longitude, whether
+  // or not it carries the spaces too.
+  const ambiguity = latMin!.match(/ /g)?.length ?? 0;
   const latMinNum = Number(latMin!.replace(/ /g, "0"));
-  const lonMinNum = Number(lonMin!.replace(/ /g, "0"));
+  const lonMinNum = Number(maskMinutes(lonMin!, ambiguity));
   if (!(latMinNum < 60 && lonMinNum < 60)) return null;
   let lat = Number(latDeg) + latMinNum / 60;
   let lon = Number(lonDeg) + lonMinNum / 60;
@@ -34,12 +36,28 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   return { fix, rest: s.slice(whole.length) };
 }
 
-/** Course/speed "CSE/SPD", altitude "/A=dddddd", and PHG out of a comment string. */
-function applyExtensions(fix: DecodedPosition, comment: string): void {
-  const cs = /^(\d{3})\/(\d{3})/.exec(comment);
+/** "mm.hh" with its last `level` digits (hundredths first, then minutes) set to zero, spaces read as zero. */
+function maskMinutes(mmhh: string, level: number): string {
+  const digits = [...mmhh.replace(/ /g, "0")];
+  for (const at of [4, 3, 1, 0].slice(0, level)) digits[at] = "0";
+  return digits.join("");
+}
+
+/**
+ * Course/speed "CSE/SPD" and altitude "/A=dddddd" out of a comment string. The course runs 001–360;
+ * 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its course
+ * and speed in the cs bytes, so its comment is never read for them.
+ */
+function applyExtensions(fix: DecodedPosition, comment: string, opts: { compressed?: boolean } = {}): void {
+  const cs = opts.compressed ? null : /^(\d{3})\/(\d{3})/.exec(comment);
   if (cs) {
-    if (Number(cs[1]) <= 360) fix.course = Number(cs[1]); // three digits past 360 are not a heading
-    fix.speedKn = Number(cs[2]);
+    const course = Number(cs[1]),
+      speed = Number(cs[2]);
+    // three digits past 360 are not a heading, and 000 is none
+    if (course >= 1 && course <= 360) fix.course = course;
+    if (course !== 0 || speed !== 0) fix.speedKn = speed;
+    comment = comment.slice(7);
+  } else if (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment)) {
     comment = comment.slice(7);
   }
   const alt = /\/A=(-\d{5,6}|\d{6})/.exec(comment); // six characters, a leading minus below sea level
@@ -51,35 +69,69 @@ function applyExtensions(fix: DecodedPosition, comment: string): void {
   if (c) fix.comment = c;
 }
 
-/** Weather fields out of an APRS weather comment (after the wind dir/speed head). */
-function parseWeather(s: string): DecodedWeather {
-  const wx: DecodedWeather = {};
-  const num = (re: RegExp, scale = 1) => {
-    const m = re.exec(s);
-    return m && m[1] !== "..." ? Number(m[1]) * scale : undefined;
-  };
-  const head = /^[/_]?(\d{3})\/(\d{3})/.exec(s) ?? /^(\d{3})\/(\d{3})/.exec(s);
-  if (head) {
-    if (Number(head[1]) <= 360) wx.windDirDeg = Number(head[1]); // past 360 is not a direction
-    wx.windKn = Number(head[2]);
+/** Knots in one mph: APRS weather reports wind and gust in mph. */
+const KN_PER_MPH = 0.868976;
+/** The positioned weather head "DDD/SSS" (wind direction and speed), dots or spaces where unknown. */
+const WX_HEAD = /^([\d. ]{3})\/([\d. ]{3})/;
+/** The width of each weather field after its letter; the fields follow one another, then any comment. */
+const WX_FIELDS: Record<string, number> = { c: 3, s: 3, g: 3, t: 3, r: 3, p: 3, P: 3, h: 2, b: 5, L: 3, l: 3, "#": 3 };
+
+/**
+ * The weather fields at the start of `s`, in order, each its letter and a fixed-width value; a value of
+ * dots or spaces is unknown. The scan stops at the first character that starts no field, so letters in
+ * the comment after the fields are never read as data. Returns the values that are numbers and how many
+ * fields were read.
+ */
+function scanWeatherFields(s: string): { fields: Record<string, number>; count: number } {
+  const fields: Record<string, number> = {};
+  let i = 0,
+    count = 0;
+  while (i < s.length) {
+    const w = WX_FIELDS[s[i]!];
+    if (!w || i + 1 + w > s.length) break;
+    const v = s.slice(i + 1, i + 1 + w);
+    if (!/^(-?\d+|[. ]+)$/.test(v)) break;
+    if (/^-?\d+$/.test(v)) fields[s[i]!] = Number(v);
+    count++;
+    i += 1 + w;
   }
-  const g = num(/g(\d{3})/);
-  if (g !== undefined) wx.gustKn = g;
-  const t = /t(-?\d{2,3})/.exec(s);
-  if (t) wx.tempC = Math.round((((Number(t[1]) - 32) * 5) / 9) * 10) / 10;
-  const r = num(/r(\d{3})/, 0.254);
-  if (r !== undefined) wx.rain1hMm = round(r);
-  const p = num(/p(\d{3})/, 0.254);
-  if (p !== undefined) wx.rain24hMm = round(p);
-  const P = num(/P(\d{3})/, 0.254);
-  if (P !== undefined) wx.rainMidnightMm = round(P);
-  const h = /h(\d{2})/.exec(s);
-  if (h) wx.humidity = Number(h[1]) === 0 ? 100 : Number(h[1]);
-  const b = num(/b(\d{5})/, 0.1);
-  if (b !== undefined) wx.pressureHpa = round(b);
+  return { fields, count };
+}
+
+/** A three-digit wind direction (past 360 is not one) and a wind speed in mph, as degrees and knots. */
+function setWind(wx: DecodedWeather, dir: number | undefined, mph: number | undefined): void {
+  if (dir !== undefined && dir <= 360) wx.windDirDeg = dir;
+  if (mph !== undefined) wx.windKn = round1(mph * KN_PER_MPH);
+}
+
+/**
+ * Weather out of a report body: positioned ("DDD/SSS" then the fields), positionless ("c…s…" fields) or the
+ * remainder of a compressed position, whose course and speed (knots) carry the wind.
+ */
+function parseWeather(s: string, compressedWind?: { dir?: number; kn?: number }): DecodedWeather {
+  const wx: DecodedWeather = {};
+  const head = WX_HEAD.exec(s);
+  const digits = (v: string | undefined) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
+  if (head) setWind(wx, digits(head[1]), digits(head[2]));
+  const { fields: f } = scanWeatherFields(head ? s.slice(7) : s);
+  if (!head) setWind(wx, f.c, f.s);
+  if (compressedWind) {
+    if (compressedWind.dir !== undefined) wx.windDirDeg = compressedWind.dir;
+    if (compressedWind.kn !== undefined) wx.windKn = compressedWind.kn;
+  }
+  if (f.g !== undefined) wx.gustKn = round1(f.g * KN_PER_MPH);
+  if (f.t !== undefined) wx.tempC = round1(((f.t - 32) * 5) / 9);
+  if (f.r !== undefined) wx.rain1hMm = round(f.r * 0.254);
+  if (f.p !== undefined) wx.rain24hMm = round(f.p * 0.254);
+  if (f.P !== undefined) wx.rainMidnightMm = round(f.P * 0.254);
+  if (f.h !== undefined) wx.humidity = f.h === 0 ? 100 : f.h;
+  if (f.b !== undefined) wx.pressureHpa = round(f.b * 0.1);
   return wx;
 }
-const isWeather = (s: string) => /^[/_]?\d{3}\/\d{3}/.test(s) && /[tgrph]/.test(s);
+/** A positioned weather report: the wind head after the symbol (any field unknown) and nothing else needed. */
+const isWeather = (s: string) => WX_HEAD.test(s);
+/** A compressed weather report: the fields follow the compressed position directly. */
+const isCompressedWeather = (s: string) => scanWeatherFields(s).count > 0;
 
 export function decodeAprs(frame: ParsedFrame): AprsData {
   return decodeFrame(frame, 0);
@@ -143,7 +195,7 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
       return { kind: "thirdparty", inner, data: decodeFrame(inner, depth + 1) };
     }
     case "_": {
-      // positionless weather: _MMDDHHMM<wx>
+      // positionless weather: _MMDDHHMM then the c…s… fields
       return { kind: "weather", ...parseWeather(p.slice(9)) };
     }
     case "T": {
@@ -157,9 +209,11 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
 
 function decodePosition(body: string, timestamp?: string): AprsData {
   let fix: DecodedPosition | null = null,
-    rest = "";
+    rest = "",
+    compressed = false;
   const comp = parseCompressed(body);
   if (comp && isValidLatLon(comp.lat, comp.lon)) {
+    compressed = true;
     fix = {
       lat: round(comp.lat),
       lon: round(comp.lon),
@@ -167,6 +221,7 @@ function decodePosition(body: string, timestamp?: string): AprsData {
       course: comp.course,
       speedKn: comp.speedKn,
       altitudeM: comp.altitudeM,
+      ...(comp.rangeKm !== undefined ? { rangeKm: comp.rangeKm } : {}),
     };
     rest = body.slice(13);
   } else {
@@ -178,28 +233,47 @@ function decodePosition(body: string, timestamp?: string): AprsData {
   }
   if (!fix) return { kind: "other" };
   if (timestamp) fix.timestamp = timestamp;
-  // weather station (symbol '_') with wx in the comment -> weather report
-  if (fix.symbol?.code === "_" && isWeather(rest))
-    return { kind: "weather", lat: fix.lat, lon: fix.lon, symbol: fix.symbol, ...parseWeather(rest) };
-  applyExtensions(fix, rest);
+  // weather station (symbol '_') with wx after the position -> weather report
+  if (fix.symbol?.code === "_") {
+    const where = { lat: fix.lat, lon: fix.lon, symbol: fix.symbol, ...(timestamp ? { timestamp } : {}) };
+    if (compressed && isCompressedWeather(rest))
+      return { kind: "weather", ...where, ...parseWeather(rest, { dir: fix.course, kn: fix.speedKn }) };
+    if (!compressed && isWeather(rest)) return { kind: "weather", ...where, ...parseWeather(rest) };
+  }
+  applyExtensions(fix, rest, { compressed });
   return { kind: "position", ...fix };
 }
 
 // A non-position object/item (e.g. `;SHORT` with no fix) must NOT be spread with
 // {lat:0,lon:0} — that plants a phantom station on null island. Return no coords unless a real
-// position decoded; the object/item variants carry Partial<DecodedPosition> for exactly this.
-function posFields(pos: AprsData): Partial<DecodedPosition> {
-  if (pos.kind !== "position") return {};
+// position decoded; the object/item variants carry Partial<DecodedPosition> for exactly this. An object
+// with the weather symbol keeps its position and its weather.
+function posFields(pos: AprsData): Partial<DecodedPosition> & Partial<DecodedWeather> {
+  if (pos.kind !== "position" && pos.kind !== "weather") return {};
   const { kind, ...fields } = pos;
   return fields;
 }
 
+/** An object or item timestamp: DDHHMM zulu or local (`z`, `/`), or HHMMSS (`h`). */
+const STAMP = /^\d{6}[zh/]/;
+
 function decodeObject(p: string): AprsData {
-  // ;NAME_____*DDHHMMz<position>   ('*' alive, '_' killed)
-  const name = p.slice(1, 10).trim();
-  const alive = p[10] === "*";
-  const body = p.slice(11).slice(7); // strip the 7-char timestamp
-  return { kind: "object", name, alive, ...posFields(decodePosition(body)) };
+  // ;NAME_____*DDHHMMz<position>   ('*' alive, '_' killed; the name padded to 9 with trailing spaces)
+  const mark = p[10];
+  if (mark !== "*" && mark !== "_") return { kind: "other" };
+  const name = p.slice(1, 10).trimEnd();
+  // An object always carries a timestamp; one sent without it still decodes, rather than losing 7
+  // characters of its position.
+  const after = p.slice(11);
+  const timestamp = STAMP.test(after) ? after.slice(0, 7) : undefined;
+  const body = timestamp ? after.slice(7) : after;
+  return {
+    kind: "object",
+    name,
+    alive: mark === "*",
+    ...posFields(decodePosition(body)),
+    ...(timestamp ? { timestamp } : {}),
+  };
 }
 
 function decodeItem(p: string): AprsData {
@@ -216,24 +290,25 @@ function decodeMessage(p: string): AprsData {
   const addressee = m[1]!.trim();
   const text = m[2]!;
   const out: AprsData = { kind: "message", addressee, text };
-  if (/^ack/.test(text)) {
-    out.ack = true;
-    out.msgNo = text.slice(3).trim();
+  // An ack or rej is the text "ack"/"rej" and the message number alone. A reply-ack sender's number reads
+  // "MM}AA" and the ack copies it whole; MM is the number acknowledged. Text that merely starts with the
+  // letters ("acknowledged", "rejoice") is an ordinary message.
+  const ackRej = /^(ack|rej)([A-Za-z0-9]{1,5})(?:\}[A-Za-z0-9]{0,5})?\s*$/.exec(text);
+  if (ackRej) {
+    if (ackRej[1] === "ack") out.ack = true;
+    else out.rej = true;
+    out.msgNo = ackRej[2];
     out.text = "";
     return out;
   }
-  if (/^rej/.test(text)) {
-    out.rej = true;
-    out.msgNo = text.slice(3).trim();
-    out.text = "";
-    return out;
-  }
-  // The message number follows the first '{' after the last '}' and runs to the end of the text.
-  // An index scan keeps this linear on a crafted body of many braces.
-  const brace = text.indexOf("{", text.lastIndexOf("}") + 1);
-  if (brace >= 0 && brace < text.length - 1) {
-    out.msgNo = text.slice(brace + 1);
-    out.text = text.slice(0, brace);
+  // The message number is 1–5 alphanumerics after the last '{', in the reply-ack form "{MM}AA" (AA is an
+  // ack of our message AA, empty when none is pending) or the plain "{MM}". The quantifiers are bounded,
+  // so a crafted body of many braces stays linear.
+  const num = /\{([A-Za-z0-9]{1,5})(?:\}([A-Za-z0-9]{0,5}))?\s*$/.exec(text);
+  if (num) {
+    out.msgNo = num[1];
+    if (num[2]) out.replyAck = num[2];
+    out.text = text.slice(0, num.index);
   }
   if (/^(BLN|NWS|SKY)/.test(addressee)) out.bulletin = addressee;
   return out;
@@ -271,3 +346,4 @@ function decodeTelemetry(p: string): AprsData {
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
+const round1 = (n: number) => Math.round(n * 10) / 10;

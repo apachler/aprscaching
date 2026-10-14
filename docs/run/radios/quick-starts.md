@@ -142,7 +142,8 @@ nearby stations back to RF. It needs a working [KISS TNC](#kiss-tnc-with-direwol
     IGATE_PASS=12345
     ```
 
-2. To pass messages to RF as well, add `IGATE_TX=1`. Leave it out for a receive-only IGate.
+2. To pass messages to RF as well, add `IGATE_TX=1`. Leave it out for a receive-only IGate, which marks what
+   it gates with `qAO` so APRS-IS sends it no messages to deliver.
 
 3. Restart the ingest. The log shows `[igate] enabled as OE8APR-10`, then `[igate] APRS-IS connected`. A
    message it sends to RF logs `[igate] TX->RF message for …`.

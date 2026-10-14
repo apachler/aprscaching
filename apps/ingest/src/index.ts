@@ -340,6 +340,7 @@ if (primaryRadio) {
         .map((p) => p.trim().toUpperCase())
         .filter(Boolean),
       canTx: () => igateTx && station.tx && station.igate === true,
+      receiveOnly: !igateTx,
       ...txLimitFromEnv("igate"),
     });
     station.igate = true;
