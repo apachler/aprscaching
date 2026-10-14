@@ -89,10 +89,11 @@ export function planDupes(batch: Copy[], stored: StoredCopy[]): Fate[] {
       return;
     }
     if ("row" in prior) {
-      fates[i] =
-        isRf(c.heardVia) && !isRf(prior.row.heard_via) ? { kind: "upgrade", stored: prior.row } : { kind: "skip" };
-      // an upgraded row now stands for an RF copy: a further RF copy is a plain duplicate
-      if (fates[i]!.kind === "upgrade") prior.row = { ...prior.row, heard_via: "rf" };
+      if (isRf(c.heardVia) && !isRf(prior.row.heard_via)) {
+        fates[i] = { kind: "upgrade", stored: prior.row };
+        // the upgraded row now stands for an RF copy: a further RF copy is a plain duplicate
+        prior.row = { ...prior.row, heard_via: "rf" };
+      } else fates[i] = { kind: "skip" };
       return;
     }
     if (isRf(c.heardVia) && !isRf(batch[prior.index]!.heardVia)) {
