@@ -19,13 +19,16 @@ export interface IgateOpts {
   retryMs?: number;
   idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
   canTx?: () => boolean; // RF-transmit switch for the APRS-IS -> RF direction (absent: never transmits)
+  /** No APRS-IS -> RF direction configured (`IGATE_TX` off): RF lines carry `qAO`. Default: no `canTx`. */
+  receiveOnly?: boolean;
   /** Token bucket for the APRS-IS -> RF direction (`IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC`). */
   burst?: number;
   refillSec?: number;
   now?: () => number;
 }
 
-const base = (c: string) => c.split("-")[0]!.toUpperCase();
+/** A station's key in the "heard locally" table: the full callsign, `-0` the same as none. */
+const station = (c: string) => c.trim().toUpperCase().replace(/-0$/, "");
 
 /**
  * Bidirectional APRS IGate over a radio port (a KISS TNC or a soundcard port) + an APRS-IS connection.
@@ -37,7 +40,7 @@ export class Igate {
   private sock?: net.Socket;
   private ready = false;
   private lines = new LineBuffer();
-  private heard = new Map<string, number>(); // base callsign -> last heard ts(ms)
+  private heard = new Map<string, number>(); // callsign with SSID -> last heard ts(ms)
   /** The radio port each station was last heard on: a message for it goes out there. */
   private heardOn = new Map<string, Pick<KissTnc, "send">>();
   private localTtl: number;
@@ -73,13 +76,15 @@ export class Igate {
 
   /** Called for every RF frame heard on a radio port (`via`; absent, the IGate's own radio). */
   onRf(f: ParsedFrame, via?: Pick<KissTnc, "send">): void {
-    this.heard.set(base(f.src), Date.now());
-    if (via) this.heardOn.set(base(f.src), via);
-    if (shouldRxIgate(f, this.o.call)) this.sendIs(rxIgateLine(f, this.o.call));
+    this.heard.set(station(f.src), Date.now());
+    if (via) this.heardOn.set(station(f.src), via);
+    // with no transmit switch the gate is receive-only, and says so (qAO) so APRS-IS routes it no messages
+    if (shouldRxIgate(f, this.o.call))
+      this.sendIs(rxIgateLine(f, this.o.call, { receiveOnly: this.o.receiveOnly ?? !this.o.canTx }));
   }
 
   private heardLocally = (cs: string): boolean => {
-    const t = this.heard.get(base(cs));
+    const t = this.heard.get(station(cs));
     return !!t && Date.now() - t < this.localTtl;
   };
 
@@ -97,7 +102,7 @@ export class Igate {
       console.warn("[igate] rate limited — message for %s not gated to RF (next in %s s)", addr, this.bucket.waitSec());
       return;
     }
-    const radio = this.heardOn.get(base(addr)) ?? this.kiss;
+    const radio = this.heardOn.get(station(addr)) ?? this.kiss;
     if (radio.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
       console.log("[igate] TX->RF message for %s", addr);
   }

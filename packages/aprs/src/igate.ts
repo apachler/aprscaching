@@ -6,7 +6,7 @@
  * The transport (KISS / APRS-IS sockets) and the "heard locally" state live in the connector; the
  * gating rules below are pure and unit-tested.
  */
-import { baseCall } from "./callsign.js";
+import { baseCall, sameStation } from "./callsign.js";
 import type { ParsedFrame } from "./types.js";
 
 // RF -> IS: `TCPIP` marks a frame that already came from APRS-IS, so it is never sent back up.
@@ -43,19 +43,26 @@ export function shouldRxIgate(f: ParsedFrame, gateCall: string): boolean {
   const payload = igatePayload(f.payload);
   if (!payload) return false;
   if (isThirdParty(payload)) return false;
+  // a general query asks the stations in RF range; APRS-IS is not the place to answer it
+  if (payload.startsWith("?")) return false;
   if (pathBlocksGating(f.path)) return false;
-  if (baseCall(f.src) === baseCall(gateCall)) return false; // don't gate our own beacons
+  if (sameStation(f.src, gateCall)) return false; // don't gate our own beacons
   return true;
 }
 
 /**
- * Build the APRS-IS line for an RF-heard frame: the original header + path, then `,qAR,GATECALL`,
- * then the info field cut at its first line break (`igatePayload`). The path keeps its has-been-repeated
- * marks as heard.
+ * Build the APRS-IS line for an RF-heard frame: the original header + path, then the q construct and the
+ * gate's call, then the info field cut at its first line break (`igatePayload`). `qAR` names a gate that
+ * also gates messages back to RF; a receive-only gate sends `qAO`, so APRS-IS routes no messages to it.
+ * The path keeps one `*`, on the last used hop: the monitor format allows no more, and every hop before
+ * it counts as used.
  */
-export function rxIgateLine(f: ParsedFrame, gateCall: string): string {
-  const via = f.path.length ? "," + f.path.join(",") : "";
-  return `${f.src}>${f.dst}${via},qAR,${gateCall.toUpperCase()}:${igatePayload(f.payload)}`;
+export function rxIgateLine(f: ParsedFrame, gateCall: string, opts: { receiveOnly?: boolean } = {}): string {
+  const last = f.path.reduce((at, h, i) => (h.endsWith("*") ? i : at), -1);
+  const hops = f.path.map((h, i) => (i === last ? h : h.replace(/\*$/, "")));
+  const via = hops.length ? "," + hops.join(",") : "";
+  const q = opts.receiveOnly ? "qAO" : "qAR";
+  return `${f.src}>${f.dst}${via},${q},${gateCall.toUpperCase()}:${igatePayload(f.payload)}`;
 }
 
 /** The addressee of an APRS message (`:ADDRESSEE :text…`), trimmed, or null if not a message. */
@@ -77,10 +84,10 @@ export function txIgateTarget(
   heardLocally: (callsign: string) => boolean,
 ): string | null {
   if (isThirdParty(f.payload) || pathBlocksTxGating(f.path)) return null;
-  if (baseCall(f.src) === baseCall(gateCall)) return null;
+  if (sameStation(f.src, gateCall)) return null;
   const addr = messageAddressee(f.payload);
   if (!addr) return null; // only messages are TX-gated
-  if (baseCall(addr) === baseCall(gateCall)) return null;
+  if (sameStation(addr, gateCall)) return null;
   if (heardLocally(f.src)) return null;
   return heardLocally(addr) ? addr : null;
 }

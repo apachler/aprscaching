@@ -35,4 +35,14 @@ describe("Igate APRS-IS -> RF", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain(":OE8XYZ-7 :hello{1");
   });
+
+  it("counts a station as heard by its full callsign, not by its base call", () => {
+    const { g, sent } = igate(() => true);
+    // OE8XYZ-7 was heard; OE8XYZ-9 was not, so a message for it stays on APRS-IS
+    g.onIsLine("OE5ABC>APRS,TCPIP*,qAC,T2AUSTRIA::OE8XYZ-9 :hello{2");
+    expect(sent).toEqual([]);
+    // a sender sharing the heard station's base call is not thereby heard locally
+    g.onIsLine("OE8XYZ-5>APRS,TCPIP*,qAC,T2AUSTRIA::OE8XYZ-7 :hi{3");
+    expect(sent).toHaveLength(1);
+  });
 });

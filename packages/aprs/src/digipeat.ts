@@ -6,20 +6,19 @@
  * (duplicate suppression) lives in the connector; this transform is pure so it's unit-tested.
  */
 import type { ParsedFrame } from "./types.js";
+import { sameStation as sameCall } from "./callsign.js";
 
 interface Hop {
   call: string;
   used: boolean;
 }
 
-/**
- * The same station: callsign and SSID equal, `-0` the same as none. Another SSID of the operator's base call
- * is another station (their handheld, their car), which the digipeater repeats like anyone else's.
- */
-const sameCall = (a: string, b: string) => {
-  const norm = (c: string) => c.toUpperCase().replace(/-0$/, "");
-  return norm(a) === norm(b);
-};
+/** AX.25 carries at most 8 digipeater addresses. */
+const MAX_DIGIS = 8;
+
+/** A generic n-N routing prefix (`WIDE1`, `WIDE2`, `TEST2`): letters and the hop role, no SSID. */
+const isGeneric = (alias: string) => /^[A-Z]{1,5}[1-7]$/.test(alias);
+
 function parseNN(call: string): { base: string; ssid: number } {
   const [base, ss] = call.split("-");
   return { base: (base ?? "").toUpperCase(), ssid: Number(ss ?? 0) || 0 };
@@ -37,7 +36,11 @@ function rebuild(f: ParsedFrame, hops: Hop[]): ParsedFrame {
 
 export interface DigiOpts {
   mycall: string; // our station callsign
-  aliases?: Set<string>; // served n-N alias bases, default {WIDE1, WIDE2}
+  /**
+   * Served aliases, default {WIDE1, WIDE2}. A generic n-N prefix (`WIDE1`, `WIDE2`) matches `WIDE2-2`,
+   * `WIDE2-1`…; any other entry (`RELAY`, `EOC-1`) is an alias matched exactly, SSID included.
+   */
+  aliases?: Set<string>;
 }
 
 /**
@@ -58,25 +61,29 @@ export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   const hop = hops[i]!;
   const { base, ssid } = parseNN(hop.call);
 
-  // explicitly routed through us
-  if (sameCall(hop.call, mycall)) {
+  // explicitly routed through us, or through an exact alias we serve: replace it with us, used
+  if (sameCall(hop.call, mycall) || [...aliases].some((a) => !isGeneric(a.toUpperCase()) && sameCall(hop.call, a))) {
     hops[i] = { call: mycall, used: true };
     return rebuild(f, hops);
   }
-  // served WIDEn-N alias with hops remaining
-  if (aliases.has(base) && ssid >= 1) {
+  // served generic n-N prefix with hops remaining
+  if (isGeneric(base) && aliases.has(base) && ssid >= 1) {
     if (ssid === 1) {
       hops[i] = { call: mycall, used: true }; // last hop: replace alias with us
     } else {
       hops[i] = { call: `${base}-${ssid - 1}`, used: false }; // decrement…
-      hops.splice(i, 0, { call: mycall, used: true }); // …and insert us (repeated) ahead
+      // …and insert us (repeated) ahead, while the frame has room for another digipeater address
+      if (hops.length < MAX_DIGIS) hops.splice(i, 0, { call: mycall, used: true });
     }
     return rebuild(f, hops);
   }
   return null; // not addressed to an alias we serve
 }
 
-/** A duplicate-suppression key: same source, destination and payload within the dedup window. */
+/**
+ * A duplicate-suppression key: the same source, destination without its SSID, and info field within the
+ * window; the path is left out, since each digipeater changes it.
+ */
 export function dedupeKey(f: ParsedFrame): string {
-  return `${f.src.toUpperCase()}>${f.dst.toUpperCase()}:${f.payload}`;
+  return `${f.src.toUpperCase()}>${f.dst.toUpperCase().split("-")[0]}:${f.payload}`;
 }

@@ -22,15 +22,15 @@ describe("message number scan is linear", () => {
     expect(value.msgNo).toBeUndefined();
   });
 
-  it("keeps the message number semantics: the first '{' after the last '}', with text after it", () => {
+  it("reads the message number as 1–5 alphanumerics after the last '{' at the end of the text", () => {
     const d = (t: string) => decodeAprs(frame(`:OE8APR   :${t}`)) as { text?: string; msgNo?: string };
     expect(d("hello{12")).toMatchObject({ text: "hello", msgNo: "12" });
-    expect(d("a{b{c")).toMatchObject({ text: "a", msgNo: "b{c" });
+    expect(d("a{b{c")).toMatchObject({ text: "a{b", msgNo: "c" });
     expect(d("a}b{c}d{e")).toMatchObject({ text: "a}b{c}d", msgNo: "e" });
     expect(d("hello{")).toMatchObject({ text: "hello{" });
     expect(d("hello{").msgNo).toBeUndefined();
     expect(d("x{}").msgNo).toBeUndefined();
-    expect(d("x{{").msgNo).toBe("{");
+    expect(d("x{{").msgNo).toBeUndefined(); // a message number is 1–5 alphanumerics
   });
 });
 

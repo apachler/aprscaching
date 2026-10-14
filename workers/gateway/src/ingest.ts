@@ -221,14 +221,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         ),
       );
     }
-    if (data.kind === "message" && data.ack && data.msgNo && String(data.addressee ?? "").toUpperCase() === service)
-      mailAcks.push({ from: p.src, msgNo: String(data.msgNo), port: p.port });
+    // An ack names the number it acknowledges; so does a reply-ack, carried inside the sender's own message.
+    const ackedNo = data.kind === "message" ? (data.ack ? data.msgNo : data.replyAck) : undefined;
+    if (data.kind === "message" && ackedNo && String(data.addressee ?? "").toUpperCase() === service)
+      mailAcks.push({ from: p.src, msgNo: String(ackedNo), port: p.port });
     // an ack for a message an operator sent from the app marks that message acknowledged
-    if (data.kind === "message" && data.ack && data.msgNo && data.addressee)
+    if (data.kind === "message" && ackedNo && data.addressee)
       stmts.push(
         env.DB.prepare(
           "UPDATE messages SET acked_at = ? WHERE direction = 'tx' AND ack = ? AND from_call = ? AND to_call = ? AND acked_at IS NULL",
-        ).bind(p.ts, String(data.msgNo), String(data.addressee).trim().toUpperCase(), p.src.toUpperCase()),
+        ).bind(p.ts, String(ackedNo), String(data.addressee).trim().toUpperCase(), p.src.toUpperCase()),
       );
     // text message -> messages log, once per transmission (dupes.ts)
     if (data.kind === "message" && !data.ack && !data.rej) {
