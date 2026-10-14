@@ -37,6 +37,7 @@ import {
   type StoredFix,
 } from "./downsample.js";
 import type { Transport } from "@aprscaching/shared";
+import { DUPE_WINDOW_SEC, planDupes, recentCopies, type Fate } from "./dupes.js";
 
 /**
  * Position-bearing decoded data (position/object/item/weather with a fix). A fix outside ±90° / ±180°
@@ -164,8 +165,18 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // An enrolled box names only its own box id, and a box enrolled for a callsign only receiving sites of
   // that base call: a site or receiver of another call is dropped, never attested on its word.
   const principal = boxPrincipal(req);
-  for (const p of packets) {
-    p.ts = clampTs(p.ts);
+  for (const p of packets) p.ts = clampTs(p.ts);
+  // Which copies the raw-packet ring and the message log keep (dupes.ts). If the lookup fails every copy
+  // is logged: a lookup error never costs a packet.
+  let fates: Fate[];
+  try {
+    fates = planDupes(packets, await recentCopies(env, packets));
+  } catch (e) {
+    console.error("duplicate lookup:", (e as Error).message);
+    fates = packets.map(() => ({ kind: "store" }));
+  }
+  for (const [i, p] of packets.entries()) {
+    const fate = fates[i]!;
     if (principal) {
       if (!siteAllowed(req, p.igateCall)) delete p.igateCall;
       if (!siteAllowed(req, p.rxCall)) delete p.rxCall;
@@ -219,21 +230,25 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           "UPDATE messages SET acked_at = ? WHERE direction = 'tx' AND ack = ? AND from_call = ? AND to_call = ? AND acked_at IS NULL",
         ).bind(p.ts, String(data.msgNo), String(data.addressee).trim().toUpperCase(), p.src.toUpperCase()),
       );
-    // text message -> messages log
+    // text message -> messages log, once per transmission (dupes.ts)
     if (data.kind === "message" && !data.ack && !data.rej) {
       const toService = String(data.addressee ?? "").toUpperCase() === service;
       // the network that carried it, the same transport its sender's position would record
-      const row = env.DB.prepare(
-        "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'rx', ?)",
-      ).bind(
-        p.ts,
-        p.src,
-        data.addressee ?? null,
-        data.text ?? "",
-        data.msgNo ?? null,
-        transportForPort(p.port, signer != null),
-      );
-      stmts.push(row);
+      const transport = transportForPort(p.port, signer != null);
+      if (fate.kind === "store")
+        stmts.push(
+          env.DB.prepare(
+            "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'rx', ?)",
+          ).bind(p.ts, p.src, data.addressee ?? null, data.text ?? "", data.msgNo ?? null, transport),
+        );
+      else if (fate.kind === "upgrade")
+        // an RF copy of a message first logged from APRS-IS: the log names the network that carried it on RF
+        stmts.push(
+          env.DB.prepare(
+            `UPDATE messages SET transport = ? WHERE direction = 'rx' AND from_call = ? AND body = ?
+               AND ts BETWEEN ? AND ?`,
+          ).bind(transport, p.src, data.text ?? "", fate.stored.ts - DUPE_WINDOW_SEC, fate.stored.ts + DUPE_WINDOW_SEC),
+        );
       if (toService) {
         const { text, msgNo } = splitMessageNumber(String(data.text ?? ""), data.msgNo);
         commands.push({
@@ -256,11 +271,22 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
     // shack raw packet view: a short, TTL-pruned ring of raw frames per
     // station — every heard packet, not only position fixes (status, telemetry, messages too).
-    stmts.push(
-      env.DB.prepare(
-        "INSERT INTO packets_recent (callsign, ts, dst, path, payload, heard_via, port) VALUES (?,?,?,?,?,?,?)",
-      ).bind(p.src, p.ts, p.dst ?? null, p.path.join(","), p.payload, p.heardVia, p.port),
-    );
+    // One row per transmission; an RF copy replaces the route of a row first logged from APRS-IS.
+    if (fate.kind === "store")
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO packets_recent (callsign, ts, dst, path, payload, heard_via, port) VALUES (?,?,?,?,?,?,?)",
+        ).bind(p.src, p.ts, p.dst ?? null, p.path.join(","), p.payload, p.heardVia, p.port),
+      );
+    else if (fate.kind === "upgrade")
+      stmts.push(
+        env.DB.prepare("UPDATE packets_recent SET heard_via = ?, port = ?, path = ? WHERE id = ?").bind(
+          p.heardVia,
+          p.port,
+          p.path.join(","),
+          fate.stored.id,
+        ),
+      );
 
     const fix = fixOf(p);
     if (!fix) continue;
