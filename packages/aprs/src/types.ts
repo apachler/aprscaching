@@ -17,7 +17,10 @@ export interface DecodedPosition {
   course?: number;
   speedKn?: number;
   altitudeM?: number;
+  /** A compressed position's pre-calculated radio range. */
+  rangeKm?: number;
   comment?: string;
+  /** Position ambiguity, 0–4: how many trailing minute digits the station left out, in both coordinates. */
   ambiguity?: number;
   messageType?: string; // MIC-E standard/custom message
   timestamp?: string; // raw timestamp token when present

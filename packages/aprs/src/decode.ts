@@ -20,9 +20,11 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   const m = UNCOMP_RE.exec(s);
   if (!m) return null;
   const [whole, latDeg, latMin, ns, table, lonDeg, lonMin, ew, code] = m;
-  const ambiguity = (latMin!.match(/ /g)?.length ?? 0) + (lonMin!.match(/ /g)?.length ?? 0);
+  // The latitude's spaces set the ambiguity, and the same digits are dropped from the longitude, whether
+  // or not it carries the spaces too.
+  const ambiguity = latMin!.match(/ /g)?.length ?? 0;
   const latMinNum = Number(latMin!.replace(/ /g, "0"));
-  const lonMinNum = Number(lonMin!.replace(/ /g, "0"));
+  const lonMinNum = Number(maskMinutes(lonMin!, ambiguity));
   if (!(latMinNum < 60 && lonMinNum < 60)) return null;
   let lat = Number(latDeg) + latMinNum / 60;
   let lon = Number(lonDeg) + lonMinNum / 60;
@@ -33,12 +35,28 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   return { fix, rest: s.slice(whole.length) };
 }
 
-/** Course/speed "CSE/SPD", altitude "/A=dddddd", and PHG out of a comment string. */
-function applyExtensions(fix: DecodedPosition, comment: string): void {
-  const cs = /^(\d{3})\/(\d{3})/.exec(comment);
+/** "mm.hh" with its last `level` digits (hundredths first, then minutes) set to zero, spaces read as zero. */
+function maskMinutes(mmhh: string, level: number): string {
+  const digits = [...mmhh.replace(/ /g, "0")];
+  for (const at of [4, 3, 1, 0].slice(0, level)) digits[at] = "0";
+  return digits.join("");
+}
+
+/**
+ * Course/speed "CSE/SPD" and altitude "/A=dddddd" out of a comment string. The course runs 001–360;
+ * 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its course
+ * and speed in the cs bytes, so its comment is never read for them.
+ */
+function applyExtensions(fix: DecodedPosition, comment: string, opts: { compressed?: boolean } = {}): void {
+  const cs = opts.compressed ? null : /^(\d{3})\/(\d{3})/.exec(comment);
   if (cs) {
-    if (Number(cs[1]) <= 360) fix.course = Number(cs[1]); // three digits past 360 are not a heading
-    fix.speedKn = Number(cs[2]);
+    const course = Number(cs[1]),
+      speed = Number(cs[2]);
+    // three digits past 360 are not a heading, and 000 is none
+    if (course >= 1 && course <= 360) fix.course = course;
+    if (course !== 0 || speed !== 0) fix.speedKn = speed;
+    comment = comment.slice(7);
+  } else if (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment)) {
     comment = comment.slice(7);
   }
   const alt = /\/A=(-\d{5,6}|\d{6})/.exec(comment); // six characters, a leading minus below sea level
@@ -139,9 +157,11 @@ export function decodeAprs(frame: ParsedFrame): AprsData {
 
 function decodePosition(body: string, timestamp?: string): AprsData {
   let fix: DecodedPosition | null = null,
-    rest = "";
+    rest = "",
+    compressed = false;
   const comp = parseCompressed(body);
   if (comp && isValidLatLon(comp.lat, comp.lon)) {
+    compressed = true;
     fix = {
       lat: round(comp.lat),
       lon: round(comp.lon),
@@ -149,6 +169,7 @@ function decodePosition(body: string, timestamp?: string): AprsData {
       course: comp.course,
       speedKn: comp.speedKn,
       altitudeM: comp.altitudeM,
+      ...(comp.rangeKm !== undefined ? { rangeKm: comp.rangeKm } : {}),
     };
     rest = body.slice(13);
   } else {
@@ -163,7 +184,7 @@ function decodePosition(body: string, timestamp?: string): AprsData {
   // weather station (symbol '_') with wx in the comment -> weather report
   if (fix.symbol?.code === "_" && isWeather(rest))
     return { kind: "weather", lat: fix.lat, lon: fix.lon, symbol: fix.symbol, ...parseWeather(rest) };
-  applyExtensions(fix, rest);
+  applyExtensions(fix, rest, { compressed });
   return { kind: "position", ...fix };
 }
 
