@@ -119,6 +119,16 @@ describe("the near-cache radio message", () => {
     expect((await call(env, "GET", "/api/near-radio", undefined, { cookie: me.cookie })).data).toEqual({ on: false });
   });
 
+  it("takes a reply-ack carried in the station's own message as the ack", async () => {
+    const { env } = await player({ on: true });
+    await beacon(env);
+    const [sent] = await outbox(env);
+    const msgNo = /\{(N[0-9A-Z]{4})$/.exec(sent!.payload)![1];
+    await ingest(env, { src: "OE1ABC-7", payload: `:OE8APR-15:HELP{7}${msgNo}` });
+    const row = await env.DB.prepare("SELECT acked_at FROM near_cache_messages").first<{ acked_at: number | null }>();
+    expect(row?.acked_at).toBeGreaterThan(0);
+  });
+
   it("goes only to a slow station: a fix without a speed counts as slow", async () => {
     const { env } = await player({ on: true });
     await beacon(env, "OE1ABC-7", 20); // 37 km/h: driving past
