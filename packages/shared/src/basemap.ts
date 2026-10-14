@@ -36,8 +36,9 @@ export const MAPLIBRE_MAJOR = 6;
 
 /**
  * Where the web build publishes MapLibre for the embed widget, relative to the app origin. The files are
- * `maplibre-gl.js` (the module entry), `maplibre-gl-shared.js` (its chunk), `maplibre-gl-worker.js`
- * (the worker) and `maplibre-gl.css`. The path carries the major version, so an instance's embeds keep
- * a stable URL across minor updates while a breaking MapLibre release gets a new one.
+ * `maplibre-gl.js` (the module entry), `maplibre-gl-worker.js` (the worker), `maplibre-gl.css`, and
+ * `maplibre-gl-shared.js` when a MapLibre release splits the entry and the worker into a shared chunk. The
+ * path carries the major version, so an instance's embeds keep a stable URL across minor updates while a
+ * breaking MapLibre release gets a new one.
  */
 export const MAPLIBRE_VENDOR_DIR = `vendor/maplibre-gl/${MAPLIBRE_MAJOR}`;
