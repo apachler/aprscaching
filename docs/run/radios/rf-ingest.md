@@ -134,7 +134,12 @@ RF transmits, so it also needs `IGATE_TX=1`.
 Set `DIGI_CALL`, and optionally `DIGI_ALIASES` (default `WIDE1,WIDE2`), to repeat traffic with the new n-N
 paradigm, over a KISS TNC or a soundcard port. With several radio ports, each frame is repeated on the port
 that heard it. It inserts your call with the has-been-repeated bit and decrements `WIDEn-N`, with a
-loop guard and a 30-second window that keeps it from repeating the same frame twice.
+loop guard and a 30-second window that keeps it from repeating the same frame twice. When a path already
+holds eight digipeaters, the most AX.25 carries, it decrements without inserting its call.
+
+An entry of `DIGI_ALIASES` is either a generic n-N prefix, letters and the hop role (`WIDE1`, `WIDE2`), which
+answers `WIDE2-2`, `WIDE2-1` and so on, or an exact alias such as `RELAY` or `EOC-1`, which answers only that
+address, SSID included, and is replaced by your call.
 
 Set `DIGI_CONNECTED=1` to also repeat connected-mode frames (SABM, I, RR, …) whose next unrepeated hop is
 your call; this relays NET/ROM crosslinks and FBB traffic through you. `DIGI_VISCOUS_MS` makes this

@@ -24,6 +24,16 @@ const f = (path: string[], src = "OE1ABC", payload = "!4704.41N/01526.27E>hi", d
 
 describe("digipeater (new n-N paradigm)", () => {
   const opts = { mycall: "OE8XXX", aliases: new Set(["WIDE1", "WIDE2"]) };
+  it("decrements without inserting when the path already holds 8 digipeaters", () => {
+    const full = ["D1*", "D2*", "D3*", "D4*", "D5*", "D6*", "D7*", "WIDE2-2"];
+    expect(digipeat(f(full), opts)!.path).toEqual([...full.slice(0, 7), "WIDE2-1"]);
+  });
+  it("replaces an exact alias, SSID included, and never decrements it", () => {
+    const eoc = { mycall: "OE8XXX", aliases: new Set(["WIDE1", "WIDE2", "EOC-1", "RELAY"]) };
+    expect(digipeat(f(["EOC-1"]), eoc)!.path).toEqual(["OE8XXX*"]);
+    expect(digipeat(f(["RELAY", "WIDE2-1"]), eoc)!.path).toEqual(["OE8XXX*", "WIDE2-1"]);
+    expect(digipeat(f(["EOC-2"]), eoc)).toBeNull();
+  });
   it("inserts our call and decrements WIDE2-2 -> WIDE2-1", () => {
     expect(digipeat(f(["WIDE2-2"]), opts)!.path).toEqual(["OE8XXX*", "WIDE2-1"]);
   });
@@ -54,6 +64,8 @@ describe("digipeater (new n-N paradigm)", () => {
   });
   it("dedupe key ignores the path", () => {
     expect(dedupeKey(f(["WIDE2-2"]))).toBe(dedupeKey(f(["WIDE1-1"])));
+    // the destination's SSID is left out too
+    expect(dedupeKey(f(["WIDE2-1"], "OE1ABC", "x", "APRS-1"))).toBe(dedupeKey(f(["WIDE2-1"], "OE1ABC", "x", "APRS")));
   });
 });
 
@@ -67,7 +79,8 @@ describe("RX-IGate", () => {
     expect(shouldRxIgate(f(["WIDE2-1", "RFONLY"]), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f(["TCPIP*"]), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f([], "OE1ABC", "}third>party:data"), "OE8XXX")).toBe(false);
-    expect(shouldRxIgate(f([], "OE8XXX-1"), "OE8XXX")).toBe(false);
+    expect(shouldRxIgate(f([], "OE8XXX"), "OE8XXX")).toBe(false);
+    expect(shouldRxIgate(f([], "OE8XXX-0"), "OE8XXX")).toBe(false);
     expect(pathBlocksGating(["WIDE1-1", "NOGATE"])).toBe(true);
   });
   it("relays the info field up to its first CR or LF, and nothing when that leaves it empty", () => {
@@ -78,6 +91,23 @@ describe("RX-IGate", () => {
     expect(rxIgateLine(f([], "OE1ABC", ">a\0b"), "OE8XXX")).toBe("OE1ABC>APRS,qAR,OE8XXX:>a");
     expect(shouldRxIgate(f([], "OE1ABC", "\r\n>later"), "OE8XXX")).toBe(false);
     expect(igatePayload(">plain")).toBe(">plain");
+  });
+});
+
+describe("RX-IGate per APRS 1.2", () => {
+  it("gates another SSID of the gate's base call: that is another station", () => {
+    expect(shouldRxIgate(f(["WIDE1-1"], "OE8APR-9"), "OE8APR-10")).toBe(true);
+  });
+  it("does not gate a general query", () => {
+    expect(shouldRxIgate(f(["WIDE1-1"], "OE1ABC", "?APRS?"), "OE8XXX")).toBe(false);
+  });
+  it("keeps one has-been-repeated mark, on the last used hop", () => {
+    expect(rxIgateLine(f(["K2RVW-1*", "WIDE1*", "WIDE2-2"]), "N0GATE")).toBe(
+      "OE1ABC>APRS,K2RVW-1,WIDE1*,WIDE2-2,qAR,N0GATE:!4704.41N/01526.27E>hi",
+    );
+  });
+  it("marks a receive-only gate with qAO", () => {
+    expect(rxIgateLine(f([]), "N0GATE", { receiveOnly: true })).toBe("OE1ABC>APRS,qAO,N0GATE:!4704.41N/01526.27E>hi");
   });
 });
 
@@ -102,6 +132,12 @@ describe("TX-IGate", () => {
   it("gates acks and rejects, which the RF station retries until it hears", () => {
     expect(txIgateTarget(f(["TCPIP*"], "DL1ABC", ":OE5LOC   :ack1"), "OE8XXX", local)).toBe("OE5LOC");
     expect(txIgateTarget(f(["TCPIP*"], "DL1ABC", ":OE5LOC   :rej1"), "OE8XXX", local)).toBe("OE5LOC");
+  });
+  it("treats other SSIDs of the gate's base call as other stations", () => {
+    const heard = (cs: string) => cs === "N0GATE-7" || cs === "K1ABC";
+    expect(txIgateTarget(f(["TCPIP*"], "W2XYZ", ":N0GATE-7 :hi{1"), "N0GATE-10", heard)).toBe("N0GATE-7");
+    expect(txIgateTarget(f(["TCPIP*"], "N0GATE-5", ":K1ABC    :hi{1"), "N0GATE-10", heard)).toBe("K1ABC");
+    expect(txIgateTarget(f(["TCPIP*"], "W2XYZ", ":N0GATE-10:hi{1"), "N0GATE-10", heard)).toBeNull();
   });
   it("won't gate non-messages", () => {
     expect(txIgateTarget(f([], "DL1ABC", "!4704.41N/01526.27E>pos"), "OE8XXX", local)).toBeNull();

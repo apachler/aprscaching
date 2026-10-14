@@ -253,24 +253,25 @@ function decodeMessage(p: string): AprsData {
   const addressee = m[1]!.trim();
   const text = m[2]!;
   const out: AprsData = { kind: "message", addressee, text };
-  if (/^ack/.test(text)) {
-    out.ack = true;
-    out.msgNo = text.slice(3).trim();
+  // An ack or rej is the text "ack"/"rej" and the message number alone. A reply-ack sender's number reads
+  // "MM}AA" and the ack copies it whole; MM is the number acknowledged. Text that merely starts with the
+  // letters ("acknowledged", "rejoice") is an ordinary message.
+  const ackRej = /^(ack|rej)([A-Za-z0-9]{1,5})(?:\}[A-Za-z0-9]{0,5})?\s*$/.exec(text);
+  if (ackRej) {
+    if (ackRej[1] === "ack") out.ack = true;
+    else out.rej = true;
+    out.msgNo = ackRej[2];
     out.text = "";
     return out;
   }
-  if (/^rej/.test(text)) {
-    out.rej = true;
-    out.msgNo = text.slice(3).trim();
-    out.text = "";
-    return out;
-  }
-  // The message number follows the first '{' after the last '}' and runs to the end of the text.
-  // An index scan keeps this linear on a crafted body of many braces.
-  const brace = text.indexOf("{", text.lastIndexOf("}") + 1);
-  if (brace >= 0 && brace < text.length - 1) {
-    out.msgNo = text.slice(brace + 1);
-    out.text = text.slice(0, brace);
+  // The message number is 1–5 alphanumerics after the last '{', in the reply-ack form "{MM}AA" (AA is an
+  // ack of our message AA, empty when none is pending) or the plain "{MM}". The quantifiers are bounded,
+  // so a crafted body of many braces stays linear.
+  const num = /\{([A-Za-z0-9]{1,5})(?:\}([A-Za-z0-9]{0,5}))?\s*$/.exec(text);
+  if (num) {
+    out.msgNo = num[1];
+    if (num[2]) out.replyAck = num[2];
+    out.text = text.slice(0, num.index);
   }
   if (/^(BLN|NWS|SKY)/.test(addressee)) out.bulletin = addressee;
   return out;

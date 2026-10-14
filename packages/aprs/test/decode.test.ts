@@ -154,6 +154,35 @@ describe("objects, items, messages, status, telemetry", () => {
     expect(d.ack).toBe(true);
     expect(d.msgNo).toBe("007");
   });
+  it("reads a reply-ack message number: MM is the number, AA acks ours", () => {
+    const d = decodeAprs(frame(":WU2Z     :Testing{AB}CD")) as any;
+    expect(d).toMatchObject({ text: "Testing", msgNo: "AB", replyAck: "CD" });
+    const open = decodeAprs(frame(":WU2Z     :Testing{AB}")) as any;
+    expect(open).toMatchObject({ text: "Testing", msgNo: "AB" });
+    expect(open.replyAck).toBeUndefined();
+  });
+  it("takes the acknowledged number out of an ack of a reply-ack number", () => {
+    const d = decodeAprs(frame(":WU2Z     :ackAB}CD")) as any;
+    expect(d).toMatchObject({ ack: true, msgNo: "AB", text: "" });
+  });
+  it("reads text that only starts with ack or rej as a message", () => {
+    for (const text of ["acknowledged, thanks", "rejoice!"]) {
+      const d = decodeAprs(frame(`:N0CALL   :${text}`)) as any;
+      expect(d.ack ?? d.rej).toBeUndefined();
+      expect(d.text).toBe(text);
+    }
+    const numbered = decodeAprs(frame(":N0CALL   :ack ok see you{12")) as any;
+    expect(numbered).toMatchObject({ text: "ack ok see you", msgNo: "12" });
+    expect(numbered.ack).toBeUndefined();
+  });
+  it("decodes a rej", () => {
+    expect(decodeAprs(frame(":OE8APR   :rej003"))).toMatchObject({ rej: true, msgNo: "003" });
+  });
+  it("takes no message number longer than five characters", () => {
+    const d = decodeAprs(frame(":WU2Z     :Hi{1234567")) as any;
+    expect(d.msgNo).toBeUndefined();
+    expect(d.text).toBe("Hi{1234567");
+  });
   it("flags a bulletin", () => {
     const d = decodeAprs(frame(":BLN1     :Net tonight 8pm")) as any;
     expect(d.bulletin).toBe("BLN1");
