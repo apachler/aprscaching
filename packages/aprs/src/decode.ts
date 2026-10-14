@@ -9,6 +9,7 @@ import { lookupSymbol } from "./symbols.js";
 import { parseCompressed } from "./compressed.js";
 import { decodeMicE } from "./mice.js";
 import { isValidLatLon } from "./geo.js";
+import { parseTNC2 } from "./tnc2.js";
 
 const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 ]\.[0-9 ]{2})([EW])(.)/;
 
@@ -81,6 +82,13 @@ function parseWeather(s: string): DecodedWeather {
 const isWeather = (s: string) => /^[/_]?\d{3}\/\d{3}/.test(s) && /[tgrph]/.test(s);
 
 export function decodeAprs(frame: ParsedFrame): AprsData {
+  return decodeFrame(frame, 0);
+}
+
+/** How deep third-party packets nest: one carried packet, which carries none in turn. */
+const MAX_THIRD_PARTY_DEPTH = 1;
+
+function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
   const p = frame.payload;
   const t = p[0] ?? "";
 
@@ -122,8 +130,18 @@ export function decodeAprs(frame: ParsedFrame): AprsData {
       return decodeItem(p);
     case ":":
       return decodeMessage(p);
-    case ">":
-      return { kind: "status", text: p.slice(1).trim() };
+    case ">": {
+      // an optional DDHHMMz timestamp leads the status text
+      const stamp = /^\d{6}z/.exec(p.slice(1));
+      const text = p.slice(1 + (stamp ? 7 : 0)).trim();
+      return stamp ? { kind: "status", text, timestamp: stamp[0] } : { kind: "status", text };
+    }
+    case "}": {
+      // third-party: the carried packet in TNC2 form, decoded on its own
+      const inner = depth < MAX_THIRD_PARTY_DEPTH ? parseTNC2(p.slice(1)) : null;
+      if (!inner || !inner.src || !inner.dst) return { kind: "other" };
+      return { kind: "thirdparty", inner, data: decodeFrame(inner, depth + 1) };
+    }
     case "_": {
       // positionless weather: _MMDDHHMM<wx>
       return { kind: "weather", ...parseWeather(p.slice(9)) };
@@ -230,11 +248,17 @@ function decodeTelemetry(p: string): AprsData {
   const s = p.slice(1);
   if (LINE_BREAK.test(s)) return { kind: "telemetry", analog: [], digital: [] };
   let i = s[0] === "#" ? 1 : 0;
-  const seqStart = i;
-  while (i < s.length && s.charCodeAt(i) >= 48 && s.charCodeAt(i) <= 57) i++;
-  // a digit run too long for an exact integer is no sequence number (and a value of `1e999` no reading)
-  const seqNum = Number(s.slice(seqStart, i));
-  const seq = i > seqStart && Number.isSafeInteger(seqNum) ? seqNum : undefined;
+  let seq: number | undefined;
+  if (s.startsWith("MIC", i)) {
+    // the sequence "MIC" (a Mic-E unit), with or without a comma before the first channel
+    i += 3;
+  } else {
+    const seqStart = i;
+    while (i < s.length && s.charCodeAt(i) >= 48 && s.charCodeAt(i) <= 57) i++;
+    // a digit run too long for an exact integer is no sequence number (and a value of `1e999` no reading)
+    const seqNum = Number(s.slice(seqStart, i));
+    seq = i > seqStart && Number.isSafeInteger(seqNum) ? seqNum : undefined;
+  }
   if (s[i] === ",") i++;
   const parts = s.slice(i).split(",");
   const analog = parts

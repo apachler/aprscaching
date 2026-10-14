@@ -80,6 +80,37 @@ describe("weather", () => {
   });
 });
 
+describe("telemetry, status and third-party per APRS 1.2", () => {
+  it("reads the MIC sequence of a Mic-E unit, with or without a comma", () => {
+    for (const p of ["T#MIC199,000,255,073,123,01101001", "T#MIC,199,000,255,073,123,01101001"]) {
+      const d = decodeAprs(frame(p)) as any;
+      expect(d.seq).toBeUndefined();
+      expect(d.analog).toEqual([199, 0, 255, 73, 123]);
+      expect(d.digital).toEqual([false, true, true, false, true, false, false, true]);
+    }
+  });
+  it("takes a leading DDHHMMz timestamp out of the status text", () => {
+    expect(decodeAprs(frame(">092345zNet Control Center"))).toEqual({
+      kind: "status",
+      text: "Net Control Center",
+      timestamp: "092345z",
+    });
+  });
+  it("decodes the packet a third-party packet carries, under its own sender", () => {
+    const d = decodeAprs(frame("}WB4APR-14>APRS,TCPIP,G9RXG*::G3NRW    :Hi Ian{001")) as any;
+    expect(d.kind).toBe("thirdparty");
+    expect(d.inner).toMatchObject({ src: "WB4APR-14", dst: "APRS", path: ["TCPIP", "G9RXG*"] });
+    expect(d.data).toMatchObject({ kind: "message", addressee: "G3NRW", text: "Hi Ian", msgNo: "001" });
+    const pos = decodeAprs(frame("}OE1ABC>APRS,TCPIP,OE8XXX*:!4903.50N/07201.75W>moving")) as any;
+    expect(pos.data.kind).toBe("position");
+  });
+  it("decodes one level of third-party traffic and no deeper", () => {
+    const d = decodeAprs(frame("}A>B:}C>D:!4903.50N/07201.75W>x")) as any;
+    expect(d.data.kind).toBe("other");
+    expect(decodeAprs(frame("}not a packet")).kind).toBe("other");
+  });
+});
+
 describe("objects, items, messages, status, telemetry", () => {
   it("decodes a live object", () => {
     const d = decodeAprs(frame(";LEADER   *092345z4903.50N/07201.75W>test")) as any;
