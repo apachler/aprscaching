@@ -97,6 +97,10 @@ The edge of the badge takes the map's colour for on the air, the internet or a m
 apart at a glance. The network says how a message arrived, not who sent it: anyone can put a message on
 APRS-IS. A message stored without its network shows no badge.
 
+One message often arrives more than once: over APRS-IS and on the air, or directly and again through a
+digipeater. Copies within 30 seconds are one message, listed once; when one copy came on the air, the badge
+shows that network.
+
 ## Send an APRS message from your radio
 
 ### Before you start
