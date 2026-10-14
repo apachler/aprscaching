@@ -43,6 +43,69 @@ describe("compressed position (base-91)", () => {
   });
 });
 
+describe("positions per APRS 1.2", () => {
+  it("takes the ambiguity from the latitude and drops the same digits from the longitude", () => {
+    const one = decodeAprs(frame("!4903.  N/07201.75W-")) as any;
+    expect(one.ambiguity).toBe(2);
+    expect(one.lon).toBeCloseTo(-72.016667, 5); // 072°01', not 072°01.75'
+    expect((decodeAprs(frame("!4903.  N/07201.  W-")) as any).ambiguity).toBe(2);
+    expect((decodeAprs(frame("!49  .  N/072  .  W-")) as any).ambiguity).toBe(4);
+  });
+  it("reads course 000 and 000/000 as unknown", () => {
+    const d = decodeAprs(frame("!4903.50N/07201.75W>000/000")) as any;
+    expect(d.course).toBeUndefined();
+    expect(d.speedKn).toBeUndefined();
+    const parked = decodeAprs(frame("!4903.50N/07201.75W>000/005")) as any;
+    expect(parked.course).toBeUndefined();
+    expect(parked.speedKn).toBe(5);
+    expect((decodeAprs(frame("!4903.50N/07201.75W>360/010")) as any).course).toBe(360);
+  });
+  it("takes .../... and blanks as an unknown course and speed, not as the comment", () => {
+    for (const cse of [".../...", "   /   "]) {
+      const d = decodeAprs(frame(`!4903.50N/07201.75W>${cse}Test`)) as any;
+      expect(d.comment).toBe("Test");
+      expect(d.course).toBeUndefined();
+    }
+  });
+  it("never reads a compressed position's comment as its course and speed", () => {
+    const d = decodeAprs(frame("!/5L!!<*e7>7P[123/456 hi")) as any;
+    expect(d.course).toBe(88);
+    expect(d.speedKn).toBeCloseTo(36.2, 1);
+    expect(d.comment).toBe("123/456 hi");
+  });
+  it("passes on a compressed radio range", () => {
+    expect((decodeAprs(frame("=/5L!!<*e7>{?!")) as any).rangeKm).toBe(32.4);
+  });
+});
+
+describe("MIC-E per APRS 1.2", () => {
+  const base = '`(_fn"Oj/';
+  it("reads the altitude after a device prefix, and drops prefix and suffix from the comment", () => {
+    const d710 = decodeMicE("S32U6T", `${base}]"4T}Mobile=`)!;
+    expect(d710.altitudeM).toBe(61);
+    expect(d710.comment).toBe("Mobile");
+    expect(decodeMicE("S32U6T", `${base}>"4T}^`)!).toMatchObject({ altitudeM: 61 });
+    expect(decodeMicE("S32U6T", `${base}>"4T}^`)!.comment).toBeUndefined();
+    const ft3d = decodeMicE("S32U6T", `${base}\`"4T}Hiking_0`)!;
+    expect(ft3d).toMatchObject({ altitudeM: 61, comment: "Hiking" });
+    expect(decodeMicE("S32U6T", `${base}"4T}`)!.altitudeM).toBe(61); // no prefix, as before
+  });
+  it("applies the latitude's ambiguity to the longitude", () => {
+    // T4SQZZ: the last two latitude digits ambiguous, so the longitude is 112°07', not 112°07.74'
+    const m = decodeMicE("T4SQZZ", base)!;
+    expect(m.ambiguity).toBe(2);
+    expect(m.lon).toBeCloseTo(-112.116667, 5);
+  });
+  it("reads course 0 as unknown and 360 as north", () => {
+    expect(decodeMicE("S32U6T", "`(_fl\x1c\x1cj/")!.course).toBeUndefined();
+  });
+  it("calls a mix of Standard and Custom message bits Unknown, and refuses A-K after the third byte", () => {
+    expect(decodeMicE("S2DU6T", base)!.messageType).toBe("Unknown");
+    expect(decodeMicE("S32UKT", base)).toBeNull();
+    expect(decodeMicE("S32U6T", base)!.messageType).toBe("Returning");
+  });
+});
+
 describe("MIC-E", () => {
   // dest "SSRUVT" -> 33 deg 25.64' N, +100 lon offset, West
   // info: ` ( $ n \x1e \x1e O > /  -> lon 112 deg 08.82' W, course 251, speed 20, car symbol
