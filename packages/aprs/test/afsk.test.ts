@@ -87,3 +87,12 @@ describe("afsk — Bell-202 1200-baud modem", () => {
     });
   });
 });
+
+describe("AX.25 UI frame addresses", () => {
+  it("sets the destination's C bit and clears the source's: a UI frame is a command", () => {
+    const frame = encodeAx25({ src: "DL1ABC", dst: "APRS", path: [], payload: ">x" });
+    expect(frame[6]! & 0x80).toBe(0x80); // destination SSID octet
+    expect(frame[13]! & 0x80).toBe(0); // source SSID octet
+    expect(decodeAx25(frame)?.dst).toBe("APRS");
+  });
+});

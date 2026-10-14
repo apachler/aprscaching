@@ -197,7 +197,8 @@ export function decodeAx25(bytes: Uint8Array): ParsedFrame | null {
 export function encodeAx25(f: { src: string; dst: string; path?: string[]; payload: string }): Uint8Array {
   const path = f.path ?? [];
   const bytes: number[] = [];
-  bytes.push(...encodeAddr(f.dst, false));
+  // a UI frame is a command: the destination's C bit is 1, the source's 0
+  bytes.push(...encodeAddr(f.dst, false, true));
   bytes.push(...encodeAddr(f.src, path.length === 0));
   path.forEach((p, i) => {
     const repeated = p.endsWith("*");
