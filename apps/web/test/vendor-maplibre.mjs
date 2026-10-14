@@ -4,8 +4,9 @@
 //
 // `/embed` is served by the gateway but loads MapLibre from the app origin at MAPLIBRE_VENDOR_DIR, so
 // nothing in either unit's own build notices when the two ends disagree — the widget just renders a
-// blank frame on every instance. This checks the built output: each file is present, the module entry
-// and the worker import their shared chunk by the published name, and nothing still points at `.mjs`.
+// blank frame on every instance. This checks the built output: each file is present, and when a release
+// splits MapLibre into a shared chunk, the module entry and the worker import it by the published name and
+// nothing still points at `.mjs`; a self-contained release names no chunk at all.
 // It runs after `vite build` (the package's `build` precedes `test` in `pnpm -r`); with no build at all
 // it says so and passes, so the unit tests stay runnable on their own.
 import { existsSync, readFileSync } from "node:fs";
@@ -19,13 +20,21 @@ if (!existsSync(join(DIST, "index.html"))) {
   process.exit(0);
 }
 const dir = join(DIST, MAPLIBRE_VENDOR_DIR);
-const files = ["maplibre-gl.js", "maplibre-gl-shared.js", "maplibre-gl-worker.js", "maplibre-gl.css"];
+const split = existsSync(join(dir, "maplibre-gl-shared.js"));
+const files = [
+  "maplibre-gl.js",
+  ...(split ? ["maplibre-gl-shared.js"] : []),
+  "maplibre-gl-worker.js",
+  "maplibre-gl.css",
+];
 const problems = [];
 for (const f of files) if (!existsSync(join(dir, f))) problems.push(`missing ${MAPLIBRE_VENDOR_DIR}/${f}`);
 for (const f of ["maplibre-gl.js", "maplibre-gl-worker.js"]) {
   if (!existsSync(join(dir, f))) continue;
   const src = readFileSync(join(dir, f), "utf8");
-  if (!src.includes('"./maplibre-gl-shared.js"')) problems.push(`${f} does not import ./maplibre-gl-shared.js`);
+  if (split && !src.includes('"./maplibre-gl-shared.js"'))
+    problems.push(`${f} does not import ./maplibre-gl-shared.js`);
+  if (!split && src.includes("maplibre-gl-shared")) problems.push(`${f} names a shared chunk that is not published`);
   if (src.includes("maplibre-gl-shared.mjs")) problems.push(`${f} still imports the .mjs chunk`);
 }
 const headers = join(DIST, "_headers");
