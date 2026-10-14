@@ -42,6 +42,8 @@ export interface DecodedMessage {
   addressee: string;
   text: string;
   msgNo?: string;
+  /** A reply-ack (`{MM}AA`): the sender's acknowledgement of our message number AA, carried in its own message. */
+  replyAck?: string;
   ack?: boolean;
   rej?: boolean;
   bulletin?: string;
