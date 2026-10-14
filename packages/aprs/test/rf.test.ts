@@ -78,7 +78,8 @@ describe("RX-IGate", () => {
   it("refuses NOGATE/RFONLY/TCPIP paths, third-party, and our own", () => {
     expect(shouldRxIgate(f(["WIDE2-1", "RFONLY"]), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f(["TCPIP*"]), "OE8XXX")).toBe(false);
-    expect(shouldRxIgate(f([], "OE1ABC", "}third>party:data"), "OE8XXX")).toBe(false);
+    // a carried packet that came from APRS-IS stays off it
+    expect(shouldRxIgate(f([], "OE1ABC", "}W2XYZ>APRS,TCPIP,OE1ABC*:>hello"), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f([], "OE8XXX"), "OE8XXX")).toBe(false);
     expect(shouldRxIgate(f([], "OE8XXX-0"), "OE8XXX")).toBe(false);
     expect(pathBlocksGating(["WIDE1-1", "NOGATE"])).toBe(true);
@@ -95,6 +96,15 @@ describe("RX-IGate", () => {
 });
 
 describe("RX-IGate per APRS 1.2", () => {
+  it("gates the packet a third-party frame carries, with the encapsulation removed", () => {
+    const tp = f(["WIDE2-1"], "K1ABC", "}W2XYZ>APRS,K1ABC*:>hello");
+    expect(shouldRxIgate(tp, "N0GATE")).toBe(true);
+    expect(rxIgateLine(tp, "N0GATE")).toBe("W2XYZ>APRS,K1ABC*,qAR,N0GATE:>hello");
+  });
+  it("does not unwrap a carried packet that is third-party traffic in turn, nor an empty one", () => {
+    expect(shouldRxIgate(f([], "K1ABC", "}W2XYZ>APRS:}A>B:>x"), "N0GATE")).toBe(false);
+    expect(shouldRxIgate(f([], "K1ABC", "}not a packet"), "N0GATE")).toBe(false);
+  });
   it("gates another SSID of the gate's base call: that is another station", () => {
     expect(shouldRxIgate(f(["WIDE1-1"], "OE8APR-9"), "OE8APR-10")).toBe(true);
   });

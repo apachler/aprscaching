@@ -35,6 +35,11 @@ describe("directSiteCall", () => {
     expect(directSiteCall(["TRACE3-1"], "OE8APR-10")).toBeUndefined();
     expect(directSiteCall(["WIDE1", "WIDE2-2"], "OE8APR-10")).toBeUndefined();
   });
+  it("names no site when a regional SSn-N hop was decremented, and does when it is untouched", () => {
+    expect(directSiteCall(["OE2-1"], "OE8APR-10")).toBeUndefined();
+    expect(directSiteCall(["HOP7-6"], "OE8APR-10")).toBeUndefined();
+    expect(directSiteCall(["OE2-2"], "OE8APR-10")).toBe("OE8APR-10");
+  });
   it("names no site on a digipeated frame", () => {
     expect(directSiteCall(["OE8XBM-10*", "WIDE2-1"], "OE8APR-10")).toBeUndefined();
     expect(directSiteCall(["WIDE1*", "WIDE2-1"], "OE8APR-10")).toBeUndefined();

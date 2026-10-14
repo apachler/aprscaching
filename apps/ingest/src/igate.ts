@@ -112,7 +112,7 @@ export class Igate {
     if (/[\r\n\0]/.test(line)) return;
     if (this.ready && this.sock) {
       try {
-        this.sock.write(line + "\r\n");
+        this.sock.write(line + "\r\n", "latin1");
       } catch {
         /* dropped */
       }
@@ -137,7 +137,9 @@ export class Igate {
     this.lines.reset();
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
-    s.setEncoding("utf8");
+    // APRS-IS carries bytes, not text: read and write one character per byte (latin1), so an info field
+    // passes between RF and APRS-IS unchanged, whatever character set its sender used
+    s.setEncoding("latin1");
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy()); // detect a silently-dead uplink
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval

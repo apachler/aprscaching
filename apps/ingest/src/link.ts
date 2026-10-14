@@ -22,15 +22,17 @@ export interface FrameLink {
 
 /** `WIDEn-N` / `TRACEn-N` (an absent SSID is N = 0). */
 const FLOOD_HOP = /^(?:WIDE|TRACE)([1-7])(?:-(\d{1,2}))?$/i;
+/** A regional or other generic `SSn-N` hop (`OE2-1`, `HOP7-6`): letters, the hop role, and its count. */
+const GENERIC_HOP = /^[A-Z]{1,5}([1-7])-(\d{1,2})$/i;
 
 /**
- * Whether a path hop shows the frame was relayed: the has-been-repeated bit (`*`) is set, or a flood /
- * trace digipeater decremented a `WIDEn-N` / `TRACEn-N` hop (N < n) without marking it — an untraced
+ * Whether a path hop shows the frame was relayed: the has-been-repeated bit (`*`) is set, or a digipeater
+ * decremented a `WIDEn-N` / `TRACEn-N` or regional `SSn-N` hop (N < n) without marking it — an untraced
  * digipeater consumes a hop that way. An untouched hop (`WIDE1-1`, `WIDE2-2`) is not a relay.
  */
 function hopUsed(hop: string): boolean {
   if (hop.endsWith("*")) return true;
-  const m = FLOOD_HOP.exec(hop.trim());
+  const m = FLOOD_HOP.exec(hop.trim()) ?? GENERIC_HOP.exec(hop.trim());
   return !!m && Number(m[2] ?? 0) < Number(m[1]);
 }
 

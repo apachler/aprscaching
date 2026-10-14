@@ -7,6 +7,7 @@
  * gating rules below are pure and unit-tested.
  */
 import { baseCall, sameStation } from "./callsign.js";
+import { parseTNC2 } from "./tnc2.js";
 import type { ParsedFrame } from "./types.js";
 
 // RF -> IS: `TCPIP` marks a frame that already came from APRS-IS, so it is never sent back up.
@@ -38,26 +39,44 @@ export function igatePayload(payload: string): string {
   return cut < 0 ? payload : payload.slice(0, cut);
 }
 
+/**
+ * The packet an RX-IGate relays for an RF-heard frame: the frame itself, or for third-party traffic the
+ * packet it carries, with the encapsulation removed. null when a third-party frame carries no packet, or one
+ * that came from APRS-IS (its path holds `TCPIP`, `TCPXX`, `NOGATE` or `RFONLY`): relaying that back would
+ * loop. A carried packet that is third-party traffic in turn is not unwrapped again.
+ */
+export function rxIgateFrame(f: ParsedFrame): ParsedFrame | null {
+  const payload = igatePayload(f.payload);
+  if (!isThirdParty(payload)) return f;
+  const inner = parseTNC2(payload.slice(1));
+  if (!inner?.src || !inner.dst || isThirdParty(inner.payload) || pathBlocksGating(inner.path)) return null;
+  return inner;
+}
+
 /** RX-IGate: should this RF-heard frame be relayed to APRS-IS? */
 export function shouldRxIgate(f: ParsedFrame, gateCall: string): boolean {
-  const payload = igatePayload(f.payload);
-  if (!payload) return false;
-  if (isThirdParty(payload)) return false;
-  // a general query asks the stations in RF range; APRS-IS is not the place to answer it
-  if (payload.startsWith("?")) return false;
   if (pathBlocksGating(f.path)) return false;
   if (sameStation(f.src, gateCall)) return false; // don't gate our own beacons
+  const g = rxIgateFrame(f);
+  if (!g) return false;
+  const payload = igatePayload(g.payload);
+  if (!payload) return false;
+  // a general query asks the stations in RF range; APRS-IS is not the place to answer it
+  if (payload.startsWith("?")) return false;
+  if (sameStation(g.src, gateCall)) return false;
   return true;
 }
 
 /**
- * Build the APRS-IS line for an RF-heard frame: the original header + path, then the q construct and the
+ * Build the APRS-IS line for an RF-heard frame (for third-party traffic, the packet it carries): its header
+ * and path, then the q construct and the
  * gate's call, then the info field cut at its first line break (`igatePayload`). `qAR` names a gate that
  * also gates messages back to RF; a receive-only gate sends `qAO`, so APRS-IS routes no messages to it.
  * The path keeps one `*`, on the last used hop: the monitor format allows no more, and every hop before
  * it counts as used.
  */
-export function rxIgateLine(f: ParsedFrame, gateCall: string, opts: { receiveOnly?: boolean } = {}): string {
+export function rxIgateLine(frame: ParsedFrame, gateCall: string, opts: { receiveOnly?: boolean } = {}): string {
+  const f = rxIgateFrame(frame) ?? frame;
   const last = f.path.reduce((at, h, i) => (h.endsWith("*") ? i : at), -1);
   const hops = f.path.map((h, i) => (i === last ? h : h.replace(/\*$/, "")));
   const via = hops.length ? "," + hops.join(",") : "";
