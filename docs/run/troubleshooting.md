@@ -332,7 +332,7 @@ Every shape with an ingest.
 
 - **Tests:** a TCP connection to `LORA_APRS_HOST:LORA_APRS_PORT`, when `LORA_APRS_HOST` is set.
 - **Message:** `LORA_APRS <host>:<port> does not answer` (fail).
-- **Fix:** switch on the iGate's TNC server, check that it is on your Wi-Fi, and check the host and port.
+- **Fix:** switch on the IGate's TNC server, check that it is on your Wi-Fi, and check the host and port.
 - **See:** [LoRa APRS](radios/lora-aprs.md).
 
 ### `ingest.meshtastic`
