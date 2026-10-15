@@ -53,8 +53,8 @@ function instance(
   const live: Instance["live"] = [];
   const room = {
     fetch: async (req: Request) => {
-      const body = (await req.json()) as { envelopes: { station: { callsign: string; lat: number; lon: number } }[] };
-      for (const e of body.envelopes) live.push(e.station);
+      const body = (await req.json()) as { envelopes: { station?: { callsign: string; lat: number; lon: number } }[] };
+      for (const e of body.envelopes) if (e.station) live.push(e.station); // heard envelopes carry none
       return new Response(null, { status: 204 });
     },
   };

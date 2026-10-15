@@ -24,3 +24,4 @@ export * from "./sitesettings.js";
 export * from "./toolregistries.js";
 export * from "./coverage.js";
 export * from "./aprsfreq.js";
+export * from "./heard.js";

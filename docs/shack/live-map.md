@@ -7,8 +7,8 @@ layers**, and the browser remembers them.
 ## Live stations and spots
 
 Switch on **Live stations** to see APRS stations on the map as they are heard. Moving stations show a heading
-arrow. Tap a station for its page: symbol, the device that sent its last position, speed and course, altitude,
-radio range (sent, or worked out from its power, antenna height and gain), recent track, weather and its raw
+arrow. Tap a station for its page: symbol, the device that sent its last position, its
+[grid square](../glossary.md#maidenhead), speed and course, altitude, radio range (sent, or worked out from its power, antenna height and gain), recent track, weather and its raw
 packets, each transmission listed once with the best route it was heard on. Signed in, **+ Add to my stations** puts it in your stations; a station already there shows **In
 your stations**, and the page says when another operator registered it. The button shows only for a station
 under a verified callsign on your account; for any other station the page says why it can't be added.
@@ -16,9 +16,13 @@ under a verified callsign on your account; for any other station the page says w
 The device line (**Sent with Kenwood TM-D710**) comes from the packet's
 tocall, the destination callsign each APRS program and radio sends, or, for a Mic-E packet, from the device
 code around its status text. The names come from
-[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which the instance fetches once a
-day. A station page shows no device when the instance's sysop turned the lookup off (`DEVICEID_URL`), when the
+[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which every instance fetches once a
+day by default. A station page shows no device when the instance's sysop turned the lookup off (`DEVICEID_URL`), when the
 instance has not fetched the database yet, or when the database does not know the device.
+
+The grid line (**Grid JN77RB**) is the Maidenhead locator the station put at the front of its last status
+report or Mic-E status text that had one. It names a square of a few kilometres, not a position: the map
+marker, the track and find verification use only the station's position reports.
 
 **Activity spots** (off by default) shows live POTA and SOTA activations, and DX-cluster, RBN and PSKReporter
 spots, when the instance's sysop enables spots. Filter them by **Band**, **Mode** and **Source**. With a rig

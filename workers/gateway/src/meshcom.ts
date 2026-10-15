@@ -209,9 +209,12 @@ export async function ownMeshcomVia(
   });
 }
 
+/** Days a MeshCom node stays after it was last heard: `MESHCOM_NODE_TTL_DAYS`, else 7. */
+export const meshcomNodeKeepDays = (env: Env): number => intEnv(setting(env, "MESHCOM_NODE_TTL_DAYS"), 7, 1);
+
 /** Nightly: drop nodes and links not heard within their windows. */
 export async function pruneMeshcom(env: Env, now: number): Promise<void> {
-  const nodeDays = intEnv(setting(env, "MESHCOM_NODE_TTL_DAYS"), 7, 1);
+  const nodeDays = meshcomNodeKeepDays(env);
   const linkHours = intEnv(setting(env, "MESHCOM_LINK_TTL_HOURS"), 48, 1);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM meshcom_nodes WHERE last_heard < ?").bind(now - nodeDays * 86400),

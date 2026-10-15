@@ -2,8 +2,8 @@
 
 This page is for the sysop. It explains what members can export and erase, how long the instance keeps the
 rest, and how an erasure reaches the other instances in the network, so you can answer a data-protection
-request. The gateway serves `/privacy` from `OPERATOR_NAME`, `OPERATOR_ADDRESS` and `OPERATOR_EMAIL`
-([A public instance's duties](index.md#name-the-operator)).
+request. The gateway serves `/privacy` and the terms of use at `/terms` from `OPERATOR_NAME`, `OPERATOR_ADDRESS`
+and `OPERATOR_EMAIL` ([A public instance's duties](index.md#name-the-operator)).
 
 Members run export and erasure themselves ([Your data](../../play/account.md#your-data) is their side). You do
 not need to act on a request by hand.
@@ -42,7 +42,7 @@ Secrets such as passkey public keys and push keys stay out of it.
 | `accountEvents` | What the instance recorded about the calls: a move to another instance, a sysop's verification |
 | `caches`, `cacheStages`, `cacheMedia` | Every detail of the caches the person owns, their stages (with each stage's unlock code) and uploaded media |
 | `logs`, `ratings`, `favorites`, `watches`, `achievements`, `stageUnlocks` | Finds and notes, ratings, favourites, watched caches, badges, unlocked stages |
-| `positions`, `stations`, `stationsOperated`, `rendezvous` | Positions, the person's stations, rendezvous |
+| `positions`, `heardStations`, `stations`, `stationsOperated`, `rendezvous` | Positions, what the instance last heard of the person's calls (position, comment, the locator of a status report), the person's stations, rendezvous |
 | `messages` | The APRS messages the person sent or was sent, with their delivery state |
 | `aprsOutbox`, `radioCommands`, `nearCacheMessages`, `boxCommands` | Radio traffic queued from or to the calls, radio commands, near-cache messages, commands sent to the person's boxes |
 | `bbsMessages`, `mailbox`, `meshcomGroupMessages`, `whitePages` | BBS mail and bulletins, Mailbox mail, MeshCom group messages, the white-pages entry |
@@ -110,8 +110,9 @@ signed account-move record points attribution at the new instance across the net
 
 | Data | Kept | Setting |
 |---|---|---|
-| Positions from APRS-IS and from browser radio forwarding | 7 days, pruned nightly; finds use them as evidence | fixed |
-| Other positions, finds, caches, accounts, keys | until erased | — |
+| Positions, from ingest and from browser radio forwarding | 7 days, pruned nightly; a find keeps its verification result, not the position | fixed |
+| A station's map entry (its last heard position) | 1 year after it was last heard, or while a living cache, a registered station or a MeshCom node names it | fixed |
+| Finds, caches, accounts, keys | until erased | — |
 | Shack raw-packet ring | 24 hours | `RETENTION` (`packetsHours`) |
 | Message log and MeshCom group messages | 7 days | `RETENTION` (`messagesDays`) |
 | Weather and telemetry readings | 30 days | `RETENTION` (`sensorDays`) |
@@ -128,6 +129,7 @@ signed account-move record points attribution at the new instance across the net
 | Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
 | A member's own tool registries, and the copies of their files the instance fetched for them | until the member removes them or is erased; a copy is refreshed hourly while in use | `TOOL_REGISTRIES_PLAYERS`, `TOOL_REGISTRIES_PROXY` |
+| Database backups | 30 days in `BACKUP_DIR`; a bucket by its lifecycle rule | `BACKUP_RETENTION_DAYS` |
 
 `RETENTION` is JSON naming only what you change, for example `{"packetsHours":6,"sensorDays":90}`
 ([Configuration](../../reference/configuration.md)). What the instance keeps beyond accounts is public ham
@@ -140,6 +142,11 @@ register's rows and deletes calls the register no longer lists ([Licence registe
 Once a day the instance asks GitHub for the newest release (`UPDATE_CHECK`). The request names the instance and
 carries no member data. While the check is on, the privacy page lists GitHub among the recipients
 ([How you hear about a new release](../day-to-day/updates.md#how-you-hear-about-a-new-release)).
+
+Once a day the instance also fetches the APRS device database, `aprs-deviceid.aprsfoundation.org` by default
+(`DEVICEID_URL`), so a station page can name the device behind its packets. The request names the instance and
+carries no member data. The privacy page lists the database's host among the recipients unless `DEVICEID_URL` is
+set empty, which turns the fetch off.
 
 ## Moderation records
 

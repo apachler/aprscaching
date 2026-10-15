@@ -7,6 +7,6 @@
  * app.ts's route() and checks it is claimed here.
  */
 const GATEWAY_PATH =
-  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|tiles|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|tiles|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|terms|health|sitemap|sitemap\.xml|robots\.txt)$/;
 
 export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pathname);

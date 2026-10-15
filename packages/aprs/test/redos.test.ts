@@ -79,6 +79,19 @@ describe("data extension scan is linear", () => {
   });
 });
 
+describe("Mic-E device code scan is linear", () => {
+  const mice = (payload: string) => decodeAprs({ ...frame(payload), dst: "S32U6T" }) as { comment?: string };
+  it("a status text of many near-codes decodes fast", () => {
+    for (const payload of [`\`(_fn"Oj/\`${"(".repeat(N)}`, `\`(_fn"Oj/'${"_|".repeat(N)}x`]) {
+      const { ms } = timed(() => mice(payload));
+      expect(ms).toBeLessThan(1000);
+    }
+  });
+  it("keeps the semantics", () => {
+    expect(mice(`\`(_fn"Oj/'${"(".repeat(10)}`).comment).toBe("(".repeat(8));
+  });
+});
+
 describe("!DAO!, NMEA and locator scans are linear", () => {
   const pos = "!4903.50N/07201.75W>";
   it("a comment of many near-tokens, a long NMEA sentence and a long locator status decode fast", () => {

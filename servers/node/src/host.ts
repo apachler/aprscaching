@@ -25,12 +25,17 @@ import { mdnsMode, startMdns } from "./mdns.js";
  */
 export const BODY_MAX_BYTES = 20 * 1024 * 1024;
 
-/** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
+/**
+ * The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms, and the read API's heard stream
+ * listens on them; the WS upgrade is the server's.
+ */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
   return {
     get: (region) => ({
       fetch: (req: Request) => serveRoom(req, (envelopes) => rooms.dispatch(region, envelopes as LiveEnvelope[])),
     }),
+    listen: (region, holder, fn) => rooms.listen(region, holder, fn),
+    holding: (holder) => rooms.holding(holder),
   };
 }
 

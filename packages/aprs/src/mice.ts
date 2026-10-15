@@ -196,6 +196,14 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
 }
 
 /**
+ * A device code after a `` ` `` or `'` prefix: two characters, the first naming the maker's code range (`_` Yaesu,
+ * `|` Byonics, `(` Anytone, `^`, `*`, `:` and `[` other makers), the second the model. The rule is the code's
+ * shape, not a list of models, so a model the device database adds later is stripped too. A code led by a space
+ * stays in the comment: a comment ending in a word of one character has the same shape.
+ */
+const MICE_CODE = /[_|(^*:[].$/;
+
+/**
  * The Mic-E status text: an optional device prefix (`>` `]` for Kenwood, `` ` `` `'` for other makers), then
  * an optional altitude "xxx}" (base-91 metres above a datum 10 km below sea level), then the comment, then
  * the device's suffix (one character after a Kenwood prefix, two after the others). Prefix and suffix name
@@ -216,7 +224,7 @@ function statusText(rest: string): { altitudeM?: number; comment?: string; devic
   const device = prefix ? { prefix, suffix: text.length >= tail ? text.slice(-tail) : "" } : undefined;
   if (prefix === ">") text = text.replace(/[=^&]$/, "");
   else if (prefix === "]") text = text.replace(/=$/, "");
-  else if (prefix) text = text.replace(/[_|].$/, "");
+  else if (prefix) text = text.replace(MICE_CODE, "");
   const comment = text.trim();
   return {
     ...(altitudeM !== undefined ? { altitudeM } : {}),

@@ -11,10 +11,11 @@
  * Cost and failure: the scheduled task refreshes the copy at most once a day, with `If-None-Match` so an unchanged
  * database costs a 304, a short timeout and a body cap. A failed or malformed answer keeps the last good copy, and
  * with no copy at all a station page names no device. The parsed table stays in memory per database, read from the
- * cached row on first use, so a restart or an offline box keeps naming devices. `DEVICEID_URL` unset or empty turns
- * the fetch and the naming off.
+ * cached row on first use, so a restart or an offline box keeps naming devices. `DEVICEID_URL` unset fetches the
+ * database's own address, so every shape names devices; set empty, it turns the fetch and the naming off.
  */
 import { buildDeviceIndex, identifyDevice, type DeviceIndex, type DeviceMatch } from "@aprscaching/aprs";
+import { CONFIG_KEYS } from "@aprscaching/shared";
 import type { Env } from "./env.js";
 import { readCappedBody } from "./fetchguard.js";
 import { nowS } from "./util/time.js";
@@ -26,9 +27,9 @@ const TIMEOUT_MS = 15_000;
 /** The real database is some 40 KB; anything past this is not it. */
 const MAX_BODY = 2 * 1024 * 1024;
 
-/** The configured database address; null when the operator turned device naming off. */
+/** The database address: the configured one, else the default; null when the operator set it empty (naming off). */
 export function deviceIdUrl(env: Env): string | null {
-  const u = (env.DEVICEID_URL ?? "").trim();
+  const u = (env.DEVICEID_URL ?? CONFIG_KEYS.DEVICEID_URL.default).trim();
   if (!u || !URL.canParse(u)) return null;
   const { protocol } = new URL(u);
   return protocol === "https:" || protocol === "http:" ? u : null;

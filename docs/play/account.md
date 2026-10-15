@@ -125,7 +125,8 @@ Dark is the default appearance. Phosphor is a green-screen terminal look.
 ## API keys
 
 The read API is free and needs no key. A key raises its rate limit, for an app or script of yours that reads
-the instance often ([the read API](../reference/api.md#public-read-api)). A key unlocks no feature.
+the instance often, and keeps more station streams open at once
+([the read API](../reference/api.md#public-read-api)). A key unlocks no feature.
 
 1. Open **Settings → Developer**.
 2. Type a name for the key, such as the app that uses it, and tap **Create key**.

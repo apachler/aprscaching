@@ -43,7 +43,7 @@ fit is cut between letters, never inside one.
 
 | Transport | Turn on with | What it does |
 |-----------|-------------|--------------|
-| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (for example Direwolf). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. A MeshCom node's KISS port is refused: the box logs an error and ignores it, because a frame the MeshCom server relayed would read as heard directly. Listen to a node with `MESHCOM_NODE`. |
+| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (for example Direwolf: [Direwolf as your TNC](direwolf.md)). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. A MeshCom node's KISS port is refused: the box logs an error and ignores it, because a frame the MeshCom server relayed would read as heard directly. Listen to a node with `MESHCOM_NODE`. |
 | **Soundcard port** | `SOUNDCARD_DEVICE` (+ `SOUNDCARD_*`, `SOUNDCARD_PORTS`) | The box is the 1200-baud AFSK modem: ALSA's `arecord` and `aplay` with a USB sound card or a sound HAT, keyed by a PTT driver (CM108 GPIO, Linux GPIO, serial RTS/DTR, CAT, rigctld or VOX). Receives like a KISS TNC and carries the same functions. Transmit is off by default and needs a control-verified call; a watchdog bounds the key time. Setup: [Soundcard port](soundcard.md). |
 | **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
@@ -75,7 +75,7 @@ nothing, so the box sends them whether or not it transmits.
 
 Each value is a whole number from 0 to 255. The defaults are the APRS values that
 [My radio](../../shack/my-radio.md#set-your-tncs-timing) sends a browser-connected TNC. Direwolf applies the
-frames to the channel, in place of `TXDELAY`, `PERSIST` and `SLOTTIME` in `direwolf.conf`. Set `KISS_TIMING=off`
+frames to the channel, in place of `TXDELAY`, `PERSIST` and `SLOTTIME` in `direwolf.conf`. Which side to let set them: [Decide who sets the timing](direwolf.md#5-decide-who-sets-the-timing). Set `KISS_TIMING=off`
 to leave the TNC on its own settings: the ones in `direwolf.conf`, or a TNC whose firmware you set up yourself.
 The [soundcard port](soundcard.md) has its own `SOUNDCARD_*` timing.
 

@@ -49,4 +49,11 @@ export interface MediaStore {
 /** Region rooms — the in-memory room registry (rooms-core.ts); a region's room is reached by a fetch-shaped call. */
 export interface RoomNamespace {
   get(region: string): { fetch(req: Request): Promise<Response> };
+  /**
+   * An in-process listener on a region's dispatches, held by `holder` (rooms-core.ts `listen`); returns the
+   * function that ends it. The heard stream of the read API (heardfeed.ts) is built on it.
+   */
+  listen?(region: string, holder: string, fn: (envelopes: unknown[]) => void): () => void;
+  /** How many listeners `holder` holds open. */
+  holding?(holder: string): number;
 }

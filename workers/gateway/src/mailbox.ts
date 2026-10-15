@@ -21,7 +21,7 @@ import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 /** How long a message waits for its station. */
-const MAILBOX_TTL_SEC = 7 * 86400;
+export const MAILBOX_TTL_SEC = 7 * 86400;
 /** Deliveries without an ack before a message counts as undelivered. */
 const MAX_ATTEMPTS = 5;
 /** Seconds between two deliveries of one message. */
@@ -31,7 +31,7 @@ const PER_HOUR = 20;
 /** Messages that may wait for one station at a time. */
 const HELD_PER_ADDRESSEE = 10;
 /** Delivered and expired messages stay listed this long, then are deleted. */
-const KEEP_SEC = 30 * 86400;
+export const MAILBOX_KEEP_SEC = 30 * 86400;
 /** Addressees one read names, so a statement binds at most 100 parameters (four more bind the filters). */
 const ADDRESSEES_PER_READ = 90;
 /** The APRS message text limit. */
@@ -308,13 +308,15 @@ export async function mailboxOnAck(env: Env, from: string, msgNo: string, port: 
     .run();
 }
 
-/** Daily: expire what waited too long, and delete what has been settled for {@link KEEP_SEC}. */
+/** Daily: expire what waited too long, and delete what has been settled for {@link MAILBOX_KEEP_SEC}. */
 export async function expireMailbox(env: Env): Promise<void> {
   const now = nowS();
   await env.DB.batch([
     env.DB.prepare(
       "UPDATE mailbox_messages SET status = 'expired' WHERE status IN ('held','sent') AND expires_at <= ?",
     ).bind(now),
-    env.DB.prepare("DELETE FROM mailbox_messages WHERE expires_at <= ? AND status != 'held'").bind(now - KEEP_SEC),
+    env.DB.prepare("DELETE FROM mailbox_messages WHERE expires_at <= ? AND status != 'held'").bind(
+      now - MAILBOX_KEEP_SEC,
+    ),
   ]);
 }

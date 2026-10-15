@@ -65,9 +65,13 @@ const name = async (env: Env, tocall: string) =>
   (await stationDevice(env, { tocall, mice_prefix: null, mice_suffix: null }))?.name ?? null;
 
 describe("the device database copy", () => {
-  it("is off without an http(s) DEVICEID_URL: nothing fetched, nothing named", async () => {
+  it("reads the database's own address while DEVICEID_URL is unset", () => {
+    expect(deviceIdUrl(store().env(undefined))).toBe("https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json");
+  });
+
+  it("is off with DEVICEID_URL set empty or not http(s): nothing fetched, nothing named", async () => {
     const s = store();
-    for (const u of [undefined, "", "  ", "ftp://x/y"]) {
+    for (const u of ["", "  ", "ftp://x/y"]) {
       const env = s.env(u);
       const r = remote(() => ok());
       expect(deviceIdUrl(env)).toBeNull();

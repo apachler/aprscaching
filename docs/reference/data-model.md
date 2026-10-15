@@ -6,7 +6,7 @@ is one file, `0001_baseline.sql`, edited in place; once 1.0 is released that fil
 change is a new, next-numbered `NNNN_name.sql` file applied on top, never edited after it is applied.
 
 The schema uses no virtual tables (rtree, FTS): spatial lookups use plain `(lat, lon)` indexes and search is
-LIKE-based. Firehose positions and the diagnostic tables are TTL'd; the durable record is caches, finds,
+LIKE-based. Positions (7 days) and the diagnostic tables are TTL'd; the durable record is caches, finds,
 accounts and keys — back those up.
 
 ## What the tables cover

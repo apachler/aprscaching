@@ -218,6 +218,9 @@ export const CONFIG_KEYS = {
     site: { group: "imprint", format: "email", maxLength: 254 },
   },
   SECURITY_CONTACT: { type: "list", units: ["gateway"], site: { group: "imprint", format: "contacts" } },
+  EDITORIAL_LINE: { type: "string", units: ["gateway"], site: { group: "imprint", maxLength: 500 } },
+  PRIVACY_AUTHORITY: { type: "string", units: ["gateway"], site: { group: "imprint", maxLength: 300 } },
+  HOSTING_PROVIDER: { type: "string", units: ["gateway"], site: { group: "imprint", maxLength: 200 } },
   SOURCE_COMMIT: { type: "string", units: ["gateway", "server"] },
   SOURCE_TAG: { type: "string", units: ["gateway"] },
   SOURCE_BUILT_AT: { type: "int", units: ["gateway"] },
@@ -228,7 +231,11 @@ export const CONFIG_KEYS = {
     values: ["0", "1", "false", "no", "true", "yes"],
     site: { group: "updates" },
   },
-  DEVICEID_URL: { type: "url", units: ["gateway"] },
+  DEVICEID_URL: {
+    type: "url",
+    units: ["gateway"],
+    default: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json",
+  },
   TOOL_REGISTRIES: { type: "json", units: ["gateway"] },
   TOOL_REGISTRIES_PLAYERS: {
     type: "enum",
@@ -399,7 +406,7 @@ export const CONFIG_KEYS = {
   R2_ENDPOINT: { type: "url", units: ["deploy"], shapes: ["selfhost", "baremetal", "desktop"] },
   BACKUP_RETENTION_DAYS: {
     type: "int",
-    units: ["deploy"],
+    units: ["gateway", "deploy"],
     default: "30",
     shapes: ["selfhost", "baremetal", "desktop"],
   },
