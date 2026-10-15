@@ -12,8 +12,11 @@ import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => vi.unstubAllGlobals());
 
-// Every test runs gateways against each other: seconds on a loaded machine.
-const GATEWAYS = { timeout: 30_000 };
+// Every test runs gateways against each other, all on the CPU: under a second to a few seconds alone, and
+// ten to fifteen times that on a machine whose cores other suites share. The long chains take longer still.
+const GATEWAYS = { timeout: 60_000 };
+/** A chain of five instances moving a thousand-odd records: about 10 s alone. */
+const LONG_CHAIN = { timeout: 180_000 };
 
 const OP = { "x-operator-secret": "test-operator-secret" };
 const now = () => Math.floor(Date.now() / 1000);
@@ -493,7 +496,7 @@ describe("what moves a mark", GATEWAYS, () => {
   });
 });
 
-describe("a long chain", GATEWAYS, () => {
+describe("a long chain", LONG_CHAIN, () => {
   it("reads past one page budget a pass, the hop limit and all, and never starts over", async () => {
     const all = { FED_RESERVE: "all" };
     const a = await node("a");
@@ -515,10 +518,10 @@ describe("a long chain", GATEWAYS, () => {
     expect(counts).toEqual([500, 1000, 1200, 1200]);
     const top = (await one(a.env, "SELECT n FROM fed_seq WHERE kind = 'cache'"))!.n as number;
     expect(await mark(h4.env, "cache")).toBe(top);
-  }, 30_000);
+  });
 });
 
-describe("the edge of the mesh", GATEWAYS, () => {
+describe("the edge of the mesh", LONG_CHAIN, () => {
   it("records past the hop limit hold no mark back, start no read again, and raise no alarm", async () => {
     const all = { FED_RESERVE: "all" };
     const a = await node("a");
@@ -551,7 +554,7 @@ describe("the edge of the mesh", GATEWAYS, () => {
     clock.mockRestore();
     expect((await call(z.env, "GET", "/federation/peers", undefined, OP)).data.givenUp.count).toBe(0);
     expect(await rows(z.env, "SELECT v FROM fed_origin_gaps")).toEqual([]); // gone quietly after 30 days
-  }, 60_000);
+  });
 });
 
 describe("a restored origin", GATEWAYS, () => {

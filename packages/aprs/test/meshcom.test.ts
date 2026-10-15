@@ -168,7 +168,9 @@ describe("meshcom parser robustness (never throws, never unbounded)", () => {
   let seed = 0x12345678;
   const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
 
-  it("survives random bytes", () => {
+  // 5000 datagrams take under half a second alone and past the 5 s default on a machine whose cores other
+  // suites share
+  it("survives random bytes", { timeout: 30_000 }, () => {
     for (let i = 0; i < 5000; i++) {
       const b = Uint8Array.from({ length: Math.floor(rnd() * 300) }, () => Math.floor(rnd() * 256));
       expect(() => decodeMeshcom(b)).not.toThrow();
@@ -238,7 +240,8 @@ describe("meshcom dedup", () => {
     expect(d.offer(ev("lora", "DH1FR-1", "B1"), 0)).toBe("new");
     expect(d.offer(ev("lora", "DH1FR-1", "B1"), 1001)).toBe("new");
   });
-  it("stays bounded in memory across 1M distinct frames", { timeout: 60_000 }, () => {
+  // a million offers take about 5 s alone and over a minute on a machine whose cores other suites share
+  it("stays bounded in memory across 1M distinct frames", { timeout: 150_000 }, () => {
     const d = new MeshcomDedup({ max: 4096 });
     const e = ev("lora", "DH1FR-1", "0");
     for (let i = 0; i < 1_000_000; i++) {

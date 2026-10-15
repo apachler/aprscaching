@@ -5,6 +5,7 @@
 // FUZZ_RUNS raises the number of generated cases for a deeper local run: FUZZ_RUNS=100000 pnpm test.
 import { describe, it, expect, vi } from "vitest";
 import fc from "fast-check";
+import { cpuTimed } from "./helpers/cpu-time.js";
 import { cborDecode, cborEncode, fromCborValue, toCborValue, type CborValue } from "../src/cbor.js";
 import {
   decodeFedFrame,
@@ -22,8 +23,9 @@ import {
 const fuzzRuns = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.FUZZ_RUNS;
 const numRuns = Number(fuzzRuns) || 300;
 const run = <T>(p: fc.IProperty<T>) => fc.assert(p, { numRuns });
-// a deep run takes as long as it needs
-if (fuzzRuns) vi.setConfig({ testTimeout: 600_000 });
+// The slowest property (a fedwire record round trip) takes about half a second alone and several seconds on a
+// machine whose cores other suites share, past vitest's 5 s default. A deep run takes as long as it needs.
+vi.setConfig({ testTimeout: fuzzRuns ? 600_000 : 30_000 });
 
 const int = fc.maxSafeInteger();
 const text = fc.string({ unit: "binary", maxLength: 40 });
@@ -198,9 +200,16 @@ describe("fedwire", () => {
     run(
       fc.property(fc.integer({ min: 33, max: 100_000 }), fc.constantFrom(0x81, 0xa1), (depth, head) => {
         const b = new Uint8Array(depth + 1).fill(head);
-        const t0 = performance.now();
-        expect(() => cborDecode(b)).toThrow(Error);
-        expect(performance.now() - t0).toBeLessThan(250);
+        const { value: thrown, ms } = cpuTimed(() => {
+          try {
+            cborDecode(b);
+          } catch (e) {
+            return e;
+          }
+          return null;
+        });
+        expect(thrown).toBeInstanceOf(Error);
+        expect(ms).toBeLessThan(250);
       }),
     );
   });

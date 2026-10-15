@@ -45,9 +45,9 @@ function streamChunks(
   return { last, final: dec.flush() };
 }
 
-// Each case demodulates seconds of audio sample by sample: CPU-bound work that takes a few seconds on
-// a loaded CI runner, past vitest's 5 s default, so the budget is explicit.
-describe("makeStreamDecoder — incremental live decode", { timeout: 30_000 }, () => {
+// Each case demodulates seconds of audio sample by sample: CPU-bound work that takes up to 3 s alone and
+// ten times that on a machine whose cores other suites share, so the budget is explicit.
+describe("makeStreamDecoder — incremental live decode", { timeout: 120_000 }, () => {
   const preamble = "0".repeat(48);
 
   it("decodes text fed in small chunks (streaming, not batch)", () => {

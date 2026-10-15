@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Radio and APRS-IS payloads are attacker-controlled: every text scan in the decoder must run in
 // linear time, so a crafted frame cannot stall the ingest. Each case feeds a long adversarial payload
-// and requires it to decode well inside a second (a quadratic scan of the same input takes tens of
+// and requires it to decode well inside a second of CPU time (a quadratic scan of the same input takes tens of
 // seconds), with the same result a short payload gives.
 import { describe, it, expect } from "vitest";
+import { cpuTimed } from "./helpers/cpu-time.js";
 import { decodeAprs } from "../src/decode.js";
 
 const frame = (payload: string) => ({ src: "OE8APR", dst: "APRS", path: [] as string[], payload, raw: "" });
 const N = 200_000;
 
-function timed<T>(fn: () => T): { value: T; ms: number } {
-  const t0 = performance.now();
-  const value = fn();
-  return { value, ms: performance.now() - t0 };
-}
-
 describe("message number scan is linear", () => {
   it("a message body of many '{' followed by '}' decodes fast and carries no message number", () => {
-    const { value, ms } = timed(() => decodeAprs(frame(`:OE8APR   :${"{".repeat(N)}}`)) as { msgNo?: string });
+    const { value, ms } = cpuTimed(() => decodeAprs(frame(`:OE8APR   :${"{".repeat(N)}}`)) as { msgNo?: string });
     expect(ms).toBeLessThan(1000);
     expect(value.msgNo).toBeUndefined();
   });
@@ -36,7 +31,7 @@ describe("message number scan is linear", () => {
 
 describe("telemetry scan is linear", () => {
   it("a long digit run followed by a line break decodes fast", () => {
-    const { value, ms } = timed(() => decodeAprs(frame(`T#${"0".repeat(N)}\nx`)) as { analog?: number[] });
+    const { value, ms } = cpuTimed(() => decodeAprs(frame(`T#${"0".repeat(N)}\nx`)) as { analog?: number[] });
     expect(ms).toBeLessThan(1000);
     expect(value).toEqual({ kind: "telemetry", analog: [], digital: [] });
   });
@@ -66,7 +61,7 @@ describe("data extension scan is linear", () => {
       `${pos}\\000/000${"/".repeat(N)}`,
       `${pos}\\000/000/${"9".repeat(N)}`,
     ]) {
-      const { ms } = timed(() => decodeAprs(frame(payload)));
+      const { ms } = cpuTimed(() => decodeAprs(frame(payload)));
       expect(ms).toBeLessThan(1000);
     }
   });
@@ -83,7 +78,7 @@ describe("Mic-E device code scan is linear", () => {
   const mice = (payload: string) => decodeAprs({ ...frame(payload), dst: "S32U6T" }) as { comment?: string };
   it("a status text of many near-codes decodes fast", () => {
     for (const payload of [`\`(_fn"Oj/\`${"(".repeat(N)}`, `\`(_fn"Oj/'${"_|".repeat(N)}x`]) {
-      const { ms } = timed(() => mice(payload));
+      const { ms } = cpuTimed(() => mice(payload));
       expect(ms).toBeLessThan(1000);
     }
   });
@@ -104,7 +99,7 @@ describe("!DAO!, NMEA and locator scans are linear", () => {
       `>IO91SX/G ${"IO91SX/G".repeat(N)}`,
       `>${"IO91".repeat(N)}`,
     ]) {
-      const { ms } = timed(() => decodeAprs(frame(payload)));
+      const { ms } = cpuTimed(() => decodeAprs(frame(payload)));
       expect(ms).toBeLessThan(1000);
     }
   });
