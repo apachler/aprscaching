@@ -14,7 +14,7 @@ import {
   type MeshcomGroupHearing,
   type MeshcomObservation,
 } from "./meshcom.js";
-import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf } from "@aprscaching/aprs";
+import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf, rfText } from "@aprscaching/aprs";
 import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
@@ -135,6 +135,13 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // from an untrusted batch rather than stored under a callsign the signer does not hold.
   const signerBase = signer ? baseCall(signer.callsign) : null;
   const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  // An ingest posts the info field it heard one character per byte. From here on it is the text a station
+  // sent: UTF-8 where the bytes are valid UTF-8, else one character per byte. Gating and digipeating happen on
+  // the ingest, on the bytes; a signed batch was verified over the bytes above.
+  for (const p of packets) {
+    p.payload = rfText(p.payload);
+    if (p.raw !== undefined) p.raw = rfText(p.raw);
+  }
 
   const stmts: SqlStatement[] = [];
   // every fix heard, for the live fan-out and the per-station hooks; `fixes` decides what is persisted
