@@ -15,13 +15,14 @@
  */
 import net from "node:net";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
-import { Afsk1200Rx } from "@aprscaching/aprs";
+import { AfskRx } from "@aprscaching/aprs";
 import { alsaArgs, alsaHint, alsaToolsProblem, s16Reader } from "./alsa.js";
 import { stationCalls, type TxGateLookup } from "./callverify.js";
 import { describePtt, openPtt, pttProblem, type Ptt, type PttDeps, type PttSpec } from "./ptt/index.js";
 import { installPttRelease, trackPtt, untrackPtt } from "./ptt/release.js";
 import { PttWatchdog } from "./ptt/watchdog.js";
 import { soundcardPorts, type SoundcardPortSettings } from "./soundcardconfig.js";
+import { afskModem } from "./soundcard.js";
 
 export type CheckStatus = "pass" | "warn" | "fail";
 /** One result; `kind` is alsa, audio, ptt or tx, and `port` names the port (empty for alsa). */
@@ -281,7 +282,7 @@ export async function pttTest(
         ? "refused: the sound card is in use; stop the ingest first (it owns the card, the PTT and the transmit switch)"
         : `refused: cannot listen on ${p.device}: ${alsaHint("arecord", heard.error ?? null, heard.stderr)}`,
     };
-  const rx = new Afsk1200Rx(p.rate, () => {});
+  const rx = new AfskRx(p.rate, () => {}, afskModem(p.modem));
   const pcm = s16Reader()(heard.stdout);
   let busyChannel = false;
   for (let i = 0; i < pcm.length; i += 480) {

@@ -153,6 +153,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
   SOUNDCARD_RATE: "Sample rate of the soundcard port's audio",
+  SOUNDCARD_MODEM: "Soundcard modem: 1200 (Bell 202, VHF/UHF FM) or hf300 (300 baud, 1600/1800 Hz, HF SSB)",
   SOUNDCARD_TX: "1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)",
   SOUNDCARD_CALL: "Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)",
   SOUNDCARD_PTT: "How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:",
@@ -226,7 +227,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BOX_CALL: "Callsign the box transmits remote commands as",
   BOX_LAT: "Latitude of this box, in degrees: the position a remote beacon names",
   BOX_LON: "Longitude of this box, in degrees: the position a remote beacon names",
-  BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct",
+  BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct (the default on an HF port)",
   BOX_CMD_MAX_AGE: "Seconds after which a queued remote command is too old to run",
   BOX_POLL_MS: "Interval in milliseconds between remote-command polls",
   BOX_TX_BURST: "Remote transmits allowed at once before pacing applies",
@@ -834,8 +835,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`TX_GATE_GRACE` (`6` minutes; a plain number is minutes, or `30m`, `2h`; clamped to 6 minutes to 24 hours): how long the gateway's last confirmation of a station call keeps counting while the gateway cannot be reached. A call the gateway says is not verified, or not this box's operator's, closes the gate for that call at once. The gate judges each frame by the box's calls it carries, so a refused call holds back only its own frames — [Transmit gate](../run/radios/rf-ingest.md#transmit-gate)",
       ],
       [
-        "Soundcard port (1200-baud AFSK in the box; carries digi/node/BBS/IGate without a TNC)",
-        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
+        "Soundcard port (AFSK in the box, 1200 or 300 baud; carries digi/node/BBS/IGate without a TNC)",
+        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`), `SOUNDCARD_MODEM` (`1200`, Bell 202 for FM; `hf300`, 300 baud at 1600/1800 Hz for an SSB radio on HF, with an empty `BOX_TX_PATH` and a 500 ms TXDELAY unless set); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
       ],
       [
         "Meshtastic (licensed nodes only)",
@@ -876,7 +877,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "APRS-IS uplink (answers, announces, weather)",

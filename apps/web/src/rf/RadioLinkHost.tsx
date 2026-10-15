@@ -7,6 +7,7 @@
  */
 import { useEffect, useSyncExternalStore } from "react";
 import { WebSerialKiss, WebBluetoothKiss } from "./kiss.js";
+import { BELL_202, HF_300 } from "@aprscaching/aprs";
 import { WebAudioAfsk, WebSerialMeshtastic } from "./extralinks.js";
 import { fieldStation } from "./fieldStation.js";
 import { readKissTiming } from "./kissTiming.js";
@@ -40,8 +41,8 @@ export const radioLink = new RadioLinkStore(
         ? new WebSerialKiss(onFrame, onClose)
         : kind === "ble"
           ? new WebBluetoothKiss(onFrame, onClose)
-          : kind === "audio"
-            ? new WebAudioAfsk(onFrame, onClose)
+          : kind === "audio" || kind === "hf"
+            ? new WebAudioAfsk(onFrame, onClose, kind === "hf" ? HF_300 : BELL_202)
             : new WebSerialMeshtastic(onFrame, onClose),
     forward: (packets, s) =>
       s.mode === "signed" && s.callsign.length >= 3

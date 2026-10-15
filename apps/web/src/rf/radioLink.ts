@@ -26,12 +26,13 @@ import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
 import { aprsTxNote, type TxEntry, type TxFeature, type TxNote } from "./txLog.js";
 import { KISS_TIMING_DEFAULTS, type KissTiming } from "./kissTiming.js";
 
-export type LinkKind = "serial" | "ble" | "audio" | "mesh";
+export type LinkKind = "serial" | "ble" | "audio" | "hf" | "mesh";
 
 export const LINK_LABEL: Record<LinkKind, string> = {
   serial: "USB radio",
   ble: "Bluetooth radio",
   audio: "Soundcard (AFSK)",
+  hf: "Soundcard (HF 300 baud)",
   mesh: "Meshtastic node",
 };
 
@@ -434,7 +435,7 @@ export class RadioLinkStore {
 /** The transmit state in a word: open, off (the operator's choice or a receive-only link) or locked (unverified). */
 export function txWord(s: Pick<RadioState, "link" | "verified" | "txOn">): "TX on" | "RX only" | "TX locked" {
   if (!s.verified) return "TX locked";
-  if (s.link === "audio" || s.link === "mesh" || !s.txOn) return "RX only";
+  if (s.link === "audio" || s.link === "hf" || s.link === "mesh" || !s.txOn) return "RX only";
   return "TX on";
 }
 

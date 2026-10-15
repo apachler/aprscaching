@@ -2,6 +2,7 @@
 // The box-side remote-control poller: lease → execute → ack, and the box's own transmit gates
 // (opt-in, own station call, command age, rate limit) that hold even when the gateway let a command through.
 import { describe, it, expect } from "vitest";
+import { decodeMicE } from "@aprscaching/aprs";
 import {
   BoxPoller,
   parseBoxPath,
@@ -59,6 +60,41 @@ describe("remote transmit", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ src: "OE8APR-7", dst: "APZACG", path: ["WIDE1-1", "WIDE2-1"] });
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
+  });
+
+  it("on an HF radio: a Mic-E beacon with no path, the comment on every fourth, at most one in 10 min", async () => {
+    const sent: Sent[] = [];
+    const radio = {
+      hf: true,
+      send: (f: Sent) => {
+        sent.push(f);
+        return true;
+      },
+    };
+    const { poller, nowSec, advance } = setup({ radio, path: [], refillSec: 1 });
+    const beacon = () =>
+      poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { comment: "QRV 30m", symbol: "/-" } }));
+    for (let i = 0; i < 5; i++) {
+      expect(await beacon()).toMatchObject({ status: "done", position: { lat: 47.07, lon: 15.42 } });
+      const tooSoon = await beacon();
+      expect(tooSoon).toMatchObject({ status: "failed" });
+      expect(tooSoon.result).toMatch(/at most every 10 min; the next in 10 min/);
+      advance(600_000);
+    }
+    expect(sent).toHaveLength(5);
+    for (const f of sent) {
+      expect(f.path).toEqual([]);
+      const fix = decodeMicE(f.dst, f.payload)!;
+      expect(fix.lat).toBeCloseTo(47.07, 3);
+      expect(fix).toMatchObject({ code: "-", messageType: "In Service" });
+    }
+    expect(sent.map((f) => decodeMicE(f.dst, f.payload)!.comment)).toEqual([
+      "QRV 30m",
+      undefined,
+      undefined,
+      undefined,
+      "QRV 30m",
+    ]);
   });
 
   it("refuses a beacon when the box has no configured position", async () => {

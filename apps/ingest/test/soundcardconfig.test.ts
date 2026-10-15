@@ -3,7 +3,7 @@
 // MAC), and the doctor's checks and PTT test, all against fakes.
 import { describe, it, expect, vi } from "vitest";
 import { createHmac } from "node:crypto";
-import { encodeAx25, modulateAfsk1200 } from "@aprscaching/aprs";
+import { encodeAx25, modulateAfsk } from "@aprscaching/aprs";
 import { validateConfig } from "@aprscaching/shared";
 import { soundcardPorts } from "../src/soundcardconfig.js";
 import {
@@ -33,6 +33,7 @@ describe("soundcardPorts", () => {
         device: "plughw:1,0",
         playback: "plughw:1,0",
         rate: 48000,
+        modem: "1200",
         tx: false,
         ptt: { kind: "none" },
         call: "OE8APR-10",
@@ -91,8 +92,28 @@ describe("soundcardPorts", () => {
     });
   });
 
+  it("SOUNDCARD_MODEM=hf300 picks the 300-baud HF modem and a longer TXDELAY, unless one is set", () => {
+    const ports = soundcardPorts({
+      SOUNDCARD_DEVICE: "plughw:1,0",
+      SOUNDCARD_MODEM: "hf300",
+      SOUNDCARD_PORTS: JSON.stringify([
+        { name: "vhf", device: "plughw:2,0", modem: "1200" },
+        { name: "hf2", device: "plughw:3,0", txDelayMs: 250 },
+      ]),
+    });
+    expect(ports.map((p) => [p.name, p.modem, p.txDelayMs])).toEqual([
+      ["1", "hf300", 500],
+      ["vhf", "1200", 300],
+      ["hf2", "hf300", 250],
+    ]);
+    const [set] = soundcardPorts({ SOUNDCARD_DEVICE: "a", SOUNDCARD_MODEM: "hf300", SOUNDCARD_TXDELAY_MS: "200" });
+    expect(set).toMatchObject({ modem: "hf300", txDelayMs: 200 });
+  });
+
   it.each([
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_RATE: "8000" }, /SOUNDCARD_RATE/],
+    [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_MODEM: "9600" }, /SOUNDCARD_MODEM: expected 1200 or hf300/],
+    [{ SOUNDCARD_PORTS: '[{"device":"a","modem":"300"}]' }, /SOUNDCARD_PORTS\[0\]\.modem/],
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_PTT: "cm108:/dev/hidraw0:12" }, /GPIO must be/],
     [{ SOUNDCARD_PORTS: "{}" }, /JSON array/],
     [{ SOUNDCARD_PORTS: "[{}]" }, /SOUNDCARD_PORTS\[0\]\.device/],
@@ -540,7 +561,7 @@ describe("PTT test", () => {
     if (what === "card-in-use")
       return { status: 1, stdout: Buffer.alloc(0), stderr: "arecord: audio open error: Device or resource busy" };
     if (what === "silence") return { status: 0, stdout: Buffer.alloc(rate * 2), stderr: "" };
-    const pcm = modulateAfsk1200(encodeAx25({ src: "OE3XYZ", dst: "APRS", payload: ">talking" }), rate, { flags: 100 });
+    const pcm = modulateAfsk(encodeAx25({ src: "OE3XYZ", dst: "APRS", payload: ">talking" }), rate, { flags: 100 });
     return { status: 0, stdout: Buffer.from(new Int16Array(pcm.map((v) => Math.round(v * 16000))).buffer), stderr: "" };
   };
 

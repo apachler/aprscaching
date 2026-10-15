@@ -141,6 +141,7 @@ TX_GATE_GRACE	string	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	How long
 SOUNDCARD_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port	
 SOUNDCARD_PLAYBACK	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA playback device of the soundcard port (blank: the capture device)	
 SOUNDCARD_RATE	enum	ingest	48000	44100|48000	0	0	selfhost,baremetal,ingest-box,pocket	Sample rate of the soundcard port's audio	
+SOUNDCARD_MODEM	enum	ingest	1200	1200|hf300	0	0	selfhost,baremetal,ingest-box,pocket	Soundcard modem: 1200 (Bell 202, VHF/UHF FM) or hf300 (300 baud, 1600/1800 Hz, HF SSB)	
 SOUNDCARD_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)	
 SOUNDCARD_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)	
 SOUNDCARD_PTT	string	ingest	none		0	0	selfhost,baremetal,ingest-box,pocket	How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:	
@@ -214,7 +215,7 @@ BOX_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows 
 BOX_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box transmits remote commands as	
 BOX_LAT	number	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Latitude of this box, in degrees: the position a remote beacon names	
 BOX_LON	number	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Longitude of this box, in degrees: the position a remote beacon names	
-BOX_TX_PATH	list	ingest	WIDE1-1,WIDE2-1		0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for remote transmits; blank sends direct	
+BOX_TX_PATH	list	ingest	WIDE1-1,WIDE2-1		0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for remote transmits; blank sends direct (the default on an HF port)	
 BOX_CMD_MAX_AGE	int	ingest	900		0	0	selfhost,baremetal,ingest-box,pocket	Seconds after which a queued remote command is too old to run	
 BOX_POLL_MS	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between remote-command polls	
 BOX_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	Remote transmits allowed at once before pacing applies	

@@ -323,6 +323,7 @@ export const CONFIG_KEYS = {
   SOUNDCARD_DEVICE: { type: "string", units: ["ingest"] },
   SOUNDCARD_PLAYBACK: { type: "string", units: ["ingest"] },
   SOUNDCARD_RATE: { type: "enum", units: ["ingest"], default: "48000", values: ["44100", "48000"] },
+  SOUNDCARD_MODEM: { type: "enum", units: ["ingest"], default: "1200", values: ["1200", "hf300"] },
   SOUNDCARD_TX: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
   SOUNDCARD_CALL: { type: "call", units: ["ingest"] },
   SOUNDCARD_PTT: { type: "string", units: ["ingest"], default: "none" },
