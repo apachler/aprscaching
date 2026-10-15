@@ -67,6 +67,12 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IMPORT_ALLOW: "Comma-separated import sources whose permission the operator holds (wwff, iota, gcau)",
   SERVICE_CALL: "The instance's on-air call for radio commands and mail; default the sysop's call -15",
   RADIO_REPLIES: "1 sends a text reply to each FOUND, DNF and NOTE radio command",
+  CACHE_OBJECTS: "1 sends the caches near the transmitting box on air as APRS objects",
+  CACHE_OBJECTS_BOX: "The ingest box (its BOX_ID) whose radio sends the cache objects",
+  CACHE_OBJECTS_RADIUS_KM: "Only caches this close to the transmitting box go on air",
+  CACHE_OBJECTS_INTERVAL_MIN: "Minutes between repeats of one cache object once its first announcements are out",
+  CACHE_OBJECTS_PER_RUN: "Cache objects sent in one five-minute run, at most",
+  CACHE_OBJECTS_PATH: "The digipeater path of cache objects: none, or WIDE1-1 at most",
   API_RATE_WINDOW_SEC: "Length of the public read-API rate-limit window, in seconds",
   API_RATE_ANON: "Read-API requests per window without a key",
   API_RATE_KEYED: "Read-API requests per window with a free key",
@@ -156,6 +162,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
   SOUNDCARD_RATE: "Sample rate of the soundcard port's audio",
+  SOUNDCARD_MODEM: "Soundcard modem: 1200 (Bell 202, VHF/UHF FM) or hf300 (300 baud, 1600/1800 Hz, HF SSB)",
   SOUNDCARD_TX: "1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)",
   SOUNDCARD_CALL: "Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)",
   SOUNDCARD_PTT: "How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:",
@@ -229,7 +236,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BOX_CALL: "Callsign the box transmits remote commands as",
   BOX_LAT: "Latitude of this box, in degrees: the position a remote beacon names",
   BOX_LON: "Longitude of this box, in degrees: the position a remote beacon names",
-  BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct",
+  BOX_TX_PATH: "Digipeater path for remote transmits; blank sends direct (the default on an HF port)",
   BOX_CMD_MAX_AGE: "Seconds after which a queued remote command is too old to run",
   BOX_POLL_MS: "Interval in milliseconds between remote-command polls",
   BOX_TX_BURST: "Remote transmits allowed at once before pacing applies",
@@ -438,6 +445,24 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`)",
         "off",
       ],
+      [
+        "`CACHE_OBJECTS`",
+        "`1` sends the caches near the transmitting ingest box on air as APRS objects with the point-of-interest symbol, from the service call, through that box's radio and its transmit gates; never through APRS-IS ([Caches on air](../run/radios/caches-on-air.md))",
+        "off",
+      ],
+      ["`CACHE_OBJECTS_BOX`", "The `BOX_ID` of the ingest box whose radio sends the cache objects", "—"],
+      [
+        "`CACHE_OBJECTS_RADIUS_KM`",
+        "Only active caches this many kilometres or closer to the transmitting box's own position (`BOX_LAT`, `BOX_LON`) go on air, 1–50",
+        "`20`",
+      ],
+      [
+        "`CACHE_OBJECTS_INTERVAL_MIN`",
+        "Minutes between repeats of one cache object once its first announcements are out (at once, then 5, 10 and 20 minutes apart), 30–240",
+        "`30`",
+      ],
+      ["`CACHE_OBJECTS_PER_RUN`", "Cache objects sent in one five-minute run, at most, 1–5", "`2`"],
+      ["`CACHE_OBJECTS_PATH`", "The digipeater path of cache objects: `none`, or `WIDE1-1`", "`none`"],
     ],
   },
   {
@@ -823,8 +848,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`TX_GATE_GRACE` (`6` minutes; a plain number is minutes, or `30m`, `2h`; clamped to 6 minutes to 24 hours): how long the gateway's last confirmation of a station call keeps counting while the gateway cannot be reached. A call the gateway says is not verified, or not this box's operator's, closes the gate for that call at once. The gate judges each frame by the box's calls it carries, so a refused call holds back only its own frames — [Transmit gate](../run/radios/rf-ingest.md#transmit-gate)",
       ],
       [
-        "Soundcard port (1200-baud AFSK in the box; carries digi/node/BBS/IGate without a TNC)",
-        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
+        "Soundcard port (AFSK in the box, 1200 or 300 baud; carries digi/node/BBS/IGate without a TNC)",
+        "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`), `SOUNDCARD_MODEM` (`1200`, Bell 202 for FM; `hf300`, 300 baud at 1600/1800 Hz for an SSB radio on HF, with an empty `BOX_TX_PATH` and a 500 ms TXDELAY unless set); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
       ],
       [
         "Meshtastic (licensed nodes only)",
@@ -865,7 +890,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "APRS-IS uplink (answers, announces, weather)",
@@ -1005,6 +1030,7 @@ export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
   accounts: "Accounts & API",
   retention: "Privacy & retention",
   imports: "Imports & data sources",
+  radio: "Caches on air",
   federation: "Federation",
   tools: "Tools",
   imprint: "Imprint & contact",
@@ -1081,6 +1107,18 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   },
   UPDATE_CHECK: { label: "Look for new releases", hint: "Ask GitHub once a day whether a newer release is out" },
   HIDE_DAILY_LIMIT: { label: "Hides per day", hint: "New caches one account may hide in 24 hours; 0 lifts the limit" },
+  CACHE_OBJECTS: {
+    label: "Send caches as APRS objects",
+    hint: "Nearby radios and maps show the caches around your box; sent by its radio, never through APRS-IS",
+  },
+  CACHE_OBJECTS_BOX: { label: "Transmitting box", hint: "The BOX_ID of the ingest box whose radio sends them" },
+  CACHE_OBJECTS_RADIUS_KM: { label: "Radius", hint: "Only caches this close to the box's own position go on air" },
+  CACHE_OBJECTS_INTERVAL_MIN: {
+    label: "Repeat every",
+    hint: "How often one cache is repeated once its first few announcements are out",
+  },
+  CACHE_OBJECTS_PER_RUN: { label: "Objects per run", hint: "The most objects sent in one five-minute run" },
+  CACHE_OBJECTS_PATH: { label: "Path", hint: "No digipeater, or WIDE1-1 for one hop: never a wide path" },
 };
 
 /** The labels of the RETENTION fields. */

@@ -1,6 +1,6 @@
 # Soundcard port
 
-This page sets up a soundcard port: the ingest box itself is the 1200-baud APRS modem, with a USB sound card
+This page sets up a soundcard port: the ingest box itself is the APRS modem (1200 baud, or 300 baud on HF), with a USB sound card
 or a Raspberry Pi sound HAT between it and the radio, and no TNC. It is for the sysop who runs the box. At the
 end the box decodes what the radio hears and, once you allow it, transmits through it.
 
@@ -77,7 +77,8 @@ SOUNDCARD_DEVICE=plughw:1,0
 ```
 
 `SOUNDCARD_PLAYBACK` names a different playback device when the card has one; by default the port plays on
-the capture device. `SOUNDCARD_RATE` is `48000` (default) or `44100`.
+the capture device. `SOUNDCARD_RATE` is `48000` (default) or `44100`. `SOUNDCARD_MODEM` is `1200` (default,
+Bell 202 for an FM radio) or `hf300`, 300 baud for an SSB radio on 30 m ([HF APRS on 30 m](hf.md)).
 
 **In Docker**, pass the sound devices into the ingest container. In `deploy/compose.ingest-only.yml` (or
 `deploy/docker-compose.yml`), on the ingest service:
@@ -288,17 +289,17 @@ The port checks the gate when a function hands over a frame and again at the mom
 ## Several ports
 
 `SOUNDCARD_PORTS` adds ports, as a JSON array of objects with the same fields in short form: `device`
-(required), `name`, `playback`, `rate`, `tx`, `ptt`, `call`, `txDelayMs`, `txTailMs`, `persist`, `slotTimeMs`,
+(required), `name`, `playback`, `rate`, `modem`, `tx`, `ptt`, `call`, `txDelayMs`, `txTailMs`, `persist`, `slotTimeMs`,
 `pttMaxMs`, `txLevel` and `dutyPct`.
 
 ```
 SOUNDCARD_PORTS=[{"name":"uhf","device":"plughw:2,0","tx":true,"ptt":"cm108:/dev/hidraw1:3"}]
 ```
 
-A further port takes its rate, timing, level and call from the `SOUNDCARD_*` settings unless it sets its own,
-but never `tx` or `ptt`. Each port has its own PTT, watchdog and duty cycle.
+A further port takes its rate, modem, timing, level and call from the `SOUNDCARD_*` settings unless it sets its
+own, but never `tx` or `ptt`. Each port has its own PTT, watchdog and duty cycle.
 
-- **Digipeater**: repeats on the port that heard the frame. One duplicate window covers every port, so two
+- **Digipeater**: repeats on the port that heard the frame, except an HF port: HF has no digipeaters. One duplicate window covers every port, so two
   ports on the same frequency never both repeat a frame.
 - **IGate**: sends a message to RF on the port that last heard its addressee.
 - **Remote box, packet node, BBS and FBB forwarding**: use the first radio, the KISS TNC when there is one,

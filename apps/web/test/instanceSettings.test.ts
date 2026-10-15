@@ -8,6 +8,7 @@ import {
   defaultText,
   draftOf,
   encodeDraft,
+  foldedBy,
   groupStatus,
   isDirty,
   matches,
@@ -30,6 +31,7 @@ const base: SiteSettingView = {
   options: null,
   format: null,
   maxLength: null,
+  gate: null,
   fields: null,
   default: "5",
   value: "5",
@@ -37,6 +39,16 @@ const base: SiteSettingView = {
   stored: null,
 };
 const of = (o: Partial<SiteSettingView>): SiteSettingView => ({ ...base, ...o });
+
+describe("a setting under a master switch", () => {
+  it("folds away while the switch is off and shows once it is on", () => {
+    const master = of({ key: "CACHE_OBJECTS", type: "enum", control: "switch", value: "0" });
+    const radius = of({ key: "CACHE_OBJECTS_RADIUS_KM", gate: "CACHE_OBJECTS" });
+    expect(foldedBy(radius, [master, radius])?.key).toBe("CACHE_OBJECTS");
+    expect(foldedBy(radius, [{ ...master, value: "1" }, radius])).toBeNull();
+    expect(foldedBy(master, [master, radius])).toBeNull();
+  });
+});
 
 describe("the control of a setting", () => {
   it("follows its type and format", () => {

@@ -2,6 +2,7 @@
 // The box-side remote-control poller: lease → execute → ack, and the box's own transmit gates
 // (opt-in, own station call, command age, rate limit) that hold even when the gateway let a command through.
 import { describe, it, expect } from "vitest";
+import { decodeMicE } from "@aprscaching/aprs";
 import {
   BoxPoller,
   parseBoxPath,
@@ -59,6 +60,41 @@ describe("remote transmit", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ src: "OE8APR-7", dst: "APZACG", path: ["WIDE1-1", "WIDE2-1"] });
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
+  });
+
+  it("on an HF radio: a Mic-E beacon with no path, the comment on every fourth, at most one in 10 min", async () => {
+    const sent: Sent[] = [];
+    const radio = {
+      hf: true,
+      send: (f: Sent) => {
+        sent.push(f);
+        return true;
+      },
+    };
+    const { poller, nowSec, advance } = setup({ radio, path: [], refillSec: 1 });
+    const beacon = () =>
+      poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { comment: "QRV 30m", symbol: "/-" } }));
+    for (let i = 0; i < 5; i++) {
+      expect(await beacon()).toMatchObject({ status: "done", position: { lat: 47.07, lon: 15.42 } });
+      const tooSoon = await beacon();
+      expect(tooSoon).toMatchObject({ status: "failed" });
+      expect(tooSoon.result).toMatch(/at most every 10 min; the next in 10 min/);
+      advance(600_000);
+    }
+    expect(sent).toHaveLength(5);
+    for (const f of sent) {
+      expect(f.path).toEqual([]);
+      const fix = decodeMicE(f.dst, f.payload)!;
+      expect(fix.lat).toBeCloseTo(47.07, 3);
+      expect(fix).toMatchObject({ code: "-", messageType: "In Service" });
+    }
+    expect(sent.map((f) => decodeMicE(f.dst, f.payload)!.comment)).toEqual([
+      "QRV 30m",
+      undefined,
+      undefined,
+      undefined,
+      "QRV 30m",
+    ]);
   });
 
   it("refuses a beacon when the box has no configured position", async () => {
@@ -241,7 +277,7 @@ describe("poll loop", () => {
     const gw = fakeGateway([cmd({ id: 7, kind: "status" }), cmd({ id: 8, kind: "tx", payload: { on: false } })]);
     const { poller, state } = setup({ fetch: gw.f });
     await poller.tick();
-    expect(gw.calls[0]).toBe("GET http://gw/api/box/pi-home/commands?tx=1&rf=1&meshcom=");
+    expect(gw.calls[0]).toBe("GET http://gw/api/box/pi-home/commands?tx=1&rf=1&meshcom=&lat=47.07000&lon=15.42000");
     expect(gw.acks).toEqual([
       expect.objectContaining({ id: 7, status: "done" }),
       { id: 8, status: "done", result: "transmit off" },
@@ -409,10 +445,56 @@ describe("answers to radio commands", () => {
     const { poller, state } = setup({
       meshcom: { nodes: [{ ip: "1", call: "oe8apr-12" }, { ip: "2" }], send: async () => ({ ok: true }) },
     });
-    expect(poller.capsQuery()).toBe("tx=1&rf=1&meshcom=OE8APR-12");
+    // where the box stands rides only while it takes remote transmits
+    expect(poller.capsQuery()).toBe("tx=1&rf=1&meshcom=OE8APR-12&lat=47.07000&lon=15.42000");
+    expect(setup({ position: undefined }).poller.capsQuery()).toBe("tx=1&rf=1&meshcom=");
     state.tx = false;
     expect(poller.capsQuery()).toBe("tx=0&rf=1&meshcom=OE8APR-12");
     expect(setup({ remoteTx: false, radio: null }).poller.capsQuery()).toBe("tx=0&rf=0&meshcom=");
+  });
+});
+
+describe("cache objects", () => {
+  const object = (payload: Record<string, unknown>, nowSec: number) =>
+    cmd({
+      kind: "object",
+      callsign: "OE8APR-15",
+      createdAt: nowSec,
+      payload: { name: "AC-1", lat: 47.08, lon: 15.43, comment: "Old mill", alive: true, path: [], ...payload },
+    });
+
+  it("sends a live or killed object near the box with the point-of-interest symbol, on the path it names", async () => {
+    const { poller, sent, nowSec } = setup();
+    expect(await poller.execute(object({}, nowSec()))).toMatchObject({
+      status: "done",
+      result: "object AC-1 sent as OE8APR-15",
+    });
+    expect(sent[0]).toMatchObject({ src: "OE8APR-15", dst: "APZACG", path: [] });
+    expect(sent[0]!.payload).toMatch(/^;AC-1 {5}\*\d{6}z\\.{8}i {2}!Old mill$/);
+    expect((await poller.execute(object({ alive: false, path: ["wide1-1"] }, nowSec()))).status).toBe("done");
+    expect(sent[1]).toMatchObject({ path: ["WIDE1-1"] });
+    expect(sent[1]!.payload.slice(0, 11)).toBe(";AC-1     _");
+  });
+
+  it("refuses a wide path, an object far from the box, a bad name and a box with no position", async () => {
+    const { poller, sent, nowSec } = setup();
+    const r = (p: Record<string, unknown>) => poller.execute(object(p, nowSec())).then((x) => x.result);
+    expect(await r({ path: ["WIDE2-2"] })).toMatch(/no path or WIDE1-1/);
+    expect(await r({ path: ["WIDE1-1", "WIDE2-1"] })).toMatch(/no path or WIDE1-1/);
+    expect(await r({ lat: 48.2, lon: 16.37 })).toMatch(/more than 50 km/);
+    expect(await r({ name: "AC-1234567" })).toMatch(/name/);
+    expect((await setup({ position: undefined }).poller.execute(object({}, nowSec()))).result).toMatch(/BOX_LAT/);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("passes the box's own transmit gates: its station call, remote transmit and the switch", async () => {
+    const { poller, nowSec, state } = setup();
+    expect((await poller.execute({ ...object({}, nowSec()), callsign: "OE6ABC-15" })).result).toMatch(
+      /not this box's station call/,
+    );
+    state.tx = false;
+    expect((await poller.execute(object({}, nowSec()))).result).toMatch(/switched off/);
+    expect((await setup({ remoteTx: false }).poller.execute(object({}, nowSec()))).result).toMatch(/BOX_TX=1/);
   });
 });
 

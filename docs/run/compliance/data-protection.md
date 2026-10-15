@@ -128,6 +128,7 @@ signed account-move record points attribution at the new instance across the net
 | Callsign claims and the holder-change trail | 1 year after the claim ends or the change | fixed |
 | Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
+| An excluded station's record: the callsign, the reason and the date | until the sysop lifts the exclusion | — |
 | A member's own tool registries, and the copies of their files the instance fetched for them | until the member removes them or is erased; a copy is refreshed hourly while in use | `TOOL_REGISTRIES_PLAYERS`, `TOOL_REGISTRIES_PROXY` |
 | Database backups | 30 days in `BACKUP_DIR`; a bucket by its lifecycle rule | `BACKUP_RETENTION_DAYS` |
 
@@ -170,6 +171,24 @@ They never federate.
   category, the reporter's words and the reporter's call.
 - **A removal or suspension notice** goes to the person concerned as an in-app alert, by push where configured,
   and by email when the account has a confirmed address.
+
+## A licensee's objection
+
+Stations heard on the air are processed under the operator's legitimate interest (GDPR Art. 6(1)(f)), with or
+without an account here, and the privacy notice says so. A station's licensee may object (Art. 21). Answer an
+objection by excluding the callsign under **Instance admin → Excluded stations**
+([Exclude a station](../day-to-day/moderation.md#exclude-a-station)):
+
+- what the instance holds of the station's own transmissions is deleted at once, under every SSID of the call;
+- what the station sends later is neither stored nor shown, on the live map, in the Shack, in the read API or in
+  the heard stream;
+- another station's packet that only names the call in its path or as an addressee is that station's, and stays;
+- federation carries no station data, so peers neither receive nor return it.
+
+The privacy notice promises this exclusion. To honour the objection the instance keeps the callsign, the reason
+(an objection, an erasure request or another) and the date, nothing else. That record is outside export and
+erasure, also legitimate interest, and stays until you lift the exclusion. The exclusion leaves accounts, finds
+and caches alone: a member who holds the call has their own export and erasure.
 
 ## Erasure across the network
 

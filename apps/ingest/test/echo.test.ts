@@ -4,7 +4,7 @@
 // receiving site never attests what the box itself sent.
 import { describe, it, expect, afterEach } from "vitest";
 import net from "node:net";
-import { encodeAx25, kissWrap, modulateAfsk1200 } from "@aprscaching/aprs";
+import { encodeAx25, kissWrap, modulateAfsk } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import { KissTnc } from "../src/kiss.js";
 import { SoundcardPort, type SoundcardConfig } from "../src/soundcard.js";
@@ -39,7 +39,7 @@ const frame = { src: "OE8APR-10", dst: "APZACG", path: ["WIDE1-1"], payload: ">b
 const other = { ...frame, src: "OE3XYZ-9", payload: ">another station" };
 const afsk = (f: typeof frame) =>
   Buffer.from(
-    new Int16Array(modulateAfsk1200(encodeAx25(f), 48000, { flags: 40 }).map((v) => Math.round(v * 16000))).buffer,
+    new Int16Array(modulateAfsk(encodeAx25(f), 48000, { flags: 40 }).map((v) => Math.round(v * 16000))).buffer,
   );
 
 /** A KISS TNC on a local socket: records what the box writes, and plays frames its radio hears. */

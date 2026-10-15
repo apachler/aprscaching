@@ -16,7 +16,7 @@ your radio hears, shows it live, and can pass it on to an instance.
 |---|---|---|
 | A USB [KISS](../glossary.md#kiss) [TNC](../glossary.md#tnc), or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
 | A Bluetooth Low Energy KISS TNC, such as a Mobilinkd TNC3 or TNC4 | **Connect Bluetooth** | Finds TNCs that offer the BLE KISS service (Mobilinkd, many LoRa APRS trackers) or the Nordic UART service |
-| Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | A software modem: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only |
+| Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | A software modem: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only. **Soundcard HF**, under **Other APRS channels**, decodes 300-baud HF APRS from an SSB radio on 10.1476 MHz USB |
 | A [Meshtastic](../glossary.md#meshtastic) node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed mode on, callsign as long name) and shows them under their callsign; licence-free nodes are ignored. Receive only |
 
 The page shows only the buttons your browser supports, and a line under them names the links it lacks. USB

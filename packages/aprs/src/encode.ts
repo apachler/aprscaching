@@ -43,6 +43,64 @@ export function encodeAprsPosition(lat: number, lon: number, symbol = "/>", comm
   return `!${degMin(lat, true)}${table}${degMin(lon, false)}${code}${rfClip(clean(comment), 43)}`;
 }
 
+/** Four base-91 digits (APRS101 §9), most significant first. */
+function base91(n: number): string {
+  let out = "";
+  for (let i = 0; i < 4; i++) {
+    out = String.fromCharCode(33 + (n % 91)) + out;
+    n = Math.floor(n / 91);
+  }
+  return out;
+}
+
+/**
+ * Compressed position without course, speed or altitude (APRS101 §9): `TYYYYXXXXC  !`. Thirteen characters
+ * against nineteen for `ddmm.mmN/dddmm.mmE`, and finer than the hundredths of a minute those carry. The space in
+ * the `c` column says the `csT` bytes carry nothing. A digit overlay goes out as `a`–`j`.
+ */
+function compressedPosition(lat: number, lon: number, table: string, code: string): string {
+  const la = Math.max(-90, Math.min(90, lat));
+  const lo = Math.max(-180, Math.min(180, lon));
+  const y = Math.min(91 ** 4 - 1, Math.round(380926 * (90 - la)));
+  const x = Math.min(91 ** 4 - 1, Math.round(190463 * (180 + lo)));
+  const t = /^[0-9]$/.test(table) ? String.fromCharCode(97 + Number(table)) : table;
+  return `${t}${base91(y)}${base91(x)}${code}  !`;
+}
+
+/** An object name: one to nine printable ASCII characters, with no leading or trailing space. */
+export const isAprsObjectName = (s: string): boolean => /^[\x21-\x7e](?:[\x20-\x7e]{0,7}[\x21-\x7e])?$/.test(s);
+
+/** What `encodeAprsObject` sends. */
+export interface AprsObjectFields {
+  /** One to nine printable ASCII characters (`isAprsObjectName`); padded to nine on air. */
+  name: string;
+  lat: number;
+  lon: number;
+  /** Table and code (`isAprsSymbol`); anything else falls back to the point of interest, `\i`. */
+  symbol?: string;
+  comment?: string;
+  /** false sends the object killed (`_`), which takes it off the maps and radios that show it. Default true. */
+  alive?: boolean;
+  /** The object's time, sent as DDHHMM zulu. Default now. */
+  at?: Date;
+}
+
+/**
+ * APRS object (APRS101 §11): `;NAME_____*DDHHMMz` + compressed position + comment. `*` is a live object, `_` a
+ * killed one. The position is compressed, the shorter form on air. The comment is cleaned and capped at 43 bytes
+ * of UTF-8. Throws on a name `isAprsObjectName` refuses, since a clipped name would address another object.
+ */
+export function encodeAprsObject(o: AprsObjectFields): string {
+  if (!isAprsObjectName(o.name)) throw new RangeError("an object name is 1-9 printable ASCII characters");
+  const sym = o.symbol && isAprsSymbol(o.symbol) ? o.symbol : "\\i";
+  const at = o.at ?? new Date();
+  const two = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${two(at.getUTCDate())}${two(at.getUTCHours())}${two(at.getUTCMinutes())}z`;
+  const pos = compressedPosition(o.lat, o.lon, sym[0]!, sym[1]!);
+  const mark = o.alive === false ? "_" : "*";
+  return `;${o.name.padEnd(9, " ")}${mark}${stamp}${pos}${rfClip(clean(o.comment ?? ""), 43)}`;
+}
+
 /**
  * APRS text message: `:ADDRESSEE :text{msgNo` (addressee space-padded to 9). The message text may not
  * contain `|`, `~` or `{` (reserved); they're stripped, and it is capped at 67 bytes of UTF-8, cut between

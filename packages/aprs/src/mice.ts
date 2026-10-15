@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * mice.ts — MIC-E decode (APRS 1.2 chapter 10, "Mic-E Data Format").
+ * mice.ts — MIC-E decode and encode (APRS 1.2 chapter 10, "Mic-E Data Format").
  * MIC-E packs latitude + message bits into the AX.25 *destination* address, and
  * longitude + speed + course + symbol into the information field. Implemented from the
  * published algorithm (not derived from any third-party source).
@@ -16,6 +16,7 @@ import { isValidLatLon } from "./geo.js";
 import type { MicEDeviceCode } from "./types.js";
 import { addMinutes, extractDao } from "./dao.js";
 import { readLocator, type Locator } from "./locator.js";
+import { rfClip } from "./text.js";
 
 export interface MicEFix {
   lat: number;
@@ -234,3 +235,81 @@ function statusText(rest: string): { altitudeM?: number; comment?: string; devic
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/** The standard Mic-E messages an encoder sends. Emergency is left out: no beacon raises one by default or by slip. */
+export type MicEMessage = "Off Duty" | "En Route" | "In Service" | "Returning" | "Committed" | "Special" | "Priority";
+
+export interface MicEEncodeOpts {
+  /** Two characters, table then code (default `/>`, a car). */
+  symbol?: string;
+  speedKn?: number;
+  /** Degrees, 1–360; 0 or none is an unknown course. */
+  course?: number;
+  altitudeM?: number;
+  /** The status text, cut to fit the 43 bytes it shares with the altitude. */
+  comment?: string;
+  /** The standard message the destination carries (default `En Route`). */
+  message?: MicEMessage;
+}
+
+/**
+ * A Mic-E position (APRS 1.2 chapter 10): the destination address that carries the latitude and the message
+ * bits, and the info field that carries the longitude, speed, course, symbol and an optional altitude and status
+ * text. Nine bytes plus the status text against the nineteen of an uncompressed position, which counts on a
+ * 300-baud HF channel. Speed and course take the offset forms (`+800` knots below 200 knots, `+400` degrees) so
+ * neither byte is a control character; the longitude's hundredths and the course's last two digits may still be
+ * one, as the format allows. {@link decodeMicE} reads back what this writes.
+ */
+export function encodeMicE(lat: number, lon: number, opts: MicEEncodeOpts = {}): { dest: string; info: string } {
+  if (!isValidLatLon(lat, lon)) throw new RangeError("encodeMicE: latitude or longitude out of range");
+  const [latDeg, latHund] = degHundredths(Math.abs(lat));
+  // the longitude byte reaches 179°; 180° itself goes out as the nearest position it holds
+  const [lonDeg, lonHund] = Math.abs(lon) >= 179.99992 ? [179, 5999] : degHundredths(Math.abs(lon));
+  const latDigits = `${String(latDeg).padStart(2, "0")}${String(latHund).padStart(4, "0")}`;
+  const msgIndex = Math.max(1, STD_MSG.indexOf(opts.message ?? "En Route"));
+  const lonOffset = lonDeg < 10 || lonDeg >= 100;
+  const high = [(msgIndex >> 2) & 1, (msgIndex >> 1) & 1, msgIndex & 1, lat >= 0, lonOffset, lon < 0];
+  let dest = "";
+  for (let i = 0; i < 6; i++) dest += String.fromCharCode((high[i] ? 80 : 48) + latDigits.charCodeAt(i) - 48);
+
+  const degByte = lonDeg < 10 ? lonDeg + 90 : lonDeg < 100 ? lonDeg : lonDeg < 110 ? lonDeg - 20 : lonDeg - 100;
+  const min = Math.floor(lonHund / 100),
+    hund = lonHund % 100;
+  const speed = Math.max(0, Math.min(799, Math.round(opts.speedKn ?? 0)));
+  const course = opts.course && opts.course > 0 && opts.course <= 360 ? Math.round(opts.course) : 0;
+  const tens = Math.floor(speed / 10);
+  const ch = (v: number) => String.fromCharCode(v + 28);
+  const sym = /^[\x21-\x7e]{2}$/.test(opts.symbol ?? "") ? opts.symbol! : "/>";
+  let info =
+    "`" +
+    ch(degByte) +
+    ch(min < 10 ? min + 60 : min) +
+    ch(hund) +
+    ch(tens < 20 ? tens + 80 : tens) +
+    ch((speed % 10) * 10 + Math.floor(course / 100) + 4) +
+    ch(course % 100) +
+    sym[1]! +
+    sym[0]!;
+  let room = 43;
+  if (opts.altitudeM !== undefined) {
+    const v = Math.max(0, Math.min(91 ** 3 - 1, Math.round(opts.altitudeM) + 10000));
+    info += String.fromCharCode(33 + Math.floor(v / 8281), 33 + (Math.floor(v / 91) % 91), 33 + (v % 91)) + "}";
+    room -= 4;
+  }
+  let comment = (opts.comment ?? "").replace(/[\r\n\x00-\x1f\x7f]/g, "").trim();
+  // a status text that opens with a device prefix would read as one; a space keeps it text
+  if (/^[>\]`']/.test(comment)) comment = ` ${comment}`;
+  info += rfClip(comment, room);
+  return { dest, info };
+}
+
+/** Whole degrees and hundredths of a minute (0–5999), rounded, with a `60.00` minute carried into the degrees. */
+function degHundredths(v: number): [number, number] {
+  let d = Math.floor(v);
+  let h = Math.round((v - d) * 6000);
+  if (h >= 6000) {
+    d += 1;
+    h -= 6000;
+  }
+  return [d, h];
+}

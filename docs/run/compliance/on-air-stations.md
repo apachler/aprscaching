@@ -62,6 +62,9 @@ retries.
   on-air source (`}USERCALL>APZACG,…`), with your station as the sender. When you forward other operators' BBS
   mail, or carry federation records that started at their stations, you remain responsible for your country's
   third-party rules and any international agreements.
+- **Objects.** With [Caches on air](../radios/caches-on-air.md) switched on, the box sends nearby caches as
+  APRS objects from the service call: a few times when new, then every 30 minutes or less often, on no path or
+  `WIDE1-1`, and killed when the cache is archived. It is off by default.
 - **No ciphertext.** An RF binding never carries ciphertext. A field withheld for privacy, such as a cache
   owner's details under its federation scope, is dropped before it reaches the air, never encrypted onto it.
 - **No secrets.** The ingest secret, the session key, per-operator peer keys and the push (VAPID) keys

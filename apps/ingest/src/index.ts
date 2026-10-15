@@ -184,6 +184,8 @@ interface TxRadio {
   hubName: string;
   /** Raw AX.25 bytes as a KISS server client sent them, gated as going out under `call`. */
   sendRaw(frame: Uint8Array, call: string): boolean;
+  /** A 300-baud HF soundcard port. */
+  hf?: boolean;
 }
 const radios: TxRadio[] = [];
 // What the box sent on any port, so no port reports the box's own signal as a hearing (echo.ts).
@@ -307,6 +309,7 @@ if (soundcardSettings.length) {
       frameSubs,
       rawSubs,
       label: () => port.label(),
+      hf: sc.modem === "hf300",
     });
   }
   soundcardRunning = ports;
@@ -374,7 +377,7 @@ if (gateRunning)
 // with one duplicate window across ports; the IGate sends a message on the port that last heard its addressee.
 const primaryRadio = radios[0];
 if (primaryRadio) {
-  boxRadio = { send: (f) => primaryRadio.send(f), label: primaryRadio.label };
+  boxRadio = { send: (f) => primaryRadio.send(f), label: primaryRadio.label, hf: primaryRadio.hf };
   serviceLink = {
     sendFrame: (f) => primaryRadio.sendFrame(f),
     onRaw: (cb) => primaryRadio.rawSubs.push(cb),
@@ -397,6 +400,9 @@ if (primaryRadio) {
     const recentUi = new Map<string, number>();
     const recentConnected = new Map<string, number>();
     for (const radio of radios) {
+      // HF APRS has no digipeaters: a station there reaches its listeners directly, and a repeat doubles the load
+      // of a shared 300-baud channel
+      if (radio.hf) continue;
       const digi = new Digipeater(radio, { mycall: env.DIGI_CALL, aliases, recent: recentUi });
       radio.frameSubs.push((f) => {
         if (station.tx && station.digi) digi.onFrame(f);
@@ -817,7 +823,8 @@ if (env.BOX_ID) {
     radio: boxRadio,
     meshcom: meshcomTx,
     state: station,
-    path: parseBoxPath(env.BOX_TX_PATH),
+    // HF has no digipeaters: an HF radio's frames go out with no path unless BOX_TX_PATH names one
+    path: boxRadio?.hf && env.BOX_TX_PATH === undefined ? [] : parseBoxPath(env.BOX_TX_PATH),
     maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),
     pollMs: numEnv("BOX_POLL_MS", 5000, { min: 1000 }),
     ...txLimitFromEnv("box"),
