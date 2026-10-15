@@ -250,7 +250,7 @@ only when its variable is present.
 <!-- config-table:ingest-transports -->
 | Subsystem | Variables |
 |---|---|
-| KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`) |
+| KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing) |
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` (`0`, the first channel) |
 | LoRa APRS (receive only; a LoRa APRS IGate's TNC server) | `LORA_APRS_HOST` (enables the port), `LORA_APRS_PORT` (`8001`), `LORA_APRS_PROTOCOL` (`kiss`, or `text` for one TNC2 line per packet; it matches the IGate's KISS setting), `LORA_APRS_PRESET` (`standard`: BW 125 kHz, SF9, CR 4:7; `fast`: BW 125 kHz, SF8, CR 4:6; `custom`), `LORA_APRS_FREQ_MHZ` (`433.775`, IARU Region 1; `439.9125` in the UK), and for `custom`: `LORA_APRS_SF` (`9`, 7–12), `LORA_APRS_BW_KHZ` (`125`), `LORA_APRS_CR` (`7`, for 4:7; 5–8). The box does not set the modem: these say what it runs, for the status line and the airtime — [LoRa APRS](../run/radios/lora-aprs.md) |

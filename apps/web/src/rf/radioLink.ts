@@ -20,6 +20,7 @@
  * The store holds no browser globals of its own: the link factory, the forwarder and the local sink are injected,
  * so the lifecycle is testable without a radio.
  */
+import { rfBytes } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
 import { aprsTxNote, type TxEntry, type TxFeature, type TxNote } from "./txLog.js";
@@ -320,7 +321,8 @@ export class RadioLinkStore {
 
   /**
    * Transmit one frame for a part of the app. Without a grant it asks for consent first; it throws when transmit
-   * is not allowed, or when the frame names another source than the callsign the grant was given for.
+   * is not allowed, or when the frame names another source than the callsign the grant was given for. The payload
+   * is text the app originates: it goes out as UTF-8 bytes, and Recent transmissions shows the text.
    */
   async transmit(frame: TxFrame, feature: TxFeature): Promise<void> {
     if (!this.canTransmit()) await this.requestTx("bridge");
@@ -329,7 +331,7 @@ export class RadioLinkStore {
       throw new Error("transmit needs a connected radio, a verified callsign and your consent for this tab");
     const as = this.grants.bridge ?? "";
     if (frame.src.toUpperCase() !== as) throw new Error(`transmit is allowed as ${as} only`);
-    await l.send(frame);
+    await l.send({ ...frame, payload: rfBytes(frame.payload) });
     this.recordTx(aprsTxNote(frame, feature));
   }
 

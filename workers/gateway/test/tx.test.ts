@@ -24,6 +24,12 @@ describe("gated user TX payload", () => {
       error: expect.stringMatching(/67/),
     });
     expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x".repeat(67) }).ok).toBe(true);
+    // the limit counts the UTF-8 bytes the text goes out as: 34 × ü is 68 bytes
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "ü".repeat(34) }).ok).toBe(false);
+    expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "ü".repeat(33) })).toMatchObject({
+      ok: true,
+      payload: `:OE1XYZ   :${"ü".repeat(33)}`,
+    });
     expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ-123", text: "x" }).ok).toBe(false);
     expect(buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "x", msgNo: "{bad" }).ok).toBe(false);
   });

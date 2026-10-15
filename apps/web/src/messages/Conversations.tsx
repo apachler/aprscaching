@@ -7,7 +7,7 @@
  * operator's name, so sending is gated on callsign control-verification and says so before anything is typed.
  */
 import { useId, useMemo, useState } from "react";
-import { encodeAprsMessage } from "@aprscaching/aprs";
+import { encodeAprsMessage, rfByteLength } from "@aprscaching/aprs";
 import {
   getMailbox,
   getMessages,
@@ -310,7 +310,9 @@ function Compose(props: {
   const route = nowRoute(radio);
   const max = textMax(delivery, props.callsign);
   const recipient = to.trim().toUpperCase();
-  const ready = !blocked && validRecipient(recipient) && text.trim().length > 0 && text.length <= max;
+  // the limit counts the bytes the text goes out as: a letter such as ü takes two
+  const used = rfByteLength(text);
+  const ready = !blocked && validRecipient(recipient) && text.trim().length > 0 && used <= max;
 
   async function send() {
     if (!ready) return;
@@ -390,14 +392,14 @@ function Compose(props: {
       )}
       <label>
         Message{" "}
-        <span className={text.length > max ? "error" : "muted"}>
-          ({text.length}/{max})
+        <span className={used > max ? "error" : "muted"}>
+          ({used}/{max})
         </span>
         <input
           value={text}
           disabled={off}
           aria-describedby={blocked ? reasonId : undefined}
-          aria-invalid={text.length > max || undefined}
+          aria-invalid={used > max || undefined}
           onChange={(e) => setText(e.target.value)}
         />
       </label>
