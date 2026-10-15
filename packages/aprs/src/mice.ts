@@ -197,11 +197,11 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
 
 /**
  * A device code after a `` ` `` or `'` prefix: two characters, the first naming the maker's code range (`_` Yaesu,
- * `|` Byonics, `(` Anytone, `^`, `*`, `:`, `[` and `~` other makers), the second the model. The rule is the code's
+ * `|` Byonics, `(` Anytone, `^`, `*`, `:` and `[` other makers), the second the model. The rule is the code's
  * shape, not a list of models, so a model the device database adds later is stripped too. A code led by a space
  * stays in the comment: a comment ending in a word of one character has the same shape.
  */
-const MICE_CODE = /[_|(^*:[~].$/;
+const MICE_CODE = /[_|(^*:[].$/;
 
 /**
  * The Mic-E status text: an optional device prefix (`>` `]` for Kenwood, `` ` `` `'` for other makers), then

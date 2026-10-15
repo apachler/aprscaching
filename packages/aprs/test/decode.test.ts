@@ -99,7 +99,7 @@ describe("MIC-E per APRS 1.2", () => {
     expect((decodeAprs(frame(`${base}>Hi^`, "S32U6T")) as any).micEDevice).toEqual({ prefix: ">", suffix: "^" });
   });
   it("drops every maker's two-character code after a ` or ' prefix, and keeps it on the device", () => {
-    for (const code of ["(5", "|3", "^v", "*v", ":2", "[1", "~x", "_ "]) {
+    for (const code of ["(5", "|3", "^v", "*v", ":2", "[1", "_ "]) {
       const m = decodeMicE("S32U6T", `${base}'On air${code}`)!;
       expect(m.comment).toBe("On air");
       expect(m.device).toEqual({ prefix: "'", suffix: code });
