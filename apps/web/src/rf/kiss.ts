@@ -18,6 +18,7 @@ import {
   decodeAx25,
   decodeAprs,
   encodeAx25,
+  rfText,
   kissWrap,
   type ParsedFrame,
   type AprsData,
@@ -70,14 +71,15 @@ export function frameToPacket(frame: ParsedFrame, data: AprsData, atSec: number)
 }
 
 /** Decode KISS data frames into RF frames (pure; the testable core of the reader). */
-function decodeKissFrames(frames: KissFrame[], atMs: number): RfFrame[] {
+export function decodeKissFrames(frames: KissFrame[], atMs: number): RfFrame[] {
   const out: RfFrame[] = [];
   for (const k of frames) {
     if (k.command !== 0) continue; // a KISS command, not a frame
     const frame = decodeAx25(k.frame);
     if (!frame) continue;
     try {
-      const data = decodeAprs(frame);
+      // the frame keeps the bytes heard (posted as heard, re-sent unchanged); what is shown is their text
+      const data = decodeAprs({ ...frame, payload: rfText(frame.payload) });
       out.push({ frame, data, packet: frameToPacket(frame, data, Math.floor(atMs / 1000)), at: atMs });
     } catch {
       /* skip a malformed frame, keep the stream alive */
