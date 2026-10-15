@@ -7,8 +7,8 @@ layers**, and the browser remembers them.
 ## Live stations and spots
 
 Switch on **Live stations** to see APRS stations on the map as they are heard. Moving stations show a heading
-arrow. Tap a station for its page: symbol, speed and course, altitude, recent track, weather and its raw
-packets, each transmission listed once with the best route it was heard on. Signed in, **+ Add to my stations** puts it in your stations; a station already there shows **In
+arrow. Tap a station for its page: symbol, speed and course, altitude, radio range (sent, or worked out from its
+power, antenna height and gain), recent track, weather and its raw packets, each transmission listed once with the best route it was heard on. Signed in, **+ Add to my stations** puts it in your stations; a station already there shows **In
 your stations**, and the page says when another operator registered it. The button shows only for a station
 under a verified callsign on your account; for any other station the page says why it can't be added.
 

@@ -11,6 +11,12 @@ describe("ingest fix", () => {
     expect(fixOf(pkt("!4704.41N/01526.27E>hi"))).toMatchObject({ lat: 47.0735, own: true });
   });
 
+  it("carries the radio range a PHG works out to, or an RNG sends, and leaves the extension out of the comment", () => {
+    expect(fixOf(pkt("!4704.41N/01526.27E#PHG5132 hilltop"))).toMatchObject({ rangeKm: 12.8, comment: "hilltop" });
+    expect(fixOf(pkt("!4704.41N/01526.27E#RNG0050"))).toMatchObject({ rangeKm: 80.5 });
+    expect(fixOf(pkt("!4704.41N/01526.27E>hi"))?.rangeKm).toBeUndefined();
+  });
+
   it("refuses a decoded position past the poles or with minutes of 60 or more", () => {
     expect(fixOf(pkt("!9530.00N/01526.27E>"))).toBeNull();
     expect(fixOf(pkt("!4775.00N/01526.27E>"))).toBeNull();
