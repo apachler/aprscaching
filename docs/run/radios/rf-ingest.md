@@ -54,6 +54,24 @@ fit is cut between letters, never inside one.
     in `AXUDP_PEERS` or `AXIP_PEERS` lets the node send over the tunnel; transmitting on the air is a
     separate matter ([On-air legality](#on-air-legality)).
 
+### TNC timing
+
+After each connect, the box sends the KISS TNC three settings that decide when it keys the radio: TX delay,
+persist and slot time. A TNC that restarted is back on these values at the next connect. The frames key
+nothing, so the box sends them whether or not it transmits.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `KISS_TXDELAY` | `30` (300 ms) | How long the radio transmits before the data starts, in 10 ms steps. |
+| `KISS_PERSIST` | `63` (1 in 4) | The chance, (value + 1) in 256, that the TNC sends in a free slot. |
+| `KISS_SLOTTIME` | `10` (100 ms) | How long the TNC waits between tries for a free channel, in 10 ms steps. |
+
+Each value is a whole number from 0 to 255. The defaults are the APRS values that
+[My radio](../../shack/my-radio.md#set-your-tncs-timing) sends a browser-connected TNC. Direwolf applies the
+frames to the channel, in place of `TXDELAY`, `PERSIST` and `SLOTTIME` in `direwolf.conf`. Set `KISS_TIMING=off`
+to leave the TNC on its own settings: the ones in `direwolf.conf`, or a TNC whose firmware you set up yourself.
+The [soundcard port](soundcard.md) has its own `SOUNDCARD_*` timing.
+
 ## Callsigns and SSIDs
 
 Every station of yours is your callsign with its own SSID. Give each role its SSID once, and keep it:

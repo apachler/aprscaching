@@ -1197,7 +1197,14 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onTogglePin={togglePin}
               />
             )}
-            {view.kind === "app" && <ShackAppSurface app={view.id} tool={view.tool} onClose={closeView} />}
+            {view.kind === "app" && (
+              <ShackAppSurface
+                app={view.id}
+                tool={view.tool}
+                onClose={closeView}
+                onRadio={session.signedIn ? openRadio : undefined}
+              />
+            )}
             {view.kind === "station" && (
               <StationPanel picked={view.call} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
             )}

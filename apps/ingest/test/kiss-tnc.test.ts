@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // KissTnc over a real TCP socket: a frame split across reads behind a whole frame keeps its boundary, and
-// a KISS command frame is never taken for a heard frame.
+// a KISS command frame is never taken for a heard frame; the TNC is sent its timing after each connect.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import net from "node:net";
 import { encodeAx25, kissWrap } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
-import { KissTnc } from "../src/kiss.js";
+import { KissTnc, kissTimingFromEnv } from "../src/kiss.js";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((c) => c()));
@@ -64,5 +64,73 @@ describe("KissTnc connection", () => {
     tnc.start();
     cleanups.push(() => tnc["sock"]?.destroy());
     expect(spy).toHaveBeenCalledWith(true, 30_000);
+  });
+});
+
+/** A fake TNC that keeps what each connection wrote to it; `dropFirst` closes the first connection soon after. */
+async function recordingTnc(opts: { dropFirst?: boolean } = {}) {
+  const conns: number[][] = [];
+  const server = net.createServer((sock) => {
+    sock.on("error", () => {});
+    const got: number[] = [];
+    conns.push(got);
+    sock.on("data", (d: Buffer) => got.push(...d));
+    if (opts.dropFirst && conns.length === 1) setTimeout(() => sock.destroy(), 50);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  cleanups.push(() => server.close());
+  return { port: (server.address() as net.AddressInfo).port, conns };
+}
+
+const TIMING_BYTES = [0xc0, 0x01, 30, 0xc0, 0xc0, 0x02, 63, 0xc0, 0xc0, 0x03, 10, 0xc0];
+
+describe("KissTnc timing", () => {
+  it("sends TXDELAY, PERSIST and SLOTTIME after each connect, ahead of any frame", async () => {
+    const tnc0 = await recordingTnc({ dropFirst: true });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    cleanups.push(() => vi.restoreAllMocks());
+    const tnc = new KissTnc(
+      { host: "127.0.0.1", port: tnc0.port, retryMs: 50, timing: { txDelay: 30, persist: 63, slotTime: 10 } },
+      { onPacket: () => {} },
+    );
+    tnc.start();
+    cleanups.push(() => tnc["link"].stop());
+    await until(() => tnc0.conns.length >= 2 && tnc0.conns[1]!.length >= TIMING_BYTES.length);
+    expect(tnc0.conns[0]).toEqual(TIMING_BYTES);
+    expect(tnc0.conns[1]).toEqual(TIMING_BYTES);
+    expect(tnc.send({ src: "OE8APR-10", dst: "APRS", payload: ">hi" })).toBe(true);
+    await until(() => tnc0.conns[1]!.length > TIMING_BYTES.length);
+    expect(tnc0.conns[1]!.slice(TIMING_BYTES.length, TIMING_BYTES.length + 2)).toEqual([0xc0, 0x00]);
+  });
+
+  it("sends nothing when the TNC keeps its own timing", async () => {
+    const tnc0 = await recordingTnc();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    cleanups.push(() => vi.restoreAllMocks());
+    const tnc = new KissTnc({ host: "127.0.0.1", port: tnc0.port, timing: null }, { onPacket: () => {} });
+    tnc.start();
+    cleanups.push(() => tnc["link"].stop());
+    await until(() => tnc["connected"]);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(tnc0.conns).toEqual([[]]);
+  });
+});
+
+describe("kissTimingFromEnv", () => {
+  it("takes the APRS defaults when nothing is set", () => {
+    expect(kissTimingFromEnv({})).toEqual({ txDelay: 30, persist: 63, slotTime: 10 });
+  });
+
+  it("reads the three values, clamped to a byte", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    cleanups.push(() => vi.restoreAllMocks());
+    expect(
+      kissTimingFromEnv({ KISS_TIMING: "on", KISS_TXDELAY: "40", KISS_PERSIST: "300", KISS_SLOTTIME: "-1" }),
+    ).toEqual({ txDelay: 40, persist: 255, slotTime: 0 });
+  });
+
+  it("sends none with KISS_TIMING=off", () => {
+    expect(kissTimingFromEnv({ KISS_TIMING: "off", KISS_TXDELAY: "40" })).toBeNull();
+    expect(kissTimingFromEnv({ KISS_TIMING: " OFF " })).toBeNull();
   });
 });

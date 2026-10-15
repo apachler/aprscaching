@@ -106,6 +106,10 @@ APRSIS_PASSCODE	int	ingest	-1		1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS 
 APRSIS_FILTER	string	ingest,pocket	r/47.07/15.42/300		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed	
 KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Host of the KISS TNC over TCP; set it to enable the TNC	
 KISS_TNC_PORT	int	ingest,pocket	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the KISS TNC	
+KISS_TIMING	enum	ingest	on	on|off	0	0	selfhost,baremetal,ingest-box,pocket	Send the KISS TNC its timing after each connect (off keeps its own)	
+KISS_TXDELAY	int	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	TX delay sent to the KISS TNC, 0-255 in 10 ms steps	
+KISS_PERSIST	int	ingest	63		0	0	selfhost,baremetal,ingest-box,pocket	Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot	
+KISS_SLOTTIME	int	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Slot time sent to the KISS TNC, 0-255 in 10 ms steps	
 AGWPE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the AGWPE server; set it to enable AGWPE	
 AGWPE_PORT	int	ingest	8000		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the AGWPE server	
 AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port to use (0 is the first)	
