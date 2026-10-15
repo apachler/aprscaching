@@ -4,8 +4,9 @@
 //   KISS  -> AFSK -> AGWPE: our KISS TCP client keys dw-a; our AGWPE client hears it on dw-b.
 //   AGWPE -> AFSK -> KISS:  our AGWPE client keys dw-b; our KISS TCP client hears it on dw-a.
 //   IGate: a position keyed on dw-b is heard by dw-a, whose KISS client is the acs ingest; its
-//          RX-IGate must deliver it to aprsc as `<src>>APZACG,WIDE1-1,qAR,OE1ACS-10:<info>`, and a
-//          frame whose path carries RFONLY must never reach APRS-IS.
+//          RX-IGate must deliver it to aprsc as `<src>>APZACG,WIDE1-1,qAO,OE1ACS-10:<info>` (qAO: the
+//          ingest runs without IGATE_TX, a receive-only gate), and a frame whose path carries RFONLY must
+//          never reach APRS-IS.
 // Runs under tsx (imports the ingest's TS sources):
 //   pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
 import net from "node:net";
@@ -120,7 +121,8 @@ const position = {
 await deliver("RFONLY frame keyed on dw-b is heard on dw-a", agw, rfOnly, heardOnKiss);
 await deliver("position keyed on dw-b is heard on dw-a", agw, position, heardOnKiss);
 
-const want = `${position.src}>${TOCALL},WIDE1-1,qAR,${IGATE_CALL}:${position.payload}`;
+// the ingest here gates RF to APRS-IS only (no IGATE_TX), so it names itself with qAO, a receive-only gate
+const want = `${position.src}>${TOCALL},WIDE1-1,qAO,${IGATE_CALL}:${position.payload}`;
 const gated = await until(45000, async () => feed.find((l) => l.includes(position.payload)));
 ok("the ingest's IGate delivers the RF position to aprsc", !!gated, `no line with "${position.payload}" in the feed`);
 ok(
