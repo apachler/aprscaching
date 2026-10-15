@@ -92,3 +92,24 @@ export function toMaidenhead(lat: number, lon: number): string {
   const t2 = A[Math.floor((lat % 1) * 24)]!.toLowerCase();
   return `${f1}${f2}${s1}${s2}${t1}${t2}`;
 }
+
+/**
+ * The centre of a 4- or 6-character Maidenhead locator (`JN77`, `JN77sb`), letters in either case, or null when
+ * it is not one. A square is 2° × 1°, a subsquare 5′ × 2.5′ (about 6 × 4.6 km in central Europe): the centre
+ * stands for the whole cell, never for a fix.
+ */
+export function fromMaidenhead(locator: string): { lat: number; lon: number } | null {
+  const m = /^([A-R])([A-R])(\d)(\d)(?:([A-X])([A-X]))?$/.exec(locator.toUpperCase());
+  if (!m) return null;
+  const at = (c: string) => c.charCodeAt(0) - 65;
+  let lon = at(m[1]!) * 20 + Number(m[3]) * 2 - 180;
+  let lat = at(m[2]!) * 10 + Number(m[4]) - 90;
+  if (m[5]) {
+    lon += (at(m[5]) + 0.5) * (2 / 24);
+    lat += (at(m[6]!) + 0.5) * (1 / 24);
+  } else {
+    lon += 1;
+    lat += 0.5;
+  }
+  return { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 };
+}

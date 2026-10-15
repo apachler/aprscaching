@@ -13,6 +13,8 @@
  * 'A'-'K' carry only message bits, so they appear in the first three characters alone.
  */
 import { isValidLatLon } from "./geo.js";
+import { addMinutes, extractDao } from "./dao.js";
+import { readLocator, type Locator } from "./locator.js";
 
 export interface MicEFix {
   lat: number;
@@ -25,6 +27,10 @@ export interface MicEFix {
   messageType: string;
   ambiguity: number;
   comment?: string;
+  /** The datum a `!DAO!` token in the status text names. */
+  datum?: string;
+  /** A Maidenhead locator leading the status text (`IO91SX/G Hello`); the Mic-E position stays the fix. */
+  locator?: Locator;
 }
 
 // standard message table, indexed by the 3 message bits (A,B,C) read as a 3-bit number
@@ -161,7 +167,27 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
 
   const text = statusText(info.slice(9));
   if (text.altitudeM !== undefined) fix.altitudeM = text.altitudeM;
-  if (text.comment) fix.comment = text.comment;
+  let comment = text.comment ?? "";
+  const dao = extractDao(comment);
+  if (dao) {
+    fix.datum = dao.datum;
+    comment = dao.comment.trim();
+    // An ambiguous position left digits out on purpose: added precision would contradict it.
+    if (!dd.ambiguity) {
+      const daoLat = addMinutes(lat, !dd.north, dao.latMin),
+        daoLon = addMinutes(lon, dd.west, dao.lonMin);
+      if (isValidLatLon(daoLat, daoLon)) {
+        fix.lat = round(daoLat);
+        fix.lon = round(daoLon);
+      }
+    }
+  }
+  const loc = readLocator(comment);
+  if (loc) {
+    fix.locator = loc.locator;
+    comment = loc.text;
+  }
+  if (comment) fix.comment = comment;
   return fix;
 }
 
