@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: MIT
 // The Morse decoder and the session-script parser read text pasted from or received over the air, so it is
 // untrusted: each scan must run in linear time. Every case feeds a long adversarial input and
-// requires it to parse well inside a second (a quadratic scan of the same input takes tens of seconds),
+// requires it to parse well inside a second of CPU time (a quadratic scan of the same input takes tens of seconds),
 // with the result a short input gives.
 import { describe, it, expect } from "vitest";
+import { cpuTimed } from "./helpers/cpu-time.js";
 import { decodeMorse } from "../src/decoders/morse.js";
 import { parseScript } from "../src/session-script.js";
 
 const N = 200_000;
 
-function timed<T>(fn: () => T): { value: T; ms: number } {
-  const t0 = performance.now();
-  const value = fn();
-  return { value, ms: performance.now() - t0 };
-}
-
 describe("Morse word splitting", () => {
   it("a long run of spaces between letters decodes fast", () => {
-    const { value, ms } = timed(() => decodeMorse(".-" + " ".repeat(N) + "-..."));
+    const { value, ms } = cpuTimed(() => decodeMorse(".-" + " ".repeat(N) + "-..."));
     expect(ms).toBeLessThan(1000);
     expect(value).toBe("A B");
   });
@@ -36,7 +31,7 @@ describe("Morse word splitting", () => {
 
 describe("session-script waitfor timeout", () => {
   it("a long run of spaces in a waitfor pattern parses fast", () => {
-    const { value, ms } = timed(() => parseScript("waitfor a" + " ".repeat(N) + "b"));
+    const { value, ms } = cpuTimed(() => parseScript("waitfor a" + " ".repeat(N) + "b"));
     expect(ms).toBeLessThan(1000);
     expect(value).toEqual([{ op: "waitfor", text: "a" + " ".repeat(N) + "b", timeoutSec: undefined }]);
   });
