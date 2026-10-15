@@ -2,7 +2,7 @@
 // Per-instance legal pages: the imprint + privacy notice render the operator's identity from the
 // OPERATOR_* env, and show a visible not-configured warning (never silent placeholders) without it.
 import { describe, it, expect } from "vitest";
-import { handleImprintPage, handlePrivacyPage } from "../src/legal.js";
+import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "../src/legal.js";
 import type { Env } from "../src/env.js";
 
 const base = { INSTANCE: "test.instance" } as Env;
@@ -158,5 +158,60 @@ describe("legal pages", () => {
       DEVICEID_URL: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json",
     } as Env).text();
     expect(on).toContain("APRS device database</strong> (aprs-deviceid.aprsfoundation.org)");
+  });
+
+  it("terms of use name the operator, the rules and Austrian law, and link the other legal pages", async () => {
+    const res = handleTermsPage(configured);
+    const html = await res.text();
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("run by <strong>Max Mustermann</strong>");
+    expect(html).toContain("non-commercial");
+    expect(html).toContain("Fair play");
+    expect(html).toContain("Settings → Your data");
+    expect(html).toContain("Austrian law");
+    expect(html).toContain("Last changed:");
+    expect(html).toContain("/play/community/#report-a-problem");
+    for (const href of ['href="/imprint"', 'href="/privacy"']) expect(html).toContain(href);
+    expect(html).not.toContain("not configured");
+    expect(await handleTermsPage(base).text()).toContain("not configured");
+  });
+
+  it("every legal page links the terms, and the privacy notice rests Art. 6(1)(b) on them", async () => {
+    for (const h of [handleImprintPage, handlePrivacyPage, handleTermsPage])
+      expect(await h(configured).text()).toContain('href="/terms"');
+    expect(await handlePrivacyPage(configured).text()).toContain(
+      'under the <a href="/terms">terms of use</a> (Art. 6(1)(b))',
+    );
+  });
+
+  it("privacy names the transfer safeguards, and the providers they cover", async () => {
+    const bare = await handlePrivacyPage(configured).text();
+    expect(bare).toContain("EU-US Data Privacy");
+    expect(bare).toContain("(Art. 46(2)(c))");
+    expect(bare).not.toContain("tells you on request");
+    expect(bare).not.toContain("This applies to");
+    const html = await handlePrivacyPage({
+      ...configured,
+      EMAIL_API_KEY: "re_x",
+      EMAIL_FROM: "n@example.net",
+      TRUST_CF: "1",
+      HOSTING_PROVIDER: "Oracle Cloud Infrastructure (Oracle Corporation), EU region",
+    } as Env).text();
+    expect(html).toContain("This applies to Resend (United States); Cloudflare (United States); the hosting provider");
+    expect(html).toContain("even where it stores the data in an EU region");
+  });
+
+  it("privacy states the Art. 14(5)(b) notice and how a station objects", async () => {
+    const html = await handlePrivacyPage(configured).text();
+    expect(html).toContain("Art. 14(5)(b)");
+    expect(html).toContain("object by e-mail to the operator");
+  });
+
+  it("privacy states the backups' retention from BACKUP_RETENTION_DAYS", async () => {
+    expect(await handlePrivacyPage(configured).text()).toContain("when the oldest copy holding it is deleted");
+    const set = await handlePrivacyPage({ ...configured, BACKUP_RETENTION_DAYS: "14" } as Env).text();
+    expect(set).toContain("Backups are kept for 14 days, so an erased record leaves them within 14 days.");
+    const bad = await handlePrivacyPage({ ...configured, BACKUP_RETENTION_DAYS: "x" } as Env).text();
+    expect(bad).toContain("when the oldest copy holding it is deleted");
   });
 });

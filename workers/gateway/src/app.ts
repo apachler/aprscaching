@@ -76,7 +76,7 @@ import {
 import { handleWellKnownSource, handleSourceRedirect, sourceInfo } from "./source.js";
 import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
-import { handleImprintPage, handlePrivacyPage } from "./legal.js";
+import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
 import { extraOrigins, handleWebauthnOrigins, secureOrigin } from "./origins.js";
 import {
@@ -472,9 +472,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // WebAuthn related origins: the https addresses of this instance share RP_ID's passkeys
   if (p === "/.well-known/webauthn" && m === "GET") return handleWebauthnOrigins(env);
 
-  // per-instance legal pages — the operator's imprint + privacy notice (OPERATOR_* env)
+  // per-instance legal pages — the operator's imprint, privacy notice and terms of use (OPERATOR_* env)
   if (p === "/imprint" && m === "GET") return handleImprintPage(env);
   if (p === "/privacy" && m === "GET") return handlePrivacyPage(env);
+  if (p === "/terms" && m === "GET") return handleTermsPage(env);
 
   // supporter recognition + public transparency ledger — recognition only, gates nothing
   if (p === "/support" && m === "GET") return handleSupportPage(req, env);

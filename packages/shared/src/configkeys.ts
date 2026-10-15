@@ -402,7 +402,7 @@ export const CONFIG_KEYS = {
   R2_ENDPOINT: { type: "url", units: ["deploy"], shapes: ["selfhost", "baremetal", "desktop"] },
   BACKUP_RETENTION_DAYS: {
     type: "int",
-    units: ["deploy"],
+    units: ["gateway", "deploy"],
     default: "30",
     shapes: ["selfhost", "baremetal", "desktop"],
   },

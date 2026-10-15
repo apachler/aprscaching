@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * legal.ts — per-instance legal pages: the imprint (provider identification) and the privacy
- * notice. Like the AGPL §13 source link, these are obligations of WHOEVER RUNS an instance, not of
+ * legal.ts — per-instance legal pages: the imprint (provider identification), the privacy notice and the
+ * terms of use. Like the AGPL §13 source link, these are obligations of WHOEVER RUNS an instance, not of
  * the project — so they are served by the gateway and filled from the operator's site settings (Instance
  * settings, or the environment, which wins):
  *
@@ -11,10 +11,12 @@
  *   EDITORIAL_LINE     optional: the site's editorial line, on the imprint
  *   PRIVACY_AUTHORITY  optional: the supervisory authority a complaint goes to ("," separates lines)
  *   HOSTING_PROVIDER   optional: who hosts the instance and where, a recipient on the privacy notice
+ *   BACKUP_RETENTION_DAYS  the days backup.sh keeps a snapshot, stated as the backups' retention
  *
  *   GET /imprint    provider identification (ECG §5, MedienG §25, MStV where applicable)
  *   GET /privacy    the GDPR Art. 13/14 notice: each purpose with its data, legal basis and retention,
  *                   the recipients, what the browser stores, and the data subject's rights
+ *   GET /terms      the terms of use an account accepts, which the notice's Art. 6(1)(b) purposes rest on
  *
  * The privacy text states what the software ACTUALLY does, and reads every period it names from the
  * same constants and settings the nightly prune uses (retention.ts and the modules it calls), so the page
@@ -68,7 +70,7 @@ const page = (title: string, body: string): Response =>
   new Response(
     `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>${title} · APRScaching</title>${STYLE}${body}
-<p class=m><a href="/imprint">Imprint</a> · <a href="/privacy">Privacy</a> · <a href="/source" rel="noopener">Source (AGPL-3.0)</a></p>`,
+<p class=m><a href="/imprint">Imprint</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms of use</a> · <a href="/source" rel="noopener">Source (AGPL-3.0)</a></p>`,
     { headers: { "content-type": "text/html; charset=utf-8" } },
   );
 
@@ -149,8 +151,36 @@ function recipients(env: Env): string {
   instance fetches the list of APRS device names from there. The request names this instance and carries nothing
   about you.</li>`);
   return `<div class=box><ul>\n${items.join("\n")}\n</ul>
-<p>Where a recipient sits outside the EU/EEA, the operator tells you on request which safeguard (GDPR Art. 45 or
-46) covers the transfer. No data is sold, and nothing goes to advertisers or analytics services.</p></div>`;
+${transfers(env, mail?.kind === "resend")}
+<p>No data is sold, and nothing goes to advertisers or analytics services.</p></div>`;
+}
+
+/**
+ * The safeguard for transfers to providers outside the EU/EEA (GDPR Art. 13(1)(f)), naming the providers this
+ * configuration brings in. Whether a provider is certified under the Data Privacy Framework is not something
+ * the code can know, so the page states the rule for both cases.
+ */
+function transfers(env: Env, resend: boolean): string {
+  const named: string[] = [];
+  if (resend) named.push("Resend (United States)");
+  if (env.TRUST_CF === "1") named.push("Cloudflare (United States)");
+  if (setting(env, "HOSTING_PROVIDER")?.trim())
+    named.push(
+      "the hosting provider, when it is headquartered outside the EU/EEA, even where it stores the data in an EU region",
+    );
+  const who = named.length ? ` This applies to ${named.join("; ")}.` : "";
+  return `<p>A transfer to a provider headquartered or processing outside the EU/EEA rests on the EU-US Data Privacy
+Framework, an adequacy decision of the European Commission (GDPR Art. 45), where the provider is certified under
+it, and otherwise on the European Commission's standard contractual clauses (Art. 46(2)(c)).${who}</p>`;
+}
+
+/** The backups' retention in words: BACKUP_RETENTION_DAYS when it holds a whole number of days. */
+function backupKeep(env: Env): string {
+  const n = Number(env.BACKUP_RETENTION_DAYS);
+  if (!Number.isInteger(n) || n <= 0)
+    return "An erased record leaves the backups when the oldest copy holding it is deleted.";
+  const d = n === 1 ? "1 day" : `${n} days`;
+  return `Backups are kept for ${d}, so an erased record leaves them within ${d}.`;
 }
 
 /** The purposes this instance processes personal data for, each with its data, legal basis and retention. */
@@ -163,7 +193,8 @@ function purposes(env: Env): string {
 <p>Your amateur-radio callsign and the calls you hold, their control-verification, an optional e-mail address
   (only if you use e-mail sign-in or the digest), and your passkeys' public keys. Profiles are thin and opt-in;
   there is no name/address directory.<br>
-  <em>Legal basis:</em> providing the service you sign up for (GDPR Art. 6(1)(b)).<br>
+  <em>Legal basis:</em> providing the service you sign up for under the <a href="/terms">terms of use</a> (GDPR
+  Art. 6(1)(b)).<br>
   <em>Kept:</em> until you erase your account. The sign-in cookie expires after ${days(sessionDays)}; e-mail
   sign-in links are deleted a day after they are used, and two days after they were sent at the latest.</p>
 
@@ -172,7 +203,7 @@ function purposes(env: Env): string {
   favourites, watched caches, and media you upload. When you log a find in the app, your device's location at that
   moment is compared with the cache; only the distance and the result are kept, not the location. Photos are
   stored without the Exif, XMP or IPTC data a camera writes, such as the place the photo was taken.<br>
-  <em>Legal basis:</em> providing the service (Art. 6(1)(b)).<br>
+  <em>Legal basis:</em> providing the service under the <a href="/terms">terms of use</a> (Art. 6(1)(b)).<br>
   <em>Kept:</em> until you delete it or erase your account. Erasure replaces your callsign on your finds with a
   withdrawn marker and archives your caches, so other players' counts stay right.</p>
 
@@ -196,7 +227,12 @@ function purposes(env: Env): string {
   ${period(STATION_KEEP_S)} after last heard, or while a living cache, a registered station or a MeshCom node
   names it. Mailbox messages wait ${period(MAILBOX_TTL_SEC)} for their station and are deleted
   ${period(MAILBOX_KEEP_SEC)} after that; BBS bulletins expire after ${period(BULLETIN_LIFETIME_SEC)} unless
-  they set another expiry; personal BBS mail stays until its recipient deletes it.</p>
+  they set another expiry; personal BBS mail stays until its recipient deletes it.<br>
+  <em>Source and notice:</em> this data is not collected from you (Art. 14). Telling every station heard on the
+  air individually is impossible, or would need disproportionate effort (Art. 14(5)(b)), so this public notice
+  takes its place. A station's licensee may object by e-mail to the operator (Art. 21), who answers each
+  objection. The instance has no setting that keeps one callsign out of its station data, so what it hears from
+  that station later is stored again and deleted on the periods above.</p>
 
 <h3>Moderation</h3>
 <p>Reports players file (the item, a category, the reporter's words and, when signed
@@ -215,8 +251,8 @@ function purposes(env: Env): string {
 <h3>Security and abuse protection</h3>
 <p>Your IP address is used for each request and counted against per-address rate limits; the nightly cleanup
   deletes a counter once its window (at most a day) has ended. The gateway keeps no access log of your requests; error messages it prints go to the host's log, which the
-  operator's deployment rotates. Backup copies of the database let the operator restore the instance after a failure;
-  an erased record leaves the backups when the oldest copy holding it is deleted.<br>
+  operator's deployment rotates. Backup copies of the database let the operator restore the instance after a failure.
+  ${backupKeep(env)}<br>
   <em>Legal basis:</em> the operator's legitimate interest in a secure, available service (Art. 6(1)(f)).</p>
 </div>`;
 }
@@ -270,5 +306,59 @@ verification tier of a find is a game result.</p>
 a rented VM, a cloud instance or a phone)${
       setting(env, "HOSTING_PROVIDER")?.trim() ? "; the hosting provider is named above" : ""
     }. The operator answers questions about it at the contact above.</p>`,
+  );
+}
+
+/** The date the terms of use last changed, shown on the page; a change to their text sets it anew. */
+const TERMS_CHANGED = "15 October 2026";
+
+/** GET /terms — the terms of use an account on this instance accepts. */
+export function handleTermsPage(env: Env): Response {
+  const op = operator(env);
+  const who = op.configured
+    ? `<strong>${escapeHtml(op.name)}</strong> (see the <a href="/imprint">imprint</a>)`
+    : "its operator";
+  const contact = op.configured
+    ? `<a href="mailto:${escapeHtml(op.email)}">${escapeHtml(op.email)}</a>`
+    : "the operator's contact address";
+  return page(
+    "Terms of use",
+    `<h1>Terms of use</h1>
+${op.configured ? "" : unconfigured}
+<p class=m>Last changed: ${TERMS_CHANGED}.</p>
+<h2>The service</h2>
+<p>This APRScaching instance (${escapeHtml(env.INSTANCE ?? "unconfigured")}) is a free, non-commercial
+amateur-radio game run by ${who}. Playing costs nothing, and no feature is sold.</p>
+<h2>Your account</h2>
+<p>An account lets you hide caches, log finds, keep your settings and take part in the community. It holds the
+amateur-radio callsign a licence gave you; you sign up for yourself only, and keep your passkey and your e-mail
+access to yourself. By creating an account you accept these terms.</p>
+<h2>On the air</h2>
+<p>Anything you send on the air, from this app or from your own radio, falls under the rules of amateur radio
+and your licence. The responsibility for each transmission, and for your station, stays with you as the
+licensee.</p>
+<h2>Fair play</h2>
+<p>Log only finds you made, and do not fake a position or a verification. Use only callsigns you hold: never
+impersonate another station.</p>
+<h2>Caches, logs and photos</h2>
+<p>What you publish must be lawful and must not hold other people's personal data. Hide caches only where you
+may, with respect for property, nature and the people around them. Content that breaks these rules is taken
+down when it is reported.</p>
+<h2>Moderation</h2>
+<p>The operator may moderate, remove content and suspend accounts that break these terms. Anyone can report a
+cache, a log or a photo in the app (see
+<a href="https://apachler.github.io/aprscaching/play/community/#report-a-problem">how reports work</a>); the
+operator decides on each report.</p>
+<h2>No warranty</h2>
+<p>The service is provided as it is, without warranty and without any promise that it is available. The
+operator's liability is limited as far as Austrian law allows.</p>
+<h2>Leaving</h2>
+<p>You can erase your account at any time under <em>Settings → Your data</em>. The
+<a href="/privacy">privacy notice</a> says what happens to your data.</p>
+<h2>Changes</h2>
+<p>A change to these terms is announced on this page, with the date it takes effect. Questions go to
+${contact}.</p>
+<h2>Governing law</h2>
+<p>These terms are governed by Austrian law.</p>`,
   );
 }

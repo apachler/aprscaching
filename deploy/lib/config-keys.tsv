@@ -248,7 +248,7 @@ BACKUP_DIR	string	deploy			0	0	selfhost,baremetal,desktop	Local or mounted direc
 OCI_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	OCI Object Storage bucket for backups (needs the oci CLI)	
 BACKUP_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	S3-compatible bucket for backups; needs R2_ENDPOINT and the aws CLI	
 R2_ENDPOINT	url	deploy			0	0	selfhost,baremetal,desktop	Endpoint URL of the S3-compatible backup bucket	
-BACKUP_RETENTION_DAYS	int	deploy	30		0	0	selfhost,baremetal,desktop	Days a backup snapshot is kept	
+BACKUP_RETENTION_DAYS	int	gateway,deploy	30		0	0	selfhost,baremetal,desktop	Days a backup snapshot is kept; /privacy names it as the backups' retention	
 BACKUP_PRUNE_BUCKET	enum	deploy	0	0|1	0	0	selfhost,baremetal,desktop	1 deletes expired bucket snapshots too, for buckets with no lifecycle rule	
 BACKUP_KEEP	int	deploy	14		0	0	selfhost,baremetal,desktop	Backup archives kept in their local destination; older ones are deleted	
 CF_API_TOKEN	string	deploy			1	0	selfhost	Cloudflare API token for the CDN cache rules	

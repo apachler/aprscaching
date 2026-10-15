@@ -260,7 +260,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   OCI_BUCKET: "OCI Object Storage bucket for backups (needs the oci CLI)",
   BACKUP_BUCKET: "S3-compatible bucket for backups; needs R2_ENDPOINT and the aws CLI",
   R2_ENDPOINT: "Endpoint URL of the S3-compatible backup bucket",
-  BACKUP_RETENTION_DAYS: "Days a backup snapshot is kept",
+  BACKUP_RETENTION_DAYS: "Days a backup snapshot is kept; /privacy names it as the backups' retention",
   BACKUP_PRUNE_BUCKET: "1 deletes expired bucket snapshots too, for buckets with no lifecycle rule",
   BACKUP_KEEP: "Backup archives kept in their local destination; older ones are deleted",
   CF_API_TOKEN: "Cloudflare API token for the CDN cache rules",
@@ -936,8 +936,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`BACKUP_RETENTION_DAYS`",
-        "`deploy/backup.sh`",
-        "Snapshots in `BACKUP_DIR` older than this many days are deleted; with `BACKUP_PRUNE_BUCKET=1`, bucket snapshots too",
+        "`deploy/backup.sh`, gateway",
+        "Snapshots in `BACKUP_DIR` older than this many days are deleted; with `BACKUP_PRUNE_BUCKET=1`, bucket snapshots too. The gateway reads it as well: `/privacy` tells players that erased data leaves the backups within this many days, and unset it says only that it leaves them with the oldest copy. A bucket's lifecycle rule must expire snapshots within the same period",
         "`30`",
       ],
       [
