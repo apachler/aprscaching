@@ -8,7 +8,7 @@
  *
  * Attestation is default-deny, and it follows the path a frame took to reach the gateway:
  *   - Only a frame the attested site's own receiver heard, delivered by that site's own ingest, is first-party
- *     attested: a local TNC (KISS, AGWPE, WA8DED host mode → `tnc`) or a MeshCom node (`meshcom`) on the
+ *     attested: a local TNC (KISS, AGWPE, WA8DED host mode, a soundcard port or a LoRa APRS iGate → `tnc`) or a MeshCom node (`meshcom`) on the
  *     operator's ingest box, whose writes need INGEST_SECRET (a signed batch records `browser-rf`, whatever
  *     port it names). The ingest stamps a direct hearing with the site call as `igate_call`, the frame is
  *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`, or a station the sysop trusts in Instance admin; a site trusted through an enrolled box only for the frames that box delivered itself; attestedsites.ts). An on-air frame carries no q-construct of
@@ -73,6 +73,7 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   soundcard: "tnc",
   agwpe: "tnc",
   hostmode: "tnc",
+  "lora-aprs": "tnc",
   "webserial-kiss": "browser-rf",
   "browser-rf": "browser-rf",
   axudp: "axudp",

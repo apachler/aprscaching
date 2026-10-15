@@ -209,6 +209,11 @@ on the `meshtastic` port and are always Tier C. A Meshtastic node on USB can als
 MeshCom has its own guide: [MeshCom](meshcom.md). In short: `--extudpip <ingest box IP>` and `--extudp on`
 on the node, `MESHCOM_NODE=<node IP>=<node call>` on the ingest.
 
+## LoRa APRS
+
+LoRa APRS has its own guide: [LoRa APRS](lora-aprs.md). In short: switch on the TNC server of a CA2RXU
+LoRa_APRS_iGate, then set `LORA_APRS_HOST=<iGate IP>` and `LORA_APRS_PRESET` on the ingest.
+
 ## AXUDP and AXIP (packet over the internet)
 
 Link the ingest with other packet nodes (LinBPQ, JNOS, …) over the internet or HAMNET.
