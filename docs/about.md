@@ -48,7 +48,7 @@ open:
 | Part | Licence | Why |
 |------|---------|-----|
 | **App & gateway** — `apps/`, `workers/gateway`, `servers/`, `db/`, `tools/` | **AGPL-3.0-or-later** | A hosted network service — the AGPL §13 network-use clause keeps any *hosted* fork's source open to its users, not only redistributed copies. |
-| **Reusable libraries** — `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/tools`, `packages/shared` | **MIT** | So other amateur-radio software can embed the decoders and contracts freely. |
+| **Reusable libraries** — `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/hub`, `packages/tools`, `packages/shared` | **MIT** | So other amateur-radio software can embed the decoders and contracts freely. |
 | **Documentation** — `docs/` | **CC-BY-SA-4.0** | Free-culture share-alike for prose, specs, and diagrams. |
 
 Each file's licence is that of the unit it lives in — every source file carries an `SPDX-License-Identifier`

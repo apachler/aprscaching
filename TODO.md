@@ -158,10 +158,11 @@ transport becomes core:
       Direwolf/tfkiss partners so ONE conformance suite covers the box drivers and the shack
       drivers alike.
 
-## Station hub — parked until after launch
+## Station hub — started; the rest after launch
 
-_The box as protocol driver + universal hardware interface (owner-decided design)._ Parked: it is a
-separate product scope that carries transmit liability, and it does not advance the caching game.
+_The box as protocol driver + universal hardware interface (owner-decided design)._ The hub has started with
+its KISS-over-TCP server ([Share the box's radio](docs/run/radios/kiss-server.md)); the rest waits until after
+launch: it is a separate product scope that carries transmit liability, and it does not advance the caching game.
 
 The inversion of the transport work above: the box _consumes_ protocols; this program makes
 it also _serve_ them, so third-party packet software uses our box as its TNC/driver (the TFPCX
@@ -171,23 +172,27 @@ taps everything that flows through. Decided scope: all three southbound servers,
 shared arbitration, core hardware through PACTOR, the full rig program including re-export, the full
 PTT set, GPS, a separate hub daemon, weekly client-conformance legs, and fringe hardware last.
 
-**Architecture** — new `packages/hub` (pure protocol/driver cores, unit-testable) + a separate
-hub daemon process shipped in the same box image next to the ingest process: crash-isolated,
-restartable, talks to ingest over the existing local seam. MIT-clean like the other packages.
+**Architecture** — `packages/hub` (pure protocol/driver cores, unit-testable; MIT-clean like the other
+packages) + a separate hub daemon process shipped in the same box image next to the ingest process:
+crash-isolated, restartable, talks to ingest over the existing local seam. The cores exist (KISS client framing,
+the per-port arbiter, the client registry, `KissServerCore`); the KISS server runs inside the ingest process
+(`apps/ingest/src/hubserver.ts`) until the daemon exists, and moves into it unchanged.
 
 **Southbound servers (what 3rd-party software connects to):**
 
 - [ ] **AGWPE-TCP server** _(P1 · M)_ — the modern lingua franca (UI-View lineage, QtTermTCP,
       APRS clients): registration, monitor frames, raw frames, connected sessions.
-- [ ] **KISS-over-TCP server** _(P1 · S)_ — universal fallback every packet program speaks;
-      multi-client with per-client port filters.
+- [x] **KISS-over-TCP server** _(P1 · S)_ — universal fallback every packet program speaks;
+      multi-client with per-client port filters (single-port listeners), transmit opt-in under listed base
+      calls through the box's gate; ingest-hosted, cores in `packages/hub`.
 - [ ] **WA8DED/TF hostmode server over TCP + pty** _(P1 · M)_ — the literal TFPCX/TFKISS role for
       Paxon/LinKT-class software: channel polling, monitor headers, autobaud prompt on the pty.
 - [ ] **TNC2 command-mode emulation (`cmd:`) on telnet + pty** _(P2 · M)_ — vintage terminal
       programs get the classic prompt: C/D/MHEARD/MYCALL against our real stack.
 - [ ] **Channel arbitration + monitor fan-out** _(P1 · M)_ — shared model: every connected
       app receives RX; TX serialized through a fair per-port queue with per-app budgets; session
-      ownership tracked so connected-mode links stay coherent.
+      ownership tracked so connected-mode links stay coherent. The fan-out and the fair queue with budgets exist
+      (`packages/hub` `TxArbiter`, used by the KISS server); session ownership across servers is what's left.
 
 **Northbound hardware drivers (core hardware):**
 
@@ -219,7 +224,9 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **Client-side conformance legs in weekly `transports.yml`** _(P1 · M)_ — the mirror image
       of the interop suite: real third-party clients dial OUR servers in CI (Direwolf as AGW/KISS
       client, `call`/axcall via kissattach against our KISS-TCP, tfkiss-driven hostmode session,
-      hamlib `rigctl` against the re-export). Every server above lands with its leg.
+      hamlib `rigctl` against the re-export). Every server above lands with its leg. The KISS server's leg runs:
+      Direwolf's `kissutil` against it (`tools/interop/tests/kiss-server-loop.mjs`); `kissattach` + `axcall`
+      through a pty bridge on the kernel tier is left.
 - [ ] **Fringe hardware** _(P3 · L)_ — LoRa RNode, RX-only SDR via rtl_tcp: roadmap-listed, attempted
       opportunistically after the core hardware.
 
@@ -572,7 +579,7 @@ Considered and not planned:
         the hub's own transmit ports, a separate path.)
       - Docs: `docs/shack/rig-weather.md` (the option), `docs/run/radios/ingest-box.md` (the settings, running
         `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client's user).
-      The Station hub's parked **rigctld client** item above is the same client from the hub side.
+      The Station hub's **rigctld client** item above is the same client from the hub side.
 
 - [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
       so a dark or Phosphor app opens onto a bright map. A dark style from the same tiles would follow the

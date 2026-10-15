@@ -180,6 +180,10 @@ interface TxRadio {
   frameSubs: ((f: ParsedFrame) => void)[];
   rawSubs: ((b: Uint8Array) => void)[];
   label?: () => string;
+  /** The port's name for the KISS server: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`. */
+  hubName: string;
+  /** Raw AX.25 bytes as a KISS server client sent them, gated as going out under `call`. */
+  sendRaw(frame: Uint8Array, call: string): boolean;
 }
 const radios: TxRadio[] = [];
 // What the box sent on any port, so no port reports the box's own signal as a hearing (echo.ts).
@@ -246,6 +250,8 @@ if (env.KISS_TNC_HOST) {
     radios.push({
       send: (f) => kissOpen([f.src, ...(f.path ?? [])]) && radio.send(f),
       sendFrame: (f) => kissOpen([addrStr(f.src), ...(f.digis ?? []).map(addrStr)]) && radio.sendFrame(f),
+      hubName: kissTncPort(ch),
+      sendRaw: (frame, call) => kissOpen([call]) && radio.sendRaw(frame),
       frameSubs,
       rawSubs,
       ...(kissChannels.channels.length > 1 ? { label: () => kissTncPort(ch) } : {}),
@@ -296,12 +302,54 @@ if (soundcardSettings.length) {
     radios.push({
       send: (f) => port.send(f),
       sendFrame: (f) => port.sendFrame(f),
+      hubName: `soundcard-${sc.name}`,
+      sendRaw: (frame, call) => port.sendRaw(frame, [call]),
       frameSubs,
       rawSubs,
       label: () => port.label(),
     });
   }
   soundcardRunning = ports;
+}
+// The KISS server: other packet applications share the box's radio ports (hubserver.ts). Off unless
+// KISS_SERVER_PORT is set; it listens on loopback unless KISS_SERVER_HOST opens it, and transmits for its
+// clients only with KISS_SERVER_TX=1, under the base calls KISS_SERVER_TX_CALLS lists (default: the box's own).
+// Those calls join the transmit gate: a client frame goes out only while the gateway confirms its base call.
+if (env.KISS_SERVER_PORT) {
+  const { KissServer, kissServerSettings } = await import("./hubserver.js");
+  let settings: import("./hubserver.js").KissServerSettings | null;
+  try {
+    settings = kissServerSettings(
+      env,
+      radios.map((r) => r.hubName),
+      gateCalls,
+    );
+  } catch (e) {
+    console.error("[ingest] FATAL: %s", (e as Error).message);
+    process.exit(1);
+  }
+  if (settings) {
+    if (settings.tx) for (const c of settings.txCalls) addGateCall(c);
+    const server = new KissServer(
+      settings,
+      radios.map((r) => ({ name: r.hubName, sendRaw: r.sendRaw })),
+    );
+    for (const r of radios) r.rawSubs.push((b) => server.heard(r.hubName, b));
+    try {
+      await server.start();
+    } catch (e) {
+      console.error("[ingest] FATAL: the KISS server cannot listen: %s", (e as Error).message);
+      process.exit(1);
+    }
+    onShutdown.push(() => server.stop());
+    console.log(
+      "[kiss-server] listening on %s:%s — %s; transmit %s",
+      settings.host,
+      [settings.port, ...settings.listeners.map((l) => `${l.tcpPort} (KISS port ${l.kiss})`)].join(", "),
+      settings.map.map((m) => `${m.kiss}=${m.radio}`).join(", "),
+      settings.tx ? `on as ${settings.txCalls.join(", ") || "? (set KISS_SERVER_TX_CALLS)"}` : "off",
+    );
+  }
 }
 // The gateway's answers for every station call, refreshed every three minutes (sooner while it cannot be
 // reached); each transmitting soundcard port says what still holds it back.

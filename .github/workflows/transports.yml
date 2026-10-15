@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   direwolf:
-    name: Direwolf (KISS TCP + AGWPE over AFSK, RF -> IGate -> aprsc)
+    name: Direwolf (KISS TCP + AGWPE over AFSK, RF -> IGate -> aprsc, kissutil -> KISS server)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -26,6 +26,8 @@ jobs:
       - run: $COMPOSE up -d --build
       - run: sleep 20 && $COMPOSE logs --tail 30
       - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
+      # the client-side leg: Direwolf's kissutil dials the acs ingest's KISS server
+      - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/kiss-server-loop.mjs
       # on failure: container states + full logs — both modems print every frame they decode
       - if: failure()
         run: |

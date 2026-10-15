@@ -8,6 +8,7 @@ import {
   encodeAx25,
   kissWrap,
   kissFrames,
+  kissDecode,
   decodeAx25,
 } from "../src/index.js";
 
@@ -86,5 +87,12 @@ describe("APRS encoders", () => {
     const back = decodeAx25(kissFrames(kissWrap(encodeAx25(frame)))[0]!)!;
     expect(back.src).toBe("OE8APR-9");
     expect((decodeAprs(back) as { kind: string }).kind).toBe("position");
+  });
+
+  it("wraps a frame on a KISS port in the type byte's high nibble, and refuses a port outside 0-15", () => {
+    const raw = encodeAx25({ src: "OE8APR-9", dst: "APRS", payload: ">port" });
+    expect(kissWrap(raw, 5)[1]).toBe(0x50);
+    expect(kissDecode(kissWrap(raw, 15))).toEqual([{ port: 15, command: 0, frame: raw }]);
+    expect(() => kissWrap(raw, 16)).toThrow(RangeError);
   });
 });

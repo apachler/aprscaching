@@ -15,6 +15,7 @@ The APRScaching-first web app, by OE8APR. This file is a map of the repository.
   MeshCom ExtUDP
 - `packages/ax25/` — AX.25 connected-mode link (mod-8 and mod-128 / SREJ)
 - `packages/packet/` — BBS + FBB forwarding, NET/ROM node and INP3, session server (pure protocol logic)
+- `packages/hub/` — the station hub's cores: KISS server clients and framing, the per-port transmit arbiter
 - `packages/tools/` — the signed tool-plugin system (manifest, capabilities, host, decoders)
 - `packages/shared/` — zod contracts (Packet, WebSocket messages, DTOs), the fedwire codec, the surface manifest
 - `workers/gateway/` — the runtime-neutral gateway app (`src/app.ts` `handle()`); `src/verify.ts` is the trust-tier engine,

@@ -266,6 +266,14 @@ export class SoundcardPort {
     return this.enqueue(encodeFrame(f), [addrStr(f.src), ...(f.digis ?? []).map(addrStr)]);
   }
 
+  /**
+   * Transmit raw AX.25 bytes as they are (a frame a KISS server client hands the box), judged by the gate as going
+   * out under `gateAs`, the box's calls the frame carries.
+   */
+  sendRaw(frame: Uint8Array, gateAs: readonly string[]): boolean {
+    return this.enqueue(frame, gateAs);
+  }
+
   /** Push captured PCM; the capture process feeds it, and a test may too. */
   pushPcm(samples: Float32Array): void {
     this.lastPcmAt = this.now();

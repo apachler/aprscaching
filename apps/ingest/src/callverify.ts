@@ -258,7 +258,7 @@ export function gatewayTxGateLookup(o: {
 
 /**
  * Whether any function of the box would transmit: a soundcard port with transmit on, MeshCom transmit
- * (`MESHCOM_TX`), or a KISS TNC with a transmitting function set. A receive-only box never asks the gateway
+ * (`MESHCOM_TX`), or a KISS TNC with a transmitting function set (the KISS server's transmit among them). A receive-only box never asks the gateway
  * about its calls.
  */
 export function boxTransmits(env: Record<string, string | undefined>, soundcardTx: boolean): boolean {
@@ -274,7 +274,8 @@ export function boxTransmits(env: Record<string, string | undefined>, soundcardT
     env.BBS_NODE_CALL ||
     on("BBS_FORWARD") ||
     on("FED_LINK_SERVE") ||
-    on("FED_LINK_PULL")
+    on("FED_LINK_PULL") ||
+    (!!env.KISS_SERVER_PORT && on("KISS_SERVER_TX"))
   );
 }
 
