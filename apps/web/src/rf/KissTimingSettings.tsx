@@ -23,7 +23,7 @@ export function KissTimingSettings() {
       <p className="muted fine m-0">
         {kissLink
           ? "Sent to your TNC as it connects; a change is sent right away."
-          : "Sent to a USB or Bluetooth TNC as it connects. The soundcard modem and a Meshtastic node take none."}
+          : "Sent to a USB or Bluetooth TNC as it connects, here and in the packet terminal. The soundcard modem and a Meshtastic node take none."}
       </p>
       {KISS_TIMING_FIELDS.map((f) => (
         <TimingField key={f.key} field={f} value={kissTiming[f.key]} />

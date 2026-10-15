@@ -40,7 +40,7 @@ Messages from people who erased their account, or who no longer hold the call th
 1. Select **New message**, or open a conversation to reply in it.
 2. Enter **To**: a callsign such as `OE5XYZ`, or `OE5XYZ-7` for one station. The field suggests the stations
    you wrote with.
-3. Enter the **Message**, up to 67 characters.
+3. Enter the **Message**, up to 67 bytes. The counter beside it counts a letter such as `ü` as two.
 4. Choose the **Delivery**:
     - **Now** sends it at once. With a USB or Bluetooth TNC connected in
       [My radio](my-radio.md#connect) and transmitting allowed for this tab, it goes out from your radio as your
@@ -116,7 +116,7 @@ shows that network.
    From **Messages**, **Open My radio** takes you there.
 2. Check the **TX callsign** SSID, `-7` by default.
 3. Under **Message**, enter the recipient's callsign in **to** (up to nine characters) and the text in
-   **message** (up to 67 characters).
+   **message** (up to 67 bytes; a letter such as `ü` counts as two).
 4. Select **Send**, then **Transmit** in the confirmation.
 
 The app shows **Transmitted: message to <CALL>**. The message goes out with the path `WIDE1-1` and a message

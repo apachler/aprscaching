@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
-import { KissTnc } from "./kiss.js";
+import { KissTnc, kissTimingFromEnv } from "./kiss.js";
 import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
@@ -179,7 +179,13 @@ if (env.KISS_TNC_HOST) {
   // so a gateway that trusts it attests those frames. This batch is the only way the
   // site's hearings reach Tier A: the RX-IGate's APRS-IS copy (`qAR,<site>`) is never attested.
   const kiss = new KissTnc(
-    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall, sent: sentFrames },
+    {
+      host: env.KISS_TNC_HOST,
+      port: portEnv("KISS_TNC_PORT", 8001),
+      siteCall,
+      sent: sentFrames,
+      timing: kissTimingFromEnv(env),
+    },
     {
       onPacket: enqueue,
       onFrame: (f) => {

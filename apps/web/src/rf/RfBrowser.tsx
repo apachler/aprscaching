@@ -6,6 +6,7 @@ import {
   encodeAprsPosition,
   encodeAprsMessage,
   ackReply,
+  rfByteLength,
   rfText,
   syncBackBatch,
   type LocalMessage,
@@ -146,6 +147,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       toast("Enter a valid latitude and longitude");
       return;
     }
+    if (rfByteLength(bcn.comment.trim()) > 43) {
+      toast("The comment is too long: a beacon comment holds 43 bytes, and a letter such as ü takes two");
+      return;
+    }
     if (
       !(await confirmDialog({
         title: "Transmit position beacon?",
@@ -159,6 +164,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   async function sendMsg() {
     if (!msg.to.trim() || !msg.text.trim()) {
       toast("Enter a recipient and a message");
+      return;
+    }
+    if (rfByteLength(msg.text.trim()) > 67) {
+      toast("The message is too long: an APRS message holds 67 bytes, and a letter such as ü takes two");
       return;
     }
     if (

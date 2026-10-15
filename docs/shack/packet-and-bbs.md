@@ -19,7 +19,8 @@ Bluetooth on a computer or an Android phone. Browsers on an iPhone or iPad have 
 
 1. Open **Shack → Packet terminal**.
 2. Choose **USB** or **Bluetooth**, switch on or plug in the TNC, and select **Open KISS TNC…**. Pick the
-   device in the browser's dialog. Channel 0 shows everything the TNC hears.
+   device in the browser's dialog. Channel 0 shows everything the TNC hears. A TNC that can transmit is sent the
+   timing set in [My radio](my-radio.md#set-your-tncs-timing).
 3. Answer **Allow** when the app asks whether this tab may transmit through the TNC. **Receive only** keeps it
    listening; **Allow transmit**, or the first **Connect**, asks again. The consent ends when you close the
    tab or the TNC, select **Receive only**, or sign out

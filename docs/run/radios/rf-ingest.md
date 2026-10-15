@@ -27,6 +27,11 @@ unchanged, so the IGate and the digipeater send exactly the bytes they heard. Th
 station sent (a message, a status, a comment) as UTF-8 when the bytes are valid UTF-8, and otherwise as
 Latin-1, one character per byte. A `Grüße` sent in either set shows as `Grüße`.
 
+Text the box, the gateway or the browser radio writes itself (a message, an answer to a radio command, a
+beacon comment, a status) goes out as UTF-8, on RF and on APRS-IS alike. APRS limits count these bytes: a
+message holds 67 bytes of text and a beacon comment 43, and a letter such as `ü` takes two. A message cut to
+fit is cut between letters, never inside one.
+
 ## Transports
 
 | Transport | Turn on with | What it does |
@@ -48,6 +53,24 @@ Latin-1, one character per byte. A `Grüße` sent in either set shows as `Grüß
     ([transport is not trust](../../reference/trust-model.md#transport-is-not-trust)). Naming tunnel peers
     in `AXUDP_PEERS` or `AXIP_PEERS` lets the node send over the tunnel; transmitting on the air is a
     separate matter ([On-air legality](#on-air-legality)).
+
+### TNC timing
+
+After each connect, the box sends the KISS TNC three settings that decide when it keys the radio: TX delay,
+persist and slot time. A TNC that restarted is back on these values at the next connect. The frames key
+nothing, so the box sends them whether or not it transmits.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `KISS_TXDELAY` | `30` (300 ms) | How long the radio transmits before the data starts, in 10 ms steps. |
+| `KISS_PERSIST` | `63` (1 in 4) | The chance, (value + 1) in 256, that the TNC sends in a free slot. |
+| `KISS_SLOTTIME` | `10` (100 ms) | How long the TNC waits between tries for a free channel, in 10 ms steps. |
+
+Each value is a whole number from 0 to 255. The defaults are the APRS values that
+[My radio](../../shack/my-radio.md#set-your-tncs-timing) sends a browser-connected TNC. Direwolf applies the
+frames to the channel, in place of `TXDELAY`, `PERSIST` and `SLOTTIME` in `direwolf.conf`. Set `KISS_TIMING=off`
+to leave the TNC on its own settings: the ones in `direwolf.conf`, or a TNC whose firmware you set up yourself.
+The [soundcard port](soundcard.md) has its own `SOUNDCARD_*` timing.
 
 ## Callsigns and SSIDs
 

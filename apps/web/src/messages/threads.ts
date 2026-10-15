@@ -200,7 +200,10 @@ export function sendBlocked(s: { signedIn: boolean; verified: boolean; callsign:
   return null;
 }
 
-/** The longest text for a delivery: the Mailbox sends `de <call>: <text>` from the service call. */
+/**
+ * The longest text for a delivery, in the bytes it goes out as (UTF-8): the Mailbox sends `de <call>: <text>` from
+ * the service call.
+ */
 export function textMax(delivery: Delivery, from: string): number {
   return delivery === "heard" ? APRS_TEXT_MAX - `de ${from.toUpperCase()}: `.length : APRS_TEXT_MAX;
 }
