@@ -177,9 +177,9 @@ describe("KISS timing on a serial link", () => {
     await t.connect();
     t.send(ui);
     t.send(ui);
-    await settle();
+    // the writes run one after another through the port's queue; wait for all three rather than a fixed delay
+    await vi.waitFor(() => expect(written).toHaveLength(3));
     expect(written[0]).toEqual(TIMING_BYTES);
-    expect(written).toHaveLength(3);
     expect(written.slice(1).map((w) => w.slice(0, 2))).toEqual([
       [0xc0, 0x00],
       [0xc0, 0x00],

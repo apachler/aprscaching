@@ -32,3 +32,46 @@ export function rfText(s: string): string {
     return s;
   }
 }
+
+const utf8Out = new TextEncoder();
+
+/** The UTF-8 length of one code point (a lone surrogate encodes as U+FFFD, three bytes). */
+const width = (c: number): number => (c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4);
+
+/**
+ * Text this station originates (a message, a status, a comment, a beacon) as the bytes it goes out as: its UTF-8
+ * encoding, held one character per byte like every info field, ready for `encodeAx25` or for an APRS-IS line
+ * written one character per byte. For valid UTF-8 it is the inverse of {@link rfText}; ASCII returns unchanged.
+ *
+ * Only for text this station writes: a frame it relays (digipeated, or gated between RF and APRS-IS) already
+ * holds the bytes it heard and passes on unchanged.
+ */
+export function rfBytes(text: string): string {
+  if (!/[^\x00-\x7f]/.test(text)) return text;
+  let out = "";
+  for (const b of utf8Out.encode(text)) out += String.fromCharCode(b);
+  return out;
+}
+
+/** How many bytes `text` takes on the air: the length of its UTF-8 encoding. */
+export function rfByteLength(text: string): number {
+  let n = 0;
+  for (const ch of text) n += width(ch.codePointAt(0)!);
+  return n;
+}
+
+/**
+ * The longest start of `text` that takes at most `maxBytes` bytes on the air. It cuts between characters, never
+ * inside one, so the bytes sent stay valid UTF-8. An APRS length limit, such as the 67 of a message's text, counts
+ * these bytes.
+ */
+export function rfClip(text: string, maxBytes: number): string {
+  let n = 0;
+  let end = 0;
+  for (const ch of text) {
+    n += width(ch.codePointAt(0)!);
+    if (n > maxBytes) break;
+    end += ch.length;
+  }
+  return text.slice(0, end);
+}
