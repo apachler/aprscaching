@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { buildDeviceIndex, deviceByMicE, deviceByTocall, identifyDevice } from "../src/index.js";
+import { buildDeviceIndex, decodeMicE, deviceByMicE, deviceByTocall, identifyDevice } from "../src/index.js";
 
 // A hand-written table in the shape of the device database: the matcher's tests never read the real data.
 const TABLE = {
@@ -17,7 +17,11 @@ const TABLE = {
     APRS: { model: "Unknown" },
     APZEXP: { vendor: "Unknown", model: "Experimental" },
   },
-  mice: { _0: { vendor: "Yaesu", model: "FT3D", class: "ht" }, "_ ": { vendor: "Yaesu", model: "VX-8", class: "ht" } },
+  mice: {
+    _0: { vendor: "Yaesu", model: "FT3D", class: "ht" },
+    "_ ": { vendor: "Yaesu", model: "VX-8", class: "ht" },
+    "(5": { vendor: "Anytone", model: "D578UV", class: "rig" },
+  },
   micelegacy: {
     "]": { vendor: "Kenwood", model: "TM-D700", class: "rig", prefix: "]" },
     "]=": { vendor: "Kenwood", model: "TM-D710", class: "rig", prefix: "]", suffix: "=" },
@@ -59,6 +63,11 @@ describe("device by Mic-E code", () => {
     expect(deviceByMicE(index, { prefix: "`", suffix: "_0" })).toEqual({ name: "FT3D", vendor: "Yaesu", class: "HT" });
     expect(deviceByMicE(index, { prefix: "'", suffix: "_ " })?.name).toBe("VX-8");
     expect(deviceByMicE(index, { prefix: "`", suffix: "zz" })).toBeNull();
+  });
+  it("names the device from a decoded code the comment no longer shows", () => {
+    const m = decodeMicE("S32U6T", '`(_fn"Oj/`On air(5')!;
+    expect(m.comment).toBe("On air");
+    expect(identifyDevice(index, { micE: m.device ?? null })?.name).toBe("D578UV");
   });
   it("reads a Kenwood prefix with its suffix, else the prefix alone", () => {
     expect(deviceByMicE(index, { prefix: "]", suffix: "=" })?.name).toBe("TM-D710");

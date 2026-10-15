@@ -98,6 +98,19 @@ describe("MIC-E per APRS 1.2", () => {
     expect(decodeMicE("S32U6T", `${base}"4T}`)!.device).toBeUndefined();
     expect((decodeAprs(frame(`${base}>Hi^`, "S32U6T")) as any).micEDevice).toEqual({ prefix: ">", suffix: "^" });
   });
+  it("drops every maker's two-character code after a ` or ' prefix, and keeps it on the device", () => {
+    for (const code of ["(5", "|3", "^v", "*v", ":2", "[1", "_ "]) {
+      const m = decodeMicE("S32U6T", `${base}'On air${code}`)!;
+      expect(m.comment).toBe("On air");
+      expect(m.device).toEqual({ prefix: "'", suffix: code });
+    }
+  });
+  it("keeps comment text that does not end in a device code", () => {
+    expect(decodeMicE("S32U6T", `${base}\`Hello world`)!.comment).toBe("Hello world");
+    expect(decodeMicE("S32U6T", `${base}\`QRV ch 2`)!.comment).toBe("QRV ch 2"); // a space-led tail is text
+    expect(decodeMicE("S32U6T", `${base}Mobile (5`)!.comment).toBe("Mobile (5"); // no prefix, no code
+    expect(decodeMicE("S32U6T", `${base}>Mobile(5`)!.comment).toBe("Mobile(5"); // a Kenwood suffix is one character
+  });
   it("applies the latitude's ambiguity to the longitude", () => {
     // T4SQZZ: the last two latitude digits ambiguous, so the longitude is 112°07', not 112°07.74'
     const m = decodeMicE("T4SQZZ", base)!;

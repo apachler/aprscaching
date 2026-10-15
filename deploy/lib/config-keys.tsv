@@ -89,6 +89,9 @@ OPERATOR_NAME	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Person or e
 OPERATOR_ADDRESS	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's postal address; commas separate the lines	imprint
 OPERATOR_EMAIL	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's contact address, also the privacy contact	imprint
 SECURITY_CONTACT	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Contact URIs in /.well-known/security.txt; default mailto:OPERATOR_EMAIL	imprint
+EDITORIAL_LINE	string	gateway			0	0	selfhost,baremetal,pocket,desktop	The site's editorial line, shown on /imprint when set	imprint
+PRIVACY_AUTHORITY	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Data-protection supervisory authority named on /privacy; commas separate the lines	imprint
+HOSTING_PROVIDER	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Who hosts this instance and where, named as a recipient on /privacy	imprint
 SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Commit or tag the instance runs; resolved at build or start when unset	
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs	
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds	
@@ -245,7 +248,7 @@ BACKUP_DIR	string	deploy			0	0	selfhost,baremetal,desktop	Local or mounted direc
 OCI_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	OCI Object Storage bucket for backups (needs the oci CLI)	
 BACKUP_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	S3-compatible bucket for backups; needs R2_ENDPOINT and the aws CLI	
 R2_ENDPOINT	url	deploy			0	0	selfhost,baremetal,desktop	Endpoint URL of the S3-compatible backup bucket	
-BACKUP_RETENTION_DAYS	int	deploy	30		0	0	selfhost,baremetal,desktop	Days a backup snapshot is kept	
+BACKUP_RETENTION_DAYS	int	gateway,deploy	30		0	0	selfhost,baremetal,desktop	Days a backup snapshot is kept; /privacy names it as the backups' retention	
 BACKUP_PRUNE_BUCKET	enum	deploy	0	0|1	0	0	selfhost,baremetal,desktop	1 deletes expired bucket snapshots too, for buckets with no lifecycle rule	
 BACKUP_KEEP	int	deploy	14		0	0	selfhost,baremetal,desktop	Backup archives kept in their local destination; older ones are deleted	
 CF_API_TOKEN	string	deploy			1	0	selfhost	Cloudflare API token for the CDN cache rules	

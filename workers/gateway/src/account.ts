@@ -226,6 +226,12 @@ export async function handleAccountExport(req: Request, env: Env, named: string)
       "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE $CALLS",
       "callsign",
     ),
+    // what the instance last heard of the person's calls on air: position, symbol, comment, the locator of a status
+    heardStations: await q(
+      `SELECT callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, range_km, comment, locator
+         FROM stations WHERE $CALLS`,
+      "callsign",
+    ),
     radioCommands: await q(
       "SELECT from_call, command, cache_code, body, raw_text, port, status, reason, sent_at, decided_at FROM radio_commands WHERE $CALLS ORDER BY sent_at",
       "from_call",

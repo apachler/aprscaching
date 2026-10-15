@@ -142,6 +142,7 @@ nav:
           - Lend your receiver to an instance: run/radios/lend-a-receiver.md
           - RF ingest & transports: run/radios/rf-ingest.md
           - Soundcard port: run/radios/soundcard.md
+          - Direwolf as your TNC: run/radios/direwolf.md
           - MeshCom: run/radios/meshcom.md
           - LoRa APRS: run/radios/lora-aprs.md
           - "Packet: BBS & NET/ROM node": run/radios/packet-node.md

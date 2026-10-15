@@ -673,7 +673,10 @@ CREATE TABLE stations (
   -- destination is position data
   tocall       TEXT,
   mice_prefix  TEXT,
-  mice_suffix  TEXT
+  mice_suffix  TEXT,
+  -- the Maidenhead locator leading its last status report or Mic-E status text with one: a grid square for the
+  -- station page, never a position fix
+  locator      TEXT
 );
 CREATE INDEX idx_stations_geo ON stations (lat, lon);
 -- the IGates that gated a position lately (coverage.ts): a station another one names as its gate

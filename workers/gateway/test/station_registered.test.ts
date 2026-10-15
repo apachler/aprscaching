@@ -28,6 +28,7 @@ function stationDb(owner: string | null) {
               altitudeM: null,
               comment: null,
               lastSeen: 1790794800,
+              locator: "JN76TO",
               roles: owner ? '["node"]' : null,
               owner,
             }),
@@ -72,6 +73,10 @@ describe("station page — registry state", () => {
     const s = await station(envFor("acct-me"), false);
     expect(s.registered).toBe(true);
     expect(s.mine).toBe(false);
+  });
+
+  it("carries the grid square of its last status report", async () => {
+    expect((await station(envFor(null), false)).locator).toBe("JN76TO");
   });
 
   it("never names the owning account", async () => {

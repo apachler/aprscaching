@@ -54,6 +54,7 @@ export function Landing(props: {
         <a href={`${API_BASE}/api/v1`}>Read API</a>
         <a href={`${API_BASE}/imprint`}>Imprint</a>
         <a href={`${API_BASE}/privacy`}>Privacy</a>
+        <a href={`${API_BASE}/terms`}>Terms of use</a>
         <a href={`${API_BASE}/sitemap.xml`}>sitemap.xml</a>
         <p className="landing-fineprint">
           {APRS_CREDIT} {APRS_MARK} {APRS_NOT_AFFILIATED} {OTHER_MARKS} {OTHERS_NOT_AFFILIATED}

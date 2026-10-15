@@ -476,6 +476,11 @@ export interface StationDetail extends StationSummary {
    * not know it.
    */
   device?: StationDevice | null;
+  /**
+   * The Maidenhead locator leading its last status report or Mic-E status text with one (`JN76TO`): a grid square,
+   * never a position fix; null when it has sent none.
+   */
+  locator?: string | null;
 }
 
 /** A sending device: its model (or vendor when the database names no model), vendor and class label. */
