@@ -27,7 +27,10 @@ those, an [ingest box](../run/radios/ingest-box.md) feeds the instance instead.
 ## Connect
 
 1. Open **Settings → My radio (browser)**.
-2. Tune your radio to your APRS frequency: 144.800 MHz in Europe, 144.390 MHz in North America.
+2. Tune your radio to your APRS frequency. The line under the buttons names it, as in
+   **APRS in Austria: 144.800 MHz**: the country comes from your callsign's prefix, or from your browser's
+   language region when the prefix names no country the app knows. **Other APRS channels** lists LoRa APRS
+   (433.775 MHz) and the ISS digipeater (145.825 MHz). The app never changes your radio's frequency.
 3. Select the button for your hardware and pick the device in the browser's dialog.
 4. The status line shows **● live (USB radio) · N frames**. Heard packets appear under **Live RX**.
 

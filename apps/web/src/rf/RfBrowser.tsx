@@ -18,7 +18,8 @@ import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
 import { nextMsgNo } from "./msgNo.js";
 import { devicePublicKey } from "../crypto.js";
-import { useFmt } from "../format.js";
+import { browserLocale, useFmt } from "../format.js";
+import { frequencyLines } from "./aprsFrequency.js";
 import { NAV_MAX_AGE_MS } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import {
@@ -204,6 +205,8 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const heardN = fieldStation.heardForSync().length;
   // forwarding matters once there is something to forward: a live radio, or frames heard off-grid
   const canForward = link != null || heardN > 0;
+  // the APRS frequency of the operator's country, a hint only: the radio keeps the frequency its operator set
+  const freq = frequencyLines(props.callsign, browserLocale());
   const connectBtn = (kind: LinkKind, label: string, hint: string, primary = false) => (
     <Button
       variant={primary ? "primary" : undefined}
@@ -252,6 +255,17 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           </ManualLink>
         </p>
       )}
+
+      <p className="muted fine m-0">
+        {freq.aprs ?? "Your national society's band plan names your country's APRS frequency"}. Tune your radio to it:
+        the app never changes the radio&apos;s frequency.
+      </p>
+      <Disclosure label="Other APRS channels">
+        <ul className="muted fine m-0">
+          <li>{freq.lora}</li>
+          <li>{freq.iss}</li>
+        </ul>
+      </Disclosure>
 
       <Disclosure label="What your radio can verify">
         <p className="muted fine m-0">
