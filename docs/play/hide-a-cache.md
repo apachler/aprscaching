@@ -68,7 +68,7 @@ each circle's colour:
 The line under the switch reads your pin:
 
 - **Inside an attested receiver's range:** RF finds can reach Tier A.
-- **Only APRS-IS reaches here:** RF finds stop at Tier C.
+- **Only APRS-IS reaches here:** RF finds stop at Tier C, unless a digipeater relays them to an attested receiver.
 - **No receiver known in range:** a radio may not be heard at all.
 
 Outside an attested receiver's range, a finder who logs in the app at the cache can still reach

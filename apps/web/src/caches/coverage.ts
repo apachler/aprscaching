@@ -84,7 +84,7 @@ export function reachText(r: Reach, radioOnly = false): { text: string; tone: "o
     : " A find logged in the app at the cache can still reach Tier B.";
   if (r.kind === "relay")
     return {
-      text: `Only APRS-IS reaches here (through ${r.call}): RF finds stop at Tier C.${app}`,
+      text: `Only APRS-IS reaches here (through ${r.call}): RF finds stop at Tier C unless a digipeater relays them to an attested receiver.${app}`,
       tone: "warn",
       call: r.call,
     };
