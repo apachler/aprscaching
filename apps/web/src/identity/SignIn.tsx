@@ -8,6 +8,7 @@ import {
   accountDataStart,
   errorText,
   ApiError,
+  API_BASE,
   type Licence,
 } from "../api.js";
 import { Button, Panel, Icon, LicenceBadge, ManualLink } from "../ui/index.js";
@@ -300,6 +301,11 @@ export function SignIn(props: {
               </Button>
             </div>
           </div>
+          {!probe.exists && (
+            <p className="muted fine mt-3">
+              By creating an account you accept the <a href={`${API_BASE}/terms`}>terms of use</a>.
+            </p>
+          )}
           {probe.claimable && (
             <div className="mt-3">
               <p className="muted fine m-0">
