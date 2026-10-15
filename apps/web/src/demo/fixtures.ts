@@ -484,6 +484,7 @@ const STATION_DETAIL: StationDetail = {
   registered: true,
   mine: false,
   device: { name: "TM-D710", vendor: "Kenwood", class: "Rig" },
+  locator: "JN77RB",
   lastRoute: {
     src: "OE6XRR-9",
     path: "OE6XGR-2*,WIDE2-1",

@@ -5,7 +5,7 @@ import { ExportButton } from "../exports/ExportButton.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, useToast, useLoad, Card, Button, Icon } from "../ui/index.js";
+import { Panel, Badge, ErrorState, useToast, useLoad, Card, Button, Icon, InfoTip } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 
 import { TrackReplay } from "../shack/TrackReplay.js";
@@ -114,6 +114,13 @@ export function StationPanel(props: {
             </p>
           )}
           {station.comment && <div className="comment">{station.comment}</div>}
+          {station.locator && (
+            // the square its last status report named: a coarse place, never drawn as the station's position
+            <p className="mt-1">
+              Grid <span className="mono">{station.locator}</span>{" "}
+              <InfoTip text={TERMS.maidenhead} label="What is a grid square?" />
+            </p>
+          )}
           <div className="muted mt-1">
             {station.speedKn != null && station.speedKn > 0
               ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · `

@@ -42,5 +42,7 @@ export const TERMS = {
   provenance: "How a packet reached the instance, and whether one of its own receiving stations heard it directly.",
   meshcom: "A LoRa mesh network for licensed amateurs; the instance listens to a node over its ExtUDP interface.",
   watchlist: "The callsigns you follow. You get an alert when the network hears one of them.",
+  maidenhead:
+    "A grid square such as JN77pb that names a location in a few characters; hams use it in place of coordinates.",
   "offline-pack": "The caches of one Maidenhead square, saved on this device for use without a signal.",
 } as const;

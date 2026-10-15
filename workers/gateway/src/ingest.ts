@@ -187,6 +187,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const mailAcks: { from: string; msgNo: string; port: string }[] = []; // acks to the service call: Mailbox deliveries
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
   const groupMessages: MeshcomGroupHearing[] = []; // MeshCom group chat, apart from the callsign message log
+  // the Maidenhead locator leading a status report or Mic-E status text, per station: a grid square for the
+  // station page, never a fix, so it never reaches positions, the live map or verification
+  const locators = new Map<string, string>();
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
@@ -320,6 +323,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           fate.stored.id,
         ),
       );
+
+    const grid = typeof data.locator?.grid === "string" ? data.locator.grid : null;
+    if (grid) locators.set(p.src, grid);
 
     const fix = fixOf(p);
     if (!fix) continue;
@@ -457,6 +463,10 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(fix.lat, fix.lon, p.ts, p.src, fix.lat, fix.lon),
     );
   }
+  // after the station upserts, so a Mic-E station's first fix and its locator land in one batch; a station heard
+  // only through status reports has no row and no station page, so its locator is not kept
+  for (const [call, grid] of locators)
+    stmts.push(env.DB.prepare("UPDATE stations SET locator = ? WHERE callsign = ?").bind(grid, call));
   // per-transport RX counters, bucketed by hour (port_stats)
   const bucket = Math.floor((maxTs || nowS()) / 3600) * 3600;
   for (const [port, rx] of portRx) {
