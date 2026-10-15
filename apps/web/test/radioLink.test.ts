@@ -15,6 +15,7 @@ import {
 import { ANNOUNCE_GAP_MS, TxAnnouncer, aprsSummary, ax25Summary, terminalTxNote } from "../src/rf/txLog.js";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import type { RfFrame } from "../src/rf/kiss.js";
+import type { KissTiming } from "../src/rf/kissTiming.js";
 
 /** A fake radio: it records connects, disconnects and sends, and lets the test deliver frames or lose the device. */
 function fakeRadio(opts: { failConnect?: Error } = {}) {
@@ -140,6 +141,89 @@ describe("the app-wide radio link", () => {
     expect(txWord({ link: "serial", verified: true, txOn: false })).toBe("RX only");
     expect(txWord({ link: "audio", verified: true, txOn: true })).toBe("RX only");
     expect(txWord({ link: "serial", verified: true, txOn: true })).toBe("TX on");
+  });
+});
+
+describe("KISS timing for the radio link", () => {
+  /** Links that log what reaches them: a KISS TNC (serial, ble) takes timing, the others have no setTiming. */
+  function timingRadio(opts: { failTiming?: Error; init?: KissTiming } = {}) {
+    const log: string[] = [];
+    const saved: KissTiming[] = [];
+    const deps: RadioDeps = {
+      makeLink: (kind) => ({
+        async connect() {
+          log.push(`connect ${kind}`);
+        },
+        async disconnect() {},
+        async send() {
+          log.push("send");
+        },
+        ...(kind === "serial" || kind === "ble"
+          ? {
+              async setTiming(t: KissTiming) {
+                if (opts.failTiming) throw opts.failTiming;
+                log.push(`timing ${t.txDelay}/${t.persist}/${t.slotTime}`);
+              },
+            }
+          : {}),
+      }),
+      forward: () => Promise.resolve(),
+      feedLocal: () => {},
+      saveKissTiming: (t) => saved.push(t),
+    };
+    const store = new RadioLinkStore(deps, { kissTiming: opts.init });
+    const events: RadioEvent[] = [];
+    store.onEvent((e) => events.push(e));
+    return { store, log, saved, events };
+  }
+
+  it("sends the APRS defaults to a KISS TNC as it connects, before the link reports connected", async () => {
+    for (const kind of ["serial", "ble"] as const) {
+      const { store, log, events } = timingRadio();
+      store.onEvent((e) => e.kind === "connected" && log.push("connected"));
+      await store.connect(kind);
+      expect(log).toEqual([`connect ${kind}`, "timing 30/63/10", "connected"]);
+      expect(events.map((e) => e.kind)).toEqual(["connected"]);
+    }
+  });
+
+  it("sends nothing to the soundcard modem or a Meshtastic node", async () => {
+    for (const kind of ["audio", "mesh"] as const) {
+      const { store, log } = timingRadio();
+      await store.connect(kind);
+      store.setKissTiming({ txDelay: 40 });
+      expect(log).toEqual([`connect ${kind}`]);
+    }
+  });
+
+  it("starts from the stored settings", async () => {
+    const { store, log } = timingRadio({ init: { txDelay: 50, persist: 127, slotTime: 20 } });
+    await store.connect("serial");
+    expect(log).toContain("timing 50/127/20");
+  });
+
+  it("saves a change, sends it to a connected TNC at once, and ignores a value outside 0–255", async () => {
+    const { store, log, saved } = timingRadio();
+    store.setKissTiming({ txDelay: 45 }); // no link yet: saved, sent on the next connect
+    expect(saved).toEqual([{ txDelay: 45, persist: 63, slotTime: 10 }]);
+    await store.connect("serial");
+    store.setKissTiming({ persist: 255, slotTime: 300 });
+    store.setKissTiming({ slotTime: 1.5, txDelay: -1 });
+    store.setKissTiming({ persist: 255 }); // no change: nothing saved or sent
+    await Promise.resolve();
+    expect(store.getState().kissTiming).toEqual({ txDelay: 45, persist: 255, slotTime: 10 });
+    expect(saved).toHaveLength(2);
+    expect(log).toEqual(["connect serial", "timing 45/63/10", "timing 45/255/10"]);
+  });
+
+  it("reports a TNC that refuses its timing and keeps the link up", async () => {
+    const { store, events } = timingRadio({ failTiming: new Error("write failed") });
+    await store.connect("serial");
+    expect(store.getState().link).toBe("serial");
+    expect(events).toEqual([
+      { kind: "timing-failed", message: "write failed" },
+      { kind: "connected", link: "serial" },
+    ]);
   });
 });
 

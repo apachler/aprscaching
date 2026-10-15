@@ -9,11 +9,21 @@ import { useEffect, useSyncExternalStore } from "react";
 import { WebSerialKiss, WebBluetoothKiss } from "./kiss.js";
 import { WebAudioAfsk, WebSerialMeshtastic } from "./extralinks.js";
 import { fieldStation } from "./fieldStation.js";
+import { readKissTiming } from "./kissTiming.js";
 import { RadioLinkStore, LINK_LABEL, holdRadio, radioBusyText, type RadioState } from "./radioLink.js";
 import { ingestPackets, ingestSigned } from "../api.js";
 import { useConfirm, useToast } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
+const TIMING_KEY = "acs.rf.kiss-timing"; // TXDELAY, PERSIST and SLOTTIME sent to a KISS TNC
+
+function storedKissTiming() {
+  try {
+    return readKissTiming(localStorage.getItem(TIMING_KEY));
+  } catch {
+    return readKissTiming(null);
+  }
+}
 
 function storedGatewayUrl(): string {
   try {
@@ -47,11 +57,18 @@ export const radioLink = new RadioLinkStore(
         /* storage blocked: the URL lasts for this page only */
       }
     },
+    saveKissTiming: (t) => {
+      try {
+        localStorage.setItem(TIMING_KEY, JSON.stringify(t));
+      } catch {
+        /* storage blocked: the settings last for this page only */
+      }
+    },
     connectError: (err) => radioBusyText(err, "bridge"),
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
   },
-  { gatewayUrl: storedGatewayUrl() },
+  { gatewayUrl: storedGatewayUrl(), kissTiming: storedKissTiming() },
 );
 
 // the packet terminal reads this to name the RF bridge when both reach for one port
@@ -99,6 +116,7 @@ export function RadioLinkHost(props: { callsign: string; verified: boolean }) {
         else if (e.kind === "lost") toast(`Radio disconnected: ${e.message}`);
         else if (e.kind === "connect-failed") toast(`Could not connect: ${e.message}`);
         else if (e.kind === "forward-failed") toast(`Forwarding failed: ${e.message}`);
+        else if (e.kind === "timing-failed") toast(`The TNC did not take its timing: ${e.message}`);
       }),
     [toast],
   );

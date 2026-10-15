@@ -20,6 +20,8 @@ import {
   encodeAx25,
   rfText,
   kissWrap,
+  kissTimingFrames,
+  type KissTiming,
   type ParsedFrame,
   type AprsData,
 } from "@aprscaching/aprs";
@@ -101,6 +103,11 @@ export interface RfLink {
   disconnect(): Promise<void>;
   /** Transmit a frame (gated UI-side on callsign control-verification + opt-in). May throw if RX-only. */
   send(frame: TxFrame): Promise<void>;
+  /**
+   * Set a KISS TNC's channel access (TXDELAY, PERSIST, SLOTTIME). Only a KISS TNC link has it; a link that cannot
+   * write (a receive-only TNC) skips it, since it never keys the radio.
+   */
+  setTiming?(t: KissTiming): Promise<void>;
 }
 
 /**
@@ -111,6 +118,7 @@ export class WebSerialKiss implements RfLink {
   private port: SerialPortLike | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private closed = false;
+  private writes: Promise<void> = Promise.resolve();
   private feed: (chunk: Uint8Array) => void;
 
   constructor(
@@ -157,12 +165,30 @@ export class WebSerialKiss implements RfLink {
   /** Transmit a frame over the serial port (gated on callsign control-verification). Throws if the port has no writable stream. */
   async send(frame: TxFrame): Promise<void> {
     if (!this.port?.writable) throw new Error("port is not writable");
-    const writer = this.port.writable.getWriter();
-    try {
-      await writer.write(kissWrap(encodeAx25(frame)));
-    } finally {
-      writer.releaseLock();
-    }
+    await this.write(kissWrap(encodeAx25(frame)));
+  }
+
+  /** Write bytes to the port one write at a time: a frame and a parameter change never reach for the writer at once. */
+  private write(bytes: Uint8Array): Promise<void> {
+    const run = async () => {
+      const w = this.port?.writable;
+      if (!w) throw new Error("port is not writable");
+      const writer = w.getWriter();
+      try {
+        await writer.write(bytes);
+      } finally {
+        writer.releaseLock();
+      }
+    };
+    const next = this.writes.then(run, run);
+    this.writes = next.catch(() => {}); // one failed write must not block the next
+    return next;
+  }
+
+  /** Send the TNC its channel-access parameters; a port with no writable stream never transmits, so it skips them. */
+  async setTiming(t: KissTiming): Promise<void> {
+    if (!this.port?.writable) return;
+    await this.write(kissTimingFrames(t));
   }
 
   async disconnect(): Promise<void> {
@@ -212,6 +238,11 @@ export class WebBluetoothKiss implements RfLink {
   /** Transmit a frame over BLE (gated on callsign control-verification). Throws if the TNC is receive-only. */
   async send(frame: TxFrame): Promise<void> {
     await this.link.write(kissWrap(encodeAx25(frame)));
+  }
+
+  /** Send the TNC its channel-access parameters; a receive-only TNC never transmits, so it skips them. */
+  async setTiming(t: KissTiming): Promise<void> {
+    if (this.link.writable) await this.link.write(kissTimingFrames(t));
   }
 
   async disconnect(): Promise<void> {
