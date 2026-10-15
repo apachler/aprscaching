@@ -116,7 +116,8 @@ it to the instance and never stores it. **Clear** empties it, and signing out do
 When a USB or Bluetooth TNC connects, the browser sends it three KISS settings that decide when it keys the
 radio. The values for APRS are the defaults, so most stations never change them. To change one, open
 **Advanced: TNC timing** at the end of the forwarding settings, type a whole number from 0 to 255 and leave the
-field. The browser keeps your values, and a connected TNC gets a change at once.
+field. The browser keeps your values, and a connected TNC gets a change at once. The
+[packet terminal](packet-and-bbs.md#connect-to-a-bbs-or-node) sends the same values to the TNC it opens.
 
 | Setting | Default | What it does |
 |---|---|---|

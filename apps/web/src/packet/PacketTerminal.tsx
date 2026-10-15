@@ -52,9 +52,10 @@ const LINK_MISSING: Record<TncLink, string> = {
   usb: "USB needs Web Serial: Chromium on a desktop computer.",
   ble: "Bluetooth needs Web Bluetooth: Chromium on a desktop computer or Android. iPhone and iPad browsers have none.",
 };
+/** Each link sends the TNC the timing kept in My radio → Advanced, so it is set once for both surfaces. */
 const makeLink: Record<TncLink, MakeTransport> = {
-  usb: (onF, onC) => new SerialKissTransport(onF, onC),
-  ble: (onF, onC) => new BleKissTransport(onF, onC),
+  usb: (onF, onC) => new SerialKissTransport(onF, onC, radioLink.getState().kissTiming),
+  ble: (onF, onC) => new BleKissTransport(onF, onC, radioLink.getState().kissTiming),
 };
 /** A closed chooser is the user changing their mind, not an error to show. */
 const CANCELLED = /No port selected|User cancelled|chooser|NotFoundError/i;
@@ -109,6 +110,8 @@ export function PacketTerminal(props: {
   verified: boolean;
   makeTransport?: MakeTransport;
   autoConnect?: string;
+  /** Open Settings at My radio, where the TNC's timing is set. */
+  onRadio?: () => void;
 }) {
   const [, forceRender] = useReducer((n) => n + 1, 0);
   const notify = useCallback(() => forceRender(), []);
@@ -489,6 +492,19 @@ export function PacketTerminal(props: {
           A connected-mode packet terminal for your own radio: reach a KISS TNC over USB or Bluetooth, open it here,
           then connect to a BBS or a node by callsign. Channel 0 shows everything your TNC hears.
         </EmptyState>
+      )}
+      {!portOpen && !simulated && (
+        <p className="muted fine">
+          As it opens, the TNC is sent the TX delay, persist and slot time from My radio → Advanced: TNC timing.
+          {props.onRadio && (
+            <>
+              {" "}
+              <Button variant="inline" onClick={props.onRadio}>
+                Open My radio
+              </Button>
+            </>
+          )}
+        </p>
       )}
 
       {portOpen && (
