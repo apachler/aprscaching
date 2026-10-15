@@ -9,6 +9,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { readCappedBody } from "./fetchguard.js";
+import { stripImageMetadata } from "./imagemeta.js";
 import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -529,6 +530,8 @@ const AUDIO_TYPES = new Set([
   "audio/x-m4a",
   "audio/webm",
 ]);
+const unreadablePhoto = (ct: string) =>
+  `this file does not read as ${ct.slice("image/".length).toUpperCase()}: save the photo again and upload that`;
 const mediaType = (ct: string | null) => (ct ?? "").split(";")[0]!.trim().toLowerCase();
 function mediaKind(ct: string): "image" | "audio" | null {
   if (IMAGE_TYPES.has(ct)) return "image";
@@ -588,9 +591,12 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
       { status: 415 },
     );
   const max = MEDIA_LIMITS[kind];
-  const bytes = await readCappedBody(req, max);
-  if (!bytes?.length)
+  const body = await readCappedBody(req, max);
+  if (!body?.length)
     return json({ error: `${kind === "image" ? "a photo" : "a sound"} is at most ${mediaMB(max)}` }, { status: 413 });
+  // a photo is stored without the Exif, XMP and IPTC its camera wrote (the place it was taken among them)
+  const bytes = kind === "image" ? stripImageMetadata(body, ct) : body;
+  if (!bytes) return json({ error: unreadablePhoto(ct) }, { status: 415 });
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_media WHERE cache_id=?")
     .bind(cacheId)
     .first<{ n: number }>();
@@ -646,8 +652,10 @@ export async function handlePutMediaThumb(req: Request, env: Env, cacheId: numbe
   const ct = (req.headers.get("content-type") ?? "").split(";")[0]!.trim();
   if (ct !== "image/jpeg" && ct !== "image/webp")
     return json({ error: "a thumbnail is image/jpeg or image/webp" }, { status: 415 });
-  const bytes = await readCappedBody(req, THUMB_LIMIT);
-  if (!bytes?.length) return json({ error: `a thumbnail is at most ${THUMB_LIMIT / 1000} kB` }, { status: 413 });
+  const body = await readCappedBody(req, THUMB_LIMIT);
+  if (!body?.length) return json({ error: `a thumbnail is at most ${THUMB_LIMIT / 1000} kB` }, { status: 413 });
+  const bytes = stripImageMetadata(body, ct);
+  if (!bytes) return json({ error: unreadablePhoto(ct) }, { status: 415 });
   const key = `cache/${cacheId}/media/${crypto.randomUUID()}.thumb.${ct === "image/webp" ? "webp" : "jpeg"}`;
   await env.MEDIA.put(key, bytes, ct);
   await env.DB.prepare("UPDATE cache_media SET thumb_key=?, thumb_bytes=? WHERE id=?")
