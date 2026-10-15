@@ -19,6 +19,8 @@ export interface ShackAppProps {
   onClose: () => void;
   /** A tool to open on launch (the Tools app reads it; `?view=tools&tool=…`). */
   tool?: string;
+  /** Open Settings at My radio (the packet terminal points there for the TNC's timing). */
+  onRadio?: () => void;
 }
 
 export interface ShackApp {

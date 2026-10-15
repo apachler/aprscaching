@@ -459,37 +459,19 @@ consolidated specification ([`wb2osz/aprsspec`](https://github.com/wb2osz/aprssp
 database ([`aprsorg/aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid)), the LoRa APRS series and the
 online APRS viewers. Items are listed in start order (the lowest `step` first), and each step names what it waits
 on. Already in place, so not listed: the decoder, digipeater and IGate checked against APRS 1.2 (messages and
-reply-acks, objects and weather, positions and Mic-E, telemetry, status and third-party packets, SSID handling,
-the 8-digipeater limit, byte-for-byte APRS-IS gating), the gateway's APRS-IS duplicate rule for its packet and
-message logs (`workers/gateway/src/dupes.ts`), the `NEAR` radio command, geofence prompts, CSMA on the ingest
-soundcard port, BLE KISS for Mobilinkd and LoRa trackers, and MeshCom signal reports. The tocall request is the
-launch-list item above.
+reply-acks, objects and weather, positions and Mic-E, telemetry, status and third-party packets, SSID handling, the
+8-digipeater limit, byte-for-byte APRS-IS gating, PHG, RNG, DFS and DF bearings, `!DAO!` precision, raw NMEA
+reports and status locators), UTF-8 text heard on RF and sent on it (`rfText`, `rfBytes`), the packet route on find
+and station details, the sending device named by tocall (`DEVICEID_URL`), radio coverage on the hide form, KISS
+timing on every KISS link, photos stored without their metadata, the ingest's receive-only LoRa APRS port, the
+gateway's APRS-IS duplicate rule for its packet and message logs (`workers/gateway/src/dupes.ts`), the `NEAR` radio
+command, geofence prompts, CSMA on the ingest soundcard port, BLE KISS for Mobilinkd and LoRa trackers, and MeshCom
+signal reports. The tocall request is the launch-list item above.
 
-- [ ] **KISS timing on browser transmit** _(P1 · S · step 3)_ — the Web Serial and BLE KISS transmit paths in
-      `apps/web/src/rf` send no KISS parameters, so the TNC's own defaults decide channel access. Send TXDELAY
-      30, PERSIST 63 and SLOTTIME 10 (WB2OSZ, _Minimizing APRS Collisions_) on connect, adjustable under My
-      radio → Advanced; the manual advises against VOX keying (a 250–500 ms VOX tail collides). Transmit
-      stays gated on callsign control-verification. _Depends on:_ —
-- [ ] **Sending device by tocall** _(P2 · S · step 4)_ — name the device behind a packet ("Kenwood TM-D710",
-      "Dire Wolf") in the decoder, station details and the live map, from `tocalls.dense.json` in
-      `aprsorg/aprs-deviceid`. Check its licence before bundling it in `packages/aprs` (MIT-clean); otherwise the
-      gateway fetches and caches it. The same files list the Mic-E prefix and suffix codes the decoder strips from a
-      Mic-E comment, so the device behind a Mic-E report is named too. _Depends on:_ —
-- [ ] **LoRa APRS port in the ingest** _(P1 · M · step 5)_ — the common LoRa APRS firmware (CA2RXU, SQ2CPA)
-      frames a packet as `0x3C 0xFF 0x01` followed by a TNC2 text line, not AX.25; the ingest reads MeshCom but
-      not this. A port that strips the prefix and parses TNC2, attested like a TNC port when the box's own radio
-      heard it. Presets: Standard BW125 SF9 CR4:7, Fast BW125 SF8 CR4:6, Custom; 433.775 MHz in IARU Region 1
-      (the OE experimenters' frequency), 439.9125 MHz in the UK. Keep per-packet RSSI, SNR and frequency offset
-      as receiver metadata for display; receiving never lifts trust. The port's status header shows the settings
-      and the computed airtime. _Depends on:_ —
 - [ ] **Dire Wolf as the reference TNC** _(P2 · S · step 6)_ — test the ingest's KISS-TCP client against Dire
       Wolf with several channels, each KISS channel its own attested receiver port, and document the
       `direwolf.conf` that pairs with an ingest box. Dire Wolf's FX.25 frames stay AX.25-compatible; IL2P does
       not, so the manual says which to enable. _Depends on:_ —
-- [ ] **Packet route on find and station detail** _(P1 · M · step 7)_ — draw the path a packet took: radio,
-      each digipeater, the IGate or the instance's own receiver, APRS-IS. It shows on screen why one find is
-      Tier A (heard by an attested site's own receiver) and another Tier C (through APRS-IS, `qAR` included).
-      None of the public APRS viewers explains trust; this is where the platform differs. _Depends on:_ —
 - [ ] **HF port preset** _(P3 · S · step 8)_ — 30 m APRS at 300 baud: an empty path (HF has no digipeating;
       an empty path saves 14 bytes), beacons every 10–15 min, Mic-E, the comment on every fourth beacon, 5–10
       message retries, and the dial frequency named together with mode and tones (10.1476 MHz USB). HF heard
@@ -501,9 +483,6 @@ launch-list item above.
 - [ ] **Ingest health in the Shack** _(P2 · S · step 10)_ — packets per second, parse rate and invalid
       packets per port at the port's status header, the figures the public viewers show for their feeds.
       _Depends on:_ —
-- [ ] **Coverage for hiders** _(P2 · M · step 11)_ — PHG range circles and digipeater and IGate coverage on
-      the hide form's map, so a hider places a cache where RF hears the finder; a hint warns where only APRS-IS
-      reaches, since finds there stop at Tier C. _Depends on:_ steps 7 and 17.
 - [ ] **APRScaching Thursday** _(P2 · S · step 12)_ — join #APRSThursday (every Thursday, 00:00–23:59 UTC,
       tracked by aprs.world, aprs.to and aprslive): a weekly find event with a leaderboard ranked by callsign,
       per the identity rule. Folds into the **Weekly #CacheNet** item above, which supplies the messaging net.
@@ -514,31 +493,32 @@ launch-list item above.
 - [ ] **Caches as APRS objects on air** _(P3 · M · step 14)_ — opt-in per instance, sysop-gated: send a cache
       as an object with the point-of-interest symbol `\i`, so it shows on any APRS radio or map nearby. A low
       rate, local reach only (never a wide path), and the transmit gate as today; _APRS Worst Practices_ is the
-      checklist of what not to do. _Depends on:_ step 3.
+      checklist of what not to do. _Depends on:_ —
 - [ ] **LoRa hop signal block** _(P3 · M · step 15)_ — a proposed format appends `{rssi snr foff}` as three
       base-91 characters per LoRa digipeater hop. Parse it out of the comment in `packages/aprs` and draw
       link-quality lines on the map. A proposal, not a standard: build it once LoRa traffic carries it.
-      _Depends on:_ step 5.
+      _Depends on:_ step 22.
 - [ ] **Outreach to the APRS community** _(P2 · S · step 16, no code)_ — submit APRScaching to the APRS
       Foundation as a documented use case; ask WB2OSZ to list it under _New Developments_ on how.aprs.works; link
       his _How to Get Started in APRS_ guide from the manual instead of rewriting it. After the launch list's
       third-party contacts. _Depends on:_ the public instance answering.
 
-- [ ] **Position data extensions** _(P2 · S · step 17)_ — PHG (power, height, gain, directivity), RNG and DFS
-      in a position's comment, and the DF report's bearing and quality (`/BRG/NRQ`), decoded into fields instead
-      of left in the comment (APRS 1.2 chapter 7). Coverage for hiders draws its PHG circles from them.
-      _Depends on:_ —
-- [ ] **`!DAO!` extra precision** _(P3 · S · step 18)_ — the `!DAO!` comment token adds a digit to latitude and
-      longitude and names the datum; apply it to the position and drop it from the comment. _Depends on:_ —
-- [ ] **Raw NMEA reports** _(P3 · S · step 19)_ — `$GPRMC`, `$GPGGA` and the other sentences APRS 1.2 asks a
-      receiver to read; old trackers still send them and decode as nothing today. _Depends on:_ —
-- [ ] **Maidenhead in status reports** _(P3 · S · step 20)_ — a status report or Mic-E status text may lead with
-      a locator and symbol (`IO91SX/G`); decode it as a coarse position for the station's details.
-      _Depends on:_ —
-- [ ] **Text heard on RF in the gateway** _(P2 · S · step 21)_ — an AX.25 info field is bytes, and the ingest
-      passes it on one character per byte; check how the gateway stores and shows a UTF-8 message heard on RF
-      (`Grüße`), and read it as UTF-8 where the bytes are valid UTF-8, keeping the bytes for gating.
-      _Depends on:_ —
+- [ ] **LoRa APRS port on hardware** _(P1 · S · step 22)_ — run the ingest's LoRa APRS port
+      (`apps/ingest/src/lora-aprs.ts`) against a CA2RXU LoRa APRS iGate: both TNC forms (`kiss` and `text`),
+      the `*` on relayed hops in the AX.25 rendering, how the iGate writes a q-construct, and the setting names
+      its web page uses; then the SQ2CPA and tracker firmware. Decide whether the Standard preset follows the
+      firmware's factory SF12 CR4:5. A serial LoRa modem takes a bridge (`socat`, Pocket's `usb_kiss_bridge.py`)
+      the manual names. _Depends on:_ a LoRa APRS iGate on the bench.
+- [ ] **LoRa signal reports** _(P3 · M · step 23)_ — RSSI, SNR and frequency offset per LoRa packet: neither
+      CA2RXU TNC form carries them, so they need a transport that does (the esp32_loraprs KISS signal-report
+      extension, once its byte layout is confirmed); the gateway then stores them as receiver metadata and the
+      station page shows them. Receiving never lifts trust. _Depends on:_ step 22.
+- [ ] **Locator on the station page** _(P3 · S · step 26)_ — the decoder reads a Maidenhead locator leading a
+      status report or Mic-E status text; the gateway keeps it only in the raw packet ring. Store the last one per
+      station and show it as the grid square on the station page, never as a position fix. _Depends on:_ —
+- [ ] **Mic-E device codes in the comment** _(P3 · S · step 27)_ — after a `` ` `` or `'` prefix the decoder
+      strips only `_x` and `|x` suffixes, so other makers' two-character codes (Anytone `(5`) stay visible in the
+      comment although the device is named. Strip every code the device database lists. _Depends on:_ —
 
 Considered and not planned:
 

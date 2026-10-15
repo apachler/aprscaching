@@ -65,6 +65,7 @@ import { NearbyPanel } from "./caches/NearbyPanel.js";
 import { FilterPanel } from "./caches/FilterPanel.js";
 import { NO_FILTERS, facetsOf, filtering, passes, type CacheFilters } from "./caches/filters.js";
 import { HidePanel } from "./caches/HidePanel.js";
+import { CoverageLayer, useCoverage } from "./caches/CoverageLayer.js";
 import { DetailPanel } from "./caches/DetailPanel.js";
 import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
@@ -152,6 +153,8 @@ const STATIONS_KEY = "acs.layer.stations";
 /** The MeshCom layer (on unless switched off) and its links (off unless switched on), per browser. */
 const MESHCOM_KEY = "acs.layer.meshcom";
 const MESHCOM_LINKS_KEY = "acs.layer.meshcomLinks";
+/** The hide form's radio coverage overlay: off until the hider turns it on, then remembered. */
+const COVERAGE_KEY = "acs.layer.hideCoverage";
 
 /** A remembered layer switch; `fallback` when this browser never set it or storage is blocked. */
 function useLayerPref(key: string, fallback: boolean) {
@@ -482,6 +485,8 @@ export default function Platform({ session, startTour }: { session: SessionState
     },
   );
   useFineGrid(map);
+  const [coverageOn, setCoverageOn] = useLayerPref(COVERAGE_KEY, false);
+  const coverage = useCoverage(map, hiding && coverageOn);
   const flyTo = useCallback(
     (lat: number, lon: number, minZoom: number) =>
       mapRef.current?.flyTo({ center: [lon, lat], zoom: Math.max(mapRef.current.getZoom(), minZoom) }),
@@ -1129,6 +1134,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onCancel={closeView}
                 onCreated={onCreated}
                 onVerify={() => openView(panel("settings"))}
+                coverage={{ on: coverageOn, setOn: setCoverageOn, state: coverage }}
               />
             )}
             {isPanel("nearby") && (
@@ -1197,7 +1203,14 @@ export default function Platform({ session, startTour }: { session: SessionState
                 onTogglePin={togglePin}
               />
             )}
-            {view.kind === "app" && <ShackAppSurface app={view.id} tool={view.tool} onClose={closeView} />}
+            {view.kind === "app" && (
+              <ShackAppSurface
+                app={view.id}
+                tool={view.tool}
+                onClose={closeView}
+                onRadio={session.signedIn ? openRadio : undefined}
+              />
+            )}
             {view.kind === "station" && (
               <StationPanel picked={view.call} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
             )}
@@ -1265,6 +1278,9 @@ export default function Platform({ session, startTour }: { session: SessionState
               {/* the viewer's own fix: the cache sheet shows the distance to it */}
               <LocateControl map={map} onFix={(lat, lon) => setHere({ lat, lon })} />
               {ready && <BasemapSwitcher map={map} styleEpoch={styleEpoch} />}
+              {ready && hiding && coverageOn && (
+                <CoverageLayer map={map} sites={coverage.sites} styleEpoch={styleEpoch} />
+              )}
               {ready && meshcomOn && meshcomLinksOn && (
                 <MeshcomLinks map={map} links={meshcomLinks} styleEpoch={styleEpoch} />
               )}

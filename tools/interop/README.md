@@ -20,7 +20,7 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | APRS-IS (login/passcode · server-side filter · stream) | aprsc (the core APRS-IS server) | `aprsis-loop` | beacon travels driver → aprsc → acs ingest → gateway API |
 | KISS TCP (the ingest's KISS TNC client) | Direwolf | `direwolf-loop` | keys one Direwolf, hears the other, over Bell-202 1200 bd AFSK |
 | AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
-| RX-IGate (RF → APRS-IS, `qAR,<igate>`) | Direwolf + aprsc | `direwolf-loop` | the acs ingest gates what its Direwolf hears; an `RFONLY` path is held back |
+| RX-IGate (RF → APRS-IS, `qAO,<igate>` for a receive-only gate) | Direwolf + aprsc | `direwolf-loop` | the acs ingest gates what its Direwolf hears; an `RFONLY` path is held back |
 | Telnet consoles | LinBPQ, F6FBB, TNN, JNOS | all drivers | reachability + banner/gate assertions |
 | INP3 (RIF/L3RTT) | TNN (TheNet lineage) | `extra-peers` once the TNN leg is green | asserted stack-vs-stack in the local loop every run |
 
@@ -113,7 +113,8 @@ the published ports (`DW_A_KISS_PORT` 38001, `DW_B_AGW_PORT` 38000, `DW_APRSC_FU
 - a frame keyed over KISS TCP on `dw-a` reaches the AGWPE client on `dw-b` with source, destination,
   path and information field intact, and a frame keyed over AGWPE on `dw-b` reaches the KISS client;
 - a position keyed on `dw-b` is heard by `dw-a`, gated by the acs ingest's RX-IGate, and appears on
-  aprsc's full feed as `OE9TST-9>APZACG,WIDE1-1,qAR,OE1ACS-10:…`;
+  aprsc's full feed as `OE9TST-9>APZACG,WIDE1-1,qAO,OE1ACS-10:…` (the ingest runs without `IGATE_TX`, so it
+  gates as a receive-only IGate);
 - a frame whose path carries `RFONLY` is heard on RF but never reaches aprsc.
 
 ## What this catches

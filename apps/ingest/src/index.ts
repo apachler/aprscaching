@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
-import { KissTnc } from "./kiss.js";
+import { KissTnc, kissTimingFromEnv } from "./kiss.js";
 import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
@@ -179,7 +179,13 @@ if (env.KISS_TNC_HOST) {
   // so a gateway that trusts it attests those frames. This batch is the only way the
   // site's hearings reach Tier A: the RX-IGate's APRS-IS copy (`qAR,<site>`) is never attested.
   const kiss = new KissTnc(
-    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall, sent: sentFrames },
+    {
+      host: env.KISS_TNC_HOST,
+      port: portEnv("KISS_TNC_PORT", 8001),
+      siteCall,
+      sent: sentFrames,
+      timing: kissTimingFromEnv(env),
+    },
     {
       onPacket: enqueue,
       onFrame: (f) => {
@@ -455,6 +461,31 @@ if (env.AGWPE_HOST) {
     { onPacket: enqueue },
   ).start();
   console.log("[agwpe] enabled");
+}
+// LoRa APRS — opt-in; a LoRa APRS iGate's TNC server (KISS or text lines over TCP), receive only. Its frames
+// are a TNC port's: one heard directly names the receiving site, which the gateway attests only when its sysop
+// trusts the call.
+if (env.LORA_APRS_HOST) {
+  const { LoraAprsPort, loraSettings } = await import("./lora-aprs.js");
+  let settings: import("./lora-aprs.js").LoraSettings;
+  try {
+    settings = loraSettings(env);
+  } catch (e) {
+    console.error("[ingest] FATAL: %s", (e as Error).message);
+    process.exit(1);
+  }
+  const lora = new LoraAprsPort(
+    { host: env.LORA_APRS_HOST, port: portEnv("LORA_APRS_PORT", 8001), settings, siteCall },
+    enqueue,
+  );
+  lora.start();
+  onShutdown.push(() => lora.stop());
+  console.log(
+    "[lora-aprs] enabled (%s), receive only: %s%s",
+    settings.protocol,
+    lora.status(),
+    siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : "",
+  );
 }
 // WA8DED host-mode TNC — opt-in; a TF-firmware TNC / TFPCX over TCP (serial at deploy).
 if (env.HOSTMODE_HOST) {

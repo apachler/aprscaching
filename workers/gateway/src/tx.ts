@@ -5,7 +5,7 @@ import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { encodeAprsMessage, encodeAprsPosition, isAprsSymbol } from "@aprscaching/aprs";
+import { encodeAprsMessage, encodeAprsPosition, isAprsSymbol, rfByteLength } from "@aprscaching/aprs";
 
 /**
  * tx.ts — gated user TX via the ingest box. A signed-in, control-verified user asks the peer to inject
@@ -33,7 +33,7 @@ const TOCALL = /^[A-Z0-9]{1,6}(-\d{1,2})?$/;
 const ADDRESSEE = /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/;
 /** An APRS message number. */
 const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
-/** The longest APRS message text. */
+/** The longest APRS message text, in the bytes it goes out as (UTF-8). */
 const APRS_MESSAGE_MAX = 67;
 
 /** User transmissions an account may queue an hour. */
@@ -63,8 +63,11 @@ export function buildTxPayload(body: UserTxBody):
     const text = String(body.text ?? "").trim();
     if (!to || !text) return { ok: false, error: "a message needs an addressee and text" };
     if (!ADDRESSEE.test(to)) return { ok: false, error: "the addressee must be a callsign of up to 9 characters" };
-    if (text.length > APRS_MESSAGE_MAX)
-      return { ok: false, error: `an APRS message holds at most ${APRS_MESSAGE_MAX} characters` };
+    if (rfByteLength(text) > APRS_MESSAGE_MAX)
+      return {
+        ok: false,
+        error: `an APRS message holds at most ${APRS_MESSAGE_MAX} bytes of text, and a letter such as ü takes two`,
+      };
     // a message number asks the addressee's station to acknowledge it
     const msgNo = body.msgNo == null || body.msgNo === "" ? undefined : String(body.msgNo);
     if (msgNo !== undefined && !MSG_NO.test(msgNo)) return { ok: false, error: "msgNo must be 1–5 letters or digits" };

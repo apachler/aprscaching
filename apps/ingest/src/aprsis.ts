@@ -71,7 +71,9 @@ export class AprsIs extends EventEmitter {
     this.lines.reset(); // never carry a partial line across connections
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
-    s.setEncoding("utf8");
+    // An APRS-IS line carries bytes in no named character set: read it one character per byte (latin1), the
+    // form an info field heard on RF takes, and the gateway reads the text out of both alike (`rfText`)
+    s.setEncoding("latin1");
     // A half-dead server keeps the TCP session up but stops sending. setTimeout fires when
     // no bytes arrive within idleMs (reset on every read) → destroy → `close` → one reconnect.
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());

@@ -485,7 +485,7 @@ doc_transports() {
   if tcp_open "$host" "$port"; then pass ingest.aprsis "APRS-IS $host:$port is reachable"; else
     warnc ingest.aprsis "APRS-IS $host:$port is not reachable from here (fine off-grid)" "check the network or APRSIS_HOST"
   fi
-  for name in KISS_TNC AGWPE HOSTMODE MESHTASTIC; do
+  for name in KISS_TNC AGWPE HOSTMODE LORA_APRS MESHTASTIC; do
     host="$(doc_get "${name}_HOST")"
     [ -n "$host" ] || continue
     port="$(doc_get "${name}_PORT")"

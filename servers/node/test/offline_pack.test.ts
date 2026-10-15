@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { PACK_LOGS_PER_CACHE, type PackResponse } from "@aprscaching/shared";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { jpegOf } from "./helpers/images.js";
 
 let ip = 0;
 function setup() {
@@ -169,7 +170,7 @@ describe("image thumbnails", () => {
       new Request(`https://pack.example/api/caches/${id}/media?title=view`, {
         method: "POST",
         headers: { "content-type": "image/jpeg", "x-ingest-secret": "test-ingest-secret", "x-owner-call": "OE8OWN" },
-        body: new Uint8Array(5000),
+        body: jpegOf(5000),
       }),
     );
     const mediaId = ((await up.json()) as { item: { id: number } }).item.id;
@@ -191,7 +192,7 @@ describe("image thumbnails", () => {
 
   it("the owner stores one, and the gallery and the pack list it beside the image", async () => {
     const t = await withImage();
-    expect((await t.thumb(new Uint8Array(800))).status).toBe(200);
+    expect((await t.thumb(jpegOf(800))).status).toBe(200);
     const list = (await (await serve(t.env)(new Request(`https://pack.example/api/caches/${t.id}/media`))).json()) as {
       media: { thumbUrl?: string; thumbBytes?: number; bytes: number }[];
     };
@@ -210,8 +211,8 @@ describe("image thumbnails", () => {
 
   it("a new one replaces the old, and deleting the image deletes both", async () => {
     const t = await withImage();
-    await t.thumb(new Uint8Array(800));
-    await t.thumb(new Uint8Array(900));
+    await t.thumb(jpegOf(800));
+    await t.thumb(jpegOf(900));
     expect([...t.objects.keys()].filter((k) => k.includes(".thumb.")).length).toBe(1);
     await serve(t.env)(
       new Request(`https://pack.example/api/caches/${t.id}/media/${t.mediaId}`, {

@@ -303,7 +303,7 @@ for (const f of TEXT) {
           return;
         }
         if (/^ingest\.x$/.test(id)) {
-          for (const n of ["kiss_tnc", "agwpe", "hostmode", "meshtastic"])
+          for (const n of ["kiss_tnc", "agwpe", "hostmode", "lora_aprs", "meshtastic"])
             checkRef(f, i + 1, page, `ingest${n}`, `ingest.${n}`);
           return;
         }

@@ -67,6 +67,33 @@ Everything else. That includes any position that reached the instance only over 
 ([APRS-IS](../glossary.md#aprs-is)). Anyone can send such a position with any callsign, so it proves nothing
 about where you were.
 
+## See the route of a find
+
+Each found log in a cache's logbook has a **Packet route** link. Tap it to see the path the beacon behind the
+find took, from your radio to the instance:
+
+| Step                  | What it shows                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| **Sender**            | The callsign that sent the beacon.                                                       |
+| **Digipeater**        | Each station that repeated it on the air. **Not taken** marks a hop no station repeated. |
+| **Attested receiver** | The instance's own receiving station heard it on the air.                                |
+| **IGate**             | A station that copied it to [APRS-IS](../glossary.md#aprs-is).                           |
+| **APRS-IS**           | The [q-construct](../glossary.md#q-construct) a server added, such as `qAR` or `qAC`.    |
+| **This instance**     | Where the route ends.                                                                    |
+
+A badge above the route says what the beacon supports on its own: **Tier A evidence** when an attested
+receiver heard it, **Tier C evidence** otherwise. One line below says why.
+
+A route that passes through APRS-IS is always Tier C evidence, even when it names one of the instance's own
+stations, as in `qAR` followed by its callsign. Anyone can write that line, so only the station's own receiver
+counts. A route with an attested receiver can still end in a find below Radio-verified: the station was yours,
+or your track could not reach the cache.
+
+A Location-verified find, or one another instance confirmed, has no route here; the link says so.
+
+The sheet of a live station on the map shows the same route for the station's last position, under **Last
+packet route**.
+
 ## Improve your badge
 
 - **Allow location access** when the browser asks. Without it, a find without a radio can only be **Logged**.

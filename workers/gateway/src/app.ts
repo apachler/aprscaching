@@ -229,6 +229,7 @@ import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommand
 import { handleMailboxPost, handleMailboxList, handleMailboxWithdraw, expireMailbox } from "./mailbox.js";
 import { handleNearRadioPrefs, pruneNearCacheMessages } from "./nearradio.js";
 import { runUpdateCheck } from "./updatecheck.js";
+import { refreshDeviceIds } from "./deviceid.js";
 import { handleAdminSettings } from "./sitesettings.js";
 import { handleAdminToolRegistries, handleMyToolRegistries, handleToolRegistries } from "./toolregistries.js";
 import { loadSiteSettings } from "./siteconfig.js";
@@ -404,6 +405,8 @@ export async function runScheduled(env: Env): Promise<void> {
   await runFrequentSync(env);
   // the daily look for a newer release (off with UPDATE_CHECK=0); it never throws
   await runUpdateCheck(env);
+  // the daily refresh of the device database (off without DEVICEID_URL); it never throws
+  await refreshDeviceIds(env);
   // email each account its un-notified watch alerts (no-op without an email provider)
   try {
     await runDigests(env);

@@ -415,6 +415,10 @@ CREATE TABLE cache_logs (
   -- a finder's "needs maintenance" flag on a found or did-not-find log. The cache shows it until its owner
   -- posts a maintenance log (or enables the cache again) after it; the owner hears of each flag in the app.
   needs_maintenance   INTEGER NOT NULL DEFAULT 0,
+  -- the route of the stored packet a found log was scored against (JSON PacketRouteInfo: sender, path, how it
+  -- arrived, the receiving site and whether that site attested it). Display only: it says why the find has its
+  -- tier after the position itself is pruned. NULL when no packet was matched (Tier B, a peer's corroboration).
+  route               TEXT,
   -- the find's number, its signed `v` and its global id `<instance>:find:<fed_seq>` (trigger
   -- cache_logs_fed_seq, under Federation)
   fed_seq             INTEGER NOT NULL DEFAULT 0
@@ -661,10 +665,19 @@ CREATE TABLE stations (
   course       INTEGER,
   speed_kn     INTEGER,
   altitude_m   INTEGER,
+  range_km     REAL,                               -- radio range: sent (RNG, compressed) or from its PHG
   comment      TEXT,
-  source_call  TEXT                                -- the gating IGate
+  source_call  TEXT,                               -- the gating IGate
+  -- what names the device of its last stored position (deviceid.ts): the tocall (the destination without SSID)
+  -- of an ordinary packet, or the Mic-E device code (prefix character, suffix characters) of a Mic-E one, whose
+  -- destination is position data
+  tocall       TEXT,
+  mice_prefix  TEXT,
+  mice_suffix  TEXT
 );
 CREATE INDEX idx_stations_geo ON stations (lat, lon);
+-- the IGates that gated a position lately (coverage.ts): a station another one names as its gate
+CREATE INDEX idx_stations_source ON stations (source_call, last_seen);
 
 -- Raw per-station packet history for the shack: a short, hard-TTL ring of verbatim TNC2 frames. A
 -- diagnostic, not a long-term log.
@@ -1711,6 +1724,17 @@ CREATE TABLE update_check (
   tag        TEXT,
   url        TEXT,
   etag       TEXT,
+  checked_at INTEGER NOT NULL
+);
+
+-- The last copy of the APRS device identification database (aprs-deviceid, CC BY-SA 2.0), as the daily refresh
+-- fetched it from DEVICEID_URL (deviceid.ts): the JSON body verbatim, the ETag that keeps the next request a cheap
+-- 304, and when it was fetched and last checked. A restart or an offline box keeps naming devices from it.
+CREATE TABLE deviceid_cache (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  body       TEXT,
+  etag       TEXT,
+  fetched_at INTEGER,
   checked_at INTEGER NOT NULL
 );
 

@@ -19,6 +19,24 @@
   .station-graph .u-legend {
     font-size: var(--text-caption);
   }
+  /* the graphs' and raw packets' toggles: text controls, at least 24px tall (WCAG 2.5.8) */
+  .station-graphs > .link,
+  .station-packets > .link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 24px;
+  }
+  /* the route of the station's latest stored packet */
+  .station-route {
+    margin-top: var(--space-md);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--line);
+  }
+  .station-route .tr-head {
+    margin: 0;
+    font-family: inherit;
+    font-weight: 400;
+  }
   /* ---- track history + time-replay ---- */
   .trackreplay {
     margin-top: var(--space-md);

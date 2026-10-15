@@ -3,11 +3,12 @@
  * serialKiss.ts — a Web Serial KISS transport for connected-mode packet. Bridges the
  * serial byte stream ⇄ raw AX.25 frames: incoming bytes are de-KISS'd + decoded into typed frames for
  * the TerminalSession, and outgoing frames are encoded + KISS-wrapped. It implements @aprscaching/packet's
- * synchronous Transport.send by queueing the write (fire-and-forget). Chromium-only + session-bound,
- * exactly like the RX-only browser ingest — operator-local RF.
+ * synchronous Transport.send by queueing the write (fire-and-forget). A port that can write is sent the TNC's
+ * channel access (TXDELAY, PERSIST, SLOTTIME) as it opens, the values My radio keeps. Chromium-only +
+ * session-bound, exactly like the RX-only browser ingest — operator-local RF.
  */
 import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprscaching/ax25";
-import { KissDecoder, kissWrap } from "@aprscaching/aprs";
+import { KissDecoder, kissTimingFrames, kissWrap, type KissTiming } from "@aprscaching/aprs";
 import type { Transport } from "@aprscaching/packet";
 
 interface SerialPortLike {
@@ -42,11 +43,14 @@ export class SerialKissTransport implements Transport {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private closed = false;
+  private writes: Promise<void> = Promise.resolve();
   private feed: (chunk: Uint8Array) => void;
 
+  /** `timing`, when given, is sent to the TNC as the port opens, before any frame. */
   constructor(
     private onFrame: (f: Ax25Frame) => void,
     private onClose?: (err?: Error) => void,
+    private timing?: KissTiming,
   ) {
     this.feed = ax25Feeder(onFrame);
   }
@@ -60,20 +64,34 @@ export class SerialKissTransport implements Transport {
     this.feed = ax25Feeder(this.onFrame); // a reopened port must not complete the last session's partial frame
     if (this.port.writable) this.writer = this.port.writable.getWriter();
     void this.readLoop();
+    // a receive-only port never keys the radio, so it takes no timing
+    if (this.writer && this.timing) {
+      try {
+        await this.write(kissTimingFrames(this.timing));
+      } catch (e) {
+        await this.disconnect(); // the open failed: release the port so the next open can take it
+        throw e;
+      }
+    }
   }
 
   /** Transport.send — encode + KISS-wrap + queue the write (the session calls this synchronously). */
   send(frame: Ax25Frame): void {
-    void this.write(kissWrap(encodeFrame(frame)));
+    if (!this.writer) return;
+    this.write(kissWrap(encodeFrame(frame))).catch((e: Error) => {
+      if (!this.closed) this.onClose?.(e);
+    });
   }
 
-  private async write(bytes: Uint8Array): Promise<void> {
-    if (!this.writer) return;
-    try {
+  /** Write bytes one write at a time, in order: the timing and a frame never interleave on the wire. */
+  private write(bytes: Uint8Array): Promise<void> {
+    const run = async () => {
+      if (!this.writer) throw new Error("port is not writable");
       await this.writer.write(bytes);
-    } catch (e) {
-      if (!this.closed) this.onClose?.(e as Error);
-    }
+    };
+    const next = this.writes.then(run, run);
+    this.writes = next.catch(() => {}); // one failed write must not block the next
+    return next;
   }
 
   private async readLoop(): Promise<void> {

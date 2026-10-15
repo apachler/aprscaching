@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, hiderSignup, type Res } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { pngOf } from "./helpers/images.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 
@@ -44,7 +45,7 @@ async function upload(env: Env, cacheId: number, headers: Record<string, string>
     new Request(`https://gw.test/api/caches/${cacheId}/media?title=x`, {
       method: "POST",
       headers: { "content-type": "image/png", "x-real-ip": "192.0.2.10", ...headers },
-      body: new Uint8Array([1, 2, 3]),
+      body: pngOf(),
     }),
   );
 }

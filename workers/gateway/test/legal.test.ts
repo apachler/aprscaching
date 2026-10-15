@@ -150,4 +150,13 @@ describe("legal pages", () => {
     const smtp = await handlePrivacyPage({ ...mail, SMTP_HOST: "mail.example.net" } as Env).text();
     expect(smtp).not.toContain("a third country.</li>");
   });
+
+  it("privacy names the device database host only while DEVICEID_URL is set", async () => {
+    expect(await handlePrivacyPage(configured).text()).not.toContain("APRS device database");
+    const on = await handlePrivacyPage({
+      ...configured,
+      DEVICEID_URL: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json",
+    } as Env).text();
+    expect(on).toContain("APRS device database</strong> (aprs-deviceid.aprsfoundation.org)");
+  });
 });

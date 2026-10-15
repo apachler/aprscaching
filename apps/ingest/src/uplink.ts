@@ -163,7 +163,8 @@ export class AprsUplink {
         ? `${inner}\r\n`
         : `${this.o.serviceCall}>${item.tocall},TCPIP*:}${inner}\r\n`;
     try {
-      s.write(frame);
+      // the gateway originates every outbox item: its text goes out as UTF-8 bytes, the way it reads text back
+      s.write(frame, "utf8");
       return true;
     } catch {
       this.ready = false;

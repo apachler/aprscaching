@@ -11,6 +11,8 @@ import { TEXT_LIMITS, dxccOfCall, type CacheType, type FedScope } from "@aprscac
 import { parseTags, refusalMessage, tagProblem } from "./formLimits.js";
 import { CountrySelect } from "./CountrySelect.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { CoverageGroup } from "./CoverageGroup.js";
+import type { CoverageState } from "./CoverageLayer.js";
 
 const SCOPES: { v: FedScope; label: string; help: string }[] = [
   { v: "public", label: "Public", help: "Shared across the whole network." },
@@ -33,6 +35,8 @@ export function HidePanel(props: {
   onCreated: (c: CacheSummary) => void;
   /** Open Settings, where the callsign is verified (an unverified call cannot hide a cache). */
   onVerify?: () => void;
+  /** The radio coverage overlay on the map: its remembered switch and what it shows. */
+  coverage?: { on: boolean; setOn: (v: boolean) => void; state: CoverageState };
 }) {
   const { callsign, verified } = usePlatform();
   const [title, setTitle] = useState("");
@@ -238,6 +242,15 @@ export function HidePanel(props: {
           ? "Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator."
           : "Decimal degrees (lat, lon) or a Maidenhead locator."}
       </p>
+      {props.coverage && (
+        <CoverageGroup
+          on={props.coverage.on}
+          setOn={props.coverage.setOn}
+          state={props.coverage.state}
+          pin={props.draft}
+          radioOnly={radioOnly}
+        />
+      )}
       <h4 className="set-subh">Basics</h4>
       <label>
         Title

@@ -17,6 +17,7 @@ describe("transportForPort", () => {
     ["soundcard", "tnc"],
     ["agwpe", "tnc"],
     ["hostmode", "tnc"],
+    ["lora-aprs", "tnc"],
     ["webserial-kiss", "browser-rf"],
     ["browser-rf", "browser-rf"],
     ["axudp", "axudp"],

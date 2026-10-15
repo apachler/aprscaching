@@ -6,6 +6,7 @@ import {
   parseFromRadio,
   wantConfigFrame,
   MeshtasticLicensedNodes,
+  rfText,
   type ParsedFrame,
   type AprsData,
   type MeshFix,
@@ -41,7 +42,7 @@ function ax25ToRfFrame(ax: Uint8Array): RfFrame | null {
   const frame = decodeAx25(ax);
   if (!frame) return null;
   try {
-    const data = decodeAprs(frame);
+    const data = decodeAprs({ ...frame, payload: rfText(frame.payload) });
     return { frame, data, packet: frameToPacket(frame, data, Math.floor(Date.now() / 1000)), at: Date.now() };
   } catch {
     return null;

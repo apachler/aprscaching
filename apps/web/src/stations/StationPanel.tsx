@@ -13,6 +13,8 @@ import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
 import { MeshcomSection } from "../meshcom/MeshcomSection.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { PacketRoute } from "../packet/PacketRoute.js";
+import { DEVICEID_CREDIT, DEVICEID_LINK } from "../credits.js";
 
 /** What each station role means, for its badge's hint. */
 const ROLE_HINT: Partial<Record<StationRole, string>> = {
@@ -93,12 +95,31 @@ export function StationPanel(props: {
               ))}
             </div>
           ) : null}
+          {station.device && (
+            <p className="mt-1">
+              <Icon name="radio" cp437="" className="lead-ic" />
+              Sent with{" "}
+              <strong>
+                {station.device.vendor ? `${station.device.vendor} ` : ""}
+                {station.device.name}
+              </strong>
+              {station.device.class ? <span className="muted"> · {station.device.class}</span> : null}{" "}
+              <span className="fine muted">
+                (
+                <a href={DEVICEID_LINK} target="_blank" rel="noopener noreferrer">
+                  {DEVICEID_CREDIT}
+                </a>
+                )
+              </span>
+            </p>
+          )}
           {station.comment && <div className="comment">{station.comment}</div>}
           <div className="muted mt-1">
             {station.speedKn != null && station.speedKn > 0
               ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · `
               : ""}
             {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
+            {station.rangeKm != null ? `range ${fmt.distance(station.rangeKm * 1000)} · ` : ""}
             {station.packets} pkts · {station.track.length} track pts
           </div>
           {station.wx && (
@@ -160,6 +181,15 @@ export function StationPanel(props: {
               <Button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</Button>
             </div>
           </div>
+          <section className="station-route" aria-labelledby="station-route-h">
+            <h3 id="station-route-h" className="tr-head">
+              Last packet route
+            </h3>
+            <PacketRoute
+              route={station.lastRoute}
+              empty="No position from this station is stored, so no route is on record."
+            />
+          </section>
           <MeshcomSection callsign={station.callsign} />
           <TrackReplay map={map} callsign={station.callsign} />
           <StationGraphs callsign={station.callsign} />

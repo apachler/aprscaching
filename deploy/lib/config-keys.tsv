@@ -96,6 +96,7 @@ SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Comm
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs	
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds	
 UPDATE_CHECK	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops the daily request to GitHub that looks for a newer release	updates
+DEVICEID_URL	url	gateway			0	0	selfhost,baremetal,pocket,desktop	Address of the APRS device database (aprs-deviceid JSON) fetched once a day; empty names no devices	
 TOOL_REGISTRIES	json	gateway			0	0	selfhost,baremetal,pocket,desktop	JSON list of tool registries; set, it replaces the list kept in Instance settings	
 TOOL_REGISTRIES_PLAYERS	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops players adding tool registries of their own	tools
 TOOL_REGISTRIES_PROXY	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 lets browsers fetch tool registries directly instead of through this instance	tools
@@ -109,6 +110,10 @@ APRSIS_PASSCODE	int	ingest	-1		1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS 
 APRSIS_FILTER	string	ingest,pocket	r/47.07/15.42/300		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed	
 KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Host of the KISS TNC over TCP; set it to enable the TNC	
 KISS_TNC_PORT	int	ingest,pocket	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the KISS TNC	
+KISS_TIMING	enum	ingest	on	on|off	0	0	selfhost,baremetal,ingest-box,pocket	Send the KISS TNC its timing after each connect (off keeps its own)	
+KISS_TXDELAY	int	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	TX delay sent to the KISS TNC, 0-255 in 10 ms steps	
+KISS_PERSIST	int	ingest	63		0	0	selfhost,baremetal,ingest-box,pocket	Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot	
+KISS_SLOTTIME	int	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Slot time sent to the KISS TNC, 0-255 in 10 ms steps	
 AGWPE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the AGWPE server; set it to enable AGWPE	
 AGWPE_PORT	int	ingest	8000		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the AGWPE server	
 AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port to use (0 is the first)	
@@ -116,6 +121,14 @@ HOSTMODE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of t
 HOSTMODE_PORT	int	ingest	3694		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the WA8DED host-mode TNC	
 HOSTMODE_MYCALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to	
 HOSTMODE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	Host-mode radio channel to use (0 is the first)	
+LORA_APRS_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the LoRa APRS IGate's TNC server; set it to enable the LoRa APRS port	
+LORA_APRS_PORT	int	ingest	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the LoRa APRS IGate's TNC server	
+LORA_APRS_PROTOCOL	enum	ingest	kiss	kiss|text	0	0	selfhost,baremetal,ingest-box,pocket	What the TNC server sends: kiss (KISS frames) or text (one TNC2 line per packet)	
+LORA_APRS_PRESET	enum	ingest	standard	standard|fast|custom	0	0	selfhost,baremetal,ingest-box,pocket	LoRa modem settings the modem runs: standard (SF9, CR 4:7), fast (SF8, CR 4:6) or custom	
+LORA_APRS_FREQ_MHZ	number	ingest	433.775		0	0	selfhost,baremetal,ingest-box,pocket	Frequency the LoRa modem is set to, in MHz (433.775 in IARU Region 1, 439.9125 in the UK)	
+LORA_APRS_SF	int	ingest	9		0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: spreading factor, 7-12	
+LORA_APRS_BW_KHZ	number	ingest	125		0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: bandwidth in kHz (125, 250, 62.5, …)	
+LORA_APRS_CR	enum	ingest	7	5|6|7|8	0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: coding rate denominator, 5-8 for 4:5 to 4:8	
 TX_GATE_GRACE	string	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)	
 SOUNDCARD_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port	
 SOUNDCARD_PLAYBACK	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA playback device of the soundcard port (blank: the capture device)	

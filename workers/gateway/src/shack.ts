@@ -14,6 +14,9 @@ import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall } from "./servicecall.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
+import { routeOf } from "./provenance.js";
+import { attestation, everySite, sitesFor } from "./attestedsites.js";
+import { stationDevice, type DeviceColumns } from "./deviceid.js";
 
 // ------------------------------------------------------------- station registry
 function bbox(u: URL): { sql: string; binds: number[] } {
@@ -178,13 +181,16 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(
     `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
-            s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner
+            s.range_km AS rangeKm, s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner,
+            s.tocall, s.mice_prefix, s.mice_suffix
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
   )
     .bind(cs)
-    .first<{ roles: string | null; owner: string | null }>();
+    .first<{ roles: string | null; owner: string | null } & DeviceColumns>();
   if (!st) return json({ error: "unknown station" }, { status: 404 });
-  const { owner, ...station } = st;
+  const { owner, tocall, mice_prefix, mice_suffix, ...station } = st;
+  // the device its last stored position names, from the device database; none when that is off or unknown
+  const device = await stationDevice(env, { tocall, mice_prefix, mice_suffix }).catch(() => null);
   const stRoles = rolesArr(station.roles);
   // Whether the station is in an operator's registry, and whether that registry is the viewer's own, so
   // the panel offers "Add to my stations" only where adding can succeed. The owner's id never leaves.
@@ -208,9 +214,37 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const pc = await env.DB.prepare("SELECT COUNT(*) AS n FROM positions WHERE callsign = ?")
     .bind(cs)
     .first<{ n: number }>();
+  // The route of the latest stored position, attested against the sites its delivering box may claim; the box
+  // itself never leaves.
+  const last = await env.DB.prepare(
+    `SELECT callsign, ts, heard_via, igate_call, path, transport, ingest_box FROM positions
+      WHERE callsign = ? ORDER BY ts DESC, id DESC LIMIT 1`,
+  )
+    .bind(cs)
+    .first<{
+      callsign: string;
+      ts: number;
+      heard_via: string;
+      igate_call: string | null;
+      path: string | null;
+      transport: string | null;
+      ingest_box: string | null;
+    }>();
+  const att = last ? await attestation(env) : null;
+  const lastRoute = last && att ? routeOf(last, sitesFor(att, last.ingest_box), everySite(att)) : null;
 
   return json({
-    station: { ...station, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0, registered, mine },
+    station: {
+      ...station,
+      roles: stRoles,
+      track,
+      wx: wx ?? null,
+      packets: pc?.n ?? 0,
+      registered,
+      mine,
+      lastRoute,
+      device,
+    },
   });
 }
 

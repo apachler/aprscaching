@@ -31,6 +31,7 @@ import { moderationKeepDays, POSITION_RETENTION_S, retentionFrom, STATION_KEEP_S
 import { meshcomNodeKeepDays } from "./meshcom.js";
 import { MAILBOX_KEEP_SEC, MAILBOX_TTL_SEC } from "./mailbox.js";
 import { BULLETIN_LIFETIME_SEC } from "./bbs.js";
+import { deviceIdUrl } from "./deviceid.js";
 import { setting } from "./siteconfig.js";
 
 const STYLE = `<style>
@@ -142,6 +143,11 @@ function recipients(env: Env): string {
   if (updateCheckOn(env))
     items.push(`<li><strong>GitHub</strong> (api.github.com) — once a day this instance asks GitHub whether a newer
   APRScaching release exists. The request names this instance and carries nothing about you.</li>`);
+  const deviceIds = deviceIdUrl(env);
+  if (deviceIds)
+    items.push(`<li><strong>APRS device database</strong> (${escapeHtml(new URL(deviceIds).host)}) — once a day this
+  instance fetches the list of APRS device names from there. The request names this instance and carries nothing
+  about you.</li>`);
   return `<div class=box><ul>\n${items.join("\n")}\n</ul>
 <p>Where a recipient sits outside the EU/EEA, the operator tells you on request which safeguard (GDPR Art. 45 or
 46) covers the transfer. No data is sold, and nothing goes to advertisers or analytics services.</p></div>`;
@@ -164,9 +170,8 @@ function purposes(env: Env): string {
 <h3>Playing</h3>
 <p>Caches you hide, finds and notes you log (callsign, time, comment and how the find was verified), ratings,
   favourites, watched caches, and media you upload. When you log a find in the app, your device's location at that
-  moment is compared with the cache; only the distance and the result are kept, not the location. Your browser
-  scales a photo larger than 1600 pixels down before uploading it, which drops its embedded metadata (such as a
-  GPS position); a smaller photo is stored as you upload it, metadata included.<br>
+  moment is compared with the cache; only the distance and the result are kept, not the location. Photos are
+  stored without the Exif, XMP or IPTC data a camera writes, such as the place the photo was taken.<br>
   <em>Legal basis:</em> providing the service (Art. 6(1)(b)).<br>
   <em>Kept:</em> until you delete it or erase your account. Erasure replaces your callsign on your finds with a
   withdrawn marker and archives your caches, so other players' counts stay right.</p>

@@ -54,3 +54,51 @@ describe("telemetry scan is linear", () => {
     expect(d("T#12\r")).toEqual({ kind: "telemetry", analog: [], digital: [] });
   });
 });
+
+describe("data extension scan is linear", () => {
+  const pos = "!4903.50N/07201.75W";
+  it("long runs after a PHG, RNG, DFS or DF bearing head decode fast", () => {
+    for (const payload of [
+      `${pos}#PHG${"5".repeat(N)}`,
+      `${pos}#PHG513${"0/".repeat(N)}`,
+      `${pos}#RNG${"0".repeat(N)}`,
+      `${pos}\\DFS${"2".repeat(N)}`,
+      `${pos}\\000/000${"/".repeat(N)}`,
+      `${pos}\\000/000/${"9".repeat(N)}`,
+    ]) {
+      const { ms } = timed(() => decodeAprs(frame(payload)));
+      expect(ms).toBeLessThan(1000);
+    }
+  });
+
+  it("keeps the extension semantics", () => {
+    const d = (p: string) => decodeAprs(frame(p)) as { phg?: unknown; rangeKm?: number; df?: unknown };
+    expect(d(`${pos}#PHG5132`).phg).toEqual({ powerW: 25, heightM: 6.1, gainDb: 3, directivityDeg: 90 });
+    expect(d(`${pos}#RNG0050`).rangeKm).toBe(80.5);
+    expect(d(`${pos}\\000/000/270/729`).df).toEqual({ bearingDeg: 270, hits: 7, rangeKm: 6.4, accuracyDeg: 1 });
+  });
+});
+
+describe("!DAO!, NMEA and locator scans are linear", () => {
+  const pos = "!4903.50N/07201.75W>";
+  it("a comment of many near-tokens, a long NMEA sentence and a long locator status decode fast", () => {
+    for (const payload of [
+      `${pos}${"!W1".repeat(N)}`,
+      `${pos}${"!Wab!".repeat(N)}`,
+      `${pos}${"!".repeat(N)}`,
+      `$GPRMC,${",".repeat(N)}`,
+      `$GPGGA,${"*".repeat(N)}`,
+      `>IO91SX/G ${"IO91SX/G".repeat(N)}`,
+      `>${"IO91".repeat(N)}`,
+    ]) {
+      const { ms } = timed(() => decodeAprs(frame(payload)));
+      expect(ms).toBeLessThan(1000);
+    }
+  });
+
+  it("keeps the semantics", () => {
+    expect(decodeAprs(frame(`${pos}x${"!W1".repeat(10)}!W12!`))).toMatchObject({ lat: 49.05835, datum: "W" });
+    expect(decodeAprs(frame(`$GPRMC,${",".repeat(N)}`)).kind).toBe("other");
+    expect(decodeAprs(frame(">IO91SX/G hi"))).toMatchObject({ text: "hi", locator: { grid: "IO91SX" } });
+  });
+});

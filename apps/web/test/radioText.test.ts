@@ -20,6 +20,11 @@ describe("the radio fallback text", () => {
   it("fits one APRS message", () => {
     expect(radioLogText(item("found", "x".repeat(200)))!.length).toBe(APRS_MESSAGE_MAX);
   });
+  it("counts the bytes the text goes out as, and never cuts a letter in half", () => {
+    const text = radioLogText(item("found", "ü".repeat(60)))!;
+    expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(APRS_MESSAGE_MAX);
+    expect(text).toBe(`FOUND AC-1234 ${"ü".repeat(26)}`);
+  });
   it("has none where the radio cannot log it", () => {
     expect(radioLogText(item("note"))).toBeNull();
     expect(radioLogText(item("maintenance", "fixed the lid"))).toBeNull();

@@ -8,7 +8,7 @@
  *
  * Attestation is default-deny, and it follows the path a frame took to reach the gateway:
  *   - Only a frame the attested site's own receiver heard, delivered by that site's own ingest, is first-party
- *     attested: a local TNC (KISS, AGWPE, WA8DED host mode → `tnc`) or a MeshCom node (`meshcom`) on the
+ *     attested: a local TNC (KISS, AGWPE, WA8DED host mode, a soundcard port or a LoRa APRS iGate → `tnc`) or a MeshCom node (`meshcom`) on the
  *     operator's ingest box, whose writes need INGEST_SECRET (a signed batch records `browser-rf`, whatever
  *     port it names). The ingest stamps a direct hearing with the site call as `igate_call`, the frame is
  *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`, or a station the sysop trusts in Instance admin; a site trusted through an enrolled box only for the frames that box delivered itself; attestedsites.ts). An on-air frame carries no q-construct of
@@ -24,7 +24,7 @@
  *   - An internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
  *     its `heard_via` and site claim — no receiver the operator runs heard it on amateur RF.
  */
-import { Transport as TransportEnum, type Transport, type Provenance } from "@aprscaching/shared";
+import { Transport as TransportEnum, type Transport, type Provenance, type PacketRouteInfo } from "@aprscaching/shared";
 
 export interface RawProvenance {
   // The `& {}` keeps the known-value suggestions without the union collapsing to bare `string`.
@@ -73,6 +73,7 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   soundcard: "tnc",
   agwpe: "tnc",
   hostmode: "tnc",
+  "lora-aprs": "tnc",
   "webserial-kiss": "browser-rf",
   "browser-rf": "browser-rf",
   axudp: "axudp",
@@ -116,5 +117,30 @@ export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Pro
     firstPartyAttested,
     ...(igate ? { siteId: igate } : {}),
     ...(p.ts != null ? { heardAt: p.ts } : {}),
+  };
+}
+
+/**
+ * The route of a stored position, for display: its path, how it arrived, and whether the receiving site it names
+ * attested it. `sites` are the sites this position may claim ({@link provenanceOf}); `everySite` all the instance
+ * attests, so a reader can tell an APRS-IS copy that names an attested site (`qAR,<site>`, still Tier C) from
+ * one that names a stranger.
+ */
+export function routeOf(
+  p: RawProvenance & { callsign: string; ts: number },
+  sites: Set<string>,
+  everySite: Set<string>,
+): PacketRouteInfo {
+  const prov = provenanceOf(p, sites);
+  const site = prov.siteId ?? null;
+  return {
+    src: p.callsign,
+    path: p.path ?? "",
+    heardVia: p.heard_via,
+    transport: prov.transport,
+    site,
+    attested: prov.firstPartyAttested,
+    siteAttested: !!site && everySite.has(site),
+    ts: p.ts,
   };
 }

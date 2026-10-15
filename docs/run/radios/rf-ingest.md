@@ -22,6 +22,16 @@ The APRS-IS feed always runs: set `APRSIS_FILTER`, and `APRSIS_CALLSIGN` / `APRS
 logged-in feed. Every transport below is opt-in and starts only when its setting is present. Each stamps its
 own `port`, counted at `GET /api/ports`.
 
+APRS names no character set: a frame heard on RF and a line from APRS-IS carry bytes. The box passes them on
+unchanged, so the IGate and the digipeater send exactly the bytes they heard. The gateway reads the text a
+station sent (a message, a status, a comment) as UTF-8 when the bytes are valid UTF-8, and otherwise as
+Latin-1, one character per byte. A `Grüße` sent in either set shows as `Grüße`.
+
+Text the box, the gateway or the browser radio writes itself (a message, an answer to a radio command, a
+beacon comment, a status) goes out as UTF-8, on RF and on APRS-IS alike. APRS limits count these bytes: a
+message holds 67 bytes of text and a beacon comment 43, and a letter such as `ü` takes two. A message cut to
+fit is cut between letters, never inside one.
+
 ## Transports
 
 | Transport | Turn on with | What it does |
@@ -30,6 +40,7 @@ own `port`, counted at `GET /api/ports`.
 | **Soundcard port** | `SOUNDCARD_DEVICE` (+ `SOUNDCARD_*`, `SOUNDCARD_PORTS`) | The box is the 1200-baud AFSK modem: ALSA's `arecord` and `aplay` with a USB sound card or a sound HAT, keyed by a PTT driver (CM108 GPIO, Linux GPIO, serial RTS/DTR, CAT, rigctld or VOX). Receives like a KISS TNC and carries the same functions. Transmit is off by default and needs a control-verified call; a watchdog bounds the key time. Setup: [Soundcard port](soundcard.md). |
 | **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
+| **LoRa APRS** | `LORA_APRS_HOST` (+ `LORA_APRS_PORT`, 8001; `LORA_APRS_PROTOCOL`; `LORA_APRS_PRESET`) | Reads a LoRa APRS IGate's TNC server (CA2RXU firmware), as KISS frames or text lines. Takes the LoRa packet's TNC2 line with or without its `0x3C 0xFF 0x01` prefix, or the IGate's AX.25 rendering of it; drops lines the IGate passed on from APRS-IS. Logs the radio settings and a packet's airtime. Receive only. Setup: [LoRa APRS](lora-aprs.md). |
 | **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes send to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Accepts only licensed nodes (licensed ham mode on, callsign as long name), under their callsign; drops licence-free nodes. Always Tier C. The browser's Web Serial path uses the same decoder and rule. |
 | **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Accepts only configured node addresses, rate-capped per node; a frame the node reports twice (LoRa and server) is forwarded once. Transmits only answers to radio commands, and only with `MESHCOM_TX=1`. Setup, firewall, trust and troubleshooting: [MeshCom](meshcom.md). |
 | **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`, `AXUDP_BIND`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it is a receive-only listener that accepts from any host and says so at start; bind it to a LAN address with `AXUDP_BIND`. With `AXUDP_PEERS` it is a two-way port that carries NET/ROM crosslinks and FBB forwarding over the internet, and accepts frames only from the peers' addresses. Host names are resolved again every five minutes, so dynamic DNS works; anything else is dropped and counted. |
@@ -42,6 +53,24 @@ own `port`, counted at `GET /api/ports`.
     ([transport is not trust](../../reference/trust-model.md#transport-is-not-trust)). Naming tunnel peers
     in `AXUDP_PEERS` or `AXIP_PEERS` lets the node send over the tunnel; transmitting on the air is a
     separate matter ([On-air legality](#on-air-legality)).
+
+### TNC timing
+
+After each connect, the box sends the KISS TNC three settings that decide when it keys the radio: TX delay,
+persist and slot time. A TNC that restarted is back on these values at the next connect. The frames key
+nothing, so the box sends them whether or not it transmits.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `KISS_TXDELAY` | `30` (300 ms) | How long the radio transmits before the data starts, in 10 ms steps. |
+| `KISS_PERSIST` | `63` (1 in 4) | The chance, (value + 1) in 256, that the TNC sends in a free slot. |
+| `KISS_SLOTTIME` | `10` (100 ms) | How long the TNC waits between tries for a free channel, in 10 ms steps. |
+
+Each value is a whole number from 0 to 255. The defaults are the APRS values that
+[My radio](../../shack/my-radio.md#set-your-tncs-timing) sends a browser-connected TNC. Direwolf applies the
+frames to the channel, in place of `TXDELAY`, `PERSIST` and `SLOTTIME` in `direwolf.conf`. Set `KISS_TIMING=off`
+to leave the TNC on its own settings: the ones in `direwolf.conf`, or a TNC whose firmware you set up yourself.
+The [soundcard port](soundcard.md) has its own `SOUNDCARD_*` timing.
 
 ## Callsigns and SSIDs
 
@@ -65,8 +94,8 @@ stations**, or `FIRST_PARTY_SITES`).
 ## Receiving site and Tier A
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local
-TNCs (KISS, AGWPE or WA8DED host mode) or soundcard ports hears **directly** carries that callsign to the
-gateway. A gateway that
+TNCs (KISS, AGWPE or WA8DED host mode), soundcard ports or its LoRa APRS IGate hears **directly** carries that
+callsign to the gateway. A gateway that
 trusts the call counts those frames as RF-corroborated evidence for Tier A, with no APRS-IS round trip, so it
 works off-grid too. The gateway's independence rule still keeps your own receiver from corroborating your own
 finds.

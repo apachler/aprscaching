@@ -53,7 +53,7 @@ export type IngestBatch = z.infer<typeof IngestBatch>;
 export const Transport = z.enum([
   "aprs-is", // the APRS-IS feed
   "app", // first-party in-app device geolocation (the Tier-B path)
-  "tnc", // a local TNC on the ingest box: KISS, AGWPE or WA8DED host mode
+  "tnc", // a local TNC on the ingest box: KISS, AGWPE, WA8DED host mode, a soundcard port or a LoRa APRS iGate
   "browser-rf", // the browser RF bridge (Web Serial / Web Bluetooth), a signed batch
   "axudp", // AX.25 over UDP (BPQ node mesh)
   "axip", // AX.25 over raw IP proto 93

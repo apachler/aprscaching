@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it, vi } from "vitest";
+import { encodeAx25 } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import {
   FLUSH_FRAMES,
@@ -15,6 +16,7 @@ import {
 import { ANNOUNCE_GAP_MS, TxAnnouncer, aprsSummary, ax25Summary, terminalTxNote } from "../src/rf/txLog.js";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import type { RfFrame } from "../src/rf/kiss.js";
+import type { KissTiming } from "../src/rf/kissTiming.js";
 
 /** A fake radio: it records connects, disconnects and sends, and lets the test deliver frames or lose the device. */
 function fakeRadio(opts: { failConnect?: Error } = {}) {
@@ -140,6 +142,89 @@ describe("the app-wide radio link", () => {
     expect(txWord({ link: "serial", verified: true, txOn: false })).toBe("RX only");
     expect(txWord({ link: "audio", verified: true, txOn: true })).toBe("RX only");
     expect(txWord({ link: "serial", verified: true, txOn: true })).toBe("TX on");
+  });
+});
+
+describe("KISS timing for the radio link", () => {
+  /** Links that log what reaches them: a KISS TNC (serial, ble) takes timing, the others have no setTiming. */
+  function timingRadio(opts: { failTiming?: Error; init?: KissTiming } = {}) {
+    const log: string[] = [];
+    const saved: KissTiming[] = [];
+    const deps: RadioDeps = {
+      makeLink: (kind) => ({
+        async connect() {
+          log.push(`connect ${kind}`);
+        },
+        async disconnect() {},
+        async send() {
+          log.push("send");
+        },
+        ...(kind === "serial" || kind === "ble"
+          ? {
+              async setTiming(t: KissTiming) {
+                if (opts.failTiming) throw opts.failTiming;
+                log.push(`timing ${t.txDelay}/${t.persist}/${t.slotTime}`);
+              },
+            }
+          : {}),
+      }),
+      forward: () => Promise.resolve(),
+      feedLocal: () => {},
+      saveKissTiming: (t) => saved.push(t),
+    };
+    const store = new RadioLinkStore(deps, { kissTiming: opts.init });
+    const events: RadioEvent[] = [];
+    store.onEvent((e) => events.push(e));
+    return { store, log, saved, events };
+  }
+
+  it("sends the APRS defaults to a KISS TNC as it connects, before the link reports connected", async () => {
+    for (const kind of ["serial", "ble"] as const) {
+      const { store, log, events } = timingRadio();
+      store.onEvent((e) => e.kind === "connected" && log.push("connected"));
+      await store.connect(kind);
+      expect(log).toEqual([`connect ${kind}`, "timing 30/63/10", "connected"]);
+      expect(events.map((e) => e.kind)).toEqual(["connected"]);
+    }
+  });
+
+  it("sends nothing to the soundcard modem or a Meshtastic node", async () => {
+    for (const kind of ["audio", "mesh"] as const) {
+      const { store, log } = timingRadio();
+      await store.connect(kind);
+      store.setKissTiming({ txDelay: 40 });
+      expect(log).toEqual([`connect ${kind}`]);
+    }
+  });
+
+  it("starts from the stored settings", async () => {
+    const { store, log } = timingRadio({ init: { txDelay: 50, persist: 127, slotTime: 20 } });
+    await store.connect("serial");
+    expect(log).toContain("timing 50/127/20");
+  });
+
+  it("saves a change, sends it to a connected TNC at once, and ignores a value outside 0–255", async () => {
+    const { store, log, saved } = timingRadio();
+    store.setKissTiming({ txDelay: 45 }); // no link yet: saved, sent on the next connect
+    expect(saved).toEqual([{ txDelay: 45, persist: 63, slotTime: 10 }]);
+    await store.connect("serial");
+    store.setKissTiming({ persist: 255, slotTime: 300 });
+    store.setKissTiming({ slotTime: 1.5, txDelay: -1 });
+    store.setKissTiming({ persist: 255 }); // no change: nothing saved or sent
+    await Promise.resolve();
+    expect(store.getState().kissTiming).toEqual({ txDelay: 45, persist: 255, slotTime: 10 });
+    expect(saved).toHaveLength(2);
+    expect(log).toEqual(["connect serial", "timing 45/63/10", "timing 45/255/10"]);
+  });
+
+  it("reports a TNC that refuses its timing and keeps the link up", async () => {
+    const { store, events } = timingRadio({ failTiming: new Error("write failed") });
+    await store.connect("serial");
+    expect(store.getState().link).toBe("serial");
+    expect(events).toEqual([
+      { kind: "timing-failed", message: "write failed" },
+      { kind: "connected", link: "serial" },
+    ]);
   });
 });
 
@@ -311,6 +396,21 @@ describe("transmit consent for one browser session", () => {
     await settle();
     await expect(store.transmit(msgFrame("OE8XBM-7"), "My radio")).rejects.toThrow(/OE8APR-7 only/);
     expect(r.sent).toEqual([]);
+  });
+
+  it("sends the text it originates as UTF-8 bytes, and lists the text it sent", async () => {
+    const { r, store } = consenting(true);
+    store.setIdentity("OE8APR", true);
+    await store.connect("serial");
+    await settle();
+    const text = ":OE8XBM   :Grüße 73 €{5";
+    await store.transmit({ src: store.txCall(), dst: "APRS", path: ["WIDE1-1"], payload: text }, "Messages");
+    const sent = r.sent[0] as { payload: string };
+    // one character per byte, the bytes of the UTF-8 encoding: what encodeAx25 writes to the TNC
+    expect(sent.payload).toBe(String.fromCharCode(...new TextEncoder().encode(text)));
+    const info = encodeAx25({ src: "OE8APR-7", dst: "APRS", payload: sent.payload }).subarray(16);
+    expect(new TextDecoder().decode(info)).toBe(text);
+    expect(store.getState().sent[0]?.summary).toContain("Grüße 73 €");
   });
 
   it("keeps the grant in this tab only: nothing goes to storage and a new tab starts without one", async () => {

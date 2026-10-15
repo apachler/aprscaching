@@ -90,6 +90,14 @@ describe("MIC-E per APRS 1.2", () => {
     expect(ft3d).toMatchObject({ altitudeM: 61, comment: "Hiking" });
     expect(decodeMicE("S32U6T", `${base}"4T}`)!.altitudeM).toBe(61); // no prefix, as before
   });
+  it("keeps the raw device code for the device table", () => {
+    expect(decodeMicE("S32U6T", `${base}]"4T}Mobile=`)!.device).toEqual({ prefix: "]", suffix: "=" });
+    expect(decodeMicE("S32U6T", `${base}\`"4T}Hiking_0`)!.device).toEqual({ prefix: "`", suffix: "_0" });
+    // a two-character code may end in a space, so the tail is read before the comment is trimmed
+    expect(decodeMicE("S32U6T", `${base}'_ `)!.device).toEqual({ prefix: "'", suffix: "_ " });
+    expect(decodeMicE("S32U6T", `${base}"4T}`)!.device).toBeUndefined();
+    expect((decodeAprs(frame(`${base}>Hi^`, "S32U6T")) as any).micEDevice).toEqual({ prefix: ">", suffix: "^" });
+  });
   it("applies the latitude's ambiguity to the longitude", () => {
     // T4SQZZ: the last two latitude digits ambiguous, so the longitude is 112°07', not 112°07.74'
     const m = decodeMicE("T4SQZZ", base)!;
@@ -300,5 +308,149 @@ describe("symbol catalog", () => {
     expect(lookupSymbol("/", ">").label).toBe("Car");
     expect(lookupSymbol("/", "_").category).toBe("weather");
     expect(lookupSymbol("T", "#").overlay).toBe("T"); // overlay digi
+  });
+});
+
+describe("data extensions per APRS 1.2 chapter 7", () => {
+  const d = (payload: string) => decodeAprs(frame(payload)) as any;
+
+  it("decodes PHG5132: 25 W, 20 ft, 3 dB, east, and its range of about 7.9 miles", () => {
+    const p = d("=4903.50N/07201.75W#PHG5132");
+    expect(p.kind).toBe("position");
+    expect(p.phg).toEqual({ powerW: 25, heightM: 6.1, gainDb: 3, directivityDeg: 90 });
+    expect(p.rangeKm).toBe(12.8);
+    expect(p.comment).toBeUndefined();
+  });
+
+  it("leaves the directivity out for an omni antenna and keeps the comment after the extension", () => {
+    const p = d("!4903.50N/07201.75W#PHG2360 Digi on the hill");
+    expect(p.phg).toEqual({ powerW: 4, heightM: 24.4, gainDb: 6 });
+    expect(p.rangeKm).toBe(19.2);
+    expect(p.comment).toBe("Digi on the hill");
+  });
+
+  it("maps directivity codes 1–8 to 45°–360°", () => {
+    for (let code = 1; code <= 8; code++)
+      expect(d(`!4903.50N/07201.75W#PHG513${code}`).phg.directivityDeg).toBe(code * 45);
+  });
+
+  it("reads height codes past 9 for balloons and aircraft", () => {
+    expect(d("!4903.50N/07201.75WOPHG5:30").phg.heightM).toBe(3121.2); // 10240 ft
+    expect(d("!4903.50N/07201.75WOPHG5;30").phg.heightM).toBe(Math.round(20480 * 0.3048 * 10) / 10);
+  });
+
+  it("reads the PHGR probe form's beacon rate and the mandatory slash", () => {
+    expect(d("!4903.50N/07201.75W#PHG72604/ probe")).toMatchObject({
+      phg: { powerW: 49, heightM: 12.2, gainDb: 6, beaconsPerHour: 4 },
+      comment: "probe",
+    });
+    expect(d("!4903.50N/07201.75W#PHG7260A/").phg.beaconsPerHour).toBe(10);
+    expect(d("!4903.50N/07201.75W#PHG7260Z/").phg.beaconsPerHour).toBe(35);
+    // a rate character without its slash is the comment, not a rate
+    const noSlash = d("!4903.50N/07201.75W#PHG72604 x");
+    expect(noSlash.phg.beaconsPerHour).toBeUndefined();
+    expect(noSlash.comment).toBe("4 x");
+  });
+
+  it("keeps an altitude after the PHG", () => {
+    const p = d("!4703.50N/01524.00E-PHG2360/A=001234 home");
+    expect(p.phg).toMatchObject({ powerW: 4 });
+    expect(p.altitudeM).toBe(Math.round(1234 * 0.3048));
+    expect(p.comment).toBe("home");
+  });
+
+  it("leaves a malformed PHG in the comment", () => {
+    for (const bad of ["PHG513", "PHGx132", "PHG5139", "PHG51x2", "phg5132"]) {
+      const p = d(`!4903.50N/07201.75W#${bad} rest`);
+      expect(p.phg).toBeUndefined();
+      expect(p.rangeKm).toBeUndefined();
+      expect(p.comment).toBe(`${bad} rest`);
+    }
+  });
+
+  it("reads PHG only where the data extension sits, right after the position", () => {
+    const p = d("!4903.50N/07201.75W#Digi PHG5132");
+    expect(p.phg).toBeUndefined();
+    expect(p.comment).toBe("Digi PHG5132");
+  });
+
+  it("decodes RNG0050 as a range of 50 miles", () => {
+    const p = d("@092345z4903.50N/07201.75W>RNG0050 mobile");
+    expect(p.rangeKm).toBe(80.5);
+    expect(p.phg).toBeUndefined();
+    expect(p.comment).toBe("mobile");
+    expect(d("!4903.50N/07201.75W>RNG005 x").rangeKm).toBeUndefined();
+  });
+
+  it("decodes DFS2360: S2 heard on an omni 6 dB antenna at 80 ft", () => {
+    const p = d("/234517h4903.50N/07201.75W>DFS2360");
+    expect(p.dfs).toEqual({ strength: 2, heightM: 24.4, gainDb: 6 });
+    expect(p.rangeKm).toBeUndefined();
+    expect(p.comment).toBeUndefined();
+    expect(d("!4903.50N/07201.75W\\DFS0132 not heard").dfs).toEqual({
+      strength: 0,
+      heightM: 6.1,
+      gainDb: 3,
+      directivityDeg: 90,
+    });
+  });
+
+  it("decodes a DF report's bearing and NRQ after its course/speed", () => {
+    const p = d("=4903.50N/07201.75W\\088/036/270/729");
+    expect(p).toMatchObject({ course: 88, speedKn: 36 });
+    expect(p.df).toEqual({ bearingDeg: 270, hits: 7, rangeKm: 6.4, accuracyDeg: 1 });
+    expect(p.comment).toBeUndefined();
+  });
+
+  it("decodes a fixed DF station's report, with or without a timestamp", () => {
+    for (const payload of ["=4903.50N/07201.75W\\000/036/270/729", "/092345z4903.50N/07201.75W\\000/000/270/729"]) {
+      const p = d(payload);
+      expect(p.course).toBeUndefined();
+      expect(p.df).toEqual({ bearingDeg: 270, hits: 7, rangeKm: 6.4, accuracyDeg: 1 });
+    }
+    expect(d("=4903.50N/07201.75W\\.../.../090/914 hunt")).toMatchObject({
+      df: { bearingDeg: 90, manual: true, rangeKm: 3.2, accuracyDeg: 32 },
+      comment: "hunt",
+    });
+  });
+
+  it("keeps only the bearing when N is 0, and no accuracy when Q is 0", () => {
+    expect(d("=4903.50N/07201.75W\\000/000/180/099").df).toEqual({ bearingDeg: 180 });
+    expect(d("=4903.50N/07201.75W\\000/000/180/130").df).toEqual({ bearingDeg: 180, hits: 1, rangeKm: 12.9 });
+  });
+
+  it("reads a bearing only with the DF symbol, and only up to 360°", () => {
+    const car = d("=4903.50N/07201.75W>088/036/270/729");
+    expect(car.df).toBeUndefined();
+    expect(car.comment).toBe("/270/729");
+    const alt = d("=4903.50N/07201.75W\\088/036/A=001234");
+    expect(alt.df).toBeUndefined();
+    expect(alt.altitudeM).toBe(Math.round(1234 * 0.3048));
+    const wide = d("=4903.50N/07201.75W\\088/036/361/729");
+    expect(wide.df).toBeUndefined();
+    expect(wide.comment).toBe("/361/729");
+  });
+
+  it("decodes the extensions on objects and items", () => {
+    expect(d(";DIGI     *092345z4903.50N/07201.75W#PHG5132 hilltop")).toMatchObject({
+      kind: "object",
+      phg: { powerW: 25, directivityDeg: 90 },
+      rangeKm: 12.8,
+      comment: "hilltop",
+    });
+    expect(d(")RPT!4903.50N/07201.75WrRNG0025")).toMatchObject({ kind: "item", rangeKm: 40.2 });
+  });
+
+  it("reads no extension from a compressed position's comment, which carries its range in the cs bytes", () => {
+    const p = d("!/5L!!<*e7> sTPHG5132");
+    expect(p.phg).toBeUndefined();
+    expect(p.comment).toBe("PHG5132");
+  });
+
+  it("leaves weather reports untouched", () => {
+    const w = d("!4903.50N/07201.75W_220/004g005t077r000p000P000h50b09900");
+    expect(w.kind).toBe("weather");
+    expect(w.phg).toBeUndefined();
+    expect(w.windDirDeg).toBe(220);
   });
 });

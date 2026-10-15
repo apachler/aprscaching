@@ -4,12 +4,15 @@
  * (first payload byte) to produce a typed `AprsData`. Builds on parsePosition (uncompressed),
  * parseCompressed (base-91), decodeMicE, plus object/item/message/status/weather/telemetry.
  */
-import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather } from "./types.js";
-import { lookupSymbol } from "./symbols.js";
+import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather, DfBearing } from "./types.js";
+import { lookupSymbol, symbolFromAddress } from "./symbols.js";
 import { parseCompressed } from "./compressed.js";
 import { decodeMicE } from "./mice.js";
 import { isValidLatLon } from "./geo.js";
 import { parseTNC2 } from "./tnc2.js";
+import { addMinutes, extractDao } from "./dao.js";
+import { parseNmea } from "./nmea.js";
+import { readLocator } from "./locator.js";
 
 const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 ]\.[0-9 ]{2})([EW])(.)/;
 
@@ -17,7 +20,9 @@ const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 
  * Parse an uncompressed "DDMM.hhN/DDDMM.hhW$" head; returns the fix + the comment remainder, or null when
  * the minutes reach 60 or the position falls outside ±90° / ±180°.
  */
-function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | null {
+function parseUncompressed(
+  s: string,
+): { fix: DecodedPosition; rest: string; lat: number; lon: number; south: boolean; west: boolean } | null {
   const m = UNCOMP_RE.exec(s);
   if (!m) return null;
   const [whole, latDeg, latMin, ns, table, lonDeg, lonMin, ew, code] = m;
@@ -33,7 +38,7 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   if (ew === "W") lon = -lon;
   if (!isValidLatLon(lat, lon)) return null;
   const fix: DecodedPosition = { lat: round(lat), lon: round(lon), symbol: lookupSymbol(table!, code!), ambiguity };
-  return { fix, rest: s.slice(whole.length) };
+  return { fix, rest: s.slice(whole.length), lat, lon, south: ns === "S", west: ew === "W" };
 }
 
 /** "mm.hh" with its last `level` digits (hundredths first, then minutes) set to zero, spaces read as zero. */
@@ -43,10 +48,107 @@ function maskMinutes(mmhh: string, level: number): string {
   return digits.join("");
 }
 
+/** Kilometres in one statute mile: PHG heights work out to a range in miles, and RNG sends one. */
+const KM_PER_MI = 1.609344;
+const M_PER_FT = 0.3048;
+
 /**
- * Course/speed "CSE/SPD" and altitude "/A=dddddd" out of a comment string. The course runs 001–360;
- * 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its course
- * and speed in the cs bytes, so its comment is never read for them.
+ * The 7-byte data extensions that stand in place of course/speed (APRS 1.2 chapter 7). The height code is
+ * any character from `0` up (`:` is 10240 ft, `;` 20480 ft, for balloons and aircraft); the directivity
+ * runs 0 (omni) to 8 (north); PHG's probe form adds a beacon rate, `1`–`9` then `A` for 10, and a `/`.
+ */
+const PHG_RE = /^PHG(\d)([0-~])(\d)([0-8])(?:([0-9A-Z])\/)?/;
+const RNG_RE = /^RNG(\d{4})/;
+const DFS_RE = /^DFS(\d)([0-~])(\d)([0-8])/;
+/** A DF report's `/BRG/NRQ`, right after its course/speed. */
+const BRG_NRQ_RE = /^\/(\d{3})\/(\d)(\d)(\d)/;
+/** The beamwidth each DF quality digit 1–9 stands for; 0 is useless. */
+const DF_ACCURACY_DEG = [0, 240, 120, 64, 32, 16, 8, 4, 2, 1];
+
+/** Height in feet for a PHG/DFS height code: 10 ft doubled per step from `0`. */
+const heightFt = (code: string) => 10 * 2 ** (code.charCodeAt(0) - 48);
+/** A directivity code as degrees: 1–8 in steps of 45° from north-east round to north; 0 is omni. */
+const directivity = (code: string) => (code === "0" ? {} : { directivityDeg: Number(code) * 45 });
+
+/**
+ * The usable radio range from a PHG, in miles: sqrt(2 · haat · sqrt(power/10 · gain/2)), haat in feet and
+ * gain as a ratio. PHG5132 (25 W, 20 ft, 3 dB) gives about 7.9 miles.
+ */
+function phgRangeMi(powerW: number, haatFt: number, gainDb: number): number {
+  return Math.sqrt(2 * haatFt * Math.sqrt((powerW / 10) * (10 ** (gainDb / 10) / 2)));
+}
+
+/**
+ * The data extension at the start of an uncompressed position's comment: PHG, RNG or DFS. Returns the
+ * comment after it, or the comment unchanged when none leads it.
+ */
+function applyRangeExtension(fix: DecodedPosition, comment: string): string {
+  const phg = PHG_RE.exec(comment);
+  if (phg) {
+    const powerW = Number(phg[1]) ** 2,
+      ft = heightFt(phg[2]!),
+      gainDb = Number(phg[3]),
+      rate = phg[5];
+    fix.phg = {
+      powerW,
+      heightM: round1(ft * M_PER_FT),
+      gainDb,
+      ...directivity(phg[4]!),
+      ...(rate ? { beaconsPerHour: parseInt(rate, 36) } : {}),
+    };
+    fix.rangeKm = round1(phgRangeMi(powerW, ft, gainDb) * KM_PER_MI);
+    return comment.slice(phg[0].length);
+  }
+  const rng = RNG_RE.exec(comment);
+  if (rng) {
+    fix.rangeKm = round1(Number(rng[1]) * KM_PER_MI);
+    return comment.slice(7);
+  }
+  const dfs = DFS_RE.exec(comment);
+  if (dfs) {
+    fix.dfs = {
+      strength: Number(dfs[1]),
+      heightM: round1(heightFt(dfs[2]!) * M_PER_FT),
+      gainDb: Number(dfs[3]),
+      ...directivity(dfs[4]!),
+    };
+    return comment.slice(7);
+  }
+  return comment;
+}
+
+/**
+ * A DF report's `/BRG/NRQ` after its course/speed: the bearing (000–360), then N (0 makes the NRQ
+ * meaningless, 1–8 hits in eighths, 9 manual), R (the line reaches 2^R miles) and Q (the beamwidth).
+ */
+function applyDfBearing(fix: DecodedPosition, comment: string): string {
+  const m = BRG_NRQ_RE.exec(comment);
+  if (!m) return comment;
+  const bearingDeg = Number(m[1]);
+  if (bearingDeg > 360) return comment;
+  const n = Number(m[2]),
+    r = Number(m[3]),
+    q = Number(m[4]);
+  const df: DfBearing = { bearingDeg };
+  if (n !== 0) {
+    if (n === 9) df.manual = true;
+    else df.hits = n;
+    df.rangeKm = round1(2 ** r * KM_PER_MI);
+    if (q !== 0) df.accuracyDeg = DF_ACCURACY_DEG[q]!;
+  }
+  fix.df = df;
+  return comment.slice(8);
+}
+
+/** The DF symbol, `\` in the primary table: only its reports carry a bearing after the course/speed. */
+const isDfSymbol = (fix: DecodedPosition) => fix.symbol?.table === "/" && fix.symbol.code === "\\";
+
+/**
+ * The data extensions and altitude out of a comment string: course/speed "CSE/SPD" (with a DF report's
+ * "/BRG/NRQ" after it) or one of PHG, RNG and DFS, then altitude "/A=dddddd" anywhere. The course runs
+ * 001–360; 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its
+ * course, speed or range in the cs bytes and takes no data extension, so its comment is read for the
+ * altitude alone.
  */
 function applyExtensions(fix: DecodedPosition, comment: string, opts: { compressed?: boolean } = {}): void {
   const cs = opts.compressed ? null : /^(\d{3})\/(\d{3})/.exec(comment);
@@ -56,9 +158,12 @@ function applyExtensions(fix: DecodedPosition, comment: string, opts: { compress
     // three digits past 360 are not a heading, and 000 is none
     if (course >= 1 && course <= 360) fix.course = course;
     if (course !== 0 || speed !== 0) fix.speedKn = speed;
+  }
+  if (cs || (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment))) {
     comment = comment.slice(7);
-  } else if (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment)) {
-    comment = comment.slice(7);
+    if (isDfSymbol(fix)) comment = applyDfBearing(fix, comment);
+  } else if (!opts.compressed) {
+    comment = applyRangeExtension(fix, comment);
   }
   const alt = /\/A=(-\d{5,6}|\d{6})/.exec(comment); // six characters, a leading minus below sea level
   if (alt) {
@@ -159,6 +264,9 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
         comment: me.comment,
         ambiguity: me.ambiguity,
         messageType: me.messageType,
+        ...(me.device ? { micEDevice: me.device } : {}),
+        ...(me.datum ? { datum: me.datum } : {}),
+        ...(me.locator ? { locator: me.locator } : {}),
       };
   }
 
@@ -183,11 +291,16 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
     case ":":
       return decodeMessage(p);
     case ">": {
-      // an optional DDHHMMz timestamp leads the status text
+      // an optional DDHHMMz timestamp leads the status text; a status led by a Maidenhead locator has none
       const stamp = /^\d{6}z/.exec(p.slice(1));
-      const text = p.slice(1 + (stamp ? 7 : 0)).trim();
-      return stamp ? { kind: "status", text, timestamp: stamp[0] } : { kind: "status", text };
+      if (stamp) return { kind: "status", text: p.slice(8).trim(), timestamp: stamp[0] };
+      const loc = readLocator(p.slice(1));
+      if (loc)
+        return { kind: "status", text: loc.text, locator: loc.locator, symbol: lookupSymbol(loc.table, loc.code) };
+      return { kind: "status", text: p.slice(1).trim() };
     }
+    case "$":
+      return decodeNmea(frame);
     case "}": {
       // third-party: the carried packet in TNC2 form, decoded on its own
       const inner = depth < MAX_THIRD_PARTY_DEPTH ? parseTNC2(p.slice(1)) : null;
@@ -224,24 +337,71 @@ function decodePosition(body: string, timestamp?: string): AprsData {
       ...(comp.rangeKm !== undefined ? { rangeKm: comp.rangeKm } : {}),
     };
     rest = body.slice(13);
+    // A compressed position is finer than the digits a `!DAO!` adds, so its token names the datum alone.
+    const dao = extractDao(rest);
+    if (dao) {
+      fix.datum = dao.datum;
+      rest = dao.comment;
+    }
   } else {
     const u = parseUncompressed(body);
     if (u) {
       fix = u.fix;
       rest = u.rest;
+      const dao = extractDao(rest);
+      if (dao) {
+        fix.datum = dao.datum;
+        rest = dao.comment;
+        // An ambiguous position left digits out on purpose: added precision would contradict it.
+        if (!fix.ambiguity) {
+          const lat = addMinutes(u.lat, u.south, dao.latMin),
+            lon = addMinutes(u.lon, u.west, dao.lonMin);
+          if (isValidLatLon(lat, lon)) {
+            fix.lat = round(lat);
+            fix.lon = round(lon);
+          }
+        }
+      }
     }
   }
   if (!fix) return { kind: "other" };
   if (timestamp) fix.timestamp = timestamp;
   // weather station (symbol '_') with wx after the position -> weather report
   if (fix.symbol?.code === "_") {
-    const where = { lat: fix.lat, lon: fix.lon, symbol: fix.symbol, ...(timestamp ? { timestamp } : {}) };
+    const where = {
+      lat: fix.lat,
+      lon: fix.lon,
+      symbol: fix.symbol,
+      ...(fix.datum ? { datum: fix.datum } : {}),
+      ...(timestamp ? { timestamp } : {}),
+    };
     if (compressed && isCompressedWeather(rest))
       return { kind: "weather", ...where, ...parseWeather(rest, { dir: fix.course, kn: fix.speedKn }) };
     if (!compressed && isWeather(rest)) return { kind: "weather", ...where, ...parseWeather(rest) };
   }
   applyExtensions(fix, rest, { compressed });
   return { kind: "position", ...fix };
+}
+
+/**
+ * A raw NMEA sentence: a GGA, GLL or RMC fix is the sender's position, its symbol from the addresses; a WPL is
+ * a waypoint, decoded as an item named after it. A VTG carries no position, and a void fix or a bad checksum
+ * none either.
+ */
+function decodeNmea(frame: ParsedFrame): AprsData {
+  const n = parseNmea(frame.payload);
+  if (!n || n.lat === undefined || n.lon === undefined) return { kind: "other" };
+  const symbol = symbolFromAddress(frame.dst, frame.src);
+  const where = { lat: n.lat, lon: n.lon, ...(symbol ? { symbol } : {}), nmea: n.sentence };
+  if (n.waypoint !== undefined) return { kind: "item", name: n.waypoint, alive: true, ...where };
+  return {
+    kind: "position",
+    ...where,
+    ...(n.course !== undefined ? { course: n.course } : {}),
+    ...(n.speedKn !== undefined ? { speedKn: n.speedKn } : {}),
+    ...(n.altitudeM !== undefined ? { altitudeM: n.altitudeM } : {}),
+    ...(n.time ? { timestamp: `${n.time}h` } : {}),
+  };
 }
 
 // A non-position object/item (e.g. `;SHORT` with no fix) must NOT be spread with

@@ -2,8 +2,17 @@
 import { useEffect, useReducer, useState } from "react";
 import { webSerialSupported, webBluetoothSupported } from "./kiss.js";
 import { webAudioSupported } from "./extralinks.js";
-import { encodeAprsPosition, encodeAprsMessage, ackReply, syncBackBatch, type LocalMessage } from "@aprscaching/aprs";
+import {
+  encodeAprsPosition,
+  encodeAprsMessage,
+  ackReply,
+  rfByteLength,
+  rfText,
+  syncBackBatch,
+  type LocalMessage,
+} from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
+import { KissTimingSettings } from "./KissTimingSettings.js";
 import { radioLink, useRadioLink } from "./RadioLinkHost.js";
 import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
@@ -138,6 +147,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       toast("Enter a valid latitude and longitude");
       return;
     }
+    if (rfByteLength(bcn.comment.trim()) > 43) {
+      toast("The comment is too long: a beacon comment holds 43 bytes, and a letter such as ü takes two");
+      return;
+    }
     if (
       !(await confirmDialog({
         title: "Transmit position beacon?",
@@ -151,6 +164,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   async function sendMsg() {
     if (!msg.to.trim() || !msg.text.trim()) {
       toast("Enter a recipient and a message");
+      return;
+    }
+    if (rfByteLength(msg.text.trim()) > 67) {
+      toast("The message is too long: an APRS message holds 67 bytes, and a letter such as ü takes two");
       return;
     }
     if (
@@ -314,6 +331,8 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       ) : (
         <p className="muted fine">Connect a radio to forward what it hears to a gateway.</p>
       )}
+
+      <KissTimingSettings />
 
       {link && (
         <div className="tx-block">
@@ -566,7 +585,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                 </span>
               )}
               <span className="muted"> · {fmt.ago(f.at / 1000)}</span>
-              <div className="comment mono">{f.frame.payload.slice(0, 80)}</div>
+              <div className="comment mono">{rfText(f.frame.payload).slice(0, 80)}</div>
             </li>
           ))}
         </ul>
