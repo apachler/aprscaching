@@ -10,7 +10,7 @@ import {
   encodeAx25,
   type KissTiming,
 } from "@aprscaching/aprs";
-import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
+import { decodeFrame, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import type { KissFrame, ParsedFrame } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
@@ -63,6 +63,7 @@ export interface KissHandlers {
   onPacket: (p: Packet) => void;
   onFrame?: (f: ParsedFrame) => void; // UI-decoded RF frame (for the APRS digipeater / igate)
   onRaw?: (bytes: Uint8Array) => void; // raw KISS-unwrapped AX.25 frame (for connected-mode: node/digi)
+  onInvalid?: () => void; // a data frame that is no AX.25 frame at all, for the port's health
 }
 
 export interface TcpLinkOpts {
@@ -262,7 +263,11 @@ export class KissTnc {
     if (this.meshcomNode) return;
     if (this.o.sent?.echoes(raw)) return; // the box's own transmission, heard back
     this.h.onRaw?.(raw); // raw AX.25 for connected-mode consumers (node/digi)
-    if (!f) return;
+    if (!f) {
+      // a connected-mode frame is AX.25 but no APRS packet; only a frame no decoder reads counts as invalid
+      if (!decodeFrame(raw)) this.h.onInvalid?.();
+      return;
+    }
     this.h.onFrame?.(f);
     this.h.onPacket(tncPacket(f, "kiss-tnc", this.o.siteCall, Math.floor(Date.now() / 1000)));
   }

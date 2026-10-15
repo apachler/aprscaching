@@ -52,7 +52,7 @@ const rooms = {
   get: () => ({ fetch: async () => new Response("ok") }),
 };
 
-async function signedIngest(env: Env, signerCall: string, packets: unknown[]) {
+async function signedIngest(env: Env, signerCall: string, packets: unknown[], extra: Record<string, unknown> = {}) {
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
   const pub = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
   const at = Math.floor(Date.now() / 1000);
@@ -75,7 +75,7 @@ async function signedIngest(env: Env, signerCall: string, packets: unknown[]) {
       "x-acs-sig": sig,
       "x-acs-at": String(at),
     },
-    body: JSON.stringify({ packets }),
+    body: JSON.stringify({ packets, ...extra }),
   });
   return handleIngest(req, env, {} as never);
 }
@@ -120,5 +120,14 @@ describe("signed ingest binds every stored frame to the authenticated signer", (
     expect(calls).not.toContain("DL9XYZ-1");
     // no packets_recent / stations / messages row for the foreign call either
     expect(captured.some((s) => s.binds.some((b) => b === "DL9XYZ-1"))).toBe(false);
+  });
+
+  it("ignores the port health a signed batch carries: only the operator's own ingest reports on its ports", async () => {
+    const captured: { sql: string; binds: unknown[] }[] = [];
+    const env = { DB: mockDb(captured), ROOMS: rooms, INGEST_SECRET: "unused" } as unknown as Env;
+    const ports = [{ port: "aprs-is", heard: 999, parsed: 999, invalid: 0, pps: 50 }];
+    const res = await signedIngest(env, "OE8APR", [posn("OE8APR-9")], { ports });
+    expect(res.status).toBe(200);
+    expect(captured.some((s) => s.sql.includes("pps_at"))).toBe(false);
   });
 });

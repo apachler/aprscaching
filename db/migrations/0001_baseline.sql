@@ -721,8 +721,21 @@ CREATE INDEX idx_messages_ts ON messages (ts);
 CREATE INDEX idx_messages_tx_ack ON messages (ack) WHERE direction = 'tx';
 CREATE INDEX idx_messages_outbox ON messages (outbox_id) WHERE outbox_id IS NOT NULL;
 
--- Per-port RX/TX counters, bucketed by hour.
-CREATE TABLE port_stats (port TEXT, ts INTEGER, rx INTEGER, tx INTEGER, PRIMARY KEY (port, ts));
+-- Per-port RX/TX counters, bucketed by hour. heard / parsed / invalid are the port's health as the ingest box
+-- reports it (frames heard, decoded as APRS, not a packet at all); pps is its last reported packets per second
+-- and pps_at when that report came.
+CREATE TABLE port_stats (
+  port    TEXT,
+  ts      INTEGER,
+  rx      INTEGER,
+  tx      INTEGER,
+  heard   INTEGER NOT NULL DEFAULT 0,
+  parsed  INTEGER NOT NULL DEFAULT 0,
+  invalid INTEGER NOT NULL DEFAULT 0,
+  pps     REAL,
+  pps_at  INTEGER,
+  PRIMARY KEY (port, ts)
+);
 
 -- Weather readings, observational only: they never touch the find tiers. Sources are RF and APRS-IS
 -- weather beacons and direct PWS pushes (stored under the station the push key names).

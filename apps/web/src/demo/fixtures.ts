@@ -673,9 +673,18 @@ const BBS: BbsMessage[] = [
 ];
 
 const PORTS: PortStat[] = [
-  { port: "aprs_is", rx: 18234, tx: 0, lastBucket: NOW - MIN },
-  { port: "kiss:tnc0", rx: 912, tx: 37, lastBucket: NOW - MIN },
-  { port: "meshcom", rx: 204, tx: 0, lastBucket: NOW - 5 * MIN },
+  {
+    port: "aprs-is",
+    rx: 18234,
+    tx: 0,
+    lastBucket: NOW - MIN,
+    heard: 18290,
+    parsed: 17905,
+    invalid: 56,
+    pps: 0.21,
+  },
+  { port: "kiss-tnc", rx: 912, tx: 37, lastBucket: NOW - MIN, heard: 931, parsed: 902, invalid: 19, pps: 0.02 },
+  { port: "meshcom", rx: 204, tx: 0, lastBucket: NOW - 5 * MIN, heard: 0, parsed: 0, invalid: 0, pps: null },
 ];
 
 /** The callsign identity records of the demo instance, on 44Net at the default name, and its self-check. */

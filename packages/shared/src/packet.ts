@@ -37,7 +37,25 @@ export type Packet = z.infer<typeof Packet>;
 /** Hard batch ceiling: the ingest box flushes every few seconds, so a legitimate batch
  *  is tens of packets — 1000 absorbs any reconnect backlog while bounding a hostile POST. */
 export const INGEST_BATCH_MAX = 1000;
-export const IngestBatch = z.object({ packets: z.array(Packet).max(INGEST_BATCH_MAX) });
+/**
+ * One ingest port's health, carried with a batch: the frames it heard, the ones whose APRS payload decoded and
+ * the ones that were not a packet at all, each counted since the port's last delivered report, and its packets
+ * per second over the last minute.
+ */
+export const PortHealth = z.object({
+  port: z.string().max(64),
+  heard: z.number().int().min(0).max(1e9),
+  parsed: z.number().int().min(0).max(1e9),
+  invalid: z.number().int().min(0).max(1e9),
+  pps: z.number().min(0).max(1e6),
+});
+export type PortHealth = z.infer<typeof PortHealth>;
+/** The most ports one batch reports on. */
+export const PORT_HEALTH_MAX = 32;
+export const IngestBatch = z.object({
+  packets: z.array(Packet).max(INGEST_BATCH_MAX),
+  ports: z.array(PortHealth).max(PORT_HEALTH_MAX).optional(),
+});
 export type IngestBatch = z.infer<typeof IngestBatch>;
 
 /**
