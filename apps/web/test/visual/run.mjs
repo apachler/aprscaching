@@ -178,6 +178,20 @@ const SURFACES = [
   { name: "filter", as: "user", query: "?view=filter" },
   { name: "alerts", as: "user", query: "?view=alerts" },
   { name: "hide", as: "user", query: "?view=hide" },
+  // the hide form's radio coverage: the switch on, a typed pin inside the attested receiver's circle, the key
+  {
+    name: "hide-coverage",
+    as: "user",
+    query: "?view=hide",
+    wait: ".coord-entry",
+    steps: [
+      ["click", "button[role=switch][aria-label='Radio coverage']"],
+      ["fill", ".coord-entry input", "47.07600, 15.43900"],
+      ["click", "button:has-text('Place pin')"],
+      ["scroll", ".coverage-key"],
+    ],
+    after: ".coverage-line .inline-note",
+  },
   // the first-run tour: it starts when a visitor explores the map, with the tour not yet seen
   {
     name: "tour",

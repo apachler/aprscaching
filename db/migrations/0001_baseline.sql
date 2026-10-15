@@ -676,6 +676,8 @@ CREATE TABLE stations (
   mice_suffix  TEXT
 );
 CREATE INDEX idx_stations_geo ON stations (lat, lon);
+-- the IGates that gated a position lately (coverage.ts): a station another one names as its gate
+CREATE INDEX idx_stations_source ON stations (source_call, last_seen);
 
 -- Raw per-station packet history for the shack: a short, hard-TTL ring of verbatim TNC2 frames. A
 -- diagnostic, not a long-term log.

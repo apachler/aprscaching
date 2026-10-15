@@ -462,11 +462,11 @@ on. Already in place, so not listed: the decoder, digipeater and IGate checked a
 reply-acks, objects and weather, positions and Mic-E, telemetry, status and third-party packets, SSID handling, the
 8-digipeater limit, byte-for-byte APRS-IS gating, PHG, RNG, DFS and DF bearings, `!DAO!` precision, raw NMEA
 reports and status locators), UTF-8 text heard on RF and sent on it (`rfText`, `rfBytes`), the packet route on find
-and station details, the sending device named by tocall (`DEVICEID_URL`), KISS timing on every KISS link, photos
-stored without their metadata, the ingest's receive-only LoRa APRS port, the gateway's APRS-IS duplicate rule for
-its packet and message logs (`workers/gateway/src/dupes.ts`), the `NEAR` radio command, geofence prompts, CSMA on
-the ingest soundcard port, BLE KISS for Mobilinkd and LoRa trackers, and MeshCom signal reports. The tocall request
-is the launch-list item above.
+and station details, the sending device named by tocall (`DEVICEID_URL`), radio coverage on the hide form, KISS
+timing on every KISS link, photos stored without their metadata, the ingest's receive-only LoRa APRS port, the
+gateway's APRS-IS duplicate rule for its packet and message logs (`workers/gateway/src/dupes.ts`), the `NEAR` radio
+command, geofence prompts, CSMA on the ingest soundcard port, BLE KISS for Mobilinkd and LoRa trackers, and MeshCom
+signal reports. The tocall request is the launch-list item above.
 
 - [ ] **Dire Wolf as the reference TNC** _(P2 · S · step 6)_ — test the ingest's KISS-TCP client against Dire
       Wolf with several channels, each KISS channel its own attested receiver port, and document the
@@ -482,11 +482,6 @@ is the launch-list item above.
       `packages/shared`, shown as a hint, never set on the radio without the operator's action. _Depends on:_ —
 - [ ] **Ingest health in the Shack** _(P2 · S · step 10)_ — packets per second, parse rate and invalid
       packets per port at the port's status header, the figures the public viewers show for their feeds.
-      _Depends on:_ —
-- [ ] **Coverage for hiders** _(P2 · M · step 11)_ — PHG range circles and digipeater and IGate coverage on
-      the hide form's map, so a hider places a cache where RF hears the finder; a hint warns where only APRS-IS
-      reaches, since finds there stop at Tier C. The decoder reads PHG and RNG into a range, but only the station
-      detail carries it (`StationDetail.rangeKm`); the map needs it on the live-station list or a coverage query.
       _Depends on:_ —
 - [ ] **APRScaching Thursday** _(P2 · S · step 12)_ — join #APRSThursday (every Thursday, 00:00–23:59 UTC,
       tracked by aprs.world, aprs.to and aprslive): a weekly find event with a leaderboard ranked by callsign,

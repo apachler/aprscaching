@@ -18,6 +18,7 @@ export const TERMS = {
   "q-construct": "A tag (qAR, qAC) APRS-IS servers add to a packet's path. Anyone can write one, so it proves nothing.",
   igate: "A station that copies packets it hears on the air to APRS-IS, and optionally back.",
   digipeater: "A station that repeats packets on the air to extend their range.",
+  phg: "Codes in a beacon that give a station's power, antenna height and gain (PHG) or its range (RNG).",
   tocall: "The destination field of an APRS packet, which names the software or device that sent it.",
   tnc: "The modem that turns radio audio into packets and back: a box, or software such as Direwolf.",
   kiss: "The simple protocol a computer uses to exchange packets with a TNC, over USB, Bluetooth or TCP.",

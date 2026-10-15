@@ -16,6 +16,7 @@
  *   GET  /api/v1/profile/:call        a callsign's public profile
  *   GET  /api/v1/stations?bbox=       live stations
  *   GET  /api/v1/spots?bbox=          live activity spots
+ *   GET  /api/v1/coverage?bbox=       receiving sites, digipeaters and IGates with their range circles
  *   GET  /api/v1/licence/:call        callsign validity from imported public licence registers
  *
  * Runtime-neutral; CORS is applied globally (open for embeds).
@@ -30,6 +31,7 @@ import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./shack.js";
 import { handleSpots } from "./spots.js";
+import { handleCoverage } from "./coverage.js";
 import { licenceAnswer } from "./licence.js";
 import {
   handleCachesGpx,
@@ -67,6 +69,11 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/station/:call/track?from=&to=", desc: "position history (JSON)" },
   { method: "GET", path: "/api/v1/station/:call.kml", desc: "position history as a KML track" },
   { method: "GET", path: "/api/v1/spots?bbox=", desc: "live activity spots" },
+  {
+    method: "GET",
+    path: "/api/v1/coverage?bbox=",
+    desc: "where radio hears a station: attested receiving sites, digipeaters and IGates with their ranges",
+  },
   { method: "GET", path: "/api/v1/licence/:call", desc: "callsign validity from public licence registers" },
   { method: "GET", path: "/api/v1/key", desc: "the API key this request presents" },
 ];
@@ -178,6 +185,7 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (rest === "/corroborators") return handleCorroborators(req, env);
   if (rest === "/stations") return bboxTooLarge(req) ?? handleStations(req, env);
   if (rest === "/spots") return bboxTooLarge(req) ?? handleSpots(req, env);
+  if (rest === "/coverage") return bboxTooLarge(req) ?? handleCoverage(req, env);
   const stTrack = /^\/station\/([A-Za-z0-9-]+)\/track$/.exec(rest);
   if (stTrack) return handleStationTrack(req, env, stTrack[1]!.toUpperCase());
   const stKml = /^\/station\/([A-Za-z0-9-]+)\.kml$/.exec(rest);
