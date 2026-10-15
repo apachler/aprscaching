@@ -111,6 +111,25 @@ summary (a message's text, a position, a status, a connect or disconnect) and th
 it: **My radio**, **Messages** or **Terminal**. The list lives in this tab's memory only: the app never sends
 it to the instance and never stores it. **Clear** empties it, and signing out does too.
 
+### Set your TNC's timing
+
+When a USB or Bluetooth TNC connects, the browser sends it three KISS settings that decide when it keys the
+radio. The values for APRS are the defaults, so most stations never change them. To change one, open
+**Advanced: TNC timing** at the end of the forwarding settings, type a whole number from 0 to 255 and leave the
+field. The browser keeps your values, and a connected TNC gets a change at once.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **TX delay** | 30 (300 ms) | How long the radio transmits before the data starts, in 10 ms steps, while its transmitter comes up. Raise it when other stations miss the start of your frames. |
+| **Persist** | 63 (1 in 4) | The chance, (value + 1) in 256, that the TNC sends in a free slot. A lower value leaves the channel to stations that waited with yours. |
+| **Slot time** | 10 (100 ms) | How long the TNC waits between tries for a free channel, in 10 ms steps. |
+
+These defaults follow WB2OSZ's *Minimizing APRS Collisions*. **Reset to defaults** restores them. The soundcard
+modem and a Meshtastic node receive only, so they take none of these settings.
+
+Key the radio from the TNC's PTT line, not by VOX. A VOX circuit holds the transmitter on for 250 to 500 ms
+after the audio stops, so your radio stays on the air after the frame and covers the next station's packet.
+
 ## Troubleshooting
 
 | Problem | What to check |

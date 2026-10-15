@@ -110,3 +110,51 @@ describe("a serial link that fails while reading", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("KISS timing on a My radio serial link", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** A port that keeps the bytes written to it, with a reader that waits until it is cancelled. */
+  function writablePort(writable: boolean) {
+    const written: number[][] = [];
+    const stream = new WritableStream<Uint8Array>({
+      async write(chunk) {
+        await new Promise((r) => setTimeout(r, 1)); // a slow port: overlapping writes would find the writer locked
+        written.push([...chunk]);
+      },
+    });
+    vi.stubGlobal("navigator", {
+      serial: {
+        requestPort: async () => ({
+          readable: new ReadableStream<Uint8Array>(),
+          writable: writable ? stream : null,
+          open: async () => {},
+          close: async () => {},
+        }),
+      },
+    });
+    return written;
+  }
+
+  it("writes TXDELAY, PERSIST and SLOTTIME, and queues a frame sent at the same moment behind them", async () => {
+    const written = writablePort(true);
+    const l = new WebSerialKiss(() => {});
+    await l.connect();
+    await Promise.all([
+      l.setTiming({ txDelay: 30, persist: 63, slotTime: 10 }),
+      l.send({ src: "OE8APR-7", dst: "APRS", payload: ">hi" }),
+    ]);
+    expect(written[0]).toEqual([0xc0, 0x01, 30, 0xc0, 0xc0, 0x02, 63, 0xc0, 0xc0, 0x03, 10, 0xc0]);
+    expect(written[1]?.slice(0, 2)).toEqual([0xc0, 0x00]); // the data frame follows
+    await l.disconnect();
+  });
+
+  it("skips the timing on a port with nothing to write to", async () => {
+    const written = writablePort(false);
+    const l = new WebSerialKiss(() => {});
+    await l.connect();
+    await expect(l.setTiming({ txDelay: 30, persist: 63, slotTime: 10 })).resolves.toBeUndefined();
+    expect(written).toEqual([]);
+    await l.disconnect();
+  });
+});

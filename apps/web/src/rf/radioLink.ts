@@ -6,6 +6,9 @@
  * collapsing a group or searching settings never drops the radio. It goes down only on an explicit Disconnect,
  * on the loss of the device, on a change of account, or when the page unloads.
  *
+ * A KISS TNC (USB or Bluetooth) is sent its channel access (TXDELAY, PERSIST, SLOTTIME) as the link comes up and
+ * again whenever the operator changes it, so the radio keys up on this page's settings, not the TNC's own.
+ *
  * Transmit consent lasts one browser session and lives in memory only. The operator grants it in a dialog
  * (asked when a transmit-capable radio connects under a verified callsign, or at the first transmit), for one
  * callsign over one link; it ends on Disconnect, on the loss of the device, on a change of callsign or SSID, on
@@ -20,6 +23,7 @@
 import type { Packet } from "@aprscaching/shared";
 import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
 import { aprsTxNote, type TxEntry, type TxFeature, type TxNote } from "./txLog.js";
+import { KISS_TIMING_DEFAULTS, type KissTiming } from "./kissTiming.js";
 
 export type LinkKind = "serial" | "ble" | "audio" | "mesh";
 
@@ -60,6 +64,8 @@ export interface RadioState {
   ssid: string;
   callsign: string;
   verified: boolean;
+  /** The channel access a KISS TNC is sent; persisted by the host. */
+  kissTiming: KissTiming;
 }
 
 /** Something the user should hear about; the host turns these into toasts. */
@@ -68,6 +74,7 @@ export type RadioEvent =
   | { kind: "lost"; message: string }
   | { kind: "connect-failed"; message: string }
   | { kind: "forward-failed"; message: string }
+  | { kind: "timing-failed"; message: string }
   | { kind: "tx"; entry: TxEntry };
 
 /** Who may transmit: a part of the app with a radio port, the callsign it sends as and the words for its link. */
@@ -87,6 +94,8 @@ export interface RadioDeps {
   feedLocal(f: RfFrame): void;
   /** Persist the gateway URL; the secret is never handed to storage. */
   saveGatewayUrl?(url: string): void;
+  /** Persist the KISS channel-access settings. */
+  saveKissTiming?(t: KissTiming): void;
   /** Turn a connect error into the words the user sees, or null to stay quiet (a cancelled chooser). */
   connectError?(err: Error): string | null;
   setTimer?(fn: () => void, ms: number): unknown;
@@ -121,7 +130,7 @@ export class RadioLinkStore {
 
   constructor(
     private deps: RadioDeps,
-    init: { gatewayUrl?: string } = {},
+    init: { gatewayUrl?: string; kissTiming?: KissTiming } = {},
   ) {
     this.state = {
       link: null,
@@ -140,6 +149,7 @@ export class RadioLinkStore {
       ssid: "7",
       callsign: "",
       verified: false,
+      kissTiming: { ...(init.kissTiming ?? KISS_TIMING_DEFAULTS) },
     };
   }
 
@@ -278,6 +288,8 @@ export class RadioLinkStore {
     const l = this.deps.makeLink(kind, (f) => this.onFrame(f), onClose);
     try {
       await l.connect();
+      // the TNC takes this page's channel access before anything can be sent through it
+      await this.sendTiming(l);
       this.current = l;
       this.fwdReported = false;
       this.set({ link: kind, busy: false, frames: [], count: 0 });
@@ -319,6 +331,33 @@ export class RadioLinkStore {
     if (frame.src.toUpperCase() !== as) throw new Error(`transmit is allowed as ${as} only`);
     await l.send(frame);
     this.recordTx(aprsTxNote(frame, feature));
+  }
+
+  /**
+   * Change the KISS channel access. Each value is a whole number 0–255; one outside that is ignored. The settings
+   * are saved and, with a KISS TNC connected, sent to it at once.
+   */
+  setKissTiming(patch: Partial<KissTiming>): void {
+    const next = { ...this.state.kissTiming };
+    for (const k of ["txDelay", "persist", "slotTime"] as const) {
+      const v = patch[k];
+      if (v !== undefined && Number.isInteger(v) && v >= 0 && v <= 255) next[k] = v;
+    }
+    const cur = this.state.kissTiming;
+    if (next.txDelay === cur.txDelay && next.persist === cur.persist && next.slotTime === cur.slotTime) return;
+    this.set({ kissTiming: next });
+    this.deps.saveKissTiming?.(next);
+    if (this.current) void this.sendTiming(this.current);
+  }
+
+  /** Send a link its channel access when it is a KISS TNC; a failure is reported and leaves the link up. */
+  private async sendTiming(l: ConnectableLink): Promise<void> {
+    if (!l.setTiming) return;
+    try {
+      await l.setTiming(this.state.kissTiming);
+    } catch (e) {
+      this.emit({ kind: "timing-failed", message: (e as Error).message || "the TNC did not take its settings" });
+    }
   }
 
   setForward(on: boolean): void {

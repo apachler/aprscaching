@@ -130,6 +130,47 @@ export function kissWrap(ax25: Uint8Array): Uint8Array {
   return Uint8Array.from(out);
 }
 
+/** The KISS commands that set a TNC's channel access (the low nibble of the type byte). */
+export const KISS_TXDELAY = 0x01;
+export const KISS_PERSIST = 0x02;
+export const KISS_SLOTTIME = 0x03;
+
+/**
+ * A TNC's channel-access parameters, each one byte (0–255). txDelay and slotTime count in units of 10 ms;
+ * persist p sets the chance (p + 1) / 256 that the TNC keys up in a free slot.
+ */
+export interface KissTiming {
+  txDelay: number;
+  persist: number;
+  slotTime: number;
+}
+
+/**
+ * The APRS values (WB2OSZ, "Minimizing APRS Collisions"): 300 ms TXDELAY, persist 63 (a 1-in-4 chance per slot)
+ * and a 100 ms slot. A shorter TXDELAY clips the start of the frame on many radios; a TNC left on persist 255
+ * keys up the moment the channel clears, all at once with every other station that waited.
+ */
+export const KISS_TIMING_DEFAULTS: Readonly<KissTiming> = Object.freeze({ txDelay: 30, persist: 63, slotTime: 10 });
+
+/** One KISS command frame carrying a one-byte value, escaped like a data frame. Throws on a value outside 0–255. */
+export function kissCommand(command: number, value: number, port = 0): Uint8Array {
+  if (!Number.isInteger(command) || command < 1 || command > 0x0e) throw new RangeError(`KISS command ${command}`);
+  if (!Number.isInteger(port) || port < 0 || port > 0x0f) throw new RangeError(`KISS port ${port}`);
+  if (!Number.isInteger(value) || value < 0 || value > 255) throw new RangeError(`KISS value ${value} is not 0–255`);
+  const type = (port << 4) | command;
+  const body = value === FEND ? [FESC, TFEND] : value === FESC ? [FESC, TFESC] : [value];
+  return Uint8Array.from([FEND, type, ...body, FEND]);
+}
+
+/** The TXDELAY, PERSIST and SLOTTIME frames for a TNC, in that order, as one write. */
+export function kissTimingFrames(t: KissTiming, port = 0): Uint8Array {
+  return Uint8Array.from([
+    ...kissCommand(KISS_TXDELAY, t.txDelay, port),
+    ...kissCommand(KISS_PERSIST, t.persist, port),
+    ...kissCommand(KISS_SLOTTIME, t.slotTime, port),
+  ]);
+}
+
 // ---- AX.25 address codec ----
 /** An address character: A–Z, 0–9 or the space that pads a short call. */
 const isAddrChar = (c: number) => c === 0x20 || (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);

@@ -11,6 +11,7 @@ import {
   type LocalMessage,
 } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
+import { KissTimingSettings } from "./KissTimingSettings.js";
 import { radioLink, useRadioLink } from "./RadioLinkHost.js";
 import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
@@ -321,6 +322,8 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       ) : (
         <p className="muted fine">Connect a radio to forward what it hears to a gateway.</p>
       )}
+
+      <KissTimingSettings />
 
       {link && (
         <div className="tx-block">
