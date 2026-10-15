@@ -59,6 +59,7 @@ export const SITE_GROUPS = [
   "accounts",
   "retention",
   "imports",
+  "radio",
   "federation",
   "tools",
   "imprint",
@@ -89,6 +90,11 @@ export interface SiteSetting {
    * `mailto:`), donation links (`[{label,url}]`), or the retention fields (RETENTION_FIELDS).
    */
   readonly format?: "email" | "contacts" | "links" | "retention";
+  /**
+   * The on/off setting of the same group this one belongs to: while it is off the form folds this one away, and
+   * the gateway does not read it.
+   */
+  readonly gate?: string;
 }
 
 export type ConfigKeyName = keyof typeof CONFIG_KEYS;

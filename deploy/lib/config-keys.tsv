@@ -55,6 +55,12 @@ OKAPI_KEY	string	gateway			1	0	selfhost,baremetal,pocket,desktop	OpenCaching OKA
 IMPORT_ALLOW	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Comma-separated import sources whose permission the operator holds (wwff, iota, gcau)	imports
 SERVICE_CALL	call	gateway			0	0	selfhost,baremetal,pocket,desktop	The instance's on-air call for radio commands and mail; default the sysop's call -15	
 RADIO_REPLIES	enum	gateway		0|1	0	0	selfhost,baremetal,pocket,desktop	1 sends a text reply to each FOUND, DNF and NOTE radio command	
+CACHE_OBJECTS	enum	gateway	0	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	1 sends the caches near the transmitting box on air as APRS objects	radio
+CACHE_OBJECTS_BOX	string	gateway			0	0	selfhost,baremetal,pocket,desktop	The ingest box (its BOX_ID) whose radio sends the cache objects	radio
+CACHE_OBJECTS_RADIUS_KM	int	gateway	20		0	0	selfhost,baremetal,pocket,desktop	Only caches this close to the transmitting box go on air	radio
+CACHE_OBJECTS_INTERVAL_MIN	int	gateway	30		0	0	selfhost,baremetal,pocket,desktop	Minutes between repeats of one cache object once its first announcements are out	radio
+CACHE_OBJECTS_PER_RUN	int	gateway	2		0	0	selfhost,baremetal,pocket,desktop	Cache objects sent in one five-minute run, at most	radio
+CACHE_OBJECTS_PATH	enum	gateway	none	none|WIDE1-1	0	0	selfhost,baremetal,pocket,desktop	The digipeater path of cache objects: none, or WIDE1-1 at most	radio
 API_RATE_WINDOW_SEC	int	gateway	60		0	0	selfhost,baremetal,pocket,desktop	Length of the public read-API rate-limit window, in seconds	accounts
 API_RATE_ANON	int	gateway	60		0	0	selfhost,baremetal,pocket,desktop	Read-API requests per window without a key	accounts
 API_RATE_KEYED	int	gateway	600		0	0	selfhost,baremetal,pocket,desktop	Read-API requests per window with a free key	accounts
@@ -110,13 +116,15 @@ APRSIS_PASSCODE	int	ingest	-1		1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS 
 APRSIS_FILTER	string	ingest,pocket	r/47.07/15.42/300		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed	
 KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Host of the KISS TNC over TCP; set it to enable the TNC	
 KISS_TNC_PORT	int	ingest,pocket	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the KISS TNC	
+KISS_TNC_CHANNELS	list	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	KISS channels (0-15) the TNC's radios use, comma-separated; each is its own port	
+KISS_TNC_TX_CHANNEL	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	KISS channel of the box's own transmissions (default: the first listed)	
 KISS_TIMING	enum	ingest	on	on|off	0	0	selfhost,baremetal,ingest-box,pocket	Send the KISS TNC its timing after each connect (off keeps its own)	
 KISS_TXDELAY	int	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	TX delay sent to the KISS TNC, 0-255 in 10 ms steps	
 KISS_PERSIST	int	ingest	63		0	0	selfhost,baremetal,ingest-box,pocket	Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot	
 KISS_SLOTTIME	int	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Slot time sent to the KISS TNC, 0-255 in 10 ms steps	
 AGWPE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the AGWPE server; set it to enable AGWPE	
 AGWPE_PORT	int	ingest	8000		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the AGWPE server	
-AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port to use (0 is the first)	
+AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port heard and transmitted on (0 is the first); other ports are ignored	
 HOSTMODE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the WA8DED host-mode TNC; set it to enable host mode	
 HOSTMODE_PORT	int	ingest	3694		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the WA8DED host-mode TNC	
 HOSTMODE_MYCALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to	

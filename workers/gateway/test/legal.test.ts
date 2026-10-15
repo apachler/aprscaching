@@ -106,6 +106,14 @@ describe("legal pages", () => {
     expect(html).toContain("Musterweg 1, 9020 Klagenfurt, Austria"); // the controller's address, not only the name
   });
 
+  it("privacy promises an objecting licensee's exclusion, and names the record kept to honour it", async () => {
+    const html = (await handlePrivacyPage(configured).text()).replace(/\s+/g, " ");
+    expect(html).toContain("excludes the callsign, with every SSID of it");
+    expect(html).toContain("neither stored nor shown");
+    expect(html).toContain("this record is not part of an export or erasure");
+    expect(html).not.toContain("stored again");
+  });
+
   it("privacy names the supervisory authority when set, and the right to complain without it", async () => {
     expect(await handlePrivacyPage(configured).text()).toContain("a data-protection supervisory authority");
     const dsb = "Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at";

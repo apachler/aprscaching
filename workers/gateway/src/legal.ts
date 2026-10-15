@@ -230,9 +230,13 @@ function purposes(env: Env): string {
   they set another expiry; personal BBS mail stays until its recipient deletes it.<br>
   <em>Source and notice:</em> this data is not collected from you (Art. 14). Telling every station heard on the
   air individually is impossible, or would need disproportionate effort (Art. 14(5)(b)), so this public notice
-  takes its place. A station's licensee may object by e-mail to the operator (Art. 21), who answers each
-  objection. The instance has no setting that keeps one callsign out of its station data, so what it hears from
-  that station later is stored again and deleted on the periods above.</p>
+  takes its place. A station's licensee may object by e-mail to the operator (Art. 21). On an objection the operator
+  excludes the callsign, with every SSID of it: what the instance holds of that station's own transmissions is
+  deleted, and what it hears from the station later is neither stored nor shown. A packet of another station that
+  only names the callsign in its route or as an addressee is that station's and stays. To honour the objection the
+  instance keeps the callsign, why it is excluded (an objection, an erasure request or another reason) and when,
+  nothing else; this record is not part of an export or erasure and stays until the operator lifts the exclusion
+  (legitimate interest, Art. 6(1)(f)).</p>
 
 <h3>Moderation</h3>
 <p>Reports players file (the item, a category, the reporter's words and, when signed
@@ -293,7 +297,8 @@ use, and are never read for tracking. No analytics, no advertising, no third-par
   operator.</li>
 <li><strong>Restriction</strong> (Art. 18) and <strong>objection</strong> (Art. 21) — you may object at any time,
   on grounds relating to your situation, to processing based on legitimate interest, including what this instance
-  stores about your station from the air. Write to the operator above.</li>
+  stores about your station from the air. Write to the operator above; an objecting licensee's callsign is
+  excluded from storage and display.</li>
 <li><strong>Withdrawing consent</strong> (Art. 7(3)) — switch the feature off in Settings; this does not affect
   what was done before.</li>
 <li><strong>Complaint</strong> (Art. 77) — you may complain to ${complain}.</li>

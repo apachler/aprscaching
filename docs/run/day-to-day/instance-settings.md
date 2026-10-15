@@ -1,7 +1,7 @@
 # Instance settings
 
 This page is for the sysop. It shows how to change the policy values of your instance in the app: the game
-rules, the API limits, how long data is kept, imports and spots, tools and their registries, the imprint, donation
+rules, the API limits, how long data is kept, imports and spots, caches on air, tools and their registries, the imprint, donation
 links and the update check. At the end the new value applies at once, with no restart.
 
 ## Before you start

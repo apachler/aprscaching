@@ -83,6 +83,7 @@ const ALTERNATE: Record<string, [string, string]> = {
   O: ["Rocket", "air"],
   W: ["Flooding", "weather"],
   _: ["Weather (alt)", "weather"],
+  i: ["Point of interest", "other"],
   n: ["Overlay triangle", "other"],
   s: ["Overlay ship", "marine"],
   u: ["Overlay truck", "vehicle"],

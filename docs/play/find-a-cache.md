@@ -138,6 +138,14 @@ You get a message only when:
 
 You get one message per cache a day, and at most four an hour.
 
+## Caches on your radio's display
+
+An instance can send the caches around its station on air as APRS objects. A radio or a map program with an APRS
+display near that station then lists them, with the point-of-interest symbol: the cache code as the name, the
+title as the comment, and the published coordinates, which for a multi-stage cache are the start. An archived
+cache drops off the display. Whether your instance sends them is its sysop's choice
+([Caches on air](../run/radios/caches-on-air.md)).
+
 ## Caches from other instances
 
 Your instance can show caches from other instances in its network, and search finds them too. Their sheet
