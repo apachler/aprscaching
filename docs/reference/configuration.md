@@ -68,6 +68,9 @@ change. It travels with the database, so a backup carries it. The tables below m
 | Postal address | `OPERATOR_ADDRESS` | Imprint & contact | one line of text, up to 300 characters |
 | Contact email | `OPERATOR_EMAIL` | Imprint & contact | an email address |
 | Security contacts | `SECURITY_CONTACT` | Imprint & contact | email or `https:` addresses, up to 5 |
+| Editorial line | `EDITORIAL_LINE` | Imprint & contact | one line of text, up to 500 characters |
+| Supervisory authority | `PRIVACY_AUTHORITY` | Imprint & contact | one line of text, up to 300 characters |
+| Hosting provider | `HOSTING_PROVIDER` | Imprint & contact | one line of text, up to 200 characters |
 | Donation links | `SUPPORT_LINKS` | Support links | donation links (a label and an http(s) address), up to 12 |
 | Look for new releases | `UPDATE_CHECK` | Updates | on or off |
 <!-- /site-settings-table -->
@@ -102,6 +105,9 @@ change. It travels with the database, so a backup carries it. The tables below m
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop), matched by base call (`OE8APR-10` names the holder of `OE8APR`). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign)) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning. `OPERATOR_EMAIL` also receives each player report when mail is configured ([Moderation](../run/day-to-day/moderation.md)) · *[Instance setting](#instance-settings)* | — |
 | `SECURITY_CONTACT` | Where a security report goes: the `Contact:` lines of `/.well-known/security.txt` (RFC 9116), comma-separated `mailto:` or `https:` URIs (a bare address becomes `mailto:`). With neither this nor `OPERATOR_EMAIL` set, the file answers 404 · *[Instance setting](#instance-settings)* | `mailto:` + `OPERATOR_EMAIL` |
+| `EDITORIAL_LINE` | The site's editorial line (the Austrian MedienG §25 (4) _Blattlinie_), shown on `/imprint` under the operator. A small website that only presents its owner needs none · *[Instance setting](#instance-settings)* | — |
+| `PRIVACY_AUTHORITY` | The data-protection supervisory authority `/privacy` names for a complaint (GDPR Art. 77), "," separating its lines, for example `Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at`. Unset, the page names the right to complain without naming an authority · *[Instance setting](#instance-settings)* | — |
+| `HOSTING_PROVIDER` | Who hosts this instance and where, for example `Oracle Cloud Infrastructure, Frankfurt (Germany)`. `/privacy` names it among the recipients as the hosting processor; unset, it names none. Leave it unset on your own hardware · *[Instance setting](#instance-settings)* | — |
 | `SERVICE_CALL` | The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks and replies are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit | the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one, or when that base call is longer than six characters |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
 <!-- /config-table -->

@@ -37,7 +37,14 @@ operator address to the push services, unless `VAPID_SUBJECT` says otherwise.
 
 `/privacy` also names who receives personal data from the instance. When mail is on it names the mail
 server's host: `SMTP_HOST`, or `api.resend.com` for the Resend API ([Send mail](../day-to-day/mail.md)). An
-instance that sends no mail names none. Push services appear only with web push configured.
+instance that sends no mail names none. Push services appear only with web push configured, Cloudflare only
+with `TRUST_CF=1`, and your hosting provider only when `HOSTING_PROVIDER` names it.
+
+The page gives each purpose its legal basis and its retention, read from the same settings the nightly cleanup
+uses, so changing `RETENTION` or `SESSION_TTL_DAYS` changes the page too. Name the supervisory authority a member
+may complain to in `PRIVACY_AUTHORITY`; unset, the page states the right to complain without naming one.
+`EDITORIAL_LINE` adds the site's editorial line to `/imprint`, which Austrian media law asks of a site that does
+more than present its owner.
 
 ## Check that it worked
 

@@ -106,8 +106,9 @@ signed account-move record points attribution at the new instance across the net
 
 | Data | Kept | Setting |
 |---|---|---|
-| Positions from APRS-IS and from browser radio forwarding | 7 days, pruned nightly; finds use them as evidence | fixed |
-| Other positions, finds, caches, accounts, keys | until erased | — |
+| Positions, from ingest and from browser radio forwarding | 7 days, pruned nightly; a find keeps its verification result, not the position | fixed |
+| A station's map entry (its last heard position) | 1 year after it was last heard, or while a living cache, a registered station or a MeshCom node names it | fixed |
+| Finds, caches, accounts, keys | until erased | — |
 | Shack raw-packet ring | 24 hours | `RETENTION` (`packetsHours`) |
 | Message log and MeshCom group messages | 7 days | `RETENTION` (`messagesDays`) |
 | Weather and telemetry readings | 30 days | `RETENTION` (`sensorDays`) |

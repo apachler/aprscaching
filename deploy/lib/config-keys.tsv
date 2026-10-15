@@ -89,6 +89,9 @@ OPERATOR_NAME	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Person or e
 OPERATOR_ADDRESS	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's postal address; commas separate the lines	imprint
 OPERATOR_EMAIL	string	gateway			0	1	selfhost,baremetal,pocket,desktop	Operator's contact address, also the privacy contact	imprint
 SECURITY_CONTACT	list	gateway			0	0	selfhost,baremetal,pocket,desktop	Contact URIs in /.well-known/security.txt; default mailto:OPERATOR_EMAIL	imprint
+EDITORIAL_LINE	string	gateway			0	0	selfhost,baremetal,pocket,desktop	The site's editorial line, shown on /imprint when set	imprint
+PRIVACY_AUTHORITY	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Data-protection supervisory authority named on /privacy; commas separate the lines	imprint
+HOSTING_PROVIDER	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Who hosts this instance and where, named as a recipient on /privacy	imprint
 SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Commit or tag the instance runs; resolved at build or start when unset	
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs	
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds	

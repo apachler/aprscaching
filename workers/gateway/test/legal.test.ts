@@ -88,4 +88,66 @@ describe("legal pages", () => {
     const off = await handlePrivacyPage({ ...configured, UPDATE_CHECK: "0" } as Env).text();
     expect(off).not.toContain("api.github.com");
   });
+
+  it("imprint shows the editorial line only when one is set", async () => {
+    expect(await handleImprintPage(configured).text()).not.toContain("Editorial line");
+    const html = await handleImprintPage({
+      ...configured,
+      EDITORIAL_LINE: "Amateur-radio geocaching <b>news</b>",
+    } as Env).text();
+    expect(html).toContain("Editorial line: Amateur-radio geocaching &lt;b&gt;news&lt;/b&gt;");
+  });
+
+  it("privacy gives each purpose its legal basis and lists every right", async () => {
+    const html = await handlePrivacyPage(configured).text();
+    for (const basis of ["Art. 6(1)(b)", "Art. 6(1)(a)", "Art. 6(1)(f)"]) expect(html).toContain(basis);
+    for (const right of ["Art. 15, 20", "Art. 16", "Art. 17", "Art. 18", "Art. 21", "Art. 7(3)", "Art. 77", "Art. 22"])
+      expect(html).toContain(right);
+    expect(html).toContain("Musterweg 1, 9020 Klagenfurt, Austria"); // the controller's address, not only the name
+  });
+
+  it("privacy names the supervisory authority when set, and the right to complain without it", async () => {
+    expect(await handlePrivacyPage(configured).text()).toContain("a data-protection supervisory authority");
+    const dsb = "Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at";
+    expect(await handlePrivacyPage({ ...configured, PRIVACY_AUTHORITY: dsb } as Env).text()).toContain(dsb);
+  });
+
+  it("privacy states the retention periods the nightly prune applies, from the settings", async () => {
+    const html = await handlePrivacyPage(configured).text();
+    expect(html).toContain("positions 7 days");
+    expect(html).toContain("raw packets 24 hours");
+    expect(html).toContain("expires after 30 days"); // the sign-in cookie, SESSION_TTL_DAYS default
+    expect(html).toContain("map entry\n  one year after last heard");
+    const set = await handlePrivacyPage({
+      ...configured,
+      RETENTION: JSON.stringify({ packetsHours: 6, sensorDays: 90 }),
+      SESSION_TTL_DAYS: "14",
+      MESHCOM_NODE_TTL_DAYS: "3",
+    } as Env).text();
+    expect(set).toContain("raw packets 6 hours");
+    expect(set).toContain("readings\n  90 days");
+    expect(set).toContain("expires after 14 days");
+    expect(set).toContain("MeshCom nodes 3 days after last heard");
+  });
+
+  it("privacy names Cloudflare behind a declared edge and the hosting provider when set", async () => {
+    const bare = await handlePrivacyPage(configured).text();
+    expect(bare).not.toContain("Cloudflare");
+    expect(bare).not.toContain("Hosting provider</strong>");
+    const html = await handlePrivacyPage({
+      ...configured,
+      TRUST_CF: "1",
+      HOSTING_PROVIDER: "Oracle Cloud Infrastructure, Frankfurt (Germany)",
+    } as Env).text();
+    expect(html).toContain("<strong>Cloudflare</strong>");
+    expect(html).toContain("Hosting provider</strong> (Oracle Cloud Infrastructure, Frankfurt (Germany))");
+  });
+
+  it("privacy marks the Resend API as a third-country transfer, and an SMTP host not", async () => {
+    const mail = { ...configured, EMAIL_FROM: "n@example.net" };
+    const resend = await handlePrivacyPage({ ...mail, EMAIL_API_KEY: "re_x" } as Env).text();
+    expect(resend).toContain("Resend, Inc. in the United States");
+    const smtp = await handlePrivacyPage({ ...mail, SMTP_HOST: "mail.example.net" } as Env).text();
+    expect(smtp).not.toContain("a third country.</li>");
+  });
 });

@@ -105,6 +105,9 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   OPERATOR_ADDRESS: "Operator's postal address; commas separate the lines",
   OPERATOR_EMAIL: "Operator's contact address, also the privacy contact",
   SECURITY_CONTACT: "Contact URIs in /.well-known/security.txt; default mailto:OPERATOR_EMAIL",
+  EDITORIAL_LINE: "The site's editorial line, shown on /imprint when set",
+  PRIVACY_AUTHORITY: "Data-protection supervisory authority named on /privacy; commas separate the lines",
+  HOSTING_PROVIDER: "Who hosts this instance and where, named as a recipient on /privacy",
   SOURCE_COMMIT: "Commit or tag the instance runs; resolved at build or start when unset",
   SOURCE_TAG: "Release tag the instance runs",
   SOURCE_BUILT_AT: "Build time in unix seconds",
@@ -380,6 +383,21 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`SECURITY_CONTACT`",
         "Where a security report goes: the `Contact:` lines of `/.well-known/security.txt` (RFC 9116), comma-separated `mailto:` or `https:` URIs (a bare address becomes `mailto:`). With neither this nor `OPERATOR_EMAIL` set, the file answers 404",
         "`mailto:` + `OPERATOR_EMAIL`",
+      ],
+      [
+        "`EDITORIAL_LINE`",
+        "The site's editorial line (the Austrian MedienG §25 (4) _Blattlinie_), shown on `/imprint` under the operator. A small website that only presents its owner needs none",
+        "—",
+      ],
+      [
+        "`PRIVACY_AUTHORITY`",
+        'The data-protection supervisory authority `/privacy` names for a complaint (GDPR Art. 77), "," separating its lines, for example `Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at`. Unset, the page names the right to complain without naming an authority',
+        "—",
+      ],
+      [
+        "`HOSTING_PROVIDER`",
+        "Who hosts this instance and where, for example `Oracle Cloud Infrastructure, Frankfurt (Germany)`. `/privacy` names it among the recipients as the hosting processor; unset, it names none. Leave it unset on your own hardware",
+        "—",
       ],
       [
         "`SERVICE_CALL`",
@@ -986,6 +1004,18 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   OPERATOR_NAME: { label: "Operator name", hint: "The person or entity running this instance, on Imprint and Privacy" },
   OPERATOR_ADDRESS: { label: "Postal address", hint: "Shown on the Imprint; commas separate the lines" },
   OPERATOR_EMAIL: { label: "Contact email", hint: "The privacy contact, and where player reports are mailed" },
+  EDITORIAL_LINE: {
+    label: "Editorial line",
+    hint: "What the site is about, on the Imprint; a small site may leave it empty",
+  },
+  PRIVACY_AUTHORITY: {
+    label: "Supervisory authority",
+    hint: "The data-protection authority on the Privacy page; commas separate the lines",
+  },
+  HOSTING_PROVIDER: {
+    label: "Hosting provider",
+    hint: "Who hosts the instance and where, on the Privacy page; empty on your own hardware",
+  },
   SECURITY_CONTACT: {
     label: "Security contacts",
     hint: "Email or https addresses in security.txt; none uses the contact email",
