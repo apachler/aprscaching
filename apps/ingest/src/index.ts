@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
-import { KissTnc, kissTimingFromEnv } from "./kiss.js";
+import { KissTnc, kissChannelsFromEnv, kissTimingFromEnv } from "./kiss.js";
 import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { addrStr } from "@aprscaching/ax25";
-import { validateConfig, type Packet } from "@aprscaching/shared";
+import { kissTncPort, validateConfig, type Packet } from "@aprscaching/shared";
 import { gatewayUrls, loadDotEnv, numEnv, portEnv } from "./config.js";
 import { Delivery } from "./deliver.js";
 import { PortHealthCounter } from "./porthealth.js";
@@ -59,8 +59,9 @@ let batch: Packet[] = [];
 // Each port's health (frames heard, decoded, invalid, packets per second), reported with the batches.
 const health = new PortHealthCounter();
 // Frames this box received over a radio it can also transmit on carry its BOX_ID, so the gateway can
-// send an answer (an ack to a radio command) back through this box instead of over APRS-IS.
-const RX_ANSWER_PORTS = new Set(["kiss-tnc", "soundcard", "meshcom"]);
+// send an answer (an ack to a radio command) back through this box instead of over APRS-IS. Of the KISS TNC's
+// channels only the transmit channel answers (KISS_TNC_TX_CHANNEL): the box's answers go out there alone.
+const RX_ANSWER_PORTS = new Set(["soundcard", "meshcom"]);
 const enqueue = (p: Packet) => {
   if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
   health.packet(p);
@@ -187,8 +188,22 @@ const sentFrames = new SentFrames();
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
-  const frameSubs: ((f: ParsedFrame) => void)[] = [];
-  const rawSubs: ((b: Uint8Array) => void)[] = [];
+  let kissChannels: import("./kiss.js").KissChannels;
+  try {
+    kissChannels = kissChannelsFromEnv(env);
+  } catch (e) {
+    console.error("[ingest] FATAL: %s", (e as Error).message);
+    process.exit(1);
+  }
+  // one radio port per KISS channel, the transmit channel first: it carries the box's own transmissions
+  const order = [kissChannels.tx, ...kissChannels.channels.filter((c) => c !== kissChannels.tx)];
+  const subs = new Map(
+    order.map((c) => [
+      c,
+      { frameSubs: [] as ((f: ParsedFrame) => void)[], rawSubs: [] as ((b: Uint8Array) => void)[] },
+    ]),
+  );
+  RX_ANSWER_PORTS.add(kissTncPort(kissChannels.tx));
   // RF_SITE_CALL (default: IGATE_CALL) names this box as the receiving site of what it hears directly,
   // so a gateway that trusts it attests those frames. This batch is the only way the
   // site's hearings reach Tier A: the RX-IGate's APRS-IS copy (`qAR,<site>`) is never attested.
@@ -199,20 +214,26 @@ if (env.KISS_TNC_HOST) {
       siteCall,
       sent: sentFrames,
       timing: kissTimingFromEnv(env),
+      channels: kissChannels.channels,
     },
     {
       onPacket: enqueue,
-      onInvalid: () => health.invalid("kiss-tnc"),
-      onFrame: (f) => {
-        for (const s of frameSubs) s(f);
+      onInvalid: (port) => health.invalid(port),
+      onFrame: (f, ch) => {
+        for (const s of subs.get(ch)?.frameSubs ?? []) s(f);
       },
-      onRaw: (b) => {
-        for (const s of rawSubs) s(b);
+      onRaw: (b, ch) => {
+        for (const s of subs.get(ch)?.rawSubs ?? []) s(b);
       },
     },
   );
   kiss.start();
-  console.log("[kiss] enabled%s", siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : "");
+  const onlyZero = kissChannels.channels.length === 1 && kissChannels.tx === 0;
+  console.log(
+    "[kiss] enabled%s%s",
+    onlyZero ? "" : ` on channels ${kissChannels.channels.join(",")} (transmit ${kissChannels.tx})`,
+    siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : "",
+  );
   const kissOpen = gateCheck(
     callGate,
     () => gateCalls,
@@ -220,12 +241,16 @@ if (env.KISS_TNC_HOST) {
     () => station.tx,
     (m) => console.log("[kiss] %s", m),
   );
-  radios.push({
-    send: (f) => kissOpen([f.src, ...(f.path ?? [])]) && kiss.send(f),
-    sendFrame: (f) => kissOpen([addrStr(f.src), ...(f.digis ?? []).map(addrStr)]) && kiss.sendFrame(f),
-    frameSubs,
-    rawSubs,
-  });
+  for (const [ch, { frameSubs, rawSubs }] of subs) {
+    const radio = kiss.channel(ch);
+    radios.push({
+      send: (f) => kissOpen([f.src, ...(f.path ?? [])]) && radio.send(f),
+      sendFrame: (f) => kissOpen([addrStr(f.src), ...(f.digis ?? []).map(addrStr)]) && radio.sendFrame(f),
+      frameSubs,
+      rawSubs,
+      ...(kissChannels.channels.length > 1 ? { label: () => kissTncPort(ch) } : {}),
+    });
+  }
 }
 
 // Soundcard ports — a 1200-baud AFSK modem in the box itself (ALSA arecord/aplay), keyed by a PTT driver.
@@ -296,9 +321,9 @@ if (gateRunning)
     },
   );
 
-// The first transmitting port (the KISS TNC, else the first soundcard port) carries the remote box's
-// transmissions and the connected-mode services. The digipeater repeats on the port that heard the frame, with
-// one duplicate window across ports; the IGate sends a message on the port that last heard its addressee.
+// The first transmitting port (the KISS TNC's transmit channel, else the first soundcard port) carries the remote
+// box's transmissions and the connected-mode services. The digipeater repeats on the port that heard the frame,
+// with one duplicate window across ports; the IGate sends a message on the port that last heard its addressee.
 const primaryRadio = radios[0];
 if (primaryRadio) {
   boxRadio = { send: (f) => primaryRadio.send(f), label: primaryRadio.label };

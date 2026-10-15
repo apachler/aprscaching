@@ -43,7 +43,7 @@ import type { CacheRow } from "./verify.js";
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import { alreadyFound, logRefusal } from "./findrules.js";
 import { serviceCall } from "./servicecall.js";
-import { leaveMail } from "./mailbox.js";
+import { leaveMail, isBoxRadioPort } from "./mailbox.js";
 import { setNearRadio } from "./nearradio.js";
 import type { Transport } from "@aprscaching/shared";
 
@@ -236,9 +236,6 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
 
 const repliesEnabled = (env: Env) => env.RADIO_REPLIES === "1";
 
-/** Ports on which the ingest box itself received the frame over a radio it can also transmit on. */
-const RF_PORTS = new Set(["kiss-tnc", "soundcard"]);
-
 /** An APRS addressee field: exactly nine characters, space-padded or truncated. */
 const addressee = (call: string) => call.toUpperCase().slice(0, 9).padEnd(9);
 
@@ -262,7 +259,7 @@ async function answer(env: Env, m: RadioMessage, raw: string): Promise<boolean> 
       text,
       from: serviceCall(env),
     });
-  } else if (caps?.tx && caps.rf && RF_PORTS.has(m.port)) {
+  } else if (caps?.tx && caps.rf && isBoxRadioPort(m.port)) {
     await enqueueSystemBoxCommand(env, m.box!, "aprs_msg", { from: serviceCall(env), to: m.src.toUpperCase(), text });
   } else {
     await queueAprs(env, m.src, text);
