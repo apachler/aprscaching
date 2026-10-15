@@ -6,7 +6,7 @@
 // transmit until capture runs again.
 import { describe, it, expect, afterEach } from "vitest";
 import { EventEmitter } from "node:events";
-import { modulateAfsk1200, encodeAx25 } from "@aprscaching/aprs";
+import { modulateAfsk, encodeAx25 } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import {
   SoundcardPort,
@@ -134,6 +134,23 @@ describe("SoundcardPort", () => {
     });
   });
 
+  it("an hf300 port sends and hears 300 baud, which a 1200-baud port does not decode", async () => {
+    const hf = { modem: "hf300" as const };
+    const tx = await makePort({ cfg: hf });
+    const rx = await makePort({ cfg: hf, siteCall: "OE8APR-10" });
+    const vhf = await makePort({ siteCall: "OE8APR-10" });
+    expect(tx.port.label()).toBe("soundcard 1 HF 300 baud");
+    expect(tx.port.send({ ...frame, path: [] })).toBe(true);
+    await until(() => tx.ptt.events.includes("unkey"));
+    const audio = Buffer.concat(tx.audio.aplay()[0]!.written);
+    // 100 ms of TXDELAY at 300 baud is four flags; the frame itself takes four times as long as at 1200 baud
+    expect(txDelayFlags(100, 300)).toBe(4);
+    feed(rx.audio.arecord()[0]!, audio);
+    feed(vhf.audio.arecord()[0]!, audio);
+    expect(rx.packets.map((p) => p.payload)).toEqual([">soundcard loopback"]);
+    expect(vhf.packets).toHaveLength(0);
+  });
+
   it("never hears its own transmission: not 150 ms after the unkey, nor its echo within 30 s", async () => {
     let clock = 1_000_000;
     const tx = await makePort({ siteCall: "OE8APR-10" }, { now: () => clock });
@@ -148,7 +165,7 @@ describe("SoundcardPort", () => {
     feed(cap, own);
     expect(tx.packets).toHaveLength(0);
     // another station's frame is heard as ever
-    const other = modulateAfsk1200(encodeAx25({ ...frame, src: "OE3XYZ-9" }), 48000, { flags: 40 });
+    const other = modulateAfsk(encodeAx25({ ...frame, src: "OE3XYZ-9" }), 48000, { flags: 40 });
     feed(cap, Buffer.from(new Int16Array(other.map((v) => Math.round(v * 16000))).buffer));
     expect(tx.packets.map((p) => p.src)).toEqual(["OE3XYZ-9"]);
     clock += 31_000; // after the echo window the same bytes count as a hearing again
@@ -159,8 +176,8 @@ describe("SoundcardPort", () => {
   it("leads each frame with its TXDELAY of flags", () => {
     expect(txDelayFlags(300)).toBe(45);
     expect(txDelayFlags(1)).toBe(1);
-    const plain = modulateAfsk1200(encodeAx25(frame), 48000, { flags: 1 }).length;
-    const delayed = modulateAfsk1200(encodeAx25(frame), 48000, { flags: txDelayFlags(300) }).length;
+    const plain = modulateAfsk(encodeAx25(frame), 48000, { flags: 1 }).length;
+    const delayed = modulateAfsk(encodeAx25(frame), 48000, { flags: txDelayFlags(300) }).length;
     expect(Math.round(((delayed - plain) / 48000) * 1000)).toBe(293); // 44 more flags, 293 ms
   });
 
@@ -257,7 +274,7 @@ describe("SoundcardPort", () => {
     it("holds a frame back while the channel is busy, then sends once it clears", async () => {
       let slots = 0;
       const ref: { port?: SoundcardPort } = {};
-      const signal = modulateAfsk1200(encodeAx25({ ...frame, payload: ">someone else talking" }), 48000, {
+      const signal = modulateAfsk(encodeAx25({ ...frame, payload: ">someone else talking" }), 48000, {
         flags: 60,
       });
       const made = await makePort(
@@ -298,7 +315,7 @@ describe("SoundcardPort", () => {
         {},
         { now: () => clock, sleep: async () => void (clock += 1000), error: (m) => errors.push(m) },
       );
-      const signal = modulateAfsk1200(encodeAx25({ ...frame, payload: ">a long one" }), 48000, { flags: 60 });
+      const signal = modulateAfsk(encodeAx25({ ...frame, payload: ">a long one" }), 48000, { flags: 60 });
       made.port.pushPcm(signal.subarray(0, Math.floor(signal.length * 0.6))); // busy, and it stays busy
       expect(made.port.send(frame)).toBe(true);
       await until(() => errors.length > 0);

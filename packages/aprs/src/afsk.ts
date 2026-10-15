@@ -1,17 +1,33 @@
 // SPDX-License-Identifier: MIT
 /**
- * afsk.ts — a Bell-202 1200-baud AFSK modem. The modulator
- * turns an AX.25 frame into PCM (also the basis for AFSK TX, gated on callsign control-verification);
+ * afsk.ts — an AFSK modem for AX.25: Bell 202 at 1200 baud for VHF and UHF, and the 300-baud HF modem. The
+ * modulator turns an AX.25 frame into PCM (also the basis for AFSK TX, gated on callsign control-verification);
  * the demodulator turns PCM back
  * into AX.25 frames via a non-coherent mark/space correlator + DPLL bit recovery + HDLC deframing
  * with an X.25 FCS check. Pure DSP: the browser (Web Audio) or the ingest box (ALSA) supplies the audio.
  *
- * Bell 202: mark = 1200 Hz, space = 2200 Hz, 1200 baud, NRZI (a 0 toggles tone, a 1 holds), bits
- * LSB-first, HDLC flags 0x7E, bit-stuffing after five 1s, FCS = CRC-16/X.25.
+ * Both modems: NRZI (a 0 toggles tone, a 1 holds), bits LSB-first, HDLC flags 0x7E, bit-stuffing after five
+ * 1s, FCS = CRC-16/X.25. NRZI carries the data in the tone changes, not in which tone is which, so a receiver
+ * that swaps mark and space (an HF radio on the other sideband) still decodes the frame.
  */
-const MARK = 1200,
-  SPACE = 2200,
-  BAUD = 1200;
+
+/** An AFSK modem's line rate and tone pair. */
+export interface AfskModem {
+  baud: number;
+  /** Mark tone, Hz. */
+  mark: number;
+  /** Space tone, Hz. */
+  space: number;
+}
+
+/** Bell 202, 1200 baud, 1200/2200 Hz: APRS on VHF and UHF FM. */
+export const BELL_202: AfskModem = { baud: 1200, mark: 1200, space: 2200 };
+
+/**
+ * The HF APRS modem: 300 baud, 1600/1800 Hz (200 Hz shift, centre 1700 Hz) through an SSB radio, the tone pair
+ * Direwolf's `MODEM 300` uses by default and the one the 30 m APRS channel listens for.
+ */
+export const HF_300: AfskModem = { baud: 300, mark: 1600, space: 1800 };
 
 /** CRC-16/X.25 (HDLC FCS): reflected 0x1021, init 0xFFFF, final XOR 0xFFFF. */
 export function crc16X25(data: Uint8Array): number {
@@ -23,12 +39,13 @@ export function crc16X25(data: Uint8Array): number {
   return ~crc & 0xffff;
 }
 
-/** AX.25 frame bytes → Bell-202 PCM (Float32, mono). `flags` = leading HDLC flags (preamble). */
-export function modulateAfsk1200(
+/** AX.25 frame bytes → AFSK PCM (Float32, mono). `flags` = leading HDLC flags (preamble); `modem` defaults to Bell 202. */
+export function modulateAfsk(
   frame: Uint8Array,
   sampleRate = 48000,
-  opts: { flags?: number; amplitude?: number } = {},
+  opts: { flags?: number; amplitude?: number; modem?: AfskModem } = {},
 ): Float32Array {
+  const { baud: BAUD, mark: MARK, space: SPACE } = opts.modem ?? BELL_202;
   const fcs = crc16X25(frame);
   const withFcs = Uint8Array.from([...frame, fcs & 0xff, (fcs >>> 8) & 0xff]);
 
@@ -83,7 +100,7 @@ class Hdlc {
   private ones = 0;
   // A valid AX.25 frame is ≤ ~330 bytes (~2640 bits). A steady 0101 tone (a soundcard
   // IGate on noise, or crafted audio) never hits a flag or the >6-ones reset, so cap the accumulator
-  // and drop a frame that grows past any legal length instead of letting `bits` grow ~1200/s forever.
+  // and drop a frame that grows past any legal length instead of letting `bits` grow at the baud rate forever.
   private static readonly MAX_BITS = 4096;
   constructor(private onFrame: (f: Uint8Array) => void) {}
   rx(bit: number): void {
@@ -142,14 +159,15 @@ const DCD_TOLERANCE = 0.2;
 const DCD_IDLE_BITS = 10;
 
 /**
- * Streaming Bell-202 demodulator: push PCM chunks, get AX.25 frames out.
+ * Streaming AFSK demodulator: push PCM chunks, get AX.25 frames out. `modem` defaults to Bell 202. The
+ * correlation window is one bit long, which at 300 baud still tells 1600 Hz from 1800 Hz.
  *
  * {@link dcd} is its carrier detect: true while the tone edges keep falling on the recovered bit clock, as
- * they do for any 1200-baud AFSK signal, flags included. Noise puts edges anywhere, and silence or a steady
+ * they do for any AFSK signal at the modem's baud rate, flags included. Noise puts edges anywhere, and silence or a steady
  * tone has none, so neither raises it. A transmitter checks it before keying, so it does not talk over a
  * busy channel.
  */
-export class Afsk1200Rx {
+export class AfskRx {
   private spb: number;
   private win: number;
   private ring: Float32Array;
@@ -168,7 +186,7 @@ export class Afsk1200Rx {
   private sinceEdge = 0; // samples since the last tone edge
   private carrier = false;
 
-  /** Carrier detect: a 1200-baud AFSK signal is on the channel. */
+  /** Carrier detect: an AFSK signal at the modem's baud rate is on the channel. */
   get dcd(): boolean {
     return this.carrier;
   }
@@ -176,7 +194,9 @@ export class Afsk1200Rx {
   constructor(
     private sampleRate: number,
     onFrame: (f: Uint8Array) => void,
+    modem: AfskModem = BELL_202,
   ) {
+    const { baud: BAUD, mark: MARK, space: SPACE } = modem;
     this.spb = sampleRate / BAUD;
     this.win = Math.round(this.spb);
     this.ring = new Float32Array(this.win);

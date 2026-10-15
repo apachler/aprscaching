@@ -142,6 +142,7 @@ nav:
           - Lend your receiver to an instance: run/radios/lend-a-receiver.md
           - RF ingest & transports: run/radios/rf-ingest.md
           - Soundcard port: run/radios/soundcard.md
+          - "HF APRS on 30 m": run/radios/hf.md
           - Direwolf as your TNC: run/radios/direwolf.md
           - MeshCom: run/radios/meshcom.md
           - LoRa APRS: run/radios/lora-aprs.md
