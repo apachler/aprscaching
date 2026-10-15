@@ -2,7 +2,14 @@
 import { useEffect, useReducer, useState } from "react";
 import { webSerialSupported, webBluetoothSupported } from "./kiss.js";
 import { webAudioSupported } from "./extralinks.js";
-import { encodeAprsPosition, encodeAprsMessage, ackReply, syncBackBatch, type LocalMessage } from "@aprscaching/aprs";
+import {
+  encodeAprsPosition,
+  encodeAprsMessage,
+  ackReply,
+  rfText,
+  syncBackBatch,
+  type LocalMessage,
+} from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
 import { KissTimingSettings } from "./KissTimingSettings.js";
 import { radioLink, useRadioLink } from "./RadioLinkHost.js";
@@ -569,7 +576,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                 </span>
               )}
               <span className="muted"> · {fmt.ago(f.at / 1000)}</span>
-              <div className="comment mono">{f.frame.payload.slice(0, 80)}</div>
+              <div className="comment mono">{rfText(f.frame.payload).slice(0, 80)}</div>
             </li>
           ))}
         </ul>

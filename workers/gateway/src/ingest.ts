@@ -14,7 +14,7 @@ import {
   type MeshcomGroupHearing,
   type MeshcomObservation,
 } from "./meshcom.js";
-import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf } from "@aprscaching/aprs";
+import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf, rfText } from "@aprscaching/aprs";
 import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
@@ -50,6 +50,8 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
   course?: number;
   speedKn?: number;
   altitudeM?: number;
+  /** the radio range it sends (RNG, a compressed range byte) or its PHG works out to */
+  rangeKm?: number;
   comment?: string;
   /** the station's own position, not an object, item or weather report it sent */
   own: boolean;
@@ -68,6 +70,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       course: d.course,
       speedKn: d.speedKn,
       altitudeM: d.altitudeM,
+      rangeKm: d.rangeKm,
       comment: d.comment,
       own: d.kind === "position",
     };
@@ -135,6 +138,13 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // from an untrusted batch rather than stored under a callsign the signer does not hold.
   const signerBase = signer ? baseCall(signer.callsign) : null;
   const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  // An ingest posts the info field it heard one character per byte. From here on it is the text a station
+  // sent: UTF-8 where the bytes are valid UTF-8, else one character per byte. Gating and digipeating happen on
+  // the ingest, on the bytes; a signed batch was verified over the bytes above.
+  for (const p of packets) {
+    p.payload = rfText(p.payload);
+    if (p.raw !== undefined) p.raw = rfText(p.raw);
+  }
 
   const stmts: SqlStatement[] = [];
   // every fix heard, for the live fan-out and the per-station hooks; `fixes` decides what is persisted
@@ -371,7 +381,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     stmts.push(
       env.DB.prepare(
         `UPDATE stations SET last_seen = ?, symbol = ?, course = ?, speed_kn = ?, altitude_m = ?,
-           comment = COALESCE(?, comment)
+           range_km = COALESCE(?, range_km), comment = COALESCE(?, comment)
          WHERE callsign = ? AND lat IS ? AND lon IS ?`,
       ).bind(
         p.ts,
@@ -379,6 +389,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.course ?? null,
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
+        fix.rangeKm ?? null,
         fix.comment ?? null,
         p.src,
         fix.lat,
@@ -387,11 +398,12 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     );
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, comment, source_call)
-         VALUES (?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, range_km, comment, source_call)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen,
            symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
-           altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)
+           altitude_m=excluded.altitude_m, range_km=COALESCE(excluded.range_km, stations.range_km),
+           comment=COALESCE(excluded.comment, stations.comment)
          WHERE stations.lat IS NOT excluded.lat OR stations.lon IS NOT excluded.lon`,
       ).bind(
         p.src,
@@ -402,6 +414,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.course ?? null,
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
+        fix.rangeKm ?? null,
         fix.comment ?? null,
         igate,
       ),

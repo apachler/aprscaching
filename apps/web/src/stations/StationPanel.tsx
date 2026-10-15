@@ -99,6 +99,7 @@ export function StationPanel(props: {
               ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · `
               : ""}
             {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
+            {station.rangeKm != null ? `range ${fmt.distance(station.rangeKm * 1000)} · ` : ""}
             {station.packets} pkts · {station.track.length} track pts
           </div>
           {station.wx && (
