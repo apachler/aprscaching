@@ -17,6 +17,11 @@ describe("ingest fix", () => {
     expect(fixOf(pkt("!4704.41N/01526.27E>hi"))?.rangeKm).toBeUndefined();
   });
 
+  it("never takes the locator of a status report as a fix", () => {
+    expect(fixOf(pkt(">JN76TO/- QRV 145.500"))).toBeNull();
+    expect(fixOf(pkt(">IO91SX/G"))).toBeNull();
+  });
+
   it("refuses a decoded position past the poles or with minutes of 60 or more", () => {
     expect(fixOf(pkt("!9530.00N/01526.27E>"))).toBeNull();
     expect(fixOf(pkt("!4775.00N/01526.27E>"))).toBeNull();

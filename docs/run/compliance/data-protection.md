@@ -42,7 +42,7 @@ Secrets such as passkey public keys and push keys stay out of it.
 | `accountEvents` | What the instance recorded about the calls: a move to another instance, a sysop's verification |
 | `caches`, `cacheStages`, `cacheMedia` | Every detail of the caches the person owns, their stages (with each stage's unlock code) and uploaded media |
 | `logs`, `ratings`, `favorites`, `watches`, `achievements`, `stageUnlocks` | Finds and notes, ratings, favourites, watched caches, badges, unlocked stages |
-| `positions`, `stations`, `stationsOperated`, `rendezvous` | Positions, the person's stations, rendezvous |
+| `positions`, `heardStations`, `stations`, `stationsOperated`, `rendezvous` | Positions, what the instance last heard of the person's calls (position, comment, the locator of a status report), the person's stations, rendezvous |
 | `messages` | The APRS messages the person sent or was sent, with their delivery state |
 | `aprsOutbox`, `radioCommands`, `nearCacheMessages`, `boxCommands` | Radio traffic queued from or to the calls, radio commands, near-cache messages, commands sent to the person's boxes |
 | `bbsMessages`, `mailbox`, `meshcomGroupMessages`, `whitePages` | BBS mail and bulletins, Mailbox mail, MeshCom group messages, the white-pages entry |
