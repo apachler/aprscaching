@@ -344,7 +344,7 @@ every mailbox, since it carries the mail of the stations it hears and forwards.
 
 ## Scheduled tasks
 
-On a cron the gateway prunes TTL'd firehose positions, the raw-packet ring and stale relay
+On a cron the gateway prunes positions older than 7 days, the raw-packet ring and stale relay
 queue entries, the APRS-IS outbox (queued items older than an hour are never sent, sent ones go after 7 days),
 box commands after 7 days, expired bulletins (30 days unless they name a lifetime), the FBB forward log after
 30 days, unseen watch alerts after 30 days, and stations not heard for a year that no living cache,

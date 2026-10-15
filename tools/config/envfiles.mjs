@@ -405,8 +405,9 @@ export const ENV_FILES = [
       "",
       "# ---- device names ----",
       "# Once a day the gateway fetches the APRS device identification database (aprs-deviceid, CC BY-SA 2.0), so",
-      "# a station page names the radio or software behind its packets. Empty: nothing is fetched, no device named.",
-      { key: "DEVICEID_URL", value: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json" },
+      "# a station page names the radio or software behind its packets. On by default; set empty to turn it off",
+      "# (nothing is fetched, no device named).",
+      { key: "DEVICEID_URL", off: true },
     ],
   },
 ];

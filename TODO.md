@@ -50,19 +50,24 @@ start order: the first ones wait on replies from outside, so they start first, a
       development. `APRCG?` (`APRCG0`–`APRCGZ`) and a Mic-E identifier are requested in
       [aprsorg/aprs-deviceid#376](https://github.com/aprsorg/aprs-deviceid/issues/376); once allocated, switch
       the default tocall in the code to it.
-- [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, an abuse address and
+- [ ] **Contact addresses exist** _(S)_ — the mailboxes behind `OPERATOR_EMAIL`, `abuse@aprscaching.net` and
       `security@aprscaching.net` exist and are read. Player reports land under Instance admin → Reports and are
-      mailed to `OPERATOR_EMAIL` when mail is configured; the owner still names an abuse address on the imprint.
+      mailed to `OPERATOR_EMAIL` when mail is configured. The imprint names `abuse@aprscaching.net`; `/imprint` has
+      no abuse field or setting yet (`workers/gateway/src/legal.ts`), so it needs one, or the address goes in the
+      imprint's own text.
       `SECURITY.md` names `security@aprscaching.net`; the public instance sets
       `SECURITY_CONTACT=mailto:security@aprscaching.net` for its `/.well-known/security.txt`, and web push's VAPID
       contact is `VAPID_SUBJECT`, else `mailto:` `OPERATOR_EMAIL`, else the instance's https origin.
 - [ ] **Imprint and privacy notice for aprscaching.net** _(S — owner and legal review)_ — `OPERATOR_NAME`,
       `OPERATOR_ADDRESS` and `OPERATOR_EMAIL` set, so `/imprint` meets ECG §5 (name, geographic address, email)
-      and the MedienG §25 disclosure (owner: a small website, or a statement of the editorial line). Review
-      `/privacy` (`workers/gateway/src/legal.ts`) against DSGVO Art. 13: the legal basis per purpose, the
-      retention periods, the full list of rights, the Austrian Datenschutzbehörde as the supervisory authority,
-      the processors (the email provider, and Cloudflare where used) with any third-country transfer, and
-      server and proxy logs.
+      and the MedienG §25 disclosure. The owner's decisions: the site is a small website under MedienG §25, so
+      `EDITORIAL_LINE` stays empty; the instance runs on Oracle Cloud Infrastructure, so `HOSTING_PROVIDER` is
+      `Oracle Cloud Infrastructure, <region>` (the owner fills in the region the box runs in);
+      `PRIVACY_AUTHORITY` is `Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at`.
+      Review `/privacy` (`workers/gateway/src/legal.ts`) against DSGVO Art. 13: the legal basis per purpose, the
+      retention periods, the full list of rights, the processors with any third-country transfer, and server and
+      proxy logs. The owner checks the processor agreements (Art. 28 DPA) with Oracle, the mail provider and
+      Cloudflare where used. The terms of use and the privacy notice get a legal review before 1.0.
 - [ ] **Sign-in mail deliverable** _(S)_ — the `EMAIL_FROM` domain has SPF, DKIM (the provider's selector) and a
       DMARC record (`p=quarantine` once the reports are clean); a sign-in link reaches Gmail, Outlook and GMX
       inboxes, not spam. The three records are documented in Sign-in links or Your first hour.

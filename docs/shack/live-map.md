@@ -16,8 +16,8 @@ under a verified callsign on your account; for any other station the page says w
 The device line (**Sent with Kenwood TM-D710**) comes from the packet's
 tocall, the destination callsign each APRS program and radio sends, or, for a Mic-E packet, from the device
 code around its status text. The names come from
-[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which the instance fetches once a
-day. A station page shows no device when the instance's sysop turned the lookup off (`DEVICEID_URL`), when the
+[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which every instance fetches once a
+day by default. A station page shows no device when the instance's sysop turned the lookup off (`DEVICEID_URL`), when the
 instance has not fetched the database yet, or when the database does not know the device.
 
 **Activity spots** (off by default) shows live POTA and SOTA activations, and DX-cluster, RBN and PSKReporter

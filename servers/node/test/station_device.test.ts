@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A station's detail names the device behind its last stored position, from the device database the gateway
-// fetched from DEVICEID_URL: by tocall for an ordinary packet, by the Mic-E device code for a Mic-E one. Without
-// DEVICEID_URL nothing is fetched and no device is named.
+// fetched from DEVICEID_URL: by tocall for an ordinary packet, by the Mic-E device code for a Mic-E one. Unset, the
+// gateway fetches the database's own address; set empty, nothing is fetched and no device is named.
 import { describe, it, expect } from "vitest";
 import { refreshDeviceIds } from "@aprscaching/gateway/deviceid";
 import { runScheduled } from "@aprscaching/gateway/app";
@@ -69,8 +69,15 @@ describe("the device on a station's detail", () => {
     expect((await detail(env, "OE8XX-1")).device).toBeNull();
   });
 
-  it("fetches nothing and names nothing without DEVICEID_URL", async () => {
-    const env = authEnv({ ROOMS: { get: () => room } });
+  it("fetches the database's own address while DEVICEID_URL is unset", async () => {
+    const env = authEnv({ DEVICEID_URL: undefined, ROOMS: { get: () => room } });
+    const s = server();
+    await refreshDeviceIds(env, s.f);
+    expect(s.seen).toEqual(["https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json"]);
+  });
+
+  it("fetches nothing and names nothing with DEVICEID_URL set empty", async () => {
+    const env = authEnv({ DEVICEID_URL: "", ROOMS: { get: () => room } });
     const s = server();
     await refreshDeviceIds(env, s.f);
     expect(s.seen).toEqual([]);
@@ -78,8 +85,8 @@ describe("the device on a station's detail", () => {
     expect((await detail(env, "OE8DW-10")).device).toBeNull();
   });
 
-  it("keeps the nightly task off the network without DEVICEID_URL", async () => {
-    const env = authEnv({ UPDATE_CHECK: "0", ROOMS: { get: () => room } });
+  it("keeps the nightly task off the network with DEVICEID_URL set empty", async () => {
+    const env = authEnv({ UPDATE_CHECK: "0", DEVICEID_URL: "", ROOMS: { get: () => room } });
     const real = globalThis.fetch;
     const seen: string[] = [];
     globalThis.fetch = (async (u: string | URL | Request) => {

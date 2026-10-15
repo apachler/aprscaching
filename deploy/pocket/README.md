@@ -88,7 +88,7 @@ the paths, and keeps it on every later run. The profile suits a phone:
 - APRS-IS receive-only (passcode `-1`) with a 300 km example filter; tune `APRSIS_FILTER` to where you
   operate. Offline, the ingest retries with a backoff;
 - `RETENTION` keeps the raw packet log 6 h, weather and telemetry 7 days, port counters and the node MHeard
-  list 3 days. Logger positions, finds and accounts are not affected;
+  list 3 days. Positions are kept 7 days whatever it says; finds and accounts are not affected;
 - federation off (no `FED_*` settings), no TAK/CoT or other transports, no write budget (SQLite has no
   per-row cost);
 - MeshCom off until `meshcom-setup.sh` writes `MESHCOM_NODE`.

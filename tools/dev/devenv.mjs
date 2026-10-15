@@ -87,8 +87,9 @@ ADMIN_CALLSIGNS=${call}
 ALLOW_DEV_TOKENS=1
 # the attested receiving site, so a frame heard through it reaches Tier A (the seed data uses it)
 FIRST_PARTY_SITES=${DEV_SITE}
-# a dev instance does not ask GitHub for new releases
+# a dev instance asks GitHub for no new releases and fetches no device database
 UPDATE_CHECK=0
+DEVICEID_URL=
 
 # --- web push ---
 VAPID_PUBLIC=${vapid.pub}

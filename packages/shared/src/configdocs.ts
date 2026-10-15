@@ -98,7 +98,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SUPPORT_LINKS: "JSON array of donation links [{label,url}] shown on /support",
   SOURCE_REPO: "Published source URL (AGPL §13); a modified fork must set its own",
   UPDATE_CHECK: "0 stops the daily request to GitHub that looks for a newer release",
-  DEVICEID_URL: "Address of the APRS device database (aprs-deviceid JSON) fetched once a day; empty names no devices",
+  DEVICEID_URL: "Address of the APRS device database (aprs-deviceid JSON) fetched once a day; set empty to turn off",
   TOOL_REGISTRIES: "JSON list of tool registries; set, it replaces the list kept in Instance settings",
   TOOL_REGISTRIES_PLAYERS: "0 stops players adding tool registries of their own",
   TOOL_REGISTRIES_PROXY: "0 lets browsers fetch tool registries directly instead of through this instance",
@@ -366,8 +366,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`DEVICEID_URL`",
-        "Where the gateway fetches the APRS device identification database ([`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid), the generated `tocalls.dense.json`), so a station page can name the device behind its packets. It fetches at most once a day, keeps the last copy in the database for restarts and offline days, and credits the database (CC BY-SA 2.0) wherever it names a device. The self-host `.env.example` sets the database's own address, `https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json`. Unset or empty, nothing is fetched and no device is named",
-        "off",
+        "Where the gateway fetches the APRS device identification database ([`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid), the generated `tocalls.dense.json`), so a station page can name the device behind its packets. It fetches at most once a day, keeps the last copy in the database for restarts and offline days, and credits the database (CC BY-SA 2.0) wherever it names a device. On by default in every shape: unset, the gateway fetches the database's own address. Set it empty (`DEVICEID_URL=`) to turn it off, for an off-grid instance or one that should not contact the database; nothing is then fetched and no device is named",
+        "`https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json`",
       ],
       [
         "`TOOL_REGISTRIES`",
