@@ -445,6 +445,7 @@ const STATION_DETAIL: StationDetail = {
   packets: 214,
   registered: true,
   mine: false,
+  device: { name: "TM-D710", vendor: "Kenwood", class: "Rig" },
   lastRoute: {
     src: "OE6XRR-9",
     path: "OE6XGR-2*,WIDE2-1",

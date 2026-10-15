@@ -49,7 +49,15 @@ import { NearRadioSettings } from "./NearRadioSettings.js";
 import { ApiKeys } from "./ApiKeys.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { AboutInstance, BugReportLink } from "./AboutInstance.js";
-import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "../credits.js";
+import {
+  APRS_CREDIT,
+  APRS_MARK,
+  APRS_NOT_AFFILIATED,
+  DEVICEID_CREDIT,
+  DEVICEID_LINK,
+  OTHER_MARKS,
+  OTHERS_NOT_AFFILIATED,
+} from "../credits.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
 
@@ -399,7 +407,7 @@ export function SettingsPanel(props: {
       )}
 
       {match(
-        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence license register open source notices map OpenStreetMap Meshtastic POTA SOTA LoTW ARRL Groundspeak geocaching",
+        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence license register open source notices map OpenStreetMap Meshtastic POTA SOTA LoTW ARRL Groundspeak geocaching device tocall aprs-deviceid",
       ) && (
         <Group title="Help & credits" defaultOpen={false}>
           <p className="row gap-2">
@@ -427,7 +435,11 @@ export function SettingsPanel(props: {
             OpenMapTiles. Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Map style: ©
             OpenTopoMap (CC-BY-SA)) · EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified
             Copernicus Sentinel data 2016). Imported places name and link their source; that source's own terms apply to
-            its data. DXCC entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
+            its data. DXCC entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).{" "}
+            <a href={DEVICEID_LINK} target="_blank" rel="noopener noreferrer">
+              {DEVICEID_CREDIT}
+            </a>{" "}
+            (APRS device identification database by Hessu, OH7LZB, and its volunteers), fetched by this instance.
           </p>
           <p className="muted">
             Register badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur

@@ -22,6 +22,7 @@ import type { Env } from "./env.js";
 import { escapeHtml } from "./util/html.js";
 import { mailTransport } from "./mail.js";
 import { updateCheckOn } from "./updatecheck.js";
+import { deviceIdUrl } from "./deviceid.js";
 import { moderationKeepDays } from "./retention.js";
 import { setting } from "./siteconfig.js";
 
@@ -98,6 +99,11 @@ function recipients(env: Env): string {
   if (updateCheckOn(env))
     items.push(`<li><strong>GitHub</strong> (api.github.com) — once a day this instance asks GitHub whether a newer
   APRScaching release exists. The request names this instance and carries nothing about you.</li>`);
+  const deviceIds = deviceIdUrl(env);
+  if (deviceIds)
+    items.push(`<li><strong>APRS device database</strong> (${escapeHtml(new URL(deviceIds).host)}) — once a day this
+  instance fetches the list of APRS device names from there. The request names this instance and carries nothing
+  about you.</li>`);
   return `<div class=box><ul>\n${items.join("\n")}\n</ul></div>`;
 }
 

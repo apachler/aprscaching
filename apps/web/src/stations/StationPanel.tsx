@@ -14,6 +14,7 @@ import { StationPackets } from "../shack/StationPackets.js";
 import { MeshcomSection } from "../meshcom/MeshcomSection.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { PacketRoute } from "../packet/PacketRoute.js";
+import { DEVICEID_CREDIT, DEVICEID_LINK } from "../credits.js";
 
 /** What each station role means, for its badge's hint. */
 const ROLE_HINT: Partial<Record<StationRole, string>> = {
@@ -94,6 +95,24 @@ export function StationPanel(props: {
               ))}
             </div>
           ) : null}
+          {station.device && (
+            <p className="mt-1">
+              <Icon name="radio" cp437="" className="lead-ic" />
+              Sent with{" "}
+              <strong>
+                {station.device.vendor ? `${station.device.vendor} ` : ""}
+                {station.device.name}
+              </strong>
+              {station.device.class ? <span className="muted"> · {station.device.class}</span> : null}{" "}
+              <span className="fine muted">
+                (
+                <a href={DEVICEID_LINK} target="_blank" rel="noopener noreferrer">
+                  {DEVICEID_CREDIT}
+                </a>
+                )
+              </span>
+            </p>
+          )}
           {station.comment && <div className="comment">{station.comment}</div>}
           <div className="muted mt-1">
             {station.speedKn != null && station.speedKn > 0

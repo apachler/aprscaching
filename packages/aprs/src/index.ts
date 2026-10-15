@@ -14,6 +14,7 @@ export * from "./rigctld.js";
 export * from "./symbols.js";
 export * from "./compressed.js";
 export * from "./mice.js";
+export * from "./deviceid.js";
 export * from "./dao.js";
 export * from "./nmea.js";
 export * from "./locator.js";

@@ -90,6 +90,14 @@ describe("MIC-E per APRS 1.2", () => {
     expect(ft3d).toMatchObject({ altitudeM: 61, comment: "Hiking" });
     expect(decodeMicE("S32U6T", `${base}"4T}`)!.altitudeM).toBe(61); // no prefix, as before
   });
+  it("keeps the raw device code for the device table", () => {
+    expect(decodeMicE("S32U6T", `${base}]"4T}Mobile=`)!.device).toEqual({ prefix: "]", suffix: "=" });
+    expect(decodeMicE("S32U6T", `${base}\`"4T}Hiking_0`)!.device).toEqual({ prefix: "`", suffix: "_0" });
+    // a two-character code may end in a space, so the tail is read before the comment is trimmed
+    expect(decodeMicE("S32U6T", `${base}'_ `)!.device).toEqual({ prefix: "'", suffix: "_ " });
+    expect(decodeMicE("S32U6T", `${base}"4T}`)!.device).toBeUndefined();
+    expect((decodeAprs(frame(`${base}>Hi^`, "S32U6T")) as any).micEDevice).toEqual({ prefix: ">", suffix: "^" });
+  });
   it("applies the latitude's ambiguity to the longitude", () => {
     // T4SQZZ: the last two latitude digits ambiguous, so the longitude is 112°07', not 112°07.74'
     const m = decodeMicE("T4SQZZ", base)!;

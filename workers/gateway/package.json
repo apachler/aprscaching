@@ -38,6 +38,7 @@
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",
     "./ingest": "./src/ingest.ts",
+    "./deviceid": "./src/deviceid.ts",
     "./adoption": "./src/adoption.ts",
     "./rooms-core": "./src/rooms-core.ts",
     "./station_status": "./src/station_status.ts",

@@ -402,6 +402,11 @@ export const ENV_FILES = [
       "# out. 0 stops the request (an off-grid instance, or one that should not contact GitHub). Also an",
       "# instance setting (Instance admin → Instance settings → Updates); a value set here wins over the page.",
       { key: "UPDATE_CHECK", value: "0", off: true },
+      "",
+      "# ---- device names ----",
+      "# Once a day the gateway fetches the APRS device identification database (aprs-deviceid, CC BY-SA 2.0), so",
+      "# a station page names the radio or software behind its packets. Empty: nothing is fetched, no device named.",
+      { key: "DEVICEID_URL", value: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json" },
     ],
   },
 ];

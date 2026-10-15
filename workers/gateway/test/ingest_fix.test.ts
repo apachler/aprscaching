@@ -65,4 +65,19 @@ describe("ingest fix", () => {
     ])
       expect(fixOf(pkt(">status", parsed)), JSON.stringify(parsed)).toBeNull();
   });
+
+  it("keeps what names the sending device: the tocall, or a Mic-E packet's device code and never its destination", () => {
+    const withDst = (dst: string, payload: string) => fixOf({ src: "OE8APR-9", dst, path: [], payload });
+    expect(withDst("apdw17-1", "!4704.41N/01526.27E>")?.device).toEqual({
+      tocall: "APDW17",
+      mice_prefix: null,
+      mice_suffix: null,
+    });
+    expect(withDst("S32U6T", '`(_fn"Oj/]"4T}Mobile=')?.device).toEqual({
+      tocall: null,
+      mice_prefix: "]",
+      mice_suffix: "=",
+    });
+    expect(withDst("S32U6T", '`(_fn"Oj/')?.device).toEqual({ tocall: null, mice_prefix: null, mice_suffix: null });
+  });
 });

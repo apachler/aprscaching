@@ -10,6 +10,17 @@ export interface ParsedFrame {
   raw: string;
 }
 
+/**
+ * The raw device code a Mic-E status text carries: `prefix` is its first character (`>` `]` for Kenwood, `` ` ``
+ * `'` for other makers) and `suffix` the characters at its end where the code sits (one after a Kenwood prefix,
+ * two after the others, empty when the text is too short). The decoder strips the codes it knows from the
+ * comment; naming the device is the device table's job (`identifyDevice` in deviceid.ts).
+ */
+export interface MicEDeviceCode {
+  prefix: string;
+  suffix: string;
+}
+
 // ---- decoded APRS data (APRS101 data-type identifiers) ----
 export interface DecodedPosition {
   lat: number;
@@ -33,6 +44,8 @@ export interface DecodedPosition {
   /** Position ambiguity, 0–4: how many trailing minute digits the station left out, in both coordinates. */
   ambiguity?: number;
   messageType?: string; // MIC-E standard/custom message
+  /** A Mic-E position's raw device code (prefix and suffix of its status text), for the device table. */
+  micEDevice?: MicEDeviceCode;
   timestamp?: string; // raw timestamp token when present
   /**
    * The datum a `!DAO!` token names (`W` WGS84, `N` NAD27, `O` OSGB36, a digit for a local one). The token's
