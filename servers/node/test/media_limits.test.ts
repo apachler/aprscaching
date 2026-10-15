@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { jpegOf } from "./helpers/images.js";
 
 const media = () => ({ put: async () => {}, get: async () => null, delete: async () => {} });
 
@@ -34,7 +35,7 @@ async function owner(extra: Record<string, unknown> = {}) {
       new Request(`https://gw.test${path}`, {
         method,
         headers: { "content-type": contentType, cookie: who.cookie!, "x-real-ip": "192.0.2.10" },
-        body: new Uint8Array(size),
+        body: contentType === "image/jpeg" ? jpegOf(size) : new Uint8Array(size),
       }),
     );
   return { env, who, hide, upload };

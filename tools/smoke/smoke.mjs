@@ -1078,7 +1078,15 @@ const mdetail = await call("GET", `/api/caches/${mid}`);
 ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
 
 // cache media gallery — owner uploads an image, it lists + serves, non-owner can't delete, owner can
-const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+// a whole PNG (signature, IHDR, IDAT, IEND) with a tEXt chunk the gateway drops before it stores the photo
+const pngChunk = (type, data) => [0, 0, 0, data.length, ...Buffer.from(type), ...data, 0, 0, 0, 0];
+const pngBytes = new Uint8Array([
+  ...[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  ...pngChunk("IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]),
+  ...pngChunk("tEXt", [...Buffer.from("Comment\0at home")]),
+  ...pngChunk("IDAT", [1, 2, 3]),
+  ...pngChunk("IEND", []),
+]);
 const addMedia = await fetch(`${BASE}/api/caches/${mid}/media?title=Hint%20photo`, {
   method: "POST",
   headers: { "content-type": "image/png", "x-owner-call": "OE8APR", "x-ingest-secret": SECRET },
@@ -1097,9 +1105,13 @@ ok(
   JSON.stringify(mediaList.data?.media),
 );
 const servedMedia = await fetch(`${BASE}${addJson.item?.url}`);
+const servedBytes = Buffer.from(await servedMedia.arrayBuffer());
 ok(
-  "cache media is served back",
-  servedMedia.status === 200 && (servedMedia.headers.get("content-type") || "").includes("image/"),
+  "cache media is served back, without the text chunk it was uploaded with",
+  servedMedia.status === 200 &&
+    (servedMedia.headers.get("content-type") || "").includes("image/") &&
+    servedBytes.subarray(0, 8).equals(Buffer.from(pngBytes.subarray(0, 8))) &&
+    !servedBytes.includes(Buffer.from("tEXt")),
   `status=${servedMedia.status}`,
 );
 const delNonOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, {

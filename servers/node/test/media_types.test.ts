@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
+import { jpegOf, pngOf } from "./helpers/images.js";
 
 function store() {
   const items = new Map<string, { bytes: Uint8Array; contentType: string }>();
@@ -32,7 +33,8 @@ async function world() {
       new Request(`https://gw.test${path}`, {
         method,
         headers: { "content-type": contentType, cookie: owner.cookie!, "x-real-ip": "192.0.2.10" },
-        body: new Uint8Array([1, 2, 3]),
+        body:
+          contentType === "image/jpeg" ? jpegOf() : contentType === "image/png" ? pngOf() : new Uint8Array([1, 2, 3]),
       }),
     );
   return { env, media, upload, owner, cacheId: made.data.cache.id as number };
