@@ -236,6 +236,30 @@ export interface MapCache {
   tags: string[];
 }
 
+/**
+ * The route one stored packet took to this instance: the sender, its path as the gateway stored it (digipeaters,
+ * the q-construct and what it names), and how the instance received it. Display data that explains a tier; the
+ * verify engine reads the position it came from, never this.
+ */
+export interface PacketRouteInfo {
+  /** The sending station. */
+  src: string;
+  /** The comma-joined path: digipeaters with `*` on the last one taken, then any q-construct and its station. */
+  path: string;
+  /** `rf` when a receiving station heard it on the air, `aprs_is` when it arrived as an APRS-IS line. */
+  heardVia: string;
+  /** How it reached the gateway (the provenance transport: aprs-is, tnc, meshcom, browser-rf…). */
+  transport: string;
+  /** The receiving station: the attested site that heard it, or the IGate the q-construct names. */
+  site: string | null;
+  /** First-party attested: the site's own receiver heard it directly, delivered by that site's own ingest. */
+  attested: boolean;
+  /** The station named as `site` is one this instance attests, whether or not this packet came from its receiver. */
+  siteAttested: boolean;
+  /** When it was heard (unix seconds). */
+  ts: number;
+}
+
 export interface CacheLogEntry {
   id: number;
   cacheId: number;
@@ -254,6 +278,8 @@ export interface CacheLogEntry {
   // why ts is the receive time and not the signed field time (future, too_old, before_cache, before_key, unsigned)
   fieldTimeRejected?: string | null;
   needsMaintenance?: boolean; // the finder flagged the cache for its owner
+  /** A found log scored against a stored packet: the route of that packet, kept with the log. */
+  route?: PacketRouteInfo | null;
 }
 
 export interface CacheDetail extends CacheSummary {
@@ -442,6 +468,8 @@ export interface StationDetail extends StationSummary {
   registered: boolean;
   /** In the signed-in viewer's own registry. */
   mine: boolean;
+  /** The route of the station's latest stored position; null when none is stored. */
+  lastRoute?: PacketRouteInfo | null;
 }
 
 // ---- operated-stations registry: the operator's own stations ----

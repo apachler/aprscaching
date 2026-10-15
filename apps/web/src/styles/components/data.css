@@ -195,4 +195,130 @@
     font-family: var(--font-mono);
     color: var(--ink-2);
   }
+  /* ---- packet route: sender → digipeaters → receiver or IGate → APRS-IS → this instance ---- */
+  /* a query container, so the chain runs down a narrow panel and across a wide one */
+  .proute {
+    container: proute / inline-size;
+    margin-top: var(--space-sm);
+  }
+  .proute-h {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+  .proute-hops {
+    list-style: none;
+    margin: var(--space-sm) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .proute-hop {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: var(--space-sm);
+  }
+  /* the line from one leg down to the next */
+  .proute-hop:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 13px;
+    inset-block: 28px calc(-1 * var(--space-xs));
+    border-inline-start: 2px solid var(--hair);
+  }
+  .proute-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-pill);
+    border: 2px solid var(--line);
+    color: var(--ink-2);
+    background: var(--surface);
+  }
+  .proute-text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-xs);
+    min-width: 0;
+    padding-top: var(--space-2xs);
+  }
+  .proute-call {
+    font-weight: 600;
+    font-size: var(--text-data);
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .proute-label {
+    font-size: var(--text-caption);
+    color: var(--ink-2);
+  }
+  .proute-sub {
+    flex-basis: 100%;
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
+    color: var(--muted);
+  }
+  /* the state is in each leg's label too; the colour and the dashed ring repeat it */
+  .proute-hop[data-state="attested"] .proute-mark {
+    border-color: var(--tier-a);
+    color: var(--tier-a-text);
+    background: color-mix(in oklch, var(--tier-a) 18%, var(--surface));
+  }
+  .proute-hop[data-state="attested"] .proute-label {
+    color: var(--tier-a-text);
+    font-weight: 600;
+  }
+  .proute-hop[data-state="untrusted"] .proute-mark {
+    border-color: var(--tier-c);
+    border-style: dashed;
+    color: var(--tier-c-text);
+  }
+  .proute-hop[data-state="unused"] .proute-mark {
+    border-style: dotted;
+    color: var(--muted);
+  }
+  .proute-hop[data-state="unused"] .proute-call {
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .proute-why {
+    margin: var(--space-sm) 0 0;
+    font-size: var(--text-label);
+    color: var(--ink-2);
+    line-height: var(--leading-body);
+  }
+  .proute-empty {
+    margin: 0;
+    font-size: var(--text-label);
+  }
+  @container proute (min-width: 34rem) {
+    .proute-hops {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: var(--space-sm) var(--space-md);
+    }
+    .proute-hop {
+      grid-template-columns: auto;
+      justify-items: start;
+      max-width: 9rem;
+    }
+    .proute-text {
+      flex-direction: column;
+      align-items: flex-start;
+      padding-top: 0;
+    }
+    /* across, the line runs from each mark to the start of the next leg, where its mark sits */
+    .proute-hop:not(:last-child)::after {
+      inset-block: 13px auto;
+      inset-inline: 30px calc(-1 * var(--space-md));
+      border-inline-start: none;
+      border-block-start: 2px solid var(--hair);
+    }
+  }
 }

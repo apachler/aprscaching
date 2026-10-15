@@ -13,6 +13,7 @@ import {
   type CacheDetail,
   type CacheLogEntry,
   type MapCache,
+  type PacketRouteInfo,
 } from "@aprscaching/shared";
 import {
   verifyFind,
@@ -24,8 +25,8 @@ import {
   type VerifyResult,
   type AppGeo,
 } from "./verify.js";
-import { provenanceOf } from "./provenance.js";
-import { attestation as loadAttestation, sitesFor } from "./attestedsites.js";
+import { provenanceOf, routeOf } from "./provenance.js";
+import { attestation as loadAttestation, everySite, sitesFor } from "./attestedsites.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
@@ -98,6 +99,7 @@ export interface LogDbRow {
   received_at?: number | null;
   field_time_rejected?: string | null;
   needs_maintenance?: number;
+  route?: string | null; // JSON PacketRouteInfo
 }
 
 export function toSummary(r: CacheDbRow): CacheSummary {
@@ -180,7 +182,18 @@ export function toLogEntry(r: LogDbRow): CacheLogEntry {
     receivedAt: r.received_at ?? null,
     fieldTimeRejected: r.field_time_rejected ?? null,
     ...(r.needs_maintenance ? { needsMaintenance: true } : {}),
+    ...(r.route ? { route: routeJson(r.route) } : {}),
   };
+}
+
+/** A stored route; null when it cannot be read. */
+function routeJson(stored: string): PacketRouteInfo | null {
+  try {
+    const v = JSON.parse(stored) as PacketRouteInfo | null;
+    return v && typeof v.src === "string" && typeof v.path === "string" ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 function ingestOk(req: Request, env: Env): boolean {
@@ -953,6 +966,8 @@ export interface FindScore {
   corrIgate: string | null;
   /** Set when the find missed Tier A only because trusted peers could not be reached: ask them later. */
   retry?: RetryPlan;
+  /** The route of the stored packet the find was scored against; null when none was (Tier B, a peer, no match). */
+  route?: PacketRouteInfo | null;
 }
 
 /** Does the account that owns cache `cacheId` hold the base call of `stationCall`? */
@@ -1071,6 +1086,12 @@ export async function scoreFind(
   // to Tier A only if the logger's own local track could have been there.
   let corroboratedBy: string | null = null;
   let retry: RetryPlan | undefined;
+  // The route of the matched packet, kept with the log: positions are pruned, the log's explanation is not.
+  // (`SELECT *` carries the path and transport the route reads)
+  const matched = lp.results.find((p) => p.id === result.matchedPositionId);
+  let route: PacketRouteInfo | null = matched
+    ? routeOf(matched, sitesFor(attested, matched.ingest_box), everySite(attested))
+    : null;
   const lastStation = station?.find((p) => p.ts <= at + 60 && (p.firstPartyAttested || p.ownerSigned) && !p.commanded);
   const point =
     cache.type === "aprs_living"
@@ -1106,6 +1127,7 @@ export async function scoreFind(
       result.distanceM = ev.distanceM;
       result.matchedPositionId = undefined;
       result.reason = undefined;
+      route = null; // the peer's packet is the evidence now, and its route stays with that peer
       peerIgate = ev.igateCall ?? null; // present only when both instances opted into FED_REVEAL_IGATE
     }
   }
@@ -1115,7 +1137,7 @@ export async function scoreFind(
     result.verified && result.tier === "A"
       ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
       : null;
-  return { result, corroboratedBy, corrIgate, ...(retry && result.tier !== "A" && { retry }) };
+  return { result, corroboratedBy, corrIgate, route, ...(retry && result.tier !== "A" && { retry }) };
 }
 
 /**
@@ -1146,8 +1168,8 @@ export async function commitFind(
   // INSERT OR IGNORE against the partial unique index on (cache, logger) founds. If a concurrent
   // found for the same pair beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
   const ins = await env.DB.prepare(
-    `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at, received_at, field_time_rejected)
-     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at, received_at, field_time_rejected, route)
+     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       cacheId,
@@ -1166,6 +1188,7 @@ export async function commitFind(
       author.signedAt,
       nowS(),
       author.fieldTimeRejected ?? null,
+      score.route ? JSON.stringify(score.route) : null,
     )
     .run();
   if ((ins.meta?.changes ?? 1) === 0) return { duplicate: true };

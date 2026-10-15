@@ -117,6 +117,18 @@ const SURFACES = [
     steps: [["click", ".ccard >> nth=0"]],
     after: ".detail-meta",
   },
+  // a Tier-A find's packet route, opened from its log: sender, digipeaters, the attested receiver
+  {
+    name: "detail-route",
+    as: "user",
+    query: "?view=nearby",
+    wait: ".ccard",
+    steps: [
+      ["click", ".ccard:has-text('Schlossberg')"],
+      ["click", ".logrow-route > button >> nth=0"],
+    ],
+    after: ".logrow .proute-hops",
+  },
   // the owner's edit form, with its stages, from the cache the persona hid
   {
     name: "edit",
@@ -240,7 +252,7 @@ const SURFACES = [
     after: ".tool-out",
   },
   { name: "rig", as: "user", query: "?view=rig" },
-  { name: "station", as: "user", query: "?view=station&call=OE6XRR-9" },
+  { name: "station", as: "user", query: "?view=station&call=OE6XRR-9", wait: ".station-route" },
   { name: "admin", as: "sysop", query: "?view=admin" },
   // Instance settings, opened by the admin search: the imprint saved here, then retention's fields
   {
@@ -412,6 +424,8 @@ async function main() {
             localStorage.setItem("acs.locale", JSON.stringify({ theme: t }));
             const pins = new URLSearchParams(location.search).get("pins");
             localStorage.setItem("acs.pins", JSON.stringify(pins ? pins.split(",") : []));
+            // a station's sheet stays open only while the live-stations layer is on
+            if (location.search.includes("view=station")) localStorage.setItem("acs.layer.stations", "1");
           } catch {
             /* storage refused */
           }

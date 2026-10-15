@@ -196,7 +196,7 @@ export async function handleAccountExport(req: Request, env: Env, named: string)
       "callsign",
     ),
     logs: await q(
-      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, needs_maintenance, signer_key, signed_at FROM cache_logs WHERE $CALLS ORDER BY ts",
+      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, needs_maintenance, signer_key, signed_at, route FROM cache_logs WHERE $CALLS ORDER BY ts",
       "logger_call",
     ),
     positions: await q(
@@ -567,11 +567,18 @@ async function eraseCall(
                         GROUP BY cache_id)`,
     ).bind(...b, ...b),
     env.DB.prepare(
-      `UPDATE cache_logs SET logger_call=?, comment=NULL, signer_key=NULL, author_sig=NULL WHERE ${mine("logger_call")}`,
+      `UPDATE cache_logs SET logger_call=?, comment=NULL, signer_key=NULL, author_sig=NULL, route=NULL WHERE ${mine("logger_call")}`,
     ).bind(marker, ...b),
     // A station of the person that gated someone else's find is no longer named as its corroborator, nor as the
     // IGate of others' positions, stations and radio commands: the IGate leaderboard and the profile counts follow.
     env.DB.prepare(`UPDATE cache_logs SET corroborator_igate=NULL WHERE ${mine("corroborator_igate")}`).bind(...b),
+    // nor as the receiving site or a digipeater on the route kept with someone else's find
+    env.DB.prepare(`UPDATE cache_logs SET route=NULL WHERE ${mine("json_extract(route, '$.site')")}`).bind(...b),
+    env.DB.prepare(
+      `UPDATE cache_logs SET route=NULL WHERE route IS NOT NULL
+         AND (',' || replace(json_extract(route, '$.path'), '*', '') || ',' LIKE ? OR
+              ',' || replace(json_extract(route, '$.path'), '*', '') || ',' LIKE ?)`,
+    ).bind(`%,${cs},%`, `%,${cs}-%`),
     env.DB.prepare(`UPDATE positions SET igate_call=NULL WHERE ${mine("igate_call")}`).bind(...b),
     env.DB.prepare(`UPDATE stations SET source_call=NULL WHERE ${mine("source_call")}`).bind(...b),
     env.DB.prepare(`UPDATE radio_commands SET igate_call=NULL WHERE ${mine("igate_call")}`).bind(...b),
