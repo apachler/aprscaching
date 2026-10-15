@@ -13,10 +13,10 @@ packets, each transmission listed once with the best route it was heard on. Sign
 your stations**, and the page says when another operator registered it. The button shows only for a station
 under a verified callsign on your account; for any other station the page says why it can't be added.
 
-The device line (**Sent with Kenwood TM-D710**, **Sent with WB2OSZ DireWolf**) comes from the packet's
+The device line (**Sent with Kenwood TM-D710**) comes from the packet's
 tocall, the destination callsign each APRS program and radio sends, or, for a Mic-E packet, from the device
 code around its status text. The names come from
-[aprs-deviceid](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which the instance fetches once a
+[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid) (CC BY-SA 2.0), which the instance fetches once a
 day. A station page shows no device when the instance's sysop turned the lookup off (`DEVICEID_URL`), when the
 instance has not fetched the database yet, or when the database does not know the device.
 

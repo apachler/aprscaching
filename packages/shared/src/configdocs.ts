@@ -366,7 +366,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`DEVICEID_URL`",
-        "Where the gateway fetches the APRS device identification database ([aprs-deviceid](https://github.com/aprsorg/aprs-deviceid), the generated `tocalls.dense.json`), so a station page can name the device behind its packets. It fetches at most once a day, keeps the last copy in the database for restarts and offline days, and credits the database (CC BY-SA 2.0) wherever it names a device. The self-host `.env.example` sets the database's own address, `https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json`. Unset or empty, nothing is fetched and no device is named",
+        "Where the gateway fetches the APRS device identification database ([`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid), the generated `tocalls.dense.json`), so a station page can name the device behind its packets. It fetches at most once a day, keeps the last copy in the database for restarts and offline days, and credits the database (CC BY-SA 2.0) wherever it names a device. The self-host `.env.example` sets the database's own address, `https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json`. Unset or empty, nothing is fetched and no device is named",
         "off",
       ],
       [

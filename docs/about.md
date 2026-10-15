@@ -81,7 +81,7 @@ and EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modi
 Imported places name
 and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
 Radio Country Files by Jim Reisert, AD1C (MIT). Device names on station pages come from
-[aprs-deviceid](https://github.com/aprsorg/aprs-deviceid), the APRS device identification database by Hessu,
+[`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid), the APRS device identification database by Hessu,
 OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime.
 
 Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur callsign list,
