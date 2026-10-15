@@ -52,7 +52,7 @@ export type {
   MeshcomGroupMessage,
   Spot,
 };
-import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
+import { photoForUpload, thumbnailOf } from "./media/resize.js";
 import { openSealedStage, type StagePayload, type ToolRegistryEntry } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, packSearch, saveAutoArea, type OfflineSource } from "./offline/packs.js";
@@ -1873,13 +1873,14 @@ export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMedi
 }
 /** Upload a media item (raw body) — authorised by the signed-in owner session. */
 /**
- * Upload a cache's media. A photo is scaled down here first (at most PHOTO_PX on its longest side), and
- * its thumbnail is stored beside it, so galleries and offline packs load a few kilobytes instead of the
- * photo; a photo whose thumbnail could not be made or stored still uploads, without one.
+ * Upload a cache's media. A photo is re-encoded here first (at most PHOTO_PX on its longest side, without the
+ * Exif, XMP and IPTC its camera wrote), and its thumbnail is stored beside it, so galleries and offline packs
+ * load a few kilobytes instead of the photo; a photo whose thumbnail could not be made or stored still uploads,
+ * without one.
  */
 export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
   const isImage = file.type.startsWith("image/");
-  const photo = (isImage && (await resizeImage(file, PHOTO_PX, 0.85))) || file;
+  const photo = isImage ? await photoForUpload(file) : file;
   const problem = mediaUploadProblem(photo.type || file.type, photo.size);
   if (problem) throw new Error(problem);
   const q = title ? `?title=${encodeURIComponent(title)}` : "";

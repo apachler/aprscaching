@@ -13,6 +13,10 @@ the APRS-IS announce and the near-cache radio message. Only the callsign's game 
 is public from the start. [What a new account shares](../../play/account.md#what-a-new-account-shares) lists
 each default.
 
+An uploaded photo carries no location. The app re-encodes every photo before upload, and the gateway removes the
+Exif, XMP, IPTC and text metadata of any photo that still holds it before it stores the file. A photo that does
+not read as its type is refused.
+
 ## Who can act on an account
 
 Sensitive account actions are authorised by the account's own session, or by a signature from a device key

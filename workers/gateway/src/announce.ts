@@ -4,7 +4,7 @@ import { instanceHost, type Env } from "./env.js";
 import { isCallsignVerified } from "./callsign.js";
 import { json } from "./http.js";
 import { sessionIdentity } from "./auth.js";
-import { baseCall } from "@aprscaching/aprs";
+import { baseCall, rfClip } from "@aprscaching/aprs";
 
 /**
  * Announce a verified find to APRS-IS — ONLY if: account opted in AND callsign is verified.
@@ -34,7 +34,8 @@ export async function maybeAnnounceFind(
   const title = t ? ` (${t})` : "";
   // The status names the instance that logged the find, by its own host.
   const via = instanceHost(env) ?? "APRScaching";
-  const payload = `>Found ${oneLine(cacheCode)}${title} via ${via}`.slice(0, 120);
+  // capped at 120 bytes of the UTF-8 it goes out as, cut between characters
+  const payload = rfClip(`>Found ${oneLine(cacheCode)}${title} via ${via}`, 120);
   await env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)")
     .bind(nowS(), callsign, acct.announce_tocall ?? "APZACG", payload)
     .run();

@@ -240,4 +240,23 @@ describe("BleKissLink", () => {
     expect(again.gattState.connected).toBe(false);
     expect(quiet).not.toHaveBeenCalled();
   });
+
+  it("packet terminal: sends the timing as the TNC connects, ahead of the first frame", async () => {
+    const tnc = fakeTnc(BLE_KISS_API.service, { slowWrites: true });
+    const t = new BleKissTransport(() => {}, undefined, { txDelay: 30, persist: 63, slotTime: 10 });
+    await t.connect();
+    t.send(frame("after the timing"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(tnc.writes[0]).toEqual([0xc0, 0x01, 30, 0xc0, 0xc0, 0x02, 63, 0xc0, 0xc0, 0x03, 10, 0xc0]);
+    expect(tnc.writes[1]?.slice(0, 2)).toEqual([0xc0, 0x00]);
+    await t.disconnect();
+  });
+
+  it("packet terminal: sends no timing when none is given", async () => {
+    const tnc = fakeTnc(BLE_KISS_API.service);
+    const t = new BleKissTransport(() => {});
+    await t.connect();
+    expect(tnc.writes).toEqual([]);
+    await t.disconnect();
+  });
 });

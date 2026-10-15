@@ -127,7 +127,8 @@ ${contact}
   from the public APRS-IS network and radio links. These are broadcasts every amateur station
   transmits publicly by design; short-lived firehose positions are pruned on a retention schedule,
   while positions that verify a cache find are kept longer as the find's evidence.</li>
-<li><strong>Game data</strong> — caches you hide, finds you log, ratings, and media you upload.</li>
+<li><strong>Game data</strong> — caches you hide, finds you log, ratings, and media you upload. Photos are
+  stored without the Exif, XMP or IPTC data a camera writes, such as the place the photo was taken.</li>
 <li><strong>Moderation</strong> — reports players file (the item, a category, the reporter's words and, when signed
   in, the reporter's call) and the operator's record of each moderation action and suspension, kept to answer
   abuse (legitimate interest). A settled report and the record of an action are deleted after

@@ -101,7 +101,10 @@ function makeFeeder(onFrame: (f: RfFrame) => void): (chunk: Uint8Array) => void 
 /** A live RF link; both Web Serial and Web Bluetooth implement it. */
 export interface RfLink {
   disconnect(): Promise<void>;
-  /** Transmit a frame (gated UI-side on callsign control-verification + opt-in). May throw if RX-only. */
+  /**
+   * Transmit a frame (gated UI-side on callsign control-verification + opt-in), its payload held one character per
+   * byte and sent as those bytes. May throw if RX-only.
+   */
   send(frame: TxFrame): Promise<void>;
   /**
    * Set a KISS TNC's channel access (TXDELAY, PERSIST, SLOTTIME). Only a KISS TNC link has it; a link that cannot

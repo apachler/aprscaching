@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
-import { KissDecoder, kissStripCrc, kissWrap, decodeAx25, encodeAx25 } from "@aprscaching/aprs";
+import {
+  KissDecoder,
+  KISS_TIMING_DEFAULTS,
+  kissStripCrc,
+  kissTimingFrames,
+  kissWrap,
+  decodeAx25,
+  encodeAx25,
+  type KissTiming,
+} from "@aprscaching/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import type { KissFrame, ParsedFrame } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
+import { numEnv } from "./config.js";
 import { tncPacket } from "./link.js";
 import type { SentFrames } from "./echo.js";
 
@@ -16,6 +26,26 @@ export interface KissOpts {
   siteCall?: string;
   /** The frames the box sent on any port: what this TNC sends is remembered there, and an echo of one is dropped. */
   sent?: SentFrames;
+  /** The channel access sent to the TNC after each connect; absent, the TNC keeps its own (see {@link kissTimingFromEnv}). */
+  timing?: KissTiming | null;
+}
+
+/**
+ * The TXDELAY, PERSIST and SLOTTIME the box sends its KISS TNC after each connect: `KISS_TXDELAY`, `KISS_PERSIST`
+ * and `KISS_SLOTTIME` (0–255; the APRS values of {@link KISS_TIMING_DEFAULTS} unless set), or null with
+ * `KISS_TIMING=off`, which leaves the TNC on what its own configuration sets (a `direwolf.conf`, a TNC's firmware).
+ */
+export function kissTimingFromEnv(env: Record<string, string | undefined> = process.env): KissTiming | null {
+  const mode = (env.KISS_TIMING ?? "").trim().toLowerCase();
+  if (mode === "off") return null;
+  if (mode !== "" && mode !== "on")
+    console.warn('[config] KISS_TIMING="%s" is neither on nor off — sending the timing', env.KISS_TIMING);
+  const byte = (key: string, def: number) => Math.round(numEnv(key, def, { min: 0, max: 255 }, env));
+  return {
+    txDelay: byte("KISS_TXDELAY", KISS_TIMING_DEFAULTS.txDelay),
+    persist: byte("KISS_PERSIST", KISS_TIMING_DEFAULTS.persist),
+    slotTime: byte("KISS_SLOTTIME", KISS_TIMING_DEFAULTS.slotTime),
+  };
 }
 
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and the partial frame would grow
@@ -54,7 +84,7 @@ export class TcpLink {
   private stopped = false;
   constructor(
     private o: TcpLinkOpts,
-    private h: { onChunk: (chunk: Buffer) => void; onOpen?: () => void },
+    private h: { onChunk: (chunk: Buffer) => void; onOpen?: () => void; onConnect?: () => void },
   ) {
     this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
   }
@@ -88,6 +118,7 @@ export class TcpLink {
       this.connected = true;
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       console.log("[%s] connected %s:%s", this.o.tag, this.o.host, this.o.port);
+      this.h.onConnect?.(); // written here, ahead of anything else sent on this connection
     });
     s.on("data", (chunk: Buffer) => this.h.onChunk(chunk));
     const down = () => {
@@ -115,8 +146,9 @@ export class KissLink {
   constructor(
     private o: TcpLinkOpts,
     private onData: (k: KissFrame) => void,
+    onConnect?: () => void,
   ) {
-    this.tcp = new TcpLink(o, { onChunk: (c) => this.onChunk(c), onOpen: () => this.rx.reset() });
+    this.tcp = new TcpLink(o, { onChunk: (c) => this.onChunk(c), onOpen: () => this.rx.reset(), onConnect });
   }
 
   start(): void {
@@ -152,7 +184,8 @@ export class KissLink {
 /**
  * KISS-over-TCP TNC client (e.g. Direwolf on :8001). Decodes each frame as AX.25, forwards each UI frame as
  * an `rf`-heard packet on the `kiss-tnc` port, and exposes send() so a digipeater / TX-IGate can transmit.
- * Auto-reconnects.
+ * Auto-reconnects, and sends the TNC its channel access (`timing`) after each connect: a TNC that restarted is
+ * back on its own defaults. The three command frames key nothing, so they go out whether or not the box transmits.
  */
 export class KissTnc {
   private link: KissLink;
@@ -160,7 +193,18 @@ export class KissTnc {
     private o: KissOpts,
     private h: KissHandlers,
   ) {
-    this.link = new KissLink({ host: o.host, port: o.port, retryMs: o.retryMs, tag: "kiss" }, (k) => this.onData(k));
+    this.link = new KissLink(
+      { host: o.host, port: o.port, retryMs: o.retryMs, tag: "kiss" },
+      (k) => this.onData(k),
+      () => this.sendTiming(),
+    );
+  }
+
+  private sendTiming(): void {
+    const t = this.o.timing;
+    if (!t) return;
+    this.link.write(kissTimingFrames(t));
+    console.log("[kiss] sent TXDELAY %s, PERSIST %s, SLOTTIME %s", t.txDelay, t.persist, t.slotTime);
   }
 
   private get sock(): net.Socket | undefined {

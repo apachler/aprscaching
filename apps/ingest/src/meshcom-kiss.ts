@@ -20,7 +20,7 @@
  */
 import net from "node:net";
 import { createHmac } from "node:crypto";
-import { decodeAx25, encodeAx25, KissDecoder, kissWrap, decodeAprs } from "@aprscaching/aprs";
+import { decodeAx25, encodeAx25, KissDecoder, kissWrap, decodeAprs, rfBytes } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
 
 export interface MeshcomKissOpts {
@@ -104,11 +104,11 @@ export class MeshcomKiss {
 
   /**
    * Send an APRS message info field (`:ADDRESSEE:text{nn`, or an ack `:ADDRESSEE:ack12`) from `from`, and
-   * resolve with the node's verdict.
+   * resolve with the node's verdict. The info field is text this box originates, sent as UTF-8 bytes.
    */
   send(from: string, info: string): Promise<KissTxResult> {
     if (!this.canSend(from) || !this.sock) return Promise.resolve("no-answer");
-    const frame = encodeAx25({ src: from.toUpperCase(), dst: "APZACG", path: [], payload: info });
+    const frame = encodeAx25({ src: from.toUpperCase(), dst: "APZACG", path: [], payload: rfBytes(info) });
     return new Promise((resolve) => {
       const t = setTimeout(() => {
         const i = this.waiting.indexOf(done);

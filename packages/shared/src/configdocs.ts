@@ -119,6 +119,10 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   APRSIS_FILTER: "APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed",
   KISS_TNC_HOST: "Host of the KISS TNC over TCP; set it to enable the TNC",
   KISS_TNC_PORT: "TCP port of the KISS TNC",
+  KISS_TIMING: "Send the KISS TNC its timing after each connect (off keeps its own)",
+  KISS_TXDELAY: "TX delay sent to the KISS TNC, 0-255 in 10 ms steps",
+  KISS_PERSIST: "Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot",
+  KISS_SLOTTIME: "Slot time sent to the KISS TNC, 0-255 in 10 ms steps",
   AGWPE_HOST: "Host of the AGWPE server; set it to enable AGWPE",
   AGWPE_PORT: "TCP port of the AGWPE server",
   AGWPE_RADIO_PORT: "AGWPE radio port to use (0 is the first)",
@@ -765,7 +769,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     id: "ingest-transports",
     header: ["Subsystem", "Variables"],
     rows: [
-      ["KISS TNC (gates digi/node/BBS/IGate)", "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`)"],
+      [
+        "KISS TNC (gates digi/node/BBS/IGate)",
+        "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
+      ],
       ["AGWPE", "`AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`)"],
       [
         "WA8DED hostmode",

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it, vi } from "vitest";
+import { encodeAx25 } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import {
   FLUSH_FRAMES,
@@ -395,6 +396,21 @@ describe("transmit consent for one browser session", () => {
     await settle();
     await expect(store.transmit(msgFrame("OE8XBM-7"), "My radio")).rejects.toThrow(/OE8APR-7 only/);
     expect(r.sent).toEqual([]);
+  });
+
+  it("sends the text it originates as UTF-8 bytes, and lists the text it sent", async () => {
+    const { r, store } = consenting(true);
+    store.setIdentity("OE8APR", true);
+    await store.connect("serial");
+    await settle();
+    const text = ":OE8XBM   :Grüße 73 €{5";
+    await store.transmit({ src: store.txCall(), dst: "APRS", path: ["WIDE1-1"], payload: text }, "Messages");
+    const sent = r.sent[0] as { payload: string };
+    // one character per byte, the bytes of the UTF-8 encoding: what encodeAx25 writes to the TNC
+    expect(sent.payload).toBe(String.fromCharCode(...new TextEncoder().encode(text)));
+    const info = encodeAx25({ src: "OE8APR-7", dst: "APRS", payload: sent.payload }).subarray(16);
+    expect(new TextDecoder().decode(info)).toBe(text);
+    expect(store.getState().sent[0]?.summary).toContain("Grüße 73 €");
   });
 
   it("keeps the grant in this tab only: nothing goes to storage and a new tab starts without one", async () => {

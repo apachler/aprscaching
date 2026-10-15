@@ -5,11 +5,14 @@
  * parseCompressed (base-91), decodeMicE, plus object/item/message/status/weather/telemetry.
  */
 import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather, DfBearing } from "./types.js";
-import { lookupSymbol } from "./symbols.js";
+import { lookupSymbol, symbolFromAddress } from "./symbols.js";
 import { parseCompressed } from "./compressed.js";
 import { decodeMicE } from "./mice.js";
 import { isValidLatLon } from "./geo.js";
 import { parseTNC2 } from "./tnc2.js";
+import { addMinutes, extractDao } from "./dao.js";
+import { parseNmea } from "./nmea.js";
+import { readLocator } from "./locator.js";
 
 const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 ]\.[0-9 ]{2})([EW])(.)/;
 
@@ -17,7 +20,9 @@ const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 
  * Parse an uncompressed "DDMM.hhN/DDDMM.hhW$" head; returns the fix + the comment remainder, or null when
  * the minutes reach 60 or the position falls outside ±90° / ±180°.
  */
-function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | null {
+function parseUncompressed(
+  s: string,
+): { fix: DecodedPosition; rest: string; lat: number; lon: number; south: boolean; west: boolean } | null {
   const m = UNCOMP_RE.exec(s);
   if (!m) return null;
   const [whole, latDeg, latMin, ns, table, lonDeg, lonMin, ew, code] = m;
@@ -33,7 +38,7 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   if (ew === "W") lon = -lon;
   if (!isValidLatLon(lat, lon)) return null;
   const fix: DecodedPosition = { lat: round(lat), lon: round(lon), symbol: lookupSymbol(table!, code!), ambiguity };
-  return { fix, rest: s.slice(whole.length) };
+  return { fix, rest: s.slice(whole.length), lat, lon, south: ns === "S", west: ew === "W" };
 }
 
 /** "mm.hh" with its last `level` digits (hundredths first, then minutes) set to zero, spaces read as zero. */
@@ -260,6 +265,8 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
         ambiguity: me.ambiguity,
         messageType: me.messageType,
         ...(me.device ? { micEDevice: me.device } : {}),
+        ...(me.datum ? { datum: me.datum } : {}),
+        ...(me.locator ? { locator: me.locator } : {}),
       };
   }
 
@@ -284,11 +291,16 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
     case ":":
       return decodeMessage(p);
     case ">": {
-      // an optional DDHHMMz timestamp leads the status text
+      // an optional DDHHMMz timestamp leads the status text; a status led by a Maidenhead locator has none
       const stamp = /^\d{6}z/.exec(p.slice(1));
-      const text = p.slice(1 + (stamp ? 7 : 0)).trim();
-      return stamp ? { kind: "status", text, timestamp: stamp[0] } : { kind: "status", text };
+      if (stamp) return { kind: "status", text: p.slice(8).trim(), timestamp: stamp[0] };
+      const loc = readLocator(p.slice(1));
+      if (loc)
+        return { kind: "status", text: loc.text, locator: loc.locator, symbol: lookupSymbol(loc.table, loc.code) };
+      return { kind: "status", text: p.slice(1).trim() };
     }
+    case "$":
+      return decodeNmea(frame);
     case "}": {
       // third-party: the carried packet in TNC2 form, decoded on its own
       const inner = depth < MAX_THIRD_PARTY_DEPTH ? parseTNC2(p.slice(1)) : null;
@@ -325,24 +337,71 @@ function decodePosition(body: string, timestamp?: string): AprsData {
       ...(comp.rangeKm !== undefined ? { rangeKm: comp.rangeKm } : {}),
     };
     rest = body.slice(13);
+    // A compressed position is finer than the digits a `!DAO!` adds, so its token names the datum alone.
+    const dao = extractDao(rest);
+    if (dao) {
+      fix.datum = dao.datum;
+      rest = dao.comment;
+    }
   } else {
     const u = parseUncompressed(body);
     if (u) {
       fix = u.fix;
       rest = u.rest;
+      const dao = extractDao(rest);
+      if (dao) {
+        fix.datum = dao.datum;
+        rest = dao.comment;
+        // An ambiguous position left digits out on purpose: added precision would contradict it.
+        if (!fix.ambiguity) {
+          const lat = addMinutes(u.lat, u.south, dao.latMin),
+            lon = addMinutes(u.lon, u.west, dao.lonMin);
+          if (isValidLatLon(lat, lon)) {
+            fix.lat = round(lat);
+            fix.lon = round(lon);
+          }
+        }
+      }
     }
   }
   if (!fix) return { kind: "other" };
   if (timestamp) fix.timestamp = timestamp;
   // weather station (symbol '_') with wx after the position -> weather report
   if (fix.symbol?.code === "_") {
-    const where = { lat: fix.lat, lon: fix.lon, symbol: fix.symbol, ...(timestamp ? { timestamp } : {}) };
+    const where = {
+      lat: fix.lat,
+      lon: fix.lon,
+      symbol: fix.symbol,
+      ...(fix.datum ? { datum: fix.datum } : {}),
+      ...(timestamp ? { timestamp } : {}),
+    };
     if (compressed && isCompressedWeather(rest))
       return { kind: "weather", ...where, ...parseWeather(rest, { dir: fix.course, kn: fix.speedKn }) };
     if (!compressed && isWeather(rest)) return { kind: "weather", ...where, ...parseWeather(rest) };
   }
   applyExtensions(fix, rest, { compressed });
   return { kind: "position", ...fix };
+}
+
+/**
+ * A raw NMEA sentence: a GGA, GLL or RMC fix is the sender's position, its symbol from the addresses; a WPL is
+ * a waypoint, decoded as an item named after it. A VTG carries no position, and a void fix or a bad checksum
+ * none either.
+ */
+function decodeNmea(frame: ParsedFrame): AprsData {
+  const n = parseNmea(frame.payload);
+  if (!n || n.lat === undefined || n.lon === undefined) return { kind: "other" };
+  const symbol = symbolFromAddress(frame.dst, frame.src);
+  const where = { lat: n.lat, lon: n.lon, ...(symbol ? { symbol } : {}), nmea: n.sentence };
+  if (n.waypoint !== undefined) return { kind: "item", name: n.waypoint, alive: true, ...where };
+  return {
+    kind: "position",
+    ...where,
+    ...(n.course !== undefined ? { course: n.course } : {}),
+    ...(n.speedKn !== undefined ? { speedKn: n.speedKn } : {}),
+    ...(n.altitudeM !== undefined ? { altitudeM: n.altitudeM } : {}),
+    ...(n.time ? { timestamp: `${n.time}h` } : {}),
+  };
 }
 
 // A non-position object/item (e.g. `;SHORT` with no fix) must NOT be spread with
