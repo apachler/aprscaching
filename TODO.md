@@ -467,34 +467,22 @@ on. Already in place, so not listed: the decoder, digipeater and IGate checked a
 reply-acks, objects and weather, positions and Mic-E, telemetry, status and third-party packets, SSID handling, the
 8-digipeater limit, byte-for-byte APRS-IS gating, PHG, RNG, DFS and DF bearings, `!DAO!` precision, raw NMEA
 reports and status locators), UTF-8 text heard on RF and sent on it (`rfText`, `rfBytes`), the packet route on find
-and station details, the sending device named by tocall (`DEVICEID_URL`), radio coverage on the hide form, KISS
-timing on every KISS link, photos stored without their metadata, the ingest's receive-only LoRa APRS port, the
-gateway's APRS-IS duplicate rule for its packet and message logs (`workers/gateway/src/dupes.ts`), the `NEAR` radio
-command, geofence prompts, CSMA on the ingest soundcard port, BLE KISS for Mobilinkd and LoRa trackers, and MeshCom
-signal reports. The tocall request is the launch-list item above.
+and station details, the sending device named by tocall (`DEVICEID_URL`), radio coverage on the hide form, the grid
+square and Mic-E device codes on the station page, the APRS frequency hint in My radio, per-port ingest health, the
+station "last heard" feed on the read API (`/api/v1/stations/heard/stream`), Direwolf as the documented reference
+TNC, KISS timing on every KISS link, photos stored without their metadata, the ingest's receive-only LoRa APRS
+port, the gateway's APRS-IS duplicate rule for its packet and message logs (`workers/gateway/src/dupes.ts`), the
+`NEAR` radio command, geofence prompts, CSMA on the ingest soundcard port, BLE KISS for Mobilinkd and LoRa
+trackers, and MeshCom signal reports. The tocall request is the launch-list item above.
 
-- [ ] **Dire Wolf as the reference TNC** _(P2 · S · step 6)_ — test the ingest's KISS-TCP client against Dire
-      Wolf with several channels, each KISS channel its own attested receiver port, and document the
-      `direwolf.conf` that pairs with an ingest box. Dire Wolf's FX.25 frames stay AX.25-compatible; IL2P does
-      not, so the manual says which to enable. _Depends on:_ —
 - [ ] **HF port preset** _(P3 · S · step 8)_ — 30 m APRS at 300 baud: an empty path (HF has no digipeating;
       an empty path saves 14 bytes), beacons every 10–15 min, Mic-E, the comment on every fourth beacon, 5–10
       message retries, and the dial frequency named together with mode and tones (10.1476 MHz USB). HF heard
-      through someone else's IGate is APRS-IS and stays Tier C. _Depends on:_ step 6.
-- [ ] **Frequency by country in My radio** _(P2 · S · step 9)_ — suggest the APRS frequency from the
-      operator's locale or position: 144.800 MHz in Region 1, 144.390 MHz in North America, the Region 3 and
-      South American exceptions, 433.775 MHz for LoRa, 145.825 MHz for the ISS digipeater. A data table in
-      `packages/shared`, shown as a hint, never set on the radio without the operator's action. _Depends on:_ —
-- [ ] **Ingest health in the Shack** _(P2 · S · step 10)_ — packets per second, parse rate and invalid
-      packets per port at the port's status header, the figures the public viewers show for their feeds.
-      _Depends on:_ —
+      through someone else's IGate is APRS-IS and stays Tier C. _Depends on:_ —
 - [ ] **APRScaching Thursday** _(P2 · S · step 12)_ — join #APRSThursday (every Thursday, 00:00–23:59 UTC,
       tracked by aprs.world, aprs.to and aprslive): a weekly find event with a leaderboard ranked by callsign,
       per the identity rule. Folds into the **Weekly #CacheNet** item above, which supplies the messaging net.
       _Depends on:_ —
-- [ ] **Station-health feed on the read API** _(P2 · M · step 13)_ — a "last heard" webhook or event stream
-      per watched callsign, so Node-RED and IoT setups watch a station without scraping APRS-IS. Free with the
-      read API's per-IP limits and keys; an owner sees only public data. _Depends on:_ —
 - [ ] **Caches as APRS objects on air** _(P3 · M · step 14)_ — opt-in per instance, sysop-gated: send a cache
       as an object with the point-of-interest symbol `\i`, so it shows on any APRS radio or map nearby. A low
       rate, local reach only (never a wide path), and the transmit gate as today; _APRS Worst Practices_ is the
@@ -518,12 +506,16 @@ signal reports. The tocall request is the launch-list item above.
       CA2RXU TNC form carries them, so they need a transport that does (the esp32_loraprs KISS signal-report
       extension, once its byte layout is confirmed); the gateway then stores them as receiver metadata and the
       station page shows them. Receiving never lifts trust. _Depends on:_ step 22.
-- [ ] **Locator on the station page** _(P3 · S · step 26)_ — the decoder reads a Maidenhead locator leading a
-      status report or Mic-E status text; the gateway keeps it only in the raw packet ring. Store the last one per
-      station and show it as the grid square on the station page, never as a position fix. _Depends on:_ —
-- [ ] **Mic-E device codes in the comment** _(P3 · S · step 27)_ — after a `` ` `` or `'` prefix the decoder
-      strips only `_x` and `|x` suffixes, so other makers' two-character codes (Anytone `(5`) stay visible in the
-      comment although the device is named. Strip every code the device database lists. _Depends on:_ —
+- [ ] **One port per KISS channel** _(P2 · M · step 28)_ — the ingest's KISS client reads every Direwolf channel
+      as the one `kiss-tnc` port and sends everything (frames, timing) on channel 0, so with an all-channel KISS
+      stream the digipeater and the TX-IGate answer traffic heard on channel 2 on channel 0. A key listing the
+      channels, one radio entry per channel with its own port name and timing, and `send` on the channel a frame
+      belongs to; the AGWPE client's receive side filters by `AGWPE_RADIO_PORT` the same way. Until then
+      `docs/run/radios/direwolf.md` points a transmitting box at a per-channel KISS port. _Depends on:_ —
+- [ ] **Station exclusion on objection** _(P2 · S · step 29)_ — the privacy notice lets a licensee object to the
+      processing of their station's on-air data, but the gateway cannot keep one callsign out: a sysop-held
+      exclusion list the ingest and the station queries honour, with that callsign's stored rows purged. The
+      notice then promises exclusion instead of deletion on the stated periods. _Depends on:_ —
 
 Considered and not planned:
 
