@@ -28,7 +28,7 @@
  * can send, so the gateway only routes answers here while it can deliver them.
  */
 import { gatewayFetch } from "./gatewayauth.js";
-import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
+import { encodeAprsMessage, encodeAprsPosition, rfBytes } from "@aprscaching/aprs";
 import { TokenBucket } from "./txlimit.js";
 
 /** What the box can transmit through — the UI-frame send of its first radio (the KISS TNC or a soundcard port). */
@@ -335,7 +335,8 @@ export class BoxPoller {
       src: call,
       dst: tocall,
       path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
-      payload: `}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text, msgNo)}`,
+      // text the gateway originates goes out as UTF-8 bytes
+      payload: rfBytes(`}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text, msgNo)}`),
     });
     return ok
       ? { status: "done", result: `answer to ${to} sent as ${call}` }
@@ -401,6 +402,7 @@ export class BoxPoller {
     return { src };
   }
 
+  /** Transmit an info field this box originates; its text goes out as UTF-8 bytes. */
   private transmit(cmd: BoxCommand, payload: string, what: string): BoxResult {
     const g = this.txGate(cmd);
     if ("status" in g) return g;
@@ -408,7 +410,7 @@ export class BoxPoller {
       src: g.src,
       dst: this.o.tocall ?? "APZACG",
       path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
-      payload,
+      payload: rfBytes(payload),
     });
     return ok
       ? { status: "done", result: `${what} sent as ${g.src}` }

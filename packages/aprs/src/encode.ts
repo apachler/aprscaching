@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 /**
  * encode.ts — minimal APRS info-string encoders for ORIGINATING traffic (APRS101). The decoder is
- * the bulk of this package; these let a licensed operator beacon a position or send a message
- *. Pure + runtime-neutral; pair with encodeAx25 + kissWrap to frame.
+ * the bulk of this package; these let a licensed operator beacon a position or send a message.
+ * Pure + runtime-neutral. They return text: its length limits count the UTF-8 bytes it goes out as, and
+ * `rfBytes` turns it into those bytes for encodeAx25 + kissWrap.
  */
+import { rfClip } from "./text.js";
 
 /** Degrees → APRS ddmm.mmH (lat: 2°+2'+.+2; lon: 3°+2'+.+2). */
 function degMin(deg: number, isLat: boolean): string {
@@ -32,22 +34,23 @@ export const isAprsSymbol = (s: string): boolean => /^[\x21-\x7e]{2}$/.test(s);
 /**
  * Uncompressed APRS position report (no timestamp): `!lat/lon>comment`. `symbol` is a 2-char
  * table+code (default "/>" = car; anything that is not `isAprsSymbol` falls back to it); comment is
- * cleaned + length-capped.
+ * cleaned + capped at 43 bytes of UTF-8.
  */
 export function encodeAprsPosition(lat: number, lon: number, symbol = "/>", comment = ""): string {
   const sym = isAprsSymbol(symbol) ? symbol : "/>";
   const table = sym[0]!,
     code = sym[1]!;
-  return `!${degMin(lat, true)}${table}${degMin(lon, false)}${code}${clean(comment).slice(0, 43)}`;
+  return `!${degMin(lat, true)}${table}${degMin(lon, false)}${code}${rfClip(clean(comment), 43)}`;
 }
 
 /**
  * APRS text message: `:ADDRESSEE :text{msgNo` (addressee space-padded to 9). The message text may not
- * contain `|`, `~` or `{` (reserved); they're stripped. Returns the info string only.
+ * contain `|`, `~` or `{` (reserved); they're stripped, and it is capped at 67 bytes of UTF-8, cut between
+ * characters. Returns the info string only.
  */
 export function encodeAprsMessage(addressee: string, text: string, msgNo?: string): string {
   const to = clean(addressee).toUpperCase().slice(0, 9).padEnd(9, " ");
-  const body = clean(text).replace(/[|~{]/g, "").slice(0, 67);
+  const body = rfClip(clean(text).replace(/[|~{]/g, ""), 67);
   return `:${to}:${body}${msgNo ? `{${msgNo.slice(0, 5)}` : ""}`;
 }
 

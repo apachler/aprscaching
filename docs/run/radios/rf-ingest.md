@@ -27,6 +27,11 @@ unchanged, so the IGate and the digipeater send exactly the bytes they heard. Th
 station sent (a message, a status, a comment) as UTF-8 when the bytes are valid UTF-8, and otherwise as
 Latin-1, one character per byte. A `Grüße` sent in either set shows as `Grüße`.
 
+Text the box, the gateway or the browser radio writes itself (a message, an answer to a radio command, a
+beacon comment, a status) goes out as UTF-8, on RF and on APRS-IS alike. APRS limits count these bytes: a
+message holds 67 bytes of text and a beacon comment 43, and a letter such as `ü` takes two. A message cut to
+fit is cut between letters, never inside one.
+
 ## Transports
 
 | Transport | Turn on with | What it does |
