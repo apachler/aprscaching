@@ -148,6 +148,7 @@ nav:
           - LoRa APRS: run/radios/lora-aprs.md
           - "Packet: BBS & NET/ROM node": run/radios/packet-node.md
           - Remote control of your box: run/radios/remote-box.md
+          - Caches on air: run/radios/caches-on-air.md
       - Networks:
           - Off-grid and LAN: run/networks/off-grid.md
           - Cloudflare Tunnel and CDN: run/networks/cloudflare.md

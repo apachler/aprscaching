@@ -41,6 +41,7 @@ import {
 } from "./downsample.js";
 import type { HeardEvent, Transport } from "@aprscaching/shared";
 import { DUPE_WINDOW_SEC, planDupes, recentCopies, type Fate } from "./dupes.js";
+import { excludedCalls, excludedPacket } from "./exclusions.js";
 
 /**
  * Position-bearing decoded data (position/object/item/weather with a fix). A fix outside ±90° / ±180°
@@ -58,6 +59,11 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
   comment?: string;
   /** the station's own position, not an object, item or weather report it sent */
   own: boolean;
+  /**
+   * the fix places an object or item the station sent, which stands somewhere else: it is never stored as the
+   * station's position, so an object on a cache (the instance's own cache objects among them) is no find evidence
+   */
+  elsewhere: boolean;
   /** what names the sending device (deviceid.ts): the tocall, or a Mic-E packet's device code */
   device: DeviceColumns;
 } | null {
@@ -78,6 +84,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       rangeKm: d.rangeKm,
       comment: d.comment,
       own: d.kind === "position",
+      elsewhere: d.kind === "object" || d.kind === "item",
       device: deviceColumns(p.dst, p.payload, d.micEDevice),
     };
   }
@@ -89,6 +96,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       lon: pp.lon,
       symbol: typeof pp.symbol === "string" ? pp.symbol : undefined,
       own: true,
+      elsewhere: false,
       device: deviceColumns(p.dst, p.payload, undefined),
     };
   return null;
@@ -160,7 +168,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // the trusted path's job (self-host ingest secret / apps/ingest), so foreign-src frames are dropped
   // from an untrusted batch rather than stored under a callsign the signer does not hold.
   const signerBase = signer ? baseCall(signer.callsign) : null;
-  const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  const own = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  // A station excluded on its licensee's objection (exclusions.ts) leaves nothing here: its frames are dropped
+  // before anything is stored, fanned out or acted on. Another station's frame naming it in its path stays.
+  const excluded = await excludedCalls(env);
+  const packets = excluded.size ? own.filter((p) => !excludedPacket(excluded, p)) : own;
   // An ingest posts the info field it heard one character per byte. From here on it is the text a station
   // sent: UTF-8 where the bytes are valid UTF-8, else one character per byte. Gating and digipeating happen on
   // the ingest, on the bytes; a signed batch was verified over the bytes above.
@@ -183,6 +195,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   }[] = [];
   const fixes: { p: (typeof packets)[number]; fix: NonNullable<ReturnType<typeof fixOf>>; transport: Transport }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
+  // a dropped frame still counts as heard on its port: the counters name no station
+  if (packets.length !== own.length) {
+    const kept = new Set(packets);
+    for (const p of own) if (!kept.has(p)) portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
+  }
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
   const heard: Heard[] = []; // every station of the batch and its route, for the Mailbox
@@ -333,7 +350,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const fix = fixOf(p);
     // a duplicate copy is no new hearing; an RF copy of one first heard over APRS-IS is
     if (fate.kind !== "skip") heardEvents.push(heardEventOf(p, data, fix));
-    if (!fix) continue;
+    // an object or item is not where its sender stands: never the station's position, track or find evidence
+    if (!fix || fix.elsewhere) continue;
     positions.push({
       src: p.src,
       lat: fix.lat,

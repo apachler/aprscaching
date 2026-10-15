@@ -1543,6 +1543,8 @@ export interface SiteSettingView {
   options: string[] | null;
   format: "email" | "contacts" | "links" | "retention" | null;
   maxLength: number | null;
+  /** The on/off setting this one folds under while it is off. */
+  gate: string | null;
   fields: { id: string; label: string; default: number; min: number; max: number; unit: string }[] | null;
   default: string | null;
   value: string | null;

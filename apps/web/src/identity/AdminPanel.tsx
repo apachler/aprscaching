@@ -95,6 +95,7 @@ import { ApiKeysAdmin } from "./ApiKeysAdmin.js";
 import { listReports } from "../moderation/api.js";
 import { ReportsAdmin, AccountsAdmin, AuditAdmin } from "./ModerationAdmin.js";
 import { InstanceSettingsAdmin } from "./InstanceSettingsAdmin.js";
+import { ExclusionsAdmin } from "./ExclusionsAdmin.js";
 import { portHealthParts } from "./portHealth.js";
 
 /** What the admin search finds Instance settings by: its own words, its groups, and every setting's key. */
@@ -227,6 +228,23 @@ export function AdminPanel(props: { onClose: () => void }) {
           defaultOpen={false}
         >
           <AuditAdmin />
+        </Group>
+      )}
+      {show("excluded", "exclusion", "exclude", "objection", "gdpr", "privacy", "stations", "opt out") && (
+        <Group
+          title="Excluded stations"
+          status="objections"
+          help={
+            <>
+              Keep a station out when its licensee objects to this instance storing its on-air data.{" "}
+              <ManualLink page="run/day-to-day/moderation" anchor="exclude-a-station">
+                Exclude a station
+              </ManualLink>
+            </>
+          }
+          defaultOpen={false}
+        >
+          <ExclusionsAdmin />
         </Group>
       )}
       {show("callsigns", "verification", "verify", "callsign", "manual", "licence", "sysop", "release", "holder") && (

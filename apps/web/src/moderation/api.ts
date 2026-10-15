@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** The moderation endpoints: filing a report (any player), and the sysop's reports, takedowns and suspensions. */
 import { call } from "../api.js";
-import type { ContentKind, ReportCategory } from "./logic.js";
+import type { ContentKind, ExclusionCategory, ReportCategory } from "./logic.js";
 
 export function fileReport(kind: ContentKind, id: string | number, category: ReportCategory, text: string) {
   return call<{ ok: true; id: number; duplicate?: boolean }>(`/api/reports`, {
@@ -133,4 +133,31 @@ export function getAuditLog(before?: number | null) {
   return call<{ entries: ModAction[]; nextBefore: number | null }>(
     `/api/admin/moderation/log${before ? `?before=${before}` : ""}`,
   );
+}
+
+/** A station excluded on its licensee's objection; `held` says an account here holds the call. */
+export interface StationExclusion {
+  callsign: string;
+  category: ExclusionCategory;
+  createdAt: number;
+  createdBy: string | null;
+  held: boolean;
+}
+export function listExclusions() {
+  return call<{ exclusions: StationExclusion[] }>(`/api/admin/exclusions`);
+}
+/** What excluding a call would purge, row counts per kind, and whether an account holds it. */
+export function previewExclusion(callsign: string) {
+  return call<{ callsign: string; excluded: boolean; held: boolean; counts: Record<string, number> }>(
+    `/api/admin/exclusions/${encodeURIComponent(callsign)}`,
+  );
+}
+export function addExclusion(callsign: string, category: ExclusionCategory) {
+  return call<{ ok: true; callsign: string; held: boolean; purged: Record<string, number> }>(`/api/admin/exclusions`, {
+    method: "POST",
+    body: JSON.stringify({ callsign, category }),
+  });
+}
+export function liftExclusion(callsign: string) {
+  return call<{ ok: true }>(`/api/admin/exclusions/${encodeURIComponent(callsign)}`, { method: "DELETE" });
 }

@@ -125,3 +125,20 @@ describe("a reconnect starts from an empty receive buffer", () => {
     expect(got.map((p) => p.src)).toEqual(["OE3PLY-7"]);
   });
 });
+
+describe("AGWPE radio port", () => {
+  const frame = (payload: string) => ({ src: "OE3PLY-7", dst: "APRS", path: ["WIDE1-1"], payload });
+  const monitor = (port: number, payload: string) =>
+    encodeAgwpe({ port, kind: "K", data: Uint8Array.from([port, ...encodeAx25(frame(payload))]) });
+
+  it.each([0, 1])("hears only the frames on radio port %s", async (radioPort) => {
+    const { port } = await scriptedTnc([Uint8Array.from([...monitor(1, ">port one"), ...monitor(0, ">port zero")])]);
+    const got: Packet[] = [];
+    const a = new AgwpeTnc({ host: "127.0.0.1", port, radioPort, retryMs: 5000 }, { onPacket: (p) => got.push(p) });
+    cleanups.push(() => a.stop());
+    a.start();
+    await until(() => got.length > 0);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(got.map((p) => p.payload)).toEqual([radioPort === 0 ? ">port zero" : ">port one"]);
+  });
+});

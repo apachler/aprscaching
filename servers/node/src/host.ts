@@ -5,7 +5,7 @@
  * commit, and the scheduled jobs.
  */
 import { execSync } from "node:child_process";
-import { runRelayTick, runScheduled } from "@aprscaching/gateway/app";
+import { CACHE_OBJECTS_TICK_MS, runCacheObjectsTick, runRelayTick, runScheduled } from "@aprscaching/gateway/app";
 import { onPushSoon } from "@aprscaching/gateway/fedpush";
 import { catchUp } from "@aprscaching/gateway/fedcatchup";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
@@ -101,7 +101,8 @@ export function gitHead(): string | undefined {
  * peers, hub or retries costs a few queries, since each task no-ops without its config or rows. The relay
  * tick (a spoke collecting its hub's queries, an asker reading relayed corroboration answers;
  * runRelayTick) runs every `relayPollMs` (0 leaves it to the frequent sync), and a push after a local write
- * reports to the same catch-up loop as the scheduled push.
+ * reports to the same catch-up loop as the scheduled push. The cache-object run (runCacheObjectsTick) runs every
+ * five minutes and costs one settings read while `CACHE_OBJECTS` is off.
  */
 export function startSchedules(env: Env, fedSyncMs: number, relayPollMs = 0): void {
   const nightly = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
@@ -117,6 +118,7 @@ export function startSchedules(env: Env, fedSyncMs: number, relayPollMs = 0): vo
     onPushSoon((push) => loop.after({ push }));
   }
   if (relayPollMs > 0) setInterval(() => void runRelayTick(env).catch((e) => console.error("relay:", e)), relayPollMs);
+  setInterval(() => void runCacheObjectsTick(env), CACHE_OBJECTS_TICK_MS);
 }
 
 /** FED_SYNC_INTERVAL_MS: the frequent federation cadence (default 5 min; 0 disables it). */

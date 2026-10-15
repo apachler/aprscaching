@@ -11,7 +11,7 @@ import {
   type KissTiming,
 } from "@aprscaching/aprs";
 import { decodeFrame, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
-import type { Packet } from "@aprscaching/shared";
+import { kissTncPort, type Packet } from "@aprscaching/shared";
 import type { KissFrame, ParsedFrame } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
 import { numEnv } from "./config.js";
@@ -28,6 +28,38 @@ export interface KissOpts {
   sent?: SentFrames;
   /** The channel access sent to the TNC after each connect; absent, the TNC keeps its own (see {@link kissTimingFromEnv}). */
   timing?: KissTiming | null;
+  /** The KISS channels (port nibbles) the box uses, each its own port (see {@link kissChannelsFromEnv}); default `[0]`. */
+  channels?: readonly number[];
+}
+
+/** The KISS channels the box uses and the one its own transmissions (IGate, remote box, services) go out on. */
+export interface KissChannels {
+  channels: number[];
+  tx: number;
+}
+
+/**
+ * The KISS channels from `KISS_TNC_CHANNELS` (a comma list of 0-15; default `0`) and the transmit channel from
+ * `KISS_TNC_TX_CHANNEL` (one of them; default the first listed). Throws on a value that is no channel, or a
+ * transmit channel the list leaves out.
+ */
+export function kissChannelsFromEnv(env: Record<string, string | undefined> = process.env): KissChannels {
+  const parse = (key: string, v: string) => {
+    const t = v.trim();
+    if (!/^\d{1,2}$/.test(t) || Number(t) > 15) throw new Error(`${key}: "${v}" is not a KISS channel 0-15`);
+    return Number(t);
+  };
+  const raw = (env.KISS_TNC_CHANNELS ?? "").trim();
+  const listed = raw
+    .split(",")
+    .filter((c) => c.trim())
+    .map((c) => parse("KISS_TNC_CHANNELS", c));
+  const channels = listed.length ? [...new Set(listed)] : [0];
+  const txRaw = (env.KISS_TNC_TX_CHANNEL ?? "").trim();
+  const tx = txRaw ? parse("KISS_TNC_TX_CHANNEL", txRaw) : channels[0]!;
+  if (!channels.includes(tx))
+    throw new Error(`KISS_TNC_TX_CHANNEL ${tx} is not in KISS_TNC_CHANNELS (${channels.join(",")})`);
+  return { channels, tx };
 }
 
 /**
@@ -48,6 +80,13 @@ export function kissTimingFromEnv(env: Record<string, string | undefined> = proc
   };
 }
 
+/** A KISS data frame on a channel: kissWrap's frame with the channel in the type byte's high nibble. */
+function kissWrapChannel(ax25: Uint8Array, channel: number): Uint8Array {
+  const out = kissWrap(ax25);
+  out[1] = (channel & 0x0f) << 4;
+  return out;
+}
+
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and the partial frame would grow
  *  forever. Bound it — past this many bytes with no complete frame the stream isn't KISS; drop it. */
 const KISS_RX_MAX_BYTES = 64 * 1024;
@@ -59,11 +98,18 @@ const KISS_RX_MAX_BYTES = 64 * 1024;
  */
 export const isMeshcomNode = (k: { port: number; frame: Uint8Array }, dst: string | undefined) =>
   k.port === 15 || (dst !== undefined && /^APRSMC(-\d+)?$/i.test(dst));
+/** What a KISS TNC heard, each with the channel it came in on; a packet names that channel's port. */
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
-  onFrame?: (f: ParsedFrame) => void; // UI-decoded RF frame (for the APRS digipeater / igate)
-  onRaw?: (bytes: Uint8Array) => void; // raw KISS-unwrapped AX.25 frame (for connected-mode: node/digi)
-  onInvalid?: () => void; // a data frame that is no AX.25 frame at all, for the port's health
+  onFrame?: (f: ParsedFrame, channel: number) => void; // UI-decoded RF frame (for the APRS digipeater / igate)
+  onRaw?: (bytes: Uint8Array, channel: number) => void; // raw KISS-unwrapped AX.25 frame (for connected-mode: node/digi)
+  onInvalid?: (port: string) => void; // a data frame that is no AX.25 frame at all, for the port's health
+}
+
+/** A radio port on one KISS channel: what it sends goes out on that channel. */
+export interface KissChannelRadio {
+  send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
+  sendFrame(f: Ax25Frame): boolean;
 }
 
 export interface TcpLinkOpts {
@@ -184,16 +230,23 @@ export class KissLink {
 
 /**
  * KISS-over-TCP TNC client (e.g. Direwolf on :8001). Decodes each frame as AX.25, forwards each UI frame as
- * an `rf`-heard packet on the `kiss-tnc` port, and exposes send() so a digipeater / TX-IGate can transmit.
- * Auto-reconnects, and sends the TNC its channel access (`timing`) after each connect: a TNC that restarted is
- * back on its own defaults. The three command frames key nothing, so they go out whether or not the box transmits.
+ * an `rf`-heard packet on its channel's port (`kiss-tnc` for channel 0, `kiss-tnc-<n>` for the others), and
+ * exposes send() so a digipeater / TX-IGate can transmit on a channel. Each listed channel is its own radio port;
+ * a frame on a channel the box does not list is ignored, since the box neither knows that radio nor answers on it.
+ * Auto-reconnects, and sends the TNC its channel access (`timing`) on every listed channel after each connect: a
+ * TNC that restarted is back on its own defaults. The command frames key nothing, so they go out whether or not
+ * the box transmits.
  */
 export class KissTnc {
   private link: KissLink;
+  private channels: ReadonlySet<number>;
+  /** The unlisted channels a frame came in on, each logged once. */
+  private ignored = new Set<number>();
   constructor(
     private o: KissOpts,
     private h: KissHandlers,
   ) {
+    this.channels = new Set(o.channels?.length ? o.channels : [0]);
     this.link = new KissLink(
       { host: o.host, port: o.port, retryMs: o.retryMs, tag: "kiss" },
       (k) => this.onData(k),
@@ -204,8 +257,15 @@ export class KissTnc {
   private sendTiming(): void {
     const t = this.o.timing;
     if (!t) return;
-    this.link.write(kissTimingFrames(t));
-    console.log("[kiss] sent TXDELAY %s, PERSIST %s, SLOTTIME %s", t.txDelay, t.persist, t.slotTime);
+    for (const ch of this.channels) this.link.write(kissTimingFrames(t, ch));
+    const chs = [...this.channels];
+    console.log(
+      "[kiss] sent TXDELAY %s, PERSIST %s, SLOTTIME %s%s",
+      t.txDelay,
+      t.persist,
+      t.slotTime,
+      chs.length === 1 && chs[0] === 0 ? "" : ` on channels ${chs.join(",")}`,
+    );
   }
 
   private get sock(): net.Socket | undefined {
@@ -223,25 +283,27 @@ export class KissTnc {
   /** Set once the TNC turned out to be a MeshCom node: nothing more is forwarded or sent through it. */
   private meshcomNode = false;
 
-  /** Transmit an AX.25 UI frame over KISS (best-effort; dropped if the TNC link is down). */
-  send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean {
-    if (!this.connected || !this.sock || this.meshcomNode) return false;
-    try {
-      const raw = encodeAx25(f);
-      this.link.write(kissWrap(raw));
-      this.o.sent?.remember(raw);
-      return true;
-    } catch {
-      return false;
-    }
+  /** Transmit an AX.25 UI frame over KISS on a channel (best-effort; dropped if the TNC link is down). */
+  send(f: { src: string; dst: string; path?: string[]; payload: string }, channel = 0): boolean {
+    return this.transmit(() => encodeAx25(f), channel);
   }
 
-  /** Transmit a full AX.25 frame (any type — for connected-mode: NET/ROM node, connected digi). */
-  sendFrame(f: Ax25Frame): boolean {
-    if (!this.connected || !this.sock || this.meshcomNode) return false;
+  /** Transmit a full AX.25 frame (any type — for connected-mode: NET/ROM node, connected digi) on a channel. */
+  sendFrame(f: Ax25Frame, channel = 0): boolean {
+    return this.transmit(() => encodeFrame(f), channel);
+  }
+
+  /** The radio port of one listed channel: everything it sends goes out on that channel. */
+  channel(channel: number): KissChannelRadio {
+    if (!this.channels.has(channel)) throw new RangeError(`KISS channel ${channel} is not listed`);
+    return { send: (f) => this.send(f, channel), sendFrame: (f) => this.sendFrame(f, channel) };
+  }
+
+  private transmit(encode: () => Uint8Array, channel: number): boolean {
+    if (!this.connected || !this.sock || this.meshcomNode || !this.channels.has(channel)) return false;
     try {
-      const raw = encodeFrame(f);
-      this.link.write(kissWrap(raw));
+      const raw = encode();
+      this.link.write(kissWrapChannel(raw, channel));
       this.o.sent?.remember(raw);
       return true;
     } catch {
@@ -261,14 +323,22 @@ export class KissTnc {
       );
     }
     if (this.meshcomNode) return;
-    if (this.o.sent?.echoes(raw)) return; // the box's own transmission, heard back
-    this.h.onRaw?.(raw); // raw AX.25 for connected-mode consumers (node/digi)
-    if (!f) {
-      // a connected-mode frame is AX.25 but no APRS packet; only a frame no decoder reads counts as invalid
-      if (!decodeFrame(raw)) this.h.onInvalid?.();
+    const ch = k.port;
+    if (!this.channels.has(ch)) {
+      if (!this.ignored.has(ch)) {
+        this.ignored.add(ch);
+        console.log("[kiss] frames on channel %s are ignored: KISS_TNC_CHANNELS does not list it", ch);
+      }
       return;
     }
-    this.h.onFrame?.(f);
-    this.h.onPacket(tncPacket(f, "kiss-tnc", this.o.siteCall, Math.floor(Date.now() / 1000)));
+    if (this.o.sent?.echoes(raw)) return; // the box's own transmission, heard back
+    this.h.onRaw?.(raw, ch); // raw AX.25 for connected-mode consumers (node/digi)
+    if (!f) {
+      // a connected-mode frame is AX.25 but no APRS packet; only a frame no decoder reads counts as invalid
+      if (!decodeFrame(raw)) this.h.onInvalid?.(kissTncPort(ch));
+      return;
+    }
+    this.h.onFrame?.(f, ch);
+    this.h.onPacket(tncPacket(f, kissTncPort(ch), this.o.siteCall, Math.floor(Date.now() / 1000)));
   }
 }

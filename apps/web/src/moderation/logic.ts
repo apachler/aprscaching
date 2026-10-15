@@ -43,6 +43,9 @@ const ACTION_NAMES: Record<string, string> = {
   "add-peer": "added",
   "remove-peer": "removed",
   follow: "followed",
+  // a station exclusion: "OE8APR excluded station OE1ABC"
+  exclude: "excluded",
+  include: "lifted the exclusion of",
 };
 /** An audit row as a verb phrase: "OE8APR removed". */
 export const actionName = (a: string): string => ACTION_NAMES[a] ?? a;
@@ -74,4 +77,46 @@ export function suspensionUntil(span: string | null, nowMs: number): number | nu
   const days = Number(span);
   if (!span || span === "open" || !Number.isInteger(days) || days <= 0) return null;
   return Math.floor(nowMs / 1000) + days * 86_400;
+}
+
+/** Why a station is excluded: its licensee objected (GDPR Art. 21), asked for erasure (Art. 17), or another reason. */
+export type ExclusionCategory = "objection" | "erasure" | "other";
+export const EXCLUSION_CATEGORIES: { value: ExclusionCategory; label: string }[] = [
+  { value: "objection", label: "Objection (GDPR Art. 21)" },
+  { value: "erasure", label: "Erasure request (GDPR Art. 17)" },
+  { value: "other", label: "Other" },
+];
+/** A category in words, for the list. */
+export const exclusionCategoryLabel = (c: string): string =>
+  EXCLUSION_CATEGORIES.find((x) => x.value === c)?.label ?? c;
+
+/**
+ * The base call an exclusion names, as the server takes it: upper case, without an SSID. Null for what is no
+ * callsign, so the form says so before asking the server.
+ */
+export function exclusionCall(raw: string): string | null {
+  const base = raw.trim().toUpperCase().split("-")[0] ?? "";
+  return /^[A-Z0-9]{3,9}$/.test(base) && /[0-9]/.test(base) && /[A-Z]/.test(base) ? base : null;
+}
+
+const PURGE_WORDS: [key: string, one: string, many: string][] = [
+  ["stations", "map entry", "map entries"],
+  ["positions", "position", "positions"],
+  ["packets", "raw packet", "raw packets"],
+  ["messages", "message it sent", "messages it sent"],
+  ["weather", "weather reading", "weather readings"],
+  ["meshcomNodes", "MeshCom node", "MeshCom nodes"],
+  ["meshcomLinks", "MeshCom link", "MeshCom links"],
+  ["meshcomMessages", "MeshCom group message", "MeshCom group messages"],
+  ["mheard", "heard-list entry", "heard-list entries"],
+  ["netromNodes", "NET/ROM route", "NET/ROM routes"],
+  ["watchAlerts", "watch alert", "watch alerts"],
+];
+
+/** What an exclusion purges, in words, one line per kind it holds rows of: "3 positions". Empty when it holds none. */
+export function purgeLines(counts: Record<string, number>): string[] {
+  return PURGE_WORDS.flatMap(([key, one, many]) => {
+    const n = counts[key] ?? 0;
+    return n > 0 ? [`${n} ${n === 1 ? one : many}`] : [];
+  });
 }

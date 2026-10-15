@@ -71,6 +71,10 @@ third-party traffic from the service call under `BOX_CALL`, or through its MeshC
 acknowledges finds even without internet. These answers pass the same gates: the transmit switch, the command
 age and the rate limit.
 
+With [Caches on air](caches-on-air.md) switched on, the gateway also queues the instance's cache objects for
+the box it names. They pass the same gates, and the box also refuses an object more than 50 km from `BOX_LAT`
+and `BOX_LON`, or on a path other than none or `WIDE1-1`.
+
 Every `BOX_*` setting is in [Configuration](../../reference/configuration.md); the rate limits are in
 [Transmit pacing](../compliance/on-air-stations.md#transmit-pacing).
 
