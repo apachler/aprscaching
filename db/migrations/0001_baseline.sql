@@ -415,6 +415,10 @@ CREATE TABLE cache_logs (
   -- a finder's "needs maintenance" flag on a found or did-not-find log. The cache shows it until its owner
   -- posts a maintenance log (or enables the cache again) after it; the owner hears of each flag in the app.
   needs_maintenance   INTEGER NOT NULL DEFAULT 0,
+  -- the route of the stored packet a found log was scored against (JSON PacketRouteInfo: sender, path, how it
+  -- arrived, the receiving site and whether that site attested it). Display only: it says why the find has its
+  -- tier after the position itself is pruned. NULL when no packet was matched (Tier B, a peer's corroboration).
+  route               TEXT,
   -- the find's number, its signed `v` and its global id `<instance>:find:<fed_seq>` (trigger
   -- cache_logs_fed_seq, under Federation)
   fed_seq             INTEGER NOT NULL DEFAULT 0

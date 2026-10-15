@@ -24,7 +24,7 @@
  *   - An internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
  *     its `heard_via` and site claim — no receiver the operator runs heard it on amateur RF.
  */
-import { Transport as TransportEnum, type Transport, type Provenance } from "@aprscaching/shared";
+import { Transport as TransportEnum, type Transport, type Provenance, type PacketRouteInfo } from "@aprscaching/shared";
 
 export interface RawProvenance {
   // The `& {}` keeps the known-value suggestions without the union collapsing to bare `string`.
@@ -116,5 +116,30 @@ export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Pro
     firstPartyAttested,
     ...(igate ? { siteId: igate } : {}),
     ...(p.ts != null ? { heardAt: p.ts } : {}),
+  };
+}
+
+/**
+ * The route of a stored position, for display: its path, how it arrived, and whether the receiving site it names
+ * attested it. `sites` are the sites this position may claim ({@link provenanceOf}); `everySite` all the instance
+ * attests, so a reader can tell an APRS-IS copy that names an attested site (`qAR,<site>`, still Tier C) from
+ * one that names a stranger.
+ */
+export function routeOf(
+  p: RawProvenance & { callsign: string; ts: number },
+  sites: Set<string>,
+  everySite: Set<string>,
+): PacketRouteInfo {
+  const prov = provenanceOf(p, sites);
+  const site = prov.siteId ?? null;
+  return {
+    src: p.callsign,
+    path: p.path ?? "",
+    heardVia: p.heard_via,
+    transport: prov.transport,
+    site,
+    attested: prov.firstPartyAttested,
+    siteAttested: !!site && everySite.has(site),
+    ts: p.ts,
   };
 }

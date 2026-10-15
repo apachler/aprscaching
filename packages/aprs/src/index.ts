@@ -23,3 +23,4 @@ export * from "./digipeat.js";
 export * from "./igate.js";
 export * from "./thirdparty.js";
 export * from "./field.js";
+export * from "./route.js";

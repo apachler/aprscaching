@@ -91,7 +91,11 @@ export function sitesFor(a: Attestation, box?: string | null): Set<string> {
  * list the admin reads. Not for deciding one frame's attestation; that is {@link sitesFor}.
  */
 export async function attestedSites(env: Env): Promise<Set<string>> {
-  const a = await attestation(env);
+  return everySite(await attestation(env));
+}
+
+/** Every site an {@link Attestation} names, whoever may claim it. */
+export function everySite(a: Attestation): Set<string> {
   const all = new Set(a.shared);
   for (const sites of a.byBox.values()) for (const s of sites) all.add(s);
   return all;
