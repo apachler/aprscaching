@@ -75,6 +75,9 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
 4. Restart the ingest. The log shows `[kiss] connected 127.0.0.1:8001`.
 5. The `kiss-tnc` port counts packets.
 
+The full Direwolf setup, with PTT, FX.25, timing and several radios, is in
+[Direwolf as your TNC](direwolf.md).
+
 Without Direwolf, the box can be the modem itself: [Soundcard port (no TNC)](#soundcard-port-no-tnc).
 
 **Count it for find verification (optional).** For a TNC you operate, add `RF_SITE_CALL=OE8APR-10`. The log
