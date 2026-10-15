@@ -24,7 +24,13 @@
  *   - An internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
  *     its `heard_via` and site claim — no receiver the operator runs heard it on amateur RF.
  */
-import { Transport as TransportEnum, type Transport, type Provenance, type PacketRouteInfo } from "@aprscaching/shared";
+import {
+  Transport as TransportEnum,
+  isKissTncPort,
+  type Transport,
+  type Provenance,
+  type PacketRouteInfo,
+} from "@aprscaching/shared";
 
 export interface RawProvenance {
   // The `& {}` keeps the known-value suggestions without the union collapsing to bare `string`.
@@ -66,7 +72,10 @@ const ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom"]);
 /** Transports that never carry first-party RF evidence: internet tunnels and licence-free carriers. */
 const NEVER_ATTESTED: ReadonlySet<Transport> = new Set<Transport>(["axudp", "axip", "meshtastic"]);
 
-/** Ingest port → transport. One table for every port a driver emits; any other port records `unknown`. */
+/**
+ * Ingest port → transport. One table for every port a driver emits, plus the KISS TNC's further channels
+ * (`kiss-tnc-<n>`, the same local TNC); any other port records `unknown`.
+ */
 const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   "aprs-is": "aprs-is",
   "kiss-tnc": "tnc",
@@ -89,6 +98,7 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
  */
 export function transportForPort(port: string, signed: boolean): Transport {
   if (signed) return "browser-rf";
+  if (isKissTncPort(port)) return "tnc";
   return Object.hasOwn(PORT_TRANSPORT, port) ? PORT_TRANSPORT[port]! : "unknown";
 }
 

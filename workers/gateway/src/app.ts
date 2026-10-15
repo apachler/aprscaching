@@ -234,6 +234,7 @@ import { refreshDeviceIds } from "./deviceid.js";
 import { handleAdminSettings } from "./sitesettings.js";
 import { handleAdminToolRegistries, handleMyToolRegistries, handleToolRegistries } from "./toolregistries.js";
 import { loadSiteSettings } from "./siteconfig.js";
+import { runCacheObjects } from "./cacheobjects.js";
 export { syncAllPeers } from "./fedpull.js";
 
 export { isGatewayPath } from "./paths.js";
@@ -354,6 +355,28 @@ async function relayTickOnce(env: Env): Promise<void> {
     console.error("relayed corroboration:", (e as Error).message);
   }
 }
+
+/** How often Node and Bun run the cache-object scheduler (`runCacheObjectsTick`). */
+export const CACHE_OBJECTS_TICK_MS = 5 * 60_000;
+
+/**
+ * The cache-object run (cacheobjects.ts), every five minutes: queue the APRS objects due now for the
+ * transmitting box. One site-setting read when `CACHE_OBJECTS` is off; it never throws.
+ */
+export async function runCacheObjectsTick(env: Env): Promise<void> {
+  if (cacheObjectsTick) return;
+  cacheObjectsTick = true;
+  try {
+    applyDerivedDefaults(env);
+    await loadSiteSettings(env);
+    await runCacheObjects(env);
+  } catch (e) {
+    console.error("cache objects:", (e as Error).message);
+  } finally {
+    cacheObjectsTick = false;
+  }
+}
+let cacheObjectsTick = false;
 
 /**
  * The full nightly job: TTL-prune every always-growing table, then the federation sync and

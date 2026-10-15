@@ -65,6 +65,7 @@ function view(env: Env, key: SiteSettingKey, row: Row | undefined) {
     options: s.options ?? null,
     format: s.format ?? null,
     maxLength: s.maxLength ?? null,
+    gate: s.gate ?? null,
     fields:
       s.format === "retention"
         ? Object.entries(RETENTION_FIELDS).map(([id, f]) => ({

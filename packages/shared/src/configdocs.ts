@@ -67,6 +67,12 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IMPORT_ALLOW: "Comma-separated import sources whose permission the operator holds (wwff, iota, gcau)",
   SERVICE_CALL: "The instance's on-air call for radio commands and mail; default the sysop's call -15",
   RADIO_REPLIES: "1 sends a text reply to each FOUND, DNF and NOTE radio command",
+  CACHE_OBJECTS: "1 sends the caches near the transmitting box on air as APRS objects",
+  CACHE_OBJECTS_BOX: "The ingest box (its BOX_ID) whose radio sends the cache objects",
+  CACHE_OBJECTS_RADIUS_KM: "Only caches this close to the transmitting box go on air",
+  CACHE_OBJECTS_INTERVAL_MIN: "Minutes between repeats of one cache object once its first announcements are out",
+  CACHE_OBJECTS_PER_RUN: "Cache objects sent in one five-minute run, at most",
+  CACHE_OBJECTS_PATH: "The digipeater path of cache objects: none, or WIDE1-1 at most",
   API_RATE_WINDOW_SEC: "Length of the public read-API rate-limit window, in seconds",
   API_RATE_ANON: "Read-API requests per window without a key",
   API_RATE_KEYED: "Read-API requests per window with a free key",
@@ -122,13 +128,15 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   APRSIS_FILTER: "APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed",
   KISS_TNC_HOST: "Host of the KISS TNC over TCP; set it to enable the TNC",
   KISS_TNC_PORT: "TCP port of the KISS TNC",
+  KISS_TNC_CHANNELS: "KISS channels (0-15) the TNC's radios use, comma-separated; each is its own port",
+  KISS_TNC_TX_CHANNEL: "KISS channel of the box's own transmissions (default: the first listed)",
   KISS_TIMING: "Send the KISS TNC its timing after each connect (off keeps its own)",
   KISS_TXDELAY: "TX delay sent to the KISS TNC, 0-255 in 10 ms steps",
   KISS_PERSIST: "Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot",
   KISS_SLOTTIME: "Slot time sent to the KISS TNC, 0-255 in 10 ms steps",
   AGWPE_HOST: "Host of the AGWPE server; set it to enable AGWPE",
   AGWPE_PORT: "TCP port of the AGWPE server",
-  AGWPE_RADIO_PORT: "AGWPE radio port to use (0 is the first)",
+  AGWPE_RADIO_PORT: "AGWPE radio port heard and transmitted on (0 is the first); other ports are ignored",
   HOSTMODE_HOST: "Host of the WA8DED host-mode TNC; set it to enable host mode",
   HOSTMODE_PORT: "TCP port of the WA8DED host-mode TNC",
   HOSTMODE_MYCALL: "Callsign the host-mode TNC is set to",
@@ -427,6 +435,24 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`)",
         "off",
       ],
+      [
+        "`CACHE_OBJECTS`",
+        "`1` sends the caches near the transmitting ingest box on air as APRS objects with the point-of-interest symbol, from the service call, through that box's radio and its transmit gates; never through APRS-IS ([Caches on air](../run/radios/caches-on-air.md))",
+        "off",
+      ],
+      ["`CACHE_OBJECTS_BOX`", "The `BOX_ID` of the ingest box whose radio sends the cache objects", "—"],
+      [
+        "`CACHE_OBJECTS_RADIUS_KM`",
+        "Only active caches this many kilometres or closer to the transmitting box's own position (`BOX_LAT`, `BOX_LON`) go on air, 1–50",
+        "`20`",
+      ],
+      [
+        "`CACHE_OBJECTS_INTERVAL_MIN`",
+        "Minutes between repeats of one cache object once its first announcements are out (at once, then 5, 10 and 20 minutes apart), 30–240",
+        "`30`",
+      ],
+      ["`CACHE_OBJECTS_PER_RUN`", "Cache objects sent in one five-minute run, at most, 1–5", "`2`"],
+      ["`CACHE_OBJECTS_PATH`", "The digipeater path of cache objects: `none`, or `WIDE1-1`", "`none`"],
     ],
   },
   {
@@ -789,9 +815,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "KISS TNC (gates digi/node/BBS/IGate)",
-        "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
+        "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
       ],
-      ["AGWPE", "`AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`)"],
+      [
+        "AGWPE",
+        "`AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`; the one radio port heard and transmitted on)",
+      ],
       [
         "WA8DED hostmode",
         "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` (`0`, the first channel)",
@@ -987,6 +1016,7 @@ export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
   accounts: "Accounts & API",
   retention: "Privacy & retention",
   imports: "Imports & data sources",
+  radio: "Caches on air",
   federation: "Federation",
   tools: "Tools",
   imprint: "Imprint & contact",
@@ -1063,6 +1093,18 @@ export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }>
   },
   UPDATE_CHECK: { label: "Look for new releases", hint: "Ask GitHub once a day whether a newer release is out" },
   HIDE_DAILY_LIMIT: { label: "Hides per day", hint: "New caches one account may hide in 24 hours; 0 lifts the limit" },
+  CACHE_OBJECTS: {
+    label: "Send caches as APRS objects",
+    hint: "Nearby radios and maps show the caches around your box; sent by its radio, never through APRS-IS",
+  },
+  CACHE_OBJECTS_BOX: { label: "Transmitting box", hint: "The BOX_ID of the ingest box whose radio sends them" },
+  CACHE_OBJECTS_RADIUS_KM: { label: "Radius", hint: "Only caches this close to the box's own position go on air" },
+  CACHE_OBJECTS_INTERVAL_MIN: {
+    label: "Repeat every",
+    hint: "How often one cache is repeated once its first few announcements are out",
+  },
+  CACHE_OBJECTS_PER_RUN: { label: "Objects per run", hint: "The most objects sent in one five-minute run" },
+  CACHE_OBJECTS_PATH: { label: "Path", hint: "No digipeater, or WIDE1-1 for one hop: never a wide path" },
 };
 
 /** The labels of the RETENTION fields. */

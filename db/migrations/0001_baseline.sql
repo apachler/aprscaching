@@ -976,7 +976,7 @@ CREATE TABLE box_pairings (
 -- through the box that heard them only while it polls and can send; otherwise through the outbox.
 CREATE TABLE box_status (
   box_id    TEXT PRIMARY KEY,
-  caps      TEXT NOT NULL,                         -- JSON {tx: boolean, rf: boolean, meshcom: string[]}
+  caps      TEXT NOT NULL,                         -- JSON {tx, rf, meshcom: string[], kiss?, pos?: {lat, lon}}
   last_seen INTEGER NOT NULL
 );
 
@@ -1036,6 +1036,19 @@ CREATE TABLE box_trusted_sites (
   trusted_by TEXT NOT NULL,
   trusted_at INTEGER NOT NULL,
   PRIMARY KEY (box_id, site)
+);
+
+-- The caches this instance sends on air as APRS objects (cacheobjects.ts, CACHE_OBJECTS): one row per object,
+-- live or being killed. A changed object starts its count again, so it is announced a few times at short
+-- intervals before it backs off to the slow rate; a killed one is deleted once its kill went out enough times.
+CREATE TABLE cache_objects (
+  name      TEXT PRIMARY KEY,                      -- the object name on air: the cache code
+  lat       REAL NOT NULL,                         -- the published coordinates (a staged cache's start)
+  lon       REAL NOT NULL,
+  comment   TEXT NOT NULL,
+  alive     INTEGER NOT NULL,                      -- 1 live, 0 being killed
+  sends     INTEGER NOT NULL DEFAULT 0,            -- times queued in this state
+  last_sent INTEGER                                -- unix seconds of the last queueing
 );
 
 

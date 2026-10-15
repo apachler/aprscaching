@@ -34,6 +34,15 @@ export const Packet = z.object({
 });
 export type Packet = z.infer<typeof Packet>;
 
+/**
+ * The ingest port a KISS TNC channel reports on: `kiss-tnc` for channel 0, `kiss-tnc-<n>` for channels 1–15 (the
+ * KISS port nibble). Every one is the same local TNC on the operator's ingest box.
+ */
+export const kissTncPort = (channel: number): string => (channel === 0 ? "kiss-tnc" : `kiss-tnc-${channel}`);
+
+/** Whether `port` names a KISS TNC channel's port ({@link kissTncPort}). */
+export const isKissTncPort = (port: string): boolean => /^kiss-tnc(-(?:[1-9]|1[0-5]))?$/.test(port);
+
 /** Hard batch ceiling: the ingest box flushes every few seconds, so a legitimate batch
  *  is tens of packets — 1000 absorbs any reconnect backlog while bounding a hostile POST. */
 export const INGEST_BATCH_MAX = 1000;

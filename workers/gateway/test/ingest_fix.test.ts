@@ -2,6 +2,7 @@
 // The position an ingested packet contributes: decoded from its payload, or pre-parsed by the ingest box,
 // and in both cases on the globe.
 import { describe, it, expect } from "vitest";
+import { encodeAprsObject } from "@aprscaching/aprs";
 import { fixOf } from "../src/ingest.js";
 
 const pkt = (payload: string, parsed?: unknown) => ({ src: "OE8APR-9", dst: "APRS", path: [], payload, parsed });
@@ -84,5 +85,18 @@ describe("ingest fix", () => {
       mice_suffix: "=",
     });
     expect(withDst("S32U6T", '`(_fn"Oj/')?.device).toEqual({ tocall: null, mice_prefix: null, mice_suffix: null });
+  });
+
+  it("never takes an object or item, such as a cache object the instance sent, as its sender's position", () => {
+    const cacheObject = encodeAprsObject({ name: "AC-1234", lat: 46.6, lon: 14.3, comment: "Old mill" });
+    expect(fixOf(pkt(cacheObject))).toMatchObject({ own: false, elsewhere: true });
+    expect(fixOf(pkt(encodeAprsObject({ name: "AC-1234", lat: 46.6, lon: 14.3, alive: false })))).toMatchObject({
+      own: false,
+      elsewhere: true,
+    });
+    expect(fixOf(pkt(")AC-1234!4636.00N\\01418.00Ei"))).toMatchObject({ own: false, elsewhere: true });
+    expect(fixOf(pkt("!4704.41N/01526.27E>hi"))).toMatchObject({ own: true, elsewhere: false });
+    // a weather station's report stands where the station does
+    expect(fixOf(pkt("!4704.41N/01526.27E_220/004g005t077"))).toMatchObject({ elsewhere: false });
   });
 });

@@ -9,6 +9,8 @@ import {
   kissWrap,
   kissFrames,
   decodeAx25,
+  encodeAprsObject,
+  isAprsObjectName,
 } from "../src/index.js";
 
 const decode = (payload: string) => decodeAprs({ src: "OE8APR-9", dst: "APRS", path: [], payload, raw: "" });
@@ -86,5 +88,54 @@ describe("APRS encoders", () => {
     const back = decodeAx25(kissFrames(kissWrap(encodeAx25(frame)))[0]!)!;
     expect(back.src).toBe("OE8APR-9");
     expect((decodeAprs(back) as { kind: string }).kind).toBe("position");
+  });
+});
+
+describe("APRS object encoder", () => {
+  const at = new Date(Date.UTC(2026, 9, 15, 7, 5));
+
+  it("encodes a live object with the point-of-interest symbol that round-trips through the decoder", () => {
+    const info = encodeAprsObject({ name: "AC-1234", lat: 47.0735, lon: 15.4378, comment: "Old mill", at });
+    expect(info.startsWith(";AC-1234  *150705z\\")).toBe(true);
+    expect(info.length).toBe(1 + 9 + 1 + 7 + 13 + "Old mill".length);
+    const d = decode(info) as {
+      kind: string;
+      name: string;
+      alive: boolean;
+      lat: number;
+      lon: number;
+      comment?: string;
+      timestamp?: string;
+      symbol: { table: string; code: string; label: string };
+    };
+    expect(d).toMatchObject({ kind: "object", name: "AC-1234", alive: true, timestamp: "150705z" });
+    expect(d.lat).toBeCloseTo(47.0735, 4);
+    expect(d.lon).toBeCloseTo(15.4378, 4);
+    expect(d.symbol).toMatchObject({ table: "\\", code: "i", label: "Point of interest" });
+    expect(d.comment).toBe("Old mill");
+  });
+
+  it("round-trips the southern and western hemispheres", () => {
+    const d = decode(encodeAprsObject({ name: "AC-9", lat: -33.8568, lon: -151.2153, at })) as {
+      lat: number;
+      lon: number;
+    };
+    expect(d.lat).toBeCloseTo(-33.8568, 4);
+    expect(d.lon).toBeCloseTo(-151.2153, 4);
+  });
+
+  it("encodes a killed object", () => {
+    const info = encodeAprsObject({ name: "AC-1234", lat: 47.07, lon: 15.43, alive: false, at });
+    expect(info.slice(0, 11)).toBe(";AC-1234  _");
+    expect(decode(info)).toMatchObject({ kind: "object", name: "AC-1234", alive: false });
+  });
+
+  it("refuses a name it cannot send whole, and caps the comment at 43 bytes", () => {
+    expect(() => encodeAprsObject({ name: "AC-1234567", lat: 0, lon: 0 })).toThrow(RangeError);
+    expect(() => encodeAprsObject({ name: "", lat: 0, lon: 0 })).toThrow(RangeError);
+    expect(isAprsObjectName("AC-1")).toBe(true);
+    expect(isAprsObjectName(" AC")).toBe(false);
+    const info = encodeAprsObject({ name: "AC-1", lat: 0, lon: 0, comment: "x".repeat(80), at });
+    expect(info.length).toBe(1 + 9 + 1 + 7 + 13 + 43);
   });
 });
