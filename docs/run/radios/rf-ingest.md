@@ -43,9 +43,9 @@ fit is cut between letters, never inside one.
 
 | Transport | Turn on with | What it does |
 |-----------|-------------|--------------|
-| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (for example Direwolf: [Direwolf as your TNC](direwolf.md)). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. A MeshCom node's KISS port is refused: the box logs an error and ignores it, because a frame the MeshCom server relayed would read as heard directly. Listen to a node with `MESHCOM_NODE`. |
+| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001; `KISS_TNC_CHANNELS`, 0; `KISS_TNC_TX_CHANNEL`) | Connects to a KISS TNC (for example Direwolf: [Direwolf as your TNC](direwolf.md)). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. Each KISS channel in `KISS_TNC_CHANNELS` is its own port (`kiss-tnc`, `kiss-tnc-2`, …) that repeats and answers on its own channel; frames on other channels are ignored ([Several channels](direwolf.md#several-channels)). The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. A MeshCom node's KISS port is refused: the box logs an error and ignores it, because a frame the MeshCom server relayed would read as heard directly. Listen to a node with `MESHCOM_NODE`. |
 | **Soundcard port** | `SOUNDCARD_DEVICE` (+ `SOUNDCARD_*`, `SOUNDCARD_PORTS`) | The box is the 1200-baud AFSK modem: ALSA's `arecord` and `aplay` with a USB sound card or a sound HAT, keyed by a PTT driver (CM108 GPIO, Linux GPIO, serial RTS/DTR, CAT, rigctld or VOX). Receives like a KISS TNC and carries the same functions. Transmit is off by default and needs a control-verified call; a watchdog bounds the key time. Setup: [Soundcard port](soundcard.md). |
-| **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
+| **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Only frames on `AGWPE_RADIO_PORT` count; the engine's other radio ports are ignored. Receive only. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
 | **LoRa APRS** | `LORA_APRS_HOST` (+ `LORA_APRS_PORT`, 8001; `LORA_APRS_PROTOCOL`; `LORA_APRS_PRESET`) | Reads a LoRa APRS IGate's TNC server (CA2RXU firmware), as KISS frames or text lines. Takes the LoRa packet's TNC2 line with or without its `0x3C 0xFF 0x01` prefix, or the IGate's AX.25 rendering of it; drops lines the IGate passed on from APRS-IS. Logs the radio settings and a packet's airtime. Receive only. Setup: [LoRa APRS](lora-aprs.md). |
 | **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes send to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Accepts only licensed nodes (licensed ham mode on, callsign as long name), under their callsign; drops licence-free nodes. Always Tier C. The browser's Web Serial path uses the same decoder and rule. |
@@ -64,7 +64,7 @@ fit is cut between letters, never inside one.
 ### TNC timing
 
 After each connect, the box sends the KISS TNC three settings that decide when it keys the radio: TX delay,
-persist and slot time. A TNC that restarted is back on these values at the next connect. The frames key
+persist and slot time, on every channel in `KISS_TNC_CHANNELS`. A TNC that restarted is back on these values at the next connect. The frames key
 nothing, so the box sends them whether or not it transmits.
 
 | Setting | Default | What it does |

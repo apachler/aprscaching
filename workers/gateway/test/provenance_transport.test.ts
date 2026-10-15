@@ -33,6 +33,30 @@ describe("transportForPort", () => {
     expect(transportForPort("kiss-tnc", true)).toBe("browser-rf");
   });
 
+  it("every KISS TNC channel's port is the TNC, attested exactly like channel 0 and never more", () => {
+    const sites = parseAttestedSites("OE8XXX");
+    for (const port of ["kiss-tnc-1", "kiss-tnc-2", "kiss-tnc-15"]) {
+      expect(transportForPort(port, false)).toBe("tnc");
+      expect(transportForPort(port, true)).toBe("browser-rf");
+      const transport = transportForPort(port, false);
+      for (const heard_via of HEARD)
+        for (const path of PATHS)
+          for (const igate_call of IGATES)
+            expect(provenanceOf({ heard_via, path, igate_call, transport }, sites).firstPartyAttested).toBe(
+              provenanceOf({ heard_via, path, igate_call, transport: transportForPort("kiss-tnc", false) }, sites)
+                .firstPartyAttested,
+            );
+      expect(provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", transport }, sites).firstPartyAttested).toBe(true);
+      expect(
+        provenanceOf({ heard_via: "aprs_is", path: "WIDE1-1,qAR,OE8XXX", igate_call: "OE8XXX", transport }, sites)
+          .firstPartyAttested,
+      ).toBe(false);
+    }
+    // only channels 1-15 exist: anything else is no TNC port
+    for (const port of ["kiss-tnc-0", "kiss-tnc-16", "kiss-tnc-02", "kiss-tnc-x", "kiss-tnc-"])
+      expect(transportForPort(port, false)).toBe("unknown");
+  });
+
   it("an unknown port records `unknown`", () => {
     expect(transportForPort("something-new", false)).toBe("unknown");
     expect(transportForPort("", false)).toBe("unknown");
