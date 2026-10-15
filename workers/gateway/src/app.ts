@@ -139,6 +139,7 @@ import {
 } from "./meshcom.js";
 import { collectRelayedCorroborations, retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications, handleAdminCallsigns } from "./admin.js";
+import { handleAdminExclusions } from "./exclusions.js";
 import { handleClaimStart, handleClaimStatus } from "./claims.js";
 import { handleMyApiKeys, handleRevokeMyApiKey, handleAdminApiKeys, handleAdminRevokeApiKey } from "./apikeys.js";
 import { handleAdminSetup } from "./setup.js";
@@ -589,6 +590,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (adminVerif) return handleAdminVerifications(req, env, adminVerif[1]);
   const adminCall = /^\/api\/admin\/callsigns\/([A-Za-z0-9-]{3,12})$/.exec(p);
   if (adminCall) return handleAdminCallsigns(req, env, adminCall[1]!);
+  if (p === "/api/admin/exclusions") return handleAdminExclusions(req, env);
+  const exclusion = /^\/api\/admin\/exclusions\/([A-Za-z0-9-]{3,12})$/.exec(p);
+  if (exclusion) return handleAdminExclusions(req, env, exclusion[1]);
   if (p === "/api/admin/adoptions") return handleAdminAdoptions(req, env);
   if (p === "/api/admin/api-keys" && m === "GET") return handleAdminApiKeys(req, env);
   const adminKey = /^\/api\/admin\/api-keys\/(\d+)$/.exec(p);

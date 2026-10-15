@@ -41,6 +41,7 @@ import {
 } from "./downsample.js";
 import type { HeardEvent, Transport } from "@aprscaching/shared";
 import { DUPE_WINDOW_SEC, planDupes, recentCopies, type Fate } from "./dupes.js";
+import { excludedCalls, excludedPacket } from "./exclusions.js";
 
 /**
  * Position-bearing decoded data (position/object/item/weather with a fix). A fix outside ±90° / ±180°
@@ -160,7 +161,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // the trusted path's job (self-host ingest secret / apps/ingest), so foreign-src frames are dropped
   // from an untrusted batch rather than stored under a callsign the signer does not hold.
   const signerBase = signer ? baseCall(signer.callsign) : null;
-  const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  const own = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
+  // A station excluded on its licensee's objection (exclusions.ts) leaves nothing here: its frames are dropped
+  // before anything is stored, fanned out or acted on. Another station's frame naming it in its path stays.
+  const excluded = await excludedCalls(env);
+  const packets = excluded.size ? own.filter((p) => !excludedPacket(excluded, p)) : own;
   // An ingest posts the info field it heard one character per byte. From here on it is the text a station
   // sent: UTF-8 where the bytes are valid UTF-8, else one character per byte. Gating and digipeating happen on
   // the ingest, on the bytes; a signed batch was verified over the bytes above.
@@ -183,6 +188,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   }[] = [];
   const fixes: { p: (typeof packets)[number]; fix: NonNullable<ReturnType<typeof fixOf>>; transport: Transport }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
+  // a dropped frame still counts as heard on its port: the counters name no station
+  if (packets.length !== own.length) {
+    const kept = new Set(packets);
+    for (const p of own) if (!kept.has(p)) portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
+  }
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
   const heard: Heard[] = []; // every station of the batch and its route, for the Mailbox

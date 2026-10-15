@@ -9,6 +9,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireIngestOrOperator } from "./admin.js";
+import { excludedCalls, isExcludedCall } from "./exclusions.js";
 
 /**
  * Upsert the per-port MHeard entries for a batch (best-effort; called from ingest). A station heard
@@ -56,6 +57,8 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
     port?: string;
   };
   if (!b.dest || !b.alias || !b.neighbor) return json({ error: "dest + alias + neighbor required" }, { status: 400 });
+  // a route to a station excluded on its licensee's objection (exclusions.ts) is not kept
+  if (isExcludedCall(await excludedCalls(env), b.dest)) return json({ ok: true, excluded: true });
   await env.DB.prepare(
     `INSERT INTO netrom_nodes (dest, alias, neighbor, quality, port, heard_at) VALUES (?,?,?,?,?,?)
      ON CONFLICT(dest) DO UPDATE SET alias=excluded.alias, neighbor=excluded.neighbor, quality=excluded.quality, port=excluded.port, heard_at=excluded.heard_at`,

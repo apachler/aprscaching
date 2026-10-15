@@ -1654,6 +1654,18 @@ CREATE TABLE callsign_suspensions (
   at       INTEGER NOT NULL
 );
 
+-- A station kept out on its licensee's objection to the processing of its on-air data (GDPR Art. 21). The sysop
+-- lists the base call; it covers every SSID, since the objection comes from the licensee. The ingest stores, fans
+-- out and acts on nothing the station sends, and adding the call purges what the instance holds of the station's
+-- own transmissions (exclusions.ts). The row is the minimum kept to honour the objection, so it stays outside
+-- export and erasure until the sysop lifts it.
+CREATE TABLE excluded_calls (
+  callsign   TEXT PRIMARY KEY,                    -- base call
+  category   TEXT NOT NULL,                       -- objection | erasure | other
+  created_at INTEGER NOT NULL,
+  created_by TEXT                                 -- the sysop's account_id; NULL for a scripted request, and after that account's erasure
+);
+
 -- Every path that gives an account a call writes account_callsigns: a call under a suspension in force never
 -- gets there, whichever handler is asked.
 CREATE TRIGGER account_callsigns_suspended BEFORE INSERT ON account_callsigns
