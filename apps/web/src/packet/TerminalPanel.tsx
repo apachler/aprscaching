@@ -8,7 +8,12 @@
 import { Panel, Icon } from "../ui/index.js";
 import { PacketTerminal } from "./PacketTerminal.js";
 
-export function TerminalPanel(props: { callsign: string; verified: boolean; onClose: () => void }) {
+export function TerminalPanel(props: {
+  callsign: string;
+  verified: boolean;
+  onClose: () => void;
+  onRadio?: () => void;
+}) {
   return (
     <Panel
       title={
@@ -20,7 +25,7 @@ export function TerminalPanel(props: { callsign: string; verified: boolean; onCl
       onClose={props.onClose}
       wide
     >
-      <PacketTerminal callsign={props.callsign} verified={props.verified} />
+      <PacketTerminal callsign={props.callsign} verified={props.verified} onRadio={props.onRadio} />
     </Panel>
   );
 }
