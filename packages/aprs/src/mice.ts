@@ -13,6 +13,7 @@
  * 'A'-'K' carry only message bits, so they appear in the first three characters alone.
  */
 import { isValidLatLon } from "./geo.js";
+import type { MicEDeviceCode } from "./types.js";
 
 export interface MicEFix {
   lat: number;
@@ -25,6 +26,8 @@ export interface MicEFix {
   messageType: string;
   ambiguity: number;
   comment?: string;
+  /** The device code around the status text, when it leads with one (see {@link MicEDeviceCode}). */
+  device?: MicEDeviceCode;
 }
 
 // standard message table, indexed by the 3 message bits (A,B,C) read as a 3-bit number
@@ -162,6 +165,7 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   const text = statusText(info.slice(9));
   if (text.altitudeM !== undefined) fix.altitudeM = text.altitudeM;
   if (text.comment) fix.comment = text.comment;
+  if (text.device) fix.device = text.device;
   return fix;
 }
 
@@ -171,7 +175,7 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
  * the device's suffix (one character after a Kenwood prefix, two after the others). Prefix and suffix name
  * the radio and are not part of the comment.
  */
-function statusText(rest: string): { altitudeM?: number; comment?: string } {
+function statusText(rest: string): { altitudeM?: number; comment?: string; device?: MicEDeviceCode } {
   const prefix = /^[>\]`']/.test(rest) ? rest[0]! : "";
   let text = rest.slice(prefix.length);
   let altitudeM: number | undefined;
@@ -181,11 +185,18 @@ function statusText(rest: string): { altitudeM?: number; comment?: string } {
     altitudeM = v - 10000;
     text = text.slice(4);
   }
+  // the device code's raw tail, taken before the comment is stripped and trimmed (a suffix may be a space)
+  const tail = prefix === ">" || prefix === "]" ? 1 : 2;
+  const device = prefix ? { prefix, suffix: text.length >= tail ? text.slice(-tail) : "" } : undefined;
   if (prefix === ">") text = text.replace(/[=^&]$/, "");
   else if (prefix === "]") text = text.replace(/=$/, "");
   else if (prefix) text = text.replace(/[_|].$/, "");
   const comment = text.trim();
-  return { ...(altitudeM !== undefined ? { altitudeM } : {}), ...(comment ? { comment } : {}) };
+  return {
+    ...(altitudeM !== undefined ? { altitudeM } : {}),
+    ...(comment ? { comment } : {}),
+    ...(device ? { device } : {}),
+  };
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;

@@ -228,6 +228,7 @@ export const CONFIG_KEYS = {
     values: ["0", "1", "false", "no", "true", "yes"],
     site: { group: "updates" },
   },
+  DEVICEID_URL: { type: "url", units: ["gateway"] },
   TOOL_REGISTRIES: { type: "json", units: ["gateway"] },
   TOOL_REGISTRIES_PLAYERS: {
     type: "enum",

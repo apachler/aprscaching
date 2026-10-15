@@ -80,7 +80,9 @@ Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Ma
 and EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016).
 Imported places name
 and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
-Radio Country Files by Jim Reisert, AD1C (MIT).
+Radio Country Files by Jim Reisert, AD1C (MIT). Device names on station pages come from
+[aprs-deviceid](https://github.com/aprsorg/aprs-deviceid), the APRS device identification database by Hessu,
+OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime.
 
 Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur callsign list,
 reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media Authority information.

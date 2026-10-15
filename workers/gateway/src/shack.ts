@@ -16,6 +16,7 @@ import { serviceCall } from "./servicecall.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
 import { routeOf } from "./provenance.js";
 import { attestation, everySite, sitesFor } from "./attestedsites.js";
+import { stationDevice, type DeviceColumns } from "./deviceid.js";
 
 // ------------------------------------------------------------- station registry
 function bbox(u: URL): { sql: string; binds: number[] } {
@@ -180,13 +181,16 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(
     `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
-            s.range_km AS rangeKm, s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner
+            s.range_km AS rangeKm, s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner,
+            s.tocall, s.mice_prefix, s.mice_suffix
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
   )
     .bind(cs)
-    .first<{ roles: string | null; owner: string | null }>();
+    .first<{ roles: string | null; owner: string | null } & DeviceColumns>();
   if (!st) return json({ error: "unknown station" }, { status: 404 });
-  const { owner, ...station } = st;
+  const { owner, tocall, mice_prefix, mice_suffix, ...station } = st;
+  // the device its last stored position names, from the device database; none when that is off or unknown
+  const device = await stationDevice(env, { tocall, mice_prefix, mice_suffix }).catch(() => null);
   const stRoles = rolesArr(station.roles);
   // Whether the station is in an operator's registry, and whether that registry is the viewer's own, so
   // the panel offers "Add to my stations" only where adding can succeed. The owner's id never leaves.
@@ -239,6 +243,7 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
       registered,
       mine,
       lastRoute,
+      device,
     },
   });
 }

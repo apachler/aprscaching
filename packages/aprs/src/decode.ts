@@ -259,6 +259,7 @@ function decodeFrame(frame: ParsedFrame, depth: number): AprsData {
         comment: me.comment,
         ambiguity: me.ambiguity,
         messageType: me.messageType,
+        ...(me.device ? { micEDevice: me.device } : {}),
       };
   }
 

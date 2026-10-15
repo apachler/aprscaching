@@ -22,3 +22,7 @@ export const OTHERS_NOT_AFFILIATED =
   "APRScaching is not affiliated with, sponsored by, or endorsed by Groundspeak, Inc. (Geocaching HQ), Geocaching " +
   "Australia, Meshtastic LLC, ARRL, Parks on the Air (POTA), Summits on the Air (SOTA), World Wide Flora and Fauna " +
   "(WWFF), World Wide Bunkers on the Air (WWBOTA), Islands on the Air (IOTA), or the TAK Product Center.";
+
+/** The device database a station page names devices from; its licence asks for the credit wherever it is used. */
+export const DEVICEID_CREDIT = "Device names from aprs-deviceid, CC BY-SA 2.0";
+export const DEVICEID_LINK = "https://github.com/aprsorg/aprs-deviceid";

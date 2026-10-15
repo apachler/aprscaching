@@ -88,4 +88,13 @@ describe("legal pages", () => {
     const off = await handlePrivacyPage({ ...configured, UPDATE_CHECK: "0" } as Env).text();
     expect(off).not.toContain("api.github.com");
   });
+
+  it("privacy names the device database host only while DEVICEID_URL is set", async () => {
+    expect(await handlePrivacyPage(configured).text()).not.toContain("APRS device database");
+    const on = await handlePrivacyPage({
+      ...configured,
+      DEVICEID_URL: "https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json",
+    } as Env).text();
+    expect(on).toContain("APRS device database</strong> (aprs-deviceid.aprsfoundation.org)");
+  });
 });

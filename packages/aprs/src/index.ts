@@ -14,6 +14,7 @@ export * from "./rigctld.js";
 export * from "./symbols.js";
 export * from "./compressed.js";
 export * from "./mice.js";
+export * from "./deviceid.js";
 export * from "./decode.js";
 export * from "./ax25.js";
 export * from "./encode.js";

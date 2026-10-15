@@ -470,6 +470,20 @@ export interface StationDetail extends StationSummary {
   mine: boolean;
   /** The route of the station's latest stored position; null when none is stored. */
   lastRoute?: PacketRouteInfo | null;
+  /**
+   * The device behind its last stored position, named by its tocall or Mic-E device code from the aprs-deviceid
+   * database (CC BY-SA 2.0, credited wherever it shows); null when the database is off, not fetched yet, or does
+   * not know it.
+   */
+  device?: StationDevice | null;
+}
+
+/** A sending device: its model (or vendor when the database names no model), vendor and class label. */
+export interface StationDevice {
+  name: string;
+  vendor?: string;
+  /** The device class as the database shows it: `HT`, `Rig`, `Desktop software`… */
+  class?: string;
 }
 
 // ---- operated-stations registry: the operator's own stations ----

@@ -667,7 +667,13 @@ CREATE TABLE stations (
   altitude_m   INTEGER,
   range_km     REAL,                               -- radio range: sent (RNG, compressed) or from its PHG
   comment      TEXT,
-  source_call  TEXT                                -- the gating IGate
+  source_call  TEXT,                               -- the gating IGate
+  -- what names the device of its last stored position (deviceid.ts): the tocall (the destination without SSID)
+  -- of an ordinary packet, or the Mic-E device code (prefix character, suffix characters) of a Mic-E one, whose
+  -- destination is position data
+  tocall       TEXT,
+  mice_prefix  TEXT,
+  mice_suffix  TEXT
 );
 CREATE INDEX idx_stations_geo ON stations (lat, lon);
 
@@ -1716,6 +1722,17 @@ CREATE TABLE update_check (
   tag        TEXT,
   url        TEXT,
   etag       TEXT,
+  checked_at INTEGER NOT NULL
+);
+
+-- The last copy of the APRS device identification database (aprs-deviceid, CC BY-SA 2.0), as the daily refresh
+-- fetched it from DEVICEID_URL (deviceid.ts): the JSON body verbatim, the ETag that keeps the next request a cheap
+-- 304, and when it was fetched and last checked. A restart or an offline box keeps naming devices from it.
+CREATE TABLE deviceid_cache (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  body       TEXT,
+  etag       TEXT,
+  fetched_at INTEGER,
   checked_at INTEGER NOT NULL
 );
 
