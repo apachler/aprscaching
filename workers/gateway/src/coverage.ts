@@ -46,7 +46,7 @@ interface Row {
 const rolesOf = (csv: string | null): Set<string> => new Set((csv ?? "").split(",").map((s) => s.trim()));
 
 /** A digipeater by its symbol (`/#`, or `#` under an overlay) or its registry roles. */
-export function isDigipeater(symbol: string | null, roles: string | null): boolean {
+function isDigipeater(symbol: string | null, roles: string | null): boolean {
   return symbol?.[1] === "#" || rolesOf(roles).has("digipeater");
 }
 
@@ -54,7 +54,7 @@ export function isDigipeater(symbol: string | null, roles: string | null): boole
  * Pure: the circle to draw for a station. A range it advertises (more than zero) is drawn as sent, up to
  * COVERAGE_MAX_KM; none gets the default for a digipeater or for any other receiver, marked estimated.
  */
-export function coverageRange(rangeKm: number | null, digipeater: boolean): { rangeKm: number; estimated: boolean } {
+function coverageRange(rangeKm: number | null, digipeater: boolean): { rangeKm: number; estimated: boolean } {
   if (rangeKm != null && Number.isFinite(rangeKm) && rangeKm > 0)
     return { rangeKm: Math.min(rangeKm, COVERAGE_MAX_KM), estimated: false };
   return { rangeKm: digipeater ? COVERAGE_DEFAULT_KM.digipeater : COVERAGE_DEFAULT_KM.receiver, estimated: true };
