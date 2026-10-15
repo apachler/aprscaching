@@ -58,6 +58,11 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
   comment?: string;
   /** the station's own position, not an object, item or weather report it sent */
   own: boolean;
+  /**
+   * the fix places an object or item the station sent, which stands somewhere else: it is never stored as the
+   * station's position, so an object on a cache (the instance's own cache objects among them) is no find evidence
+   */
+  elsewhere: boolean;
   /** what names the sending device (deviceid.ts): the tocall, or a Mic-E packet's device code */
   device: DeviceColumns;
 } | null {
@@ -78,6 +83,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       rangeKm: d.rangeKm,
       comment: d.comment,
       own: d.kind === "position",
+      elsewhere: d.kind === "object" || d.kind === "item",
       device: deviceColumns(p.dst, p.payload, d.micEDevice),
     };
   }
@@ -89,6 +95,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       lon: pp.lon,
       symbol: typeof pp.symbol === "string" ? pp.symbol : undefined,
       own: true,
+      elsewhere: false,
       device: deviceColumns(p.dst, p.payload, undefined),
     };
   return null;
@@ -333,7 +340,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const fix = fixOf(p);
     // a duplicate copy is no new hearing; an RF copy of one first heard over APRS-IS is
     if (fate.kind !== "skip") heardEvents.push(heardEventOf(p, data, fix));
-    if (!fix) continue;
+    // an object or item is not where its sender stands: never the station's position, track or find evidence
+    if (!fix || fix.elsewhere) continue;
     positions.push({
       src: p.src,
       lat: fix.lat,

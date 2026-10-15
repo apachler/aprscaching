@@ -28,7 +28,7 @@ import { json } from "./http.js";
 import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
-import { baseCall } from "@aprscaching/aprs";
+import { baseCall, isValidLatLon } from "@aprscaching/aprs";
 import { boxOwner } from "./boxowner.js";
 import { serviceCall } from "./servicecall.js";
 import { boxPrincipal } from "./boxprincipal.js";
@@ -36,6 +36,12 @@ import { BOX_COMMAND_QUEUED_TTL_S } from "./retention.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
+/**
+ * The transmissions the gateway itself queues under a call (cacheobjects.ts), never accepted from the enqueue API.
+ * They are leased under the same control-verification check as the operator's transmit kinds.
+ */
+const SYSTEM_TX_KINDS = new Set(["object"]);
+const leasedTx = (kind: string) => TX_KINDS.has(kind) || SYSTEM_TX_KINDS.has(kind);
 const boxAuth = ingestOrBoxOk;
 
 /** Does `accountId` own `boxId` (boxowner.ts)? A box with no owner takes no session commands. */
@@ -174,6 +180,8 @@ interface BoxCaps {
   meshcom: string[];
   /** The MeshCom nodes the box reaches over KISS, which send from the service call and report its acks. */
   kiss?: string[];
+  /** The box's own position (`BOX_LAT`, `BOX_LON`), reported only while it accepts remote transmits. */
+  pos?: { lat: number; lon: number };
 }
 
 /** Parse the capability report a box sends with its poll (`?tx=1&rf=1&meshcom=CALL,…`). */
@@ -187,7 +195,15 @@ function parseBoxCaps(url: URL): BoxCaps {
     .split(",")
     .map((c) => c.trim().toUpperCase())
     .filter((c) => meshcom.includes(c));
-  return { tx: url.searchParams.get("tx") === "1", rf: url.searchParams.get("rf") === "1", meshcom, kiss };
+  const tx = url.searchParams.get("tx") === "1";
+  const num = (k: string) => {
+    const v = url.searchParams.get(k);
+    return v ? Number(v) : NaN;
+  };
+  const lat = num("lat"),
+    lon = num("lon");
+  const pos = tx && isValidLatLon(lat, lon) ? { pos: { lat, lon } } : {};
+  return { tx, rf: url.searchParams.get("rf") === "1", meshcom, kiss, ...pos };
 }
 
 /** A box that polled within this many seconds is considered reachable for a reply. */
@@ -224,6 +240,16 @@ export async function enqueueSystemBoxCommand(
     .run();
 }
 
+/**
+ * The statement that queues an APRS object the gateway sends under `callsign` (cacheobjects.ts). The callsign is
+ * checked for control-verification again when the box leases it, and the box applies its own transmit gates.
+ */
+export function systemObjectCommand(env: Env, boxId: string, callsign: string, payload: Record<string, unknown>) {
+  return env.DB.prepare(
+    "INSERT INTO box_commands (box_id, callsign, kind, payload, status, created_at) VALUES (?, ?, 'object', ?, 'queued', ?)",
+  ).bind(boxId, callsign, JSON.stringify(payload), nowS());
+}
+
 /** GET /api/box/:id/commands — the box leases its queued commands (and they're marked sent). */
 export async function handleBoxPoll(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
@@ -252,10 +278,10 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
   // it was queued fails it here
   const verified = await verificationsOf(
     env,
-    leased.flatMap((r) => (TX_KINDS.has(r.kind) && r.callsign ? [r.callsign] : [])),
+    leased.flatMap((r) => (leasedTx(r.kind) && r.callsign ? [r.callsign] : [])),
   );
   const unverified = (r: { callsign: string | null; kind: string }) =>
-    TX_KINDS.has(r.kind) && !verified.has(baseCall((r.callsign ?? "").toUpperCase()));
+    leasedTx(r.kind) && !verified.has(baseCall((r.callsign ?? "").toUpperCase()));
   const rows = leased.filter((r) => !unverified(r));
   if (leased.length) {
     const t = nowS();
