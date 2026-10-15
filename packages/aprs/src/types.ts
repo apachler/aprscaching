@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { SymbolInfo } from "./symbols.js";
+import type { Locator } from "./locator.js";
 
 export interface ParsedFrame {
   src: string;
@@ -33,6 +34,15 @@ export interface DecodedPosition {
   ambiguity?: number;
   messageType?: string; // MIC-E standard/custom message
   timestamp?: string; // raw timestamp token when present
+  /**
+   * The datum a `!DAO!` token names (`W` WGS84, `N` NAD27, `O` OSGB36, a digit for a local one). The token's
+   * added digits are already in lat/lon and the token is out of the comment; without one the datum is WGS84.
+   */
+  datum?: string;
+  /** A Maidenhead locator leading a Mic-E status text; the Mic-E position stays the fix. */
+  locator?: Locator;
+  /** The NMEA sentence (`RMC`, `GGA`, `GLL`, `WPL`) a raw GPS report came in, its timestamp `HHMMSSh`. */
+  nmea?: string;
 }
 /** The PHG extension, `PHGphgd`, or its probe form `PHGphgdR/` with a beacon rate. */
 export interface PowerHeightGain {
@@ -101,7 +111,11 @@ export type AprsData =
   | ({ kind: "weather" } & DecodedWeather & Partial<DecodedPosition>)
   | ({ kind: "telemetry" } & DecodedTelemetry)
   | ({ kind: "message" } & DecodedMessage)
-  | { kind: "status"; text: string; timestamp?: string }
+  /**
+   * A status report. One led by a Maidenhead locator carries it and its symbol: the cell's centre places the
+   * station coarsely (a 6-character subsquare is about 6 × 4.6 km) and is never a position fix.
+   */
+  | { kind: "status"; text: string; timestamp?: string; locator?: Locator; symbol?: SymbolInfo }
   /**
    * Third-party traffic (`}`): a packet another station or gateway carries for its sender. `inner` is that
    * packet's header and `data` its decoded content, attributed to `inner.src`, never to the carrier.

@@ -78,3 +78,27 @@ describe("data extension scan is linear", () => {
     expect(d(`${pos}\\000/000/270/729`).df).toEqual({ bearingDeg: 270, hits: 7, rangeKm: 6.4, accuracyDeg: 1 });
   });
 });
+
+describe("!DAO!, NMEA and locator scans are linear", () => {
+  const pos = "!4903.50N/07201.75W>";
+  it("a comment of many near-tokens, a long NMEA sentence and a long locator status decode fast", () => {
+    for (const payload of [
+      `${pos}${"!W1".repeat(N)}`,
+      `${pos}${"!Wab!".repeat(N)}`,
+      `${pos}${"!".repeat(N)}`,
+      `$GPRMC,${",".repeat(N)}`,
+      `$GPGGA,${"*".repeat(N)}`,
+      `>IO91SX/G ${"IO91SX/G".repeat(N)}`,
+      `>${"IO91".repeat(N)}`,
+    ]) {
+      const { ms } = timed(() => decodeAprs(frame(payload)));
+      expect(ms).toBeLessThan(1000);
+    }
+  });
+
+  it("keeps the semantics", () => {
+    expect(decodeAprs(frame(`${pos}x${"!W1".repeat(10)}!W12!`))).toMatchObject({ lat: 49.05835, datum: "W" });
+    expect(decodeAprs(frame(`$GPRMC,${",".repeat(N)}`)).kind).toBe("other");
+    expect(decodeAprs(frame(">IO91SX/G hi"))).toMatchObject({ text: "hi", locator: { grid: "IO91SX" } });
+  });
+});
