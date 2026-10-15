@@ -4,7 +4,7 @@
  * (first payload byte) to produce a typed `AprsData`. Builds on parsePosition (uncompressed),
  * parseCompressed (base-91), decodeMicE, plus object/item/message/status/weather/telemetry.
  */
-import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather } from "./types.js";
+import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather, DfBearing } from "./types.js";
 import { lookupSymbol } from "./symbols.js";
 import { parseCompressed } from "./compressed.js";
 import { decodeMicE } from "./mice.js";
@@ -43,10 +43,107 @@ function maskMinutes(mmhh: string, level: number): string {
   return digits.join("");
 }
 
+/** Kilometres in one statute mile: PHG heights work out to a range in miles, and RNG sends one. */
+const KM_PER_MI = 1.609344;
+const M_PER_FT = 0.3048;
+
 /**
- * Course/speed "CSE/SPD" and altitude "/A=dddddd" out of a comment string. The course runs 001–360;
- * 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its course
- * and speed in the cs bytes, so its comment is never read for them.
+ * The 7-byte data extensions that stand in place of course/speed (APRS 1.2 chapter 7). The height code is
+ * any character from `0` up (`:` is 10240 ft, `;` 20480 ft, for balloons and aircraft); the directivity
+ * runs 0 (omni) to 8 (north); PHG's probe form adds a beacon rate, `1`–`9` then `A` for 10, and a `/`.
+ */
+const PHG_RE = /^PHG(\d)([0-~])(\d)([0-8])(?:([0-9A-Z])\/)?/;
+const RNG_RE = /^RNG(\d{4})/;
+const DFS_RE = /^DFS(\d)([0-~])(\d)([0-8])/;
+/** A DF report's `/BRG/NRQ`, right after its course/speed. */
+const BRG_NRQ_RE = /^\/(\d{3})\/(\d)(\d)(\d)/;
+/** The beamwidth each DF quality digit 1–9 stands for; 0 is useless. */
+const DF_ACCURACY_DEG = [0, 240, 120, 64, 32, 16, 8, 4, 2, 1];
+
+/** Height in feet for a PHG/DFS height code: 10 ft doubled per step from `0`. */
+const heightFt = (code: string) => 10 * 2 ** (code.charCodeAt(0) - 48);
+/** A directivity code as degrees: 1–8 in steps of 45° from north-east round to north; 0 is omni. */
+const directivity = (code: string) => (code === "0" ? {} : { directivityDeg: Number(code) * 45 });
+
+/**
+ * The usable radio range from a PHG, in miles: sqrt(2 · haat · sqrt(power/10 · gain/2)), haat in feet and
+ * gain as a ratio. PHG5132 (25 W, 20 ft, 3 dB) gives about 7.9 miles.
+ */
+function phgRangeMi(powerW: number, haatFt: number, gainDb: number): number {
+  return Math.sqrt(2 * haatFt * Math.sqrt((powerW / 10) * (10 ** (gainDb / 10) / 2)));
+}
+
+/**
+ * The data extension at the start of an uncompressed position's comment: PHG, RNG or DFS. Returns the
+ * comment after it, or the comment unchanged when none leads it.
+ */
+function applyRangeExtension(fix: DecodedPosition, comment: string): string {
+  const phg = PHG_RE.exec(comment);
+  if (phg) {
+    const powerW = Number(phg[1]) ** 2,
+      ft = heightFt(phg[2]!),
+      gainDb = Number(phg[3]),
+      rate = phg[5];
+    fix.phg = {
+      powerW,
+      heightM: round1(ft * M_PER_FT),
+      gainDb,
+      ...directivity(phg[4]!),
+      ...(rate ? { beaconsPerHour: parseInt(rate, 36) } : {}),
+    };
+    fix.rangeKm = round1(phgRangeMi(powerW, ft, gainDb) * KM_PER_MI);
+    return comment.slice(phg[0].length);
+  }
+  const rng = RNG_RE.exec(comment);
+  if (rng) {
+    fix.rangeKm = round1(Number(rng[1]) * KM_PER_MI);
+    return comment.slice(7);
+  }
+  const dfs = DFS_RE.exec(comment);
+  if (dfs) {
+    fix.dfs = {
+      strength: Number(dfs[1]),
+      heightM: round1(heightFt(dfs[2]!) * M_PER_FT),
+      gainDb: Number(dfs[3]),
+      ...directivity(dfs[4]!),
+    };
+    return comment.slice(7);
+  }
+  return comment;
+}
+
+/**
+ * A DF report's `/BRG/NRQ` after its course/speed: the bearing (000–360), then N (0 makes the NRQ
+ * meaningless, 1–8 hits in eighths, 9 manual), R (the line reaches 2^R miles) and Q (the beamwidth).
+ */
+function applyDfBearing(fix: DecodedPosition, comment: string): string {
+  const m = BRG_NRQ_RE.exec(comment);
+  if (!m) return comment;
+  const bearingDeg = Number(m[1]);
+  if (bearingDeg > 360) return comment;
+  const n = Number(m[2]),
+    r = Number(m[3]),
+    q = Number(m[4]);
+  const df: DfBearing = { bearingDeg };
+  if (n !== 0) {
+    if (n === 9) df.manual = true;
+    else df.hits = n;
+    df.rangeKm = round1(2 ** r * KM_PER_MI);
+    if (q !== 0) df.accuracyDeg = DF_ACCURACY_DEG[q]!;
+  }
+  fix.df = df;
+  return comment.slice(8);
+}
+
+/** The DF symbol, `\` in the primary table: only its reports carry a bearing after the course/speed. */
+const isDfSymbol = (fix: DecodedPosition) => fix.symbol?.table === "/" && fix.symbol.code === "\\";
+
+/**
+ * The data extensions and altitude out of a comment string: course/speed "CSE/SPD" (with a DF report's
+ * "/BRG/NRQ" after it) or one of PHG, RNG and DFS, then altitude "/A=dddddd" anywhere. The course runs
+ * 001–360; 000 is unknown, as is "000/000", ".../..." or blanks for both. A compressed position carries its
+ * course, speed or range in the cs bytes and takes no data extension, so its comment is read for the
+ * altitude alone.
  */
 function applyExtensions(fix: DecodedPosition, comment: string, opts: { compressed?: boolean } = {}): void {
   const cs = opts.compressed ? null : /^(\d{3})\/(\d{3})/.exec(comment);
@@ -56,9 +153,12 @@ function applyExtensions(fix: DecodedPosition, comment: string, opts: { compress
     // three digits past 360 are not a heading, and 000 is none
     if (course >= 1 && course <= 360) fix.course = course;
     if (course !== 0 || speed !== 0) fix.speedKn = speed;
+  }
+  if (cs || (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment))) {
     comment = comment.slice(7);
-  } else if (!opts.compressed && /^(\.{3}| {3})\/(\.{3}| {3})/.test(comment)) {
-    comment = comment.slice(7);
+    if (isDfSymbol(fix)) comment = applyDfBearing(fix, comment);
+  } else if (!opts.compressed) {
+    comment = applyRangeExtension(fix, comment);
   }
   const alt = /\/A=(-\d{5,6}|\d{6})/.exec(comment); // six characters, a leading minus below sea level
   if (alt) {

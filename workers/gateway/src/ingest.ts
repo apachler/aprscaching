@@ -50,6 +50,8 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
   course?: number;
   speedKn?: number;
   altitudeM?: number;
+  /** the radio range it sends (RNG, a compressed range byte) or its PHG works out to */
+  rangeKm?: number;
   comment?: string;
   /** the station's own position, not an object, item or weather report it sent */
   own: boolean;
@@ -68,6 +70,7 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
       course: d.course,
       speedKn: d.speedKn,
       altitudeM: d.altitudeM,
+      rangeKm: d.rangeKm,
       comment: d.comment,
       own: d.kind === "position",
     };
@@ -371,7 +374,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     stmts.push(
       env.DB.prepare(
         `UPDATE stations SET last_seen = ?, symbol = ?, course = ?, speed_kn = ?, altitude_m = ?,
-           comment = COALESCE(?, comment)
+           range_km = COALESCE(?, range_km), comment = COALESCE(?, comment)
          WHERE callsign = ? AND lat IS ? AND lon IS ?`,
       ).bind(
         p.ts,
@@ -379,6 +382,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.course ?? null,
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
+        fix.rangeKm ?? null,
         fix.comment ?? null,
         p.src,
         fix.lat,
@@ -387,11 +391,12 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     );
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, comment, source_call)
-         VALUES (?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, range_km, comment, source_call)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen,
            symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
-           altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)
+           altitude_m=excluded.altitude_m, range_km=COALESCE(excluded.range_km, stations.range_km),
+           comment=COALESCE(excluded.comment, stations.comment)
          WHERE stations.lat IS NOT excluded.lat OR stations.lon IS NOT excluded.lon`,
       ).bind(
         p.src,
@@ -402,6 +407,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.course ?? null,
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
+        fix.rangeKm ?? null,
         fix.comment ?? null,
         igate,
       ),

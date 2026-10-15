@@ -661,6 +661,7 @@ CREATE TABLE stations (
   course       INTEGER,
   speed_kn     INTEGER,
   altitude_m   INTEGER,
+  range_km     REAL,                               -- radio range: sent (RNG, compressed) or from its PHG
   comment      TEXT,
   source_call  TEXT                                -- the gating IGate
 );

@@ -433,6 +433,8 @@ export interface WxReading {
   rainMm: number | null;
 }
 export interface StationDetail extends StationSummary {
+  /** The radio range the station last sent (RNG, a compressed range byte) or its PHG works out to. */
+  rangeKm: number | null;
   track: StationTrackPoint[];
   wx: WxReading | null;
   packets: number;
