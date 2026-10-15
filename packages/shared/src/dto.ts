@@ -521,6 +521,12 @@ export interface PortStat {
   rx: number;
   tx: number;
   lastBucket: number;
+  /** What the ingest reported for the port over the window: frames heard, decoded as APRS, and not a packet. */
+  heard: number;
+  parsed: number;
+  invalid: number;
+  /** Packets per second over the ingest's last minute; null when no report came in the last five minutes. */
+  pps: number | null;
 }
 export interface MessageItem {
   id: number;

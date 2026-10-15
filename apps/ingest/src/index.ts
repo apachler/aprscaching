@@ -10,6 +10,7 @@ import { addrStr } from "@aprscaching/ax25";
 import { validateConfig, type Packet } from "@aprscaching/shared";
 import { gatewayUrls, loadDotEnv, numEnv, portEnv } from "./config.js";
 import { Delivery } from "./deliver.js";
+import { PortHealthCounter } from "./porthealth.js";
 import { txLimitFromEnv } from "./txlimit.js";
 import { callWarnings } from "./callroles.js";
 import { gatewayFetch, loadBoxKey, useBoxKey } from "./gatewayauth.js";
@@ -55,23 +56,36 @@ const aprs = new AprsIs({
 });
 
 let batch: Packet[] = [];
+// Each port's health (frames heard, decoded, invalid, packets per second), reported with the batches.
+const health = new PortHealthCounter();
 // Frames this box received over a radio it can also transmit on carry its BOX_ID, so the gateway can
 // send an answer (an ack to a radio command) back through this box instead of over APRS-IS.
 const RX_ANSWER_PORTS = new Set(["kiss-tnc", "soundcard", "meshcom"]);
 const enqueue = (p: Packet) => {
   if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
+  health.packet(p);
   batch.push(p);
 };
+/** When the gateway last took a health report. */
+let healthAt = Date.now();
+/** A port that hears nothing, or only invalid frames, still reports its health this often. */
+const HEALTH_EVERY_MS = 60_000;
+// Every POST carries the ports' health; the counts are marked taken only once the gateway accepted them.
+async function postBatch(packets: Packet[]): Promise<{ ok: boolean; status: number }> {
+  const report = health.report();
+  const res = await gatewayFetch(INGEST_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
+    body: JSON.stringify({ packets, ...(report.ports.length ? { ports: report.ports } : {}) }),
+  });
+  if (res.ok) {
+    report.commit();
+    healthAt = Date.now();
+  }
+  return res;
+}
 // Undelivered packets wait here for the next flush, bounded (drop-oldest) so a long outage can't OOM the Pi.
-const delivery = new Delivery({
-  maxQueue: numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }),
-  post: (packets) =>
-    gatewayFetch(INGEST_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
-      body: JSON.stringify({ packets }),
-    }),
-});
+const delivery = new Delivery({ maxQueue: numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }), post: postBatch });
 
 // Graceful stop: best-effort flush of the pending batch + spool so a systemd/Docker restart or
 // host shutdown loses as few heard packets as possible, then exit. Registered after the buffers
@@ -188,6 +202,7 @@ if (env.KISS_TNC_HOST) {
     },
     {
       onPacket: enqueue,
+      onInvalid: () => health.invalid("kiss-tnc"),
       onFrame: (f) => {
         for (const s of frameSubs) s(f);
       },
@@ -466,7 +481,7 @@ if (env.AGWPE_HOST) {
 // are a TNC port's: one heard directly names the receiving site, which the gateway attests only when its sysop
 // trusts the call.
 if (env.LORA_APRS_HOST) {
-  const { LoraAprsPort, loraSettings } = await import("./lora-aprs.js");
+  const { LoraAprsPort, LORA_APRS_PORT, loraSettings } = await import("./lora-aprs.js");
   let settings: import("./lora-aprs.js").LoraSettings;
   try {
     settings = loraSettings(env);
@@ -475,7 +490,13 @@ if (env.LORA_APRS_HOST) {
     process.exit(1);
   }
   const lora = new LoraAprsPort(
-    { host: env.LORA_APRS_HOST, port: portEnv("LORA_APRS_PORT", 8001), settings, siteCall },
+    {
+      host: env.LORA_APRS_HOST,
+      port: portEnv("LORA_APRS_PORT", 8001),
+      settings,
+      siteCall,
+      onInvalid: () => health.invalid(LORA_APRS_PORT),
+    },
     enqueue,
   );
   lora.start();
@@ -542,7 +563,10 @@ aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));
 aprs.on("down", () => console.log("[aprs-is] disconnected, retrying..."));
 aprs.on("line", (line: string) => {
   const f = parseTNC2(line);
-  if (!f) return;
+  if (!f) {
+    health.invalid("aprs-is");
+    return;
+  }
   const q = classifyQ(f.path);
   const pos = parsePosition(f.payload);
   const pkt: Packet = {
@@ -558,6 +582,7 @@ aprs.on("line", (line: string) => {
     ts: Math.floor(Date.now() / 1000),
     raw: f.raw,
   };
+  health.packet(pkt);
   batch.push(pkt);
 });
 
@@ -565,6 +590,13 @@ setInterval(() => {
   if (shuttingDown) return;
   delivery.add(batch);
   batch = [];
+  // nothing to deliver: a health report on its own, so the gateway still hears from a quiet port or one whose
+  // frames all fail
+  if (!delivery.size && health.size && Date.now() - healthAt >= HEALTH_EVERY_MS) {
+    healthAt = Date.now();
+    void postBatch([]).catch(() => {});
+    return;
+  }
   void delivery.flush(); // joins a flush still waiting on a slow gateway instead of posting the same packets twice
 }, BATCH_MS);
 

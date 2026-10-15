@@ -42,6 +42,7 @@
     "./adoption": "./src/adoption.ts",
     "./rooms-core": "./src/rooms-core.ts",
     "./station_status": "./src/station_status.ts",
+    "./shack": "./src/shack.ts",
     "./tombstones": "./src/tombstones.ts",
     "./meshcom": "./src/meshcom.ts",
     "./migrate": "./src/migrate.ts",

@@ -188,6 +188,17 @@ describe("LoraAprsPort", () => {
     expect(p.counters(Date.now() + 60_000).channelPct).toBeGreaterThan(0);
   });
 
+  it("reports each packet it rejects for the port's health", () => {
+    let invalid = 0;
+    const p = new LoraAprsPort(
+      { host: "127.0.0.1", port: 1, settings: settings(), log: quiet, onInvalid: () => invalid++ },
+      () => {},
+    );
+    p.onBytes(lora("rubbish"));
+    p.onBytes(lora(POS));
+    expect(invalid).toBe(1);
+  });
+
   it("never takes a MeshCom node's frames for its own hearings", () => {
     const { p, got } = port();
     const mc = encodeAx25({ src: "OE8APR-12", dst: "APRSMC", payload: ">relayed" });

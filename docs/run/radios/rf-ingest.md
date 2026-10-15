@@ -22,6 +22,13 @@ The APRS-IS feed always runs: set `APRSIS_FILTER`, and `APRSIS_CALLSIGN` / `APRS
 logged-in feed. Every transport below is opt-in and starts only when its setting is present. Each stamps its
 own `port`, counted at `GET /api/ports`.
 
+Each batch also carries every port's health: the frames it heard, the ones whose APRS payload decoded, the
+frames that were no packet at all (a broken AX.25 frame from the TNC or the LoRa modem, a line from APRS-IS that
+is no packet), and its packets per second over the last minute. A quiet port, or one whose frames all fail,
+still reports once a minute. **Instance admin → Ingest & transports** shows these at each port's row, as in
+**0.21 pkt/s · 97% parsed · 56 invalid · 18,234 rx** over 24 hours; the rate shows while the last report is at
+most five minutes old.
+
 APRS names no character set: a frame heard on RF and a line from APRS-IS carry bytes. The box passes them on
 unchanged, so the IGate and the digipeater send exactly the bytes they heard. The gateway reads the text a
 station sent (a message, a status, a comment) as UTF-8 when the bytes are valid UTF-8, and otherwise as

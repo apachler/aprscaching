@@ -210,6 +210,8 @@ export interface LoraAprsOpts {
   /** How often the counters are logged, in ms; 0 never. */
   statsMs?: number;
   log?: Pick<Console, "log" | "error">;
+  /** Called for each packet that is neither a TNC2 line nor an AX.25 frame, for the port's health. */
+  onInvalid?: () => void;
 }
 
 export interface LoraStats {
@@ -311,6 +313,7 @@ export class LoraAprsPort {
     const d = decodeLoraPacket(b);
     if (!d) {
       this.stats.rejected++;
+      this.o.onInvalid?.();
       return;
     }
     if (fromAprsIs(d.frame)) {

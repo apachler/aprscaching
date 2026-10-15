@@ -95,6 +95,7 @@ import { ApiKeysAdmin } from "./ApiKeysAdmin.js";
 import { listReports } from "../moderation/api.js";
 import { ReportsAdmin, AccountsAdmin, AuditAdmin } from "./ModerationAdmin.js";
 import { InstanceSettingsAdmin } from "./InstanceSettingsAdmin.js";
+import { portHealthParts } from "./portHealth.js";
 
 /** What the admin search finds Instance settings by: its own words, its groups, and every setting's key. */
 const INSTANCE_SETTINGS_WORDS = [
@@ -3246,7 +3247,11 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
     <>
       <h4 className="set-subh">
         Transports{" "}
-        <span className="muted">{ports ? `· ${ports.length} port${ports.length === 1 ? "" : "s"} ` : ""}· 24h RX</span>
+        <span className="muted">{ports ? `· ${ports.length} port${ports.length === 1 ? "" : "s"} ` : ""}· 24h</span>{" "}
+        <InfoTip
+          label="What do the port figures mean?"
+          text="Packets per second over the ingest box's last minute, the share of frames whose APRS payload decoded, frames that were not a packet at all, and the packets this instance received, over 24 hours."
+        />
       </h4>
       {list.error ? (
         <ErrorState onRetry={list.reload}>Couldn&apos;t load port statistics.</ErrorState>
@@ -3262,7 +3267,7 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
             <div className="setrow-l">
               <span className="mono">{p.port}</span>
             </div>
-            <div className="setrow-c muted">{fmt.num(p.rx, 0)} rx</div>
+            <div className="setrow-c muted">{portHealthParts(p, fmt.num).join(" · ")}</div>
           </div>
         ))
       )}

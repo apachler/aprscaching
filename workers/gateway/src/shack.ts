@@ -6,6 +6,8 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
+import type { SqlStatement } from "./runtime.js";
+import type { PortHealth, PortStat } from "@aprscaching/shared";
 import { json } from "./http.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";
@@ -61,17 +63,39 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
 }
 
 // ------------------------------------------------------------- transports (ports)
+/** A port's rate counts as current while its last report is at most this old, seconds. */
+const PPS_FRESH_S = 5 * 60;
+
+/**
+ * Each port's health as the ingest box reports it, added to the port's hourly bucket: frames heard, decoded and
+ * invalid since its last report, and its packets per second, which replaces the one before.
+ */
+export function portHealthStatements(env: Env, ports: readonly PortHealth[], now: number): SqlStatement[] {
+  const bucket = Math.floor(now / 3600) * 3600;
+  return ports.map((h) =>
+    env.DB.prepare(
+      `INSERT INTO port_stats (port, ts, rx, tx, heard, parsed, invalid, pps, pps_at) VALUES (?,?,0,0,?,?,?,?,?)
+       ON CONFLICT(port, ts) DO UPDATE SET heard = heard + excluded.heard, parsed = parsed + excluded.parsed,
+         invalid = invalid + excluded.invalid, pps = excluded.pps, pps_at = excluded.pps_at`,
+    ).bind(h.port, bucket, h.heard, Math.min(h.parsed, h.heard), Math.min(h.invalid, h.heard), h.pps, now),
+  );
+}
+
 export async function handlePorts(_req: Request, env: Env): Promise<Response> {
-  const since = nowS() - 24 * 3600;
+  const now = nowS();
+  const since = now - 24 * 3600;
   const rows = (
     await env.DB.prepare(
-      `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket
+      `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket,
+              SUM(heard) AS heard, SUM(parsed) AS parsed, SUM(invalid) AS invalid,
+              (SELECT f.pps FROM port_stats f WHERE f.port = port_stats.port AND f.pps_at >= ?
+                ORDER BY f.pps_at DESC LIMIT 1) AS pps
        FROM port_stats WHERE ts >= ? GROUP BY port ORDER BY rx DESC`,
     )
-      .bind(since)
-      .all<{ port: string; rx: number; tx: number; lastBucket: number }>()
+      .bind(now - PPS_FRESH_S, since)
+      .all<PortStat>()
   ).results;
-  return json({ window: "24h", ports: rows });
+  return json({ window: "24h", ports: rows.map((r) => ({ ...r, pps: r.pps ?? null })) });
 }
 
 // ------------------------------------------------------------- messages (RX)

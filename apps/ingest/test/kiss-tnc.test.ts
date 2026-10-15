@@ -55,6 +55,20 @@ describe("KissTnc receive framing", () => {
   });
 });
 
+describe("KissTnc invalid frames", () => {
+  it("counts a data frame no AX.25 decoder reads as invalid, and nothing else", async () => {
+    const port = await chunkedTnc([ui(">ok"), kissWrap(Uint8Array.from([1, 2, 3, 4, 5]))]);
+    const got: Packet[] = [];
+    let invalid = 0;
+    const tnc = new KissTnc({ host: "127.0.0.1", port }, { onPacket: (p) => got.push(p), onInvalid: () => invalid++ });
+    tnc.start();
+    cleanups.push(() => tnc["sock"]?.destroy());
+    await until(() => invalid >= 1);
+    expect(got.map((p) => p.payload)).toEqual([">ok"]);
+    expect(invalid).toBe(1);
+  });
+});
+
 describe("KissTnc connection", () => {
   it("turns on TCP keepalive, so a TNC host that vanished is noticed on a quiet channel", async () => {
     const port = await chunkedTnc([]);

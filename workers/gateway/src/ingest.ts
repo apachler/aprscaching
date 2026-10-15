@@ -25,6 +25,7 @@ import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 import { serviceCall } from "./servicecall.js";
+import { portHealthStatements } from "./shack.js";
 import { deliverMailbox, mailboxOnAck, type Heard } from "./mailbox.js";
 import { transportForPort } from "./provenance.js";
 import { attestation, sitesFor } from "./attestedsites.js";
@@ -467,6 +468,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(port, bucket, rx),
     );
   }
+  // each port's health as the ingest box reports it, from the trusted path only: a signed browser batch reports
+  // on no port but its own packets
+  if (trusted) stmts.push(...portHealthStatements(env, body.data.ports ?? [], now));
   // the MeshCom map layer's node state and links (display only), and its group chat
   stmts.push(...meshcomStatements(env, meshcom));
   for (const g of groupMessages) stmts.push(meshcomGroupStatement(env, g));
