@@ -75,8 +75,8 @@ database: run `rm -rf .dev` and start `pnpm dev` again to build it from the edit
 ## Settings
 
 `.env.dev` holds what the dev instance needs and nothing else: fresh ingest, operator and session secrets, the
-web-push keys, a federation key, `ADMIN_CALLSIGNS`, `ALLOW_DEV_TOKENS=1`, `FIRST_PARTY_SITES=OE8XXX` and
-`UPDATE_CHECK=0`. Any other setting from the [configuration reference](../reference/configuration.md) added to
+web-push keys, a federation key, `ADMIN_CALLSIGNS`, `ALLOW_DEV_TOKENS=1`, `FIRST_PARTY_SITES=OE8XXX`,
+`UPDATE_CHECK=0` and an empty `DEVICEID_URL`. Any other setting from the [configuration reference](../reference/configuration.md) added to
 the file reaches the gateway as it is: `SMTP_HOST` to send real mail, `OFFLINE_TILES_PATH` for offline map
 packs, `MIN_TRUST`, and so on. Restart `pnpm dev` after an edit. Delete the file to generate a new one.
 

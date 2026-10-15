@@ -96,7 +96,7 @@ SOURCE_COMMIT	string	gateway,server			0	0	selfhost,baremetal,pocket,desktop	Comm
 SOURCE_TAG	string	gateway			0	0	selfhost,baremetal,pocket,desktop	Release tag the instance runs	
 SOURCE_BUILT_AT	int	gateway			0	0	selfhost,baremetal,pocket,desktop	Build time in unix seconds	
 UPDATE_CHECK	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops the daily request to GitHub that looks for a newer release	updates
-DEVICEID_URL	url	gateway			0	0	selfhost,baremetal,pocket,desktop	Address of the APRS device database (aprs-deviceid JSON) fetched once a day; empty names no devices	
+DEVICEID_URL	url	gateway	https://aprs-deviceid.aprsfoundation.org/tocalls.dense.json		0	0	selfhost,baremetal,pocket,desktop	Address of the APRS device database (aprs-deviceid JSON) fetched once a day; set empty to turn off	
 TOOL_REGISTRIES	json	gateway			0	0	selfhost,baremetal,pocket,desktop	JSON list of tool registries; set, it replaces the list kept in Instance settings	
 TOOL_REGISTRIES_PLAYERS	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 stops players adding tool registries of their own	tools
 TOOL_REGISTRIES_PROXY	enum	gateway	1	0|1|false|no|true|yes	0	0	selfhost,baremetal,pocket,desktop	0 lets browsers fetch tool registries directly instead of through this instance	tools

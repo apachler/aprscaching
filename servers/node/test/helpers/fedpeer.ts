@@ -76,6 +76,7 @@ export function instanceEnv(instance: string, key: FedKey | null, extra: Record<
     SESSION_SECRET: "test-session-secret",
     OPERATOR_SECRET: "test-operator-secret",
     UPDATE_CHECK: "0", // the nightly task stays off the network in tests
+    DEVICEID_URL: "", // and fetches no device database
     ...(key ? { FED_PRIVATE_KEY: key.env } : {}),
     ...extra,
   } as unknown as Env;

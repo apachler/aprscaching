@@ -369,8 +369,8 @@ export async function runScheduled(env: Env): Promise<void> {
     "SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ?",
     now - POSITION_RETENTION_S,
   );
-  // Bound the other unbounded firehose/diagnostic tables too (see retention.ts). Presence-critical
-  // logger data (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
+  // Bound the other unbounded firehose/diagnostic tables too (see retention.ts). Finds (cache_logs) keep their
+  // result and packet route and are untouched; these are all diagnostic/telemetry rings.
   const keep = retentionFrom(env);
   const days = (n: number) => now - n * 24 * 3600;
   await env.DB.batch([

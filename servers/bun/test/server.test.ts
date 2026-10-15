@@ -17,7 +17,13 @@ const SECRETS = {
   INGEST_SECRET: "bun-test-ingest-secret-0123456789",
   SESSION_SECRET: "bun-test-session-secret-0123456789",
 };
-const BASE_ENV = { UPDATE_CHECK: "0", FED_SYNC_INTERVAL_MS: "0", FED_RELAY_POLL_MS: "0", FED_MDNS: "off" };
+const BASE_ENV = {
+  UPDATE_CHECK: "0",
+  DEVICEID_URL: "",
+  FED_SYNC_INTERVAL_MS: "0",
+  FED_RELAY_POLL_MS: "0",
+  FED_MDNS: "off",
+};
 
 const started: BunServer[] = [];
 afterAll(() => {

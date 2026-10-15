@@ -201,6 +201,7 @@ jobs:
           SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
           UPDATE_CHECK: "0" # the gateways stay off GitHub
+          DEVICEID_URL: "" # and fetch no device database
           # Tier A is default-deny — it needs the operator to attest their receiving sites. The smoke
           # suite feeds its RF fixes as direct hearings on OE8XXX's own TNC, so name it as attested.
           FIRST_PARTY_SITES: OE8XXX
@@ -230,6 +231,7 @@ jobs:
           SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
           UPDATE_CHECK: "0" # the gateways stay off GitHub
+          DEVICEID_URL: "" # and fetch no device database
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           SUBKEY=$(node tools/fedkey/genkey.mjs --raw) # corroboration questions are signed
@@ -279,6 +281,7 @@ jobs:
           SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
           UPDATE_CHECK: "0" # the gateways stay off GitHub
+          DEVICEID_URL: "" # and fetch no device database
           # Tier A is default-deny — name the smoke suite's receiving site (OE8XXX) as attested.
           FIRST_PARTY_SITES: OE8XXX
         run: |

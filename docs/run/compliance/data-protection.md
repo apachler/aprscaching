@@ -143,6 +143,11 @@ Once a day the instance asks GitHub for the newest release (`UPDATE_CHECK`). The
 carries no member data. While the check is on, the privacy page lists GitHub among the recipients
 ([How you hear about a new release](../day-to-day/updates.md#how-you-hear-about-a-new-release)).
 
+Once a day the instance also fetches the APRS device database, `aprs-deviceid.aprsfoundation.org` by default
+(`DEVICEID_URL`), so a station page can name the device behind its packets. The request names the instance and
+carries no member data. The privacy page lists the database's host among the recipients unless `DEVICEID_URL` is
+set empty, which turns the fetch off.
+
 ## Moderation records
 
 Reports, the audit log and suspensions ([Moderation](../day-to-day/moderation.md)) are kept on the instance under
