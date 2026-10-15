@@ -126,6 +126,7 @@ const PAIRS: Pair[] = [
   { name: "Tier B badge", fg: "var(--tier-b-text)", bg: tint("--tier-b", 20), min: 4.5 },
   { name: "Tier C badge", fg: "var(--tier-c-text)", bg: tint("--tier-c", 16), min: 4.5 },
   { name: "found badge", fg: "var(--ok-text)", bg: tint("--ok", 20), min: 4.5 },
+  { name: "text in a good-news note", fg: "var(--ink)", bg: tint("--ok", 12), behind: "var(--surface)", min: 4.5 },
   { name: "DNF badge", fg: "var(--bad-text)", bg: tint("--bad", 20), min: 4.5 },
   { name: "warning badge", fg: "var(--warn-text)", bg: tint("--warn", 20), min: 4.5 },
   { name: "message network chip", fg: "var(--ink)", bg: "var(--chip-bg)", behind: "var(--surface)", min: 4.5 },

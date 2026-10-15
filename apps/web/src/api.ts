@@ -427,6 +427,11 @@ export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }>
 export function getStation(callsign: string): Promise<{ station: StationDetail }> {
   return call(`/api/stations/${encodeURIComponent(callsign)}`);
 }
+import type { CoverageResponse } from "@aprscaching/shared";
+/** The receivers in a box with their range circles: where radio hears a finder (the hide form's map). */
+export function getCoverage(bbox: BBox): Promise<CoverageResponse> {
+  return call(`/api/v1/coverage?bbox=${bbox.map((v) => v.toFixed(4)).join(",")}`);
+}
 export interface WxPoint {
   ts: number;
   tempC: number | null;

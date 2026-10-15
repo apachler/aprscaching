@@ -22,3 +22,4 @@ export * from "./weblink.js";
 export * from "./origins.js";
 export * from "./sitesettings.js";
 export * from "./toolregistries.js";
+export * from "./coverage.js";

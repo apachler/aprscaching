@@ -32,6 +32,7 @@ import type {
   StationDetail,
   StationSummary,
   BbsMessage,
+  CoverageResponse,
 } from "@aprscaching/shared";
 import type {
   AdminAdoptions,
@@ -381,6 +382,43 @@ const STAGES: CacheStage[] = [
   { stageNo: 2, unlock: "nfc", clue: null, mediaUrl: null, radiusM: 60, unlocked: false, lat: null, lon: null },
   { stageNo: 3, unlock: "audio", clue: null, mediaUrl: null, radiusM: 60, unlocked: false, lat: null, lon: null },
 ];
+
+/**
+ * Radio coverage around Graz for the hide form: the Schlossberg receiving site the instance attests, the
+ * Schöckl digipeater with its PHG range, and an IGate south of town that sends none (drawn dashed).
+ */
+const COVERAGE: CoverageResponse = {
+  sites: [
+    {
+      callsign: "OE6XGR-10",
+      lat: 47.0756,
+      lon: 15.4349,
+      kind: "attested",
+      rangeKm: 6,
+      estimated: false,
+      lastSeen: NOW - 30,
+    },
+    {
+      callsign: "OE6XRR-3",
+      lat: 47.1975,
+      lon: 15.4669,
+      kind: "digipeater",
+      rangeKm: 24.6,
+      estimated: false,
+      lastSeen: NOW - 5 * MIN,
+    },
+    {
+      callsign: "OE6IGT",
+      lat: 46.995,
+      lon: 15.437,
+      kind: "igate",
+      rangeKm: 5,
+      estimated: true,
+      lastSeen: NOW - 12 * MIN,
+    },
+  ],
+  truncated: false,
+};
 
 const STATIONS: StationSummary[] = [
   {
@@ -986,6 +1024,7 @@ const ROUTES: Route[] = [
   ["GET", /^\/api\/caches\/\d+\/adoption$/, () => ({ offer: null, requests: [], mine: null })],
   ["GET", /^\/api\/stations$/, () => ({ stations: STATIONS })],
   ["GET", /^\/api\/stations\/([^/]+)$/, () => ({ station: STATION_DETAIL })],
+  ["GET", /^\/api\/v1\/coverage$/, () => COVERAGE],
   ["GET", /^\/api\/stations\/[^/]+\/packets$/, () => ({ callsign: STATION_DETAIL.callsign, count: 0, packets: [] })],
   ["GET", /^\/api\/meshcom\/nodes$/, () => ({ exact: true, nodes: [] })],
   ["GET", /^\/api\/meshcom\/links$/, () => ({ exact: true, links: [] })],

@@ -39,12 +39,44 @@ says so; try again the next day.
     - Or type decimal degrees or a Maidenhead locator in **Coordinates** and tap **Place pin**.
 
     The panel shows **Pin at** with the coordinates and the grid square. Drag the pin to adjust it.
+    To see whether radio hears a finder at the spot, switch on **Radio coverage** ([Radio coverage](#radio-coverage)).
 
 3. Under **Basics**, type a **Title** and pick a **Type**. The line under the type says what it means.
 4. Under **Difficulty & terrain**, set **Difficulty** and **Terrain** with the sliders.
 5. Optional: open **Advanced: hint, description, rating & sharing** and fill in what you want
    ([Options](#options)).
 6. Tap **Hide cache**. The map moves to your cache and opens its page.
+
+## Radio coverage
+
+A find is **Radio-verified** (Tier A) only when an
+[attested receiving station](../glossary.md#attested-site) hears the finder on the air
+([How finds are verified](verification.md)). **Radio coverage** under **Location** shows where that can happen,
+so you can place a cache where finds can reach Tier A. It is off until you switch it on; the app remembers the
+switch.
+
+The map then shows a range circle around each receiving station near your pin. The key under the switch shows
+each circle's colour:
+
+- **Attested receiver:** RF finds inside its circle can reach Tier A.
+- **Digipeater or IGate:** it hears a finder on the air, but its packets reach this instance over APRS-IS, so
+  those finds stop at Tier C. A digipeater whose packets an attested receiver also hears can still carry a find
+  to Tier A.
+- **Dashed edge:** the station sends no [PHG or RNG](../glossary.md#phg), so the app draws a cautious
+  estimate: 10 km for a digipeater, 5 km for an IGate or receiver. The real range may be larger or smaller.
+
+The line under the switch reads your pin:
+
+- **Inside an attested receiver's range:** RF finds can reach Tier A.
+- **Only APRS-IS reaches here:** RF finds stop at Tier C.
+- **No receiver known in range:** a radio may not be heard at all.
+
+Outside an attested receiver's range, a finder who logs in the app at the cache can still reach
+**Location-verified** (Tier B). If you switch on **Radio-verified finds only**, the line warns that finds there
+may never count as verified.
+
+Circles are a guide, not a promise: hills, buildings and trees block radio. Test from the spot with your own
+radio if you can.
 
 ## Check that it worked
 

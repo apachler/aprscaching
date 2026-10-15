@@ -26,6 +26,11 @@ explains it in full.
 :   A station that repeats packets on the air to extend their range
     ([Digipeater](run/radios/rf-ingest.md#digipeater)).
 
+<span id="phg"></span>PHG and RNG
+:   Codes in a station's beacon that give its power, antenna height and gain (**PHG**) or its range in miles
+    (**RNG**). APRScaching works out the station's radio range from them
+    ([Radio coverage](play/hide-a-cache.md#radio-coverage)).
+
 <span id="q-construct"></span>q-construct
 :   A tag APRS-IS servers add to a packet's path (`qAR`, `qAC`, …) naming how and where it entered
     APRS-IS. Anyone with a passcode can write one, so APRScaching never treats it as proof of a hearing.

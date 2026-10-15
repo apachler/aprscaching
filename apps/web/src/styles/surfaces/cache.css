@@ -664,4 +664,50 @@
     color: var(--muted);
     text-wrap: pretty;
   }
+  /* the hide form's radio coverage: what reaches the pin, and the key to the circles on the map */
+  .coverage-line {
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-data);
+  }
+  .coverage-line .inline-note {
+    display: block;
+    text-wrap: pretty;
+  }
+  .coverage-line code {
+    white-space: nowrap;
+  }
+  .coverage-key {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2xs);
+    font-size: var(--text-data);
+    color: var(--ink-2);
+  }
+  .coverage-key li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+  .coverage-key li > span {
+    flex: 1;
+  }
+  /* the swatch draws a circle's outline as the map does: the on-air colour, the APRS-IS colour, a dashed edge */
+  .coverage-swatch {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid var(--swatch-edge);
+    background: color-mix(in oklch, var(--swatch-edge) 16%, transparent);
+    --swatch-edge: color-mix(in oklab, var(--map-heard-is) 70%, var(--ink));
+  }
+  .coverage-swatch.attested {
+    --swatch-edge: color-mix(in oklab, var(--map-heard-rf) 70%, var(--ink));
+  }
+  .coverage-swatch.estimated {
+    border-style: dashed;
+    background: none;
+  }
 }
