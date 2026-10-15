@@ -180,30 +180,41 @@ MYCALL OE8APR-10
 MODEM 1200
 PTT CM108
 
-# Every channel, multiplexed
+# Every channel on one KISS port, each frame marked with its channel
 KISSPORT 8001
-# Or one KISS port per channel: frames on 8002 are channel 2's
-# KISSPORT 8001 0
-# KISSPORT 8002 2
 AGWPORT 8000
 ```
 
-The box reads one KISS stream and does not tell its channels apart. What that means:
+With `KISSPORT 8001` Direwolf sends every channel on one KISS stream, and marks each frame with its channel.
+Name the channels the box uses in `KISS_TNC_CHANNELS`:
 
-- **Receiving works on every channel.** Each frame is a hearing of your own receiver: one heard directly names
-  `RF_SITE_CALL` and is attested like any TNC port's. All channels count together on the `kiss-tnc` port.
-- **Transmitting goes to channel 0 only.** The box sends every frame on KISS channel 0, and the timing frames
-  too. A frame heard on channel 2 is repeated by the digipeater, or answered, on channel 0.
+```ini
+KISS_TNC_HOST=127.0.0.1
+KISS_TNC_PORT=8001
+KISS_TNC_CHANNELS=0,2
+# The channel of the box's own transmissions; default the first listed
+# KISS_TNC_TX_CHANNEL=0
+```
 
-So choose one of these layouts:
+Each listed channel is its own port:
 
-| Layout | `direwolf.conf` | Box | Use it for |
-|---|---|---|---|
-| Hear every channel | `KISSPORT 8001` | `KISS_TNC_PORT=8001`, no transmitting function | Receive-only sites: every radio's hearings count, on one port. |
-| Transmit on one radio | `KISSPORT 8001 0` and `KISSPORT 8002 2` | `KISS_TNC_PORT=8001` | Digipeater, IGate or node on channel 0. The box does not hear channel 2: Direwolf's other KISS port serves another program, or a second ingest box, which runs its own APRS-IS feed as well. |
+- **Receiving.** Channel 0 counts on the `kiss-tnc` port, channel 2 on `kiss-tnc-2`, each with its own health
+  at `https://<instance>/api/ports`. Every channel is your own receiver: a frame heard directly names
+  `RF_SITE_CALL` and is attested like any TNC port's, no more.
+- **Repeating and answering.** The digipeater repeats a frame on the channel that heard it. The IGate gates a
+  message to RF on the channel that last heard its addressee.
+- **The box's own transmissions.** The remote box's commands and beacons, the answers the gateway queues, and
+  the NET/ROM node, BBS and FBB forwarder all go out on `KISS_TNC_TX_CHANNEL`. Only that channel's hearings
+  carry the box's ID, so the gateway sends an answer through the box only to a station heard there; a station
+  heard on another channel is answered over APRS-IS.
+- **Timing.** The box sends the TX delay, persist and slot time to every listed channel.
 
-A digipeater that repeats between two radios belongs in Direwolf's own `DIGIPEAT` (cross-channel), outside the
-box's transmit gate.
+A frame on a channel the list leaves out is ignored, and the box logs the channel once. It does not count on
+any port, and the box never repeats or answers it: the box does not know that radio. With the default,
+`KISS_TNC_CHANNELS=0`, only channel 0 is heard.
+
+A digipeater that repeats from one radio to the other belongs in Direwolf's own `DIGIPEAT` (cross-channel),
+outside the box's transmit gate.
 
 ## Troubleshooting
 

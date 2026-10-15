@@ -11,6 +11,7 @@
  * {@link MAILBOX_TTL_SEC}.
  */
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
+import { isKissTncPort } from "@aprscaching/shared";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { nowS } from "./util/time.js";
@@ -202,8 +203,11 @@ export interface Heard {
   rxCall?: string;
 }
 
-/** Ports on which the box itself received the frame over a radio it can also transmit on. */
-const RF_PORTS = new Set(["kiss-tnc", "soundcard"]);
+/**
+ * Ports on which the box itself received the frame over a radio it can also transmit on: a KISS TNC channel or
+ * a soundcard port. The box names itself (`box`) only on the channel its answers go out on.
+ */
+export const isBoxRadioPort = (port: string): boolean => port === "soundcard" || isKissTncPort(port);
 
 /**
  * Send a numbered APRS message from the service call to a station, back the way it was heard: over APRS
@@ -223,7 +227,7 @@ export async function sendToHeard(env: Env, h: Heard, text: string, msgNo: strin
     await enqueueSystemBoxCommand(env, h.box!, "meshcom_msg", { node, dst: to, text, from: service, msgNo });
     return caps.kiss?.includes(node) ? "acked" : "once";
   }
-  if (caps?.tx && caps.rf && RF_PORTS.has(h.port))
+  if (caps?.tx && caps.rf && isBoxRadioPort(h.port))
     await enqueueSystemBoxCommand(env, h.box!, "aprs_msg", { from: service, to, text, msgNo });
   else
     await env.DB.prepare(

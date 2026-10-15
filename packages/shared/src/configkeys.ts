@@ -298,6 +298,8 @@ export const CONFIG_KEYS = {
   APRSIS_FILTER: { type: "string", units: ["ingest", "pocket"], default: "r/47.07/15.42/300" },
   KISS_TNC_HOST: { type: "string", units: ["ingest", "pocket"] },
   KISS_TNC_PORT: { type: "int", units: ["ingest", "pocket"], default: "8001" },
+  KISS_TNC_CHANNELS: { type: "list", units: ["ingest"], default: "0" },
+  KISS_TNC_TX_CHANNEL: { type: "int", units: ["ingest"] },
   KISS_TIMING: { type: "enum", units: ["ingest"], default: "on", values: ["on", "off"] },
   KISS_TXDELAY: { type: "int", units: ["ingest"], default: "30" },
   KISS_PERSIST: { type: "int", units: ["ingest"], default: "63" },

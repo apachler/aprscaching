@@ -49,6 +49,7 @@ export interface AgwpeOpts {
   siteCall?: string;
   host: string;
   port: number;
+  /** The engine's radio port the box hears and transmits on (`AGWPE_RADIO_PORT`); frames on other ports are ignored. */
   radioPort?: number;
   /** Base reconnect delay (default 3000 ms); grows with backoff while the engine stays unreachable. */
   retryMs?: number;
@@ -62,8 +63,8 @@ export interface AgwpeHandlers {
 
 /**
  * AGWPE TCP client — connects to an AGW Packet Engine (Direwolf/SoundModem/UZ7HO on
- * :8000), enables raw-frame monitoring, and forwards each heard AX.25 frame as an `rf` packet on the
- * `agwpe` port. send() keys the modem with a raw AX.25 frame. The wire codec (@aprscaching/packet) is
+ * :8000), enables raw-frame monitoring, and forwards each AX.25 frame heard on its radio port as an `rf`
+ * packet on the `agwpe` port. send() keys the modem with a raw AX.25 frame. The wire codec (@aprscaching/packet) is
  * unit-tested; the engine handshake and frame semantics are asserted against Direwolf in the weekly
  * `transports` workflow (`tools/interop/tests/direwolf-loop.mjs`).
  */
@@ -132,6 +133,7 @@ export class AgwpeTnc {
       }
       for (const fr of frames) {
         if (fr.kind !== "K") continue; // raw AX.25 monitor frames only
+        if (fr.port !== (this.o.radioPort ?? 0)) continue; // another radio port: the box neither knows nor answers it
         const ax = fr.data.length > 1 ? fr.data.slice(1) : fr.data; // strip the leading radio-port byte
         if (this.o.sent?.echoes(ax)) continue; // the box's own transmission, heard back
         const f = decodeAx25(ax);
