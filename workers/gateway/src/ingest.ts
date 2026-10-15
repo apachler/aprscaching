@@ -17,6 +17,7 @@ import {
 import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf, rfText, type MicEDeviceCode } from "@aprscaching/aprs";
 import type { DeviceColumns } from "./deviceid.js";
 import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
+import { heardEventOf } from "./heardfeed.js";
 import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
 import { recordRendezvous } from "./rendezvous.js";
@@ -37,7 +38,7 @@ import {
   worthStoring,
   type StoredFix,
 } from "./downsample.js";
-import type { Transport } from "@aprscaching/shared";
+import type { HeardEvent, Transport } from "@aprscaching/shared";
 import { DUPE_WINDOW_SEC, planDupes, recentCopies, type Fate } from "./dupes.js";
 
 /**
@@ -187,6 +188,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const mailAcks: { from: string; msgNo: string; port: string }[] = []; // acks to the service call: Mailbox deliveries
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
   const groupMessages: MeshcomGroupHearing[] = []; // MeshCom group chat, apart from the callsign message log
+  const heardEvents: HeardEvent[] = []; // one per transmission, for the read API's heard stream
   // the Maidenhead locator leading a status report or Mic-E status text, per station: a grid square for the
   // station page, never a fix, so it never reaches positions, the live map or verification
   const locators = new Map<string, string>();
@@ -328,6 +330,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     if (grid) locators.set(p.src, grid);
 
     const fix = fixOf(p);
+    // a duplicate copy is no new hearing; an RF copy of one first heard over APRS-IS is
+    if (fate.kind !== "skip") heardEvents.push(heardEventOf(p, data, fix));
     if (!fix) continue;
     positions.push({
       src: p.src,
@@ -540,6 +544,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course, near));
     if (near.length && p.own) nearFixes.push({ heard: p.heard, lat: p.lat, lon: p.lon, speedKn: p.speedKn, near });
   }
+  // the heard envelopes ride the same dispatch: the heard stream filters them in memory
+  for (const heard of heardEvents) envelopes.push({ heard });
   await dispatchLive(env, envelopes);
 
   // the "you're near" radio message for opted-in players on foot near a cache (best-effort)

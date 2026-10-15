@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The Bun server holds the Node server's limits: a request body stops at BODY_MAX_BYTES, a failure answers a
 // generic JSON 500 (never Bun's error page), the https listener settings it has no listener for stop the boot,
-// and tool-registry fetches get their own guard. Run with `bun test servers/bun/test` (the CI Bun conformance).
+// tool-registry fetches get their own guard, and an event stream reaches its client. Run with `bun test servers/bun/test` (the CI Bun conformance).
 import { afterAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -112,5 +112,44 @@ describe("tool-registry fetches", () => {
     await s.env.FED_FETCH_GUARD!("https://10.0.0.7/x");
     for (const url of ["https://10.0.0.7/x", "https://192.168.1.5/x", "https://[::1]/x", "https://127.0.0.1/x"])
       await expect(s.env.TOOL_FETCH_GUARD!(url)).rejects.toThrow(/refused/);
+  });
+});
+
+describe("the heard stream", () => {
+  it("streams over Bun.serve and pushes a packet an ingest batch carries", async () => {
+    const s = start();
+    const res = await fetch(`${base(s)}/api/v1/stations/heard/stream?calls=OE8BUN`);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let text = "";
+    const until = async (want: RegExp) => {
+      while (!want.test(text)) {
+        const r = await reader.read();
+        if (r.done) throw new Error(`stream ended: ${text}`);
+        text += dec.decode(r.value, { stream: true });
+      }
+    };
+    await until(/event: snapshot/);
+    const ingest = await fetch(`${base(s)}/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ingest-secret": SECRETS.INGEST_SECRET },
+      body: JSON.stringify({
+        packets: [
+          {
+            src: "OE8BUN-9",
+            dst: "APRS",
+            path: ["WIDE1-1"],
+            payload: ">On the air",
+            heardVia: "rf",
+            port: "kiss-tnc",
+            ts: Math.floor(Date.now() / 1000),
+          },
+        ],
+      }),
+    });
+    expect(ingest.status).toBe(200);
+    await until(/event: heard[\s\S]*"status":"On the air"/);
+    await reader.cancel();
   });
 });

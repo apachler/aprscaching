@@ -15,6 +15,8 @@
  *   GET  /api/v1/corroborators        top IGates by Tier-A finds they helped verify
  *   GET  /api/v1/profile/:call        a callsign's public profile
  *   GET  /api/v1/stations?bbox=       live stations
+ *   GET  /api/v1/station/:call/heard  when a station was last heard, where, and over which route
+ *   GET  /api/v1/stations/heard/stream?calls=  the same, pushed as Server-Sent Events (heardfeed.ts)
  *   GET  /api/v1/spots?bbox=          live activity spots
  *   GET  /api/v1/coverage?bbox=       receiving sites, digipeaters and IGates with their range circles
  *   GET  /api/v1/licence/:call        callsign validity from imported public licence registers
@@ -33,6 +35,7 @@ import { handleStations, handleStation } from "./shack.js";
 import { handleSpots } from "./spots.js";
 import { handleCoverage } from "./coverage.js";
 import { licenceAnswer } from "./licence.js";
+import { handleHeardStream, handleStationHeard } from "./heardfeed.js";
 import {
   handleCachesGpx,
   handleCachesKml,
@@ -66,6 +69,16 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/profile/:call", desc: "a callsign's public profile" },
   { method: "GET", path: "/api/v1/stations?bbox=", desc: "live APRS stations" },
   { method: "GET", path: "/api/v1/station/:call", desc: "one station's latest info" },
+  {
+    method: "GET",
+    path: "/api/v1/station/:call/heard?since=",
+    desc: "when a station was last heard: time, route, position, comment and status text",
+  },
+  {
+    method: "GET",
+    path: "/api/v1/stations/heard/stream?calls=CALL1,CALL2",
+    desc: "the same pushed as Server-Sent Events: a snapshot per call, then each packet as it is heard",
+  },
   { method: "GET", path: "/api/v1/station/:call/track?from=&to=", desc: "position history (JSON)" },
   { method: "GET", path: "/api/v1/station/:call.kml", desc: "position history as a KML track" },
   { method: "GET", path: "/api/v1/spots?bbox=", desc: "live activity spots" },
@@ -184,6 +197,10 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (rest === "/leaderboard") return handleLeaderboard(req, env);
   if (rest === "/corroborators") return handleCorroborators(req, env);
   if (rest === "/stations") return bboxTooLarge(req) ?? handleStations(req, env);
+  if (rest === "/stations/heard/stream")
+    return handleHeardStream(req, env, g.key ? `apikey:${g.key}` : `apiip:${clientIp(req, env)}`, g.tier === "keyed");
+  const stHeard = /^\/station\/([A-Za-z0-9-]+)\/heard$/.exec(rest);
+  if (stHeard) return handleStationHeard(req, env, stHeard[1]!);
   if (rest === "/spots") return bboxTooLarge(req) ?? handleSpots(req, env);
   if (rest === "/coverage") return bboxTooLarge(req) ?? handleCoverage(req, env);
   const stTrack = /^\/station\/([A-Za-z0-9-]+)\/track$/.exec(rest);

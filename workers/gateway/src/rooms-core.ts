@@ -9,6 +9,9 @@
  * A half-open client (a phone that lost coverage) keeps its TCP socket up but never reads. The
  * ping/pong sweep reaps it, and a client whose send queue backs up is dropped before its buffer can
  * exhaust the process.
+ *
+ * Beside the sockets, a region takes in-process listeners ({@link RoomsCore.listen}): the read API's heard
+ * stream (heardfeed.ts) sees every dispatch the live map sees, from the same memory, with no database read.
  */
 import { Subscribe } from "@aprscaching/shared";
 import { deliveriesFor, type LiveEnvelope } from "./live.js";
@@ -42,8 +45,15 @@ interface State {
   alive: boolean;
 }
 
+/** An in-process listener on a region's dispatches, and who holds it (an API key or a client address). */
+interface Listener {
+  holder: string;
+  fn: (envelopes: LiveEnvelope[]) => void;
+}
+
 export class RoomsCore {
   private rooms = new Map<string, Map<RoomSocket, State>>();
+  private listeners = new Map<string, Set<Listener>>();
 
   /** `heartbeatMs: 0` runs no timer (the caller sweeps). */
   constructor(opts: { heartbeatMs?: number } = {}) {
@@ -100,8 +110,37 @@ export class RoomsCore {
     }
   }
 
-  /** Deliver live envelopes to each member per its subscription (live.ts `deliveriesFor`). */
+  /**
+   * Call `fn` with every batch of envelopes dispatched to `region` until the returned function is called. A
+   * listener that throws costs only its own delivery.
+   */
+  listen(region: string, holder: string, fn: (envelopes: LiveEnvelope[]) => void): () => void {
+    let set = this.listeners.get(region);
+    if (!set) this.listeners.set(region, (set = new Set()));
+    const l: Listener = { holder, fn };
+    set.add(l);
+    const own = set;
+    return () => {
+      own.delete(l);
+      if (!own.size && this.listeners.get(region) === own) this.listeners.delete(region);
+    };
+  }
+
+  /** The listeners `holder` holds open, across every region. */
+  holding(holder: string): number {
+    let n = 0;
+    for (const set of this.listeners.values()) for (const l of set) if (l.holder === holder) n++;
+    return n;
+  }
+
+  /** Deliver live envelopes to each member per its subscription (live.ts `deliveriesFor`), and to each listener. */
   dispatch(region: string, envelopes: LiveEnvelope[]): void {
+    for (const l of this.listeners.get(region) ?? [])
+      try {
+        l.fn(envelopes);
+      } catch {
+        /* one listener's failure is its own */
+      }
     const room = this.rooms.get(region);
     if (!room) return;
     for (const [socket, state] of room) {
