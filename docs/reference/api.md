@@ -74,6 +74,7 @@ most 20° a side.
 | GET        | `/api/v1`                                                                                | Self-describing index of the read API.                                          |
 | GET        | `/api/v1/caches` · `/caches/:code` · `/caches.gpx` · `/caches.kml` · `/caches/:code.gpx` | Caches in a box (`bbox`), one cache, and GPX/KML exports. Exports hold native caches only; imported places stay on the instance. |
 | GET        | `/api/v1/stations` · `/station/:call` · `/station/:call/track` · `/station/:call.kml`    | Live stations, one station, its track (JSON/KML).                               |
+| GET        | `/api/v1/station/:call/heard?since=` · `/stations/heard/stream?calls=`                   | When a station was last heard, as a snapshot and as a Server-Sent Events stream ([Station-health feed](#station-health-feed)). |
 | GET        | `/api/v1/profile/:call` · `/profile/:call.adif`                                          | A callsign's public profile · the person's verified finds, any SSID, as ADIF 3.1 (`SIG=APRSCACHING`); unlisted caches stay out. |
 | GET        | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots`                        | Activity feed (unlisted caches stay out), rankings, top corroborating IGates, live spots.                  |
 | GET        | `/api/v1/coverage?bbox=`                                                                 | Where radio hears a station, for the hide form's map: the attested receiving sites that sent a position in the last 30 days, and the digipeaters and IGates heard in the last 7 days, each with its range (`rangeKm`, `kind`, `estimated`). A station that advertises no PHG or RNG gets 10 km as a digipeater and 5 km as an IGate or receiving site, marked `estimated`; ranges are capped at 100 km and an answer at 300 sites. Cached for 1 minute. |
@@ -82,6 +83,55 @@ most 20° a side.
 | GET        | `/api/v1/key`                                                                            | The key the request presents: its name, prefix, creation and last use (`401` for none or an unknown one). |
 
 Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys never gate a feature.
+
+### Station-health feed
+
+The heard feed tells a script when a callsign was last heard, so a Node-RED flow or a home-automation box
+watches a station without an APRS-IS connection of its own. It carries what the station put on the air: the
+time, the route (`via` is `rf`, `aprs_is` or `app`, `path` holds the digipeaters, the q-construct and the
+gating IGate), the station's own position, its comment and its status text. No account, owner or registry
+field is part of it.
+
+`GET /api/v1/station/:call/heard` answers the latest snapshot (`StationHeard` in `packages/shared`). The call is
+taken as given, SSID included. `lastHeard` is `null` for a station this instance has not heard. Pass the
+answer's `cursor` back as `?since=`: `changed` is then `false` until something new is heard. The answer may be
+cached for 15 seconds, and its `ETag` answers `304` to `If-None-Match`.
+
+```bash
+curl -s "https://aprs.example.net/api/v1/station/OE8APR-9/heard"
+curl -s "https://aprs.example.net/api/v1/station/OE8APR-9/heard?since=1792096737&key=$KEY"
+```
+
+`GET /api/v1/stations/heard/stream?calls=CALL1,CALL2` pushes the same as Server-Sent Events, with no polling.
+It opens with a `snapshot` event per call, then sends a `heard` event (`HeardEvent`) for every packet of a
+watched call the moment the instance receives it; a duplicate copy of a packet sends none. A call with an SSID
+matches that station only; a call without one matches every SSID of the base call. A comment line
+(`: keep-alive`) arrives every 15 seconds. The stream closes after 30 minutes, and `EventSource` reconnects on
+its own after the `retry:` delay of 5 seconds.
+
+| Limit                         | Value                                                   |
+| ----------------------------- | ------------------------------------------------------- |
+| Callsigns per stream          | 20                                                      |
+| Streams open at once          | 2 per IP without a key, 10 per key (`429` past it)      |
+| Opening a stream              | One request against the read API's rate limit           |
+
+```bash
+curl -N "https://aprs.example.net/api/v1/stations/heard/stream?calls=OE8APR,DL1ABC-7&key=$KEY"
+```
+
+```js
+// A browser, or Node 22+ with the eventsource package
+const es = new EventSource("https://aprs.example.net/api/v1/stations/heard/stream?calls=OE8APR,DL1ABC-7");
+es.addEventListener("snapshot", (e) => console.log("last heard", JSON.parse(e.data)));
+es.addEventListener("heard", (e) => {
+  const ev = JSON.parse(e.data); // { type, callsign, ts, via, path, position?, status? }
+  console.log(ev.callsign, "heard via", ev.via, ev.status ?? "");
+});
+```
+
+In Node-RED, an SSE client node pointed at the stream URL, or a function node running the snippet above,
+emits one message per event. A flow that only checks now and then calls the snapshot route on a timer with
+`?since=` and acts when `changed` is `true`.
 
 A key belongs to a signed-in account. Create one under **Settings → Developer**, or with the account's session:
 

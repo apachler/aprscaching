@@ -23,3 +23,4 @@ export * from "./origins.js";
 export * from "./sitesettings.js";
 export * from "./toolregistries.js";
 export * from "./coverage.js";
+export * from "./heard.js";

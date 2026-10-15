@@ -10,7 +10,7 @@
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
-import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
+import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt, HeardEvent } from "@aprscaching/shared";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 
 const GEOFENCE_RADIUS_M = 150;
@@ -29,6 +29,8 @@ export function liveRegionOf(url: URL): string | null {
 export interface LiveEnvelope {
   station?: StationDelta;
   prompts?: { forCallsign: string; prompt: GeofencePrompt }[];
+  /** One transmission of a station, for the read API's heard stream (heardfeed.ts); never sent to a socket. */
+  heard?: HeardEvent;
 }
 
 function inBbox(bbox: readonly [number, number, number, number], lat: number, lon: number): boolean {
@@ -151,14 +153,15 @@ async function settledAmong(env: Env, callsign: string, caches: NearCache[]): Pr
 /** Send envelopes to the region room (the in-memory rooms of rooms-core.ts) via its fetch entry. */
 export async function dispatchLive(env: Env, envelopes: LiveEnvelope[], region = LIVE_REGION): Promise<void> {
   if (!envelopes.length) return;
-  const room = env.ROOMS.get(region);
-  await room
-    .fetch(
+  try {
+    await env.ROOMS.get(region).fetch(
       new Request("https://room/dispatch", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ envelopes }),
       }),
-    )
-    .catch(() => null); // room unavailable; live is best-effort
+    );
+  } catch {
+    /* no room binding, or the room is unavailable: live is best-effort and never fails the ingest */
+  }
 }

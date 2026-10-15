@@ -148,7 +148,13 @@ export function createServer(opts: BunServerOptions): BunServer {
       // x-real-ip and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared
       const headers = new Headers(req.headers);
       stampClientIp(headers, srv.requestIP(req)?.address, env);
-      return handle(new Request(req, { headers }), env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
+      const res = await handle(new Request(req, { headers }), env, {
+        waitUntil: (p) => void Promise.resolve(p).catch(() => {}),
+      });
+      // an event stream (the CoT feed, the heard stream) is quiet between keep-alives: Bun's idle timeout
+      // would cut it, so it has none
+      if ((res.headers.get("content-type") ?? "").includes("text/event-stream")) srv.timeout(req, 0);
+      return res;
     },
     websocket: roomHandlers(rooms),
   });
