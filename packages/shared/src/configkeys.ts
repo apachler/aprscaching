@@ -131,6 +131,43 @@ export const CONFIG_KEYS = {
   IMPORT_ALLOW: { type: "list", units: ["gateway"], site: { group: "imports", options: ["wwff", "gcau", "iota"] } },
   SERVICE_CALL: { type: "call", units: ["gateway"] },
   RADIO_REPLIES: { type: "enum", units: ["gateway"], values: ["0", "1"] },
+  CACHE_OBJECTS: {
+    type: "enum",
+    units: ["gateway"],
+    default: "0",
+    values: ["0", "1", "false", "no", "true", "yes"],
+    site: { group: "radio" },
+  },
+  CACHE_OBJECTS_BOX: {
+    type: "string",
+    units: ["gateway"],
+    site: { group: "radio", maxLength: 64, gate: "CACHE_OBJECTS" },
+  },
+  CACHE_OBJECTS_RADIUS_KM: {
+    type: "int",
+    units: ["gateway"],
+    default: "20",
+    site: { group: "radio", min: 1, max: 50, unit: "km", gate: "CACHE_OBJECTS" },
+  },
+  CACHE_OBJECTS_INTERVAL_MIN: {
+    type: "int",
+    units: ["gateway"],
+    default: "30",
+    site: { group: "radio", min: 30, max: 240, unit: "min", gate: "CACHE_OBJECTS" },
+  },
+  CACHE_OBJECTS_PER_RUN: {
+    type: "int",
+    units: ["gateway"],
+    default: "2",
+    site: { group: "radio", min: 1, max: 5, unit: "objects", gate: "CACHE_OBJECTS" },
+  },
+  CACHE_OBJECTS_PATH: {
+    type: "enum",
+    units: ["gateway"],
+    default: "none",
+    values: ["none", "WIDE1-1"],
+    site: { group: "radio", gate: "CACHE_OBJECTS" },
+  },
   API_RATE_WINDOW_SEC: {
     type: "int",
     units: ["gateway"],

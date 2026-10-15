@@ -122,6 +122,16 @@ export function matches(s: SiteSettingView, groupTitle: string, q: string): bool
   return [s.label, s.hint, s.key, s.key.replace(/_/g, " "), groupTitle].some((w) => w.toLowerCase().includes(t));
 }
 
+/**
+ * The switch a setting folds under while it is off (its `gate`), or null when the setting shows: a subsystem's
+ * details stay out of the way until its master switch is on.
+ */
+export function foldedBy(s: SiteSettingView, all: SiteSettingView[]): SiteSettingView | null {
+  if (!s.gate) return null;
+  const gate = all.find((g) => g.key === s.gate);
+  return gate && !flagOn(gate.value) ? gate : null;
+}
+
 /** A group's header status: how many of its settings this page changed and how many the environment sets. */
 export function groupStatus(settings: SiteSettingView[]): string {
   const site = settings.filter((s) => s.source === "site").length;

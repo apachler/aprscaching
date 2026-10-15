@@ -938,6 +938,7 @@ const siteSettings = (): SiteSettings => ({
       options: k.site!.options ? [...k.site!.options] : null,
       format: k.site!.format ?? null,
       maxLength: k.site!.maxLength ?? null,
+      gate: k.site!.gate ?? null,
       fields:
         k.site!.format === "retention"
           ? Object.entries(RETENTION_FIELDS).map(([id, f]) => ({

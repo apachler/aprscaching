@@ -20,6 +20,7 @@ import {
   defaultText,
   draftOf,
   flagOn,
+  foldedBy,
   groupStatus,
   isDirty,
   matches,
@@ -32,7 +33,7 @@ import { ToolRegistriesAdmin } from "./ToolRegistriesAdmin.js";
 
 /**
  * Instance admin → Instance settings: the policy values of this instance — game rules, API limits, retention,
- * imports, tools and their registries, the imprint, donation links and the update check — grouped, searchable with the admin panel's own
+ * imports, caches on air, tools and their registries, the imprint, donation links and the update check — grouped, searchable with the admin panel's own
  * search, each with its source. A value the environment sets wins and shows read-only with the reason; any
  * other is saved here (stored in the database) or reset to its default. The gateway checks and audit-logs each
  * change; infrastructure and secrets stay in the environment and never appear here.
@@ -63,15 +64,27 @@ export function InstanceSettingsAdmin(props: { q: string }) {
         A value set in the environment wins and shows here read-only; change it there and restart the gateway.
         Everything else is saved here and applies at once. Secrets and addresses stay in the environment.
       </p>
-      {shown.map((g) => (
-        // a search opens every group it matches; clearing it closes them again
-        <Group key={`${g.id}:${searching}`} title={g.title} status={groupStatus(g.settings)} defaultOpen={searching}>
-          {g.settings.map((s) => (
-            <SettingRow key={s.key} setting={s} onSaved={replace} />
-          ))}
-          {g.id === "tools" && <ToolRegistriesAdmin />}
-        </Group>
-      ))}
+      {shown.map((g) => {
+        // a setting under a master switch that is off folds away, with one line saying what turns it on
+        const gates = new Map(g.settings.map((s) => [s.key, foldedBy(s, data.settings)]));
+        const offGates = [...new Set([...gates.values()].filter((x) => x !== null))];
+        return (
+          // a search opens every group it matches; clearing it closes them again
+          <Group key={`${g.id}:${searching}`} title={g.title} status={groupStatus(g.settings)} defaultOpen={searching}>
+            {g.settings
+              .filter((s) => !gates.get(s.key))
+              .map((s) => (
+                <SettingRow key={s.key} setting={s} onSaved={replace} />
+              ))}
+            {offGates.map((gate) => (
+              <p key={gate.key} className="muted fine">
+                Switch on {gate.label} to set the rest of this group.
+              </p>
+            ))}
+            {g.id === "tools" && <ToolRegistriesAdmin />}
+          </Group>
+        );
+      })}
     </>
   );
 }

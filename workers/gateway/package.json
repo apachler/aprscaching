@@ -37,6 +37,7 @@
     "./account": "./src/account.ts",
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",
+    "./cacheobjects": "./src/cacheobjects.ts",
     "./ingest": "./src/ingest.ts",
     "./deviceid": "./src/deviceid.ts",
     "./adoption": "./src/adoption.ts",

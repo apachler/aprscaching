@@ -60,6 +60,12 @@ change. It travels with the database, so a backup carries it. The tables below m
 | Activity spots | `SPOTS_ENABLED` | Imports & data sources | on or off |
 | Spot sources | `SPOTS_SOURCES` | Imports & data sources | any of `pota`, `sota`, `gma`, `pskreporter`, `dxcluster`, `rbn` |
 | Poll interval | `SPOTS_TTL_SEC` | Imports & data sources | a whole number, 60–86400 s |
+| Send caches as APRS objects | `CACHE_OBJECTS` | Caches on air | on or off |
+| Transmitting box | `CACHE_OBJECTS_BOX` | Caches on air | one line of text, up to 64 characters |
+| Radius | `CACHE_OBJECTS_RADIUS_KM` | Caches on air | a whole number, 1–50 km |
+| Repeat every | `CACHE_OBJECTS_INTERVAL_MIN` | Caches on air | a whole number, 30–240 min |
+| Objects per run | `CACHE_OBJECTS_PER_RUN` | Caches on air | a whole number, 1–5 objects |
+| Path | `CACHE_OBJECTS_PATH` | Caches on air | one of `none`, `WIDE1-1` |
 | List trusted peers | `FED_PEER_EXCHANGE` | Federation | on or off |
 | Pass on peers' records | `FED_RESERVE` | Federation | one of `trusted`, `all`, `off` |
 | Players may add tool registries | `TOOL_REGISTRIES_PLAYERS` | Tools | on or off |
@@ -111,6 +117,12 @@ change. It travels with the database, so a backup carries it. The tables below m
 | `HOSTING_PROVIDER` | Who hosts this instance and where, for example `Oracle Cloud Infrastructure, Frankfurt (Germany)`. `/privacy` names it among the recipients as the hosting processor; unset, it names none. Leave it unset on your own hardware · *[Instance setting](#instance-settings)* | — |
 | `SERVICE_CALL` | The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks and replies are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit | the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one, or when that base call is longer than six characters |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
+| `CACHE_OBJECTS` | `1` sends the caches near the transmitting ingest box on air as APRS objects with the point-of-interest symbol, from the service call, through that box's radio and its transmit gates; never through APRS-IS ([Caches on air](../run/radios/caches-on-air.md)) · *[Instance setting](#instance-settings)* | off |
+| `CACHE_OBJECTS_BOX` | The `BOX_ID` of the ingest box whose radio sends the cache objects · *[Instance setting](#instance-settings)* | — |
+| `CACHE_OBJECTS_RADIUS_KM` | Only active caches this many kilometres or closer to the transmitting box's own position (`BOX_LAT`, `BOX_LON`) go on air, 1–50 · *[Instance setting](#instance-settings)* | `20` |
+| `CACHE_OBJECTS_INTERVAL_MIN` | Minutes between repeats of one cache object once its first announcements are out (at once, then 5, 10 and 20 minutes apart), 30–240 · *[Instance setting](#instance-settings)* | `30` |
+| `CACHE_OBJECTS_PER_RUN` | Cache objects sent in one five-minute run, at most, 1–5 · *[Instance setting](#instance-settings)* | `2` |
+| `CACHE_OBJECTS_PATH` | The digipeater path of cache objects: `none`, or `WIDE1-1` · *[Instance setting](#instance-settings)* | `none` |
 <!-- /config-table -->
 
 The Node and Bun servers also read plain runtime knobs that are not part of the gateway config object:
