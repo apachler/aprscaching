@@ -30,6 +30,7 @@ own `port`, counted at `GET /api/ports`.
 | **Soundcard port** | `SOUNDCARD_DEVICE` (+ `SOUNDCARD_*`, `SOUNDCARD_PORTS`) | The box is the 1200-baud AFSK modem: ALSA's `arecord` and `aplay` with a USB sound card or a sound HAT, keyed by a PTT driver (CM108 GPIO, Linux GPIO, serial RTS/DTR, CAT, rigctld or VOX). Receives like a KISS TNC and carries the same functions. Transmit is off by default and needs a control-verified call; a watchdog bounds the key time. Setup: [Soundcard port](soundcard.md). |
 | **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
+| **LoRa APRS** | `LORA_APRS_HOST` (+ `LORA_APRS_PORT`, 8001; `LORA_APRS_PROTOCOL`; `LORA_APRS_PRESET`) | Reads a LoRa APRS iGate's TNC server (CA2RXU firmware), as KISS frames or text lines. Takes the LoRa packet's TNC2 line with or without its `0x3C 0xFF 0x01` prefix, or the iGate's AX.25 rendering of it; drops lines the iGate passed on from APRS-IS. Logs the radio settings and a packet's airtime. Receive only. Setup: [LoRa APRS](lora-aprs.md). |
 | **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes send to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Accepts only licensed nodes (licensed ham mode on, callsign as long name), under their callsign; drops licence-free nodes. Always Tier C. The browser's Web Serial path uses the same decoder and rule. |
 | **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Accepts only configured node addresses, rate-capped per node; a frame the node reports twice (LoRa and server) is forwarded once. Transmits only answers to radio commands, and only with `MESHCOM_TX=1`. Setup, firewall, trust and troubleshooting: [MeshCom](meshcom.md). |
 | **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`, `AXUDP_BIND`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it is a receive-only listener that accepts from any host and says so at start; bind it to a LAN address with `AXUDP_BIND`. With `AXUDP_PEERS` it is a two-way port that carries NET/ROM crosslinks and FBB forwarding over the internet, and accepts frames only from the peers' addresses. Host names are resolved again every five minutes, so dynamic DNS works; anything else is dropped and counted. |
@@ -65,8 +66,8 @@ stations**, or `FIRST_PARTY_SITES`).
 ## Receiving site and Tier A
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local
-TNCs (KISS, AGWPE or WA8DED host mode) or soundcard ports hears **directly** carries that callsign to the
-gateway. A gateway that
+TNCs (KISS, AGWPE or WA8DED host mode), soundcard ports or its LoRa APRS iGate hears **directly** carries that
+callsign to the gateway. A gateway that
 trusts the call counts those frames as RF-corroborated evidence for Tier A, with no APRS-IS round trip, so it
 works off-grid too. The gateway's independence rule still keeps your own receiver from corroborating your own
 finds.

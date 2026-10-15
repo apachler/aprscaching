@@ -113,6 +113,14 @@ HOSTMODE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of t
 HOSTMODE_PORT	int	ingest	3694		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the WA8DED host-mode TNC	
 HOSTMODE_MYCALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to	
 HOSTMODE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	Host-mode radio channel to use (0 is the first)	
+LORA_APRS_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the LoRa APRS iGate's TNC server; set it to enable the LoRa APRS port	
+LORA_APRS_PORT	int	ingest	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the LoRa APRS iGate's TNC server	
+LORA_APRS_PROTOCOL	enum	ingest	kiss	kiss|text	0	0	selfhost,baremetal,ingest-box,pocket	What the TNC server sends: kiss (KISS frames) or text (one TNC2 line per packet)	
+LORA_APRS_PRESET	enum	ingest	standard	standard|fast|custom	0	0	selfhost,baremetal,ingest-box,pocket	LoRa modem settings the modem runs: standard (SF9, CR 4:7), fast (SF8, CR 4:6) or custom	
+LORA_APRS_FREQ_MHZ	number	ingest	433.775		0	0	selfhost,baremetal,ingest-box,pocket	Frequency the LoRa modem is set to, in MHz (433.775 in IARU Region 1, 439.9125 in the UK)	
+LORA_APRS_SF	int	ingest	9		0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: spreading factor, 7-12	
+LORA_APRS_BW_KHZ	number	ingest	125		0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: bandwidth in kHz (125, 250, 62.5, …)	
+LORA_APRS_CR	enum	ingest	7	5|6|7|8	0	0	selfhost,baremetal,ingest-box,pocket	Custom preset: coding rate denominator, 5-8 for 4:5 to 4:8	
 TX_GATE_GRACE	string	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)	
 SOUNDCARD_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port	
 SOUNDCARD_PLAYBACK	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	ALSA playback device of the soundcard port (blank: the capture device)	

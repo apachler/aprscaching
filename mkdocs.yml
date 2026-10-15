@@ -143,6 +143,7 @@ nav:
           - RF ingest & transports: run/radios/rf-ingest.md
           - Soundcard port: run/radios/soundcard.md
           - MeshCom: run/radios/meshcom.md
+          - LoRa APRS: run/radios/lora-aprs.md
           - "Packet: BBS & NET/ROM node": run/radios/packet-node.md
           - Remote control of your box: run/radios/remote-box.md
       - Networks:

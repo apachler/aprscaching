@@ -328,6 +328,13 @@ Every shape with an ingest.
 - **Fix:** check the serial-to-TCP bridge of the WA8DED TNC, and the host and port.
 - **See:** [WA8DED hostmode quick start](radios/quick-starts.md#wa8ded-hostmode-thefirmware-tncs-tfpcx).
 
+### `ingest.lora_aprs`
+
+- **Tests:** a TCP connection to `LORA_APRS_HOST:LORA_APRS_PORT`, when `LORA_APRS_HOST` is set.
+- **Message:** `LORA_APRS <host>:<port> does not answer` (fail).
+- **Fix:** switch on the iGate's TNC server, check that it is on your Wi-Fi, and check the host and port.
+- **See:** [LoRa APRS](radios/lora-aprs.md).
+
 ### `ingest.meshtastic`
 
 - **Tests:** a TCP connection to `MESHTASTIC_HOST:MESHTASTIC_PORT`, when `MESHTASTIC_HOST` is set.

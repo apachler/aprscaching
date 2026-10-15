@@ -125,6 +125,14 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   HOSTMODE_PORT: "TCP port of the WA8DED host-mode TNC",
   HOSTMODE_MYCALL: "Callsign the host-mode TNC is set to",
   HOSTMODE_RADIO_PORT: "Host-mode radio channel to use (0 is the first)",
+  LORA_APRS_HOST: "Host of the LoRa APRS iGate's TNC server; set it to enable the LoRa APRS port",
+  LORA_APRS_PORT: "TCP port of the LoRa APRS iGate's TNC server",
+  LORA_APRS_PROTOCOL: "What the TNC server sends: kiss (KISS frames) or text (one TNC2 line per packet)",
+  LORA_APRS_PRESET: "LoRa modem settings the modem runs: standard (SF9, CR 4:7), fast (SF8, CR 4:6) or custom",
+  LORA_APRS_FREQ_MHZ: "Frequency the LoRa modem is set to, in MHz (433.775 in IARU Region 1, 439.9125 in the UK)",
+  LORA_APRS_SF: "Custom preset: spreading factor, 7-12",
+  LORA_APRS_BW_KHZ: "Custom preset: bandwidth in kHz (125, 250, 62.5, …)",
+  LORA_APRS_CR: "Custom preset: coding rate denominator, 5-8 for 4:5 to 4:8",
   TX_GATE_GRACE: "How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)",
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
@@ -756,6 +764,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "WA8DED hostmode",
         "`HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` (`0`, the first channel)",
+      ],
+      [
+        "LoRa APRS (receive only; a LoRa APRS iGate's TNC server)",
+        "`LORA_APRS_HOST` (enables the port), `LORA_APRS_PORT` (`8001`), `LORA_APRS_PROTOCOL` (`kiss`, or `text` for one TNC2 line per packet; it matches the iGate's KISS setting), `LORA_APRS_PRESET` (`standard`: BW 125 kHz, SF9, CR 4:7; `fast`: BW 125 kHz, SF8, CR 4:6; `custom`), `LORA_APRS_FREQ_MHZ` (`433.775`, IARU Region 1; `439.9125` in the UK), and for `custom`: `LORA_APRS_SF` (`9`, 7–12), `LORA_APRS_BW_KHZ` (`125`), `LORA_APRS_CR` (`7`, for 4:7; 5–8). The box does not set the modem: these say what it runs, for the status line and the airtime — [LoRa APRS](../run/radios/lora-aprs.md)",
       ],
       [
         "Transmit gate (every transmit port: the KISS TNC, the soundcard ports and MeshCom transmit)",
