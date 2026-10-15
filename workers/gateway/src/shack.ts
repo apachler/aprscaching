@@ -178,7 +178,7 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(
     `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
-            s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner
+            s.range_km AS rangeKm, s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
   )
     .bind(cs)

@@ -22,6 +22,11 @@ The APRS-IS feed always runs: set `APRSIS_FILTER`, and `APRSIS_CALLSIGN` / `APRS
 logged-in feed. Every transport below is opt-in and starts only when its setting is present. Each stamps its
 own `port`, counted at `GET /api/ports`.
 
+APRS names no character set: a frame heard on RF and a line from APRS-IS carry bytes. The box passes them on
+unchanged, so the IGate and the digipeater send exactly the bytes they heard. The gateway reads the text a
+station sent (a message, a status, a comment) as UTF-8 when the bytes are valid UTF-8, and otherwise as
+Latin-1, one character per byte. A `Grüße` sent in either set shows as `Grüße`.
+
 ## Transports
 
 | Transport | Turn on with | What it does |

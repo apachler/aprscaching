@@ -145,23 +145,16 @@ export interface LoraDecoded {
   airBytes: number;
 }
 
-const utf8 = new TextDecoder("utf-8", { fatal: true });
-const encoder = new TextEncoder();
-/** One character per byte (ISO-8859-1); TextDecoder's "latin1" is windows-1252 and remaps 0x80–0x9F. */
+/**
+ * One character per byte (ISO-8859-1), the way every other port posts what it heard: the gateway reads the text
+ * as UTF-8 where the bytes are valid UTF-8 (`rfText`). TextDecoder's "latin1" is windows-1252 and remaps
+ * 0x80–0x9F, so Buffer's encoding is used.
+ */
 const latin1 = (b: Uint8Array) => Buffer.from(b).toString("latin1");
-
-/** LoRa APRS firmware writes UTF-8: text that is valid UTF-8 reads as such, anything else byte for byte. */
-function text(b: Uint8Array): string {
-  try {
-    return utf8.decode(b);
-  } catch {
-    return latin1(b);
-  }
-}
 
 /** A TNC2 line from LoRa bytes; a trailing CR, LF or NUL is dropped. */
 function parseLine(b: Uint8Array): ParsedFrame | null {
-  const line = text(b).replace(/[\r\n\0]+$/, "");
+  const line = latin1(b).replace(/[\r\n\0]+$/, "");
   // one line: a frame with a line break or another control character in it is not a TNC2 line
   if (!line || /[\x00-\x1f]/.test(line)) return null;
   const f = parseTNC2(line);
@@ -182,11 +175,9 @@ export function decodeLoraPacket(b: Uint8Array): LoraDecoded | null {
   }
   const ax = decodeAx25(b);
   if (ax) {
-    // the firmware put the line's UTF-8 bytes in the info field; AX.25 decoding reads them one per byte
-    const payload = text(Buffer.from(ax.payload, "latin1"));
     const head = `${ax.src}>${ax.dst}${ax.path.length ? "," + ax.path.join(",") : ""}`;
-    const frame = { ...ax, payload, raw: `${head}:${payload}` };
-    return { frame, form: "ax25", airBytes: LORA_APRS_PREFIX.length + encoder.encode(frame.raw).length };
+    const frame = { ...ax, raw: `${head}:${ax.payload}` };
+    return { frame, form: "ax25", airBytes: LORA_APRS_PREFIX.length + frame.raw.length };
   }
   const frame = parseLine(b);
   return frame ? { frame, form: "text", airBytes: LORA_APRS_PREFIX.length + b.length } : null;

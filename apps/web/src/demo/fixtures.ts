@@ -410,6 +410,7 @@ const STATIONS: StationSummary[] = [
 const MOBILE = STATIONS[0] as StationSummary;
 const STATION_DETAIL: StationDetail = {
   ...MOBILE,
+  rangeKm: null,
   track: [0, 1, 2, 3, 4, 5].map((i) => ({
     ts: NOW - (12 - i * 2) * MIN,
     lat: 47.0602 + i * 0.002,

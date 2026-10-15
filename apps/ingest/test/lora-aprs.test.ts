@@ -4,7 +4,7 @@
 // node's frames; and it reads an iGate's TNC server over a real socket in both of its forms.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import net from "node:net";
-import { encodeAx25, kissWrap } from "@aprscaching/aprs";
+import { encodeAx25, kissWrap, rfText } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import {
   decodeLoraPacket,
@@ -43,8 +43,8 @@ describe("decodeLoraPacket", () => {
     expect(d.airBytes).toBe(3 + POS.length);
   });
 
-  it("reads UTF-8 text, and bytes that are not UTF-8 one character per byte", () => {
-    expect(decodeLoraPacket(lora("OE8APR-7>APLRT1:>Grüße"))!.frame.payload).toBe(">Grüße");
+  it("keeps the bytes one character per byte, for the gateway to read as UTF-8 where they are", () => {
+    expect(rfText(decodeLoraPacket(lora("OE8APR-7>APLRT1:>Grüße"))!.frame.payload)).toBe(">Grüße");
     const b = Uint8Array.from([...lora("OE8APR-7>APLRT1:>x"), 0xe9, 0x96]);
     expect(decodeLoraPacket(b)!.frame.payload).toBe(">xé\u0096");
   });
@@ -63,9 +63,10 @@ describe("decodeLoraPacket", () => {
     });
     const d = decodeLoraPacket(ax)!;
     expect(d.form).toBe("ax25");
-    expect(d.frame).toMatchObject({ src: "OE8APR-7", path: ["OE8XYZ-10*"], payload: ">Grüße" });
-    expect(d.frame.raw).toBe("OE8APR-7>APLRT1,OE8XYZ-10*:>Grüße");
-    expect(d.airBytes).toBe(3 + new TextEncoder().encode(d.frame.raw).length);
+    expect(d.frame).toMatchObject({ src: "OE8APR-7", path: ["OE8XYZ-10*"] });
+    expect(rfText(d.frame.payload)).toBe(">Grüße");
+    expect(rfText(d.frame.raw!)).toBe("OE8APR-7>APLRT1,OE8XYZ-10*:>Grüße");
+    expect(d.airBytes).toBe(3 + new TextEncoder().encode(rfText(d.frame.raw!)).length);
   });
 
   it("reads a bare TNC2 line", () => {
@@ -241,6 +242,6 @@ describe("LoraAprsPort", () => {
     const portNo = await serve([text.slice(0, 20), text.slice(20, 61), text.slice(61)]);
     const got = connect(portNo, settings({ protocol: "text" }));
     await until(() => got.length >= 2);
-    expect(got.map((x) => x.payload)).toEqual(["!4703.33N/01525.56E>LoRa", ">zwei Grüße"]);
+    expect(got.map((x) => rfText(x.payload))).toEqual(["!4703.33N/01525.56E>LoRa", ">zwei Grüße"]);
   });
 });
