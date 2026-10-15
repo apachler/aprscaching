@@ -14,6 +14,8 @@ import { isCallsignVerified } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall } from "./servicecall.js";
 import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
+import { routeOf } from "./provenance.js";
+import { attestation, everySite, sitesFor } from "./attestedsites.js";
 
 // ------------------------------------------------------------- station registry
 function bbox(u: URL): { sql: string; binds: number[] } {
@@ -208,9 +210,36 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const pc = await env.DB.prepare("SELECT COUNT(*) AS n FROM positions WHERE callsign = ?")
     .bind(cs)
     .first<{ n: number }>();
+  // The route of the latest stored position, attested against the sites its delivering box may claim; the box
+  // itself never leaves.
+  const last = await env.DB.prepare(
+    `SELECT callsign, ts, heard_via, igate_call, path, transport, ingest_box FROM positions
+      WHERE callsign = ? ORDER BY ts DESC, id DESC LIMIT 1`,
+  )
+    .bind(cs)
+    .first<{
+      callsign: string;
+      ts: number;
+      heard_via: string;
+      igate_call: string | null;
+      path: string | null;
+      transport: string | null;
+      ingest_box: string | null;
+    }>();
+  const att = last ? await attestation(env) : null;
+  const lastRoute = last && att ? routeOf(last, sitesFor(att, last.ingest_box), everySite(att)) : null;
 
   return json({
-    station: { ...station, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0, registered, mine },
+    station: {
+      ...station,
+      roles: stRoles,
+      track,
+      wx: wx ?? null,
+      packets: pc?.n ?? 0,
+      registered,
+      mine,
+      lastRoute,
+    },
   });
 }
 

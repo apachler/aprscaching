@@ -55,6 +55,7 @@ import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
 import { TERMS } from "../terms.js";
 import { ContentMenu } from "../moderation/ContentMenu.js";
+import { PacketRoute } from "../packet/PacketRoute.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -784,7 +785,28 @@ function LogRow(props: {
         {l.needsMaintenance && <div className="logrow-method warn">⚠ flagged: needs maintenance</div>}
         {props.sync && <div className="logrow-method">{props.sync}</div>}
         {l.comment && <div className="logrow-note">{l.comment}</div>}
+        {l.logType === "found" && (
+          <Disclosure label="Packet route" className="logrow-route">
+            <PacketRoute route={l.route} empty={noRoute(l)} note={routeNote(l, tier)} />
+          </Disclosure>
+        )}
       </div>
     </div>
   );
+}
+
+/** Why a found log has no packet route on record. */
+function noRoute(l: CacheLogEntry): string {
+  if (l.corroboratedBy)
+    return `${l.corroboratedBy}, another instance, heard the finder on the air; the packet's route stays with that instance.`;
+  if (l.verifyMethod === "app_geo")
+    return "The finder's device location placed them at the cache; no packet was needed.";
+  return "No packet from the finder near the cache is on record.";
+}
+
+/** What the route alone does not show: an attested hearing that still did not make the find Tier A. */
+function routeNote(l: CacheLogEntry, tier: Tier): string | null {
+  return l.route?.attested && tier !== "A"
+    ? "An attested hearing alone is not enough: Tier A also needs a receiving station the finder does not control and a track that could reach the cache."
+    : null;
 }

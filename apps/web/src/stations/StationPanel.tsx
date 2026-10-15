@@ -13,6 +13,7 @@ import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
 import { MeshcomSection } from "../meshcom/MeshcomSection.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { PacketRoute } from "../packet/PacketRoute.js";
 
 /** What each station role means, for its badge's hint. */
 const ROLE_HINT: Partial<Record<StationRole, string>> = {
@@ -161,6 +162,15 @@ export function StationPanel(props: {
               <Button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</Button>
             </div>
           </div>
+          <section className="station-route" aria-labelledby="station-route-h">
+            <h3 id="station-route-h" className="tr-head">
+              Last packet route
+            </h3>
+            <PacketRoute
+              route={station.lastRoute}
+              empty="No position from this station is stored, so no route is on record."
+            />
+          </section>
           <MeshcomSection callsign={station.callsign} />
           <TrackReplay map={map} callsign={station.callsign} />
           <StationGraphs callsign={station.callsign} />

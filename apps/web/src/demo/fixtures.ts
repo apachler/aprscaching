@@ -268,10 +268,34 @@ const LOGS: CacheLogEntry[] = [
   log(101, 1, "OE6GHJ", 2 * HOUR, "found", "A", {
     comment: "Heard by OE6XGR-10 on the way up. TFTC!",
     corroboratedBy: null,
+    verifyMethod: "aprs_rf",
+    route: {
+      src: "OE6GHJ-7",
+      path: "OE6XGR-2*,WIDE2-1",
+      heardVia: "rf",
+      transport: "tnc",
+      site: "OE6XGR-10",
+      attested: true,
+      siteAttested: true,
+      ts: NOW - 2 * HOUR - 40,
+    },
   }),
   log(102, 1, "DL4MDW", 1 * DAY, "found", "B", { comment: "Quick find before the lift down." }),
   log(103, 1, "OE8KUR", 3 * DAY, "dnf", null, { comment: "Too many muggles around the clock." }),
-  log(104, 1, "OE6MKL", 6 * DAY, "found", "C", { comment: "Logged over APRS-IS from the café." }),
+  log(104, 1, "OE6MKL", 6 * DAY, "found", "C", {
+    comment: "Logged over APRS-IS from the café.",
+    verifyMethod: "aprs_is",
+    route: {
+      src: "OE6MKL-9",
+      path: "WIDE1-1,qAR,OE6XGR-10",
+      heardVia: "rf",
+      transport: "aprs-is",
+      site: "OE6XGR-10",
+      attested: false,
+      siteAttested: true,
+      ts: NOW - 6 * DAY - 90,
+    },
+  }),
   log(105, 1, ME, 9 * DAY, "maintenance", null, { comment: "New logbook, container dried." }),
 ];
 
@@ -421,6 +445,16 @@ const STATION_DETAIL: StationDetail = {
   packets: 214,
   registered: true,
   mine: false,
+  lastRoute: {
+    src: "OE6XRR-9",
+    path: "OE6XGR-2*,WIDE2-1",
+    heardVia: "rf",
+    transport: "tnc",
+    site: "OE6XGR-10",
+    attested: true,
+    siteAttested: true,
+    ts: NOW - 2 * MIN,
+  },
 };
 
 const ACTIVITY: ActivityItem[] = LOGS.map((l) => ({

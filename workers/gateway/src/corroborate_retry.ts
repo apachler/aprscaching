@@ -134,7 +134,7 @@ async function liftLater(
   });
   const up = await env.DB.prepare(
     `UPDATE cache_logs SET tier = 'A', verified = 1, verify_method = 'aprs_rf_peer', corroborated_by = ?,
-       distance_m = ?, matched_position_id = NULL, corroborator_igate = ?, corroborated_later_at = ?
+       distance_m = ?, matched_position_id = NULL, route = NULL, corroborator_igate = ?, corroborated_later_at = ?
      WHERE id = ? AND tier != 'A'`,
   )
     .bind(winner.instance, winner.distanceM, igate, now, r.log_id)

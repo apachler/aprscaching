@@ -256,6 +256,9 @@
     line-height: 1;
     padding: 0 var(--space-2xs);
     color: var(--muted);
+    /* WCAG 2.5.8: at least 24px in every theme, Phosphor's smaller mono glyph included */
+    min-inline-size: 24px;
+    min-block-size: 24px;
   }
   .rating-stars .star.on {
     color: var(--warn-text);
@@ -419,6 +422,13 @@
     color: var(--ink-2);
     margin-top: var(--space-xs);
     line-height: 1.4;
+  }
+  /* a found log's packet route: a quiet toggle under the note */
+  .logrow-route {
+    margin-top: var(--space-2xs);
+  }
+  .logrow-route > button.link {
+    font-size: var(--text-caption);
   }
   .signed {
     color: var(--tier-b-text);
