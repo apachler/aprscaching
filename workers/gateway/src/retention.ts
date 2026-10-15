@@ -53,7 +53,7 @@ const FORWARD_LOG_KEEP_S = 30 * DAY_S;
 /** Watch alerts never seen: past this they are no longer news, and the email digest has carried them. */
 const UNSEEN_ALERT_KEEP_S = 30 * DAY_S;
 /** Stations silent this long leave the map, unless a living cache, a registered station or a node names them. */
-const STATION_KEEP_S = 365 * DAY_S;
+export const STATION_KEEP_S = 365 * DAY_S;
 
 /** Resolved reports and moderation log rows: long enough to show what was done about a repeat offender. */
 const MODERATION_KEEP_DAYS = 730;

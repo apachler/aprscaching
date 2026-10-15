@@ -315,6 +315,7 @@ describe("every converted read still honours the environment", () => {
     expect(html).not.toContain("not configured");
     expect(await page(w.env, "/.well-known/security.txt")).toContain("Contact: mailto:op@example.net");
     expect(await page(withEnv(w, { OPERATOR_NAME: "Club OE8XYZ" }), "/imprint")).toContain("Club OE8XYZ");
+    expect(await page(w.env, "/terms")).toContain("run by <strong>Max Mustermann</strong>");
   });
 
   it("support links", async () => {

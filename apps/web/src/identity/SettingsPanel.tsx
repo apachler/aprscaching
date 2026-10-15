@@ -6,6 +6,7 @@ import {
   getInstance,
   getSource,
   sourceLinkUrl,
+  API_BASE,
   exportAccount,
   deleteAccount,
   getNotifyPrefs,
@@ -407,7 +408,7 @@ export function SettingsPanel(props: {
       )}
 
       {match(
-        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence license register open source notices map OpenStreetMap Meshtastic POTA SOTA LoTW ARRL Groundspeak geocaching device tocall aprs-deviceid",
+        "Help manual tour guide about instance sysop operator version bug report credits attribution imprint privacy terms legal Bruninga WB4APR APRS trademark licence license register open source notices map OpenStreetMap Meshtastic POTA SOTA LoTW ARRL Groundspeak geocaching device tocall aprs-deviceid",
       ) && (
         <Group title="Help & credits" defaultOpen={false}>
           <p className="row gap-2">
@@ -459,6 +460,11 @@ export function SettingsPanel(props: {
               third-party notices
             </a>
             .
+          </p>
+          <p className="muted fine row gap-2">
+            <a href={`${API_BASE}/imprint`}>Imprint</a>
+            <a href={`${API_BASE}/privacy`}>Privacy</a>
+            <a href={`${API_BASE}/terms`}>Terms of use</a>
           </p>
           <SourceLink />
         </Group>

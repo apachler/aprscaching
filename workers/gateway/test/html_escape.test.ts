@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { escapeHtml, stripTags } from "../src/util/html.js";
 import { trimEndChars } from "../src/util/text.js";
-import { handleImprintPage, handlePrivacyPage } from "../src/legal.js";
+import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "../src/legal.js";
 import { handleSupportPage } from "../src/support.js";
 import { handleBadge } from "../src/badge.js";
 import { sanitizeBio, sanitizeDisplayName } from "../src/profile.js";
@@ -81,7 +81,7 @@ describe("profile sanitizers keep markup out", () => {
 
 describe("legal pages escape operator values in attributes", () => {
   for (const evil of PAYLOADS) {
-    it(`imprint and privacy stay inert for ${JSON.stringify(evil)}`, async () => {
+    it(`imprint, privacy and terms stay inert for ${JSON.stringify(evil)}`, async () => {
       const env = {
         INSTANCE: evil,
         OPERATOR_NAME: evil,
@@ -90,6 +90,7 @@ describe("legal pages escape operator values in attributes", () => {
       } as unknown as Env;
       expectInert(await handleImprintPage(env).text());
       expectInert(await handlePrivacyPage(env).text());
+      expectInert(await handleTermsPage(env).text());
     });
   }
 });
