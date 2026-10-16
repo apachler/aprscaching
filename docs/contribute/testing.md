@@ -206,7 +206,7 @@ kernel modules are not PR-gating dependencies.
 
 ## Modem benchmark
 
-`tools/bench/afsk-wav.mjs` runs the soundcard modem's demodulator (`Afsk1200Rx`) over recorded audio and counts
+`tools/bench/afsk-wav.mjs` runs the soundcard modem's demodulator (`AfskRx`) over recorded audio and counts
 the frames that pass the FCS check, total and distinct. The standard recording is the
 [WA8LMF TNC Test CD](http://wa8lmf.net/TNCtest/): download its BIN/CUE image and point the script at the
 `.cue`, and it reads tracks 1 (flat discriminator audio) and 2 (the same traffic de-emphasized, as a speaker

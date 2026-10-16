@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * afsk-wav.mjs — run the Bell-202 1200-baud demodulator (`Afsk1200Rx`, `packages/aprs/src/afsk.ts`) over WAV
+ * afsk-wav.mjs — run the Bell-202 1200-baud demodulator (`AfskRx`, `packages/aprs/src/afsk.ts`) over WAV
  * recordings and count the frames it decodes, the way Direwolf's `atest` does. A frame counts once the
  * HDLC deframer has checked its FCS; `unique` counts distinct frame bytes, so a frame heard twice in one
  * recording counts once there.
@@ -129,13 +129,13 @@ async function main() {
     );
     process.exit(2);
   }
-  const { Afsk1200Rx } = await loadModem();
+  const { AfskRx } = await loadModem();
   const results = [];
   const lines = [];
   for (const load of inputs) {
     const { name, rate, pcm } = load();
     const frames = [];
-    const rx = new Afsk1200Rx(rate, (f) => frames.push(hex(f)));
+    const rx = new AfskRx(rate, (f) => frames.push(hex(f)));
     const chunk = 4096;
     const t0 = performance.now();
     for (let i = 0; i < pcm.length; i += chunk) rx.push(pcm.subarray(i, i + chunk));
