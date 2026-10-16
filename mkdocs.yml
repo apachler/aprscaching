@@ -147,6 +147,7 @@ nav:
           - MeshCom: run/radios/meshcom.md
           - LoRa APRS: run/radios/lora-aprs.md
           - "Packet: BBS & NET/ROM node": run/radios/packet-node.md
+          - Share the box's radio (KISS server): run/radios/kiss-server.md
           - Remote control of your box: run/radios/remote-box.md
           - Caches on air: run/radios/caches-on-air.md
       - Networks:

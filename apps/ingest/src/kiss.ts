@@ -80,13 +80,6 @@ export function kissTimingFromEnv(env: Record<string, string | undefined> = proc
   };
 }
 
-/** A KISS data frame on a channel: kissWrap's frame with the channel in the type byte's high nibble. */
-function kissWrapChannel(ax25: Uint8Array, channel: number): Uint8Array {
-  const out = kissWrap(ax25);
-  out[1] = (channel & 0x0f) << 4;
-  return out;
-}
-
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and the partial frame would grow
  *  forever. Bound it — past this many bytes with no complete frame the stream isn't KISS; drop it. */
 const KISS_RX_MAX_BYTES = 64 * 1024;
@@ -110,6 +103,8 @@ export interface KissHandlers {
 export interface KissChannelRadio {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
   sendFrame(f: Ax25Frame): boolean;
+  /** Raw AX.25 bytes as they are, such as a frame a KISS server client hands the box. */
+  sendRaw(frame: Uint8Array): boolean;
 }
 
 export interface TcpLinkOpts {
@@ -296,14 +291,18 @@ export class KissTnc {
   /** The radio port of one listed channel: everything it sends goes out on that channel. */
   channel(channel: number): KissChannelRadio {
     if (!this.channels.has(channel)) throw new RangeError(`KISS channel ${channel} is not listed`);
-    return { send: (f) => this.send(f, channel), sendFrame: (f) => this.sendFrame(f, channel) };
+    return {
+      send: (f) => this.send(f, channel),
+      sendFrame: (f) => this.sendFrame(f, channel),
+      sendRaw: (frame) => this.transmit(() => frame, channel),
+    };
   }
 
   private transmit(encode: () => Uint8Array, channel: number): boolean {
     if (!this.connected || !this.sock || this.meshcomNode || !this.channels.has(channel)) return false;
     try {
       const raw = encode();
-      this.link.write(kissWrapChannel(raw, channel));
+      this.link.write(kissWrap(raw, channel));
       this.o.sent?.remember(raw);
       return true;
     } catch {

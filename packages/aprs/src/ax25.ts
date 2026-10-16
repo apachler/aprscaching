@@ -118,9 +118,10 @@ export function kissStripCrc(k: KissFrame): KissFrame | null {
   return k;
 }
 
-/** Wrap a raw AX.25 frame in a KISS data frame (port 0), escaping FEND/FESC. */
-export function kissWrap(ax25: Uint8Array): Uint8Array {
-  const out: number[] = [FEND, 0x00];
+/** Wrap a raw AX.25 frame in a KISS data frame on `port` (0–15, the type byte's high nibble), escaping FEND/FESC. */
+export function kissWrap(ax25: Uint8Array, port = 0): Uint8Array {
+  if (!Number.isInteger(port) || port < 0 || port > 0x0f) throw new RangeError(`KISS port ${port}`);
+  const out: number[] = [FEND, port << 4];
   for (const b of ax25) {
     if (b === FEND) out.push(FESC, TFEND);
     else if (b === FESC) out.push(FESC, TFESC);

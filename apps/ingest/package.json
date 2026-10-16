@@ -13,7 +13,8 @@
     "@aprscaching/aprs": "workspace:*",
     "@aprscaching/ax25": "workspace:*",
     "@aprscaching/shared": "workspace:*",
-    "@aprscaching/packet": "workspace:*"
+    "@aprscaching/packet": "workspace:*",
+    "@aprscaching/hub": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

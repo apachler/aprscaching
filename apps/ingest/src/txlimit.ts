@@ -3,7 +3,7 @@
  * txlimit.ts — the token buckets that pace unattended transmits.
  *
  * Every path that keys a transmitter without an operator at the radio (remote-box answers and beacons,
- * MeshCom sends, the TX-IGate, FBB forwarding sessions) draws from its own bucket: `burst` transmits at
+ * MeshCom sends, the TX-IGate, FBB forwarding sessions, the KISS server's clients) draws from its own bucket: `burst` transmits at
  * once, then one more every `refillSec`. Each path has its own bucket so a busy one (IGate traffic) can
  * never starve another (an answer to a radio command), and so each unit is natural to the path — a frame
  * for the IGate, a connected session for FBB forwarding.
@@ -57,7 +57,7 @@ export class TokenBucket {
   }
 }
 
-export type TxPath = "box" | "meshcom" | "igate" | "bbs";
+export type TxPath = "box" | "meshcom" | "igate" | "bbs" | "hub";
 
 interface TxLimitSpec {
   burstEnv: string;
@@ -102,6 +102,14 @@ export const TX_LIMITS: Record<TxPath, TxLimitSpec> = {
     refillSec: 300,
     maxBurst: 10,
     minRefillSec: 60,
+  },
+  hub: {
+    burstEnv: "KISS_SERVER_TX_BURST",
+    refillEnv: "KISS_SERVER_TX_REFILL_SEC",
+    burst: 6,
+    refillSec: 10,
+    maxBurst: 10,
+    minRefillSec: 6,
   },
 };
 

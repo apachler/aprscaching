@@ -134,6 +134,15 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   KISS_TXDELAY: "TX delay sent to the KISS TNC, 0-255 in 10 ms steps",
   KISS_PERSIST: "Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot",
   KISS_SLOTTIME: "Slot time sent to the KISS TNC, 0-255 in 10 ms steps",
+  KISS_SERVER_PORT: "TCP port of the KISS server other packet programs share the radios through; unset keeps it off",
+  KISS_SERVER_HOST: "Address the KISS server listens on; 127.0.0.1 keeps it on this machine, a LAN address opens it",
+  KISS_SERVER_PORTS: "Radio ports the KISS server exposes, as [<kiss port>=]<radio port>; default all, in order",
+  KISS_SERVER_PORT_LISTENERS: "Extra KISS server TCP ports, <tcp port>=<kiss port>, each carrying that port as port 0",
+  KISS_SERVER_MAX_CLIENTS: "Programs connected to the KISS server at once",
+  KISS_SERVER_TX: "1 lets KISS server clients transmit; without it they only receive",
+  KISS_SERVER_TX_CALLS: "Base calls KISS server clients may transmit as (default: the box's station calls)",
+  KISS_SERVER_TX_BURST: "KISS server client transmits allowed at once before pacing applies",
+  KISS_SERVER_TX_REFILL_SEC: "Seconds to regain one KISS server client transmit",
   AGWPE_HOST: "Host of the AGWPE server; set it to enable AGWPE",
   AGWPE_PORT: "TCP port of the AGWPE server",
   AGWPE_RADIO_PORT: "AGWPE radio port heard and transmitted on (0 is the first); other ports are ignored",
@@ -817,6 +826,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "KISS TNC (gates digi/node/BBS/IGate)",
         "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
+      ],
+      [
+        "KISS server (other packet programs share the box's radio ports)",
+        "`KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md)",
       ],
       [
         "AGWPE",

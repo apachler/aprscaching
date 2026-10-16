@@ -122,6 +122,15 @@ KISS_TIMING	enum	ingest	on	on|off	0	0	selfhost,baremetal,ingest-box,pocket	Send 
 KISS_TXDELAY	int	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	TX delay sent to the KISS TNC, 0-255 in 10 ms steps	
 KISS_PERSIST	int	ingest	63		0	0	selfhost,baremetal,ingest-box,pocket	Persist sent to the KISS TNC, 0-255: chance (p+1)/256 of sending in a free slot	
 KISS_SLOTTIME	int	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Slot time sent to the KISS TNC, 0-255 in 10 ms steps	
+KISS_SERVER_PORT	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the KISS server other packet programs share the radios through; unset keeps it off	
+KISS_SERVER_HOST	string	ingest	127.0.0.1		0	0	selfhost,baremetal,ingest-box,pocket	Address the KISS server listens on; 127.0.0.1 keeps it on this machine, a LAN address opens it	
+KISS_SERVER_PORTS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Radio ports the KISS server exposes, as [<kiss port>=]<radio port>; default all, in order	
+KISS_SERVER_PORT_LISTENERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Extra KISS server TCP ports, <tcp port>=<kiss port>, each carrying that port as port 0	
+KISS_SERVER_MAX_CLIENTS	int	ingest	8		0	0	selfhost,baremetal,ingest-box,pocket	Programs connected to the KISS server at once	
+KISS_SERVER_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 lets KISS server clients transmit; without it they only receive	
+KISS_SERVER_TX_CALLS	calls	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Base calls KISS server clients may transmit as (default: the box's station calls)	
+KISS_SERVER_TX_BURST	int	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	KISS server client transmits allowed at once before pacing applies	
+KISS_SERVER_TX_REFILL_SEC	number	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one KISS server client transmit	
 AGWPE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the AGWPE server; set it to enable AGWPE	
 AGWPE_PORT	int	ingest	8000		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the AGWPE server	
 AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port heard and transmitted on (0 is the first); other ports are ignored	
