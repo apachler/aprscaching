@@ -142,10 +142,8 @@ smooth while it listens. The browser downloads the modem when you first connect 
 after that, it works offline too.
 
 The status line names the modem, as in **● live (Soundcard (AFSK)) · Direwolf modem (SIMD) · N frames**. When the
-browser cannot load Direwolf's modem, the soundcard uses the app's built-in modem instead, which decodes plain
-AX.25 only, and the status line says **built-in modem: Direwolf did not load**, with the reason. To choose the
-built-in modem yourself, open **Advanced: soundcard modem** and select **Built-in**; the choice applies the next
-time the soundcard connects.
+browser cannot load Direwolf's modem, the soundcard does not connect, and the page says **Could not connect: the
+soundcard modem could not load**, with the reason and what to do about it.
 
 The soundcard links do not decode 9600 baud: that needs the radio's flat 9600-baud data port, which a computer's
 microphone input does not pass cleanly. For 9600 baud, use a TNC or the ingest box's [soundcard port](../run/radios/soundcard.md).
@@ -158,7 +156,7 @@ microphone input does not pass cleanly. For 9600 baud, use a TNC or the ingest b
 | Only **Soundcard AFSK** shows | The browser is not Chromium-based: use Chrome or Edge for a USB or Bluetooth TNC. |
 | **The radio is in use by the packet terminal** | One USB port opens in one place at a time. Close the TNC in the [packet terminal](packet-and-bbs.md) first, or the other way round. |
 | Connected, but **0 frames** | The TNC is not in KISS mode, or the radio is on the wrong frequency. With the soundcard, the input level is too low or too high: aim for the loudest level that does not clip. |
-| **built-in modem: Direwolf did not load** | The browser could not download Direwolf's modem: you are offline and have not used the soundcard online before, or a browser extension blocks it. The built-in modem still decodes plain AX.25. |
+| **the soundcard modem could not load** | The browser could not load Direwolf's modem. You are offline and have not connected the soundcard online before: connect it once while online, and the browser keeps the modem for offline use. Or the browser, a policy or an extension blocks WebAssembly: allow it for this site. |
 | **Meshtastic node** missing | It needs Web Serial: use desktop Chrome or Edge. |
 | The Bluetooth TNC is missing from the dialog | Switch on the TNC's Bluetooth and pair it in the system settings first, if it asks for pairing. A TNC that offers only classic Bluetooth, not Bluetooth Low Energy, cannot connect. |
 | Forwarding does nothing | **signed**: sign in first. **secret**: the URL or the secret is wrong; the sysop can check the gateway log. |

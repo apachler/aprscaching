@@ -548,20 +548,23 @@ describe("the words for a transmission", () => {
 });
 
 describe("the soundcard modem in the radio link", () => {
-  function noteRadio(init?: { audioDemod?: "direwolf" | "builtin" }) {
-    const saved: string[] = [];
+  function noteRadio(fail?: string) {
+    const events: string[] = [];
     const deps: RadioDeps = {
       makeLink: () => ({
         note: "Direwolf modem (SIMD)",
-        async connect() {},
+        async connect() {
+          if (fail) throw new Error(fail);
+        },
         async disconnect() {},
         async send() {},
       }),
       forward: () => Promise.resolve(),
       feedLocal: () => {},
-      saveAudioDemod: (d) => saved.push(d),
     };
-    return { store: new RadioLinkStore(deps, init), saved };
+    const store = new RadioLinkStore(deps);
+    store.onEvent((e) => events.push(e.kind));
+    return { store, events };
   }
 
   it("shows the link's note while it is up, and clears it on disconnect", async () => {
@@ -573,13 +576,32 @@ describe("the soundcard modem in the radio link", () => {
     expect(store.getState().linkNote).toBe("");
   });
 
-  it("runs Direwolf by default, and saves a change of modem once", () => {
-    const { store, saved } = noteRadio();
-    expect(store.getState().audioDemod).toBe("direwolf");
-    store.setAudioDemod("builtin");
-    store.setAudioDemod("builtin");
-    expect(store.getState().audioDemod).toBe("builtin");
-    expect(saved).toEqual(["builtin"]);
-    expect(noteRadio({ audioDemod: "builtin" }).store.getState().audioDemod).toBe("builtin");
+  it("keeps why a connect failed for the link's status", async () => {
+    const { store, events } = noteRadio("the soundcard modem could not load (404)");
+    await store.connect("audio");
+    expect(store.getState().link).toBeNull();
+    expect(store.getState().linkError).toBe("the soundcard modem could not load (404)");
+    expect(events).toEqual(["connect-failed"]);
+  });
+
+  it("clears the error as a new attempt starts", async () => {
+    let fail = true;
+    const store = new RadioLinkStore({
+      makeLink: () => ({
+        async connect() {
+          if (fail) throw new Error("no modem");
+        },
+        async disconnect() {},
+        async send() {},
+      }),
+      forward: () => Promise.resolve(),
+      feedLocal: () => {},
+    });
+    await store.connect("hf");
+    expect(store.getState().linkError).toBe("no modem");
+    fail = false;
+    await store.connect("hf");
+    expect(store.getState().linkError).toBe("");
+    expect(store.getState().link).toBe("hf");
   });
 });

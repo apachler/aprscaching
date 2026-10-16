@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   modulateAfsk,
-  AfskRx,
+  BELL_202,
   HF_300,
   crc16X25,
   encodeAx25,
@@ -11,110 +11,126 @@ import {
   type AfskModem,
 } from "../src/index.js";
 
-/** Modulate an AX.25 frame to PCM, demodulate it back, return the frames recovered. */
-function loopback(frame: Uint8Array, sampleRate: number): Uint8Array[] {
-  const pcm = modulateAfsk(frame, sampleRate, { flags: 64 });
-  const got: Uint8Array[] = [];
-  const rx = new AfskRx(sampleRate, (f) => got.push(f));
-  rx.push(pcm);
-  return got;
+/** Signal power at `freq` over `x` (Goertzel). */
+function goertzel(x: Float32Array, freq: number, sampleRate: number): number {
+  const k = 2 * Math.cos((2 * Math.PI * freq) / sampleRate);
+  let s1 = 0,
+    s2 = 0;
+  for (const v of x) {
+    const s0 = v + k * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  return s1 * s1 + s2 * s2 - k * s1 * s2;
 }
 
-describe("afsk — Bell-202 1200-baud modem", () => {
+/** The tone of every bit slot, true for mark: the stronger of the two tones over that slot. */
+function tones(pcm: Float32Array, sampleRate: number, modem: AfskModem): boolean[] {
+  const spb = sampleRate / modem.baud;
+  const out: boolean[] = [];
+  for (let i = 0; Math.round((i + 1) * spb) <= pcm.length; i++) {
+    const slot = pcm.subarray(Math.round(i * spb), Math.round((i + 1) * spb));
+    out.push(goertzel(slot, modem.mark, sampleRate) > goertzel(slot, modem.space, sampleRate));
+  }
+  return out;
+}
+
+/** NRZI: the same tone as the slot before is a 1, a change is a 0. `before` is the tone ahead of the first slot. */
+const nrzi = (t: boolean[], before = true): number[] => t.map((m, i) => (m === (i === 0 ? before : t[i - 1]) ? 1 : 0));
+
+/**
+ * The frames between HDLC flags in a bit stream: destuffed, packed LSB-first, FCS checked and stripped. A
+ * reference decoder for the modulator's own output, bit-aligned by construction, so it needs no clock recovery.
+ */
+function deframe(bits: number[]): Uint8Array[] {
+  const frames: Uint8Array[] = [];
+  let body: number[] = [];
+  let ones = 0;
+  for (const bit of bits) {
+    if (bit === 1) {
+      ones++;
+      body.push(1);
+      continue;
+    }
+    if (ones === 5) {
+      ones = 0; // a stuffed 0
+      continue;
+    }
+    if (ones === 6) {
+      body.length = Math.max(0, body.length - 7); // the flag's leading 0 and six 1s
+      if (body.length >= 32 && body.length % 8 === 0) {
+        const bytes = new Uint8Array(body.length / 8);
+        body.forEach((b, i) => (bytes[i >> 3]! |= b << (i & 7)));
+        const data = bytes.subarray(0, -2);
+        if (crc16X25(data) === (bytes.at(-2)! | (bytes.at(-1)! << 8))) frames.push(data);
+      }
+      body = [];
+      ones = 0;
+      continue;
+    }
+    ones = 0;
+    body.push(0);
+  }
+  return frames;
+}
+
+const decode = (pcm: Float32Array, sampleRate: number, modem: AfskModem = BELL_202): Uint8Array[] =>
+  deframe(nrzi(tones(pcm, sampleRate, modem)));
+
+const FLAG = [0, 1, 1, 1, 1, 1, 1, 0];
+
+describe("afsk — Bell-202 1200-baud modulator", () => {
   it('CRC-16/X.25 matches the known check value for "123456789"', () => {
     expect(crc16X25(new TextEncoder().encode("123456789"))).toBe(0x906e);
   });
 
-  it("round-trips an AX.25 APRS frame through modulate → demodulate at 48 kHz", () => {
+  it("carries an AX.25 APRS frame in its mark/space tones at 48 kHz", () => {
     const frame = encodeAx25({ src: "OE8APR-9", dst: "APRS", path: ["WIDE1-1"], payload: "!4704.41N/01526.27E>test" });
-    const got = loopback(frame, 48000);
-    expect(got.length).toBeGreaterThanOrEqual(1);
+    const got = decode(modulateAfsk(frame, 48000, { flags: 8 }), 48000);
+    expect(got).toHaveLength(1);
+    expect(got[0]).toEqual(frame);
     const back = decodeAx25(got[0]!)!;
     expect(back.src).toBe("OE8APR-9");
     expect((decodeAprs(back) as { kind: string }).kind).toBe("position");
   });
 
-  it("also recovers the frame at 44.1 kHz (non-integer samples/bit)", () => {
+  it("keeps the bit timing at 44.1 kHz (non-integer samples per bit)", () => {
     const frame = encodeAx25({ src: "DL1ABC", dst: "APRS", path: [], payload: ">hello afsk" });
-    const got = loopback(frame, 44100);
-    expect(got.length).toBeGreaterThanOrEqual(1);
+    const got = decode(modulateAfsk(frame, 44100, { flags: 8 }), 44100);
+    expect(got).toHaveLength(1);
     expect(decodeAx25(got[0]!)!.src).toBe("DL1ABC");
   });
 
-  it("rejects noise (no spurious frames from random audio)", () => {
-    const noise = new Float32Array(48000);
-    for (let i = 0; i < noise.length; i++)
-      noise[i] = Math.sin(i * 0.7) * 0.3 + (((i * 1103515245 + 12345) & 0x7fff) / 0x7fff - 0.5);
-    const got: Uint8Array[] = [];
-    new AfskRx(48000, (f) => got.push(f)).push(noise);
-    expect(got).toHaveLength(0);
+  it("sends the preamble and the tail as HDLC flags, one bit slot per bit", () => {
+    const frame = encodeAx25({ src: "DL1ABC", dst: "APRS", path: [], payload: ">x" });
+    const pcm = modulateAfsk(frame, 48000, { flags: 10 });
+    const bits = nrzi(tones(pcm, 48000, BELL_202));
+    for (let f = 0; f < 10; f++) expect(bits.slice(f * 8, f * 8 + 8)).toEqual(FLAG);
+    expect(bits.slice(-8)).toEqual(FLAG);
+    expect(bits.length * 40).toBe(pcm.length); // 40 samples per bit at 48 kHz
   });
 
-  describe("carrier detect", () => {
-    /** Push PCM in 10 ms chunks and record the carrier detect after each one. */
-    const trace = (pcm: Float32Array, rx: AfskRx): boolean[] => {
-      const out: boolean[] = [];
-      for (let i = 0; i < pcm.length; i += 480) {
-        rx.push(pcm.subarray(i, i + 480));
-        out.push(rx.dcd);
-      }
-      return out;
-    };
-    // a pseudo-random generator, so the noise is the same on every run
-    const noise = (n: number, amp: number): Float32Array => {
-      let x = 12345;
-      const out = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
-        x = (x * 1103515245 + 12345) & 0x7fffffff;
-        out[i] = (x / 0x7fffffff - 0.5) * 2 * amp;
-      }
-      return out;
-    };
+  it("stuffs a 0 after five 1s, so no run of six 1s appears between the flags", () => {
+    // 0xFF bytes in the payload force stuffing
+    const frame = encodeAx25({ src: "DL1ABC", dst: "APRS", path: [], payload: ">\xff\xff\xff" });
+    const pcm = modulateAfsk(frame, 48000, { flags: 2 });
+    const inner = nrzi(tones(pcm, 48000, BELL_202))
+      .slice(16, -32)
+      .join("");
+    expect(inner).not.toContain("111111");
+    expect(inner).toContain("111110");
+    expect(decode(pcm, 48000)[0]).toEqual(frame);
+  });
 
-    it("rises during a 1200-baud signal and falls after it ends", () => {
-      const frame = encodeAx25({ src: "OE8APR-9", dst: "APRS", path: [], payload: ">carrier test" });
-      const pcm = modulateAfsk(frame, 48000, { flags: 40 });
-      const rx = new AfskRx(48000, () => {});
-      const during = trace(pcm, rx);
-      expect(during.slice(15).some(Boolean)).toBe(true); // after the first ~150 ms of preamble
-      expect(during.at(-1)).toBe(true);
-      const after = trace(new Float32Array(4800), rx); // 100 ms of silence
-      expect(after.at(-1)).toBe(false);
-    });
-
-    it("stays down on noise and on silence", () => {
-      const rx = new AfskRx(48000, () => {});
-      expect(trace(noise(48000 * 2, 0.5), rx).filter(Boolean).length).toBe(0);
-      expect(trace(new Float32Array(48000), rx).filter(Boolean).length).toBe(0);
-    });
-
-    it("stays down on a steady tone", () => {
-      const tone = new Float32Array(48000);
-      for (let i = 0; i < tone.length; i++) tone[i] = 0.5 * Math.sin((2 * Math.PI * 1200 * i) / 48000);
-      const rx = new AfskRx(48000, () => {});
-      expect(trace(tone, rx).filter(Boolean).length).toBe(0);
-    });
+  it("holds its amplitude", () => {
+    const frame = encodeAx25({ src: "DL1ABC", dst: "APRS", path: [], payload: ">x" });
+    const peak = Math.max(...modulateAfsk(frame, 48000, { amplitude: 0.5 }).map(Math.abs));
+    expect(peak).toBeLessThanOrEqual(0.5);
+    expect(peak).toBeGreaterThan(0.49);
   });
 });
 
 describe("afsk — the 300-baud HF modem", () => {
-  /** A pseudo-random generator, so the noise is the same on every run. */
-  const lcg = (seed: number) => () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff - 0.5;
-  };
-  const hf = (frame: Uint8Array, sampleRate: number, modem: AfskModem = HF_300, noiseAmp = 0): Uint8Array[] => {
-    const pcm = modulateAfsk(frame, sampleRate, { flags: 16, modem: HF_300 });
-    if (noiseAmp) {
-      const r = lcg(777);
-      for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! + 2 * noiseAmp * r();
-    }
-    const got: Uint8Array[] = [];
-    const rx = new AfskRx(sampleRate, (f) => got.push(f), modem);
-    rx.push(pcm);
-    rx.push(new Float32Array(sampleRate / 10));
-    return got;
-  };
   const frame = encodeAx25({ src: "OE8APR-6", dst: "APRS", path: [], payload: '`(_fn"Oj/]HF test=' });
 
   it("uses 300 baud and the 1600/1800 Hz tones", () => {
@@ -125,48 +141,19 @@ describe("afsk — the 300-baud HF modem", () => {
     expect(at300).toBe(at1200 * 4);
   });
 
-  it("round-trips an AX.25 frame at 48 kHz and at 44.1 kHz", () => {
+  it("carries the frame at 48 kHz and at 44.1 kHz", () => {
     for (const rate of [48000, 44100]) {
-      const got = hf(frame, rate);
-      expect(got.length).toBeGreaterThanOrEqual(1);
+      const got = decode(modulateAfsk(frame, rate, { flags: 4, modem: HF_300 }), rate, HF_300);
+      expect(got).toHaveLength(1);
       expect(decodeAx25(got[0]!)!.src).toBe("OE8APR-6");
     }
   });
 
-  it("decodes through added noise", () => {
-    const got = hf(frame, 48000, HF_300, 0.35);
-    expect(got.length).toBeGreaterThanOrEqual(1);
-    expect(decodeAx25(got[0]!)!.payload).toEqual(decodeAx25(frame)!.payload);
-  });
-
-  it("decodes with mark and space swapped, as the other sideband hears it", () => {
-    const got = hf(frame, 48000, { baud: 300, mark: 1800, space: 1600 });
-    expect(got.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("a 1200-baud receiver hears nothing of it, and noise alone makes no frame", () => {
-    const pcm = modulateAfsk(frame, 48000, { flags: 16, modem: HF_300 });
-    const at1200: Uint8Array[] = [];
-    new AfskRx(48000, (f) => at1200.push(f)).push(pcm);
-    expect(at1200).toHaveLength(0);
-    const r = lcg(4242);
-    const noise = Float32Array.from({ length: 48000 * 3 }, () => r());
-    const got: Uint8Array[] = [];
-    const rx = new AfskRx(48000, (f) => got.push(f), HF_300);
-    rx.push(noise);
-    expect(got).toHaveLength(0);
-    expect(rx.dcd).toBe(false);
-  });
-
-  it("raises carrier detect during the signal", () => {
-    const pcm = modulateAfsk(frame, 48000, { flags: 16, modem: HF_300 });
-    const rx = new AfskRx(48000, () => {}, HF_300);
-    let seen = false;
-    for (let i = 0; i < pcm.length; i += 480) {
-      rx.push(pcm.subarray(i, i + 480));
-      seen ||= rx.dcd;
-    }
-    expect(seen).toBe(true);
+  it("still reads with mark and space swapped, as the other sideband hears it", () => {
+    const pcm = modulateAfsk(frame, 48000, { flags: 4, modem: HF_300 });
+    const swapped = tones(pcm, 48000, { baud: 300, mark: 1800, space: 1600 });
+    // NRZI carries the data in the tone changes, so only the reference ahead of the first slot flips
+    expect(deframe(nrzi(swapped, false))[0]).toEqual(frame);
   });
 });
 

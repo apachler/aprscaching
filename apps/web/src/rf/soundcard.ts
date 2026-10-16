@@ -4,7 +4,7 @@
  * 300-baud HF AFSK. Behind the same RfLink contract as the KISS reader.
  *
  * The page only wires the audio graph: microphone → AudioWorklet tap → modem Worker (`soundcard.worker.ts`,
- * Direwolf's WebAssembly modem, or the built-in one) → AX.25 frames back here. The Worker and its WebAssembly
+ * Direwolf's WebAssembly modem) → AX.25 frames back here. The Worker and its WebAssembly
  * are fetched only when the link connects, so no other view carries them. An engine without AudioWorklet taps
  * the samples with a ScriptProcessorNode on the page and hands them to the same Worker.
  *
@@ -16,9 +16,9 @@ import {
   TAP_BLOCK,
   TAP_WORKLET,
   isModemReply,
+  modemFailure,
   modemNote,
   type AudioBaud,
-  type AudioDemod,
   type ModemStart,
 } from "./soundcardModem.js";
 
@@ -36,7 +36,6 @@ function ax25ToRfFrame(ax: Uint8Array): RfFrame | null {
 
 export interface SoundcardOptions {
   baud: AudioBaud;
-  demod: AudioDemod;
   /** The modem Worker; defaults to the one the app's build emits. */
   makeWorker?: () => Worker;
   /** How long the modem may take to start before the connect fails. */
@@ -77,7 +76,7 @@ export class SoundcardLink implements RfLink {
     this.stream.getAudioTracks()[0]?.addEventListener("ended", () => this.lost());
   }
 
-  /** Start the modem Worker and wait until it reports which modem runs. */
+  /** Start the modem Worker and wait until it reports the modem runs; a modem that does not load fails the connect. */
   private startModem(sampleRate: number, samples: MessagePort): Promise<void> {
     const worker = (this.opts.makeWorker ?? appWorker)();
     this.worker = worker;
@@ -97,7 +96,7 @@ export class SoundcardLink implements RfLink {
           resolve();
         } else if (m.type === "failed") {
           clearTimeout(timer);
-          reject(new Error(`the soundcard modem did not start: ${m.message}`));
+          reject(new Error(modemFailure(m)));
         } else
           for (const ax of m.frames) {
             const f = ax25ToRfFrame(ax.bytes);
@@ -117,7 +116,6 @@ export class SoundcardLink implements RfLink {
         type: "start",
         sampleRate,
         baud: this.opts.baud,
-        demod: this.opts.demod,
         samples,
       };
       worker.postMessage(start, [samples]);

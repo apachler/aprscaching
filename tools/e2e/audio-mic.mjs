@@ -17,8 +17,8 @@
  *      microphone's WAV.
  *   3. Connect the real `SoundcardLink`: it must report the Direwolf modem and hear both frames (only Direwolf
  *      decodes IL2P).
- *   4. Connect it again with the server answering 404 for the WebAssembly: it must fall back to the built-in
- *      modem, say so in its note, and still hear the plain frame.
+ *   4. Connect it again with the server answering 404 for the WebAssembly: the connect must fail with the
+ *      error that says the modem could not load and how to fix it, and hear nothing.
  *
  * Portable + safe to run anywhere: if no Chromium is found it prints SKIP and exits 0, and fails in CI (`CI`
  * set), where the `e2e-audio` job installs the browser playwright-core expects so the real assertion runs.
@@ -218,19 +218,25 @@ async function withBrowser(exe, port, wavPath, fn) {
   }
 }
 
-/** Connect the real soundcard link for a few loops of the fake microphone; its note and the payloads it heard. */
+/**
+ * Connect the real soundcard link for a few loops of the fake microphone; its note, the payloads it heard, and
+ * the connect's error when it did not connect.
+ */
 const listenSoundcard = (page) =>
   page.evaluate(async () => {
     const heard = [];
     const link = new window.SoundcardLink((f) => heard.push(f.frame.payload), undefined, {
       baud: 1200,
-      demod: "direwolf",
       makeWorker: () => new Worker("/modem-worker.js", { type: "module" }),
     });
-    await link.connect();
+    try {
+      await link.connect();
+    } catch (e) {
+      return { note: link.note, heard, error: e.message };
+    }
     await new Promise((r) => setTimeout(r, 7000)); // > 2 loops of the ~2.5 s file
     await link.disconnect();
-    return { note: link.note, heard };
+    return { note: link.note, heard, error: null };
   });
 
 /** Resolve the Worker's `?url` imports of the WebAssembly to this test server's /wasm/ path. */
@@ -317,6 +323,7 @@ async function main() {
     const dw = await withBrowser(exe, port, afskWav, listenSoundcard);
     console.log(`soundcard (Direwolf): ${JSON.stringify(dw)}, fetched ${JSON.stringify(state.wasmFetched)}`);
     if (
+      dw.error ||
       !dw.note.startsWith("Direwolf modem") ||
       !state.wasmFetched.length ||
       !dw.heard.includes(PLAIN_TEXT) ||
@@ -326,18 +333,19 @@ async function main() {
       failed = true;
     } else console.log("PASS: the soundcard link decoded AX.25 and IL2P with Direwolf in a Worker");
 
-    // 4. the WebAssembly missing: the built-in modem, which hears the plain frame only
+    // 4. the WebAssembly missing: the connect fails with the error that names the cause and the fix
     state.failWasm = true;
-    const ts = await withBrowser(exe, port, afskWav, listenSoundcard);
-    console.log(`soundcard (no WebAssembly): ${JSON.stringify(ts)}`);
+    const none = await withBrowser(exe, port, afskWav, listenSoundcard);
+    console.log(`soundcard (no WebAssembly): ${JSON.stringify(none)}`);
     if (
-      !ts.note.startsWith("built-in modem: Direwolf did not load") ||
-      !ts.heard.includes(PLAIN_TEXT) ||
-      ts.heard.includes(IL2P_TEXT)
+      !none.error?.startsWith("the soundcard modem could not load") ||
+      !/once while online/.test(none.error) ||
+      !/allow WebAssembly/.test(none.error) ||
+      none.heard.length
     ) {
-      console.error("FAIL: without the WebAssembly the built-in modem should run, say so and hear the plain frame");
+      console.error("FAIL: without the WebAssembly the soundcard link should not connect, and say why and what to do");
       failed = true;
-    } else console.log("PASS: without the WebAssembly the soundcard link fell back to the built-in modem");
+    } else console.log("PASS: without the WebAssembly the soundcard link refused to connect and said why");
   } finally {
     srv?.close();
     rmSync(tmp, { recursive: true, force: true });

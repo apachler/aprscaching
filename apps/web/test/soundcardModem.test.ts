@@ -5,22 +5,19 @@ import {
   TAP_WORKLET,
   isModemReply,
   isModemStart,
+  modemFailure,
   modemNote,
-  openAudioRx,
-  readAudioDemod,
-  type AudioRx,
 } from "../src/rf/soundcardModem.js";
 
 const port = () => new MessageChannel().port1;
 
 describe("the modem Worker's messages", () => {
-  it("accepts a start with a port, a 300 or 1200 baud speed and a known modem", () => {
-    const ok = { type: "start", sampleRate: 48000, baud: 1200, demod: "direwolf", samples: port() };
+  it("accepts a start with a port and a 300 or 1200 baud speed", () => {
+    const ok = { type: "start", sampleRate: 48000, baud: 1200, samples: port() };
     expect(isModemStart(ok)).toBe(true);
-    expect(isModemStart({ ...ok, baud: 300, demod: "builtin" })).toBe(true);
+    expect(isModemStart({ ...ok, baud: 300 })).toBe(true);
     for (const bad of [
       { ...ok, baud: 9600 },
-      { ...ok, demod: "native" },
       { ...ok, sampleRate: 4000 },
       { ...ok, sampleRate: 44100.5 },
       { ...ok, samples: undefined },
@@ -32,64 +29,35 @@ describe("the modem Worker's messages", () => {
   });
 
   it("accepts the replies the Worker sends and nothing else", () => {
-    expect(isModemReply({ type: "ready", kind: "direwolf", simd: true, fallback: null })).toBe(true);
-    expect(isModemReply({ type: "ready", kind: "builtin", simd: false, fallback: "Direwolf did not load (404)" })).toBe(
-      true,
-    );
+    expect(isModemReply({ type: "ready", simd: true })).toBe(true);
     expect(isModemReply({ type: "frames", frames: [{ bytes: new Uint8Array(16), fec: "il2p", corrected: 2 }] })).toBe(
       true,
     );
-    expect(isModemReply({ type: "failed", message: "no" })).toBe(true);
-    expect(isModemReply({ type: "ready", kind: "direwolf", simd: "yes", fallback: null })).toBe(false);
+    expect(isModemReply({ type: "failed", message: "404", load: true })).toBe(true);
+    expect(isModemReply({ type: "failed", message: "no", load: false })).toBe(true);
+    expect(isModemReply({ type: "ready", simd: "yes" })).toBe(false);
     expect(isModemReply({ type: "frames", frames: [{ bytes: [1, 2] }] })).toBe(false);
+    expect(isModemReply({ type: "failed", message: "no" })).toBe(false);
     expect(isModemReply({ type: "failed" })).toBe(false);
     expect(isModemReply(undefined)).toBe(false);
   });
 });
 
-describe("the choice of modem", () => {
-  const rx = (name: string): AudioRx & { name: string } => ({ name, push: () => [] });
-
-  it("reads the stored choice, Direwolf unless the built-in one was picked", () => {
-    expect(readAudioDemod(null)).toBe("direwolf");
-    expect(readAudioDemod("builtin")).toBe("builtin");
-    expect(readAudioDemod("something")).toBe("direwolf");
-  });
-
-  it("runs Direwolf when it loads", async () => {
-    const r = await openAudioRx("direwolf", { direwolf: async () => rx("dw"), builtin: () => rx("ts") });
-    expect(r.kind).toBe("direwolf");
-    expect(r.fallback).toBeNull();
-    expect((r.rx as { name: string }).name).toBe("dw");
-  });
-
-  it("falls back to the built-in modem when Direwolf does not load, and says why", async () => {
-    const r = await openAudioRx("direwolf", {
-      direwolf: () => Promise.reject(new Error("WebAssembly: 404")),
-      builtin: () => rx("ts"),
-    });
-    expect(r.kind).toBe("builtin");
-    expect(r.fallback).toBe("Direwolf did not load (WebAssembly: 404)");
-    expect(modemNote({ ...r, simd: false })).toBe("built-in modem: Direwolf did not load (WebAssembly: 404)");
-  });
-
-  it("never loads Direwolf when the built-in modem is picked", async () => {
-    let tried = false;
-    const r = await openAudioRx("builtin", {
-      direwolf: async () => {
-        tried = true;
-        return rx("dw");
-      },
-      builtin: () => rx("ts"),
-    });
-    expect(tried).toBe(false);
-    expect(r.kind).toBe("builtin");
-    expect(modemNote({ ...r, simd: false })).toBe("built-in modem");
-  });
-
+describe("the modem's status and errors", () => {
   it("names the Direwolf build in the status", () => {
-    expect(modemNote({ kind: "direwolf", simd: true, fallback: null })).toBe("Direwolf modem (SIMD)");
-    expect(modemNote({ kind: "direwolf", simd: false, fallback: null })).toBe("Direwolf modem");
+    expect(modemNote({ simd: true })).toBe("Direwolf modem (SIMD)");
+    expect(modemNote({ simd: false })).toBe("Direwolf modem");
+  });
+
+  it("explains a modem that could not load: cache it online once, or allow WebAssembly", () => {
+    const text = modemFailure({ message: "WebAssembly: 404", load: true });
+    expect(text).toMatch(/^the soundcard modem could not load \(WebAssembly: 404\)\./);
+    expect(text).toMatch(/once while online/);
+    expect(text).toMatch(/allow WebAssembly for this site/);
+  });
+
+  it("passes any other failure on in the Worker's words", () => {
+    expect(modemFailure({ message: "bad start", load: false })).toBe("the soundcard modem did not start: bad start");
   });
 });
 

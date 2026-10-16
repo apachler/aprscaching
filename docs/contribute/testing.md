@@ -97,7 +97,9 @@ pair on the fixed ports `:8801` and `:8802`.
 
 `pnpm run e2e:audio` (`tools/e2e/audio-mic.mjs`) exercises the **live microphone decode path** in a
 real headless Chromium: it bundles the actual web-app decoder code, synthesises a PSK31 WAV of
-"cq de test", feeds it in as a fake microphone, and asserts the decoded text. Skips cleanly (exit 0)
+"cq de test", feeds it in as a fake microphone, and asserts the decoded text. It then runs the soundcard link
+with its Direwolf Worker on a fake microphone of a plain AX.25 and an IL2P frame and asserts both are heard, and
+serves no WebAssembly once to assert the link refuses to connect with the error that says why. Skips cleanly (exit 0)
 when no Chromium is available, and fails in CI without one; CI installs one in the `e2e-audio` job.
 
 `pnpm run e2e:tools` (`tools/e2e/tool-sandbox.mjs`) loads tools into the real plugin sandbox, wired to the tool
@@ -208,19 +210,23 @@ kernel modules are not PR-gating dependencies.
 
 ## Modem benchmark
 
-`tools/bench/afsk-wav.mjs` runs the soundcard modem's demodulator (`AfskRx`) over recorded audio and counts
-the frames that pass the FCS check, total and distinct. The standard recording is the
-[WA8LMF TNC Test CD](http://wa8lmf.net/TNCtest/): download its BIN/CUE image and point the script at the
-`.cue`, and it reads tracks 1 (flat discriminator audio) and 2 (the same traffic de-emphasized, as a speaker
-delivers it) straight from the image. Direwolf's `atest` decodes the same tracks, so the counts compare
-directly with Direwolf's.
+`tools/bench/afsk-wav.mjs` runs the soundcard modem APRScaching ships, Direwolf's receiver from
+`modems/direwolf` (the same WebAssembly the ingest box and the browser load), over recorded audio and counts
+the frames that pass the FCS check, total and distinct. It is the regression check for the modem: run it before
+and after a change to the WebAssembly build or its glue, and the counts must not drop. The standard recording
+is the [WA8LMF TNC Test CD](http://wa8lmf.net/TNCtest/): download its BIN/CUE image and point the script at
+the `.cue`, and it reads tracks 1 (flat discriminator audio) and 2 (the same traffic de-emphasized, as a
+speaker delivers it) straight from the image. Direwolf's `atest` decodes the same tracks, so the counts
+compare directly with a native Direwolf's.
 
 ```sh
 node tools/bench/afsk-wav.mjs --cue TNC_Test_Ver-1.1.cue --tracks 1,2
 node tools/bench/afsk-wav.mjs capture.wav --frames frames.txt   # one hex line per frame, for a diff
+node tools/bench/afsk-wav.mjs hf.wav --baud 300 --plain         # the 300 baud modem, the build without SIMD
 ```
 
-The benchmark needs the downloaded image, so it runs by hand, not in CI.
+The modem is 1200 baud unless `--baud` names 300 or 9600, and runs the SIMD build where Node has SIMD. The
+benchmark needs the downloaded image, so it runs by hand, not in CI.
 
 ## Pocket in Termux
 

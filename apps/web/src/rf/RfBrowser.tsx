@@ -13,7 +13,6 @@ import {
 } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
 import { KissTimingSettings } from "./KissTimingSettings.js";
-import { SoundcardModemSettings } from "./SoundcardModemSettings.js";
 import { messageRetry, radioLink, useMessageRetry, useRadioLink } from "./RadioLinkHost.js";
 import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
@@ -55,7 +54,8 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
-  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent, linkNote } = useRadioLink();
+  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent, linkNote, linkError } =
+    useRadioLink();
   const retry = useMessageRetry();
   const rxOnlyLink = link === "audio" || link === "hf" || link === "mesh";
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
@@ -257,6 +257,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
             : "not connected"}
         </span>
       </div>
+      {!link && !busy && linkError && (
+        <p className="inline-note bad" role="alert">
+          Could not connect: {linkError}
+        </p>
+      )}
       {(!serialOk || !bleOk) && (
         <p className="muted fine">
           {!serialOk && !bleOk
@@ -375,7 +380,6 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       )}
 
       <KissTimingSettings />
-      {audioOk && <SoundcardModemSettings />}
 
       {link && (
         <div className="tx-block">
