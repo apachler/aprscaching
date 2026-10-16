@@ -390,10 +390,10 @@ Every shape with an ingest.
 ### `ingest.soundcard_modem.<port>`
 
 - **Tests:** the port's modem loads: Direwolf's WebAssembly build from `modems/direwolf/wasm`, at the port's
-  speed, or the built-in modem with `SOUNDCARD_DEMOD=builtin`. The pass names the speed and the transmit framing.
-- **Message:** `port <port>: the Direwolf modem does not load: …` (fail). The install lacks the WebAssembly
-  files: run `pnpm install` in the checkout again, or pull the current image. A 1200 or 300 baud port runs the
-  built-in modem meanwhile; `SOUNDCARD_DEMOD=builtin` chooses it outright. A 9600 baud port has no fallback.
+  speed. The pass names the speed and the transmit framing.
+- **Message:** `port <port>: the Direwolf modem did not load: …; the port is faulted: it neither captures nor
+  transmits` (fail). The install lacks the WebAssembly files: run `pnpm install` in the checkout again, or pull
+  the current image, then restart the ingest. The port has no other modem, so it stays off until then.
 - **See:** [The modem](radios/soundcard.md#the-modem).
 
 ### `ingest.soundcard_ptt.<port>`

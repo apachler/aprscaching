@@ -240,23 +240,21 @@ Decided, not planned:
 _Owner decision: Direwolf (GPL-2.0-or-later) compiled to WebAssembly is the modem for receive and transmit on
 every surface._ The package exists: `modems/direwolf` (`@aprscaching/direwolf`, AGPL-3.0-or-later) with the
 vendored Direwolf 1.8.1 sources, receive and transmit at 300 / 1200 / 9600 bd in AX.25, FX.25 and IL2P, a
-byte-reproducible build CI checks, and tests. The ingest's soundcard port runs on it; the stages below switch
-the other surfaces over, in order. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
+byte-reproducible build CI checks, and tests. Every soundcard surface runs on it. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
 from Direwolf.
 
 - [x] **Ingest soundcard port on Direwolf** _(P1 · M)_ — `apps/ingest`'s soundcard port receives and transmits
       through `@aprscaching/direwolf` behind the interface it has (`arecord`/`aplay`, echo suppression,
       `reset()` at unkey, CSMA from `dcd`), with a per-port transmit mode (`SOUNDCARD_FEC`: AX.25 / FX.25 / IL2P)
-      and speed (`SOUNDCARD_MODEM`: 300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback
-      (`SOUNDCARD_DEMOD=builtin`). Covers the ingest box, bare metal and the Docker stack; the weekly transports
-      run checks it against a native Direwolf.
+      and speed (`SOUNDCARD_MODEM`: 300 / 1200 / 9600); a modem that does not load faults the port. Covers the
+      ingest box, bare metal and the Docker stack; the weekly transports run checks it against a native Direwolf.
 - [x] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s soundcard links (1200 baud, and 300 baud on
       HF) run Direwolf's receiver in a dedicated Worker that an AudioWorklet feeds over a MessageChannel; the
       Worker and its `.wasm` load only when a soundcard link connects (the service worker stores the WebAssembly
-      on that first use), so the landing and the map bundle carry none of it. The TypeScript modem is the
-      fallback when the WebAssembly does not load, and a choice under My radio, with the reason in the link's
-      status. The links stay receive-only and 9600 baud stays with the ingest box; the Chromium fake-audio e2e
-      decodes AX.25 and IL2P through it and checks the fallback.
+      on that first use), so the landing and the map bundle carry none of it. A WebAssembly that does not load
+      fails the connect, with the reason and the fix in the link's status. The links stay receive-only and 9600
+      baud stays with the ingest box; the Chromium fake-audio e2e decodes AX.25 and IL2P through it and checks
+      the load-failure error.
 - [x] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds every file of the web build, its `.wasm`
       included, and serves it as `application/wasm` with the Node server's type map; `deploy/desktop/smoke.sh`
       proves it on the release's Linux binary, and Direwolf's notice ships beside the binaries. The binary runs
@@ -264,9 +262,11 @@ from Direwolf.
       checkout carries `modems/direwolf`, and the Termux check loads the modem under Termux's Node on aarch64
       and x86_64; a soundcard port needs ALSA, which Termux lacks, so a phone's soundcard radio waits on the
       browser stage. _Depends on:_ the ingest stage.
-- [ ] **Retire the TypeScript demodulator** _(P3 · S)_ — once Direwolf has carried every surface through a
-      release without a fallback report, remove the `AfskRx` demodulator (1200 and 300 bd) from `packages/aprs`
-      (the MIT modulator stays for embedders). _Depends on:_ the browser and Desktop stages.
+- [x] **Retire the TypeScript demodulator** _(P3 · S)_ — Direwolf is the only modem on every surface:
+      `packages/aprs` carries no demodulator, the ingest has no `SOUNDCARD_DEMOD`, and the browser no modem
+      choice; a modem that does not load is a port fault or a failed connect, never a silent fallback. The MIT
+      modulator (`modulateAfsk`, `BELL_202`, `HF_300`, `crc16X25`) stays in `packages/aprs` for embedders and
+      the Direwolf test fixtures; `tools/bench/afsk-wav.mjs` benchmarks Direwolf's receiver.
 
 Considered and not planned:
 

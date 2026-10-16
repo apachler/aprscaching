@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * afsk-wav.mjs — run the Bell-202 1200-baud demodulator (`AfskRx`, `packages/aprs/src/afsk.ts`) over WAV
- * recordings and count the frames it decodes, the way Direwolf's `atest` does. A frame counts once the
- * HDLC deframer has checked its FCS; `unique` counts distinct frame bytes, so a frame heard twice in one
- * recording counts once there.
+ * afsk-wav.mjs — run the soundcard modem APRScaching ships, Direwolf's receiver compiled to WebAssembly
+ * (`modems/direwolf`, the build the ingest box and the browser load), over WAV recordings and count the frames
+ * it decodes, the way Direwolf's `atest` does. A frame counts once its FCS checked (FIX_BITS 0); `unique`
+ * counts distinct frame bytes, so a frame heard twice in one recording counts once there. The modem is
+ * 1200-baud Bell 202 unless `--baud` names 300 or 9600; `--plain` runs the build without SIMD.
  *
- *   node tools/bench/afsk-wav.mjs track1.wav [track2.wav …] [--json] [--frames out.txt]
+ *   node tools/bench/afsk-wav.mjs track1.wav [track2.wav …] [--baud 1200] [--plain] [--json] [--frames out.txt]
  *   node tools/bench/afsk-wav.mjs --cue TNC_Test_Ver-1.1.cue [--tracks 1,2] [--json] [--frames out.txt]
  *
  * The standard recording is the WA8LMF TNC Test CD (http://wa8lmf.net/TNCtest/), published as a BIN/CUE
@@ -17,23 +18,32 @@
  * one hex line, for a diff against another decoder's output.
  */
 import { build } from "esbuild";
-import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const WASM_DIR = path.join(ROOT, "modems/direwolf/wasm");
 
-/** Bundle the demodulator from source, so the benchmark runs the code the ingest and the browser ship. */
+/** Bundle the modem's loader from source and import it, so the benchmark runs the code the ingest ships. */
 async function loadModem() {
-  const out = await build({
-    entryPoints: [path.join(ROOT, "packages/aprs/src/afsk.ts")],
-    bundle: true,
-    format: "esm",
-    platform: "neutral",
-    write: false,
-  });
-  const src = out.outputFiles[0].text;
-  return import(`data:text/javascript;base64,${Buffer.from(src).toString("base64")}`);
+  // a private directory: a fixed name in the shared temp dir could be pre-created by another local user
+  const tmp = mkdtempSync(path.join(tmpdir(), "aprs-afsk-bench-"));
+  try {
+    const out = path.join(tmp, "direwolf.mjs");
+    await build({
+      entryPoints: [path.join(ROOT, "modems/direwolf/src/index.ts")],
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile: out,
+      logLevel: "error",
+    });
+    return await import(pathToFileURL(out).href);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 /** A RIFF/WAVE file → its sample rate and the first channel as Float32 in [-1, 1]. */
@@ -117,7 +127,12 @@ async function main() {
   const framesOut = opt("--frames");
   const cue = opt("--cue");
   const tracks = (opt("--tracks") ?? "1,2").split(",").map(Number);
-  const valued = new Set(["--frames", "--cue", "--tracks"]);
+  const baud = Number(opt("--baud") ?? 1200);
+  if (![300, 1200, 9600].includes(baud)) {
+    console.error("--baud: expected 300, 1200 or 9600");
+    process.exit(2);
+  }
+  const valued = new Set(["--frames", "--cue", "--tracks", "--baud"]);
   const files = args.filter((a, i) => !a.startsWith("--") && !valued.has(args[i - 1]));
   const inputs = [
     ...files.map((f) => () => ({ name: path.basename(f), ...readWav(f) })),
@@ -125,25 +140,33 @@ async function main() {
   ];
   if (inputs.length === 0) {
     console.error(
-      "usage: afsk-wav.mjs <file.wav> [more.wav …] | --cue <image.cue> [--tracks 1,2]  [--json] [--frames out.txt]",
+      "usage: afsk-wav.mjs <file.wav> [more.wav …] | --cue <image.cue> [--tracks 1,2]  [--baud 1200] [--plain] [--json] [--frames out.txt]",
     );
     process.exit(2);
   }
-  const { AfskRx } = await loadModem();
+  const { createDirewolfRx, direwolfHasSimd } = await loadModem();
+  const simd = !args.includes("--plain") && direwolfHasSimd();
+  const wasm = await WebAssembly.compile(
+    readFileSync(path.join(WASM_DIR, simd ? "direwolf-simd.wasm" : "direwolf.wasm")),
+  );
+  if (!json) console.log(`Direwolf ${baud} baud${simd ? " (SIMD)" : ""}`);
   const results = [];
   const lines = [];
   for (const load of inputs) {
     const { name, rate, pcm } = load();
     const frames = [];
-    const rx = new AfskRx(rate, (f) => frames.push(hex(f)));
+    const rx = await createDirewolfRx({ sampleRate: rate, baud, wasm });
     const chunk = 4096;
     const t0 = performance.now();
-    for (let i = 0; i < pcm.length; i += chunk) rx.push(pcm.subarray(i, i + chunk));
+    for (let i = 0; i < pcm.length; i += chunk)
+      for (const f of rx.push(pcm.subarray(i, i + chunk))) frames.push(hex(f.bytes));
     const seconds = (performance.now() - t0) / 1000;
     const audio = pcm.length / rate;
     const r = {
       file: name,
       rate,
+      baud,
+      simd,
       audioSeconds: +audio.toFixed(1),
       frames: frames.length,
       unique: new Set(frames).size,

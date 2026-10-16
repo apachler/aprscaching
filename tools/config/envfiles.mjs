@@ -202,8 +202,6 @@ export const ENV_FILES = [
       { key: "SOUNDCARD_RATE", value: "48000" },
       "# 1200 (Bell 202, an FM radio) | hf300 (300 baud at 1600/1800 Hz, an SSB radio on 10.1476 MHz USB) | 9600 (G3RUH, a 9600 data port)",
       { key: "SOUNDCARD_MODEM", value: "1200" },
-      "# direwolf (Direwolf's modem in WebAssembly) | builtin (the TypeScript fallback: 1200/300 baud, plain AX.25)",
-      { key: "SOUNDCARD_DEMOD", value: "direwolf" },
       "# transmit framing: off (plain AX.25; always on an APRS channel) | fx25 | il2p (only on a link whose partner decodes it)",
       { key: "SOUNDCARD_FEC", value: "off" },
       "# transmit is off unless set to 1; it also needs every station call control-verified at the gateway",
