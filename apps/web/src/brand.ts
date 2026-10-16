@@ -9,7 +9,7 @@ export const ASSET = {
 } as const;
 
 /** The published manual (the MkDocs site built from `docs/`): the one place the app's documentation lives. */
-export const MANUAL_URL = "https://apachler.github.io/aprscaching/";
+export const MANUAL_URL = "https://docs.aprscaching.org/";
 
 /**
  * A page of the published manual, by its path under `docs/` without `.md` (`"play/index"`,

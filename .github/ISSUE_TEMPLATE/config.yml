@@ -7,5 +7,5 @@ contact_links:
     url: https://github.com/apachler/aprscaching/security/advisories/new
     about: Report a security issue privately — never in a public issue. See SECURITY.md.
   - name: Product manual
-    url: https://apachler.github.io/aprscaching/
+    url: https://docs.aprscaching.org/
     about: Getting started, operating an instance, RF ingest, federation, API & config reference.

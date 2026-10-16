@@ -79,16 +79,11 @@ start order: the first ones wait on replies from outside, so they start first, a
       TLS and HSTS checked; a passkey registered on `.net`
       and used on the 44Net name; one rehearsal each with the tunnel down and the line down;
       `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
-- [ ] **The manual at docs.aprscaching.org** _(S)_ — a `docs` CNAME to `apachler.github.io`, the custom domain
-      and _Enforce HTTPS_ set under Settings → Pages; then, once it answers, `site_url` in `mkdocs.yml`,
-      `manualUrl()` in `apps/web/src/brand.ts`, the published-manual URLs `tools/checks/docs.mjs` checks, and
-      every link to `apachler.github.io/aprscaching` move to it in one change. GitHub Pages forwards the old
-      address, so existing links keep working.
-- [ ] **The project sites live** _(S)_ — `aprscaching.com` (the game) and `aprscaching.org` (the Shack and the
-      project), with `www.`, point at the owner's Hetzner web hosting and serve `apachler/aprscaching-com` and
-      `apachler/aprscaching-org`: deploy key and secrets set, the repository variable `DEPLOY` on, TLS and HSTS
-      checked, both privacy pages reviewed with the instance's. Their calls to action reach this instance's
-      `/tour/game`, `/tour/shack` and `/join?call=…`; neither domain is a sign-in origin or in `EXTRA_ORIGINS`.
+- [ ] **The project sites reach the instance** _(S)_ — `aprscaching.com` (the game) and `aprscaching.org` (the
+      Shack and the project) serve `apachler/aprscaching-com` and `apachler/aprscaching-org` from the owner's web
+      hosting, deployed over SFTP. Their privacy pages are reviewed with the instance's, and their calls to action
+      (`/tour/game`, `/tour/shack`, `/join?call=…`, the live counts) answer once `aprscaching.net` runs the instance;
+      neither domain is a sign-in origin or in `EXTRA_ORIGINS`.
 - [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
       rehearsed onto a scratch instance; `resources.backup` passes in the doctor.
 - [ ] **Release pipeline proven** _(S — last)_ — _Allow GitHub Actions to create and approve pull requests_ is

@@ -6,7 +6,7 @@ community-driven, and that's on purpose.
 ## Where to go
 
 1. **Read the manual.** The product manual is published at
-   <https://apachler.github.io/aprscaching/> (source in `docs/`) and covers getting started, operating
+   <https://docs.aprscaching.org/> (source in `docs/`) and covers getting started, operating
    an instance, RF ingest, federation, and the API/config reference.
 2. **Search existing issues** — your question may already be answered.
 3. **Ask a question** — start a [GitHub Discussion](https://github.com/apachler/aprscaching/discussions),

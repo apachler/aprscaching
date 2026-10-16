@@ -37,7 +37,7 @@ Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contr
 (`@aprscaching/direwolf`) = Direwolf's modem compiled to WebAssembly, receive and transmit (300/1200/9600 bd, AX.25,
 FX.25, IL2P) for every surface; vendored Direwolf source, our `src/glue.c`, a pinned-Emscripten `build.sh`, and the
 built `.wasm` committed (CI rebuilds it byte for byte). The manual is the MkDocs site built from `docs/`
-(`mkdocs.yml`, published at https://apachler.github.io/aprscaching/ from `main`, so it matches the latest release); the app links to it (`manualUrl()` in
+(`mkdocs.yml`, published at https://docs.aprscaching.org/ from `main`, so it matches the latest release); the app links to it (`manualUrl()` in
 `apps/web/src/brand.ts`) and never bundles it, and explains its own controls with hints (`apps/web/src/ui/Hint.tsx`).
 
 ## Deployment

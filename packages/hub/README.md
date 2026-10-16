@@ -33,7 +33,7 @@ core.next("kiss-tnc"); // when the host's pacing allows: the next frame, and the
 ```
 
 The ingest's host is `apps/ingest/src/hubserver.ts`: the TCP listeners, the box's token bucket and the hand-off
-to each radio port's transmit gate. The manual's [Share the box's radio](https://apachler.github.io/aprscaching/run/radios/kiss-server/)
+to each radio port's transmit gate. The manual's [Share the box's radio](https://docs.aprscaching.org/run/radios/kiss-server/)
 covers the settings.
 
 ## Use it
