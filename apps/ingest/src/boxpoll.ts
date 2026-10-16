@@ -17,9 +17,17 @@
  *    ack reports it, so the gateway can tell the beacon's hearings from the station's own travels;
  *  - a transmit command older than `maxAgeSec` is refused, so a box that was offline never beacons a
  *    stale position or delivers a stale message when it reconnects;
- *  - remote transmits share a token bucket, so a flood of queued commands cannot key the radio in a burst.
+ *  - remote transmits share a token bucket, so a flood of queued commands cannot key the radio in a burst;
+ *  - on an HF radio (a 300-baud soundcard port) a beacon is Mic-E, carries its comment on every fourth beacon
+ *    only, and goes out at most once in 10 minutes (`HF_APRS`).
  * Switching a function OFF is always honoured: a remote "TX off" must work even when remote transmit is
  * disabled, since it is the safety stop.
+ *
+ * The gateway also queues the instance's cache objects (`object`, cacheobjects.ts): an APRS object under the
+ * service call, which passes the same gates as any remote transmit. The box also refuses one more than
+ * `OBJECT_MAX_KM` from its own position, or on any path but none or `WIDE1-1`, so it never sends an object far
+ * from itself or over a wide path, whatever the gateway asks. The poll reports the box's position while it
+ * accepts remote transmits, so the gateway picks the caches around it.
  *
  * The gateway also queues answers to radio commands (acks and replies to FOUND / DNF / NOTE / HELP
  * messages) for the box that heard them, so they go back the way the message came — on this box's RF as
@@ -28,7 +36,16 @@
  * can send, so the gateway only routes answers here while it can deliver them.
  */
 import { gatewayFetch } from "./gatewayauth.js";
-import { encodeAprsMessage, encodeAprsPosition, rfBytes } from "@aprscaching/aprs";
+import {
+  HF_APRS,
+  encodeAprsMessage,
+  encodeAprsObject,
+  encodeAprsPosition,
+  haversineMeters,
+  hfBeacon,
+  isAprsObjectName,
+  rfBytes,
+} from "@aprscaching/aprs";
 import { TokenBucket } from "./txlimit.js";
 
 /** What the box can transmit through — the UI-frame send of its first radio (the KISS TNC or a soundcard port). */
@@ -36,6 +53,8 @@ export interface BoxRadio {
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean;
   /** The radio as the status line shows it; absent for the KISS TNC (`kiss`). */
   label?: () => string;
+  /** The radio is on HF at 300 baud (`SOUNDCARD_MODEM=hf300`): beacons follow the HF preset. */
+  hf?: boolean;
 }
 
 /** The runtime switches remote commands flip. `digi`/`igate` are null when that function isn't configured. */
@@ -116,6 +135,10 @@ export interface BoxPollerOpts {
 const baseCall = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
 const CALL_RE = /^[A-Z0-9]{1,6}(?:-[A-Z0-9]{1,2})?$/;
 const MAX_PENDING_ACKS = 200;
+/** The farthest an object may stand from the box that sends it. */
+const OBJECT_MAX_KM = 50;
+/** The only paths an object goes out on: none, or one hop. */
+const OBJECT_PATHS = new Set(["", "WIDE1-1"]);
 
 /** Parse `BOX_TX_PATH` ("WIDE1-1,WIDE2-1"); an empty value means no digipeater path. */
 export function parseBoxPath(raw: string | undefined): string[] {
@@ -163,6 +186,9 @@ export class BoxPoller {
   private msgNo = Math.floor(Math.random() * 99_999);
   /** The service call the gateway named in its last poll. */
   private serviceCall?: string;
+  /** HF beacons sent, which picks the ones that carry the comment, and when the last one went out. */
+  private hfBeacons = 0;
+  private lastHfBeaconAt = -Infinity;
   private readonly startedAt: number;
   private readonly now: () => number;
   private readonly fetch: typeof fetch;
@@ -288,9 +314,12 @@ export class BoxPoller {
     const service = this.serviceCall ?? this.o.serviceCall;
     const kissNode =
       mc?.kiss && service && mc.kiss.canSend(service) ? mc.nodes.find((n) => n.ip === mc.kiss!.ip)?.call : undefined;
+    // where the box stands, only while it takes remote transmits: the gateway picks the caches around it
+    const at = tx ? this.o.position : undefined;
     return (
       `tx=${tx ? 1 : 0}&rf=${this.o.radio ? 1 : 0}&meshcom=${encodeURIComponent(meshcom.join(","))}` +
-      (kissNode ? `&kiss=${encodeURIComponent(kissNode.toUpperCase())}` : "")
+      (kissNode ? `&kiss=${encodeURIComponent(kissNode.toUpperCase())}` : "") +
+      (at ? `&lat=${at.lat.toFixed(5)}&lon=${at.lon.toFixed(5)}` : "")
     );
   }
 
@@ -402,14 +431,22 @@ export class BoxPoller {
     return { src };
   }
 
-  /** Transmit an info field this box originates; its text goes out as UTF-8 bytes. */
-  private transmit(cmd: BoxCommand, payload: string, what: string): BoxResult {
+  /**
+   * Transmit an info field this box originates; its text goes out as UTF-8 bytes. A Mic-E frame names its `dst`,
+   * and a cache object its own `path`.
+   */
+  private transmit(
+    cmd: BoxCommand,
+    payload: string,
+    what: string,
+    to: { dst?: string; path?: string[] } = {},
+  ): BoxResult {
     const g = this.txGate(cmd);
     if ("status" in g) return g;
     const ok = this.o.radio!.send({
       src: g.src,
-      dst: this.o.tocall ?? "APZACG",
-      path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
+      dst: to.dst ?? this.o.tocall ?? "APZACG",
+      path: to.path ?? this.o.path ?? ["WIDE1-1", "WIDE2-1"],
       payload: rfBytes(payload),
     });
     return ok
@@ -418,6 +455,57 @@ export class BoxPoller {
           status: "failed",
           result: "the radio refused the frame (TNC link down, or the soundcard port's transmit gate)",
         };
+  }
+
+  /**
+   * A beacon on HF: Mic-E, nine bytes plus the comment that rides on every fourth, and at most one in
+   * `HF_APRS.beaconMinSec`, since every station on the 30 m channel shares one 300-baud frequency.
+   */
+  private hfBeacon(cmd: BoxCommand, at: { lat: number; lon: number }, symbol: string, comment: string): BoxResult {
+    const wait = this.lastHfBeaconAt + HF_APRS.beaconMinSec * 1000 - this.now();
+    if (wait > 0)
+      return {
+        status: "failed",
+        result: `an HF beacon goes out at most every ${HF_APRS.beaconMinSec / 60} min; the next in ${Math.ceil(wait / 60_000)} min`,
+      };
+    const { dest, info } = hfBeacon(this.hfBeacons, at.lat, at.lon, { symbol, comment, message: "In Service" });
+    const res = this.transmit(cmd, info, "HF beacon", { dst: dest });
+    if (res.status === "done") {
+      this.hfBeacons++;
+      this.lastHfBeaconAt = this.now();
+    }
+    return res;
+  }
+
+  /**
+   * A cache object the gateway queued: a live or killed APRS object near this box, on no path or `WIDE1-1`, from
+   * the call the command names (the service call, which shares this box's base call).
+   */
+  private object(cmd: BoxCommand, p: Record<string, unknown>): BoxResult {
+    const fail = (result: string): BoxResult => ({ status: "failed", result });
+    const name = typeof p.name === "string" ? p.name : "";
+    const lat = Number(p.lat),
+      lon = Number(p.lon);
+    if (!isAprsObjectName(name)) return fail("object needs a name of 1-9 printable characters");
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
+      return fail("object needs a position");
+    const path = Array.isArray(p.path) ? p.path.map((h) => String(h).toUpperCase()) : [];
+    if (path.length > 1 || !OBJECT_PATHS.has(path[0] ?? "")) return fail("an object goes out on no path or WIDE1-1");
+    const at = this.o.position;
+    if (!at) return fail("this box has no position to send objects around (set BOX_LAT and BOX_LON)");
+    if (haversineMeters(at.lat, at.lon, lat, lon) > OBJECT_MAX_KM * 1000)
+      return fail(`object is more than ${OBJECT_MAX_KM} km from this box`);
+    const alive = p.alive !== false;
+    const info = encodeAprsObject({
+      name,
+      lat,
+      lon,
+      symbol: "\\i",
+      comment: typeof p.comment === "string" ? p.comment : "",
+      alive,
+      at: new Date(this.now()),
+    });
+    return this.transmit(cmd, info, `${alive ? "object" : "killed object"} ${name}`, { path });
   }
 
   /** Switch a function. OFF is always honoured; ON is a transmit decision and passes the full gate. */
@@ -468,9 +556,13 @@ export class BoxPoller {
         if (!at) return { status: "failed", result: "this box has no position to beacon (set BOX_LAT and BOX_LON)" };
         const symbol = typeof p.symbol === "string" && p.symbol.length === 2 ? p.symbol : "/-";
         const comment = typeof p.comment === "string" ? p.comment : "";
-        const res = this.transmit(cmd, encodeAprsPosition(at.lat, at.lon, symbol, comment), "beacon");
+        const res = this.o.radio?.hf
+          ? this.hfBeacon(cmd, at, symbol, comment)
+          : this.transmit(cmd, encodeAprsPosition(at.lat, at.lon, symbol, comment), "beacon");
         return res.status === "done" ? { ...res, position: { lat: at.lat, lon: at.lon } } : res;
       }
+      case "object":
+        return this.object(cmd, p);
       case "message": {
         const to = String(p.to ?? "")
           .trim()

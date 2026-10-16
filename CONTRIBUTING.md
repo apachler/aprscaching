@@ -204,7 +204,7 @@ tool in the project registry, which lives in `apachler/aprscaching-tools`
 The monorepo is licensed **by unit** (see `LICENSE` and each package's `LICENSE`):
 
 - `apps/`, `workers/gateway`, `servers/`, `db/`, `tools/` → **AGPL-3.0-or-later**
-- `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/tools`, `packages/shared` → **MIT**
+- `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/hub`, `packages/tools`, `packages/shared` → **MIT**
 - `docs/` → **CC-BY-SA-4.0**
 
 New code inherits the licence of the unit it lives in, and every source file carries an

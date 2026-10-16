@@ -5,6 +5,7 @@
 // FUZZ_RUNS raises the number of generated cases for a deeper local run: FUZZ_RUNS=100000 pnpm test.
 import { describe, it, expect, vi } from "vitest";
 import fc from "fast-check";
+import { cpuTimed } from "./helpers/cpu-time.js";
 import { parseTNC2 } from "../src/tnc2.js";
 import { decodeAprs } from "../src/decode.js";
 import { decodeMicE } from "../src/mice.js";
@@ -126,9 +127,7 @@ describe("decodeAprs", () => {
   it("decodes a long payload in linear time", () => {
     run(
       fc.property(fc.constantFrom(...SEEDS), aprsChar, (seed, c) => {
-        const t0 = performance.now();
-        decodeAprs(frame(seed + c.repeat(20_000)));
-        expect(performance.now() - t0).toBeLessThan(250);
+        expect(cpuTimed(() => decodeAprs(frame(seed + c.repeat(20_000)))).ms).toBeLessThan(250);
       }),
     );
   });

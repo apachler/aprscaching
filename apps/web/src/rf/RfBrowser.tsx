@@ -55,7 +55,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
   const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent } = useRadioLink();
-  const rxOnlyLink = link === "audio" || link === "mesh";
+  const rxOnlyLink = link === "audio" || link === "hf" || link === "mesh";
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
   const [msg, setMsg] = useState({ to: "", text: "" });
   const [txBusy, setTxBusy] = useState(false);
@@ -264,6 +264,19 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
         <ul className="muted fine m-0">
           <li>{freq.lora}</li>
           <li>{freq.iss}</li>
+          <li>
+            {freq.hf}. An SSB radio set to that dial frequency hears the tones; HF has no digipeaters.
+            {audioOk && !link && (
+              <>
+                {" "}
+                {connectBtn(
+                  "hf",
+                  "Soundcard HF",
+                  "Decode 300-baud HF APRS audio from an SSB radio through the sound card",
+                )}
+              </>
+            )}
+          </li>
         </ul>
       </Disclosure>
 

@@ -30,7 +30,7 @@ project's own site, not an instance: `docs.aprscaching.org` serves the manual fr
 a project landing page.
 apps/ingest = the operator-local RF/APRS-IS ingest (Pi/PC/mini-PC; a cloud box MAY run an IS-only
 feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs = pure parser (runs in
-Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts. The manual is the MkDocs site built from `docs/`
+Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts. packages/hub = the station hub's pure cores (KISS server clients, framing, the per-port transmit arbiter; MIT), hosted by `apps/ingest/src/hubserver.ts`. The manual is the MkDocs site built from `docs/`
 (`mkdocs.yml`, published at https://apachler.github.io/aprscaching/ from `main`, so it matches the latest release); the app links to it (`manualUrl()` in
 `apps/web/src/brand.ts`) and never bundles it, and explains its own controls with hints (`apps/web/src/ui/Hint.tsx`).
 
@@ -183,7 +183,7 @@ The launch list and post-1.0 deferred work are tracked in `TODO.md`. Docs and co
 ## Licensing
 Monorepo licensed by unit (see `LICENSE`, per-package `LICENSE`, README "License"): hosted app &
 gateway (`apps/`, `workers/gateway`, `servers/*`, `db/`, `tools/`) = **AGPL-3.0-or-later**;
-reusable libraries (`packages/aprs`, `packages/ax25`, `packages/packet`, `packages/tools`,
+reusable libraries (`packages/aprs`, `packages/ax25`, `packages/packet`, `packages/hub`, `packages/tools`,
 `packages/shared`) = **MIT**; docs (`docs/`) = **CC-BY-SA-4.0**.
 New code inherits the licence of its unit. Keep `packages/*` MIT-clean (embeddable); never add
 AGPL-only deps there. Contributions are inbound=outbound.

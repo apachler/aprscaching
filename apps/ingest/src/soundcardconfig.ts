@@ -6,12 +6,16 @@
  *
  *   [{"name":"uhf","device":"plughw:2,0","tx":true,"ptt":"cm108:/dev/hidraw1"}]
  *
- * A further port takes its rate, timing, level and call from the `SOUNDCARD_*` keys unless it sets its own,
- * but never `tx` or `ptt`: transmit is an opt-in per port.
+ * A further port takes its rate, modem, timing, level and call from the `SOUNDCARD_*` keys unless it sets its
+ * own, but never `tx` or `ptt`: transmit is an opt-in per port.
+ *
+ * `SOUNDCARD_MODEM` picks the modem: `1200` (Bell 202, VHF and UHF FM, the default) or `hf300` (300 baud,
+ * 1600/1800 Hz, through an SSB radio on HF). An `hf300` port takes a TXDELAY long enough for an HF radio's
+ * transmit-receive switching unless a setting names one.
  */
 import { numEnv } from "./config.js";
 import { parsePttSpec } from "./ptt/index.js";
-import type { SoundcardConfig } from "./soundcard.js";
+import type { SoundcardConfig, SoundcardModem } from "./soundcard.js";
 
 export interface SoundcardPortSettings extends SoundcardConfig {
   /** The call this port transmits under (`SOUNDCARD_CALL`, default `BOX_CALL`, `IGATE_CALL`, `DIGI_CALL`). */
@@ -30,7 +34,20 @@ const RANGES = {
 type RangedField = keyof typeof RANGES;
 
 const RATES = [44100, 48000];
-const FIELDS = new Set(["name", "device", "playback", "rate", "tx", "ptt", "call", ...Object.keys(RANGES)]);
+const MODEMS: readonly SoundcardModem[] = ["1200", "hf300"];
+/** The TXDELAY an `hf300` port takes when no setting names one: an HF radio's relays switch slower than an FM rig's. */
+const HF_TXDELAY_MS = 500;
+const FIELDS = new Set(["name", "device", "playback", "rate", "modem", "tx", "ptt", "call", ...Object.keys(RANGES)]);
+
+function readModem(raw: unknown, at: string): SoundcardModem {
+  const m = String(raw).trim();
+  if (!(MODEMS as readonly string[]).includes(m)) throw new Error(`${at}: expected ${MODEMS.join(" or ")}`);
+  return m as SoundcardModem;
+}
+
+/** The HF TXDELAY for an `hf300` port whose settings name none. */
+const hfTxDelay = (modem: SoundcardModem, set: boolean) =>
+  modem === "hf300" && !set ? { txDelayMs: HF_TXDELAY_MS } : {};
 const CALL_RE = /^[A-Z0-9]{1,6}(?:-(?:1[0-5]|[0-9]))?$/i;
 
 /** Every soundcard port the settings describe; throws with the setting at fault. */
@@ -43,6 +60,8 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
   ) as Record<RangedField, number>;
   const rate = env.SOUNDCARD_RATE?.trim() ? Number(env.SOUNDCARD_RATE) : 48000;
   if (!RATES.includes(rate)) throw new Error(`SOUNDCARD_RATE: expected ${RATES.join(" or ")}`);
+  const modem = env.SOUNDCARD_MODEM?.trim() ? readModem(env.SOUNDCARD_MODEM, "SOUNDCARD_MODEM") : "1200";
+  const txDelaySet = !!env.SOUNDCARD_TXDELAY_MS?.trim();
   const call = (env.SOUNDCARD_CALL || env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL || "").trim() || undefined;
 
   const ports: SoundcardPortSettings[] = [];
@@ -53,10 +72,12 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
       device,
       playback: env.SOUNDCARD_PLAYBACK?.trim() || device,
       rate,
+      modem,
       tx: env.SOUNDCARD_TX === "1",
       ptt: parsePttSpec(env.SOUNDCARD_PTT),
       call,
       ...ranged,
+      ...hfTxDelay(modem, txDelaySet),
     });
   }
   const extra = env.SOUNDCARD_PORTS?.trim();
@@ -68,7 +89,9 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
       throw new Error("SOUNDCARD_PORTS: expected a JSON array of ports");
     }
     if (!Array.isArray(list)) throw new Error("SOUNDCARD_PORTS: expected a JSON array of ports");
-    list.forEach((raw, i) => ports.push(extraPort(raw, ports.length + 1, i, { rate, call, ranged })));
+    list.forEach((raw, i) =>
+      ports.push(extraPort(raw, ports.length + 1, i, { rate, modem, txDelaySet, call, ranged })),
+    );
   }
   const names = new Set<string>();
   for (const p of ports) {
@@ -82,7 +105,13 @@ function extraPort(
   raw: unknown,
   number: number,
   index: number,
-  inherit: { rate: number; call?: string; ranged: Record<RangedField, number> },
+  inherit: {
+    rate: number;
+    modem: SoundcardModem;
+    txDelaySet: boolean;
+    call?: string;
+    ranged: Record<RangedField, number>;
+  },
 ): SoundcardPortSettings {
   const at = `SOUNDCARD_PORTS[${index}]`;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${at}: expected an object`);
@@ -100,6 +129,7 @@ function extraPort(
   if (!/^[\w-]{1,16}$/.test(name)) throw new Error(`${at}.name: letters, digits, - and _, up to 16`);
   const rate = o.rate === undefined ? inherit.rate : Number(o.rate);
   if (!RATES.includes(rate)) throw new Error(`${at}.rate: expected ${RATES.join(" or ")}`);
+  const modem = o.modem === undefined ? inherit.modem : readModem(o.modem, `${at}.modem`);
   const tx = o.tx === true || o.tx === 1 || o.tx === "1";
   if (o.tx !== undefined && !tx && o.tx !== false && o.tx !== 0 && o.tx !== "0")
     throw new Error(`${at}.tx: expected true or false`);
@@ -121,5 +151,16 @@ function extraPort(
     if (ranged[f] !== n)
       console.warn("[config] %s.%s=%s is outside %s–%s; using %s", at, f, n, r.min, r.max, ranged[f]);
   }
-  return { name, device, playback: str("playback") ?? device, rate, tx, ptt, call, ...ranged };
+  return {
+    name,
+    device,
+    playback: str("playback") ?? device,
+    rate,
+    modem,
+    tx,
+    ptt,
+    call,
+    ...ranged,
+    ...hfTxDelay(modem, inherit.txDelaySet || o.txDelayMs !== undefined),
+  };
 }

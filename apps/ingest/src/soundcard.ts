@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The soundcard port: a 1200-baud Bell-202 AFSK modem in the ingest box, with no TNC between the radio and
- * the box. Audio comes in through `arecord` and goes out through `aplay` (alsa.ts); the DSP is
+ * The soundcard port: an AFSK modem in the ingest box, with no TNC between the radio and the box: Bell 202 at
+ * 1200 baud for an FM radio, or the 300-baud HF modem (1600/1800 Hz) for an SSB radio on 30 m
+ * (`SOUNDCARD_MODEM=hf300`). Audio comes in through `arecord` and goes out through `aplay` (alsa.ts); the DSP is
  * `packages/aprs/src/afsk.ts`.
  *
- * Receive: PCM → `Afsk1200Rx` → AX.25 frames, delivered as a KISS TNC's are (port `soundcard`, a local RF
+ * Receive: PCM → `AfskRx` → AX.25 frames, delivered as a KISS TNC's are (port `soundcard`, a local RF
  * transport, stamped with the receiving site when heard directly), and handed to the digipeater, the IGate
  * and the connected-mode services the same way. The port's own transmissions never come back as hearings:
  * frames decoded while it transmits, or within the capture latency after it unkeys, are dropped, the
@@ -24,7 +25,7 @@
  * PTT, plays the frame with its TXDELAY of flags, waits for the playback to end plus TXTAIL, and unkeys. A
  * frame that waited 30 s is dropped. The watchdog bounds the key time.
  */
-import { Afsk1200Rx, decodeAx25, encodeAx25, modulateAfsk1200 } from "@aprscaching/aprs";
+import { AfskRx, BELL_202, HF_300, decodeAx25, encodeAx25, modulateAfsk, type AfskModem } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import { addrStr, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
@@ -48,6 +49,12 @@ import { PttWatchdog, withTimeout } from "./ptt/watchdog.js";
 /** The ingest port every soundcard port's frames carry: a local RF transport, like `kiss-tnc`. */
 export const SOUNDCARD_PORT = "soundcard";
 
+/** The soundcard modems: Bell 202 at 1200 baud, or 300 baud on HF. */
+export type SoundcardModem = "1200" | "hf300";
+
+/** The modem a port's setting names. */
+export const afskModem = (m: SoundcardModem | undefined): AfskModem => (m === "hf300" ? HF_300 : BELL_202);
+
 export interface SoundcardConfig {
   /** The port's name in logs and the doctor. */
   name: string;
@@ -56,6 +63,8 @@ export interface SoundcardConfig {
   /** ALSA playback device. */
   playback: string;
   rate: number;
+  /** The modem (`SOUNDCARD_MODEM`); Bell 202 when absent. */
+  modem?: SoundcardModem;
   /** The operator's transmit opt-in for this port. */
   tx: boolean;
   ptt: PttSpec;
@@ -123,13 +132,13 @@ const STOP_WAIT_MS = 3000;
 /** A playback may overrun its airtime by this much before it is killed. */
 const PLAY_SLACK_MS = 2000;
 
-/** HDLC flags for a TXDELAY: one flag is 8 bits at 1200 baud. */
-export const txDelayFlags = (ms: number) => Math.max(1, Math.ceil((ms * 1200) / 8000));
+/** HDLC flags for a TXDELAY: one flag is 8 bits at the modem's baud rate (1200 unless named). */
+export const txDelayFlags = (ms: number, baud = 1200) => Math.max(1, Math.ceil((ms * baud) / 8000));
 
 const tail4k = (s: string) => (s.length > 4096 ? s.slice(-4096) : s);
 
 export class SoundcardPort {
-  private rx: Afsk1200Rx;
+  private rx: AfskRx;
   private capture: AudioChild | null = null;
   private captureUp = false;
   private lastPcmAt = 0;
@@ -174,8 +183,8 @@ export class SoundcardPort {
     return `[soundcard:${this.cfg.name}]`;
   }
 
-  private newDemodulator(): Afsk1200Rx {
-    return new Afsk1200Rx(this.cfg.rate, (raw) => this.onRxFrame(raw));
+  private newDemodulator(): AfskRx {
+    return new AfskRx(this.cfg.rate, (raw) => this.onRxFrame(raw), afskModem(this.cfg.modem));
   }
 
   /** Open the PTT (when transmit is on) and start capturing. */
@@ -236,7 +245,8 @@ export class SoundcardPort {
 
   /** The port as the box's status line shows it. */
   label(): string {
-    return `soundcard ${this.cfg.name}${this.faultReason ? " (fault: PTT watchdog)" : ""}`;
+    const hf = this.cfg.modem === "hf300" ? " HF 300 baud" : "";
+    return `soundcard ${this.cfg.name}${hf}${this.faultReason ? " (fault: PTT watchdog)" : ""}`;
   }
 
   /**
@@ -264,6 +274,14 @@ export class SoundcardPort {
   /** Transmit a full AX.25 frame (connected mode: node, connected digipeater, BBS). */
   sendFrame(f: Ax25Frame): boolean {
     return this.enqueue(encodeFrame(f), [addrStr(f.src), ...(f.digis ?? []).map(addrStr)]);
+  }
+
+  /**
+   * Transmit raw AX.25 bytes as they are (a frame a KISS server client hands the box), judged by the gate as going
+   * out under `gateAs`, the box's calls the frame carries.
+   */
+  sendRaw(frame: Uint8Array, gateAs: readonly string[]): boolean {
+    return this.enqueue(frame, gateAs);
   }
 
   /** Push captured PCM; the capture process feeds it, and a test may too. */
@@ -302,8 +320,9 @@ export class SoundcardPort {
     while (this.queue.length && !this.stopped) {
       const item = this.queue.shift()!;
       try {
-        const pcm = modulateAfsk1200(item.frame, this.cfg.rate, {
-          flags: txDelayFlags(this.cfg.txDelayMs),
+        const pcm = modulateAfsk(item.frame, this.cfg.rate, {
+          flags: txDelayFlags(this.cfg.txDelayMs, afskModem(this.cfg.modem).baud),
+          modem: afskModem(this.cfg.modem),
           amplitude: 1,
         });
         const airMs = (pcm.length / this.cfg.rate) * 1000 + this.cfg.txTailMs;

@@ -21,6 +21,7 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | KISS TCP (the ingest's KISS TNC client) | Direwolf | `direwolf-loop` | keys one Direwolf, hears the other, over Bell-202 1200 bd AFSK |
 | AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
 | RX-IGate (RF → APRS-IS, `qAO,<igate>` for a receive-only gate) | Direwolf + aprsc | `direwolf-loop` | the acs ingest gates what its Direwolf hears; an `RFONLY` path is held back |
+| KISS TCP server (the ingest's KISS server, a third-party client dialling it) | Direwolf's `kissutil` | `kiss-server-loop` | `kissutil` prints a frame the ingest's TNC heard over AFSK; with transmit off, a frame it sends never reaches the air |
 | Telnet consoles | LinBPQ, F6FBB, TNN, JNOS | all drivers | reachability + banner/gate assertions |
 | INP3 (RIF/L3RTT) | TNN (TheNet lineage) | `extra-peers` once the TNN leg is green | asserted stack-vs-stack in the local loop every run |
 
@@ -33,9 +34,10 @@ AXUDP's), and TAK/CoT output consumers. Weather (CWOP) rides the same APRS-IS pr
 The remaining headless-coverable paths are the transport-conformance program in
 [`TODO.md`](../../TODO.md); each leg landing updates this matrix. Active — the core transports:
 KISS TCP vs kernel AX.25, APRS-IS vs aprsc, KISS TCP + AGWPE + the RX-IGate vs Direwolf, the FBB mail
-exchange vs F6FBB and MeshCom's fixture conformance all run. Parked until after launch: WA8DED hostmode vs tfkiss,
-AXIP vs ax25ipd, Meshtastic vs meshtasticd, the browser GPLSL drivers under Node, and the client-side
-legs against the Station hub's servers. Every leg that already runs here stays.
+exchange vs F6FBB and MeshCom's fixture conformance all run. The first client-side leg runs too: Direwolf's `kissutil`
+against the KISS server. Parked until after launch: WA8DED hostmode vs tfkiss, AXIP vs ax25ipd, Meshtastic vs
+meshtasticd, the browser GPLSL drivers under Node, and the client-side legs against the Station hub's other
+servers. Every leg that already runs here stays.
 
 ## 1. Local loop — no Docker (`run-local-loop.sh`)
 

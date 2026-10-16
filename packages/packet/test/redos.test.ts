@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Every line a forwarding partner or a NET/ROM neighbour sends is attacker-controlled: the text scans
 // that parse it must run in linear time, so a crafted line cannot stall the node. Each case feeds a
-// long adversarial input and requires it to parse well inside a second (a quadratic scan of the same
+// long adversarial input and requires it to parse well inside a second of CPU time (a quadratic scan of the same
 // input takes tens of seconds), with the result a short input gives.
 import { describe, it, expect } from "vitest";
+import { cpuTimed } from "./helpers/cpu-time.js";
 import { sidFlags, sidHasCompression } from "../src/fbb-binary.js";
 import { FbbSession, type FbbStore } from "../src/fbb-session.js";
 import { parseFSDetailed } from "../src/forward.js";
@@ -12,12 +13,6 @@ import { trimEndWhere } from "../src/trim.js";
 
 const N = 200_000;
 const enc = (s: string) => new TextEncoder().encode(s);
-
-function timed<T>(fn: () => T): { value: T; ms: number } {
-  const t0 = performance.now();
-  const value = fn();
-  return { value, ms: performance.now() - t0 };
-}
 
 const emptyStore: FbbStore = {
   outbound: () => [],
@@ -28,13 +23,13 @@ const emptyStore: FbbStore = {
 
 describe("FBB SID flags", () => {
   it("a SID of many '[' parses fast", () => {
-    const { value, ms } = timed(() => sidFlags("[".repeat(N)));
+    const { value, ms } = cpuTimed(() => sidFlags("[".repeat(N)));
     expect(ms).toBeLessThan(1000);
     expect(value).toBe("");
   });
 
   it("a SID of many '[-' parses fast", () => {
-    const { value, ms } = timed(() => sidFlags("[-".repeat(N)));
+    const { value, ms } = cpuTimed(() => sidFlags("[-".repeat(N)));
     expect(ms).toBeLessThan(1000);
     expect(value).toBe("");
   });
@@ -55,7 +50,7 @@ describe("FBB session line handling", () => {
   it("a line of many '[' with no ']' is ignored fast while awaiting the SID", () => {
     const s = new FbbSession(emptyStore, { initiator: true });
     s.start();
-    const { value, ms } = timed(() => s.feed("[".repeat(N)));
+    const { value, ms } = cpuTimed(() => s.feed("[".repeat(N)));
     expect(ms).toBeLessThan(1000);
     expect(value.out).toEqual([]);
   });
@@ -63,7 +58,7 @@ describe("FBB session line handling", () => {
   it("a line of many line breaks before text is handled fast", () => {
     const s = new FbbSession(emptyStore, { initiator: true });
     s.start();
-    const { value, ms } = timed(() => s.feed("\n".repeat(N) + "x"));
+    const { value, ms } = cpuTimed(() => s.feed("\n".repeat(N) + "x"));
     expect(ms).toBeLessThan(1000);
     expect(value.out).toEqual([]);
   });
@@ -81,7 +76,7 @@ describe("FBB session line handling", () => {
 
 describe("FS reply parsing", () => {
   it("an FS line of many spaces then a line break parses fast", () => {
-    const { value, ms } = timed(() => parseFSDetailed("FS" + " ".repeat(N) + "+\n+"));
+    const { value, ms } = cpuTimed(() => parseFSDetailed("FS" + " ".repeat(N) + "+\n+"));
     expect(ms).toBeLessThan(1000);
     expect(value).toEqual([]);
   });
@@ -97,7 +92,7 @@ describe("FS reply parsing", () => {
 
 describe("NET/ROM text trimming", () => {
   it("an L3RTT alias of many NULs before text decodes fast", () => {
-    const { value, ms } = timed(() => decodeL3rtt(enc(`L3RTT:1 OE8APR ${"\0".repeat(N)}x`)));
+    const { value, ms } = cpuTimed(() => decodeL3rtt(enc(`L3RTT:1 OE8APR ${"\0".repeat(N)}x`)));
     expect(ms).toBeLessThan(1000);
     expect(value?.alias).toBe("\0".repeat(N) + "x");
   });

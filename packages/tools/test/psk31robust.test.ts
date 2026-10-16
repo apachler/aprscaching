@@ -36,7 +36,9 @@ function modBpsk(bits: string, carrierHz: number, timingPrefix: number, noiseAmp
   return out.map((v) => v + noiseAmp * rnd());
 }
 
-describe("robust PSK31 demod — squaring carrier recovery + AGC + timing recovery", () => {
+// Each case demodulates a few seconds of audio sample by sample: under a second alone, but CPU-bound work that
+// runs past vitest's 5 s default on a machine whose cores other suites share, so the budget is explicit.
+describe("robust PSK31 demod — squaring carrier recovery + AGC + timing recovery", { timeout: 30_000 }, () => {
   const preamble = "0".repeat(64); // PSK31 idle (continuous reversals)
 
   it("recovers text through an OFF-TUNED carrier + timing offset", () => {

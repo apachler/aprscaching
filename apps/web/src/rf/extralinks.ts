@@ -11,14 +11,15 @@ import {
   type AprsData,
   type MeshFix,
 } from "@aprscaching/aprs";
-import { Afsk1200Rx } from "@aprscaching/aprs";
+import { AfskRx, BELL_202, type AfskModem } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.js";
 
 /**
  * extralinks.ts — two more browser-direct RF ingests behind the same RfLink contract as the KISS
  * reader:
- *   WebAudioAfsk        — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
+ *   WebAudioAfsk        — soundcard AFSK modem (Bell 202, or 300 baud on HF): mic → AudioContext → AfskRx →
+ *                         AX.25 frames.
  *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → FromRadio → positions of
  *                         licensed nodes only, under their callsigns.
  * Both stay RX-only and Tier C (a browser is never an attested receiving site); send() is gated on callsign
@@ -49,7 +50,7 @@ function ax25ToRfFrame(ax: Uint8Array): RfFrame | null {
   }
 }
 
-// ---------------------------------------------------------------- soundcard Bell-202 AFSK
+// ---------------------------------------------------------------- soundcard AFSK
 export class WebAudioAfsk implements RfLink {
   private ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
@@ -58,6 +59,7 @@ export class WebAudioAfsk implements RfLink {
   constructor(
     private onFrame: (f: RfFrame) => void,
     private onClose?: (e?: Error) => void,
+    private modem: AfskModem = BELL_202,
   ) {}
 
   async connect(): Promise<void> {
@@ -67,10 +69,14 @@ export class WebAudioAfsk implements RfLink {
     const Ctx = (window as unknown as { AudioContext: typeof AudioContext }).AudioContext;
     this.ctx = new Ctx();
     const src = this.ctx.createMediaStreamSource(this.stream);
-    const rx = new Afsk1200Rx(this.ctx.sampleRate, (ax) => {
-      const f = ax25ToRfFrame(ax);
-      if (f) this.onFrame(f);
-    });
+    const rx = new AfskRx(
+      this.ctx.sampleRate,
+      (ax) => {
+        const f = ax25ToRfFrame(ax);
+        if (f) this.onFrame(f);
+      },
+      this.modem,
+    );
     const sp = this.ctx.createScriptProcessor(4096, 1, 1); // deprecated but universally available; no module URL
     sp.onaudioprocess = (e) => rx.push(e.inputBuffer.getChannelData(0));
     const mute = this.ctx.createGain();

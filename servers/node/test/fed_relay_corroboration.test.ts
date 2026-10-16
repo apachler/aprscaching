@@ -192,14 +192,17 @@ describe("a find confirmed through a hub's relay", () => {
 
   it("returns an unanswered question to the next attempt after an hour", async () => {
     const t = await network();
-    const { logId, at } = await logFind(t.asker, t.cache);
-    const r = await collectRelayedCorroborations(t.asker, at + 3601);
+    const { logId } = await logFind(t.asker, t.cache);
+    // an hour past the moment the question went out, which on a loaded machine can be a second after the find
+    const [{ askedAt }] = JSON.parse(String((await retryRow(t.asker, logId))?.relayed)) as [{ askedAt: number }];
+    const later = askedAt + 3601;
+    const r = await collectRelayedCorroborations(t.asker, later);
     expect(r.collected).toBe(1);
     const row = await retryRow(t.asker, logId);
     expect(JSON.parse(String(row?.relayed))).toEqual([]);
     expect(JSON.parse(String(row?.peers))).toEqual(["https://s.example"]);
     // the next attempt asks through the hub again, and that answer lifts the find
-    await retryCorroborations(t.asker, at + 3601);
+    await retryCorroborations(t.asker, later);
     expect(JSON.parse(String((await retryRow(t.asker, logId))?.relayed))).toHaveLength(1);
     await relayPoll(t.spoke);
     expect((await collectRelayedCorroborations(t.asker)).upgraded).toBe(1);

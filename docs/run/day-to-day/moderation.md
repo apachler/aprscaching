@@ -1,7 +1,7 @@
 # Moderation
 
-This page is for the sysop of a public instance. It shows how to answer a report, take content down and
-suspend an account. At the end you know what each action does here, on the peers, and for the person concerned.
+This page is for the sysop of a public instance. It shows how to answer a report, take content down,
+suspend an account and keep out a station whose licensee objects. At the end you know what each action does here, on the peers, and for the person concerned.
 
 ## Before you start
 
@@ -11,13 +11,14 @@ suspend an account. At the end you know what each action does here, on the peers
 
 ## Where moderation lives
 
-**Instance admin** has three moderation groups:
+**Instance admin** has four moderation groups:
 
 | Group | What you do there |
 |---|---|
 | **Reports** | the queue of open reports, each with a link to the item and the actions on it; resolved reports on a second tab |
 | **Accounts** | find an account by callsign or email, see its content, suspend or lift a suspension |
 | **Audit log** | every moderation action, newest first |
+| **Excluded stations** | the stations kept out on their licensee's objection; add or lift one |
 
 Where you already see content, a **More** (**⋯**) menu offers the same actions: on a cache page, on each
 logbook row and on each photo or sound in the gallery. Players see **Report…** there; you also see **Remove…**.
@@ -136,13 +137,49 @@ it too.
 ## The audit log
 
 **Instance admin → Audit log** lists every action: who, when, the action (`remove`, `restore`, `suspend`,
-`unsuspend`, `resolve`, `reopen`), the target and the reason. A change to an
+`unsuspend`, `resolve`, `reopen`, and `exclude` and `include` for a station), the target and the reason. A change to an
 [instance setting](instance-settings.md) shows too, with its old and new value, and so does each federation trust
 decision: adding, following and removing a peer (`add-peer`, `follow`, `remove-peer`) and moving it between trust
 levels (`trust`, `unvet`, `block`, `unblock`), with the levels before and after. It is kept on this instance
 and never federates.
 A person's export carries the rows about their account; the rows stay after their erasure
 ([Moderation records](../compliance/data-protection.md#moderation-records)).
+
+## Exclude a station
+
+The [privacy notice](../compliance/data-protection.md#a-licensees-objection) lets a station's licensee object to
+this instance processing what their station sends on the air (GDPR Art. 21). They write to `OPERATOR_EMAIL`, and
+you answer by excluding the callsign.
+
+1. Open **Instance admin → Excluded stations**.
+2. Type the callsign and pick the reason: **Objection (GDPR Art. 21)**, **Erasure request (GDPR Art. 17)** or
+   **Other**. An SSID you type is dropped: the exclusion covers the base call and every SSID of it.
+3. Select **Exclude…**. The dialog lists what the instance holds of the station, and warns when an account here
+   holds the call.
+4. Select **Exclude and delete**.
+
+At once, the instance deletes the station's own transmissions:
+
+- its map entry, positions and raw packets;
+- the messages it sent; messages others sent it, and the ones members sent from here, stay;
+- the weather readings heard from it on the air; a member's own weather station pushes are account data and stay;
+- its MeshCom node, its MeshCom links and the MeshCom group messages it sent;
+- its entries in the node's heard list, a NET/ROM route to it, and the watch alerts raised by hearing it.
+
+From then on, the ingest drops every frame the station sends, and third-party traffic another station relays for
+it, before anything is stored, put on the live map or the heard stream, or acted on. A radio command from it gets
+no answer. Another station's packet that names the call in its path or as an addressee is that station's, and stays.
+Federation carries no station data, so no peer brings it back.
+
+The per-port counters count the dropped frames, since they name no station. Accounts, finds and caches are
+untouched. When a member holds the call, their account stays and so do their finds, but their station leaves the
+map and this instance no longer hears it to verify a find. Erasing the account is the member's own tool
+([Data protection](../compliance/data-protection.md)).
+
+The instance keeps the callsign, the reason and the date, nothing else, for as long as the exclusion holds. The
+record is outside export and erasure: it is what lets the instance keep honouring the objection.
+
+**Lift** ends an exclusion. What the station sends is stored and shown again; deleted rows do not come back.
 
 ## Moderate from a script
 
@@ -155,6 +192,7 @@ as its actor in the audit log. The routes and their bodies are in the
 - A removed cache answers *removed by the instance operator* in a signed-out browser.
 - The action shows at the top of **Instance admin → Audit log**.
 - A suspended member's next request shows them signed out, and sign-in names the suspension.
+- An excluded station is missing from the map, and **Instance admin → Audit log** shows `exclude`.
 
 ## Next
 

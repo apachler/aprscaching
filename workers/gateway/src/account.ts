@@ -773,6 +773,8 @@ function eraseAccount(
       env.DB.prepare("UPDATE callsign_events SET from_account=NULL WHERE from_account=?").bind(accountId),
       env.DB.prepare("UPDATE callsign_events SET to_account=NULL WHERE to_account=?").bind(accountId),
       env.DB.prepare("UPDATE callsign_claims SET holder_id=NULL WHERE holder_id=?").bind(accountId),
+      // a station the person excluded as sysop stays excluded: the objection is the licensee's, not theirs
+      env.DB.prepare("UPDATE excluded_calls SET created_by=NULL WHERE created_by=?").bind(accountId),
     );
   if (accountId) stmts.push(...eraseAccountRegistries(env, accountId));
   if (accountId)

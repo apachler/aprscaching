@@ -41,6 +41,7 @@ turns an unattended station into a channel hog.
 | MeshCom sends | message | `MESHCOM_TX_BURST`, `MESHCOM_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
 | TX-IGate (APRS-IS to RF) | message | `IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 | FBB forwarding | session | `BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC` | 4, then 1 per 300 s | 10, then 1 per 60 s |
+| [KISS server](../radios/kiss-server.md) clients, all together | frame | `KISS_SERVER_TX_BURST`, `KISS_SERVER_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 
 A refused transmit is always logged:
 
@@ -61,6 +62,9 @@ retries.
   on-air source (`}USERCALL>APZACG,…`), with your station as the sender. When you forward other operators' BBS
   mail, or carry federation records that started at their stations, you remain responsible for your country's
   third-party rules and any international agreements.
+- **Objects.** With [Caches on air](../radios/caches-on-air.md) switched on, the box sends nearby caches as
+  APRS objects from the service call: a few times when new, then every 30 minutes or less often, on no path or
+  `WIDE1-1`, and killed when the cache is archived. It is off by default.
 - **No ciphertext.** An RF binding never carries ciphertext. A field withheld for privacy, such as a cache
   owner's details under its federation scope, is dropped before it reaches the air, never encrypted onto it.
 - **No secrets.** The ingest secret, the session key, per-operator peer keys and the push (VAPID) keys

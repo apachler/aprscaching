@@ -75,6 +75,9 @@ services:
     # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
     # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
     # ports: ["192.168.1.10:1799:1799/udp"]
+    # The KISS server (KISS_SERVER_PORT) shares the radios with other packet programs. Set KISS_SERVER_HOST=0.0.0.0
+    # in .env and publish the port on the host's loopback (or a LAN address), never a public one.
+    # ports: ["127.0.0.1:8101:8101"]
     # A serial TNC or PTT line: pass the device in. The image's user (UID 10001) is in `dialout`, GID 20 on Debian,
     # Ubuntu and Raspberry Pi OS; where the host's device group has another GID (`stat -c %g /dev/ttyUSB0`), add
     # that GID with group_add.

@@ -197,7 +197,8 @@ they must talk to. Three tiers (full detail in `tools/interop/README.md`):
 - **Modem transports** — `tools/interop/direwolf/docker-compose.yml` joins two **Direwolf** modems
   with a UDP audio cable. The ingest's KISS TCP and AGWPE clients key one and hear the other over
   Bell-202 1200 bd AFSK, in both directions, and the ingest's RX-IGate delivers what its Direwolf hears
-  to **aprsc** with `qAR,<igate>`.
+  to **aprsc** with `qAR,<igate>`. Direwolf's `kissutil` dials the ingest's KISS server: it prints a frame the
+  ingest's Direwolf heard, and a frame it sends with transmit off never reaches the air.
 
 The peers run in the **weekly** `interop` workflow and the modem transports in the **weekly**
 `transports` workflow (both scheduled + manual dispatch), never the PR loop — peer downloads and

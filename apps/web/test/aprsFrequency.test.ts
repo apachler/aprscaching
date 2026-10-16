@@ -37,6 +37,13 @@ describe("frequencyLines", () => {
     expect(frequencyLines("", "en").aprs).toBeNull();
   });
 
+  it("names the HF channel by its dial frequency to 100 Hz, its sideband and its tones", () => {
+    expect(frequencyLines("", "en-US").hf).toBe(
+      "HF APRS: 10.1476 MHz USB dial, 300 baud, 1600/1800 Hz tones, worldwide",
+    );
+    expect(frequencyLines("", "de-AT").hf).toMatch(/^HF APRS: 10,1476 MHz USB dial/);
+  });
+
   it("always names the LoRa APRS and ISS channels", () => {
     const l = frequencyLines("", "en-US");
     expect(l.lora).toBe("LoRa APRS: 433.775 MHz, the IARU Region 1 channel");
