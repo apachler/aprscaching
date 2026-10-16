@@ -179,16 +179,23 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
   users. It MUST live on a **dedicated, sysop-gated surface** (revealed only when the signed-in account
   is an operator, `ADMIN_CALLSIGNS`), and every write MUST be gated **server-side** (`requireSysop`),
   never merely hidden in the UI. A normal user MUST NOT see or reach it.
-- **Landing page (signed out):** "Live on the air" — a hero that keeps the brand treatment in every theme
-  (photo, slogan, two calls to action, the terminal card's find sequence, the instance's live counts), a band of
-  the real map, then a few sections that follow the theme, each a short story beside **one** large screenshot
-  made from the fixtures (`landing-assets`). Counts come from `/api/v1/stats`; while they load the page shows
-  skeletons, and on failure it shows nothing — never invented numbers. **Motion budget:** one entrance and the
+- **Landing page (signed out):** "Live on the air", the instance's front door — a hero that keeps the brand
+  treatment in every theme (photo, slogan, the callsign field with **Join** as its one primary action, Explore the
+  live map beside it, the terminal card's find sequence, the instance's live counts), the two ways in (the game and
+  the Shack, each with its public tour), a band of the real map, the trust tiers and a short close. The longer
+  stories live on the project's own sites (`aprscaching.com`, `aprscaching.org`). Counts come from
+  `/api/v1/stats`; while they load the page shows skeletons, a count below its floor is left out, and on failure
+  it shows nothing — never invented numbers. The callsign field is a real form to `/join`, so it works in the
+  prerendered copy too. **Motion budget:** one entrance and the
   terminal card's sequence, `transform`/`opacity` only, nothing on scroll, none under reduced motion.
   **Performance budget:** landing JS ≤ ~150 KB gzip beyond the shell (no MapLibre), CLS < 0.05, LCP ≤ 2.5 s,
   AVIF/WebP srcsets and a preloaded hero. The landing ships as HTML in `index.html` (prerendered at build,
   `vite-prerender.ts`), so it paints before the JS has loaded; the app's own landing replaces it, which is why
   `Landing` renders the same with no session and no data.
+- **Public tours** (`/tour/game`, `/tour/shack`): the whole app on the demo fixtures under a banner that says so,
+  with that tour's coach marks (`tourSteps.ts`, every anchor a `data-tour` hook) and a last step that leaves for
+  `/join`. A tour keeps nothing and sends nothing: storage is in memory, writes stay in the page, and serial,
+  Bluetooth, the microphone and the live socket are out of reach (`demo/tourMode.ts`).
 - **The Shack:** an **app launcher**, not a config page. It lists the operator *apps* (packet
   terminal, BBS, NET/ROM node, tools/plugins, rig control, remote box); each launches
   into **its own surface** and can be **pinned to the nav rail**. A single tool inside Tools (the packet

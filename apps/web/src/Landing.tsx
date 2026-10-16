@@ -2,20 +2,21 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ASSET, MANUAL_URL } from "./brand.js";
 import { API_BASE } from "./api.js";
+import { statsShown, type Stats } from "./landingStats.js";
 import { Button, Icon, ManualLink, TierBadge, type IconName } from "./ui/index.js";
 import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "./credits.js";
 
 /**
- * The landing page — "Live on the air". The hero keeps the brand treatment in every theme and opens with the
- * product's thesis: an APRS frame heard on the air, decoding into its Radio-verified stamp. Below it the page
- * varies its rhythm: the instance's own numbers (from the read API, never invented), a full-width band of the
- * live map, the three steps beside a phone, the trust tiers as a progression, the network of instances, the Shack
- * beside a desktop, and
- * short closing bands. One primary action (sign in with your callsign); Explore opens the read-only map.
+ * The landing page — "Live on the air", the instance's front door. The hero keeps the brand treatment in every
+ * theme and opens with the product's thesis: an APRS frame heard on the air, decoding into its Radio-verified stamp,
+ * beside the one primary action, the callsign that joins (or signs in; the steps are the same). Below it: the two
+ * ways in (the game and the Shack, each with its public tour), a full-width band of the live map, the trust tiers,
+ * and a short close. The longer stories live on the project's own sites, aprscaching.com and aprscaching.org.
  * Images are made from the real app by apps/web/test/visual/landing-assets.mjs.
  */
 export function Landing(props: {
-  onSignIn: () => void;
+  /** Open sign-in, on the callsign the visitor typed when there is one. */
+  onSignIn: (call?: string) => void;
   onExplore: () => void;
   /** Taking over from the prerendered copy: the terminal card's sequence carries on where that copy is. */
   resume?: boolean;
@@ -25,21 +26,17 @@ export function Landing(props: {
   return (
     <main className="landing" style={{ "--landing-skew": skew } as CSSProperties}>
       <Hero onSignIn={props.onSignIn} onExplore={props.onExplore} />
+      <Ways />
       <MapBand onExplore={props.onExplore} />
-      <Steps />
       <Trust />
-      <Network />
-      <Shack />
-      <Privacy />
-      <RunAnywhere />
       <section className="landing-section landing-close">
         <h2>Free in full. Open in full.</h2>
         <p>
-          AGPL-3.0, and every instance links the code it runs. The read API is free. Donations buy recognition, never
-          features.
+          AGPL-3.0, and every instance links the code it runs. No analytics, no adverts, no third-party scripts, and
+          positions expire. Donations buy recognition, never features.
         </p>
-        <Button variant="primary" onClick={props.onSignIn}>
-          Sign in with your callsign
+        <Button variant="primary" onClick={() => props.onSignIn()}>
+          Join with your callsign
         </Button>
       </section>
       <footer className="landing-footer">
@@ -93,7 +90,7 @@ function Shot(props: {
   );
 }
 
-function Hero(props: { onSignIn: () => void; onExplore: () => void }) {
+function Hero(props: { onSignIn: (call?: string) => void; onExplore: () => void }) {
   return (
     <header className="landing-hero">
       <Shot
@@ -108,16 +105,14 @@ function Hero(props: { onSignIn: () => void; onExplore: () => void }) {
       <nav className="landing-nav" aria-label="Landing">
         <img className="landing-nav-logo" src={ASSET.wordmark} alt="APRScaching" width={160} height={34} />
         <span className="landing-nav-links">
+          <a href="#ways">Play or operate</a>
           <a href="#map">The map</a>
-          <a href="#how">How it works</a>
           <a href="#trust">Trust</a>
-          <a href="#network">Network</a>
-          <a href="#shack">Shack</a>
-          <a href="#privacy">Privacy</a>
+          <a href={MANUAL_URL} target="_blank" rel="noopener">
+            Manual
+          </a>
         </span>
-        <Button variant="primary" onClick={props.onSignIn}>
-          Sign in
-        </Button>
+        <Button onClick={() => props.onSignIn()}>Sign in</Button>
       </nav>
       <div className="landing-hero-grid">
         <div className="landing-hero-copy">
@@ -128,17 +123,53 @@ function Hero(props: { onSignIn: () => void; onExplore: () => void }) {
           <p className="landing-sub">
             Hide a cache, hunt it down, and key the find over APRS. The radio network itself proves you were there.
           </p>
-          <div className="landing-cta">
-            <Button variant="primary" onClick={props.onSignIn}>
-              Sign in with your callsign
-            </Button>
-            <Button onClick={props.onExplore}>Explore the live map</Button>
-          </div>
+          <JoinForm onJoin={props.onSignIn} />
+          <p className="landing-or">
+            No licence yet? <Button onClick={props.onExplore}>Explore the live map</Button>
+          </p>
         </div>
         <Terminal />
       </div>
       <LiveStats />
     </header>
+  );
+}
+
+/**
+ * The callsign that joins: new or returning, sign-in takes it from here. It is a real form to `/join`, so the
+ * prerendered copy works before the app has loaded; once the app is up it opens sign-in in place.
+ */
+function JoinForm(props: { onJoin: (call?: string) => void }) {
+  return (
+    <form
+      className="landing-join"
+      action="/join"
+      method="get"
+      onSubmit={(e) => {
+        e.preventDefault();
+        props.onJoin(String(new FormData(e.currentTarget).get("call") ?? "").trim());
+      }}
+    >
+      <label htmlFor="landing-call">Your callsign</label>
+      <span className="landing-join-row">
+        <input
+          id="landing-call"
+          name="call"
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={8}
+          placeholder="OE8APR"
+          aria-describedby="landing-call-help"
+        />
+        <Button variant="primary" type="submit">
+          Join
+        </Button>
+      </span>
+      <span className="landing-join-help" id="landing-call-help">
+        New or returning, the same step signs you in, with a passkey or an email link.
+      </span>
+    </form>
   );
 }
 
@@ -164,11 +195,12 @@ function Terminal() {
   );
 }
 
-interface Stats {
-  caches: number;
-  findsOnAirThisWeek: number;
-  stationsHeardLastHour: number;
-}
+const STAT_LABEL: Record<keyof Stats, string> = {
+  caches: "caches hidden here",
+  findsOnAirThisWeek: "finds heard on the air this week",
+  stationsHeardLastHour: "stations heard in the last hour",
+};
+const STAT_KEYS = Object.keys(STAT_LABEL) as (keyof Stats)[];
 
 /** The instance's own numbers from the read API; a skeleton while they load, nothing if they cannot. */
 function LiveStats() {
@@ -186,16 +218,9 @@ function LiveStats() {
   if (stats === "failed") return null;
   const n = (v: number) => new Intl.NumberFormat("en").format(v);
   const items: [string, ReactNode][] = stats
-    ? [
-        ["caches hidden here", n(stats.caches)],
-        ["finds heard on the air this week", n(stats.findsOnAirThisWeek)],
-        ["stations heard in the last hour", n(stats.stationsHeardLastHour)],
-      ]
-    : [
-        ["caches hidden here", null],
-        ["finds heard on the air this week", null],
-        ["stations heard in the last hour", null],
-      ];
+    ? statsShown(stats).map(([k, v]) => [STAT_LABEL[k], n(v)])
+    : STAT_KEYS.map((k) => [STAT_LABEL[k], null]);
+  if (items.length === 0) return null;
   return (
     <dl className="landing-stats" aria-busy={stats === null}>
       {items.map(([label, value]) => (
@@ -239,42 +264,48 @@ function MapBand(props: { onExplore: () => void }) {
   );
 }
 
-function Steps() {
+const WAYS: { icon: IconName; title: string; line: string; tour: string; tourLabel: string; site: string }[] = [
+  {
+    icon: "map",
+    title: "Play",
+    line: "Hide caches, hunt them by map, bearing or locator, and key the find over APRS from the spot.",
+    tour: "/tour/game",
+    tourLabel: "Take the game tour",
+    site: "aprscaching.com",
+  },
+  {
+    icon: "radio",
+    title: "Operate",
+    line: "The Shack: a packet terminal, a BBS, messages, signal decoders and rig control, with your own radio.",
+    tour: "/tour/shack",
+    tourLabel: "Take the Shack tour",
+    site: "aprscaching.org",
+  },
+];
+
+/** The two ways in. Each tour is the real app on demo data, so a visitor tries it before joining. */
+function Ways() {
   return (
-    <section className="landing-section landing-split" id="how" aria-labelledby="how-h">
-      <div>
-        <p className="landing-eyebrow">How a find works</p>
-        <h2 id="how-h">Three steps, and the network is the referee</h2>
-        <ol className="landing-steps">
-          <li>
-            <span>
-              <strong>Hide</strong> a container, or make a station or yourself the cache.
+    <section className="landing-section" id="ways" aria-labelledby="ways-h">
+      <p className="landing-eyebrow">Two ways in</p>
+      <h2 id="ways-h">Play the game, or run your station</h2>
+      <ul className="landing-ways">
+        {WAYS.map((w) => (
+          <li key={w.title}>
+            <Icon name={w.icon} size={24} />
+            <h3>{w.title}</h3>
+            <p>{w.line}</p>
+            <span className="landing-way-links">
+              <a className="landing-way-tour" href={w.tour}>
+                {w.tourLabel}
+              </a>
+              <a href={`https://${w.site}/`} rel="noopener">
+                More on {w.site}
+              </a>
             </span>
           </li>
-          <li>
-            <span>
-              <strong>Hunt</strong> by map, bearing or a 10-character locator, even without internet.
-            </span>
-          </li>
-          <li>
-            <span>
-              <strong>Key the find</strong> over APRS from the spot, or log it in the app.
-            </span>
-          </li>
-        </ol>
-        <ManualLink className="landing-more" page="play/index">
-          The caching guide
-        </ManualLink>
-      </div>
-      <div className="landing-phone">
-        <Shot
-          name="phone"
-          widths={[390, 780]}
-          ratio={[780, 1688]}
-          sizes="(min-width: 880px) 300px, 70vw"
-          alt="A cache open on a phone: its difficulty, rating and coordinates"
-        />
-      </div>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -300,120 +331,6 @@ function Trust() {
       </ol>
       <ManualLink className="landing-more" page="reference/trust-model">
         How verification works
-      </ManualLink>
-    </section>
-  );
-}
-
-function Network() {
-  return (
-    <section className="landing-section" id="network" aria-labelledby="network-h">
-      <p className="landing-eyebrow">Federation</p>
-      <h2 id="network-h">One network, no central server</h2>
-      <dl className="landing-facts">
-        <div>
-          <dt>Caches cross instances</dt>
-          <dd>A cache hidden on one instance shows on the maps of the others, with its finds.</dd>
-        </div>
-        <div>
-          <dt>Other receivers confirm your find</dt>
-          <dd>Instances ask each other who heard you near the cache. Two independent yeses make it Radio-verified.</dd>
-        </div>
-        <div>
-          <dt>Signed, whatever the path</dt>
-          <dd>Every record carries its instance's signature, over the internet, 44Net or HAMNET.</dd>
-        </div>
-        <div>
-          <dt>Each sysop decides whom to trust</dt>
-          <dd>No company in the middle. A deletion travels everywhere the record went.</dd>
-        </div>
-      </dl>
-      <ManualLink className="landing-more" page="run/federation/how-it-works">
-        How federation works
-      </ManualLink>
-    </section>
-  );
-}
-
-const SHACK: [IconName, string, string][] = [
-  ["radio", "Your radio, your way", "KISS TNC, Bluetooth, Meshtastic, or the sound card."],
-  ["bbs", "Packet terminal and BBS", "AX.25 connected mode, FBB forwarding, a NET/ROM node."],
-  ["map", "Live map", "Stations, tracks, weather and spots, with offline maps."],
-  ["server", "Federated", "Instances share signed caches and finds over the internet, 44Net or HAMNET."],
-  ["tools", "Tools", "Signed plugins: decoders, macros, panels."],
-  ["thermo", "Weather", "Your weather station, CWOP and WX beacons."],
-];
-
-function Shack() {
-  return (
-    <section className="landing-section landing-split landing-split-rev" id="shack" aria-labelledby="shack-h">
-      <div className="landing-desktop">
-        <Shot
-          name="desktop"
-          widths={[960, 1920]}
-          ratio={[1920, 1200]}
-          sizes="(min-width: 880px) 560px, 92vw"
-          alt="The app on a desktop: the Nearby list beside an open cache"
-        />
-      </div>
-      <div>
-        <p className="landing-eyebrow">More than a game</p>
-        <h2 id="shack-h">A ham-radio Shack underneath</h2>
-        <ul className="landing-caps">
-          {SHACK.map(([icon, title, line]) => (
-            <li key={title}>
-              <Icon name={icon} size={20} />
-              <span>
-                <strong>{title}.</strong> {line}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-function Privacy() {
-  return (
-    <section className="landing-section" id="privacy" aria-labelledby="privacy-h">
-      <p className="landing-eyebrow">What we do with your beacons</p>
-      <h2 id="privacy-h">An APRS map that forgets</h2>
-      <dl className="landing-facts">
-        <div>
-          <dt>Positions expire</dt>
-          <dd>Tracks are pruned on a schedule; only a find's own evidence is kept longer.</dd>
-        </div>
-        <div>
-          <dt>Nothing is watching you</dt>
-          <dd>No analytics, no ads, no third-party scripts. One session cookie when you sign in.</dd>
-        </div>
-        <div>
-          <dt>The source is the receipt</dt>
-          <dd>Every instance links the exact code it runs, so a promise can be checked.</dd>
-        </div>
-        <div>
-          <dt>Or run it yourself</dt>
-          <dd>Your radio, your database, your rules.</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-function RunAnywhere() {
-  return (
-    <section className="landing-section landing-run" aria-labelledby="run-h">
-      <h2 id="run-h">Run it anywhere</h2>
-      <ul className="landing-hosts">
-        <li>A desktop app</li>
-        <li>A Raspberry Pi at home</li>
-        <li>Any VM with Docker</li>
-        <li>An Android phone in the field</li>
-        <li>A free cloud VM, with your own RF box</li>
-      </ul>
-      <ManualLink className="landing-more" page="run/index">
-        Choose how to run it
       </ManualLink>
     </section>
   );

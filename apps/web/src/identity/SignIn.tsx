@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   claim,
   registerPasskey,
@@ -27,12 +27,14 @@ type Probe = {
 export function SignIn(props: {
   /** `data` opens on "Get or erase my data", for an account left with no callsign. */
   start?: "signin" | "data";
+  /** The callsign a join link named: the panel opens on it and checks it, so the visitor does not type it again. */
+  call?: string;
   onDone: () => void;
   onClose: () => void;
   /** Leave sign-in for the map, for someone without a licence; closing returns to the map where no other way is given. */
   onBrowse?: () => void;
 }) {
-  const [cs, setCs] = useState("");
+  const [cs, setCs] = useState(props.call ?? "");
   const [email, setEmail] = useState("");
   const [probe, setProbe] = useState<Probe>(null);
   const [busy, setBusy] = useState(false);
@@ -62,6 +64,14 @@ export function SignIn(props: {
       setBusy(false);
     }
   }
+  // a join link's call is checked once, as if the visitor had typed it and pressed Continue
+  const checkedJoin = useRef(false);
+  useEffect(() => {
+    if (checkedJoin.current || !props.call) return;
+    checkedJoin.current = true;
+    void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the call the panel opened with
+  }, []);
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
     setErr(null);

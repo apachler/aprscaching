@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Icon, Button } from "../ui/index.js";
-import { TAB_ITEMS, type NavItem } from "../nav.js";
+import { TAB_ITEMS, railHook, type NavItem } from "../nav.js";
 
 /**
  * The mobile bottom tab bar: the `tab` destinations of the nav table, with the find/hide action in the
@@ -26,7 +26,7 @@ export function TabBar(props: {
       className={props.active === item.key ? "on" : ""}
       aria-current={props.active === item.key ? "page" : undefined}
       onClick={() => props.onNav(item.key)}
-      data-tour={item.key === "nearby" ? "nearby" : undefined}
+      data-tour={railHook(item.key)}
     >
       <span className="ic">
         <Icon name={item.icon} cp437={item.tab!.cog} size={22} />

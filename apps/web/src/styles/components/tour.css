@@ -69,9 +69,79 @@
       position: fixed;
       position-anchor: --tour-target;
       position-area: block-end;
-      position-try-fallbacks: flip-block, flip-inline;
+      /* centred under the anchor; near a screen edge (a docked panel) it reaches inward instead; then above */
+      position-try-fallbacks:
+        block-end span-inline-start,
+        block-end span-inline-end,
+        flip-block,
+        block-start span-inline-start,
+        block-start span-inline-end,
+        --tour-inside;
       max-width: min(460px, calc(100vw - 32px));
       margin: var(--space-sm);
     }
+    /* on a phone the anchor is often a small tab at the foot: the card takes the screen's width, above it or below */
+    @media (max-width: 680px) {
+      .tour-scrim[data-anchored="true"] .tour-card {
+        position-area: block-start;
+        position-try-fallbacks: block-end, --tour-inside;
+        /* in the row, not on the anchor's centre, which would push it off a narrow screen */
+        justify-self: center;
+      }
+    }
+  }
+
+  /* An element too large to sit beside (the map): the card goes inside it, at its top. */
+  @position-try --tour-inside {
+    position-area: center;
+    align-self: start;
+    justify-self: center;
+    margin-top: var(--space-lg);
+  }
+
+  /* the strip a public tour runs under: what this is, and the ways out. A strip in its own row above the map
+     (shell.css .mapwrap, the offline banner's row, which a tour on demo data never shows), so it never covers the
+     map's controls, its attribution or a panel. */
+  .tour-banner {
+    grid-area: 1 / 1;
+    position: relative;
+    z-index: var(--z-map-ui);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 var(--space-md);
+    padding: 0 var(--space-xs) 0 var(--space-md);
+    border-bottom: 1px solid var(--hair);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: var(--text-data);
+  }
+  .tour-banner p {
+    margin: var(--space-xs) 0;
+  }
+  .tour-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--space-md);
+  }
+  .tour-banner-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit);
+    color: var(--accent-text);
+    font-weight: var(--weight-strong);
+  }
+  .tour-banner-actions .tour-banner-join {
+    padding: 0 var(--space-md);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+  }
+  .tour-banner-actions .tour-banner-join:hover {
+    background: color-mix(in oklab, var(--accent) 88%, var(--shade));
   }
 }

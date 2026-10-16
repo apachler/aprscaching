@@ -6,8 +6,9 @@ setup knowledge, and at the end you know which way in suits you.
 ## Instances and your home instance
 
 The site you use is one **[instance](../glossary.md#instance)**: one APRScaching server, run by a ham, a club
-or a group for their region. Many instances run side by side. The best known is `aprscaching.net`;
-`aprscaching.com` forwards to it.
+or a group for their region. Many instances run side by side. The best known is `aprscaching.net`.
+`aprscaching.com` (the game) and `aprscaching.org` (the Shack and the project) are the project's own sites: they
+explain APRScaching and send you to `aprscaching.net` to join.
 
 Instances link up into one network. Caches and confirmations of finds travel between them, so your map also
 shows caches from other instances.

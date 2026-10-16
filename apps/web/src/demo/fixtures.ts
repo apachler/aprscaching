@@ -1013,6 +1013,15 @@ const ROUTES: Route[] = [
   ["GET", /^\/api\/v1\/stats$/, () => ({ caches: 128, findsOnAirThisWeek: 23, stationsHeardLastHour: 41, at: NOW })],
   ["GET", /^\/api\/caches$/, () => ({ caches: MAP_CACHES })],
   ["GET", /^\/api\/caches\/(\d+)$/, (m) => ({ cache: DETAILS.get(Number(m[1])) ?? DETAILS.get(1) })],
+  // a share link's code (`/?cache=AC0001`), as the read API resolves it
+  [
+    "GET",
+    /^\/api\/v1\/caches\/([^/]+)$/,
+    (m) => {
+      const hit = MAP_CACHES.find((c) => c.code.toUpperCase() === decodeURIComponent(m[1] ?? "").toUpperCase());
+      return hit ? { cache: { id: hit.id } } : undefined;
+    },
+  ],
   // a find logged from the app: located by the device, Tier B
   [
     "POST",

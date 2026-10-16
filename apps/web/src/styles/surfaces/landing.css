@@ -166,23 +166,136 @@
     font-size: var(--text-input);
     color: var(--chrome-ink);
   }
-  .landing-cta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .landing-cta button,
   .landing-close button {
     min-height: 48px;
     padding: 0 var(--space-xl);
     border-radius: var(--radius-card);
     font-weight: var(--weight-strong);
   }
-  /* on a phone the actions are thumb-wide */
-  @media (max-width: 480px) {
-    .landing-cta button {
-      flex: 1 1 100%;
+
+  /* the callsign that joins: the hero's one primary action */
+  .landing-join {
+    display: grid;
+    gap: var(--space-xs);
+    max-width: 30rem;
+  }
+  .landing-join label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-strong);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--chrome-ink);
+  }
+  .landing-join-row {
+    display: flex;
+    gap: var(--space-sm);
+  }
+  .landing-join input {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 var(--space-md);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: color-mix(in oklch, var(--shade) 35%, var(--surface-2));
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: var(--text-input);
+    font-weight: var(--weight-strong);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .landing-join input::placeholder {
+    color: color-mix(in oklch, var(--ink) 55%, transparent);
+  }
+  .landing-join input:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+  }
+  .landing-join button {
+    min-height: 48px;
+    padding: 0 var(--space-xl);
+    border-radius: var(--radius-card);
+    font-weight: var(--weight-strong);
+  }
+  .landing-join-help {
+    font-size: var(--text-data);
+    color: var(--chrome-ink);
+  }
+  .landing-or {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm) var(--space-md);
+    margin: var(--space-xl) 0 0;
+    color: var(--chrome-ink);
+  }
+  .landing-or button {
+    min-height: var(--hit);
+  }
+
+  /* the two ways in: the game and the Shack, each with its tour */
+  .landing-ways {
+    container-type: inline-size;
+    list-style: none;
+    margin: var(--space-xl) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-lg);
+  }
+  @media (min-width: 760px) {
+    .landing-ways {
+      grid-template-columns: 1fr 1fr;
     }
+  }
+  .landing-ways li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-xs) var(--space-md);
+    align-content: start;
+    padding: var(--space-xl);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .landing-ways svg {
+    grid-row: span 3;
+    color: var(--accent-text);
+  }
+  .landing-ways h3 {
+    margin: 0;
+    font-size: var(--text-title);
+  }
+  .landing-ways p {
+    margin: 0;
+    color: var(--muted);
+  }
+  .landing-way-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-lg);
+    margin-top: var(--space-sm);
+  }
+  .landing-way-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit);
+    color: var(--accent-text);
+    font-weight: var(--weight-strong);
+  }
+  /* a secondary action: the page's one primary action is the callsign */
+  .landing-way-links .landing-way-tour {
+    padding: 0 var(--space-lg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .landing-way-links .landing-way-tour:hover {
+    background: color-mix(in oklab, var(--ink) 8%, var(--surface-2));
   }
 
   /* the terminal: one frame arrives line by line, then its stamp */
@@ -399,82 +512,6 @@
     margin: 0 auto;
     padding: clamp(40px, 7vw, 72px) clamp(16px, 4vw, 40px);
   }
-  .landing-split {
-    container-type: inline-size;
-    display: grid;
-    gap: clamp(24px, 5vw, 56px);
-    align-items: center;
-  }
-  @media (min-width: 880px) {
-    .landing-split {
-      grid-template-columns: 1fr auto;
-    }
-    .landing-split-rev {
-      grid-template-columns: auto 1fr;
-    }
-  }
-  .landing-steps {
-    margin: var(--space-xl) 0 0;
-    padding: 0;
-    list-style: none;
-    counter-reset: landing-step;
-    display: grid;
-    gap: var(--space-md);
-    max-width: 46ch;
-  }
-  .landing-steps li {
-    counter-increment: landing-step;
-    display: grid;
-    grid-template-columns: 2.25rem 1fr;
-    gap: var(--space-md);
-    align-items: baseline;
-    font-size: var(--text-input);
-  }
-  .landing-steps li::before {
-    content: counter(landing-step);
-    display: grid;
-    place-items: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: var(--radius-control);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-family: var(--font-brand);
-    font-weight: var(--weight-title);
-  }
-
-  /* device frames: CSS bezels around real screenshots */
-  .landing-phone {
-    justify-self: center;
-    width: min(300px, 72vw);
-    padding: 10px;
-    border-radius: 36px;
-    background: oklch(0.16 0.01 230);
-    box-shadow: var(--elevation-overlay);
-  }
-  .landing-phone img,
-  .landing-desktop img {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
-  .landing-phone img {
-    border-radius: 27px;
-  }
-  .landing-desktop {
-    width: min(560px, 92vw);
-    justify-self: center;
-    padding: 22px 8px 8px;
-    border-radius: var(--radius-card);
-    background:
-      oklch(0.2 0.01 230) radial-gradient(circle at 14px 11px, oklch(0.65 0.15 25) 3.5px, transparent 4px),
-      oklch(0.2 0.01 230);
-    box-shadow: var(--elevation-overlay);
-  }
-  .landing-desktop img {
-    border-radius: var(--radius-chip);
-  }
-
   /* the tiers as a progression: C, then B, then A */
   .landing-tiers {
     list-style: none;
@@ -515,61 +552,6 @@
   .landing-tiers p {
     margin: var(--space-sm) 0 0;
     color: var(--muted);
-  }
-
-  .landing-caps {
-    list-style: none;
-    margin: var(--space-xl) 0 0;
-    padding: 0;
-    display: grid;
-    gap: var(--space-md);
-  }
-  .landing-caps li {
-    display: grid;
-    grid-template-columns: 20px 1fr;
-    gap: var(--space-md);
-    align-items: start;
-  }
-  .landing-caps svg {
-    margin-top: 2px;
-    color: var(--accent-text);
-  }
-
-  .landing-facts {
-    margin: var(--space-xl) 0 0;
-    display: grid;
-    gap: var(--space-lg) var(--space-2xl);
-  }
-  @media (min-width: 760px) {
-    .landing-facts {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  .landing-facts dt {
-    font-weight: var(--weight-strong);
-    font-size: var(--text-heading);
-  }
-  .landing-facts dd {
-    margin: var(--space-xs) 0 0;
-    color: var(--muted);
-  }
-
-  .landing-run {
-    border-top: 1px solid var(--line);
-  }
-  .landing-hosts {
-    list-style: none;
-    margin: var(--space-lg) 0 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .landing-hosts li {
-    padding: var(--space-xs) var(--space-md);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-pill);
-    background: var(--surface);
   }
 
   .landing-close {

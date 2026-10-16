@@ -9,6 +9,8 @@ export type TourStep = {
   when?: "signed-out" | "signed-in";
   /** Selector for the element this step points at — a `[data-tour="…"]` hook, never a style class. */
   anchor?: string;
+  /** The last step of a public tour leaves it for the real app: the primary action goes to this address. */
+  cta?: { label: string; href: string };
 };
 
 const SEEN_KEY = "acs.tour.seen";
@@ -45,8 +47,14 @@ function visibleTarget(selector: string): HTMLElement | null {
  * than pointing at nothing. Either way the dialog is focus-trapped, keyboard-operable and
  * reduced-motion aware. Renders nothing when no step applies.
  */
-export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () => void }) {
-  const { steps, signedIn, onDone } = props;
+export function Tour(props: {
+  steps: TourStep[];
+  signedIn: boolean;
+  onDone: () => void;
+  /** A public tour: Skip and Done close the coach marks without marking the quick tour seen. */
+  keepUnseen?: boolean;
+}) {
+  const { steps, signedIn, onDone, keepUnseen } = props;
   const shown = useMemo(
     () => steps.filter((s) => !s.when || s.when === (signedIn ? "signed-in" : "signed-out")),
     [steps, signedIn],
@@ -55,27 +63,47 @@ export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () =
   const [anchored, setAnchored] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const finish = useCallback(() => {
-    markSeen();
+    if (!keepUnseen) markSeen();
     onDone();
-  }, [onDone]);
+  }, [onDone, keepUnseen]);
 
   const idx = Math.min(i, Math.max(shown.length - 1, 0));
   const step = shown[idx];
   const anchor = step?.anchor;
 
   // Ring the step's element and let CSS anchor the card to it. The class is the only thing set from
-  // JS — `anchor-name`, the ring and the placement all live in the stylesheet (css.md).
+  // JS — `anchor-name`, the ring and the placement all live in the stylesheet (css.md). An element still on its way
+  // (a cache whose detail is loading) is watched for a few seconds; until it lands the card stays centred.
   useEffect(() => {
-    const target = anchor ? visibleTarget(anchor) : null;
-    setAnchored(!!target);
-    if (!target) return;
-    target.classList.add("tour-target");
-    target.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    setAnchored(false);
+    if (!anchor) return;
+    let target: HTMLElement | null = null;
+    const attach = () => {
+      target = visibleTarget(anchor);
+      if (!target) return false;
+      setAnchored(true);
+      target.classList.add("tour-target");
+      target.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+      return true;
+    };
+    if (attach()) return () => target?.classList.remove("tour-target");
+    const watch = new MutationObserver(() => {
+      if (attach()) stop();
     });
-    return () => target.classList.remove("tour-target");
+    const timer = setTimeout(() => watch.disconnect(), 5000);
+    const stop = () => {
+      watch.disconnect();
+      clearTimeout(timer);
+    };
+    watch.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      stop();
+      target?.classList.remove("tour-target");
+    };
   }, [anchor]);
 
   useEffect(() => {
@@ -107,9 +135,15 @@ export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () =
             Skip
           </button>
           {idx > 0 && <button onClick={() => setI(idx - 1)}>Back</button>}
-          <Button variant="primary" onClick={() => (last ? finish() : setI(idx + 1))}>
-            {last ? "Done" : "Next"}
-          </Button>
+          {last && step.cta ? (
+            <Button variant="primary" onClick={() => location.assign(step.cta!.href)}>
+              {step.cta.label}
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={() => (last ? finish() : setI(idx + 1))}>
+              {last ? "Done" : "Next"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -153,6 +153,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     sysop: true,
   },
 ];
+/**
+ * The rail and tab items a tour points at, by their key: NavRail and TabBar render each as its `data-tour` hook.
+ * test/tour-anchors.mjs reads this list, so a step can anchor on a destination in the rail.
+ */
+export const TOUR_RAIL_HOOKS = ["nearby", "ranks", "messages", "shack"] as const;
+export type TourRailHook = (typeof TOUR_RAIL_HOOKS)[number];
+export const railHook = (key: string): TourRailHook | undefined =>
+  (TOUR_RAIL_HOOKS as readonly string[]).includes(key) ? (key as TourRailHook) : undefined;
+
 export const TAB_ITEMS: readonly NavItem[] = NAV_ITEMS.filter((i) => i.tab);
 
 /**

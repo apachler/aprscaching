@@ -76,10 +76,14 @@ start order: the first ones wait on replies from outside, so they start first, a
       on the same origin. `EXTRA_ORIGINS=https://aprscaching.oe8apr.ampr.org` over the 44Net Connect tunnel, with its
       certificate, the `44net` entry in `FED_ENDPOINTS` and the `_aprscaching` TXT record
       (`inst=aprscaching.net; key=…; host=aprscaching.oe8apr.ampr.org; web=https://aprscaching.net`).
-      `aprscaching.com` (and `www.`) redirects to `https://aprscaching.net` at the registrar, path and query kept,
-      before any sign-in (`302` until settled, then `301`). TLS and HSTS checked; a passkey registered on `.net`
+      TLS and HSTS checked; a passkey registered on `.net`
       and used on the 44Net name; one rehearsal each with the tunnel down and the line down;
       `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
+- [ ] **The project sites reach the instance** _(S)_ — `aprscaching.com` (the game) and `aprscaching.org` (the
+      Shack and the project) serve `apachler/aprscaching-com` and `apachler/aprscaching-org` from the owner's web
+      hosting, deployed over SFTP. Their privacy pages are reviewed with the instance's, and their calls to action
+      (`/tour/game`, `/tour/shack`, `/join?call=…`, the live counts) answer once `aprscaching.net` runs the instance;
+      neither domain is a sign-in origin or in `EXTRA_ORIGINS`.
 - [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
       rehearsed onto a scratch instance; `resources.backup` passes in the doctor.
 - [ ] **Release pipeline proven** _(S — last)_ — _Allow GitHub Actions to create and approve pull requests_ is
@@ -303,6 +307,17 @@ Considered and not planned:
       The deployment shapes it would join are in [`docs/run/index.md`](docs/run/index.md).
 
 ## Growth & community (owner-decided slate; keeps the game-first orientation and the open/recognition-only style)
+
+Visitors to members:
+
+- [ ] **"We heard your station"** _(P2 · S)_ — once a visitor types a callsign on the front page (or on the
+      project sites), show when and roughly where the instance last heard it, from the read API's public stations
+      and within the positions' retention. The strongest hook for a ham: the instance already hears them.
+- [ ] **Arrivals from the project sites** _(P3 · S)_ — the host counts `/join?from=com|org` and the tours'
+      arrivals as plain daily totals (no cookie, no address kept), shown in Instance admin, so the sysop sees which
+      site brings members.
+- [ ] **A live terminal in the Shack tour** _(P3 · S)_ — the tour's packet terminal and BBS connect to the design
+      harness's simulated BBS peer (`demo/simPeer.ts`), so a visitor sees a real AX.25 session without a radio.
 
 Next release:
 

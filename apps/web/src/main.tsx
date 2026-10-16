@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./ui/index.js";
 import { loadSettings, makeFormatters, FormatContext } from "./format.js";
 import { applyTheme } from "./shell/theme.js";
 import { registerServiceWorker } from "./shell/serviceWorker.js";
+import { tourFromPath } from "./deeplink.js";
 
 // The offline app shell (public/sw.js). Development serves unhashed modules, so there is nothing to store.
 if (import.meta.env.PROD) void registerServiceWorker();
@@ -19,7 +20,20 @@ const root = createRoot(document.getElementById("root")!);
 // instead of the app — a durable bench for the packet/BBS shells (and the Phosphor terminal look).
 const params = new URLSearchParams(location.search);
 const demo = params.get("demo");
-if (demo === "app") {
+// `/tour/game` and `/tour/shack`: the public tours, the whole app on demo data with nothing kept (demo/tourMode.ts)
+const tour = tourFromPath(location.pathname);
+if (tour) {
+  import("./demo/tourMode.js").then(({ enterTour }) => {
+    enterTour(tour);
+    root.render(
+      <React.StrictMode>
+        <ErrorBoundary>
+          <App tour={tour} />
+        </ErrorBoundary>
+      </React.StrictMode>,
+    );
+  });
+} else if (demo === "app") {
   // the whole app against canned gateway answers (demo/fixtures.ts): the design review's and the visual
   // harness's bench. `&as=user|sysop|out` picks who is signed in, `&tools=` the project tools installed.
   import("./demo/fixtures.js").then(({ installAppFixtures }) => {

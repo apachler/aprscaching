@@ -22,8 +22,9 @@ society runs courses and tells you where to take the exam; the licence gives you
 
 The same steps create an account for a callsign that has none.
 
-1. Tap **Sign in** in the top bar, or **Sign in with your callsign** on the front page.
-2. Type your **Callsign** and tap **Continue**. The panel shows your callsign. A new one says **new account**.
+1. On the front page, type your callsign under **Your callsign** and tap **Join**. Or tap **Sign in** in the top
+   bar, type your **Callsign** and tap **Continue**.
+2. The panel shows your callsign. A new one says **new account**.
 3. Pick one way in:
     - **Passkey.** Tap **Create account with a passkey** on your first visit, or **Sign in with passkey**
       after that. Your phone, computer or password manager keeps the passkey. You unlock it with a
