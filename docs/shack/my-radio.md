@@ -16,7 +16,7 @@ your radio hears, shows it live, and can pass it on to an instance.
 |---|---|---|
 | A USB [KISS](../glossary.md#kiss) [TNC](../glossary.md#tnc), or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
 | A Bluetooth Low Energy KISS TNC, such as a Mobilinkd TNC3 or TNC4 | **Connect Bluetooth** | Finds TNCs that offer the BLE KISS service (Mobilinkd, many LoRa APRS trackers) or the Nordic UART service |
-| Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | A software modem: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only. **Soundcard HF**, under **Other APRS channels**, decodes 300-baud HF APRS from an SSB radio on 10.1476 MHz USB |
+| Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | Direwolf's software modem, running in the browser: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only. **Soundcard HF**, under **Other APRS channels**, decodes 300-baud HF APRS from an SSB radio on 10.1476 MHz USB. See [The soundcard modem](#the-soundcard-modem) |
 | A [Meshtastic](../glossary.md#meshtastic) node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed mode on, callsign as long name) and shows them under their callsign; licence-free nodes are ignored. Receive only |
 
 The page shows only the buttons your browser supports, and a line under them names the links it lacks. USB
@@ -134,6 +134,22 @@ modem and a Meshtastic node receive only, so they take none of these settings.
 Key the radio from the TNC's PTT line, not by VOX. A VOX circuit holds the transmitter on for 250 to 500 ms
 after the audio stops, so your radio stays on the air after the frame and covers the next station's packet.
 
+### The soundcard modem
+
+**Soundcard AFSK** and **Soundcard HF** decode with Direwolf's modem, by John Langner, WB2OSZ, built to run in
+the browser. It decodes plain AX.25, and FX.25 and IL2P frames as well. It runs beside the page, so the map stays
+smooth while it listens. The browser downloads the modem when you first connect the soundcard, about 140 kB;
+after that, it works offline too.
+
+The status line names the modem, as in **● live (Soundcard (AFSK)) · Direwolf modem (SIMD) · N frames**. When the
+browser cannot load Direwolf's modem, the soundcard uses the app's built-in modem instead, which decodes plain
+AX.25 only, and the status line says **built-in modem: Direwolf did not load**, with the reason. To choose the
+built-in modem yourself, open **Advanced: soundcard modem** and select **Built-in**; the choice applies the next
+time the soundcard connects.
+
+The soundcard links do not decode 9600 baud: that needs the radio's flat 9600-baud data port, which a computer's
+microphone input does not pass cleanly. For 9600 baud, use a TNC or the ingest box's [soundcard port](../run/radios/soundcard.md).
+
 ## Troubleshooting
 
 | Problem | What to check |
@@ -142,6 +158,7 @@ after the audio stops, so your radio stays on the air after the frame and covers
 | Only **Soundcard AFSK** shows | The browser is not Chromium-based: use Chrome or Edge for a USB or Bluetooth TNC. |
 | **The radio is in use by the packet terminal** | One USB port opens in one place at a time. Close the TNC in the [packet terminal](packet-and-bbs.md) first, or the other way round. |
 | Connected, but **0 frames** | The TNC is not in KISS mode, or the radio is on the wrong frequency. With the soundcard, the input level is too low or too high: aim for the loudest level that does not clip. |
+| **built-in modem: Direwolf did not load** | The browser could not download Direwolf's modem: you are offline and have not used the soundcard online before, or a browser extension blocks it. The built-in modem still decodes plain AX.25. |
 | **Meshtastic node** missing | It needs Web Serial: use desktop Chrome or Edge. |
 | The Bluetooth TNC is missing from the dialog | Switch on the TNC's Bluetooth and pair it in the system settings first, if it asks for pairing. A TNC that offers only classic Bluetooth, not Bluetooth Low Energy, cannot connect. |
 | Forwarding does nothing | **signed**: sign in first. **secret**: the URL or the secret is wrong; the sysop can check the gateway log. |

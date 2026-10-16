@@ -15,6 +15,7 @@
   "dependencies": {
     "@aprscaching/aprs": "workspace:*",
     "@aprscaching/ax25": "workspace:*",
+    "@aprscaching/direwolf": "workspace:*",
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/tools": "workspace:*",

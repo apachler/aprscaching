@@ -13,6 +13,7 @@ import {
 } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
 import { KissTimingSettings } from "./KissTimingSettings.js";
+import { SoundcardModemSettings } from "./SoundcardModemSettings.js";
 import { messageRetry, radioLink, useMessageRetry, useRadioLink } from "./RadioLinkHost.js";
 import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
@@ -54,7 +55,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
-  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent } = useRadioLink();
+  const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent, linkNote } = useRadioLink();
   const retry = useMessageRetry();
   const rxOnlyLink = link === "audio" || link === "hf" || link === "mesh";
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
@@ -251,7 +252,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           </>
         )}
         <span className="muted" role="status">
-          {link ? `● live (${LINK_LABEL[link]}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}
+          {link
+            ? `● live (${LINK_LABEL[link]})${linkNote ? ` · ${linkNote}` : ""} · ${count} frame${count === 1 ? "" : "s"}`
+            : "not connected"}
         </span>
       </div>
       {(!serialOk || !bleOk) && (
@@ -372,6 +375,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       )}
 
       <KissTimingSettings />
+      {audioOk && <SoundcardModemSettings />}
 
       {link && (
         <div className="tx-block">

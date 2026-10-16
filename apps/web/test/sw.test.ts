@@ -18,14 +18,17 @@ type Handler = (event: Record<string, unknown>) => void;
 function load(
   opts: {
     list?: string[];
+    onDemand?: string[];
     active?: boolean;
     net?: (url: string, init?: RequestInit) => Response | Promise<Response>;
   } = {},
 ) {
-  const src = SRC.replace('const VERSION = "dev";', 'const VERSION = "v2";').replace(
-    "const PRECACHE = [];",
-    `const PRECACHE = ${JSON.stringify(opts.list ?? ["/index.html", "/assets/app.js"])};`,
-  );
+  const src = SRC.replace('const VERSION = "dev";', 'const VERSION = "v2";')
+    .replace(
+      "const PRECACHE = [];",
+      `const PRECACHE = ${JSON.stringify(opts.list ?? ["/index.html", "/assets/app.js"])};`,
+    )
+    .replace("const ON_DEMAND = [];", `const ON_DEMAND = ${JSON.stringify(opts.onDemand ?? [])};`);
   const handlers: Record<string, Handler> = {};
   const stores = new Map<string, Map<string, Response>>([["acs-shell-v1", new Map()]]);
   const calls = {
@@ -50,6 +53,7 @@ function load(
         addAll: async (reqs: Request[]) => {
           for (const r of reqs) m.set(new URL(r.url, ORIGIN).pathname, await fetchFn(r));
         },
+        put: async (key: string, res: Response) => void m.set(key, res),
       };
     },
     match: async (key: string, o: { cacheName: string }) => stores.get(o.cacheName)?.get(key)?.clone(),
@@ -140,6 +144,22 @@ describe("the offline app shell", () => {
     online = false;
     const res = await w.fire("fetch", w.req("/?view=nearby", "navigate"));
     expect(await res!.text()).toBe(`net:${ORIGIN}/index.html`);
+  });
+
+  it("stores an on-demand file at its first fetch, never on install, and serves it offline after", async () => {
+    let online = true;
+    const w = load({
+      onDemand: ["/assets/modem.wasm"],
+      net: (u) => (online ? new Response(`net:${u}`) : Promise.reject(new TypeError("offline"))),
+    });
+    await w.fire("install");
+    expect(w.stores.get("acs-shell-v2")!.has("/assets/modem.wasm")).toBe(false);
+    const first = await w.fire("fetch", w.req("/assets/modem.wasm"));
+    expect(await first!.text()).toBe(`net:${ORIGIN}/assets/modem.wasm`);
+    await new Promise((r) => setTimeout(r, 0));
+    online = false;
+    const again = await w.fire("fetch", w.req("/assets/modem.wasm"));
+    expect(await again!.text()).toBe(`net:${ORIGIN}/assets/modem.wasm`);
   });
 
   it("prefers the network for the app when it answers", async () => {

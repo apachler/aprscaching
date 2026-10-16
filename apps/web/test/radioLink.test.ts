@@ -546,3 +546,40 @@ describe("the words for a transmission", () => {
     expect(said.at(-1)).toBe("Transmitted to APRS");
   });
 });
+
+describe("the soundcard modem in the radio link", () => {
+  function noteRadio(init?: { audioDemod?: "direwolf" | "builtin" }) {
+    const saved: string[] = [];
+    const deps: RadioDeps = {
+      makeLink: () => ({
+        note: "Direwolf modem (SIMD)",
+        async connect() {},
+        async disconnect() {},
+        async send() {},
+      }),
+      forward: () => Promise.resolve(),
+      feedLocal: () => {},
+      saveAudioDemod: (d) => saved.push(d),
+    };
+    return { store: new RadioLinkStore(deps, init), saved };
+  }
+
+  it("shows the link's note while it is up, and clears it on disconnect", async () => {
+    const { store } = noteRadio();
+    expect(store.getState().linkNote).toBe("");
+    await store.connect("audio");
+    expect(store.getState().linkNote).toBe("Direwolf modem (SIMD)");
+    await store.disconnect();
+    expect(store.getState().linkNote).toBe("");
+  });
+
+  it("runs Direwolf by default, and saves a change of modem once", () => {
+    const { store, saved } = noteRadio();
+    expect(store.getState().audioDemod).toBe("direwolf");
+    store.setAudioDemod("builtin");
+    store.setAudioDemod("builtin");
+    expect(store.getState().audioDemod).toBe("builtin");
+    expect(saved).toEqual(["builtin"]);
+    expect(noteRadio({ audioDemod: "builtin" }).store.getState().audioDemod).toBe("builtin");
+  });
+});

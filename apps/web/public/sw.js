@@ -9,6 +9,10 @@
    is touched: API calls, gateway pages (sign-in links, /source, /embed) and map tiles go to the network
    as they would without a worker. The app's own data layer keeps the data it needs offline.
 
+   On demand: the build also lists in ON_DEMAND the large files only one feature loads (the soundcard modem's
+   WebAssembly). Install skips them; the first fetch of one stores it in the same versioned cache, and later
+   fetches are served from there, so the feature works offline once it has run online.
+
    A new version waits until the user agrees (the app shows "Reload"), so it never replaces the running
    app in the middle of a hunt; the very first install activates at once.
 
@@ -19,11 +23,13 @@
    the body is generic; the detail lives in the in-app watchlist and the email digest. */
 const VERSION = "dev";
 const PRECACHE = [];
+const ON_DEMAND = [];
 const CACHE = `acs-shell-${VERSION}`;
 const SHELL = "/index.html";
 /** How long opening the app waits for the network before it starts from the stored shell. */
 const NAV_TIMEOUT_MS = 3000;
 const PRECACHED = new Set(PRECACHE);
+const STORED_ON_DEMAND = new Set(ON_DEMAND);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -83,7 +89,24 @@ self.addEventListener("fetch", (event) => {
   }
   if (PRECACHED.has(url.pathname))
     event.respondWith(caches.match(url.pathname, { cacheName: CACHE }).then((hit) => hit || fetch(req)));
+  else if (STORED_ON_DEMAND.has(url.pathname)) event.respondWith(onDemand(req, url.pathname));
 });
+
+/** A file stored on demand: the stored copy, else the network's, kept for next time. */
+async function onDemand(req, pathname) {
+  const hit = await caches.match(pathname, { cacheName: CACHE });
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res.ok) {
+    const copy = res.clone();
+    // storing is best effort: a full quota still answers the request
+    caches
+      .open(CACHE)
+      .then((cache) => cache.put(pathname, copy))
+      .catch(() => {});
+  }
+  return res;
+}
 
 // ---- Background Sync: the offline log queue -------------------------------------------------------------
 /* With a connection back, the browser wakes the worker (tag "acs-logqueue", Chromium) even with the app

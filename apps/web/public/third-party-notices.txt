@@ -15,7 +15,9 @@ zaach/jsonlint whose package manifest lacks a license field - the upstream MIT
 notice is reproduced below) - node-forge (BSD-3-Clause, Digital Bazaar; used
 under its BSD option, loaded only to open a LoTW certificate file) - pmtiles
 (BSD-3-Clause, Protomaps LLC; reads the offline map archive) - fflate (MIT,
-Arjun Barrett; its decompressor).
+Arjun Barrett; its decompressor) - Dire Wolf (GPL-2.0-or-later, John Langner,
+WB2OSZ; the soundcard modem, compiled to WebAssembly and loaded only when a
+soundcard link connects).
 
 Fonts: Fredoka and IBM Plex Mono (SIL Open Font License 1.1 - full texts at
 /fonts/OFL-Fredoka.txt and /fonts/OFL-IBMPlexMono.txt) - PxPlus IBM VGA8 from
@@ -335,3 +337,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+Dire Wolf (Direwolf)
+--------------------
+Copyright (C) John Langner, WB2OSZ (the years are in each source file's header)
+https://github.com/wb2osz/direwolf - release 1.8.1
+
+The soundcard modem (direwolf.wasm, direwolf-simd.wasm) is built from Dire Wolf's
+unmodified sources, which are licensed under the GNU General Public License,
+version 2 or (at your option) any later version. Its FX.25 Reed-Solomon code is
+based on work by Phil Karn, KA9Q (Copyright 2002), released under the GNU General
+Public License. The combination is conveyed under the GNU Affero General Public
+License, version 3 or later, as GPLv3 section 13 allows. The complete
+corresponding source, the GPL text and the build script that reproduces the
+WebAssembly byte for byte are in modems/direwolf/ of this instance's source
+(the Source link, GET /.well-known/source).

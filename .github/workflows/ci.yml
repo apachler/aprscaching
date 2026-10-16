@@ -24,7 +24,7 @@ jobs:
   #   ingest    apps/ingest/
   #   packages  packages/, imported by the gateway, the web app and the ingest alike
   #   audio     what the audio and tool-sandbox e2e scripts bundle or serve: apps/web/src/rf/, apps/web/src/tools/,
-  #             apps/web/public/tools/ and their own files under tools/e2e/
+  #             apps/web/public/tools/, the Direwolf modem's src/ and wasm/ and their own files under tools/e2e/
   #   e2e       tools/e2e/
   #   devtools  tools/dev/ (docs-theme.mjs excepted) and tools/webauthn/, which pnpm dev:check runs
   # and the jobs each scope runs:

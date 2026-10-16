@@ -250,10 +250,13 @@ from Direwolf.
       and speed (`SOUNDCARD_MODEM`: 300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback
       (`SOUNDCARD_DEMOD=builtin`). Covers the ingest box, bare metal and the Docker stack; the weekly transports
       run checks it against a native Direwolf.
-- [ ] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s Web Audio path runs the receiver in an
-      AudioWorklet (or a Worker fed by one), loaded only when the soundcard path opens, so the landing and the
-      map bundle carry none of it; the TypeScript modem remains the fallback when WebAssembly is blocked.
-      Transmit through the same gate as today. _Depends on:_ the ingest stage.
+- [x] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s soundcard links (1200 baud, and 300 baud on
+      HF) run Direwolf's receiver in a dedicated Worker that an AudioWorklet feeds over a MessageChannel; the
+      Worker and its `.wasm` load only when a soundcard link connects (the service worker stores the WebAssembly
+      on that first use), so the landing and the map bundle carry none of it. The TypeScript modem is the
+      fallback when the WebAssembly does not load, and a choice under My radio, with the reason in the link's
+      status. The links stay receive-only and 9600 baud stays with the ingest box; the Chromium fake-audio e2e
+      decodes AX.25 and IL2P through it and checks the fallback.
 - [x] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds every file of the web build, its `.wasm`
       included, and serves it as `application/wasm` with the Node server's type map; `deploy/desktop/smoke.sh`
       proves it on the release's Linux binary, and Direwolf's notice ships beside the binaries. The binary runs
