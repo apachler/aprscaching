@@ -105,6 +105,9 @@ map tiles. For hunters' offline packs, set `OFFLINE_TILES_PATH` to an [offline m
 from the browser (Web Serial or Web Bluetooth) or from `apps/ingest` run beside it
 ([Off-grid and LAN](../networks/off-grid.md)).
 
+The app has no ingest of its own. A radio on a sound card needs `apps/ingest` beside it: its
+[soundcard port](../radios/soundcard.md) runs Direwolf's modem in WebAssembly, with nothing else to install.
+
 ## Next
 
 - [Your first hour](../first-hour.md): sign in, confirm your call and finish the setup.

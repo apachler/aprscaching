@@ -254,9 +254,13 @@ from Direwolf.
       AudioWorklet (or a Worker fed by one), loaded only when the soundcard path opens, so the landing and the
       map bundle carry none of it; the TypeScript modem remains the fallback when WebAssembly is blocked.
       Transmit through the same gate as today. _Depends on:_ the ingest stage.
-- [ ] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds the `.wasm` like the SPA (the package
-      already runs under Bun) and its notices ship beside it; Pocket runs the ingest stage as is, tested on a
-      phone. _Depends on:_ the ingest stage.
+- [x] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds every file of the web build, its `.wasm`
+      included, and serves it as `application/wasm` with the Node server's type map; `deploy/desktop/smoke.sh`
+      proves it on the release's Linux binary, and Direwolf's notice ships beside the binaries. The binary runs
+      no ingest: a soundcard port is `apps/ingest` beside it (the package runs under Bun as well). Pocket's
+      checkout carries `modems/direwolf`, and the Termux check loads the modem under Termux's Node on aarch64
+      and x86_64; a soundcard port needs ALSA, which Termux lacks, so a phone's soundcard radio waits on the
+      browser stage. _Depends on:_ the ingest stage.
 - [ ] **Retire the TypeScript demodulator** _(P3 · S)_ — once Direwolf has carried every surface through a
       release without a fallback report, remove the `AfskRx` demodulator (1200 and 300 bd) from `packages/aprs`
       (the MIT modulator stays for embedders). _Depends on:_ the browser and Desktop stages.

@@ -81,7 +81,7 @@ describe("compressed SPA assets", () => {
   // a script big enough to compress; index-abc123.js is too small to be worth it
   const script = "export const msg = 'hello from the shell';\n".repeat(200);
 
-  async function serve(): Promise<{ port: number; close: () => Promise<void> }> {
+  async function serve(): Promise<{ port: number; root: string; close: () => Promise<void> }> {
     const root = dist();
     fs.writeFileSync(path.join(root, "assets", "app-def456.js"), script);
     fs.writeFileSync(path.join(root, "assets", "logo-1.png"), Buffer.alloc(4096, 7));
@@ -92,7 +92,7 @@ describe("compressed SPA assets", () => {
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as AddressInfo).port;
-    return { port, close: () => new Promise((r) => server.close(() => r())) };
+    return { port, root, close: () => new Promise((r) => server.close(() => r())) };
   }
 
   function get(port: number, p: string, headers: Record<string, string> = {}, method = "GET") {
@@ -154,6 +154,25 @@ describe("compressed SPA assets", () => {
 
       const ranged = await get(s.port, "/assets/app-def456.js", { "accept-encoding": "br", range: "bytes=0-9" });
       expect(ranged.headers["content-encoding"]).toBeUndefined();
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("serves WebAssembly as application/wasm, which instantiateStreaming requires", async () => {
+    // the Direwolf modem's own build, as the web app's soundcard path loads it
+    const wasm = fs.readFileSync(new URL("../../../modems/direwolf/wasm/direwolf.wasm", import.meta.url));
+    const s = await serve();
+    try {
+      fs.writeFileSync(path.join(s.root, "assets", "direwolf-0a1b2c.wasm"), wasm);
+      const url = `http://127.0.0.1:${s.port}/assets/direwolf-0a1b2c.wasm`;
+      const res = await fetch(url);
+      expect(res.headers.get("content-type")).toBe("application/wasm");
+      expect(res.headers.get("cache-control")).toContain("immutable");
+      // fetch asks for brotli and gzip, and the module still compiles from the decoded stream
+      expect(res.headers.get("content-encoding")).toMatch(/^(br|gzip)$/);
+      const mod = await WebAssembly.compileStreaming(res);
+      expect(WebAssembly.Module.exports(mod).length).toBeGreaterThan(0);
     } finally {
       await s.close();
     }
