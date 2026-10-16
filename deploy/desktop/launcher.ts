@@ -23,6 +23,7 @@ import { createServer, type BunServer } from "../../servers/bun/server.ts";
 import { migrationsFromDir } from "../../servers/node/src/migrate.ts";
 import { resolveInstanceSecrets } from "../../servers/node/src/secrets.ts";
 import { compressed, negotiate } from "../../servers/node/src/compress.ts";
+import { contentTypeOf } from "../../servers/node/src/spa.ts";
 
 declare const BUILD_VERSION: string;
 const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
@@ -64,27 +65,6 @@ if (!resolved.ok) {
 }
 
 // ---- SPA serving ----
-const CT: Record<string, string> = {
-  html: "text/html; charset=utf-8",
-  js: "text/javascript",
-  mjs: "text/javascript",
-  css: "text/css",
-  json: "application/json",
-  webmanifest: "application/manifest+json",
-  svg: "image/svg+xml",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-  ico: "image/x-icon",
-  woff2: "font/woff2",
-  woff: "font/woff",
-  txt: "text/plain",
-  pmtiles: "application/octet-stream",
-  wasm: "application/wasm",
-};
-const ctOf = (p: string) => CT[p.slice(p.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream";
 
 /**
  * One SPA file: embedded in the binary, or from the build on disk in dev. Text assets go out brotli- or
@@ -96,13 +76,13 @@ async function serveSpa(pathname: string, req: Request): Promise<Response> {
   let type: string;
   if (embedded) {
     file = SPA[p] ?? SPA["/index.html"]!; // SPA-router fallback
-    type = ctOf(SPA[p] ? p : "/index.html");
+    type = contentTypeOf(SPA[p] ? p : "/index.html");
   } else {
     const fp = join(WEB_DIST, p.replace(/^\/+/, ""));
     if (!fp.startsWith(WEB_DIST)) return new Response("bad path", { status: 400 });
     const found = existsSync(fp);
     file = found ? fp : join(WEB_DIST, "index.html");
-    type = found ? ctOf(fp) : "text/html; charset=utf-8";
+    type = found ? contentTypeOf(fp) : "text/html; charset=utf-8";
   }
   const body = Bun.file(file);
   const { encoding, vary } = negotiate(type, body.size, {

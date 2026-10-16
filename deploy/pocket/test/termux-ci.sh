@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install and start Pocket inside the termux/termux-docker image, the way the phone does, from a checkout
 # mounted at /src: install.sh (Termux packages, better-sqlite3 compiled with Termux's clang, the web
-# build, the migrations), start.sh, /health and the SPA, status.sh, tls.sh with https answering, stop.sh.
+# build, the migrations), Direwolf's WebAssembly modem loading, start.sh, /health and the SPA, status.sh, tls.sh
+# with https answering, stop.sh.
 # The weekly workflow .github/workflows/pocket-termux.yml runs it; on a PC with Docker:
 #
 #   docker run --rm -v "$PWD:/src:ro" termux/termux-docker:aarch64 bash /src/deploy/pocket/test/termux-ci.sh
@@ -62,6 +63,13 @@ if ! bash "$DIR/deploy/pocket/install.sh" --call N0CALL --dir "$DIR" --data-dir 
   fail "install.sh"
 fi
 ok "install.sh in $(($(date +%s) - start)) s on $(uname -m), node $(node --version)${WEB_DIST:+, web build from $WEB_DIST}"
+
+# Direwolf's WebAssembly modem loads under Termux's Node: the ingest's own modem check (the one doctor runs) on a
+# 9600-baud port, which only Direwolf serves. Termux has no ALSA, so the audio rows are not the point here.
+modem="$(cd "$DIR/apps/ingest" && SOUNDCARD_DEVICE=plughw:0,0 SOUNDCARD_MODEM=9600 node --import tsx src/check.ts --soundcard 2>&1)" ||
+  fail "check.ts --soundcard: $modem"
+grep -q $'^modem\t1\tpass\t' <<<"$modem" || fail "the Direwolf modem does not load: $modem"
+ok "$(grep $'^modem\t' <<<"$modem" | cut -f4)"
 
 bash "$DIR/deploy/pocket/start.sh" --no-attach --gateway-only --dir "$DIR" --data-dir "$DATA"
 curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null || fail "/health"

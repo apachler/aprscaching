@@ -36,7 +36,12 @@ const TYPES: Record<string, string> = {
   wasm: "application/wasm",
 };
 
-const typeOf = (file: string) => TYPES[path.extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
+/**
+ * The content type of a build file, by its extension; the desktop launcher serves its embedded build with the
+ * same map. `.wasm` must be `application/wasm`: `WebAssembly.instantiateStreaming` refuses any other type.
+ */
+export const contentTypeOf = (file: string): string =>
+  TYPES[path.extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
 
 const isFile = (file: string) => {
   try {
@@ -68,7 +73,7 @@ export function spaFile(root: string, pathname: string): SpaFile | null {
   if (inside && isFile(wanted) && wanted !== index)
     return {
       file: wanted,
-      contentType: typeOf(wanted),
+      contentType: contentTypeOf(wanted),
       cacheControl: wanted.startsWith(path.join(base, "assets") + path.sep)
         ? "public, max-age=31536000, immutable"
         : "no-cache",

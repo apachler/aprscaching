@@ -1,10 +1,10 @@
 # deploy/desktop — single-binary desktop app (the Desktop shape)
 
-A self-contained executable (built with `bun build --compile`) bundling the **gateway + SPA +
-optional local ingest**. Download one file, run it: it starts a local server, opens your browser,
-and keeps SQLite in your OS app-data dir. RF comes from the **browser (Web Serial/BLE)** or the
-bundled ingest — operator-local, per `.claude/rules/ingest-locality.md`. Works off-grid; it's a
-federation peer like any other instance.
+A self-contained executable (built with `bun build --compile`) bundling the **gateway + SPA**.
+Download one file, run it: it starts a local server, opens your browser, and keeps SQLite in your OS
+app-data dir. RF comes from the **browser (Web Serial/BLE)** or from `apps/ingest` run beside it —
+operator-local, per `.claude/rules/ingest-locality.md`. Works off-grid; it's a federation peer like any
+other instance.
 
 ## Files
 | File | Purpose |
@@ -13,8 +13,9 @@ federation peer like any other instance.
 | `gen-assets.ts` | build step: embeds `apps/web/dist` + `db/migrations` into the binary (`import … with { type: "file" }`) → `assets.generated.ts` (gitignored) |
 | `appdata.ts` | per-OS data directory resolver |
 | `build-exe.sh` | cross-compile the matrix from one machine (web build → embed → `bun build --compile`) |
+| `smoke.sh` | start a built binary from an empty directory and check `/health`, the web app and every `.wasm` of the web build (served as `application/wasm`, compiling under `WebAssembly.compileStreaming`); `desktop-release.yml` runs it on the Linux binary before uploading |
 | `entitlements.plist` | macOS JIT entitlements for codesigning |
-| `THIRD-PARTY-NOTICES.txt`, `BUN-LICENSE.txt` | the Bun runtime's licence (MIT, with JavaScriptCore/WebKit under the LGPL 2.1) and where its source is; `build-exe.sh` copies both beside the binaries |
+| `THIRD-PARTY-NOTICES.txt`, `BUN-LICENSE.txt` | the Bun runtime's licence (MIT, with JavaScriptCore/WebKit under the LGPL 2.1) and where its source is, and Direwolf's (GPL-2.0-or-later, its source in `modems/direwolf/`) for the soundcard modem where the web app carries it; `build-exe.sh` copies both beside the binaries |
 | `../../.github/workflows/desktop-release.yml` | CI: build matrix + attach to a tagged release |
 
 ## How it works
@@ -25,9 +26,13 @@ embeds the built SPA + SQL migrations into the executable; the server applies mi
 sends every gateway route (`isGatewayPath` in the gateway's `app.ts`, the same split `deploy/Caddyfile`
 makes) through `handle()` and serves everything else as the SPA (router-fallback to `index.html`, text assets brotli- or gzip-compressed
 for a browser that accepts it), and
-keeps SQLite in the OS app-data dir. `bun run
+keeps SQLite in the OS app-data dir. Every file of the web build is embedded, its WebAssembly included
+(Direwolf's modem, where the web app carries it): the launcher serves each with
+the type the Node server gives it (`contentTypeOf` in `servers/node/src/spa.ts`), so a `.wasm` goes out as
+`application/wasm`, which `WebAssembly.instantiateStreaming` requires. `bun run
 launcher.ts` in the repo gives a disk-backed dev run (no embed needed). RF is browser Web Serial/BLE
-(operator-local); an always-on local feed is `apps/ingest`, run separately. The compiled binary is
+(operator-local); an always-on local feed, a soundcard port with Direwolf's modem among its transports, is
+`apps/ingest`, run separately. The compiled binary is
 self-contained: it serves the embedded SPA, gateway and migrations with no repository beside it.
 
 ## Build (one machine → all platforms)
