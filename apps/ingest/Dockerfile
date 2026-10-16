@@ -8,7 +8,8 @@ COPY . .
 RUN pnpm install --frozen-lockfile --filter @aprscaching/ingest...
 # Runs as the unprivileged user aprscaching (UID and GID 10001), as deploy/Dockerfile does; `dialout` opens a
 # serial TNC or PTT passed in with --device, `audio` a sound card. The soundcard port runs ALSA's arecord and
-# aplay (alsa-utils) and keys a GPIO PTT with gpioset (gpiod).
+# aplay (alsa-utils), demodulates with Direwolf's WebAssembly modem (modems/direwolf/wasm, in the copy above) and keys
+# a GPIO PTT with gpioset (gpiod).
 ENV COREPACK_HOME=/opt/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN apt-get update && apt-get install -y --no-install-recommends alsa-utils gpiod \
  && rm -rf /var/lib/apt/lists/*

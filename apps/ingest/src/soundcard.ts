@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The soundcard port: an AFSK modem in the ingest box, with no TNC between the radio and the box: Bell 202 at
- * 1200 baud for an FM radio, or the 300-baud HF modem (1600/1800 Hz) for an SSB radio on 30 m
- * (`SOUNDCARD_MODEM=hf300`). Audio comes in through `arecord` and goes out through `aplay` (alsa.ts); the DSP is
- * `packages/aprs/src/afsk.ts`.
+ * The soundcard port: a modem in the ingest box, with no TNC between the radio and the box: Bell 202 at 1200
+ * baud for an FM radio, the 300-baud HF modem (1600/1800 Hz) for an SSB radio on 30 m (`SOUNDCARD_MODEM=hf300`),
+ * or G3RUH at 9600 baud for a radio's 9600 data port (`SOUNDCARD_MODEM=9600`). Audio comes in through `arecord`
+ * and goes out through `aplay` (alsa.ts); the DSP is Direwolf's modem in WebAssembly, or the built-in TypeScript
+ * modem as a fallback (soundcardmodem.ts).
  *
- * Receive: PCM → `AfskRx` → AX.25 frames, delivered as a KISS TNC's are (port `soundcard`, a local RF
- * transport, stamped with the receiving site when heard directly), and handed to the digipeater, the IGate
- * and the connected-mode services the same way. The port's own transmissions never come back as hearings:
+ * Receive: PCM → the modem → AX.25 frames (sent as plain AX.25, FX.25 or IL2P, all alike), delivered as a KISS
+ * TNC's are (port `soundcard`, a local RF transport, stamped with the receiving site when heard directly), and
+ * handed to the digipeater, the IGate and the connected-mode services the same way. The port's own
+ * transmissions never come back as hearings:
  * frames decoded while it transmits, or within the capture latency after it unkeys, are dropped, the
  * demodulator starts afresh at every unkey, and a frame byte-identical to one the box sent on any of its ports in
  * the last 30 s is dropped too (echo.ts). An attested site must not attest its own signal.
@@ -22,38 +24,34 @@
  *  - capture runs (carrier detect needs it), and the port is not faulted (the PTT watchdog latched).
  * A refused frame is dropped and logged. An accepted one waits for a clear channel (carrier detect from the
  * demodulator, then p-persistence CSMA with the KISS defaults) and for the duty-cycle budget, then keys the
- * PTT, plays the frame with its TXDELAY of flags, waits for the playback to end plus TXTAIL, and unkeys. A
- * frame that waited 30 s is dropped. The watchdog bounds the key time.
+ * PTT, plays the frame with its TXDELAY preamble in the port's framing (`SOUNDCARD_FEC`), waits for the playback
+ * and TXTAIL to end, and unkeys. A frame that waited 30 s is dropped. The watchdog bounds the key time.
  */
-import { AfskRx, BELL_202, HF_300, decodeAx25, encodeAx25, modulateAfsk, type AfskModem } from "@aprscaching/aprs";
+import { decodeAx25, encodeAx25 } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import type { DirewolfWasm } from "@aprscaching/direwolf";
 import { addrStr, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import { SentFrames } from "./echo.js";
-import {
-  alsaArgs,
-  alsaHint,
-  defaultAudioSpawn,
-  floatToS16,
-  s16Reader,
-  type AudioChild,
-  type AudioSpawn,
-} from "./alsa.js";
+import { alsaArgs, alsaHint, defaultAudioSpawn, s16Reader, type AudioChild, type AudioSpawn } from "./alsa.js";
 import { Backoff } from "./backoff.js";
 import { frameRefusal } from "./callverify.js";
 import { tncPacket } from "./link.js";
 import { describePtt, openPtt, type Ptt, type PttSpec } from "./ptt/index.js";
 import { releaseAllSync, trackPtt, untrackPtt } from "./ptt/release.js";
 import { PttWatchdog, withTimeout } from "./ptt/watchdog.js";
+import {
+  describeModem,
+  openModem,
+  type HeardFrame,
+  type PortModem,
+  type SoundcardDemod,
+  type SoundcardFec,
+  type SoundcardModem,
+} from "./soundcardmodem.js";
 
 /** The ingest port every soundcard port's frames carry: a local RF transport, like `kiss-tnc`. */
 export const SOUNDCARD_PORT = "soundcard";
-
-/** The soundcard modems: Bell 202 at 1200 baud, or 300 baud on HF. */
-export type SoundcardModem = "1200" | "hf300";
-
-/** The modem a port's setting names. */
-export const afskModem = (m: SoundcardModem | undefined): AfskModem => (m === "hf300" ? HF_300 : BELL_202);
 
 export interface SoundcardConfig {
   /** The port's name in logs and the doctor. */
@@ -65,6 +63,12 @@ export interface SoundcardConfig {
   rate: number;
   /** The modem (`SOUNDCARD_MODEM`); Bell 202 when absent. */
   modem?: SoundcardModem;
+  /** Which implementation runs it (`SOUNDCARD_DEMOD`); Direwolf when absent. */
+  demod?: SoundcardDemod;
+  /** The framing the port transmits in (`SOUNDCARD_FEC`); plain AX.25 when absent. */
+  fec?: SoundcardFec;
+  /** FX.25 Reed–Solomon check bytes (`SOUNDCARD_FX25_CHECK_BYTES`); 16 when absent. */
+  fx25CheckBytes?: 16 | 32 | 64;
   /** The operator's transmit opt-in for this port. */
   tx: boolean;
   ptt: PttSpec;
@@ -112,6 +116,8 @@ export interface SoundcardDeps {
   stallMs?: number;
   /** The frames the box sent on any port, shared by all of them; the port keeps its own when none is given. */
   sent?: SentFrames;
+  /** Where Direwolf's WebAssembly comes from; the build inside `@aprscaching/direwolf` when absent. */
+  wasm?: DirewolfWasm;
 }
 
 /** Frames waiting to go out; past this a new one is refused instead of piling up behind a busy channel. */
@@ -132,13 +138,10 @@ const STOP_WAIT_MS = 3000;
 /** A playback may overrun its airtime by this much before it is killed. */
 const PLAY_SLACK_MS = 2000;
 
-/** HDLC flags for a TXDELAY: one flag is 8 bits at the modem's baud rate (1200 unless named). */
-export const txDelayFlags = (ms: number, baud = 1200) => Math.max(1, Math.ceil((ms * baud) / 8000));
-
 const tail4k = (s: string) => (s.length > 4096 ? s.slice(-4096) : s);
 
 export class SoundcardPort {
-  private rx: AfskRx;
+  private modem: PortModem | null = null;
   private capture: AudioChild | null = null;
   private captureUp = false;
   private lastPcmAt = 0;
@@ -154,6 +157,7 @@ export class SoundcardPort {
   private airtime: { at: number; ms: number }[] = [];
   private stopped = false;
   private faultReason: string | null = null;
+  private faultKind = "";
   private refusalLogged = new Map<string, number>();
   private backoff = new Backoff({ baseMs: 2000 });
   private spawn: AudioSpawn;
@@ -171,7 +175,6 @@ export class SoundcardPort {
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.log = deps.log ?? ((m) => console.log(m));
     this.error = deps.error ?? ((m) => console.error(m));
-    this.rx = this.newDemodulator();
     this.sent = deps.sent ?? new SentFrames(() => this.now());
   }
 
@@ -183,12 +186,23 @@ export class SoundcardPort {
     return `[soundcard:${this.cfg.name}]`;
   }
 
-  private newDemodulator(): AfskRx {
-    return new AfskRx(this.cfg.rate, (raw) => this.onRxFrame(raw), afskModem(this.cfg.modem));
-  }
-
-  /** Open the PTT (when transmit is on) and start capturing. */
+  /**
+   * Load the modem, open the PTT (when transmit is on) and start capturing. A modem that does not load faults the
+   * port (it neither receives nor transmits), unless the built-in modem can stand in.
+   */
   async start(): Promise<void> {
+    try {
+      this.modem = await openModem(this.cfg, {
+        wasm: this.deps.wasm,
+        onFallback: (why) => this.error(`${this.tag} ${why} (SOUNDCARD_DEMOD=builtin silences this)`),
+      });
+      this.log(`${this.tag} modem: ${describeModem({ ...this.cfg, demod: this.modem.kind })}`);
+    } catch (e) {
+      this.faultKind = "modem";
+      this.faultReason = (e as Error).message;
+      this.error(`${this.tag} FAULT: ${this.faultReason}. The port is off until the ingest restarts.`);
+      return;
+    }
     if (this.cfg.tx) {
       try {
         const driver = await (this.deps.openPtt ?? openPtt)(this.cfg.ptt);
@@ -235,7 +249,7 @@ export class SoundcardPort {
 
   /** Carrier detect: the channel is busy. */
   get dcd(): boolean {
-    return this.rx.dcd;
+    return this.modem?.dcd ?? false;
   }
 
   /** Why the port is faulted, or null. A fault lasts until the ingest restarts. */
@@ -245,8 +259,11 @@ export class SoundcardPort {
 
   /** The port as the box's status line shows it. */
   label(): string {
-    const hf = this.cfg.modem === "hf300" ? " HF 300 baud" : "";
-    return `soundcard ${this.cfg.name}${hf}${this.faultReason ? " (fault: PTT watchdog)" : ""}`;
+    const speed = this.cfg.modem === "hf300" ? " HF 300 baud" : this.cfg.modem === "9600" ? " 9600 baud" : "";
+    const fec = this.cfg.fec === "fx25" ? " FX.25" : this.cfg.fec === "il2p" ? " IL2P" : "";
+    const builtin = this.modem?.kind === "builtin" ? " (built-in modem)" : "";
+    const fault = this.faultReason ? ` (fault: ${this.faultKind})` : "";
+    return `soundcard ${this.cfg.name}${speed}${fec}${builtin}${fault}`;
   }
 
   /**
@@ -288,7 +305,8 @@ export class SoundcardPort {
   pushPcm(samples: Float32Array): void {
     this.lastPcmAt = this.now();
     this.captureUp = true;
-    this.rx.push(samples);
+    if (!this.modem) return;
+    for (const f of this.modem.push(samples)) this.onRxFrame(f);
   }
 
   private enqueue(frame: Uint8Array, addrs: readonly string[]): boolean {
@@ -320,12 +338,8 @@ export class SoundcardPort {
     while (this.queue.length && !this.stopped) {
       const item = this.queue.shift()!;
       try {
-        const pcm = modulateAfsk(item.frame, this.cfg.rate, {
-          flags: txDelayFlags(this.cfg.txDelayMs, afskModem(this.cfg.modem).baud),
-          modem: afskModem(this.cfg.modem),
-          amplitude: 1,
-        });
-        const airMs = (pcm.length / this.cfg.rate) * 1000 + this.cfg.txTailMs;
+        const { audio, tailMs } = await this.modem!.modulate(item.frame);
+        const airMs = (audio.length / 2 / this.cfg.rate) * 1000 + tailMs;
         if (airMs >= this.cfg.pttMaxMs) {
           this.error(
             `${this.tag} a ${Math.round(airMs)} ms transmission exceeds the PTT watchdog (SOUNDCARD_PTT_MAX_MS ${this.cfg.pttMaxMs}); frame dropped`,
@@ -344,7 +358,7 @@ export class SoundcardPort {
           this.queue = [];
           break;
         }
-        await this.transmit(item.frame, pcm, airMs);
+        await this.transmit(item.frame, audio, airMs, tailMs);
       } catch (e) {
         this.error(`${this.tag} transmit failed: ${(e as Error).message}`);
       }
@@ -370,26 +384,26 @@ export class SoundcardPort {
       if (now - queuedAt > TX_MAX_AGE_MS)
         return `the frame waited over ${TX_MAX_AGE_MS / 1000} s (busy channel or duty cycle)`;
       const withinDuty = this.recentAirtime(now) + airMs <= budget;
-      if (withinDuty && !this.rx.dcd && Math.floor(random() * 256) <= this.cfg.persist) return null;
+      if (withinDuty && !this.dcd && Math.floor(random() * 256) <= this.cfg.persist) return null;
       await this.sleep(this.cfg.slotTimeMs);
     }
   }
 
-  private async transmit(frame: Uint8Array, pcm: Float32Array, airMs: number): Promise<void> {
+  private async transmit(frame: Uint8Array, audio: Buffer, airMs: number, tailMs: number): Promise<void> {
     const ptt = this.ptt!;
     this.transmitting = true;
     this.sent.remember(frame);
     const startedAt = this.now();
     try {
       await ptt.key();
-      await this.play(floatToS16(pcm, this.cfg.txLevel), airMs + PLAY_SLACK_MS);
-      if (!this.faultReason) await this.sleep(this.cfg.txTailMs);
+      await this.play(audio, airMs + PLAY_SLACK_MS);
+      if (!this.faultReason && tailMs > 0) await this.sleep(tailMs);
     } finally {
       // the watchdog already released a tripped PTT; this unkey is then a second, harmless one
       await ptt.unkey().catch((e: Error) => this.error(`${this.tag} PTT unkey failed: ${e.message}`));
       this.airtime.push({ at: startedAt, ms: airMs });
       this.unkeyedAt = this.now();
-      this.rx = this.newDemodulator(); // nothing of the port's own signal stays in the demodulator
+      this.modem?.reset(); // nothing of the port's own signal stays in the demodulator
       this.transmitting = false;
     }
   }
@@ -429,6 +443,7 @@ export class SoundcardPort {
   }
 
   private onFault(reason: string): void {
+    this.faultKind = "PTT watchdog";
     this.faultReason = reason;
     this.queue = [];
     this.player?.kill("SIGKILL");
@@ -484,7 +499,8 @@ export class SoundcardPort {
     this.capture.kill("SIGKILL");
   }
 
-  private onRxFrame(raw: Uint8Array): void {
+  private onRxFrame(heard: HeardFrame): void {
+    const raw = heard.bytes;
     // half duplex: what the card hears while, or shortly after, the port transmits is its own signal
     if (this.transmitting || this.now() - this.unkeyedAt < RX_GUARD_MS) return;
     if (this.sent.echoes(raw)) return;

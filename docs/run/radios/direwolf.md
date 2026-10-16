@@ -4,6 +4,13 @@ This page pairs [Direwolf](https://github.com/wb2osz/direwolf), the software TNC
 the sysop who puts a radio on the box through a sound card. At the end Direwolf decodes what the radio hears,
 the box reads it over KISS TCP, and its direct hearings count as your receiving site's.
 
+!!! tip "The box runs Direwolf's modem itself"
+    A [soundcard port](soundcard.md) runs Direwolf's modem inside the ingest, compiled to WebAssembly: the same
+    demodulators at 300, 1200 and 9600 baud, with FX.25 and IL2P, and no Direwolf to install. A separate
+    Direwolf is optional. Run one when it already serves the radio, when you want a Direwolf feature the box
+    does not use (two audio channels on one stereo card, APRStt, its own beacons), or when other programs
+    share the radio over its KISS and AGW ports.
+
 Direwolf is the reference TNC: CI runs the box's KISS and AGWPE clients against two real Direwolf modems joined
 by an audio cable every week ([Interop against real packet software](../../contribute/testing.md#interop-against-real-packet-software)).
 The configuration below is the one that test uses, with a real radio in place of the cable.

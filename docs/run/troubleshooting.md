@@ -387,6 +387,15 @@ Every shape with an ingest.
   `aplay -l`.
 - **See:** [Find the sound card](radios/soundcard.md#1-find-the-sound-card).
 
+### `ingest.soundcard_modem.<port>`
+
+- **Tests:** the port's modem loads: Direwolf's WebAssembly build from `modems/direwolf/wasm`, at the port's
+  speed, or the built-in modem with `SOUNDCARD_DEMOD=builtin`. The pass names the speed and the transmit framing.
+- **Message:** `port <port>: the Direwolf modem does not load: …` (fail). The install lacks the WebAssembly
+  files: run `pnpm install` in the checkout again, or pull the current image. A 1200 or 300 baud port runs the
+  built-in modem meanwhile; `SOUNDCARD_DEMOD=builtin` chooses it outright. A 9600 baud port has no fallback.
+- **See:** [The modem](radios/soundcard.md#the-modem).
+
 ### `ingest.soundcard_ptt.<port>`
 
 - **Tests:** on a port with `SOUNDCARD_TX=1`, that its PTT driver can work, without keying it: the

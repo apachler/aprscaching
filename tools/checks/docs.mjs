@@ -278,7 +278,7 @@ for (const f of TEXT) {
             ? "ingestmeshcom_fwcall"
             : /^ingest\.meshcom\./.test(id)
               ? "ingestmeshcomcall"
-              : /^ingest\.soundcard_(audio|ptt|tx)\./.test(id)
+              : /^ingest\.soundcard_(audio|modem|ptt|tx)\./.test(id)
                 ? `${id.replace(/\.[^.]*$/, "").replace(/\./g, "")}port`
                 : /^federation\.peer\./.test(id)
                   ? "federationpeerhost"

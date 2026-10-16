@@ -3,14 +3,17 @@
 // gpioset): a frame one port transmits is heard by another but never by the port itself, the transmit gate
 // refuses what it must, CSMA, the frame age limit and the duty cycle hold back, the PTT watchdog releases a stuck
 // transmitter, a stop or a SIGTERM during a transmission ends at the unkeyed level, and capture failures stop
-// transmit until capture runs again.
+// transmit until capture runs again. The modem is Direwolf's WebAssembly build: plain AX.25, FX.25 and IL2P frames
+// are heard and attested alike, the port transmits in its configured framing at 300, 1200 or 9600 baud, and the
+// built-in modem still serves as the fallback.
 import { describe, it, expect, afterEach } from "vitest";
 import { EventEmitter } from "node:events";
-import { modulateAfsk, encodeAx25 } from "@aprscaching/aprs";
+import { AfskRx, HF_300, modulateAfsk, encodeAx25 } from "@aprscaching/aprs";
+import { createDirewolfRx, createDirewolfTx, type DirewolfFec, type DirewolfTxMode } from "@aprscaching/direwolf";
 import type { Packet } from "@aprscaching/shared";
+import { txDelayFlags } from "../src/soundcardmodem.js";
 import {
   SoundcardPort,
-  txDelayFlags,
   RX_GUARD_MS,
   type SoundcardConfig,
   type SoundcardDeps,
@@ -463,6 +466,140 @@ describe("SoundcardPort", () => {
       await until(() => errors.some((e) => /no audio/.test(e)), 2000);
       expect(audio.arecord()[0]!.killed).toContain("SIGKILL");
       expect(port.txRefusal()).toMatch(/capture is down/);
+    });
+  });
+
+  describe("Direwolf modem", () => {
+    const s16 = (pcm: Int16Array) => Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+    const pcmOf = (b: Buffer) => new Int16Array(b.buffer, b.byteOffset, b.length >> 1);
+    /** What a Direwolf receiver makes of a port's transmitted audio. */
+    const decode = async (audio: Buffer, baud: 300 | 1200 | 9600 = 1200) => {
+      const rx = await createDirewolfRx({ sampleRate: 48000, baud });
+      return [...rx.push(pcmOf(audio)), ...rx.push(new Int16Array(9600))];
+    };
+    const sent = async (o: Parameters<typeof makePort>[0]) => {
+      const tx = await makePort(o);
+      expect(tx.port.send(frame)).toBe(true);
+      await until(() => tx.ptt.events.includes("unkey"));
+      return { ...tx, sound: Buffer.concat(tx.audio.aplay()[0]!.written) };
+    };
+
+    it("hears plain AX.25, FX.25 and IL2P frames, each attested as a local RF hearing", async () => {
+      const rx = await makePort({ siteCall: "OE8APR-10" });
+      for (const mode of ["ax25", "fx25", "il2p"] as DirewolfTxMode[]) {
+        const tx = await createDirewolfTx({ sampleRate: 48000, baud: 1200, mode, txdelayMs: 200, txtailMs: 30 });
+        feed(rx.audio.arecord()[0]!, s16(tx.modulate(encodeAx25({ ...frame, payload: `>${mode} frame` }))));
+      }
+      expect(rx.packets.map((p) => p.payload)).toEqual([">ax25 frame", ">fx25 frame", ">il2p frame"]);
+      for (const p of rx.packets)
+        expect(p).toMatchObject({ heardVia: "rf", port: "soundcard", igateCall: "OE8APR-10", src: "OE8APR-10" });
+    });
+
+    it("transmits in the framing SOUNDCARD_FEC names, plain AX.25 by default", async () => {
+      const cases: [Partial<SoundcardConfig>, DirewolfFec, string][] = [
+        [{}, "none", ""],
+        [{ fec: "off" }, "none", ""],
+        [{ fec: "fx25", fx25CheckBytes: 32 }, "fx25", " FX.25"],
+        [{ fec: "il2p" }, "il2p", " IL2P"],
+      ];
+      const want = Buffer.from(encodeAx25(frame));
+      for (const [c, fec, label] of cases) {
+        const tx = await sent({ cfg: c });
+        const got = await decode(tx.sound);
+        expect(got.map((f) => [f.fec, Buffer.from(f.bytes).equals(want)])).toEqual([[fec, true]]);
+        expect(tx.port.label()).toBe(`soundcard 1${label}`);
+      }
+    });
+
+    it("plain AX.25 from Direwolf is what any AFSK receiver decodes", async () => {
+      const tx = await sent({});
+      const heard: Uint8Array[] = [];
+      const afsk = new AfskRx(48000, (f) => heard.push(f));
+      afsk.push(Float32Array.from(pcmOf(tx.sound), (v) => v / 32768));
+      afsk.push(new Float32Array(4800));
+      expect(heard).toHaveLength(1);
+    });
+
+    it("maps TXDELAY and TXTAIL onto Direwolf's preamble and tail, inside the audio", async () => {
+      const sleeps: number[] = [];
+      const short = await sent({ cfg: { txDelayMs: 100, txTailMs: 20 } });
+      const long = await makePort(
+        { cfg: { txDelayMs: 400, txTailMs: 120 } },
+        { sleep: async (ms) => void sleeps.push(ms) },
+      );
+      expect(long.port.send(frame)).toBe(true);
+      await until(() => long.ptt.events.includes("unkey"));
+      const ms = (b: Buffer) => b.length / 2 / 48;
+      const extra = ms(Buffer.concat(long.audio.aplay()[0]!.written)) - ms(short.sound);
+      expect(Math.abs(extra - 400)).toBeLessThan(15); // 300 ms more preamble and 100 ms more tail
+      expect(sleeps).not.toContain(120); // the tail is flags on the air, not a keyed silence after the audio
+    });
+
+    it("a 9600 baud port sends and hears G3RUH", async () => {
+      const nine = { modem: "9600" as const };
+      const tx = await sent({ cfg: { ...nine, fec: "il2p" } });
+      expect(tx.port.label()).toBe("soundcard 1 9600 baud IL2P");
+      expect((await decode(tx.sound, 9600)).map((f) => f.fec)).toEqual(["il2p"]);
+      const rx = await makePort({ cfg: nine, siteCall: "OE8APR-10" });
+      feed(rx.audio.arecord()[0]!, tx.sound);
+      expect(rx.packets.map((p) => p.payload)).toEqual([">soundcard loopback"]);
+    });
+
+    it("an hf300 port transmits Direwolf's 300 baud, which the built-in HF modem decodes too", async () => {
+      const tx = await sent({ cfg: { modem: "hf300" } });
+      expect((await decode(tx.sound, 300)).map((f) => f.fec)).toEqual(["none"]);
+      const heard: Uint8Array[] = [];
+      const afsk = new AfskRx(48000, (f) => heard.push(f), HF_300);
+      afsk.push(Float32Array.from(pcmOf(tx.sound), (v) => v / 32768));
+      afsk.push(new Float32Array(9600));
+      expect(heard).toHaveLength(1);
+    });
+  });
+
+  describe("built-in modem fallback", () => {
+    it("SOUNDCARD_DEMOD=builtin sends and hears with the TypeScript modem", async () => {
+      const tx = await makePort({ cfg: { demod: "builtin" } });
+      const rx = await makePort({ cfg: { demod: "builtin" }, siteCall: "OE8APR-10" });
+      expect(tx.port.label()).toBe("soundcard 1 (built-in modem)");
+      expect(tx.port.send(frame)).toBe(true);
+      await until(() => tx.ptt.events.includes("unkey"));
+      const audio = Buffer.concat(tx.audio.aplay()[0]!.written);
+      // the built-in modulator: the frame with its TXDELAY of flags, the tail held as keyed silence
+      expect(audio.length).toBe(modulateAfsk(encodeAx25(frame), 48000, { flags: txDelayFlags(100) }).length * 2);
+      feed(rx.audio.arecord()[0]!, audio);
+      expect(rx.packets.map((p) => p.payload)).toEqual([">soundcard loopback"]);
+      // and a Direwolf port hears it as well
+      const dw = await makePort({ siteCall: "OE8APR-10" });
+      feed(dw.audio.arecord()[0]!, audio);
+      expect(dw.packets).toHaveLength(1);
+    });
+
+    it("runs the built-in modem when Direwolf's WebAssembly does not load, and says why", async () => {
+      const errors: string[] = [];
+      const made = await makePort(
+        { cfg: { fec: "fx25" }, siteCall: "OE8APR-10" },
+        { wasm: new Uint8Array([0, 1, 2]), error: (m) => errors.push(m) },
+      );
+      expect(errors[0]).toMatch(
+        /the Direwolf modem did not load: .*built-in modem runs instead; it transmits plain AX\.25/,
+      );
+      expect(made.port.label()).toBe("soundcard 1 FX.25 (built-in modem)");
+      const other = modulateAfsk(encodeAx25({ ...frame, src: "OE3XYZ-9" }), 48000, { flags: 40 });
+      feed(made.audio.arecord()[0]!, Buffer.from(new Int16Array(other.map((v) => Math.round(v * 16000))).buffer));
+      expect(made.packets.map((p) => p.src)).toEqual(["OE3XYZ-9"]);
+    });
+
+    it("faults a 9600 baud port whose modem does not load: no capture, no transmit", async () => {
+      const errors: string[] = [];
+      const made = await makePort(
+        { cfg: { modem: "9600" }, captureUp: false },
+        { wasm: new Uint8Array([0, 1, 2]), error: (m) => errors.push(m) },
+      );
+      expect(errors[0]).toMatch(/FAULT: the Direwolf modem did not load/);
+      expect(made.audio.arecord()).toHaveLength(0);
+      expect(made.port.label()).toBe("soundcard 1 9600 baud (fault: modem)");
+      expect(made.port.send(frame)).toBe(false);
+      expect(made.port.txRefusal()).toMatch(/faulted/);
     });
   });
 });

@@ -41,6 +41,7 @@ doc_see() {
     ingest.meshcom_fw.*) a=ingestmeshcom_fwcall ;;
     ingest.meshcom.*) a=ingestmeshcomcall ;;
     ingest.soundcard_audio.*) a=ingestsoundcard_audioport ;;
+    ingest.soundcard_modem.*) a=ingestsoundcard_modemport ;;
     ingest.soundcard_ptt.*) a=ingestsoundcard_pttport ;;
     ingest.soundcard_tx.*) a=ingestsoundcard_txport ;;
     federation.peer.*) a=federationpeerhost ;;
@@ -500,7 +501,7 @@ doc_transports() {
 }
 
 # The soundcard ports, checked by the ingest itself (check.ts --soundcard): the ALSA tools, the devices, the
-# PTT driver, the watchdog and the station calls' verification. It never keys the radio.
+# modem, the PTT driver, the watchdog and the station calls' verification. It never keys the radio.
 doc_soundcard() {
   local out kind port st msg fix
   [ -n "$(doc_get SOUNDCARD_DEVICE)$(doc_get SOUNDCARD_PORTS)" ] || return 0
@@ -513,11 +514,12 @@ doc_soundcard() {
     case "$kind:$st" in
       alsa:fail) failc ingest.soundcard_alsa "$msg" "$fix" ;;
       audio:fail) failc "ingest.soundcard_audio.$port" "$msg" "$fix" ;;
+      modem:fail) failc "ingest.soundcard_modem.$port" "$msg" "$fix" ;;
       ptt:fail) failc "ingest.soundcard_ptt.$port" "$msg" "$fix" ;;
       tx:fail) failc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
       tx:warn) warnc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
       alsa:pass) pass ingest.soundcard_alsa "$msg" ;;
-      audio:pass | ptt:pass | tx:pass) pass "ingest.soundcard_$kind.$port" "$msg" ;;
+      audio:pass | modem:pass | ptt:pass | tx:pass) pass "ingest.soundcard_$kind.$port" "$msg" ;;
     esac
   done <<<"$out"
 }
