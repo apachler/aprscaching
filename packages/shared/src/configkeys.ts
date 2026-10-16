@@ -330,6 +330,7 @@ export const CONFIG_KEYS = {
   LORA_APRS_CR: { type: "enum", units: ["ingest"], default: "7", values: ["5", "6", "7", "8"] },
   TX_GATE_GRACE: { type: "string", units: ["ingest"], default: "6" },
   SOUNDCARD_DEVICE: { type: "string", units: ["ingest"] },
+  SOUNDCARD_AUDIO: { type: "enum", units: ["ingest"], default: "alsa", values: ["alsa", "pulse"] },
   SOUNDCARD_PLAYBACK: { type: "string", units: ["ingest"] },
   SOUNDCARD_RATE: { type: "enum", units: ["ingest"], default: "48000", values: ["44100", "48000"] },
   SOUNDCARD_MODEM: { type: "enum", units: ["ingest"], default: "1200", values: ["1200", "hf300", "9600"] },

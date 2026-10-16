@@ -5,7 +5,7 @@
  * little-endian mono at a fixed rate on stdout and stdin. No native addon, and any ALSA device name works
  * (`plughw:1,0`, `hw:CARD=Device,DEV=0`, `default`); `arecord -l` and `aplay -l` list them.
  */
-import { spawn as nodeSpawn, spawnSync as nodeSpawnSync } from "node:child_process";
+import { spawn as nodeSpawn } from "node:child_process";
 
 /** The part of a ChildProcess the soundcard port uses. */
 export interface AudioChild {
@@ -17,10 +17,15 @@ export interface AudioChild {
   on(event: "exit", cb: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
   on(event: "error", cb: (e: Error) => void): unknown;
 }
-export type AudioSpawn = (cmd: "arecord" | "aplay", args: string[]) => AudioChild;
+/** The audio tools a soundcard port runs: ALSA's (this module) or PulseAudio's (audioio.ts). */
+export type AudioTool = "arecord" | "aplay" | "parec" | "pacat";
+export type AudioSpawn = (cmd: AudioTool, args: string[]) => AudioChild;
+
+/** Whether `tool` captures (audio on its stdout) rather than plays (audio on its stdin). */
+export const captures = (tool: AudioTool): boolean => tool === "arecord" || tool === "parec";
 
 export const defaultAudioSpawn: AudioSpawn = (cmd, args) =>
-  nodeSpawn(cmd, args, { stdio: cmd === "arecord" ? ["ignore", "pipe", "pipe"] : ["pipe", "ignore", "pipe"] });
+  nodeSpawn(cmd, args, { stdio: captures(cmd) ? ["ignore", "pipe", "pipe"] : ["pipe", "ignore", "pipe"] });
 
 /** The arguments for raw S16_LE mono at `rate` on `device`, read from stdin or written to stdout. */
 export function alsaArgs(device: string, rate: number): string[] {
@@ -50,15 +55,4 @@ export function alsaHint(tool: "arecord" | "aplay", err: Error | null, stderr: s
     return `${line} — check the device name (${tool} -l lists the cards)`;
   if (/Permission denied/i.test(line)) return `${line} — add the ingest's user to the audio group`;
   return line || err?.message || `${tool} failed`;
-}
-
-/** Whether the ALSA tools are installed; null when both are, else the fix. */
-export function alsaToolsProblem(
-  spawnSync: (c: string, a: string[]) => { error?: Error } = (c, a) => nodeSpawnSync(c, a, { stdio: "ignore" }),
-): string | null {
-  for (const tool of ["arecord", "aplay"] as const) {
-    const r = spawnSync(tool, ["--version"]);
-    if (r.error) return alsaHint(tool, r.error, "");
-  }
-  return null;
 }

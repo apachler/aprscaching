@@ -165,7 +165,10 @@ rotate_if_big
 say "supervising $ENTRY (log: $LOG)"
 delay=$BASE_DELAY
 while [ "$stopping" -eq 0 ]; do
-  if [ "$NAME" = ingest ]; then wait_for_gateway; fi
+  if [ "$NAME" = ingest ]; then
+    wait_for_gateway
+    pulse_ensure
+  fi
   [ "$stopping" -eq 0 ] || break
   rotate_if_big
   started="$(date +%s)"

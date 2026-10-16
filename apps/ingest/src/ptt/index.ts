@@ -8,18 +8,21 @@
  *   rigctld[:host[:port]]             Hamlib rigctld (default 127.0.0.1:4532)
  *   cm108[:/dev/hidraw0[:gpio]]       a CM108/CM119 GPIO pin (default /dev/hidraw0, GPIO3)
  *   gpio:<chip>:<line>                a Linux GPIO line through libgpiod's gpioset; `-<line>` is active low
+ *   termux-usb[:<dev>[:<method>[:gpio]]]  a USB radio interface on an Android phone, through Termux:API's
+ *                                     termux-usb (dev `auto`, the only one attached; method `auto`, by VID:PID)
  *
  * The drivers that need the optional `serialport` package load it only when chosen.
  */
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
-import type { Ptt, PttSpec } from "./types.js";
+import { USB_PTT_METHODS, type Ptt, type PttSpec, type UsbPttMethod } from "./types.js";
 import { loadSerialPort, type SerialPortCtor } from "./serialport.js";
 import { openSerialPtt } from "./serial.js";
 import { openCatPtt } from "./cat.js";
 import { openRigctldPtt } from "./rigctld.js";
 import { openCm108Ptt } from "./cm108.js";
 import { openGpioPtt, gpiosetVersion, type GpioSpawn, type GpioSpawnSync } from "./gpio.js";
+import { openTermuxUsbPtt, termuxUsbProblem, type UsbPttSpawn } from "./termuxusb.js";
 
 export type { Ptt, PttSpec } from "./types.js";
 
@@ -86,8 +89,25 @@ export function parsePttSpec(raw: string | undefined): PttSpec {
       const invert = lineRaw!.startsWith("-");
       return { kind: "gpio", chip: chip!, line: int(lineRaw!.replace(/^-/, ""), "the GPIO line", 0, 1023), invert };
     }
+    case "termux-usb": {
+      // a usbfs path holds no colon, so the fields split cleanly
+      const [devRaw, methodRaw, gpioRaw] = rest;
+      const device = !devRaw || devRaw.toLowerCase() === "auto" ? "auto" : devRaw;
+      if (device !== "auto" && !/^\/dev\/bus\/usb\/\d{3}\/\d{3}$/.test(device))
+        bad("the device is a path as termux-usb -l lists it (/dev/bus/usb/001/002), or auto");
+      const m = (methodRaw || "auto").toLowerCase();
+      if (m !== "auto" && !(USB_PTT_METHODS as readonly string[]).includes(m))
+        bad(`the method is auto, ${USB_PTT_METHODS.join(", ")}`);
+      if (gpioRaw && m !== "cm108") bad("a GPIO goes with the cm108 method only");
+      return {
+        kind: "termux-usb",
+        device,
+        method: m as UsbPttMethod | "auto",
+        gpio: gpioRaw ? int(gpioRaw, "the CM108 GPIO", 1, 8) : 3,
+      };
+    }
     default:
-      return bad("the driver is none, vox, serial, cat, rigctld, cm108 or gpio");
+      return bad("the driver is none, vox, serial, cat, rigctld, cm108, gpio or termux-usb");
   }
 }
 
@@ -106,6 +126,8 @@ export function describePtt(s: PttSpec): string {
       return `CM108 ${s.path} GPIO${s.gpio}`;
     case "gpio":
       return `GPIO ${s.chip} line ${s.line}${s.invert ? " (active low)" : ""}`;
+    case "termux-usb":
+      return `termux-usb ${s.device} ${s.method}${s.method === "cm108" ? ` GPIO${s.gpio}` : ""}`;
   }
 }
 
@@ -114,6 +136,7 @@ export interface PttDeps {
   fs?: Pick<typeof fs, "openSync" | "writeSync" | "closeSync" | "accessSync" | "existsSync">;
   spawn?: GpioSpawn;
   spawnSync?: GpioSpawnSync;
+  usbSpawn?: UsbPttSpawn;
 }
 
 /** The driver for `s`, opened and driven to unkeyed; rejects with a message the operator can act on. */
@@ -137,6 +160,8 @@ export async function openPtt(s: PttSpec, deps: PttDeps = {}): Promise<Ptt> {
       return openCm108Ptt(s, deps.fs);
     case "gpio":
       return openGpioPtt(s, { spawn: deps.spawn, spawnSync: deps.spawnSync });
+    case "termux-usb":
+      return openTermuxUsbPtt(s, { spawn: deps.usbSpawn, run: deps.spawnSync });
   }
 }
 
@@ -172,6 +197,8 @@ export async function pttProblem(s: PttSpec, deps: PttDeps = {}): Promise<string
         gpiosetVersion(deps.spawnSync ?? defaultSpawnSync);
         return writable(chip);
       }
+      case "termux-usb":
+        return await termuxUsbProblem(s, { run: deps.spawnSync, fs: fsx });
     }
   } catch (e) {
     return (e as Error).message;

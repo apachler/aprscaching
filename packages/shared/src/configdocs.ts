@@ -160,6 +160,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   LORA_APRS_CR: "Custom preset: coding rate denominator, 5-8 for 4:5 to 4:8",
   TX_GATE_GRACE: "How long a confirmed call keeps transmitting while the gateway is unreachable (30, 30m, 2h)",
   SOUNDCARD_DEVICE: "ALSA capture device of the soundcard port (plughw:1,0); set it to enable the port",
+  SOUNDCARD_AUDIO: "Soundcard audio: alsa (arecord/aplay) or pulse (parec/pacat, a PulseAudio source and sink)",
   SOUNDCARD_PLAYBACK: "ALSA playback device of the soundcard port (blank: the capture device)",
   SOUNDCARD_RATE: "Sample rate of the soundcard port's audio",
   SOUNDCARD_MODEM: "Soundcard modem: 1200 (Bell 202, FM), hf300 (300 baud, HF SSB) or 9600 (G3RUH, 9600 data port)",
@@ -167,7 +168,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SOUNDCARD_FX25_CHECK_BYTES: "FX.25 Reed-Solomon check bytes per frame when SOUNDCARD_FEC=fx25: 16, 32 or 64",
   SOUNDCARD_TX: "1 allows the soundcard port to transmit (with a PTT and calls the gateway confirms)",
   SOUNDCARD_CALL: "Further call the soundcard port's gate requires (default BOX_CALL, IGATE_CALL, DIGI_CALL)",
-  SOUNDCARD_PTT: "How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108: or gpio:",
+  SOUNDCARD_PTT: "How the soundcard port keys the radio: none, serial:, cat:, rigctld, cm108:, gpio: or termux-usb",
   SOUNDCARD_TXDELAY_MS: "Preamble of flags before each frame, in ms",
   SOUNDCARD_TXTAIL_MS: "Time the PTT stays keyed after the audio ends, in ms",
   SOUNDCARD_PERSIST: "CSMA persistence, 0-255: chance (p+1)/256 of sending in a free slot",
@@ -865,6 +866,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "Soundcard port (Direwolf's modem in the box, 1200, 300 or 9600 baud; carries digi/node/BBS/IGate without a TNC)",
         "`SOUNDCARD_DEVICE` (ALSA capture device; enables the port), `SOUNDCARD_PLAYBACK` (default: the capture device), `SOUNDCARD_RATE` (`48000` or `44100`), `SOUNDCARD_MODEM` (`1200`, Bell 202 for FM; `hf300`, 300 baud at 1600/1800 Hz for an SSB radio on HF, with an empty `BOX_TX_PATH` and a 500 ms TXDELAY unless set; `9600`, G3RUH through a radio's 9600-capable data port), `SOUNDCARD_FEC` (`off`, plain AX.25 and the only choice on an APRS channel; `fx25` or `il2p` on a node or BBS link whose partner decodes it), `SOUNDCARD_FX25_CHECK_BYTES` (`16`, `32` or `64`); transmit: `SOUNDCARD_TX` (`1` allows it; it also needs the gateway to confirm every station call for this box), `SOUNDCARD_CALL` (a further call the port's gate and PTT test require; frames carry the call of the function that sends them; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `SOUNDCARD_PTT` (`none`; `serial:<dev>[:<line>]` (line `rts` or `dtr`, asserted to key), `cat:<dev>:<rig>[:baud[:civ]]` (rig `kenwood`, `icom`, `yaesu-bin`), `rigctld[:host[:port]]`, `cm108[:<hidraw>[:gpio]]`, `gpio:<chip>:<line>`), `SOUNDCARD_PTT_MAX_MS` (`10000`, the PTT watchdog), `SOUNDCARD_TXDELAY_MS` (`300`), `SOUNDCARD_TXTAIL_MS` (`50`), `SOUNDCARD_PERSIST` (`63`), `SOUNDCARD_SLOTTIME_MS` (`100`), `SOUNDCARD_TX_LEVEL` (`0.5`), `SOUNDCARD_DUTY_PCT` (`20`, percent of any minute on the air); `SOUNDCARD_PORTS` (JSON array of further ports) — [Soundcard port](../run/radios/soundcard.md)",
+      ],
+      [
+        "Soundcard port on PulseAudio (a phone in Termux, or a Linux desktop)",
+        "`SOUNDCARD_AUDIO` (`alsa`; `pulse` runs `parec` and `pacat`, and then `SOUNDCARD_DEVICE` names a PulseAudio source and `SOUNDCARD_PLAYBACK` a sink, `default` the server's own; per port `audio` in `SOUNDCARD_PORTS`); on Pocket, `SOUNDCARD_PTT=termux-usb[:<device>[:<method>[:gpio]]]` keys a USB radio interface through Termux:API (device `auto`, the only one attached, or its `/dev/bus/usb/…` path; method `auto` by VID:PID, or `cdc-dtr`, `cdc-rts`, `cp210x-rts`, `cp210x-dtr`, `ftdi-rts`, `ftdi-dtr`, `ch340-rts`, `ch340-dtr`, `cm108` with the GPIO, default 3) — [Radio on the phone](../run/pocket/radio.md)",
       ],
       [
         "Meshtastic (licensed nodes only)",

@@ -25,4 +25,29 @@ export type PttSpec =
   | { kind: "cat"; path: string; rig: "kenwood" | "icom" | "yaesu-bin"; baud: number; icomAddr?: number }
   | { kind: "rigctld"; host: string; port: number }
   | { kind: "cm108"; path: string; gpio: number }
-  | { kind: "gpio"; chip: string; line: number; invert: boolean };
+  | { kind: "gpio"; chip: string; line: number; invert: boolean }
+  | {
+      kind: "termux-usb";
+      /** The usbfs path termux-usb names (`/dev/bus/usb/001/002`), or `auto` for the only device attached. */
+      device: string;
+      /** The keying line (termuxusb.ts), or `auto` to choose it by the device's VID:PID. */
+      method: UsbPttMethod | "auto";
+      /** The CM108 GPIO that keys, 1–8. */
+      gpio: number;
+      /** The helper's own watchdog, a backstop behind the port's (`SOUNDCARD_PTT_MAX_MS` plus a margin). */
+      maxKeyMs?: number;
+    };
+
+/** The keying lines the USB PTT helper drives (deploy/pocket/extras/usb_ptt.py). */
+export const USB_PTT_METHODS = [
+  "cdc-dtr",
+  "cdc-rts",
+  "cp210x-rts",
+  "cp210x-dtr",
+  "ftdi-rts",
+  "ftdi-dtr",
+  "ch340-rts",
+  "ch340-dtr",
+  "cm108",
+] as const;
+export type UsbPttMethod = (typeof USB_PTT_METHODS)[number];

@@ -377,6 +377,14 @@ Every shape with an ingest.
   the ingest container up, or with Node.js and the checkout.
 - **See:** [Soundcard port: before you start](radios/soundcard.md#before-you-start).
 
+### `ingest.soundcard_pulse`
+
+- **Tests:** with a soundcard port on PulseAudio (`SOUNDCARD_AUDIO=pulse`), that `parec` and `pacat` are
+  installed where the ingest runs.
+- **Message:** `parec not found: install PulseAudio (Termux: pkg install pulseaudio; Debian: apt install
+  pulseaudio-utils)` (fail).
+- **See:** [Radio on the phone](pocket/radio.md#1-install-pulseaudio).
+
 ### `ingest.soundcard_audio.<port>`
 
 - **Tests:** the port's capture device opens for one second, and its playback device plays 50 ms of silence.
@@ -385,6 +393,9 @@ Every shape with an ingest.
   `arecord -l`; in a container, pass `/dev/snd` in.
 - **Message:** `port <port>: playback <device> does not open: …` (fail). Check `SOUNDCARD_PLAYBACK` against
   `aplay -l`.
+- **Message:** `… Connection refused — start PulseAudio` (fail, a port on PulseAudio). Start the server
+  ([Radio on the phone](pocket/radio.md#3-start-pulseaudio)), and check the source and sink against
+  `pactl list short sources` and `pactl list short sinks`.
 - **See:** [Find the sound card](radios/soundcard.md#1-find-the-sound-card).
 
 ### `ingest.soundcard_modem.<port>`
@@ -400,14 +411,18 @@ Every shape with an ingest.
 
 - **Tests:** on a port with `SOUNDCARD_TX=1`, that its PTT driver can work, without keying it: the
   `serialport` package and a writable device for `serial:` and `cat:`, a writable `/dev/hidraw*` for
-  `cm108:`, `gpioset` and a writable GPIO chip for `gpio:`, a TCP connection to rigctld for `rigctld`. A port
-  that receives only, or keys by VOX, passes.
+  `cm108:`, `gpioset` and a writable GPIO chip for `gpio:`, a TCP connection to rigctld for `rigctld`,
+  `termux-usb`, `python3`, the helper and the attached device for `termux-usb`. A port that receives only, or
+  keys by VOX, passes.
 - **Message:** `port <port>: PTT <driver>: <device> does not exist` or `no write access to <device>` (fail).
   Pass the device into the container, and give the ingest's user access: `dialout` for serial, a udev rule
   for a CM108, `gpio` for a GPIO chip. An inverted serial line (`-rts`, `-dtr`) is refused when the settings
   are read.
 - **Message:** `port <port>: PTT rigctld <host>:<port> does not answer` (fail). Start rigctld, or correct
   `SOUNDCARD_PTT`.
+- **Message:** `port <port>: PTT termux-usb …: termux-usb not found`, `no USB device is attached` or
+  `several USB devices are attached` (fail). Install Termux:API, attach the interface, or name its path
+  ([Radio on the phone](pocket/radio.md#4-attach-the-interface-and-allow-it)).
 - **See:** [Choose how the radio is keyed](radios/soundcard.md#choose-how-the-radio-is-keyed).
 
 ### `ingest.soundcard_tx.<port>`

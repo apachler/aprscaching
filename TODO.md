@@ -260,8 +260,8 @@ from Direwolf.
       proves it on the release's Linux binary, and Direwolf's notice ships beside the binaries. The binary runs
       no ingest: a soundcard port is `apps/ingest` beside it (the package runs under Bun as well). Pocket's
       checkout carries `modems/direwolf`, and the Termux check loads the modem under Termux's Node on aarch64
-      and x86_64; a soundcard port needs ALSA, which Termux lacks, so a phone's soundcard radio waits on the
-      browser stage. _Depends on:_ the ingest stage.
+      and x86_64; on a phone the soundcard port runs
+      through PulseAudio (`SOUNDCARD_AUDIO=pulse`) with USB PTT over `termux-usb`. _Depends on:_ the ingest stage.
 - [x] **Retire the TypeScript demodulator** _(P3 · S)_ — Direwolf is the only modem on every surface:
       `packages/aprs` carries no demodulator, the ingest has no `SOUNDCARD_DEMOD`, and the browser no modem
       choice; a modem that does not load is a port fault or a failed connect, never a silent fallback. The MIT
@@ -280,6 +280,11 @@ Considered and not planned:
 
 - [ ] **Watch: Bun on Android** — no official Android build (oven-sh/bun#28924), so Pocket runs the Node
       gateway rather than the desktop binary. Once Bun ships one, the desktop binary could run on a phone.
+- [ ] **Pocket radio on hardware** _(P1 · S)_ — the phone's soundcard port (PulseAudio, `termux-usb` PTT;
+      `docs/run/pocket/radio.md`) is untested on a phone: Android routing a USB interface's audio to PulseAudio,
+      claiming the HID or CDC interface for PTT with Android holding the audio, levels, Android's audio latency
+      against the receive guard, and TXDELAY, with a Digirig, an AIOC and a CM108 dongle. _Depends on:_ a phone
+      and a USB radio interface.
 - [ ] **Watch: Android background limits** — Pocket relies on a wake lock, Termux battery "Unrestricted",
       and, where needed, _Disable child process restrictions_ (Android 14+). A new Android release that tightens
       background work, or removes that developer option, needs the keep-alive advice in the Pocket guide

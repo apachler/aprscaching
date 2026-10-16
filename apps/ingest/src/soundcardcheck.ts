@@ -3,8 +3,9 @@
  * The soundcard ports' health, for `deploy/aprscaching doctor` (through `check.ts --soundcard`), and the
  * operator's deliberate PTT test (`check.ts --ptt-test`).
  *
- * The checks never key the radio: they look for the ALSA tools, open the capture device for a second and play
- * 50 ms of silence on the playback device (silence does not trip a VOX), load the port's modem (Direwolf's
+ * The checks never key the radio: they look for the audio tools (ALSA's, or PulseAudio's for a port with
+ * `SOUNDCARD_AUDIO=pulse`), open the capture device for a second and play 50 ms of silence on the playback
+ * device (silence does not trip a VOX), load the port's modem (Direwolf's
  * WebAssembly build, so a box whose install lacks it shows up here), check that the PTT driver could open
  * (the package or tool is there, the device is writable, rigctld answers a TCP connect), read the watchdog
  * setting and ask the gateway whether the station calls are control-verified. A device the running ingest
@@ -17,7 +18,8 @@
 import net from "node:net";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import type { DirewolfWasm } from "@aprscaching/direwolf";
-import { alsaArgs, alsaHint, alsaToolsProblem, s16Reader } from "./alsa.js";
+import { s16Reader } from "./alsa.js";
+import { audioCommand, audioHint, audioToolsProblem, type AudioBackend } from "./audioio.js";
 import { stationCalls, type TxGateLookup } from "./callverify.js";
 import { describePtt, openPtt, pttProblem, type Ptt, type PttDeps, type PttSpec } from "./ptt/index.js";
 import { installPttRelease, trackPtt, untrackPtt } from "./ptt/release.js";
@@ -26,9 +28,9 @@ import { soundcardPorts, type SoundcardPortSettings } from "./soundcardconfig.js
 import { describeModem, openModem } from "./soundcardmodem.js";
 
 export type CheckStatus = "pass" | "warn" | "fail";
-/** One result; `kind` is alsa, audio, modem, ptt or tx, and `port` names the port (empty for alsa). */
+/** One result; `kind` is alsa, pulse, audio, modem, ptt or tx, and `port` names the port (empty for the tools). */
 export interface CheckRow {
-  kind: "alsa" | "audio" | "modem" | "ptt" | "tx";
+  kind: "alsa" | "pulse" | "audio" | "modem" | "ptt" | "tx";
   port: string;
   status: CheckStatus;
   message: string;
@@ -46,6 +48,7 @@ type ListenFn = (
   device: string,
   rate: number,
   seconds: number,
+  audio?: AudioBackend,
 ) => { status: number | null; stdout: Buffer; stderr: string; error?: Error };
 
 export interface CheckDeps {
@@ -67,8 +70,21 @@ const busy = (stderr: string) => /busy/i.test(stderr);
 const defaultSpawnSync: SpawnSyncFn = (cmd, args, opts) =>
   nodeSpawnSync(cmd, args, { input: opts.input, timeout: opts.timeout, encoding: "utf8" });
 
-const defaultListen: ListenFn = (device, rate, seconds) => {
-  const r = nodeSpawnSync("arecord", [...alsaArgs(device, rate), "-d", String(seconds)], {
+const defaultListen: ListenFn = (device, rate, seconds, audio) => {
+  const io = audioCommand({ audio, device, playback: device, rate }, "capture");
+  if (io.cmd === "parec") {
+    // parec has no duration: it runs until stopped, and a clean stop after `seconds` is the success
+    const r = nodeSpawnSync(io.cmd, io.args, { timeout: seconds * 1000 + 300, maxBuffer: rate * 2 * (seconds + 1) });
+    const stdout = r.stdout ?? Buffer.alloc(0);
+    const stopped = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT" && stdout.length > 0;
+    return {
+      status: stopped ? 0 : (r.status ?? 1),
+      stdout,
+      stderr: String(r.stderr ?? ""),
+      error: stopped ? undefined : r.error,
+    };
+  }
+  const r = nodeSpawnSync(io.cmd, [...io.args, "-d", String(seconds)], {
     timeout: (seconds + 4) * 1000,
     maxBuffer: rate * 2 * (seconds + 1),
   });
@@ -98,14 +114,23 @@ export async function soundcardChecks(env: Record<string, string | undefined>, d
   if (!ports.length) return [];
   const spawnSync = deps.spawnSync ?? defaultSpawnSync;
   const rows: CheckRow[] = [];
-  const tools = alsaToolsProblem((c, a) => spawnSync(c, a, { timeout: 5000 }));
-  rows.push(
-    tools
-      ? { kind: "alsa", port: "", status: "fail", message: tools, fix: "apt install alsa-utils" }
-      : { kind: "alsa", port: "", status: "pass", message: "arecord and aplay are installed", fix: "" },
-  );
+  const missing = new Map<AudioBackend, string | null>();
+  for (const backend of new Set(ports.map((p) => p.audio ?? "alsa"))) {
+    const tools = audioToolsProblem(backend, (c, a) => spawnSync(c, a, { timeout: 5000 }));
+    missing.set(backend, tools);
+    const names = backend === "pulse" ? "parec and pacat" : "arecord and aplay";
+    const fix =
+      backend === "pulse"
+        ? "pkg install pulseaudio (Termux) or apt install pulseaudio-utils"
+        : "apt install alsa-utils";
+    rows.push(
+      tools
+        ? { kind: backend, port: "", status: "fail", message: tools, fix }
+        : { kind: backend, port: "", status: "pass", message: `${names} are installed`, fix: "" },
+    );
+  }
   for (const p of ports) {
-    if (!tools) rows.push(audioRow(p, spawnSync));
+    if (!missing.get(p.audio ?? "alsa")) rows.push(audioRow(p, spawnSync));
     rows.push(await modemRow(p, deps));
     rows.push(await pttRow(p, deps));
     rows.push(...(await txRows(p, env, deps)));
@@ -121,23 +146,30 @@ function audioRow(p: SoundcardPortSettings, spawnSync: SpawnSyncFn): CheckRow {
     message,
     fix,
   });
-  const cap = spawnSync("arecord", [...alsaArgs(p.device, p.rate), "-d", "1", "/dev/null"], { timeout: 5000 });
+  const pulse = p.audio === "pulse";
+  const capIo = audioCommand(p, "capture");
+  // a second of capture: arecord stops itself after `-d 1`; parec runs until the timeout stops it, which passes
+  const cap = pulse
+    ? spawnSync(capIo.cmd, [...capIo.args, "/dev/null"], { timeout: 1000 })
+    : spawnSync(capIo.cmd, [...capIo.args, "-d", "1", "/dev/null"], { timeout: 5000 });
   const capErr = String(cap.stderr ?? "");
-  if (cap.status !== 0 && !busy(capErr))
+  const capStopped = pulse && (cap.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+  if (cap.status !== 0 && !capStopped && !busy(capErr))
     return row(
       "fail",
-      `port ${p.name}: capture ${p.device} does not open: ${alsaHint("arecord", cap.error ?? null, capErr)}`,
-      "check SOUNDCARD_DEVICE against arecord -l",
+      `port ${p.name}: capture ${p.device} does not open: ${audioHint(capIo.cmd, cap.error ?? null, capErr)}`,
+      pulse ? "check SOUNDCARD_DEVICE against pactl list short sources" : "check SOUNDCARD_DEVICE against arecord -l",
     );
   // 50 ms of silence: enough to open the device, nothing a VOX reacts to
   const silence = Buffer.alloc(Math.round(p.rate * 0.05) * 2);
-  const play = spawnSync("aplay", alsaArgs(p.playback, p.rate), { input: silence, timeout: 5000 });
+  const playIo = audioCommand(p, "playback");
+  const play = spawnSync(playIo.cmd, playIo.args, { input: silence, timeout: 5000 });
   const playErr = String(play.stderr ?? "");
   if (play.status !== 0 && !busy(playErr))
     return row(
       "fail",
-      `port ${p.name}: playback ${p.playback} does not open: ${alsaHint("aplay", play.error ?? null, playErr)}`,
-      "check SOUNDCARD_PLAYBACK against aplay -l",
+      `port ${p.name}: playback ${p.playback} does not open: ${audioHint(playIo.cmd, play.error ?? null, playErr)}`,
+      pulse ? "check SOUNDCARD_PLAYBACK against pactl list short sinks" : "check SOUNDCARD_PLAYBACK against aplay -l",
     );
   const held = busy(capErr) || busy(playErr) ? " (in use by the running ingest)" : "";
   return row(
@@ -190,7 +222,9 @@ async function pttRow(p: SoundcardPortSettings, deps: CheckDeps): Promise<CheckR
       ? "install serialport, pass the device in, and add the user to dialout"
       : p.ptt.kind === "cm108"
         ? "check the device (ls /dev/hidraw*) and the udev rule that gives the ingest's user write access"
-        : "install gpiod, and give the ingest's user access to the GPIO chip (group gpio)";
+        : p.ptt.kind === "termux-usb"
+          ? "install the Termux:API app and pkg install termux-api python, attach the interface, and check termux-usb -l"
+          : "install gpiod, and give the ingest's user access to the GPIO chip (group gpio)";
   return row("fail", `port ${p.name}: PTT ${what}: ${problem}`, fix);
 }
 
@@ -298,13 +332,13 @@ export async function pttTest(
           : `refused: ${g.call} ${g.reason}`,
     };
   // listen before keying: a busy channel, or a sound card the running ingest holds, refuses the test
-  const heard = (deps.listen ?? defaultListen)(p.device, p.rate, 1);
+  const heard = (deps.listen ?? defaultListen)(p.device, p.rate, 1, p.audio);
   if (heard.status !== 0)
     return {
       ok: false,
       message: busy(heard.stderr)
         ? "refused: the sound card is in use; stop the ingest first (it owns the card, the PTT and the transmit switch)"
-        : `refused: cannot listen on ${p.device}: ${alsaHint("arecord", heard.error ?? null, heard.stderr)}`,
+        : `refused: cannot listen on ${p.device}: ${audioHint(audioCommand(p, "capture").cmd, heard.error ?? null, heard.stderr)}`,
     };
   let rx;
   try {

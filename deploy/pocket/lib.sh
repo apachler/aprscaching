@@ -99,6 +99,28 @@ termux_api_hint() {
     "pkg install termux-api"
 }
 
+# Whether a soundcard port takes its audio from PulseAudio (SOUNDCARD_AUDIO=pulse, or "audio":"pulse" in
+# SOUNDCARD_PORTS).
+pulse_wanted() {
+  [ "$(env_get SOUNDCARD_AUDIO)" = pulse ] || env_get SOUNDCARD_PORTS | grep -qE '"audio" *: *"pulse"'
+}
+
+# Start PulseAudio for the soundcard port when it is wanted and not running: with Android's OpenSL ES capture
+# (module-sles-source; Termux's default.pa loads the playback sink itself) and no exit when idle.
+pulse_ensure() {
+  pulse_wanted || return 0
+  if ! have pulseaudio; then
+    warn "a soundcard port uses PulseAudio, which is not installed" "Install it with:  pkg install pulseaudio"
+    return 0
+  fi
+  pulseaudio --check 2>/dev/null && return 0
+  if pulseaudio --start --load="module-sles-source" --exit-idle-time=-1 2>/dev/null; then
+    info "PulseAudio started for the soundcard port"
+  else
+    warn "PulseAudio did not start" "See why with:  pulseaudio --load=module-sles-source --exit-idle-time=-1 -v"
+  fi
+}
+
 # GET the operator's station summary (/api/admin/station-status) from the local gateway, with the
 # OPERATOR_SECRET from the .env; empty output when the gateway does not answer.
 station_status() {
