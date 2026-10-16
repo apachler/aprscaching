@@ -19,6 +19,7 @@ import { OUTBOX_QUEUED_TTL_S } from "./retention.js";
 import { routeOf } from "./provenance.js";
 import { attestation, everySite, sitesFor } from "./attestedsites.js";
 import { stationDevice, type DeviceColumns } from "./deviceid.js";
+import { deliveryStatement, parseDelivery } from "./delivery.js";
 
 // ------------------------------------------------------------- station registry
 function bbox(u: URL): { sql: string; binds: number[] } {
@@ -100,19 +101,27 @@ export async function handlePorts(_req: Request, env: Env): Promise<Response> {
 
 // ------------------------------------------------------------- messages (RX)
 /** Where a sent message stands: waiting in the outbox, out on the air, acknowledged by the station, or not sent. */
-type SentState = "queued" | "sent" | "acked" | "failed";
+type SentState = "queued" | "sent" | "acked" | "failed" | "rejected" | "unacked";
 
 /**
  * Pure: the delivery state of a sent message. An ack the instance heard wins. A message sent through the instance
  * (it names an outbox row) is queued until the ingest box reports it sent on APRS-IS, and failed once it is older
  * than the outbox's queue lifetime without that: the box drains nothing older. Any other sent message went out on
- * the radio that recorded it.
+ * the radio that recorded it. A sender that stopped repeating it without an ack says why: the station rejected it,
+ * or its last try went unanswered.
  */
 export function sentState(
-  m: { ts: number; ackedAt?: number | null; outboxId?: number | null; sentAt?: number | null },
+  m: {
+    ts: number;
+    ackedAt?: number | null;
+    outboxId?: number | null;
+    sentAt?: number | null;
+    gaveUp?: string | null;
+  },
   now: number,
 ): SentState {
   if (m.ackedAt) return "acked";
+  if (m.gaveUp) return m.gaveUp === "rejected" ? "rejected" : "unacked";
   if (m.outboxId == null || m.sentAt) return "sent";
   return m.ts >= now - OUTBOX_QUEUED_TTL_S ? "queued" : "failed";
 }
@@ -131,7 +140,7 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   if (callParam && !/^[A-Z0-9]{3,7}$/.test(base ?? ""))
     return json({ error: "call must be a callsign" }, { status: 400 });
   let sql =
-    "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction, transport, ack, acked_at AS ackedAt, outbox_id AS outboxId, sent_at AS sentAt FROM messages WHERE 1=1";
+    "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction, transport, ack, acked_at AS ackedAt, outbox_id AS outboxId, sent_at AS sentAt, tries, gave_up AS gaveUp FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
   if (base) {
     sql += " AND (((from_call = ? OR from_call LIKE ?) AND from_call != ?)";
@@ -156,13 +165,17 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const now = nowS();
   return json({
     // an erased person's side reads as `WITHDRAWN`; a message they sent keeps its place with an empty body
-    messages: page.items.map(({ ack, ackedAt, outboxId, sentAt, ...m }) => ({
+    messages: page.items.map(({ ack, ackedAt, outboxId, sentAt, tries, gaveUp, ...m }) => ({
       ...m,
       fromCall: m.fromCall == null ? m.fromCall : displayCall(m.fromCall),
       toCall: m.toCall == null ? m.toCall : displayCall(m.toCall),
       // a sent message carries its number and where it stands; a received one carries neither
       ...(m.direction === "tx"
-        ? { msgNo: ack ?? null, delivery: sentState({ ts: m.ts, ackedAt, outboxId, sentAt }, now) }
+        ? {
+            msgNo: ack ?? null,
+            delivery: sentState({ ts: m.ts, ackedAt, outboxId, sentAt, gaveUp }, now),
+            ...(tries ? { tries } : {}),
+          }
         : {}),
     })),
     nextCursor: page.nextCursor,
@@ -179,7 +192,13 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
 export async function handleSentMessage(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in" }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as { from?: unknown; to?: unknown; text?: unknown; msgNo?: unknown };
+  const b = (await req.json().catch(() => ({}))) as {
+    from?: unknown;
+    to?: unknown;
+    text?: unknown;
+    msgNo?: unknown;
+    delivery?: unknown;
+  };
   const from = typeof b.from === "string" ? b.from.trim().toUpperCase() : "";
   const to = typeof b.to === "string" ? b.to.trim().toUpperCase() : "";
   const text = typeof b.text === "string" ? b.text.trim().slice(0, 67) : "";
@@ -192,6 +211,18 @@ export async function handleSentMessage(req: Request, env: Env): Promise<Respons
   if (!own) return json({ error: `${baseCall(from)} is not a callsign on your account` }, { status: 403 });
   if (!(await isCallsignVerified(env, from)))
     return json({ error: `verify ${baseCall(from)} to transmit — control-verification required` }, { status: 403 });
+  // a later report on a message the browser repeated: how often its radio sent it, and how that ended
+  if (b.delivery !== undefined) {
+    const d = parseDelivery(b.delivery);
+    if (!d || !msgNo) return json({ error: "a delivery report needs msgNo, tries and an outcome" }, { status: 400 });
+    await deliveryStatement(
+      env,
+      { sql: "from_call = ? AND to_call = ? AND ack = ? AND transport = 'browser-rf'", binds: [from, to, msgNo] },
+      d,
+      nowS(),
+    ).run();
+    return json({ ok: true });
+  }
   // sent from the browser's own radio: the transport a signed browser batch records
   await env.DB.prepare(
     "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'tx', 'browser-rf')",

@@ -24,4 +24,11 @@ describe("the delivery state of a sent message", () => {
     expect(sentState({ ts: now - OUTBOX_QUEUED_TTL_S - 1, outboxId: 3 }, now)).toBe("failed");
     expect(sentState({ ts: now - OUTBOX_QUEUED_TTL_S, outboxId: 3 }, now)).toBe("queued");
   });
+
+  it("says why its sender stopped repeating it without an ack, unless an ack came after all", () => {
+    expect(sentState({ ts: now - 10, gaveUp: "rejected" }, now)).toBe("rejected");
+    expect(sentState({ ts: now - 10, gaveUp: "expired" }, now)).toBe("unacked");
+    expect(sentState({ ts: now - 10, gaveUp: "cancelled", outboxId: 3, sentAt: now }, now)).toBe("unacked");
+    expect(sentState({ ts: now - 10, gaveUp: "expired", ackedAt: now - 1 }, now)).toBe("acked");
+  });
 });

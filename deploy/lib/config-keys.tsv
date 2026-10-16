@@ -220,6 +220,17 @@ BOX_CMD_MAX_AGE	int	ingest	900		0	0	selfhost,baremetal,ingest-box,pocket	Seconds
 BOX_POLL_MS	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between remote-command polls	
 BOX_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	Remote transmits allowed at once before pacing applies	
 BOX_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one remote transmit	
+BEACON	enum	ingest	off	off|fixed|smart	0	0	selfhost,baremetal,ingest-box,pocket	Automatic position beacons: off, fixed (every BEACON_INTERVAL_MIN) or smart (SmartBeaconing)	
+BEACON_POSITION	enum	ingest	fixed	fixed|termux|gpsd|nmea	0	0	selfhost,baremetal,ingest-box,pocket	Where the beacon position comes from: fixed (BOX_LAT, BOX_LON), termux, gpsd or nmea	
+BEACON_INTERVAL_MIN	number	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	Minutes between fixed-mode beacons, at least 10	
+BEACON_SYMBOL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Beacon symbol, table then code; the default follows BEACON_POSITION	
+BEACON_COMMENT	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Beacon comment, up to 43 bytes	
+BEACON_COMMENT_EVERY	int	ingest	1		0	0	selfhost,baremetal,ingest-box,pocket	On VHF, the comment rides on one beacon in this many; on HF always one in four	
+BEACON_GPSD	string	ingest	127.0.0.1:2947		0	0	selfhost,baremetal,ingest-box,pocket	The gpsd daemon to read the position from, host:port	
+BEACON_NMEA_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Serial device of an NMEA GPS receiver, such as /dev/ttyACM0	
+BEACON_NMEA_BAUD	int	ingest	9600		0	0	selfhost,baremetal,ingest-box,pocket	Baud rate of the NMEA GPS receiver	
+BEACON_TX_BURST	int	ingest	2		0	0	selfhost,baremetal,ingest-box,pocket	Automatic beacons allowed at once before pacing applies	
+BEACON_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one automatic beacon	
 APRSIS_SERVICE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS uplink login; default the gateway's service call when the feed shares its base	
 APRSIS_SERVICE_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode of that login; default APRSIS_PASSCODE	
 CWOP_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	CWOP server for relaying weather reports; set it to enable the relay	

@@ -37,7 +37,8 @@ turns an unattended station into a channel hog.
 
 | Path | Unit | Settings | Default | Ceiling |
 |---|---|---|---|---|
-| Remote box (beacons, messages, answers) | frame | `BOX_TX_BURST`, `BOX_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
+| Remote box (beacons, messages, answers, their repeats) | frame | `BOX_TX_BURST`, `BOX_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
+| Automatic beacons | frame | `BEACON_TX_BURST`, `BEACON_TX_REFILL_SEC` | 2, then 1 per 60 s | 3, then 1 per 30 s |
 | MeshCom sends | message | `MESHCOM_TX_BURST`, `MESHCOM_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
 | TX-IGate (APRS-IS to RF) | message | `IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 | FBB forwarding | session | `BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC` | 4, then 1 per 300 s | 10, then 1 per 60 s |
@@ -45,6 +46,7 @@ turns an unattended station into a channel hog.
 A refused transmit is always logged:
 
 - a refused remote-box command fails with the wait time;
+- a refused repeat of a message or an automatic beacon waits for the next try, a few seconds later;
 - a refused IGate message is not gated, and the sender's own retry carries it once a token is back;
 - a refused FBB session waits for the next scheduler poll.
 

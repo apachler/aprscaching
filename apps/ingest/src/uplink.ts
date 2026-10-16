@@ -3,6 +3,7 @@ import net from "node:net";
 import { Backoff } from "./backoff.js";
 import { LineBuffer } from "./lines.js";
 import { SOFTWARE_VERSION } from "./version.js";
+import { decodeAprs } from "@aprscaching/aprs";
 
 const baseOf = (c: string) => (c.toUpperCase().split("-")[0] ?? "").trim();
 
@@ -44,6 +45,20 @@ export function uplinkLogin(o: {
  */
 export function isPublishable(item: { src_call: string; tocall: string; payload: string }): boolean {
   return [item.src_call, item.tocall, item.payload].every((v) => typeof v === "string" && !/[\r\n\0]/.test(v));
+}
+
+/**
+ * The numbered message an outbox item carries (`:ADDRESSEE:text{NN`), or null for any other item: the uplink
+ * repeats such a message until its addressee acks it.
+ */
+export function outboxMessage(item: {
+  src_call: string;
+  payload: string;
+}): { from: string; to: string; msgNo: string } | null {
+  if (!item.payload.startsWith(":")) return null;
+  const d = decodeAprs({ src: item.src_call, dst: "", path: [], payload: item.payload, raw: "" });
+  if (d.kind !== "message" || d.ack || d.rej || !d.msgNo || !d.addressee) return null;
+  return { from: item.src_call.toUpperCase(), to: d.addressee.trim().toUpperCase(), msgNo: d.msgNo };
 }
 
 /**

@@ -544,8 +544,13 @@ export interface MessageItem {
   transport?: string | null;
   /** A sent message: the number the station acknowledges, null when it carried none. */
   msgNo?: string | null;
-  /** A sent message: queued in the instance's APRS-IS outbox, sent, acknowledged by the station, or not sent. */
-  delivery?: "queued" | "sent" | "acked" | "failed";
+  /**
+   * A sent message: queued in the instance's APRS-IS outbox, sent, acknowledged by the station, or not sent; or
+   * rejected by the station, or never acknowledged after its sender's last try.
+   */
+  delivery?: "queued" | "sent" | "acked" | "failed" | "rejected" | "unacked";
+  /** A sent message whose sender repeats it: how often it went out, when the sender reported that. */
+  tries?: number;
 }
 
 /** A MeshCom group heard within the message retention (`*` is the all-stations group). */

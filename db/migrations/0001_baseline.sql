@@ -714,7 +714,12 @@ CREATE TABLE messages (
   -- that row sent on APRS-IS
   acked_at  INTEGER,
   outbox_id INTEGER,
-  sent_at   INTEGER
+  sent_at   INTEGER,
+  -- what the sending radio or uplink reports of its repeats (msgretry.ts): how often it sent the message, and
+  -- why it stopped repeating it without an ack, 'rejected' (the station refused it) or 'expired' (its last try
+  -- went unanswered); NULL while it repeats, once acked, and where no sender reports it
+  tries     INTEGER,
+  gave_up   TEXT
 );
 CREATE INDEX idx_messages_ts ON messages (ts);
 -- the ack lookup the ingest runs for each ack it hears, and the outbox acknowledgement

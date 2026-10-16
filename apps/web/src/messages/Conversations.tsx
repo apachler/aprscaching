@@ -32,7 +32,7 @@ import {
   Icon,
   InfoTip,
 } from "../ui/index.js";
-import { radioLink, useRadioLink } from "../rf/RadioLinkHost.js";
+import { messageRetry, radioLink, useRadioLink } from "../rf/RadioLinkHost.js";
 import { LINK_LABEL } from "../rf/radioLink.js";
 import { nextMsgNo } from "../rf/msgNo.js";
 import { TERMS } from "../terms.js";
@@ -68,6 +68,8 @@ const STATE: Record<ItemState, { label: string; hint: string; kind?: string }> =
   "sent-no-ack": { label: "sent, no ack yet", hint: "Sent from the Mailbox; the station has not acknowledged it yet" },
   delivered: { label: "delivered", hint: "The station acknowledged it", kind: "found" },
   undelivered: { label: "sent, never acked", hint: "Sent from the Mailbox, but the station never acknowledged it" },
+  rejected: { label: "rejected", hint: "The station refused the message", kind: "dnf" },
+  unacked: { label: "never acked", hint: "Sent again and again, but the station never acknowledged it", kind: "dnf" },
   expired: { label: "expired", hint: "Not heard within 7 days, so the Mailbox dropped it", kind: "dnf" },
 };
 
@@ -210,12 +212,14 @@ export function Conversations(props: {
   );
 }
 
-function StateBadge(props: { state?: ItemState }) {
+function StateBadge(props: { state?: ItemState; tries?: number }) {
   if (!props.state) return null;
   const s = STATE[props.state];
+  // a message its radio repeated says how often it went out
+  const tries = props.tries && props.tries > 1 ? props.tries : 0;
   return (
-    <Badge kind={s.kind} title={s.hint}>
-      {s.label}
+    <Badge kind={s.kind} title={tries ? `${s.hint}. Sent ${tries} times.` : s.hint}>
+      {tries ? `${s.label} · ${tries}×` : s.label}
     </Badge>
   );
 }
@@ -235,7 +239,7 @@ function ThreadLink(props: { t: Thread; fmt: ReturnType<typeof useFmt>; onOpen: 
             {t.items.length} message{t.items.length === 1 ? "" : "s"}
           </span>
         </span>
-        {t.last.dir === "out" && <StateBadge state={t.last.state} />}
+        {t.last.dir === "out" && <StateBadge state={t.last.state} tries={t.last.tries} />}
         <span className="muted msg-when">{props.fmt.ago(t.last.ts)}</span>
       </span>
       <span className="comment msg-body">
@@ -271,7 +275,7 @@ function ThreadRow(props: {
         ) : (
           <TransportBadge transport={it.transport} direction={it.dir === "out" ? "tx" : "rx"} />
         )}
-        {it.dir === "out" && <StateBadge state={it.state} />}
+        {it.dir === "out" && <StateBadge state={it.state} tries={it.tries} />}
         {it.dir === "in" && it.state === "waiting" && <StateBadge state="waiting" />}
         <span className="muted msg-when">{props.fmt.ago(it.ts)}</span>
       </div>
@@ -327,10 +331,10 @@ function Compose(props: {
         // a numbered message asks the station to acknowledge it
         const msgNo = nextMsgNo();
         const from = radioLink.txCall();
-        await radioLink.transmit(
-          { src: from, dst: "APRS", path: ["WIDE1-1"], payload: encodeAprsMessage(recipient, body, msgNo) },
-          "Messages",
-        );
+        const frame = { src: from, dst: "APRS", path: ["WIDE1-1"], payload: encodeAprsMessage(recipient, body, msgNo) };
+        await radioLink.transmit(frame, "Messages");
+        // sent again until the station acks it, while this tab and its radio stay up
+        messageRetry.track({ to: recipient, text: body, msgNo, frame, feature: "Messages" });
         // the message went out either way; a failed record only leaves it out of the conversation
         const recorded = await recordSentMessage({ from, to: recipient, text: body, msgNo }).then(
           () => true,

@@ -59,10 +59,34 @@ Each message carries a number, so the station's radio acknowledges it. The conve
 | **sent** | Sent; no acknowledgement heard yet |
 | **acked** | The instance heard the station acknowledge it |
 | **not sent** | The instance could not send it within the hour |
+| **rejected** | The station refused the message |
+| **never acked** | Sent again and again, but the station never acknowledged it |
 | **waiting until heard**, **sent, no ack yet**, **delivered**, **sent, never acked**, **expired** | A Mailbox message: [What happens next](#what-happens-next) |
 
-An ack counts only when the instance hears it: one your radio heard alone, without
-[forwarding](my-radio.md#send-what-you-hear-to-an-instance), leaves the message **sent**.
+An ack counts when the instance hears it, or when the radio that sent the message reports it. A message its
+sender repeated shows how often it went out, for example **acked · 3×**.
+
+### Repeats until acknowledged
+
+A numbered message goes out again until the station acknowledges or rejects it, as APRS asks of a sender:
+
+| Sent from | Repeats | Runs |
+|---|---|---|
+| A VHF or UHF radio, or APRS-IS | 30 s, then 1, 2 and 4 minutes apart: five tries, then 8 minutes to wait for the last ack | on the ingest box, or in the browser |
+| An HF radio | 2, 4, 8 and 16 minutes apart, then every 30 minutes: ten tries | on the ingest box |
+
+- **From the instance's ingest box** (a message through the instance, a Mailbox or near-cache message, a message
+  queued in [Remote control of your box](../run/radios/remote-box.md)): the box hears the ack on its radios or
+  its APRS-IS feed, so the repeats go on while the box cannot reach the gateway. Each repeat passes the box's
+  transmit gates and pacing, and **TX off** stops them all. Once a message ends, the box reports its tries and
+  outcome to the conversation.
+- **From your radio in the browser:** the repeats run in that tab, while its radio stays connected and
+  transmitting stays allowed. Closing the tab, disconnecting the radio or switching transmit off stops them.
+  **Recent transmissions** in My radio counts the messages waiting for an ack, resent, acked, rejected and never
+  acked, and lists each repeat.
+
+A Mailbox message is also sent again the next time the instance hears the station
+([What happens next](#what-happens-next)). Commands' answers, such as `Logged`, carry no number and go out once.
 
 ## Read the messages the instance hears
 
@@ -120,7 +144,8 @@ shows that network.
 4. Select **Send**, then **Transmit** in the confirmation.
 
 The app shows **Transmitted: message to <CALL>**. The message goes out with the path `WIDE1-1` and a message
-number, so the recipient's station acknowledges it. It joins the **Messages** list, marked **sent**.
+number, so the recipient's station acknowledges it, and goes out again until it does
+([Repeats until acknowledged](#repeats-until-acknowledged)). It joins the **Messages** list, marked **sent**.
 
 ## Acknowledge a message sent to you
 

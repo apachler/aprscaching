@@ -182,8 +182,12 @@ interface TxRadio {
   label?: () => string;
   /** A 300-baud HF soundcard port. */
   hf?: boolean;
+  /** The port transmits the box's own frames: the KISS transmit channel, a soundcard port allowed to transmit. */
+  transmits?: boolean;
 }
 const radios: TxRadio[] = [];
+/** Who wants to know what the box hears, on any radio or its APRS-IS feed: the message repeats wait for acks. */
+const heardSubs: ((src: string, payload: string) => void)[] = [];
 // What the box sent on any port, so no port reports the box's own signal as a hearing (echo.ts).
 const { SentFrames } = await import("./echo.js");
 const sentFrames = new SentFrames();
@@ -251,6 +255,7 @@ if (env.KISS_TNC_HOST) {
       frameSubs,
       rawSubs,
       ...(kissChannels.channels.length > 1 ? { label: () => kissTncPort(ch) } : {}),
+      transmits: ch === kissChannels.tx,
     });
   }
 }
@@ -302,6 +307,7 @@ if (soundcardSettings.length) {
       rawSubs,
       label: () => port.label(),
       hf: sc.modem === "hf300",
+      transmits: sc.tx,
     });
   }
   soundcardRunning = ports;
@@ -409,6 +415,11 @@ if (primaryRadio) {
     );
   }
 }
+for (const radio of radios)
+  radio.frameSubs.push((f) => {
+    for (const s of heardSubs) s(f.src, f.payload);
+  });
+
 // Meshtastic — licensed nodes only, from the node's protobuf TCP API (MESHTASTIC_HOST, port 4403) and/or
 // the protobuf feed of an MQTT broker (MESHTASTIC_MQTT_URL). Both feeds share one licence registry, so a
 // NodeInfo heard on either unlocks the node's positions on both.
@@ -615,6 +626,7 @@ aprs.on("line", (line: string) => {
   };
   health.packet(pkt);
   batch.push(pkt);
+  for (const s of heardSubs) s(f.src, f.payload);
 });
 
 setInterval(() => {
@@ -765,7 +777,7 @@ if (env.BOX_ID) {
     console.error("[ingest] FATAL: %s", (e as Error).message);
     process.exit(1);
   }
-  new BoxPoller({
+  const poller = new BoxPoller({
     base: GATEWAY_BASE,
     secret: SECRET,
     boxId: env.BOX_ID,
@@ -780,7 +792,10 @@ if (env.BOX_ID) {
     maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),
     pollMs: numEnv("BOX_POLL_MS", 5000, { min: 1000 }),
     ...txLimitFromEnv("box"),
-  }).start();
+  });
+  poller.start();
+  // the acks of the messages the box repeats, heard on its radios or its APRS-IS feed
+  heardSubs.push((src, payload) => poller.heard(src, payload));
   console.log(
     "[box] remote control active as %s (remote transmit %s)",
     env.BOX_ID,
@@ -788,8 +803,69 @@ if (env.BOX_ID) {
   );
 }
 
+// ---- Automatic beacons: off unless BEACON=fixed|smart. One scheduler per transmitting port, each through that
+// port's call gate, the transmit switch and the beacon token bucket.
+{
+  const { beaconSettings, BeaconScheduler } = await import("./beacon.js");
+  let settings: ReturnType<typeof beaconSettings>;
+  try {
+    settings = beaconSettings(env);
+  } catch (e) {
+    console.error("[ingest] FATAL: %s", (e as Error).message);
+    process.exit(1);
+  }
+  const ports = radios.filter((r) => r.transmits);
+  const call = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
+  if (settings && (!call || !ports.length)) {
+    console.error(
+      "[beacon] BEACON=%s needs a station call (BOX_CALL) and a port that transmits (a KISS TNC, or a soundcard port with SOUNDCARD_TX=1); no beacons",
+      settings.mode,
+    );
+  } else if (settings && call) {
+    const gps = await import("./gps.js");
+    const { parseBoxPath, parseBoxPosition } = await import("./boxpoll.js");
+    let source: import("./gps.js").PositionSource;
+    try {
+      if (settings.source === "fixed") {
+        const at = parseBoxPosition(env.BOX_LAT, env.BOX_LON);
+        if (!at) throw new Error("BEACON_POSITION=fixed needs BOX_LAT and BOX_LON");
+        source = new gps.FixedSource(at);
+      } else if (settings.source === "termux") source = new gps.TermuxSource();
+      else if (settings.source === "gpsd") source = new gps.GpsdSource(settings.gpsd.host, settings.gpsd.port);
+      else source = new gps.NmeaSource(settings.nmea!.device, settings.nmea!.baud);
+    } catch (e) {
+      console.error("[ingest] FATAL: %s", (e as Error).message);
+      process.exit(1);
+    }
+    await source.start();
+    onShutdown.push(() => source.stop());
+    const { TokenBucket } = await import("./txlimit.js");
+    const bucket = new TokenBucket(txLimitFromEnv("beacon"));
+    for (const port of ports) {
+      new BeaconScheduler({
+        settings,
+        source,
+        port,
+        call,
+        path: parseBoxPath(env.BOX_TX_PATH),
+        canTx: () => station.tx,
+        bucket,
+      }).start();
+      console.log(
+        "[beacon] %s beacons as %s on %s from the %s position%s",
+        settings.mode === "smart" ? "SmartBeaconing" : `every ${settings.intervalMin} min,`,
+        call.toUpperCase(),
+        port.label?.() ?? "kiss",
+        settings.source,
+        port.hf ? " (HF preset: Mic-E, no path, at most every 10 min)" : "",
+      );
+    }
+  }
+}
+
 // ---- APRS-IS announce uplink: poll the gateway outbox and publish (opt-in finds) ----
-import { AprsUplink, isPublishable, uplinkLogin } from "./uplink.js";
+import { AprsUplink, isPublishable, outboxMessage, uplinkLogin } from "./uplink.js";
+import { MessageRetrier } from "@aprscaching/aprs";
 /**
  * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, announced finds and
  * weather. Started once, under the login `uplinkLogin` chose.
@@ -817,6 +893,33 @@ function startUplink(serviceCall: string, servicePass: string): void {
     : null;
   cwop?.start();
   const base = GATEWAY_BASE;
+  // A numbered message published to APRS-IS is repeated until its addressee acks it; the feed asks for the
+  // sender's messages meanwhile, so the ack reaches this box. How each ended goes back with the next outbox ack.
+  const retryItems = new Map<number, { src_call: string; tocall: string; payload: string }>();
+  let deliveries: { id: number; tries: number; outcome: string }[] = [];
+  const watchSenders = () =>
+    aprs.watch(
+      outboxRetry
+        .list()
+        .map((m) => m.from)
+        .filter((c) => c !== SERVICE_CALL.toUpperCase()),
+    );
+  const outboxRetry = new MessageRetrier({
+    now: () => Date.now(),
+    resend: (m) => {
+      const it = retryItems.get(Number(m.ref));
+      if (!it) return "stop";
+      return uplink.publish(it) ? "sent" : "held";
+    },
+    onSettle: (m, outcome) => {
+      retryItems.delete(Number(m.ref));
+      deliveries.push({ id: Number(m.ref), tries: m.tries, outcome });
+      if (deliveries.length > 100) deliveries = deliveries.slice(-100);
+      watchSenders();
+    },
+  });
+  heardSubs.push((src, payload) => outboxRetry.heard(src, payload));
+  setInterval(() => outboxRetry.tick(), 5000).unref();
   let outboxFailing = false;
   let outboxLoggedAt = 0;
   let outboxPolling = false; // a poll still waiting on the gateway is not overlapped by the next one
@@ -836,14 +939,25 @@ function startUplink(serviceCall: string, servicePass: string): void {
           continue;
         }
         const link = it.target === "cwop" && cwop ? cwop : uplink; // target=cwop → CWOP relay, else standard APRS-IS
-        if (link.publish(it)) sent.push(it.id);
+        if (!link.publish(it)) continue;
+        sent.push(it.id);
+        const msg = link === uplink ? outboxMessage(it) : null;
+        if (msg) {
+          retryItems.set(it.id, it);
+          outboxRetry.track({ ...msg, ref: it.id });
+          watchSenders();
+        }
       }
-      if (sent.length)
-        await gatewayFetch(`${base}/outbox/ack`, {
+      const reports = deliveries;
+      deliveries = [];
+      if (sent.length || reports.length) {
+        const r = await gatewayFetch(`${base}/outbox/ack`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
-          body: JSON.stringify({ ids: sent }),
-        });
+          body: JSON.stringify({ ids: sent, ...(reports.length ? { deliveries: reports } : {}) }),
+        }).catch(() => null);
+        if (!r?.ok) deliveries = [...reports, ...deliveries].slice(-100);
+      }
       if (outboxFailing) {
         console.log("[uplink] outbox poll recovered");
         outboxFailing = false;

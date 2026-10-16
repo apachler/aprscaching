@@ -33,6 +33,7 @@ import { boxOwner } from "./boxowner.js";
 import { serviceCall } from "./servicecall.js";
 import { boxPrincipal } from "./boxprincipal.js";
 import { BOX_COMMAND_QUEUED_TTL_S } from "./retention.js";
+import { deliveryStatement, parseDelivery, type DeliveryReport } from "./delivery.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
@@ -314,12 +315,16 @@ function parsePayload(raw: string | null): Record<string, unknown> {
 /** POST /api/box/:id/commands/ack — the box reports execution. */
 export async function handleBoxAck(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
-  const { id, status, result, position } = (await req.json().catch(() => ({}))) as {
+  const { id, status, result, position, msgNo, delivery } = (await req.json().catch(() => ({}))) as {
     id?: number;
     status?: string;
     result?: string;
     position?: { lat?: unknown; lon?: unknown };
+    msgNo?: unknown;
+    delivery?: unknown;
   };
+  // a later report on a message the box sent: how often its radio sent it, and how that ended
+  if (id && delivery !== undefined) return boxDelivery(env, boxId, id, delivery);
   if (!id || (status !== "done" && status !== "failed"))
     return json({ error: "id and status (done|failed) required" }, { status: 400 });
   const done = await env.DB.prepare(
@@ -348,13 +353,60 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
         .run();
     const p =
       cmd?.kind === "message" && cmd.payload ? (JSON.parse(cmd.payload) as { to?: string; text?: string }) : null;
-    if (cmd?.callsign && p?.to && p.text)
+    // the number the box gave it, so the station's ack marks it acknowledged
+    const no = typeof msgNo === "string" && MSG_NO.test(msgNo) ? msgNo : null;
+    if (cmd?.callsign && p?.to && p.text) {
+      if (no)
+        await env.DB.prepare("UPDATE box_commands SET payload = ? WHERE id = ?")
+          .bind(JSON.stringify({ ...parsePayload(cmd.payload), msgNo: no }), id)
+          .run();
       await env.DB.prepare(
-        "INSERT INTO messages (ts, from_call, to_call, body, direction, transport) VALUES (?,?,?,?, 'tx', 'tnc')",
+        "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'tx', 'tnc')",
       )
-        .bind(nowS(), cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.text)
+        .bind(nowS(), cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.text, no)
         .run();
+    }
   }
+  return json({ ok: true });
+}
+
+const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
+
+const OUTCOME_TEXT: Record<DeliveryReport["outcome"], string> = {
+  acked: "acknowledged",
+  rejected: "rejected by the station",
+  expired: "never acknowledged",
+  cancelled: "repeats stopped, transmit switched off",
+};
+
+/**
+ * A box reports how a message it sent ended: the command's result says so, and a message an operator queued shows
+ * its tries and outcome in the Messages list.
+ */
+async function boxDelivery(env: Env, boxId: string, id: number, raw: unknown): Promise<Response> {
+  const d = parseDelivery(raw);
+  if (!d) return json({ error: "delivery needs tries (1-99) and an outcome" }, { status: 400 });
+  const cmd = await env.DB.prepare("SELECT callsign, kind, payload, result FROM box_commands WHERE id=? AND box_id=?")
+    .bind(id, boxId)
+    .first<{ callsign: string | null; kind: string; payload: string | null; result: string | null }>();
+  if (!cmd) return json({ error: "no such command on this box" }, { status: 404 });
+  const note = `${OUTCOME_TEXT[d.outcome]} after ${d.tries} ${d.tries === 1 ? "try" : "tries"}`;
+  const result = `${(cmd.result ?? "").replace(/ · (acknowledged|rejected|never|repeats).*$/, "")} · ${note}`;
+  const stmts = [env.DB.prepare("UPDATE box_commands SET result = ? WHERE id = ?").bind(result.slice(0, 500), id)];
+  const p = parsePayload(cmd.payload);
+  if (cmd.kind === "message" && cmd.callsign && typeof p.to === "string" && typeof p.msgNo === "string")
+    stmts.push(
+      deliveryStatement(
+        env,
+        {
+          sql: "from_call = ? AND to_call = ? AND ack = ? AND transport = 'tnc'",
+          binds: [cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.msgNo],
+        },
+        d,
+        nowS(),
+      ),
+    );
+  await env.DB.batch(stmts);
   return json({ ok: true });
 }
 
