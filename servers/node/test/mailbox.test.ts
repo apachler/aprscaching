@@ -212,4 +212,80 @@ describe("the Mailbox", () => {
       expect.stringMatching(/^:OE5XYZ-9 :de OE1ABC: you are next\{/),
     ]);
   });
+
+  it("queues no new send while the box repeats the last one, until the box reports it settled or the hold passes", async () => {
+    const { env, leave } = await sender();
+    await leave({ from: "OE1ABC", to: "OE5XYZ", text: "repeat hold" });
+    const sends = async () => (await outbox(env)).length;
+    const row = () =>
+      env.DB.prepare("SELECT status, attempts, repeat_until, msg_no FROM mailbox_messages").first<{
+        status: string;
+        attempts: number;
+        repeat_until: number | null;
+        msg_no: string;
+      }>();
+    const age = (sec: number) =>
+      env.DB.prepare("UPDATE mailbox_messages SET last_attempt = last_attempt - ?, repeat_until = repeat_until - ?")
+        .bind(sec, sec)
+        .run();
+    await heard(env, "OE5XYZ", ">on the air");
+    expect(await sends()).toBe(1);
+    expect((await row())!.repeat_until).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    // heard again after the once-a-minute pause: the uplink is still repeating the send, so none is queued
+    await age(120);
+    await heard(env, "OE5XYZ", ">still here");
+    expect(await sends()).toBe(1);
+
+    // the uplink reports the repeats given up: the next hearing sends again
+    const id = (await env.DB.prepare("SELECT id FROM aprs_outbox").first<{ id: number }>())!.id;
+    const report = { ids: [], deliveries: [{ id, tries: 5, outcome: "expired" }] };
+    expect((await call(env, "POST", "/outbox/ack", report, { "x-ingest-secret": SECRET })).status).toBe(200);
+    expect((await row())!.repeat_until).toBeNull();
+    await heard(env, "OE5XYZ", ">back again");
+    expect(await sends()).toBe(2);
+    expect((await row())!.attempts).toBe(2);
+
+    // a box that never reports: the hold passes on its own
+    await age(30 * 60);
+    await heard(env, "OE5XYZ", ">once more");
+    expect(await sends()).toBe(3);
+  });
+
+  it("a box that reports its repeats acked delivers the message", async () => {
+    const { env, leave } = await sender();
+    await leave({ from: "OE1ABC", to: "OE5XYZ", text: "box acked" });
+    await call(env, "GET", "/api/box/pi-rf/commands?tx=1&rf=1", undefined, { "x-ingest-secret": SECRET });
+    const ingest = (payload: string) =>
+      call(
+        env,
+        "POST",
+        "/ingest",
+        {
+          packets: [
+            {
+              src: "OE5XYZ",
+              dst: "APRS",
+              path: [],
+              payload,
+              heardVia: "rf",
+              port: "soundcard",
+              box: "pi-rf",
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ],
+        },
+        { "x-ingest-secret": SECRET },
+      );
+    await ingest(">on the air");
+    const cmd = await env.DB.prepare("SELECT id, kind FROM box_commands WHERE kind = 'aprs_msg'").first<{
+      id: number;
+    }>();
+    expect(cmd).not.toBeNull();
+    const report = { id: cmd!.id, delivery: { tries: 2, outcome: "acked" } };
+    expect((await call(env, "POST", "/api/box/pi-rf/commands/ack", report, { "x-ingest-secret": SECRET })).status).toBe(
+      200,
+    );
+    const r = await env.DB.prepare("SELECT status, repeat_until FROM mailbox_messages").first();
+    expect(r).toEqual({ status: "delivered", repeat_until: null });
+  });
 });

@@ -34,9 +34,29 @@ export class AprsIs extends EventEmitter {
   /** The gateway's service call: messages addressed to it are radio commands, wherever their sender is. */
   private serviceCall?: string;
 
-  /** The login filter: the configured one, plus a group-message filter for the service call. */
-  private filter(): string {
-    return this.serviceCall ? `${this.o.filter} g/${this.serviceCall}`.trim() : this.o.filter;
+  /** Calls whose messages the feed passes while a message they sent waits for its ack (`watch`). */
+  private watched: string[] = [];
+
+  /** The login filter: the configured one, plus a group-message filter for the service call and watched calls. */
+  filter(): string {
+    const g = [...new Set([...(this.serviceCall ? [this.serviceCall] : []), ...this.watched])];
+    return g.length ? `${this.o.filter} g/${g.join("/")}`.trim() : this.o.filter;
+  }
+
+  /**
+   * Ask for the messages addressed to these calls too, while a message they sent through the uplink waits for its
+   * ack: the ack comes back addressed to the sender, wherever it is.
+   */
+  watch(calls: string[]) {
+    const next = [...new Set(calls.map((c) => c.trim().toUpperCase()).filter(Boolean))].sort().slice(0, 20);
+    if (next.join() === this.watched.join()) return;
+    this.watched = next;
+    this.refilter();
+  }
+
+  private refilter() {
+    const s = this.sock;
+    if (s && s.writable && !s.destroyed) s.write(`#filter ${this.filter()}\r\n`);
   }
 
   /**
@@ -48,8 +68,7 @@ export class AprsIs extends EventEmitter {
     const c = call.trim().toUpperCase();
     if (!c || c === this.serviceCall) return;
     this.serviceCall = c;
-    const s = this.sock;
-    if (s && s.writable && !s.destroyed) s.write(`#filter ${this.filter()}\r\n`);
+    this.refilter();
   }
 
   /** Schedule exactly one reconnect. Only `close` calls this (`close` always follows `error`),

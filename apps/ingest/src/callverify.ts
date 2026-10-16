@@ -266,7 +266,9 @@ export function boxTransmits(env: Record<string, string | undefined>, soundcardT
   if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") return true;
   if (!env.KISS_TNC_HOST) return false;
   const on = (k: string) => env[k] === "1";
+  const beacons = !!env.BEACON && env.BEACON.trim().toLowerCase() !== "off";
   return !!(
+    beacons ||
     env.DIGI_CALL ||
     on("IGATE_TX") ||
     on("BOX_TX") ||

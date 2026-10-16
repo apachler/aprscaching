@@ -54,7 +54,10 @@ evidence for a find, nor as a corroboration a peer instance asks for
 
 The app asks you to confirm each of these commands before it queues it. A refused command shows in the
 command log with the reason. A message carries a message number, so the recipient's station acknowledges it,
-and once the box has sent it, it shows in **Messages**, marked **sent**.
+and once the box has sent it, it shows in **Messages**, marked **sent**. The box sends it again until the station
+acknowledges it ([Repeats until acknowledged](../../shack/messages.md#repeats-until-acknowledged)), and the command
+log then says how it ended, for example `acknowledged after 2 tries`. To let the box beacon by itself, see
+[Automatic beacons](beacons.md).
 
 **TX off** is the box's master switch: it silences every port that transmits (the KISS TNC and the soundcard
 ports), and with them the APRS digipeater, IGate transmit to RF, remote transmits, the packet node, the BBS
