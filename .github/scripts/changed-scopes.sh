@@ -18,6 +18,7 @@
 #             tools/e2e/fixtures/
 #   e2e       tools/e2e/
 #   devtools  tools/dev/ (docs-theme.mjs excepted) and tools/webauthn/, which pnpm dev:check runs
+#   direwolf  modems/direwolf/: the WebAssembly modem, rebuilt and compared byte for byte
 #
 #   code         (unit tests + builds)  anything but docs, Markdown, the Pocket scripts and repository metadata;
 #                                       unit test coverage runs on the same flag
@@ -28,15 +29,16 @@
 #   devstack     (dev-stack)            all, web, gateway, packages, devtools
 #   axe          (the axe shards)       all, web, packages
 #   pocket       (Pocket scripts)       deploy/pocket/, deploy/lib/, ci.yml, this script
+#   direwolf     (Direwolf WebAssembly)  direwolf, ci.yml, this script
 #   helpers      (Deploy helpers)       the deploy/ helper scripts and their tests, docs/reference/cli.md, ci.yml,
 #                                       this script
 set -euo pipefail
 
 all=false code=false gateway=false web=false packages=false audio=false e2e=false devtools=false
-pocket=false helpers=false
+pocket=false helpers=false direwolf=false
 
 if [ "${1:-}" = "--all" ]; then
-  all=true code=true pocket=true helpers=true
+  all=true code=true pocket=true helpers=true direwolf=true
 else
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -47,6 +49,9 @@ else
     esac
     case "$f" in
       deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml | .github/scripts/changed-scopes.sh) pocket=true ;;
+    esac
+    case "$f" in
+      modems/direwolf/* | .github/workflows/ci.yml | .github/scripts/changed-scopes.sh) direwolf=true ;;
     esac
     # A case pattern's * also matches /, so deploy/*.sh alone would take in deploy/pocket/: the top-level scripts
     # are matched by their place instead.
@@ -112,3 +117,4 @@ flag devstack "$all" "$web" "$gateway" "$packages" "$devtools"
 flag axe "$all" "$web" "$packages"
 flag pocket "$pocket"
 flag helpers "$helpers"
+flag direwolf "$direwolf"

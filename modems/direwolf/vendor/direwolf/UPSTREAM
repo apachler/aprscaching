@@ -1,0 +1,17 @@
+Direwolf, a software "soundcard" AX.25 packet modem/TNC and APRS encoder/decoder,
+by John Langner, WB2OSZ. GPL-2.0-or-later (see LICENSE and each file's header).
+
+Upstream:  https://github.com/wb2osz/direwolf
+Release:   1.8.1
+Commit:    a231971a652bfb574a4bae9a5d875fbce53d2267 (tag 1.8.1, "Release 1.8.1", 2025-11-11)
+
+The files under src/ are copied unmodified from that commit's src/ directory: the receive core
+(demodulators, multi-slicer, HDLC, FX.25, IL2P), the transmit path (HDLC send, tone generator, FX.25
+and IL2P send) and the headers they include. LICENSE is the upstream LICENSE file. SHA256SUMS lists
+every vendored file, so the copy can be checked against the upstream tag:
+
+  git clone --depth 1 --branch 1.8.1 https://github.com/wb2osz/direwolf
+  cd direwolf && sha256sum -c <this directory>/SHA256SUMS
+
+To move to a new release: copy the same files from it, update this file and SHA256SUMS, rebuild with
+../../build.sh (the pinned Emscripten) and run the package tests.

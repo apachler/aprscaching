@@ -1,0 +1,24 @@
+@aprscaching/direwolf — Direwolf's modem as WebAssembly, part of APRScaching
+Copyright (C) 2026 OE8APR
+
+This package is licensed under the GNU Affero General Public License, version 3 or (at your option)
+any later version (AGPL-3.0-or-later; the repository's LICENSE file). It contains and is built from
+third-party code under the GNU General Public License, version 2 or (at your option) any later version:
+
+  Dire Wolf (Direwolf) — Copyright (C) John Langner, WB2OSZ (the years are in each file's header)
+  https://github.com/wb2osz/direwolf — release 1.8.1, commit a231971a652bfb574a4bae9a5d875fbce53d2267
+  vendor/direwolf/src/ (unmodified), licence text in vendor/direwolf/LICENSE.
+
+  Its FX.25 Reed–Solomon code is based on work by Phil Karn, KA9Q (Copyright 2002), released by him
+  under the GNU General Public License; the notice is kept in vendor/direwolf/src/fx25_*.c.
+
+src/glue.c is APRScaching's own code and stays GPL-2.0-or-later, the licence of the code it links,
+so anyone can reuse it under Direwolf's terms. Direwolf's "or any later version" lets the combination be
+distributed under GPLv3, and GPLv3 section 13 lets it be combined with AGPLv3 code: the compiled
+WebAssembly (wasm/direwolf.wasm, wasm/direwolf-simd.wasm) and every bundle that includes it are
+conveyed under AGPL-3.0-or-later, whose terms include the GPL ones for the Direwolf parts.
+
+Corresponding source: everything needed to rebuild the WebAssembly byte for byte is in this directory —
+vendor/direwolf/ (the Direwolf sources, UPSTREAM and SHA256SUMS), src/glue.c and build.sh (with the pinned
+Emscripten version). Every APRScaching instance links its exact source through its "Source" link and
+GET /.well-known/source, and the release archives carry this directory.

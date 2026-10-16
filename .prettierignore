@@ -26,3 +26,7 @@ deploy/lib/config-keys.json
 
 # the bundled project registry, byte for byte as its release publishes it (tools/toolkey/bundle-registry.mjs)
 apps/web/public/tools/
+
+# the Emscripten loader build.sh generates, and the vendored Direwolf sources, byte for byte as upstream
+modems/direwolf/wasm/direwolf.mjs
+modems/direwolf/vendor/
