@@ -25,7 +25,10 @@ and so is a copy of a frame it sent in the last 30 seconds.
 
 - **An ingest box on Linux**: Raspberry Pi OS, Debian or Ubuntu ([Set up an ingest box](ingest-box.md)).
 - **ALSA's tools**, `arecord` and `aplay`. Raspberry Pi OS ships them; elsewhere install them with
-  `sudo apt install alsa-utils`. The Docker image has them.
+  `sudo apt install alsa-utils`. The Docker image has them. Where PulseAudio or PipeWire owns the card, or on a
+  phone in Termux, set `SOUNDCARD_AUDIO=pulse` instead: the port then runs PulseAudio's `parec` and `pacat`, and
+  `SOUNDCARD_DEVICE` and `SOUNDCARD_PLAYBACK` name a source and a sink (`pactl list short sources`; `default` is
+  the server's own). On a phone, see [Radio on the phone](../pocket/radio.md).
 - **A sound interface** with a way to key the radio:
     - a USB sound card built on a CM108 or CM119 chip, with PTT wired to one of its GPIO pins (most packet and
       AllStar interfaces use GPIO3);
@@ -220,6 +223,7 @@ command to two seconds.
 | `serial:<device>[:<line>]` | a serial control line asserted, `rts` (default) or `dtr` | the optional `serialport` package, group `dialout` | unkeyed | dropped: the kernel drops the line when the port closes |
 | `cat:<device>:<rig>[:<baud>[:<civ>]]` | a CAT command: `kenwood` (`TX;`), `icom` (CI-V `1C 00`, address default `0x94`) or `yaesu-bin` (FT-817/857/897) | the optional `serialport` package, group `dialout` | unkeyed, also at exit | stays as it was |
 | `rigctld[:<host>[:<port>]]` | Hamlib's `rigctld` (`T 1` / `T 0`), default `127.0.0.1:4532` | a running `rigctld` | unkeyed | stays as it was |
+| `termux-usb[:<device>[:<method>[:<gpio>]]]` | a USB interface's serial line or CM108 GPIO on an Android phone, through Termux:API ([Radio on the phone](../pocket/radio.md)) | Termux:API, `python3` | unkeyed | unkeyed when the helper sees its input end; a line left keyed by a killed helper stays as it was |
 
 Whatever the driver, keep the radio's own transmit time-out on: it is the only release after a SIGKILL, an
 out-of-memory kill or a power cut.

@@ -2,7 +2,8 @@
 # Install and start Pocket inside the termux/termux-docker image, the way the phone does, from a checkout
 # mounted at /src: install.sh (Termux packages, better-sqlite3 compiled with Termux's clang, the web
 # build, the migrations), Direwolf's WebAssembly modem loading, start.sh, /health and the SPA, status.sh, tls.sh
-# with https answering, stop.sh.
+# with https answering, stop.sh; and for the radio on the phone, the USB PTT helper's tests and a PulseAudio
+# soundcard port with a termux-usb PTT as the ingest's checks see it.
 # The weekly workflow .github/workflows/pocket-termux.yml runs it; on a PC with Docker:
 #
 #   docker run --rm -v "$PWD:/src:ro" termux/termux-docker:aarch64 bash /src/deploy/pocket/test/termux-ci.sh
@@ -14,8 +15,8 @@
 #
 #   termux-ci.sh [SRC] [WEB_DIST]
 #
-# The container has no Android: Termux:API, the wake lock and the phone's networks are absent, so those
-# lines of status.sh stay empty. It runs as Termux's unprivileged user, like the app.
+# The container has no Android: Termux:API, the wake lock, the phone's audio and the phone's networks are
+# absent, so those lines of status.sh stay empty. It runs as Termux's unprivileged user, like the app.
 set -euo pipefail
 
 SRC="${1:-/src}"
@@ -70,6 +71,33 @@ modem="$(cd "$DIR/apps/ingest" && SOUNDCARD_DEVICE=plughw:0,0 SOUNDCARD_MODEM=96
   fail "check.ts --soundcard: $modem"
 grep -q $'^modem\t1\tpass\t' <<<"$modem" || fail "the Direwolf modem does not load: $modem"
 ok "$(grep $'^modem\t' <<<"$modem" | cut -f4)"
+
+# The radio on the phone: the USB PTT helper's tests under Termux's Python (the usbfs structures at the phone's
+# word size), and a PulseAudio soundcard port with a termux-usb PTT as the ingest's checks see it. Termux's
+# pulseaudio package must bring parec and pacat; a null source and sink stand in for Android's OpenSL ES ones,
+# which the container lacks.
+(cd "$DIR/deploy/pocket/extras" && python3 -m unittest discover -s test -q) >/dev/null 2>&1 ||
+  fail "the USB PTT helper's tests under Termux's Python: $(cd "$DIR/deploy/pocket/extras" && python3 -m unittest discover -s test 2>&1 | tail -n 20)"
+ok "the USB PTT helper's tests pass under Termux's Python"
+command -v pulseaudio >/dev/null 2>&1 || apt-get install -yq pulseaudio >/dev/null || fail "pkg install pulseaudio"
+pulse_up=0
+if pulseaudio -n --daemonize=yes --exit-idle-time=-1 --load=module-native-protocol-unix \
+  --load=module-null-sink --load=module-null-source 2>/dev/null; then
+  pulse_up=1
+fi
+pulse="$(cd "$DIR/apps/ingest" && SOUNDCARD_DEVICE=default SOUNDCARD_AUDIO=pulse SOUNDCARD_TX=1 \
+  SOUNDCARD_PTT=termux-usb BOX_CALL=N0CALL-10 node --import tsx src/check.ts --soundcard 2>&1)" || true
+grep -q $'^pulse\t-\tpass\t' <<<"$pulse" || fail "parec and pacat from Termux's pulseaudio package: $pulse"
+ok "$(grep $'^pulse\t' <<<"$pulse" | cut -f4)"
+grep -q $'^ptt\t1\tfail\t.*termux-usb' <<<"$pulse" || fail "the termux-usb PTT check: $pulse"
+ok "the termux-usb PTT check names what the container lacks: $(grep $'^ptt\t' <<<"$pulse" | cut -f4)"
+if [ "$pulse_up" -eq 1 ]; then
+  grep -q $'^audio\t1\tpass\t' <<<"$pulse" || fail "parec and pacat on a running PulseAudio: $pulse"
+  ok "$(grep $'^audio\t' <<<"$pulse" | cut -f4)"
+  pulseaudio --kill 2>/dev/null || true
+else
+  printf 'note  PulseAudio did not start in the container; the capture and playback check was skipped\n'
+fi
 
 bash "$DIR/deploy/pocket/start.sh" --no-attach --gateway-only --dir "$DIR" --data-dir "$DATA"
 curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null || fail "/health"

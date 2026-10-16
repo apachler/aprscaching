@@ -33,7 +33,8 @@ import type { DirewolfWasm } from "@aprscaching/direwolf";
 import { addrStr, encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import { SentFrames } from "./echo.js";
-import { alsaArgs, alsaHint, defaultAudioSpawn, s16Reader, type AudioChild, type AudioSpawn } from "./alsa.js";
+import { defaultAudioSpawn, s16Reader, type AudioChild, type AudioSpawn } from "./alsa.js";
+import { audioCommand, audioHint, type AudioBackend } from "./audioio.js";
 import { Backoff } from "./backoff.js";
 import { frameRefusal } from "./callverify.js";
 import { tncPacket } from "./link.js";
@@ -56,10 +57,12 @@ export const SOUNDCARD_PORT = "soundcard";
 export interface SoundcardConfig {
   /** The port's name in logs and the doctor. */
   name: string;
-  /** ALSA capture device. */
+  /** Capture device: an ALSA device, or a PulseAudio source. */
   device: string;
-  /** ALSA playback device. */
+  /** Playback device: an ALSA device, or a PulseAudio sink. */
   playback: string;
+  /** Where the audio goes through (`SOUNDCARD_AUDIO`, audioio.ts): ALSA when absent, or PulseAudio. */
+  audio?: AudioBackend;
   rate: number;
   /** The modem (`SOUNDCARD_MODEM`); Bell 202 when absent. */
   modem?: SoundcardModem;
@@ -408,7 +411,7 @@ export class SoundcardPort {
     }
   }
 
-  /** Play S16 audio to the end: aplay exits once its buffer has drained. Killed when it overruns `limitMs`. */
+  /** Play S16 audio to the end: the tool exits once its buffer has drained (audioio.ts). Killed when it overruns `limitMs`. */
   private play(audio: Buffer, limitMs: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -422,20 +425,21 @@ export class SoundcardPort {
         if (e) reject(e);
         else resolve();
       };
-      const child = this.spawn("aplay", alsaArgs(this.cfg.playback, this.cfg.rate));
+      const io = audioCommand(this.cfg, "playback");
+      const child = this.spawn(io.cmd, io.args);
       this.player = child;
       const limit = setTimeout(() => child.kill("SIGKILL"), limitMs);
       // a child that never reports its exit still lets the transmission end
       const hard = setTimeout(() => done(new Error(`playback did not end within ${limitMs} ms`)), limitMs + 1000);
       child.stderr?.on("data", (b) => (stderr = tail4k(stderr + b.toString())));
-      child.on("error", (e) => done(new Error(alsaHint("aplay", e, stderr))));
+      child.on("error", (e) => done(new Error(audioHint(io.cmd, e, stderr))));
       child.stdin?.on("error", () => {
         /* aplay exited early; its exit reports why */
       });
       child.on("exit", (code, signal) => {
         if (code === 0) done(null);
         else if (signal) done(new Error(`playback stopped (${signal})`));
-        else done(new Error(alsaHint("aplay", null, stderr)));
+        else done(new Error(audioHint(io.cmd, null, stderr)));
       });
       child.stdin?.write(audio);
       child.stdin?.end();
@@ -452,7 +456,8 @@ export class SoundcardPort {
 
   private startCapture(): void {
     if (this.stopped) return;
-    const child = this.spawn("arecord", alsaArgs(this.cfg.device, this.cfg.rate));
+    const io = audioCommand(this.cfg, "capture");
+    const child = this.spawn(io.cmd, io.args);
     this.capture = child;
     const read = s16Reader();
     let stderr = "";
@@ -478,7 +483,7 @@ export class SoundcardPort {
       if (this.stopped) return;
       const wait = this.backoff.next();
       this.error(
-        `${this.tag} capture ended: ${alsaHint("arecord", failure, stderr)}; restarting in ${Math.round(wait / 1000)} s (no transmit meanwhile)`,
+        `${this.tag} capture ended: ${audioHint(io.cmd, failure, stderr)}; restarting in ${Math.round(wait / 1000)} s (no transmit meanwhile)`,
       );
       setTimeout(() => this.startCapture(), wait).unref?.();
     };

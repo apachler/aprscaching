@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Fakes for the soundcard port's tests: arecord / aplay processes, a recording PTT and a gpioset spy. No sound
+// Fakes for the soundcard port's tests: arecord / aplay (or parec / pacat) processes, a recording PTT and a gpioset spy. No sound
 // card, no radio.
 import { EventEmitter } from "node:events";
-import type { AudioChild, AudioSpawn } from "../src/alsa.js";
+import { captures, type AudioChild, type AudioSpawn, type AudioTool } from "../src/alsa.js";
 import type { Ptt } from "../src/ptt/index.js";
 
 /** How a fake aplay behaves: exit 0 once stdin ends, hang until killed, or fail to spawn (`error`, no exit). */
@@ -55,19 +55,19 @@ export class FakeChild extends EventEmitter implements AudioChild {
   }
 }
 
-/** A spawner that records every child. */
+/** A spawner that records every child; `arecord()` and `aplay()` are the capture and playback ones, PulseAudio's too. */
 export function fakeSpawner(o: { aplay?: AplayMode; arecord?: "ok" | "spawn-error" } = {}) {
   const children: FakeChild[] = [];
   const spawn: AudioSpawn = (cmd, args) => {
-    const c = new FakeChild(cmd, args, cmd === "aplay" ? (o.aplay ?? "ok") : (o.arecord ?? "ok"));
+    const c = new FakeChild(cmd, args, captures(cmd) ? (o.arecord ?? "ok") : (o.aplay ?? "ok"));
     children.push(c);
     return c;
   };
   return {
     spawn,
     children,
-    arecord: () => children.filter((c) => c.cmd === "arecord"),
-    aplay: () => children.filter((c) => c.cmd === "aplay"),
+    arecord: () => children.filter((c) => captures(c.cmd as AudioTool)),
+    aplay: () => children.filter((c) => !captures(c.cmd as AudioTool)),
   };
 }
 

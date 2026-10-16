@@ -15,9 +15,14 @@
  * one. `SOUNDCARD_DEMOD` picks the implementation: `direwolf` (the default) or `builtin`, the TypeScript modem,
  * which has neither 9600 baud nor FX.25 and IL2P. `SOUNDCARD_FEC` picks the transmit framing (`off`, `fx25`,
  * `il2p`) and `SOUNDCARD_FX25_CHECK_BYTES` the FX.25 code (16, 32 or 64); every port receives all three.
+ *
+ * `SOUNDCARD_AUDIO` picks the audio tools (audioio.ts): `alsa` (the default), with ALSA device names, or `pulse`,
+ * with PulseAudio source and sink names (`default` is the server's own), as on a phone in Termux.
  */
 import { numEnv } from "./config.js";
 import { parsePttSpec } from "./ptt/index.js";
+import { withPttMax } from "./ptt/termuxusb.js";
+import { AUDIO_BACKENDS, type AudioBackend } from "./audioio.js";
 import type { SoundcardConfig } from "./soundcard.js";
 import { builtinProblem, type SoundcardDemod, type SoundcardFec, type SoundcardModem } from "./soundcardmodem.js";
 
@@ -48,6 +53,7 @@ const FIELDS = new Set([
   "name",
   "device",
   "playback",
+  "audio",
   "rate",
   "modem",
   "demod",
@@ -89,6 +95,8 @@ function checkModem(m: ModemFields, at: string): ModemFields {
 /** The HF TXDELAY for an `hf300` port whose settings name none. */
 const hfTxDelay = (modem: SoundcardModem, set: boolean) =>
   modem === "hf300" && !set ? { txDelayMs: HF_TXDELAY_MS } : {};
+/** The audio field as the port carries it: absent for ALSA, the default. */
+const pulseOnly = (audio: AudioBackend) => (audio === "pulse" ? { audio } : {});
 const CALL_RE = /^[A-Z0-9]{1,6}(?:-(?:1[0-5]|[0-9]))?$/i;
 
 /** Every soundcard port the settings describe; throws with the setting at fault. */
@@ -110,6 +118,7 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
       ? readCheckBytes(env.SOUNDCARD_FX25_CHECK_BYTES, "SOUNDCARD_FX25_CHECK_BYTES")
       : 16,
   };
+  const audio = env.SOUNDCARD_AUDIO?.trim() ? oneOf(AUDIO_BACKENDS, env.SOUNDCARD_AUDIO, "SOUNDCARD_AUDIO") : "alsa";
   const txDelaySet = !!env.SOUNDCARD_TXDELAY_MS?.trim();
   const call = (env.SOUNDCARD_CALL || env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL || "").trim() || undefined;
 
@@ -120,10 +129,11 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
       name: "1",
       device,
       playback: env.SOUNDCARD_PLAYBACK?.trim() || device,
+      ...pulseOnly(audio),
       rate,
       ...checkModem(fields, "SOUNDCARD_DEMOD"),
       tx: env.SOUNDCARD_TX === "1",
-      ptt: parsePttSpec(env.SOUNDCARD_PTT),
+      ptt: withPttMax(parsePttSpec(env.SOUNDCARD_PTT), ranged.pttMaxMs),
       call,
       ...ranged,
       ...hfTxDelay(modem, txDelaySet),
@@ -139,7 +149,7 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
     }
     if (!Array.isArray(list)) throw new Error("SOUNDCARD_PORTS: expected a JSON array of ports");
     list.forEach((raw, i) =>
-      ports.push(extraPort(raw, ports.length + 1, i, { rate, fields, txDelaySet, call, ranged })),
+      ports.push(extraPort(raw, ports.length + 1, i, { rate, audio, fields, txDelaySet, call, ranged })),
     );
   }
   const names = new Set<string>();
@@ -156,6 +166,7 @@ function extraPort(
   index: number,
   inherit: {
     rate: number;
+    audio: AudioBackend;
     fields: ModemFields;
     txDelaySet: boolean;
     call?: string;
@@ -173,9 +184,10 @@ function extraPort(
     return v.trim();
   };
   const device = str("device");
-  if (!device) throw new Error(`${at}.device: name the ALSA capture device, as in plughw:2,0`);
+  if (!device) throw new Error(`${at}.device: name the capture device, as in plughw:2,0 (or a PulseAudio source)`);
   const name = str("name") ?? String(number);
   if (!/^[\w-]{1,16}$/.test(name)) throw new Error(`${at}.name: letters, digits, - and _, up to 16`);
+  const audio = o.audio === undefined ? inherit.audio : oneOf(AUDIO_BACKENDS, o.audio, `${at}.audio`);
   const rate = o.rate === undefined ? inherit.rate : Number(o.rate);
   if (!RATES.includes(rate)) throw new Error(`${at}.rate: expected ${RATES.join(" or ")}`);
   const fields = checkModem(
@@ -215,10 +227,11 @@ function extraPort(
     name,
     device,
     playback: str("playback") ?? device,
+    ...pulseOnly(audio),
     rate,
     ...fields,
     tx,
-    ptt,
+    ptt: withPttMax(ptt, ranged.pttMaxMs),
     call,
     ...ranged,
     ...hfTxDelay(fields.modem, inherit.txDelaySet || o.txDelayMs !== undefined),

@@ -2,7 +2,8 @@
 /**
  * PTT on a GPIO pin of a CM108/CM119 USB sound chip (most USB soundcard interfaces built for packet, and the
  * AllStar-style boards), set with a HID output report written to its `/dev/hidraw*` device. The report is
- * five bytes: report id 0, then 0, the pin mask, the pin state and 0, the same as Direwolf writes. The pins
+ * five bytes: report id 0, then 0, the pin values, the pin directions (1 = output) and 0, the CM108 data sheet's
+ * layout as Direwolf and Hamlib write it. The pin stays an output, driven low, while unkeyed. The pins
  * count from 1; GPIO3 is the one most interfaces wire to PTT. A plain file write needs no native addon, and it
  * is synchronous, so process exit unkeys the radio too.
  */
@@ -14,7 +15,7 @@ type FsLike = Pick<typeof fs, "openSync" | "writeSync" | "closeSync">;
 /** The HID output report that sets `gpio` (1–8) to `on`. */
 export function cm108Report(gpio: number, on: boolean): Uint8Array {
   const mask = 1 << (gpio - 1);
-  return Uint8Array.from([0, 0, mask, on ? mask : 0, 0]);
+  return Uint8Array.from([0, 0, on ? mask : 0, mask, 0]);
 }
 
 export function openCm108Ptt(o: { path: string; gpio: number }, fsx: FsLike = fs): Ptt {

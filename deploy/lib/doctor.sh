@@ -519,6 +519,8 @@ doc_soundcard() {
       tx:fail) failc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
       tx:warn) warnc "ingest.soundcard_tx.$port" "$msg" "$fix" ;;
       alsa:pass) pass ingest.soundcard_alsa "$msg" ;;
+      pulse:fail) failc ingest.soundcard_pulse "$msg" "$fix" ;;
+      pulse:pass) pass ingest.soundcard_pulse "$msg" ;;
       audio:pass | modem:pass | ptt:pass | tx:pass) pass "ingest.soundcard_$kind.$port" "$msg" ;;
     esac
   done <<<"$out"

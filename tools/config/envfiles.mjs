@@ -197,6 +197,8 @@ export const ENV_FILES = [
       "# --- optional: soundcard port (Direwolf's modem in the box itself, 1200, 300 or 9600 baud; ALSA arecord/aplay) ---",
       "# the ALSA capture device (arecord -l lists them); set to enable",
       { key: "SOUNDCARD_DEVICE", value: "" },
+      "# alsa (arecord/aplay) | pulse (parec/pacat: the devices are a PulseAudio source and sink, default the server's)",
+      { key: "SOUNDCARD_AUDIO", value: "alsa" },
       "# the playback device (blank = the capture device)",
       { key: "SOUNDCARD_PLAYBACK", value: "" },
       { key: "SOUNDCARD_RATE", value: "48000" },

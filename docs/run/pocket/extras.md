@@ -32,6 +32,7 @@ The extras `start.sh` starts run in their own tmux window. Every script is under
 | Field alerts | `extras/alerts.sh` (`POCKET_ALERTS=1`) | Termux:API | [below](#field-alerts) |
 | Scheduled backup | `extras/setup.sh --scheduled-backup` | Termux:API | [below](#scheduled-backup) |
 | A USB KISS TNC | `extras/usb-kiss.sh` (`start.sh` runs it) | Termux:API, `python`, `libusb`, a CDC-ACM TNC | [A USB TNC on the phone](field-station.md#a-usb-tnc-on-the-phone) |
+| A radio through a USB sound interface | `extras/usb_ptt.py` (the ingest runs it) | Termux:API, `python`, `pulseaudio`, a Digirig, AIOC or CM108 interface | [Radio on the phone](radio.md) |
 | Sync before a trip | `extras/sync-now.sh` | Termux:API to tell Wi-Fi from mobile data | [Before a trip](trips.md) |
 | Your home instance as the hub | `wizard.sh` | the home instance's submit secret | [Your home instance as the hub](trips.md#your-home-instance-as-the-hub) |
 | https on the ampr.org name | `extras/ampr-cert.sh` | `lego`, 44Net | [Pocket on 44Net](44net.md#pocket-on-44net) |

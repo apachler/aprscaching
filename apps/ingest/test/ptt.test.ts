@@ -181,7 +181,8 @@ describe("CAT PTT", () => {
 describe("CM108 PTT", () => {
   it("builds Direwolf's HID output report", () => {
     expect([...cm108Report(3, true)]).toEqual([0, 0, 4, 4, 0]);
-    expect([...cm108Report(3, false)]).toEqual([0, 0, 4, 0, 0]);
+    // unkeyed: the pin driven low and still an output, not left an input that may float to the keyed level
+    expect([...cm108Report(3, false)]).toEqual([0, 0, 0, 4, 0]);
     expect([...cm108Report(1, true)]).toEqual([0, 0, 1, 1, 0]);
   });
 
@@ -203,11 +204,11 @@ describe("CM108 PTT", () => {
     ptt.releaseSync!();
     await ptt.close();
     expect(writes).toEqual([
-      [0, 0, 4, 0, 0],
+      [0, 0, 0, 4, 0],
       [0, 0, 4, 4, 0],
-      [0, 0, 4, 0, 0],
-      [0, 0, 4, 0, 0],
-      [0, 0, 4, 0, 0],
+      [0, 0, 0, 4, 0],
+      [0, 0, 0, 4, 0],
+      [0, 0, 0, 4, 0],
     ]);
     expect(fs.statSync(dev).size).toBe(25);
   });

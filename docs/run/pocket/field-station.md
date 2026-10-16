@@ -170,6 +170,12 @@ command. `status.sh` and the station notification show "TX ON".
     to crash or run flat. Read [Automatic stations on the air](../compliance/on-air-stations.md) first, and turn
     on the ingest's transmit features (digipeater, IGate, radio replies) deliberately, as on any ingest box.
 
+## A radio through a USB sound interface
+
+A Digirig, an AIOC or a CM108 dongle on the USB-C port makes the phone the modem, with no TNC: the ingest's
+soundcard port takes its audio from PulseAudio and keys the radio through `termux-usb`
+([Radio on the phone](radio.md)).
+
 ## Your radio in the browser
 
 The browser on the phone can connect a Bluetooth Low Energy KISS TNC, such as a Mobilinkd, through Web Bluetooth
