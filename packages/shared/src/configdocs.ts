@@ -238,6 +238,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   BEACON_SYMBOL: "Beacon symbol, table then code; the default follows BEACON_POSITION",
   BEACON_COMMENT: "Beacon comment, up to 43 bytes",
   BEACON_COMMENT_EVERY: "On VHF, the comment rides on one beacon in this many; on HF always one in four",
+  BEACON_SLOW_MIN: "SmartBeaconing interval below 5 km/h, minutes, 1–60; 4 or less for a living cache",
+  BEACON_FAST_SEC: "SmartBeaconing interval from 90 km/h, seconds, 30–600",
   BEACON_GPSD: "The gpsd daemon to read the position from, host:port",
   BEACON_NMEA_DEVICE: "Serial device of an NMEA GPS receiver, such as /dev/ttyACM0",
   BEACON_NMEA_BAUD: "Baud rate of the NMEA GPS receiver",
@@ -892,7 +894,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Automatic beacons",
-        "`BEACON` (`off`; `fixed` every `BEACON_INTERVAL_MIN`, `smart` for SmartBeaconing), `BEACON_POSITION` (`fixed` from `BOX_LAT` / `BOX_LON`; `termux` for a Pocket phone with Termux:API; `gpsd`; `nmea`), `BEACON_INTERVAL_MIN` (`20`, at least 10), `BEACON_SYMBOL` (default `/-` house for a fixed position, `/[` person for `termux`, `/>` car otherwise), `BEACON_COMMENT`, `BEACON_COMMENT_EVERY` (`1`; on HF always one in four), `BEACON_GPSD` (`127.0.0.1:2947`), `BEACON_NMEA_DEVICE` / `BEACON_NMEA_BAUD` (`9600`), `BEACON_TX_BURST` (`2`) / `BEACON_TX_REFILL_SEC` (`60`). Beacons go out as `BOX_CALL` on `BOX_TX_PATH`, on the KISS transmit channel and each soundcard port that may transmit — [Automatic beacons](../run/radios/beacons.md)",
+        "`BEACON` (`off`; `fixed` every `BEACON_INTERVAL_MIN`, `smart` for SmartBeaconing), `BEACON_POSITION` (`fixed` from `BOX_LAT` / `BOX_LON`; `termux` for a Pocket phone with Termux:API; `gpsd`; `nmea`), `BEACON_INTERVAL_MIN` (`20`, at least 10), `BEACON_SYMBOL` (default `/-` house for a fixed position, `/[` person for `termux`, `/>` car otherwise), `BEACON_COMMENT`, `BEACON_COMMENT_EVERY` (`1`; on HF always one in four), `BEACON_SLOW_MIN` (`30`, 1–60; 4 or less for a living cache) / `BEACON_FAST_SEC` (`90`, 30–600) — SmartBeaconing's rates, `BEACON_GPSD` (`127.0.0.1:2947`), `BEACON_NMEA_DEVICE` / `BEACON_NMEA_BAUD` (`9600`), `BEACON_TX_BURST` (`2`) / `BEACON_TX_REFILL_SEC` (`60`). Beacons go out as `BOX_CALL` on `BOX_TX_PATH`, on the KISS transmit channel and each soundcard port that may transmit — [Automatic beacons](../run/radios/beacons.md)",
       ],
       [
         "APRS-IS uplink (answers, announces, weather)",

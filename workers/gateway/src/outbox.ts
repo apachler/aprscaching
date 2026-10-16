@@ -9,6 +9,7 @@ import { callSuspended } from "./moderation.js";
 import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { deliveryStatement, parseDelivery } from "./delivery.js";
+import { mailboxRepeatsSettled } from "./mailbox.js";
 
 type OutboxRow = { id: number; src_call: string; tocall: string; kind: string; payload: string; target: string };
 
@@ -106,6 +107,16 @@ export async function outboxAck(req: Request, env: Env): Promise<Response> {
   if (reports.length) {
     const now = nowS();
     await env.DB.batch(reports.map((r) => deliveryStatement(env, { sql: "outbox_id = ?", binds: [r.id] }, r, now)));
+    // a Mailbox send from the service call whose repeats are over
+    const service = serviceCall(env);
+    for (const r of reports) {
+      const row = await env.DB.prepare("SELECT src_call, payload FROM aprs_outbox WHERE id = ?")
+        .bind(r.id)
+        .first<{ src_call: string; payload: string }>();
+      const m =
+        row && row.src_call.toUpperCase() === service ? /^:(.{9}):.*\{([A-Za-z0-9]{1,5})$/s.exec(row.payload) : null;
+      if (m) await mailboxRepeatsSettled(env, m[1]!.trim(), m[2]!, r.outcome === "acked");
+    }
   }
   if (ids.length) {
     const now = nowS();

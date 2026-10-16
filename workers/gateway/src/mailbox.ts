@@ -10,7 +10,7 @@
  * whichever SSID of it is heard first; mail to a call with an SSID waits for that station. It expires after
  * {@link MAILBOX_TTL_SEC}.
  */
-import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
+import { baseCall, encodeAprsMessage, retrySpanMs } from "@aprscaching/aprs";
 import { isKissTncPort } from "@aprscaching/shared";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
@@ -27,6 +27,12 @@ export const MAILBOX_TTL_SEC = 7 * 86400;
 const MAX_ATTEMPTS = 5;
 /** Seconds between two deliveries of one message. */
 const RETRY_SEC = 60;
+/**
+ * How long a send over APRS waits for the box (or its APRS-IS uplink) to report its repeats settled before the
+ * next hearing may queue another: its repeats on VHF and a margin. A box on HF still repeating takes a send it
+ * gets after this as a restart of the same message number, never a second series.
+ */
+const REPEAT_HOLD_SEC = retrySpanMs(false) / 1000 + 300;
 /** Messages one account may leave an hour. */
 const PER_HOUR = 20;
 /** Messages that may wait for one station at a time. */
@@ -261,21 +267,23 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
       `SELECT * FROM mailbox_messages WHERE to_call IN (${chunk.map(() => "?").join(",")})
          AND status IN ('held','sent') AND expires_at > ?
          AND attempts < ? AND (last_attempt IS NULL OR last_attempt <= ?)
+         AND (repeat_until IS NULL OR repeat_until <= ?)
          AND NOT EXISTS (SELECT 1 FROM account_suspensions s WHERE s.account_id = mailbox_messages.from_account
                            AND (s.until IS NULL OR s.until > ?))
        ORDER BY id`,
     )
-      .bind(...chunk, now, MAX_ATTEMPTS, now - RETRY_SEC, now)
+      .bind(...chunk, now, MAX_ATTEMPTS, now - RETRY_SEC, now, now)
       .all<MailRow>();
     waiting.push(...rows.results);
   }
   if (!waiting.length) return;
-  const settle = (id: number, to: string, msgNo: string, status: string, tries: number) =>
+  const settle = (id: number, to: string, msgNo: string, status: string, tries: number, repeats = false) =>
     env.DB.prepare(
-      `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?
+      `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?,
+         repeat_until = ?
         WHERE id = ? AND status IN ('held','sent')`,
     )
-      .bind(status, to, msgNo, tries, now, id)
+      .bind(status, to, msgNo, tries, now, repeats ? now + REPEAT_HOLD_SEC : null, id)
       .run();
   for (const m of waiting) {
     // mail to a base call reaches the first SSID heard; mail to an SSID only that station
@@ -293,7 +301,9 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
       continue;
     }
     const tries = m.attempts + 1;
-    await settle(m.id, to, msgNo, tries >= MAX_ATTEMPTS ? "undelivered" : "sent", tries);
+    // over APRS the box, or its APRS-IS uplink, repeats the send until the station acks it; the next hearing waits
+    // for those repeats to settle
+    await settle(m.id, to, msgNo, tries >= MAX_ATTEMPTS ? "undelivered" : "sent", tries, h.port !== "meshcom");
   }
 }
 
@@ -310,6 +320,19 @@ export async function mailboxOnAck(env: Env, from: string, msgNo: string, port: 
   )
     .bind(nowS(), from.toUpperCase(), msgNo.toUpperCase())
     .run();
+}
+
+/**
+ * The box reported how its repeats of a send ended: the next hearing of the station may queue another send, and a
+ * repeat the station acked delivers the message.
+ */
+export async function mailboxRepeatsSettled(env: Env, to: string, msgNo: string, acked: boolean): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE mailbox_messages SET repeat_until = NULL WHERE delivered_to = ? AND msg_no = ? AND repeat_until IS NOT NULL",
+  )
+    .bind(to.toUpperCase(), msgNo.toUpperCase())
+    .run();
+  if (acked) await mailboxOnAck(env, to, msgNo, "box");
 }
 
 /** Daily: expire what waited too long, and delete what has been settled for {@link MAILBOX_KEEP_SEC}. */

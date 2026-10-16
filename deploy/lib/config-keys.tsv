@@ -226,6 +226,8 @@ BEACON_INTERVAL_MIN	number	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	M
 BEACON_SYMBOL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Beacon symbol, table then code; the default follows BEACON_POSITION	
 BEACON_COMMENT	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Beacon comment, up to 43 bytes	
 BEACON_COMMENT_EVERY	int	ingest	1		0	0	selfhost,baremetal,ingest-box,pocket	On VHF, the comment rides on one beacon in this many; on HF always one in four	
+BEACON_SLOW_MIN	number	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	SmartBeaconing interval below 5 km/h, minutes, 1–60; 4 or less for a living cache	
+BEACON_FAST_SEC	number	ingest	90		0	0	selfhost,baremetal,ingest-box,pocket	SmartBeaconing interval from 90 km/h, seconds, 30–600	
 BEACON_GPSD	string	ingest	127.0.0.1:2947		0	0	selfhost,baremetal,ingest-box,pocket	The gpsd daemon to read the position from, host:port	
 BEACON_NMEA_DEVICE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Serial device of an NMEA GPS receiver, such as /dev/ttyACM0	
 BEACON_NMEA_BAUD	int	ingest	9600		0	0	selfhost,baremetal,ingest-box,pocket	Baud rate of the NMEA GPS receiver	

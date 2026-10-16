@@ -919,6 +919,9 @@ CREATE TABLE mailbox_messages (
   msg_no       TEXT,                               -- its APRS message number on the air
   attempts     INTEGER NOT NULL DEFAULT 0,
   last_attempt INTEGER,
+  -- while the ingest box repeats the last send until the station acks it: no new send is queued until the box
+  -- reports that send settled, or until this time passes when it never does
+  repeat_until INTEGER,
   created_at   INTEGER NOT NULL,
   expires_at   INTEGER NOT NULL,
   delivered_at INTEGER

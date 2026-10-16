@@ -408,6 +408,8 @@ export const CONFIG_KEYS = {
   BEACON_SYMBOL: { type: "string", units: ["ingest"] },
   BEACON_COMMENT: { type: "string", units: ["ingest"] },
   BEACON_COMMENT_EVERY: { type: "int", units: ["ingest"], default: "1" },
+  BEACON_SLOW_MIN: { type: "number", units: ["ingest"], default: "30" },
+  BEACON_FAST_SEC: { type: "number", units: ["ingest"], default: "90" },
   BEACON_GPSD: { type: "string", units: ["ingest"], default: "127.0.0.1:2947" },
   BEACON_NMEA_DEVICE: { type: "string", units: ["ingest"] },
   BEACON_NMEA_BAUD: { type: "int", units: ["ingest"], default: "9600" },

@@ -12,8 +12,10 @@
  * (http://www.hamhud.net/hh2/smartbeacon.html): below `low_speed` the station beacons at `slow_rate`; above
  * `high_speed` at `fast_rate`; between them at `fast_rate × high_speed / speed`. A turn sharper than
  * `turn_min + turn_slope / speed` beacons at once ("corner pegging"), once `turn_time` has passed since the last.
- * The defaults are the usual tracker ones (TinyTrak, HamHUD), in metric: 5 km/h and 30 min, 90 km/h and 90 s,
- * 28°, a slope of 26 in the TinyTrak's tens of degrees × mph, and 30 s.
+ * The defaults are the usual tracker ones, in metric: 5 km/h and 30 min, 90 km/h and 90 s, 28°, a turn slope of
+ * 255 degree·mph (the HamHUD's and Direwolf's), and 30 s. The slow and fast rates are settings
+ * (`BEACON_SLOW_MIN`, `BEACON_FAST_SEC`): a station that is a living cache sets the slow rate to 4 min or less,
+ * since a find needs the station's position within 5 min of the player's.
  *
  * On an HF port (`SOUNDCARD_MODEM=hf300`) the HF preset applies whatever the mode: at most one beacon in
  * `HF_APRS.beaconMinSec`, Mic-E, no path, the comment on every fourth beacon only.
@@ -37,21 +39,25 @@ export interface BeaconSettings {
   comment: string;
   /** On VHF, the comment rides on one beacon in this many. */
   commentEvery: number;
+  /** SmartBeaconing's slow rate (below `lowSpeedKmh`) and fast rate (from `highSpeedKmh`), seconds. */
+  slowRateSec: number;
+  fastRateSec: number;
   gpsd: { host: string; port: number };
   nmea?: { device: string; baud: number };
 }
 
-/** SmartBeaconing's settings: speeds in km/h, rates and times in seconds, angles in degrees. */
+/** SmartBeaconing's fixed settings: speeds in km/h, times in seconds, angles in degrees. */
 export const SMART_BEACONING = {
   lowSpeedKmh: 5,
-  slowRateSec: 1800,
   highSpeedKmh: 90,
-  fastRateSec: 90,
   turnMinDeg: 28,
-  /** In tens of degrees × mph, as trackers take it: 26 is 260 degree·mph divided by the speed. */
-  turnSlope: 26,
+  /** Degrees × mph: divided by the speed in mph, it adds to `turnMinDeg`. */
+  turnSlopeDegMph: 255,
   turnTimeSec: 30,
 } as const;
+/** The rates' defaults and bounds: the slow rate in minutes, the fast rate in seconds. */
+const SLOW_MIN = { def: 30, min: 1, max: 60 };
+const FAST_SEC = { def: 90, min: 30, max: 600 };
 
 /** The shortest fixed interval on VHF, minutes: a station that stands still has nothing new to say sooner. */
 export const BEACON_MIN_INTERVAL_MIN = 10;
@@ -85,6 +91,9 @@ export function beaconSettings(env: Record<string, string | undefined>): BeaconS
   if (!isAprsSymbol(symbol)) throw new Error(`BEACON_SYMBOL must be two characters, table then code, not ${symbol}`);
   const [host, port] = (env.BEACON_GPSD?.trim() || "127.0.0.1:2947").split(":");
   const nmeaDevice = env.BEACON_NMEA_DEVICE?.trim();
+  const slowRateSec = num("BEACON_SLOW_MIN", SLOW_MIN.def, SLOW_MIN.min, SLOW_MIN.max) * 60;
+  // the fast rate is never slower than the slow one
+  const fastRateSec = Math.min(num("BEACON_FAST_SEC", FAST_SEC.def, FAST_SEC.min, FAST_SEC.max), slowRateSec);
   if (source === "nmea" && !nmeaDevice) throw new Error("BEACON_POSITION=nmea needs BEACON_NMEA_DEVICE");
   return {
     mode,
@@ -93,23 +102,28 @@ export function beaconSettings(env: Record<string, string | undefined>): BeaconS
     symbol,
     comment: (env.BEACON_COMMENT ?? "").trim(),
     commentEvery: Math.round(num("BEACON_COMMENT_EVERY", 1, 1, 100)),
+    slowRateSec,
+    fastRateSec,
     gpsd: { host: host || "127.0.0.1", port: Number(port) || 2947 },
     ...(nmeaDevice ? { nmea: { device: nmeaDevice, baud: num("BEACON_NMEA_BAUD", 9600, 1200, 115_200) } } : {}),
   };
 }
 
-/** SmartBeaconing's interval at a speed, seconds. */
-export function smartRateSec(speedKmh: number): number {
+/** SmartBeaconing's interval at a speed, seconds, never slower than the slow rate. */
+export function smartRateSec(
+  speedKmh: number,
+  rates: { slowRateSec: number; fastRateSec: number } = { slowRateSec: 1800, fastRateSec: 90 },
+): number {
   const s = SMART_BEACONING;
-  if (speedKmh < s.lowSpeedKmh) return s.slowRateSec;
-  if (speedKmh >= s.highSpeedKmh) return s.fastRateSec;
-  return (s.fastRateSec * s.highSpeedKmh) / speedKmh;
+  if (speedKmh < s.lowSpeedKmh) return rates.slowRateSec;
+  if (speedKmh >= s.highSpeedKmh) return rates.fastRateSec;
+  return Math.min(rates.slowRateSec, (rates.fastRateSec * s.highSpeedKmh) / speedKmh);
 }
 
 /** The heading change that pegs a corner at a speed, degrees. */
 export function turnThresholdDeg(speedKmh: number): number {
   const mph = speedKmh / 1.609344;
-  return SMART_BEACONING.turnMinDeg + (SMART_BEACONING.turnSlope * 10) / Math.max(mph, 0.1);
+  return SMART_BEACONING.turnMinDeg + SMART_BEACONING.turnSlopeDegMph / Math.max(mph, 0.1);
 }
 
 /** The smaller angle between two headings, degrees. */
@@ -189,7 +203,7 @@ export class BeaconScheduler {
       headingChange(fix.course, this.lastCourse) > turnThresholdDeg(speed)
     )
       return "corner";
-    return since >= smartRateSec(speed) ? "rate" : null;
+    return since >= smartRateSec(speed, this.o.settings) ? "rate" : null;
   }
 
   /** The frame for this fix: Mic-E on HF and for a moving source, an uncompressed position otherwise. */

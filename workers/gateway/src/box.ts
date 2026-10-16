@@ -34,6 +34,7 @@ import { serviceCall } from "./servicecall.js";
 import { boxPrincipal } from "./boxprincipal.js";
 import { BOX_COMMAND_QUEUED_TTL_S } from "./retention.js";
 import { deliveryStatement, parseDelivery, type DeliveryReport } from "./delivery.js";
+import { mailboxRepeatsSettled } from "./mailbox.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
@@ -407,6 +408,9 @@ async function boxDelivery(env: Env, boxId: string, id: number, raw: unknown): P
       ),
     );
   await env.DB.batch(stmts);
+  // a numbered answer from the service call: a Mailbox send whose repeats are over
+  if (cmd.kind === "aprs_msg" && typeof p.to === "string" && typeof p.msgNo === "string")
+    await mailboxRepeatsSettled(env, p.to, p.msgNo, d.outcome === "acked");
   return json({ ok: true });
 }
 

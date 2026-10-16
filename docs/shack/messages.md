@@ -85,8 +85,8 @@ A numbered message goes out again until the station acknowledges or rejects it, 
   **Recent transmissions** in My radio counts the messages waiting for an ack, resent, acked, rejected and never
   acked, and lists each repeat.
 
-A Mailbox message is also sent again the next time the instance hears the station
-([What happens next](#what-happens-next)). Commands' answers, such as `Logged`, carry no number and go out once.
+A Mailbox message whose repeats end without an ack is sent again the next time the instance hears the station
+([What happens next](#what-happens-next)); while the box still repeats it, no second send starts. Commands' answers, such as `Logged`, carry no number and go out once.
 
 ## Read the messages the instance hears
 
@@ -213,7 +213,7 @@ that station. The station's radio acknowledges the numbered message. The convers
 | State | Means |
 |---|---|
 | **waiting until heard** | Not heard yet |
-| **sent, no ack yet** | Sent; the instance tries again when it hears the station, at most once a minute |
+| **sent, no ack yet** | Sent and repeated until acked; once the repeats end, the instance sends it again when it next hears the station |
 | **delivered** | The station acknowledged it |
 | **sent, never acked** | Sent five times without an ack |
 | **expired** | Not heard within 7 days |

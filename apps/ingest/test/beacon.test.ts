@@ -28,6 +28,8 @@ function setup(o: { settings?: Partial<BeaconSettings>; hf?: boolean; fix?: Part
     symbol: "/-",
     comment: "APRScaching box",
     commentEvery: 1,
+    slowRateSec: 1800,
+    fastRateSec: 90,
     gpsd: { host: "127.0.0.1", port: 2947 },
     ...o.settings,
   };
@@ -105,6 +107,17 @@ describe("beacon settings", () => {
     });
     expect(() => beaconSettings({ BEACON: "smart", BEACON_POSITION: "nmea" })).toThrow(/BEACON_NMEA_DEVICE/);
     expect(() => beaconSettings({ BEACON: "fixed", BEACON_SYMBOL: "house" })).toThrow(/BEACON_SYMBOL/);
+    expect(beaconSettings({ BEACON: "smart" })).toMatchObject({ slowRateSec: 1800, fastRateSec: 90 });
+    expect(beaconSettings({ BEACON: "smart", BEACON_SLOW_MIN: "4", BEACON_FAST_SEC: "60" })).toMatchObject({
+      slowRateSec: 240,
+      fastRateSec: 60,
+    });
+    // bounded: the slow rate 1–60 min, the fast 30–600 s and never slower than the slow
+    expect(beaconSettings({ BEACON: "smart", BEACON_SLOW_MIN: "0", BEACON_FAST_SEC: "5" })).toMatchObject({
+      slowRateSec: 60,
+      fastRateSec: 30,
+    });
+    expect(beaconSettings({ BEACON: "smart", BEACON_SLOW_MIN: "2", BEACON_FAST_SEC: "600" })!.fastRateSec).toBe(120);
   });
 });
 
@@ -139,8 +152,12 @@ describe("SmartBeaconing", () => {
     expect(smartRateSec(45)).toBe(180);
     expect(smartRateSec(90)).toBe(90);
     expect(smartRateSec(130)).toBe(90);
-    // turn_min 28° plus 260 degree·mph over the speed
-    expect(turnThresholdDeg(80.4672)).toBeCloseTo(28 + 260 / 50, 5);
+    // turn_min 28° plus 255 degree·mph over the speed
+    expect(turnThresholdDeg(80.4672)).toBeCloseTo(28 + 255 / 50, 5);
+    // a living cache's slow rate caps every rate
+    expect(smartRateSec(0, { slowRateSec: 240, fastRateSec: 60 })).toBe(240);
+    expect(smartRateSec(10, { slowRateSec: 240, fastRateSec: 60 })).toBe(240);
+    expect(smartRateSec(90, { slowRateSec: 240, fastRateSec: 60 })).toBe(60);
   });
 
   it("beacons by speed, Mic-E with course and speed for a moving source", () => {
@@ -171,7 +188,7 @@ describe("SmartBeaconing", () => {
     });
     run(5);
     expect(sent).toHaveLength(1);
-    // 25° is under 28 + 260/31 ≈ 36°: no corner
+    // 25° is under 28 + 255/31 ≈ 36°: no corner
     move({ course: 35 });
     run(25);
     expect(sent).toHaveLength(1);
@@ -206,6 +223,17 @@ describe("SmartBeaconing", () => {
     lose();
     run(60);
     expect(sent).toHaveLength(n);
+  });
+});
+
+describe("a living cache's slow rate", () => {
+  it("beacons a parked station every 4 min, and the HF floor of 10 min still holds", () => {
+    const vhf = setup({ settings: { mode: "smart", source: "termux", slowRateSec: 240 }, fix: { speedKmh: 0 } });
+    vhf.run(5 + 3 * 240);
+    expect(vhf.sent).toHaveLength(4);
+    const hf = setup({ hf: true, settings: { mode: "smart", source: "termux", slowRateSec: 240 } });
+    hf.run(5 + 3 * 240);
+    expect(hf.sent).toHaveLength(2);
   });
 });
 

@@ -104,10 +104,12 @@ fast and seldom when it stands, and at once on a turn:
 
 | Setting | Value |
 |---|---|
-| Below 5 km/h | every 30 min |
-| From 90 km/h | every 90 s |
-| Between | 90 s × 90 km/h ÷ speed: 3 min at 45 km/h |
-| A turn sharper than 28° plus 260 degree·mph ÷ speed | a beacon at once, at most every 30 s |
+| Below 5 km/h | every `BEACON_SLOW_MIN` minutes (default 30, 1 to 60) |
+| From 90 km/h | every `BEACON_FAST_SEC` seconds (default 90, 30 to 600) |
+| Between | the fast rate × 90 km/h ÷ speed: 3 min at 45 km/h, never slower than the slow rate |
+| A turn sharper than 28° plus 255 degree·mph ÷ speed | a beacon at once, at most every 30 s |
+
+On an HF port the 10-minute floor holds whatever the rates say.
 
 ### Gates
 
@@ -131,8 +133,19 @@ independent of the logger, so it never makes the operator's own find [Tier A](..
 
 A [living cache](../../play/cache-types/living.md) follows a station's beacons. A Pocket phone with
 `BEACON=smart` and `BEACON_POSITION=termux` makes a good one: it beacons every 90 s at speed and on every turn,
-so a player who meets it has a station position close in time. Parked, it beacons only every 30 minutes, and a
-meeting needs positions at most 5 minutes apart: tell players where to meet, or move on.
+so a player who meets it has a station position close in time.
+
+A find needs the station's position within 5 minutes of the player's, so a station that is a living cache sets
+the slow rate to 4 minutes or less:
+
+```bash
+BEACON=smart
+BEACON_POSITION=termux
+BEACON_SLOW_MIN=4
+```
+
+With the default 30 minutes, a player who meets the station while it is parked may find no position close
+enough. On HF the 10-minute floor still holds, so a living cache beacons on VHF.
 
 ## Validate at deploy
 
