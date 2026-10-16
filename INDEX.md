@@ -4,7 +4,7 @@ The APRScaching-first web app, by OE8APR. This file is a map of the repository.
 
 ## Start here
 - `README.md` — what the project is, the quick start and the licence
-- `docs/` — the product manual (published at <https://apachler.github.io/aprscaching/>): caching, the Shack,
+- `docs/` — the product manual (published at <https://docs.aprscaching.org/>): caching, the Shack,
   operating an instance, the reference, design notes
 - `CONTRIBUTING.md` — setup, the inner loop, commits and branches
 - `CLAUDE.md` and `.claude/rules/` — conventions and load-bearing invariants for working in this repo

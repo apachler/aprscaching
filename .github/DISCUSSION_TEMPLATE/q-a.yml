@@ -4,7 +4,7 @@ body:
     attributes:
       value: |
         Ask about running an instance, radios and TNCs, APRS-IS or the game. Search first: your question may
-        already have an answer here or in the [manual](https://apachler.github.io/aprscaching/). Report a bug as an
+        already have an answer here or in the [manual](https://docs.aprscaching.org/). Report a bug as an
         issue, and a security problem privately as SECURITY.md describes.
   - type: textarea
     id: question

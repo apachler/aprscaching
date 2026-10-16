@@ -80,12 +80,6 @@ start order: the first ones wait on replies from outside, so they start first, a
       before any sign-in (`302` until settled, then `301`). TLS and HSTS checked; a passkey registered on `.net`
       and used on the 44Net name; one rehearsal each with the tunnel down and the line down;
       `/.well-known/source` names the running commit; `deploy/aprscaching doctor` reports no failure.
-- [ ] **The manual at docs.aprscaching.org** _(S)_ — a `docs` CNAME to `apachler.github.io`, the custom domain
-      and _Enforce HTTPS_ set under Settings → Pages; then, once it answers, `site_url` in `mkdocs.yml`,
-      `manualUrl()` in `apps/web/src/brand.ts`, the published-manual URLs `tools/checks/docs.mjs` checks, and
-      every link to `apachler.github.io/aprscaching` move to it in one change. GitHub Pages forwards the old
-      address, so existing links keep working. `aprscaching.org` (and `www.`) stops redirecting to `.net` and
-      gets the project landing page.
 - [ ] **Backups of the public instance** _(S)_ — a scheduled backup with an off-box copy, and one restore
       rehearsed onto a scratch instance; `resources.backup` passes in the doctor.
 - [ ] **Release pipeline proven** _(S — last)_ — _Allow GitHub Actions to create and approve pull requests_ is

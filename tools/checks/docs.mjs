@@ -195,7 +195,9 @@ for (const f of PROSE.filter((f) => !f.startsWith("docs/"))) {
 // hints and the configuration schema's links (relative to
 // docs/reference/, where they are rendered). Links inside the manual are checked by `mkdocs build --strict`.
 /** The published manual: a page is `<site>/<path>/`, the home page the bare site. */
-const SITE_URL = /apachler\.github\.io\/aprscaching\/([\w/-]*?)\/?(?:#([\w-]+))?(?=[)\s"'>`]|$)/g;
+const SITE_URL = /docs\.aprscaching\.org\/([\w/-]*?)\/?(?:#([\w-]+))?(?=[)\s"'>`]|$)/g;
+/** GitHub Pages' own address for the manual only forwards to its domain: a link names the domain. */
+const OLD_SITE = /apachler\.github\.io\/aprscaching(?![\w-])/;
 /** Python-Markdown's toc slug: what MkDocs gives a heading as its anchor. */
 const slug = (h) =>
   h
@@ -246,6 +248,8 @@ for (const f of TEXT) {
     .forEach((text, i) => {
       for (const m of text.matchAll(/(?<![\w-])docs\/([\w./-]+\.md)(?:#([\w-]+))?/g))
         checkRef(f, i + 1, m[1], m[2], m[0]);
+      if (OLD_SITE.test(text))
+        fail(f, i + 1, "the manual is at https://docs.aprscaching.org/, not its GitHub Pages address");
       for (const m of text.matchAll(SITE_URL)) {
         const p = m[1];
         const page = !p ? "index.md" : existsSync(join(root, "docs", `${p}.md`)) ? `${p}.md` : `${p}/index.md`;

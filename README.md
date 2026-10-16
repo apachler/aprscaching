@@ -4,7 +4,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apachler/aprscaching/badge)](https://scorecard.dev/viewer/?uri=github.com/apachler/aprscaching)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/apachler/aprscaching?sort=semver)](https://github.com/apachler/aprscaching/releases)
-[![Manual](https://img.shields.io/badge/manual-apachler.github.io-14b8a6)](https://apachler.github.io/aprscaching/)
+[![Manual](https://img.shields.io/badge/manual-apachler.github.io-14b8a6)](https://docs.aprscaching.org/)
 
 **Find real places on the air.** APRScaching is an APRS geocaching game and ham-radio **Shack**. You hide a
 cache, go find it, and log the find *verified by radio*, not by tapping a button. Hide, hunt, operate.
@@ -13,9 +13,9 @@ It runs in a browser, self-hosts on a Raspberry Pi, and federates with other ins
 Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, MeshCom, TAK/CoT).
 Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
 
-> **New here? [What is APRScaching?](https://apachler.github.io/aprscaching/play/)**
+> **New here? [What is APRScaching?](https://docs.aprscaching.org/play/)**
 > Sign in at **[aprscaching.net](https://aprscaching.net)** with your callsign, verify it over APRS, and log
-> your first find — no installation needed. [Your first find](https://apachler.github.io/aprscaching/play/first-find/)
+> your first find — no installation needed. [Your first find](https://docs.aprscaching.org/play/first-find/)
 > walks you through it in five minutes.
 
 ## What it is
@@ -36,29 +36,29 @@ instance appear on the maps of the others; a find logged on one can be confirmed
 a deletion travels everywhere the record went. Every record is signed by the instance it comes from, so it can
 travel over the internet, 44Net or HAMNET (or, experimentally, as packet mail) and no path in between can alter
 it. Each sysop decides whom to trust, and no company, registry or server sits in the middle.
-[How federation works](https://apachler.github.io/aprscaching/run/federation/how-it-works/) and
-[Choose how to connect](https://apachler.github.io/aprscaching/run/federation/choose/) explain it.
+[How federation works](https://docs.aprscaching.org/run/federation/how-it-works/) and
+[Choose how to connect](https://docs.aprscaching.org/run/federation/choose/) explain it.
 
 ## The manual
 
 | I want to… | Start with |
 |---|---|
-| **Play** — find and hide caches | [What is APRScaching?](https://apachler.github.io/aprscaching/play/) |
-| **Operate** — my radio, packet and the Shack apps | [The Shack at a glance](https://apachler.github.io/aprscaching/shack/) |
-| **Run an instance** | [Is running an instance for me?](https://apachler.github.io/aprscaching/run/) and [Your first hour](https://apachler.github.io/aprscaching/run/first-hour/) |
-| **Build on it** — the read API, signed feeds, federation | [HTTP API](https://apachler.github.io/aprscaching/reference/api/) and [Federation wire format](https://apachler.github.io/aprscaching/reference/federation-wire/) |
-| **Contribute** | [Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) and [CONTRIBUTING.md](CONTRIBUTING.md) |
+| **Play** — find and hide caches | [What is APRScaching?](https://docs.aprscaching.org/play/) |
+| **Operate** — my radio, packet and the Shack apps | [The Shack at a glance](https://docs.aprscaching.org/shack/) |
+| **Run an instance** | [Is running an instance for me?](https://docs.aprscaching.org/run/) and [Your first hour](https://docs.aprscaching.org/run/first-hour/) |
+| **Build on it** — the read API, signed feeds, federation | [HTTP API](https://docs.aprscaching.org/reference/api/) and [Federation wire format](https://docs.aprscaching.org/reference/federation-wire/) |
+| **Contribute** | [Run from source](https://docs.aprscaching.org/contribute/run-from-source/) and [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-How finds are verified is in [How finds are verified](https://apachler.github.io/aprscaching/play/verification/) and, as precise rules, [The trust model](https://apachler.github.io/aprscaching/reference/trust-model/); the privacy invariants, with the code behind each,
-are under [About](https://apachler.github.io/aprscaching/about/#privacy-by-default).
+How finds are verified is in [How finds are verified](https://docs.aprscaching.org/play/verification/) and, as precise rules, [The trust model](https://docs.aprscaching.org/reference/trust-model/); the privacy invariants, with the code behind each,
+are under [About](https://docs.aprscaching.org/about/#privacy-by-default).
 
 ---
 
 ## Run it from source
 
 For developers. To install an instance, use the Docker stack in `deploy/`
-([Self-host with Docker](https://apachler.github.io/aprscaching/run/install/self-host-docker/)) or another
-[shape](https://apachler.github.io/aprscaching/run/choose-a-shape/). Needs Node 22+ and pnpm.
+([Self-host with Docker](https://docs.aprscaching.org/run/install/self-host-docker/)) or another
+[shape](https://docs.aprscaching.org/run/choose-a-shape/). Needs Node 22+ and pnpm.
 
 ```bash
 pnpm install
@@ -67,12 +67,12 @@ pnpm dev            # gateway + web app on http://localhost:5173, reloading on e
 pnpm dev --ingest   # also the operator-local RF/APRS-IS ingest
 ```
 
-[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the ingest, a
+[Run from source](https://docs.aprscaching.org/contribute/run-from-source/) covers the ingest, a
 federating peer, the Bun runtime and the desktop build, and
-[Testing](https://apachler.github.io/aprscaching/contribute/testing/) covers the smoke and conformance suites.
+[Testing](https://docs.aprscaching.org/contribute/testing/) covers the smoke and conformance suites.
 
 For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key
-([Self-host on Oracle Cloud](https://apachler.github.io/aprscaching/run/install/oracle-cloud/)). It deploys the
+([Self-host on Oracle Cloud](https://docs.aprscaching.org/run/install/oracle-cloud/)). It deploys the
 stack archive attached to the latest release, so it works once the first release is published:
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)

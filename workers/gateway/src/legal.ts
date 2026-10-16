@@ -352,7 +352,7 @@ down when it is reported.</p>
 <h2>Moderation</h2>
 <p>The operator may moderate, remove content and suspend accounts that break these terms. Anyone can report a
 cache, a log or a photo in the app (see
-<a href="https://apachler.github.io/aprscaching/play/community/#report-a-problem">how reports work</a>); the
+<a href="https://docs.aprscaching.org/play/community/#report-a-problem">how reports work</a>); the
 operator decides on each report.</p>
 <h2>No warranty</h2>
 <p>The service is provided as it is, without warranty and without any promise that it is available. The
