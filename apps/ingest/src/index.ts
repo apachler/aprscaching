@@ -266,7 +266,7 @@ if (env.KISS_TNC_HOST) {
   }
 }
 
-// Soundcard ports — a 1200-baud AFSK modem in the box itself (ALSA arecord/aplay), keyed by a PTT driver.
+// Soundcard ports — a modem in the box itself (Direwolf in WebAssembly; ALSA arecord/aplay), keyed by a PTT driver.
 // Nothing between such a port and the radio can refuse a frame, so the port adds to the call gate what a TNC's
 // firmware would hold: its own opt-in, a running capture for carrier detect, and the PTT watchdog.
 let soundcardSettings: import("./soundcardconfig.js").SoundcardPortSettings[] = [];

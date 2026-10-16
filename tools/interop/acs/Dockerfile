@@ -9,6 +9,7 @@ RUN corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc* ./
 COPY packages ./packages
+COPY modems ./modems
 COPY servers/node ./servers/node
 COPY workers/gateway ./workers/gateway
 COPY apps/ingest ./apps/ingest

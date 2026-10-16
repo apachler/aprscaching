@@ -22,7 +22,8 @@ runs the ingest box. At the end the box hears the 30 m APRS channel and, once yo
 | Path | none |
 
 30 m is the one HF band with APRS activity worldwide. The tone pair is the one Direwolf's `MODEM 300` uses by
-default, and most HF packet modems use it too.
+default, and most HF packet modems use it too. The port runs that same modem: Direwolf's 300 baud demodulator
+and modulator, in WebAssembly inside the ingest ([The modem](soundcard.md#the-modem)).
 
 ### Dial frequency and tones
 
@@ -60,8 +61,10 @@ SOUNDCARD_DEVICE=plughw:1,0
 SOUNDCARD_MODEM=hf300
 ```
 
-`hf300` switches the port to 300 baud and the 1600/1800 Hz tones, and gives it a 500 ms TXDELAY for an HF
-radio's slower transmit-receive switching, unless `SOUNDCARD_TXDELAY_MS` names another. With a VHF port beside
+`hf300` switches the port to Direwolf's 300 baud modem and the 1600/1800 Hz tones, and gives it a 500 ms TXDELAY
+for an HF radio's slower transmit-receive switching, unless `SOUNDCARD_TXDELAY_MS` names another. Leave
+`SOUNDCARD_FEC` at `off`: the 30 m APRS channel is plain AX.25, and the port still decodes an FX.25 or IL2P frame
+it hears. With a VHF port beside
 it, give the HF port its own entry in `SOUNDCARD_PORTS`, with `"modem":"hf300"`
 ([Several ports](soundcard.md#several-ports)). Restart the ingest.
 

@@ -198,7 +198,9 @@ they must talk to. Three tiers (full detail in `tools/interop/README.md`):
   with a UDP audio cable. The ingest's KISS TCP and AGWPE clients key one and hear the other over
   Bell-202 1200 bd AFSK, in both directions, and the ingest's RX-IGate delivers what its Direwolf hears
   to **aprsc** with `qAR,<igate>`. Direwolf's `kissutil` dials the ingest's KISS server: it prints a frame the
-  ingest's Direwolf heard, and a frame it sends with transmit off never reaches the air.
+  ingest's Direwolf heard, and a frame it sends with transmit off never reaches the air. The ingest's soundcard
+  port, Direwolf's modem in WebAssembly, joins the same cable: it exchanges frames both ways with a native
+  Direwolf in plain AX.25, FX.25 and IL2P.
 
 The peers run in the **weekly** `interop` workflow and the modem transports in the **weekly**
 `transports` workflow (both scheduled + manual dispatch), never the PR loop — peer downloads and
@@ -260,7 +262,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs`) · unit test coverage (reported as an artifact, never failing on a number) · conformance on Node and Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio and tool-sandbox e2e · offline-shell e2e · the dev stack (`pnpm dev:check`) · axe on every fixture surface in every theme (pull requests and `main`) · Pocket scripts · Deploy helpers | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
-| `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |
+| `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc · the soundcard port against native Direwolf | weekly + manual | Informational |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, every Mermaid diagram in the repository's Markdown parsed, then `mkdocs build --strict` (a missing page or heading fails it) | docs and Markdown changes, the theme's sources, `apps/web/package.json` (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |

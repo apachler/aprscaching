@@ -2,11 +2,14 @@
 # stack (acs) whose ingest drives dw-a over KISS TCP with its RX-IGate on, and aprsc as the APRS-IS
 # server the IGate logs in to. The driver (tests/direwolf-loop.mjs) dials dw-a's KISS port, dw-b's
 # AGW port and aprsc's full feed from the host; tests/kiss-server-loop.mjs runs Direwolf's kissutil in dw-b
-# against the acs ingest's KISS server. Host ports are high and overridable, so the project
+# against the acs ingest's KISS server. dw-sc-ax25, dw-sc-fx25 and dw-sc-il2p each transmit in one framing and
+# send their audio to the host, where tests/soundcard-direwolf-loop.mjs runs the ingest's soundcard port
+# (Direwolf's modem in WebAssembly) against them. Host ports are high and overridable, so the project
 # runs beside other compose projects.
 #
 #   docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml up -d --build
 #   pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
+#   pnpm -C apps/ingest exec tsx ../../tools/interop/tests/soundcard-direwolf-loop.mjs
 services:
   dw-a:
     build: .
@@ -22,6 +25,34 @@ services:
     environment: { MYCALL: OE1DWB, PEER: dw-a }
     ports:
       - "${DW_B_AGW_PORT:-38000}:8000" # AGWPE — our AGWPE client
+    networks: [rf]
+
+  # the soundcard port's partners: audio in on a published UDP port, audio out to the host's listener
+  dw-sc-ax25:
+    build: .
+    environment: { MYCALL: OE1DWS, PEER: host.docker.internal, PEER_PORT: "38455", TXMODE: ax25 }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports:
+      - "${DW_SC_AX25_KISS_PORT:-38011}:8001"
+      - "${DW_SC_AX25_AUDIO_PORT:-38355}:7355/udp"
+    networks: [rf]
+
+  dw-sc-fx25:
+    build: .
+    environment: { MYCALL: OE1DWS, PEER: host.docker.internal, PEER_PORT: "38456", TXMODE: fx25 }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports:
+      - "${DW_SC_FX25_KISS_PORT:-38012}:8001"
+      - "${DW_SC_FX25_AUDIO_PORT:-38356}:7355/udp"
+    networks: [rf]
+
+  dw-sc-il2p:
+    build: .
+    environment: { MYCALL: OE1DWS, PEER: host.docker.internal, PEER_PORT: "38457", TXMODE: il2p }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports:
+      - "${DW_SC_IL2P_KISS_PORT:-38013}:8001"
+      - "${DW_SC_IL2P_AUDIO_PORT:-38357}:7355/udp"
     networks: [rf]
 
   aprsc:

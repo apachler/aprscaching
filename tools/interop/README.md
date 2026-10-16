@@ -22,6 +22,7 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
 | RX-IGate (RF → APRS-IS, `qAO,<igate>` for a receive-only gate) | Direwolf + aprsc | `direwolf-loop` | the acs ingest gates what its Direwolf hears; an `RFONLY` path is held back |
 | KISS TCP server (the ingest's KISS server, a third-party client dialling it) | Direwolf's `kissutil` | `kiss-server-loop` | `kissutil` prints a frame the ingest's TNC heard over AFSK; with transmit off, a frame it sends never reaches the air |
+| Soundcard port (Direwolf's modem in WebAssembly, `SOUNDCARD_FEC` off / fx25 / il2p) | native Direwolf | `soundcard-direwolf-loop` | the port and a native Direwolf exchange frames both ways over the audio cable, in AX.25, FX.25 and IL2P; a heard frame is the receiving site's local RF hearing in every framing |
 | Telnet consoles | LinBPQ, F6FBB, TNN, JNOS | all drivers | reachability + banner/gate assertions |
 | INP3 (RIF/L3RTT) | TNN (TheNet lineage) | `extra-peers` once the TNN leg is green | asserted stack-vs-stack in the local loop every run |
 
@@ -98,10 +99,12 @@ workflow (scheduled + manual dispatch, kept out of the `interop` run):
 | `dw-b`  | Direwolf 1.7 (Ubuntu archive) | AGWPE modem for the driver |
 | `acs`   | our gateway + ingest | KISS TNC on `dw-a`, RX-IGate to `aprsc` |
 | `aprsc` | aprsc (OH7LZB) | the APRS-IS server the IGate logs in to |
+| `dw-sc-ax25`, `dw-sc-fx25`, `dw-sc-il2p` | Direwolf 1.7 (Ubuntu archive) | partners of the ingest's soundcard port, each transmitting in one framing (`TXMODE`) |
 
 ```bash
 docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml up -d --build
 pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
+pnpm -C apps/ingest exec tsx ../../tools/interop/tests/soundcard-direwolf-loop.mjs
 docker compose -p direwolf -f tools/interop/direwolf/docker-compose.yml down -v
 ```
 
@@ -118,6 +121,13 @@ the published ports (`DW_A_KISS_PORT` 38001, `DW_B_AGW_PORT` 38000, `DW_APRSC_FU
   aprsc's full feed as `OE9TST-9>APZACG,WIDE1-1,qAO,OE1ACS-10:…` (the ingest runs without `IGATE_TX`, so it
   gates as a receive-only IGate);
 - a frame whose path carries `RFONLY` is heard on RF but never reaches aprsc.
+
+`soundcard-direwolf-loop` runs three soundcard ports on the host, one per `SOUNDCARD_FEC`, whose `arecord` and
+`aplay` are UDP sockets: playback goes to a `dw-sc-*` container's `udp:` input (`DW_SC_<MODE>_AUDIO_PORT`, 38355
+to 38357), and the container's cable sends its transmit audio to `host.docker.internal` (38455 to 38457), which
+capture reads. It asserts, for each framing, that the port's frame reaches the native Direwolf's KISS port
+(`DW_SC_<MODE>_KISS_PORT`, 38011 to 38013) intact, and that a frame keyed on the native Direwolf is heard by the
+port as a local RF hearing stamped with its receiving site.
 
 ## What this catches
 

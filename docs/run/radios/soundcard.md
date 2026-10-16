@@ -1,8 +1,13 @@
 # Soundcard port
 
-This page sets up a soundcard port: the ingest box itself is the APRS modem (1200 baud, or 300 baud on HF), with a USB sound card
-or a Raspberry Pi sound HAT between it and the radio, and no TNC. It is for the sysop who runs the box. At the
-end the box decodes what the radio hears and, once you allow it, transmits through it.
+This page sets up a soundcard port: the ingest box itself is the modem (1200 baud, 300 baud on HF, or 9600
+baud), with a USB sound card or a Raspberry Pi sound HAT between it and the radio, and no TNC. It is for the
+sysop who runs the box. At the end the box decodes what the radio hears and, once you allow it, transmits
+through it.
+
+The modem inside is Direwolf's, by John Langner, WB2OSZ, compiled to WebAssembly and shipped with the ingest:
+the same demodulators a Direwolf install runs, with no Direwolf to install and no second program on the sound
+card ([The modem](#the-modem)).
 
 A soundcard port receives like a KISS TNC: its frames are local RF hearings (port `soundcard`), stamped with
 the [receiving site](rf-ingest.md#receiving-site-and-tier-a) when heard directly, and the digipeater, the
@@ -48,9 +53,8 @@ flowchart TB
   csma --> recheck{"Port gate again"}
   recheck -- "refused" --> drop
   recheck -- "allowed" --> key["PTT key, watchdog starts"]
-  key --> play["aplay: TXDELAY flags, then the frame"]
-  play --> tail["TXTAIL"]
-  tail --> unkey["PTT unkey"]
+  key --> play["aplay: TXDELAY preamble, the frame, TXTAIL"]
+  play --> unkey["PTT unkey"]
 ```
 
 ## Steps
@@ -78,7 +82,8 @@ SOUNDCARD_DEVICE=plughw:1,0
 
 `SOUNDCARD_PLAYBACK` names a different playback device when the card has one; by default the port plays on
 the capture device. `SOUNDCARD_RATE` is `48000` (default) or `44100`. `SOUNDCARD_MODEM` is `1200` (default,
-Bell 202 for an FM radio) or `hf300`, 300 baud for an SSB radio on 30 m ([HF APRS on 30 m](hf.md)).
+Bell 202 for an FM radio), `hf300`, 300 baud for an SSB radio on 30 m ([HF APRS on 30 m](hf.md)), or `9600`
+for a radio's 9600-baud data port ([The modem](#the-modem)).
 
 **In Docker**, pass the sound devices into the ingest container. In `deploy/compose.ingest-only.yml` (or
 `deploy/docker-compose.yml`), on the ingest service:
@@ -92,7 +97,8 @@ the radio by RTS, DTR or CAT (`/dev/ttyUSB0`). VOX and `rigctld` over the networ
 in the `audio` group, GID 29 on Debian, Ubuntu and Raspberry Pi OS, and in `dialout`, GID 20. On a host whose
 sound, GPIO or serial devices belong to another GID (`stat -c %g /dev/snd/controlC0`), add it on the ingest
 service: `group_add: ["<gid>"]`. Restart the ingest.
-The log shows `[soundcard:1] receive only (SOUNDCARD_TX=1 allows transmit)`, then
+The log shows `[soundcard:1] modem: Direwolf 1200 baud Bell 202 (SIMD), transmits AX.25, receives AX.25, FX.25 and
+IL2P`, `[soundcard:1] receive only (SOUNDCARD_TX=1 allows transmit)`, then
 `[soundcard:1] capturing plughw:1,0 at 48000 Hz`.
 
 ### 3. Set the receive level
@@ -134,7 +140,7 @@ use it when the radio has one.
 ### 6. Check it
 
 Run `deploy/aprscaching doctor`. Its `ingest.soundcard_*` checks look for the ALSA tools, open both devices,
-check the PTT driver and the watchdog, and ask the gateway about the calls' verification. They never key the
+load the modem, check the PTT driver and the watchdog, and ask the gateway about the calls' verification. They never key the
 radio ([Troubleshooting](../troubleshooting.md#ingestsoundcard_alsa)).
 
 To prove the keying line, run the PTT test. It keys the transmitter for half a second, with no audio, and only
@@ -162,6 +168,44 @@ docker compose run --rm -w /app/apps/ingest ingest node --import tsx src/check.t
 
 Name a port after `--ptt-test` to test another than the first. It prints
 `PTT test on port 1: CM108 /dev/hidraw0 GPIO3 keyed for 500 ms and released`, or why it refused.
+
+## The modem
+
+Each soundcard port runs Direwolf's modem in WebAssembly, inside the ingest. Direwolf's receive core decodes
+plain AX.25, FX.25 and IL2P at the port's speed, all at once, and its transmitter sends the framing you set.
+
+| `SOUNDCARD_MODEM` | Speed and tones | Radio and connection |
+|---|---|---|
+| `1200` (default) | 1200 baud, Bell 202 (1200/2200 Hz) | An FM radio, through its microphone and speaker or its data port. APRS on VHF and UHF. |
+| `hf300` | 300 baud, 1600/1800 Hz | An SSB radio on 30 m, upper sideband ([HF APRS on 30 m](hf.md)). |
+| `9600` | 9600 baud, G3RUH | An FM radio with a 9600-capable data port (the `9600` pin of a 6-pin mini-DIN, or a flat discriminator output and a direct modulator input). A microphone and speaker path cannot carry it. Packet node and BBS links. |
+
+**Receive.** A frame sent as FX.25 or IL2P is heard the same as plain AX.25: the same `soundcard` port, the
+same receiving site, the same trust. The forward error correction only recovers more frames from a weak or
+noisy signal.
+
+**Transmit framing.** `SOUNDCARD_FEC` sets how the port's frames go out:
+
+| `SOUNDCARD_FEC` | On the air | Use |
+|---|---|---|
+| `off` (default) | Plain AX.25 | Always on the APRS channel. Every station decodes it. |
+| `fx25` | FX.25: the AX.25 frame inside a Reed–Solomon block, with `SOUNDCARD_FX25_CHECK_BYTES` (`16`, `32` or `64`, default `16`) of parity | A node or BBS link whose partner decodes FX.25 and whose path is poor. More check bytes correct more errors and make each frame longer. A frame too long for the code goes out as plain AX.25. |
+| `il2p` | IL2P | A node or BBS link where both ends speak IL2P. |
+
+!!! warning "Plain AX.25 on the APRS channel"
+    Keep `SOUNDCARD_FEC=off` on 144.800, 144.390 and every other APRS frequency. IL2P is not AX.25: most APRS
+    stations would not decode your beacons or digipeats at all. FX.25 makes every frame longer on a shared
+    channel. Set FX.25 or IL2P per port, on links where you know the partner decodes it.
+
+**9600 baud.** The rate stays `48000` or `44100`. Set the receive level from the radio's 9600 output and the
+transmit level for about 3 kHz deviation; a radio's microphone filtering ruins 9600 baud, so use the data port.
+`SOUNDCARD_TXDELAY_MS` can be shorter than at 1200 baud when the radio switches fast.
+
+**The built-in modem.** `SOUNDCARD_DEMOD=builtin` runs the ingest's own TypeScript modem instead,
+at 1200 and 300 baud, plain AX.25 only. It is the fallback for one release: set it if the WebAssembly modem
+misbehaves on your box, and report what you saw. If Direwolf's WebAssembly fails to load at start, a 1200 or
+300 baud port runs the built-in modem by itself and logs `the Direwolf modem did not load`; a 9600 baud port
+cannot, and faults.
 
 ## Choose how the radio is keyed
 
@@ -216,15 +260,15 @@ two seconds closes the connection, so a late answer can never be taken for the n
 
 | Setting | Default | What it does |
 |---|---|---|
-| `SOUNDCARD_TXDELAY_MS` | `300` | Flags sent before each frame, while the radio's transmitter comes up. Raise it for a slow radio. |
-| `SOUNDCARD_TXTAIL_MS` | `50` | Time the PTT stays keyed after the audio ends. |
+| `SOUNDCARD_TXDELAY_MS` | `300` | Preamble sent before each frame (HDLC flags, or IL2P's preamble), while the radio's transmitter comes up. Raise it for a slow radio. |
+| `SOUNDCARD_TXTAIL_MS` | `50` | The same pattern sent after the frame, so the radio does not cut its end. The built-in modem keeps the PTT keyed in silence instead. |
 | `SOUNDCARD_PERSIST` | `63` | Once the channel is clear, the chance (p+1)/256 of sending in a slot, so stations that waited do not all start at once. |
 | `SOUNDCARD_SLOTTIME_MS` | `100` | The slot length for that draw, and for checking a busy channel again. |
 | `SOUNDCARD_PTT_MAX_MS` | `10000` | The watchdog: the longest the PTT may stay keyed (1000 to 60000). |
 | `SOUNDCARD_DUTY_PCT` | `20` | The most of any 60 seconds the port may transmit, in percent (1 to 100). |
 
-**Carrier detect.** The demodulator raises carrier detect while it hears a 1200-baud signal, and the port waits
-until it drops. Carrier detect needs a running capture: while capture is down (the device vanished, `arecord`
+**Carrier detect.** Direwolf's demodulator raises carrier detect while it hears HDLC flags or a frame at the
+port's speed, and the port waits until it drops. Carrier detect needs a running capture: while capture is down (the device vanished, `arecord`
 failed, or it delivers no audio for five seconds and is restarted), the port does not transmit.
 
 **Waiting.** A frame waits for a clear channel and for airtime within `SOUNDCARD_DUTY_PCT`. One that has waited
@@ -289,15 +333,21 @@ The port checks the gate when a function hands over a frame and again at the mom
 ## Several ports
 
 `SOUNDCARD_PORTS` adds ports, as a JSON array of objects with the same fields in short form: `device`
-(required), `name`, `playback`, `rate`, `modem`, `tx`, `ptt`, `call`, `txDelayMs`, `txTailMs`, `persist`, `slotTimeMs`,
-`pttMaxMs`, `txLevel` and `dutyPct`.
+(required), `name`, `playback`, `rate`, `modem`, `demod`, `fec`, `fx25CheckBytes`, `tx`, `ptt`, `call`,
+`txDelayMs`, `txTailMs`, `persist`, `slotTimeMs`, `pttMaxMs`, `txLevel` and `dutyPct`.
 
 ```
 SOUNDCARD_PORTS=[{"name":"uhf","device":"plughw:2,0","tx":true,"ptt":"cm108:/dev/hidraw1:3"}]
 ```
 
-A further port takes its rate, modem, timing, level and call from the `SOUNDCARD_*` settings unless it sets its
-own, but never `tx` or `ptt`. Each port has its own PTT, watchdog and duty cycle.
+A 9600-baud node link beside the APRS port, in IL2P:
+
+```
+SOUNDCARD_PORTS=[{"name":"link","device":"plughw:2,0","modem":"9600","fec":"il2p","tx":true,"ptt":"cm108:/dev/hidraw1:3"}]
+```
+
+A further port takes its rate, modem, framing, timing, level and call from the `SOUNDCARD_*` settings unless it
+sets its own, but never `tx` or `ptt`. Each port has its own PTT, watchdog and duty cycle.
 
 - **Digipeater**: repeats on the port that heard the frame, except an HF port: HF has no digipeaters. One duplicate window covers every port, so two
   ports on the same frequency never both repeat a frame.
@@ -310,8 +360,10 @@ own, but never `tx` or `ptt`. Each port has its own PTT, watchdog and duty cycle
 
 - **`capture ended: … No such file or directory`**: the device name is wrong, or the container has no
   `/dev/snd`. Compare with `arecord -l`.
-- **`… Device or resource busy`**: another program, such as Direwolf, holds the card. A card serves one
-  modem.
+- **`… Device or resource busy`**: another program, such as a separate Direwolf, holds the card. A card
+  serves one modem.
+- **`the Direwolf modem did not load`**: the install lacks `modems/direwolf/wasm`. Run `pnpm install` in the
+  checkout again, or pull the current image. Meanwhile a 1200 or 300 baud port runs the built-in modem.
 - **Nothing decodes**: check the receive level and the cable, and that squelch is closed. Record a minute
   with `arecord -D plughw:1,0 -f S16_LE -r 48000 -c 1 test.wav` and listen to it.
 - **`PTT … unavailable`**: the log names the missing package, tool or permission. The port then receives
@@ -335,10 +387,12 @@ calls of the box's operator. The PTT test is a transmission too.
 ## Validate at deploy
 
 The modem, the gate, the channel access, the watchdog and every PTT driver are tested against fakes: no sound
-card and no radio. These need your hardware:
+card and no radio. The weekly transport tests run a soundcard port against a native Direwolf over an audio
+cable, in plain AX.25, FX.25 and IL2P. These need your hardware:
 
 - **Unverified:** decoding at real receive levels, with a real radio's de-emphasis and noise.
 - **Unverified:** the transmit level and deviation each card and radio need.
+- **Unverified:** 9600 baud through a real radio's data port, and its receive level.
 - **Unverified:** each PTT driver against real hardware: a CM108 interface's GPIO wiring, a Raspberry Pi GPIO
   line under libgpiod 1 and 2, a serial cable's RTS or DTR, each CAT family's PTT command on the radio, and
   rigctld with your rig.

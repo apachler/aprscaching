@@ -4,7 +4,8 @@
  * operator's deliberate PTT test (`check.ts --ptt-test`).
  *
  * The checks never key the radio: they look for the ALSA tools, open the capture device for a second and play
- * 50 ms of silence on the playback device (silence does not trip a VOX), check that the PTT driver could open
+ * 50 ms of silence on the playback device (silence does not trip a VOX), load the port's modem (Direwolf's
+ * WebAssembly build, so a box whose install lacks it shows up here), check that the PTT driver could open
  * (the package or tool is there, the device is writable, rigctld answers a TCP connect), read the watchdog
  * setting and ask the gateway whether the station calls are control-verified. A device the running ingest
  * holds reports as busy, which passes.
@@ -15,19 +16,19 @@
  */
 import net from "node:net";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
-import { AfskRx } from "@aprscaching/aprs";
+import type { DirewolfWasm } from "@aprscaching/direwolf";
 import { alsaArgs, alsaHint, alsaToolsProblem, s16Reader } from "./alsa.js";
 import { stationCalls, type TxGateLookup } from "./callverify.js";
 import { describePtt, openPtt, pttProblem, type Ptt, type PttDeps, type PttSpec } from "./ptt/index.js";
 import { installPttRelease, trackPtt, untrackPtt } from "./ptt/release.js";
 import { PttWatchdog } from "./ptt/watchdog.js";
 import { soundcardPorts, type SoundcardPortSettings } from "./soundcardconfig.js";
-import { afskModem } from "./soundcard.js";
+import { describeModem, direwolfModem, openModem } from "./soundcardmodem.js";
 
 export type CheckStatus = "pass" | "warn" | "fail";
-/** One result; `kind` is alsa, audio, ptt or tx, and `port` names the port (empty for alsa). */
+/** One result; `kind` is alsa, audio, modem, ptt or tx, and `port` names the port (empty for alsa). */
 export interface CheckRow {
-  kind: "alsa" | "audio" | "ptt" | "tx";
+  kind: "alsa" | "audio" | "modem" | "ptt" | "tx";
   port: string;
   status: CheckStatus;
   message: string;
@@ -56,6 +57,8 @@ export interface CheckDeps {
   tcpOpen?: (host: string, port: number) => Promise<boolean>;
   openPtt?: (s: PttSpec) => Promise<Ptt>;
   sleep?: (ms: number) => Promise<void>;
+  /** Where Direwolf's WebAssembly comes from; the package's own build when absent. */
+  wasm?: DirewolfWasm;
 }
 
 /** Whether an ALSA tool's failure means the device is held by another process (the running ingest). */
@@ -103,6 +106,7 @@ export async function soundcardChecks(env: Record<string, string | undefined>, d
   );
   for (const p of ports) {
     if (!tools) rows.push(audioRow(p, spawnSync));
+    rows.push(await modemRow(p, deps));
     rows.push(await pttRow(p, deps));
     rows.push(...(await txRows(p, env, deps)));
   }
@@ -140,6 +144,29 @@ function audioRow(p: SoundcardPortSettings, spawnSync: SpawnSyncFn): CheckRow {
     "pass",
     `port ${p.name}: ${p.device} opens for capture and ${p.playback} for playback at ${p.rate} Hz${held}`,
   );
+}
+
+async function modemRow(p: SoundcardPortSettings, deps: CheckDeps): Promise<CheckRow> {
+  const row = (status: CheckStatus, message: string, fix = ""): CheckRow => ({
+    kind: "modem",
+    port: p.name,
+    status,
+    message,
+    fix,
+  });
+  if (p.demod === "builtin") return row("pass", `port ${p.name}: ${describeModem(p)} (SOUNDCARD_DEMOD=builtin)`);
+  try {
+    await direwolfModem(p, deps.wasm);
+    return row("pass", `port ${p.name}: ${describeModem(p)}`);
+  } catch (e) {
+    return row(
+      "fail",
+      `port ${p.name}: the Direwolf modem does not load: ${(e as Error).message}`,
+      p.modem === "9600"
+        ? "reinstall the ingest (pnpm install) so modems/direwolf/wasm is there"
+        : "reinstall the ingest (pnpm install) so modems/direwolf/wasm is there, or set SOUNDCARD_DEMOD=builtin",
+    );
+  }
 }
 
 async function pttRow(p: SoundcardPortSettings, deps: CheckDeps): Promise<CheckRow> {
@@ -282,7 +309,12 @@ export async function pttTest(
         ? "refused: the sound card is in use; stop the ingest first (it owns the card, the PTT and the transmit switch)"
         : `refused: cannot listen on ${p.device}: ${alsaHint("arecord", heard.error ?? null, heard.stderr)}`,
     };
-  const rx = new AfskRx(p.rate, () => {}, afskModem(p.modem));
+  let rx;
+  try {
+    rx = await openModem(p, { wasm: deps.wasm });
+  } catch (e) {
+    return { ok: false, message: `refused: no carrier detect on port ${p.name}: ${(e as Error).message}` };
+  }
   const pcm = s16Reader()(heard.stdout);
   let busyChannel = false;
   for (let i = 0; i < pcm.length; i += 480) {

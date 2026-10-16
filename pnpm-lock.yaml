@@ -62,6 +62,9 @@ importers:
       '@aprscaching/ax25':
         specifier: workspace:*
         version: link:../../packages/ax25
+      '@aprscaching/direwolf':
+        specifier: workspace:*
+        version: link:../../modems/direwolf
       '@aprscaching/hub':
         specifier: workspace:*
         version: link:../../packages/hub

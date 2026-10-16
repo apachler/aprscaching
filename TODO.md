@@ -240,15 +240,16 @@ Decided, not planned:
 _Owner decision: Direwolf (GPL-2.0-or-later) compiled to WebAssembly is the modem for receive and transmit on
 every surface._ The package exists: `modems/direwolf` (`@aprscaching/direwolf`, AGPL-3.0-or-later) with the
 vendored Direwolf 1.8.1 sources, receive and transmit at 300 / 1200 / 9600 bd in AX.25, FX.25 and IL2P, a
-byte-reproducible build CI checks, and tests. No consumer uses it yet; the stages below switch them over, in
-order. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
+byte-reproducible build CI checks, and tests. The ingest's soundcard port runs on it; the stages below switch
+the other surfaces over, in order. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
 from Direwolf.
 
-- [ ] **Ingest soundcard port on Direwolf** _(P1 · M)_ — `apps/ingest`'s soundcard port receives and transmits
+- [x] **Ingest soundcard port on Direwolf** _(P1 · M)_ — `apps/ingest`'s soundcard port receives and transmits
       through `@aprscaching/direwolf` behind the interface it has (`arecord`/`aplay`, echo suppression,
-      `reset()` at unkey, CSMA from `dcd`), with a per-port transmit mode (AX.25 / FX.25 / IL2P) and speed
-      (300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback setting. Covers the ingest box,
-      bare metal and the Docker stack. _Depends on:_ —
+      `reset()` at unkey, CSMA from `dcd`), with a per-port transmit mode (`SOUNDCARD_FEC`: AX.25 / FX.25 / IL2P)
+      and speed (`SOUNDCARD_MODEM`: 300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback
+      (`SOUNDCARD_DEMOD=builtin`). Covers the ingest box, bare metal and the Docker stack; the weekly transports
+      run checks it against a native Direwolf.
 - [ ] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s Web Audio path runs the receiver in an
       AudioWorklet (or a Worker fed by one), loaded only when the soundcard path opens, so the landing and the
       map bundle carry none of it; the TypeScript modem remains the fallback when WebAssembly is blocked.

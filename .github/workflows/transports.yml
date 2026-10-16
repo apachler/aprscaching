@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   direwolf:
-    name: Direwolf (KISS TCP + AGWPE over AFSK, RF -> IGate -> aprsc, kissutil -> KISS server)
+    name: Direwolf (KISS TCP + AGWPE over AFSK, RF -> IGate -> aprsc, kissutil -> KISS server, soundcard port)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -28,6 +28,8 @@ jobs:
       - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/direwolf-loop.mjs
       # the client-side leg: Direwolf's kissutil dials the acs ingest's KISS server
       - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/kiss-server-loop.mjs
+      # the soundcard port (Direwolf's modem in WebAssembly) against native Direwolf, in AX.25, FX.25 and IL2P
+      - run: pnpm -C apps/ingest exec tsx ../../tools/interop/tests/soundcard-direwolf-loop.mjs
       # on failure: container states + full logs — both modems print every frame they decode
       - if: failure()
         run: |
