@@ -204,6 +204,22 @@ The peers run in the **weekly** `interop` workflow and the modem transports in t
 `transports` workflow (both scheduled + manual dispatch), never the PR loop — peer downloads and
 kernel modules are not PR-gating dependencies.
 
+## Modem benchmark
+
+`tools/bench/afsk-wav.mjs` runs the soundcard modem's demodulator (`AfskRx`) over recorded audio and counts
+the frames that pass the FCS check, total and distinct. The standard recording is the
+[WA8LMF TNC Test CD](http://wa8lmf.net/TNCtest/): download its BIN/CUE image and point the script at the
+`.cue`, and it reads tracks 1 (flat discriminator audio) and 2 (the same traffic de-emphasized, as a speaker
+delivers it) straight from the image. Direwolf's `atest` decodes the same tracks, so the counts compare
+directly with Direwolf's.
+
+```sh
+node tools/bench/afsk-wav.mjs --cue TNC_Test_Ver-1.1.cue --tracks 1,2
+node tools/bench/afsk-wav.mjs capture.wav --frames frames.txt   # one hex line per frame, for a diff
+```
+
+The benchmark needs the downloaded image, so it runs by hand, not in CI.
+
 ## Pocket in Termux
 
 The monthly `pocket-termux` workflow installs and starts Pocket in the `termux/termux-docker` image. On
