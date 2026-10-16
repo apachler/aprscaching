@@ -71,6 +71,18 @@ const SURFACES = [
     steps: [["click", "text=/^Sign in/i"]],
     after: "form, .signin",
   },
+  // a join link from the landing's form or the project's sites: sign-in opens on the call, already checked
+  { name: "join", as: "out", url: "/join?call=OE8APR&demo=app&as=out", wait: ".landing", after: "text=new account" },
+  // the public tours: the app on demo data under their banner, with their coach marks
+  { name: "tour-game", url: "/tour/game?t=1", wait: ".tour-banner", after: ".tour-card" },
+  {
+    name: "tour-game-log",
+    url: "/tour/game?t=1",
+    wait: ".tour-banner",
+    steps: [["click", ".tour-actions button.primary"]],
+    after: '.tour-scrim[data-anchored="true"]',
+  },
+  { name: "tour-shack", url: "/tour/shack?t=1", wait: ".tour-banner", after: ".tour-card" },
   // signed out because the callsign moved to its licensee: the notice says why and offers the data
   { name: "session-ended", as: "ended", query: "", wait: ".landing", after: "text=is no longer yours" },
   // an account with no passkey and no email: the bar over the map, and the warning in Settings → Account

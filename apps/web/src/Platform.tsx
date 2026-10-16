@@ -1254,6 +1254,7 @@ export default function Platform({
 
             <div className="mapwrap">
               <div ref={setMapNode} className="map" data-tour="map" />
+              {tour && <TourBanner tour={tour} onReplay={() => setTourOpen(true)} />}
               <ToolMapLayers map={map} />
               {/* §6 — `map`-capability tools render markers here */}
               {ready && center && (
@@ -1433,7 +1434,6 @@ export default function Platform({
               onClose={() => setSearchOpen(false)}
             />
           )}
-          {tour && <TourBanner tour={tour} onReplay={() => setTourOpen(true)} />}
           {tourOpen && (
             <Tour
               steps={tour === "game" ? GAME_TOUR_STEPS : tour === "shack" ? SHACK_TOUR_STEPS : TOUR_STEPS}
