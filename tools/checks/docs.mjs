@@ -42,7 +42,7 @@ const PROSE = tracked.filter(
     !f.startsWith("docs/reviews/") &&
     (f.startsWith("docs/") ||
       !f.includes("/") ||
-      /^(deploy|tools|servers|apps|packages|workers)\/.*README\.md$/.test(f)),
+      /^(deploy|tools|servers|apps|packages|modems|workers)\/.*README\.md$/.test(f)),
 );
 const CODES = [
   [/\b(?:M[0-9]|H[1-6]|W[1-4]|T3[a-e])\b(?!-)/, "milestone or track code"],

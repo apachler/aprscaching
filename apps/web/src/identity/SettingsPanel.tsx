@@ -56,6 +56,8 @@ import {
   APRS_NOT_AFFILIATED,
   DEVICEID_CREDIT,
   DEVICEID_LINK,
+  DIREWOLF_CREDIT,
+  DIREWOLF_LINK,
   OTHER_MARKS,
   OTHERS_NOT_AFFILIATED,
 } from "../credits.js";
@@ -440,7 +442,11 @@ export function SettingsPanel(props: {
             <a href={DEVICEID_LINK} target="_blank" rel="noopener noreferrer">
               {DEVICEID_CREDIT}
             </a>{" "}
-            (APRS device identification database by Hessu, OH7LZB, and its volunteers), fetched by this instance.
+            (APRS device identification database by Hessu, OH7LZB, and its volunteers), fetched by this instance.{" "}
+            <a href={DIREWOLF_LINK} target="_blank" rel="noopener noreferrer">
+              {DIREWOLF_CREDIT}
+            </a>
+            , compiled to WebAssembly; its source is part of this instance's source.
           </p>
           <p className="muted">
             Register badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur

@@ -1,0 +1,36 @@
+{
+  "name": "@aprscaching/direwolf",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "description": "Direwolf's modem (receive and transmit, AX.25, FX.25, IL2P) as WebAssembly",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": [
+    "src",
+    "wasm",
+    "vendor",
+    "build.sh",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build:wasm": "./build.sh",
+    "fixture": "tsx test/make-fixture.ts"
+  },
+  "devDependencies": {
+    "@aprscaching/aprs": "workspace:*",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apachler/aprscaching.git",
+    "directory": "modems/direwolf"
+  },
+  "homepage": "https://aprscaching.net",
+  "author": "OE8APR"
+}

@@ -18,6 +18,14 @@ rebuild Bun with a changed WebKit. APRScaching's own code, which `bun build
 executable with a relinked Bun is `bash deploy/desktop/build-exe.sh` run with
 that Bun on PATH.
 
+The soundcard modem, where the executable carries it, is Direwolf by John
+Langner, WB2OSZ (https://github.com/wb2osz/direwolf, GPL-2.0-or-later), compiled to WebAssembly
+in modems/direwolf and conveyed with APRScaching under AGPL-3.0-or-later. Its
+complete corresponding source, the vendored Direwolf files, the glue code and
+the pinned build script, is in modems/direwolf/ of the release's source archive
+(aprscaching-<tag>-source.tar.gz, attached to every release) and at the Source
+link; modems/direwolf/NOTICE gives the details.
+
 The web app the executable serves is built from apps/web; the copyright notices
 and licence texts of the libraries compiled into it are at
 /third-party-notices.txt in the running app (Settings -> Help & credits ->

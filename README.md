@@ -100,7 +100,9 @@ Imported places name
 and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
 Radio Country Files by Jim Reisert, AD1C (MIT). Device names on station pages come from
 [aprs-deviceid](https://github.com/aprsorg/aprs-deviceid), the APRS device identification database by Hessu,
-OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime.
+OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime. The soundcard modem is
+[Direwolf](https://github.com/wb2osz/direwolf) by John Langner, WB2OSZ (GPL-2.0-or-later), compiled to WebAssembly
+(`modems/direwolf`, with its source).
 
 Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur callsign list,
 reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media Authority information.
@@ -122,6 +124,7 @@ open:
 |---|---|---|
 | **App & gateway** — `apps/`, `workers/gateway`, `servers/`, `db/`, `tools/` | **AGPL-3.0-or-later** (`LICENSE`) | A hosted network service — the AGPL §13 network-use clause keeps any *hosted* fork's source open to its users. |
 | **Reusable libraries** — `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/hub`, `packages/tools`, `packages/shared` | **MIT** (per-package `LICENSE`) | So other amateur-radio software can embed the decoders and contracts freely. |
+| **Modem** — `modems/direwolf` | **AGPL-3.0-or-later**; its vendored [Direwolf](https://github.com/wb2osz/direwolf) sources and `src/glue.c` **GPL-2.0-or-later** (`modems/direwolf/NOTICE`) | Direwolf's demodulator and modulator, compiled to WebAssembly. Direwolf's "or later" lets it combine with AGPL code under GPLv3 §13, so the built modem ships under the AGPL; it stays out of `packages/`, which nothing GPL may enter. |
 | **Documentation** — `docs/` | **CC-BY-SA-4.0** (`docs/LICENSE`) | Free-culture share-alike for prose, specs, and diagrams. |
 
 Each file's licence is the one of the unit it lives in; the per-package `LICENSE` files and the `license`

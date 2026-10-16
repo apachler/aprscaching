@@ -11,6 +11,7 @@ const units = [
   "packages/hub",
   "packages/shared",
   "packages/tools",
+  "modems/direwolf",
 ];
 const apps = ["workers/gateway", "servers/node", "apps/ingest", "apps/web"];
 

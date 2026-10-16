@@ -38,6 +38,7 @@ jobs:
   #   axe                   web, packages; never on a push to dev (pull requests run it, visual.yml nightly)
   #   Pocket scripts        deploy/pocket/, deploy/lib/, ci.yml
   #   Deploy helpers        the deploy/ helper scripts and their tests, docs/reference/cli.md, ci.yml
+  #   Direwolf WebAssembly  modems/direwolf/, ci.yml (its unit tests run in unit tests + builds)
   # `lint + format` always runs. A skipped job reports as skipped, which a required check accepts. When the diff
   # cannot be read, everything runs.
   changes:
@@ -53,6 +54,7 @@ jobs:
       axe: ${{ steps.paths.outputs.axe }}
       pocket: ${{ steps.paths.outputs.pocket }}
       helpers: ${{ steps.paths.outputs.helpers }}
+      direwolf: ${{ steps.paths.outputs.direwolf }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 2 }
@@ -127,6 +129,38 @@ jobs:
       - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with: { tofu_version: 1.13.1, tofu_wrapper: false }
       - run: tofu -chdir=deploy/oci init -backend=false -input=false && tofu -chdir=deploy/oci validate && tofu -chdir=deploy/oci fmt -check
+
+  direwolf:
+    name: Direwolf WebAssembly (vendored source, reproducible build)
+    needs: changes
+    if: needs.changes.outputs.direwolf == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The vendored files are upstream's, byte for byte, at the tag and commit UPSTREAM names.
+      - name: vendored Direwolf matches its release
+        run: |
+          tag=$(sed -n 's/^Release: *//p' modems/direwolf/vendor/direwolf/UPSTREAM)
+          commit=$(sed -n 's/^Commit: *\([0-9a-f]*\).*/\1/p' modems/direwolf/vendor/direwolf/UPSTREAM)
+          git clone --quiet --depth 1 --branch "$tag" https://github.com/wb2osz/direwolf "$RUNNER_TEMP/direwolf"
+          [ "$(git -C "$RUNNER_TEMP/direwolf" rev-parse HEAD)" = "$commit" ] || { echo "tag $tag is not $commit" >&2; exit 1; }
+          (cd "$RUNNER_TEMP/direwolf" && sha256sum --quiet -c "$GITHUB_WORKSPACE/modems/direwolf/vendor/direwolf/SHA256SUMS")
+      # build.sh pins the Emscripten version; emsdk's tags match its versions.
+      - name: install the pinned Emscripten
+        run: |
+          v=$(sed -n 's/^EMSDK_VERSION=//p' modems/direwolf/build.sh)
+          git clone --quiet --depth 1 --branch "$v" https://github.com/emscripten-core/emsdk "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$v"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$v"
+      # The build is byte-reproducible (-ffile-prefix-map keeps the checkout's path out), so the committed .wasm
+      # files and loader must be exactly what the source builds. The package's tests run in the unit test job.
+      - name: rebuild and compare with the committed build
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          modems/direwolf/build.sh
+          git status --porcelain -- modems/direwolf/wasm
+          git diff --exit-code --stat -- modems/direwolf/wasm
+          [ -z "$(git status --porcelain -- modems/direwolf/wasm)" ]
 
   lint-types:
     name: lint (type-aware, slow)

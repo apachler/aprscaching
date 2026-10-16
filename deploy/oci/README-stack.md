@@ -15,7 +15,9 @@ larger allowance free — check *Governance → Limits, Quotas and Usage* in the
 
 The button hands Resource Manager the `aprscaching-oci-stack.zip` attached to the latest release, so
 there is nothing to download or upload by hand. Each release's zip pins its own tag: a stack created
-from `v1.2.0` deploys `v1.2.0`, not whatever `main` holds later.
+from `v1.2.0` deploys `v1.2.0`, not whatever `main` holds later. The zip holds only the stack: the VM
+clones the repository at that tag, so it builds from the complete source, the vendored Direwolf modem
+(`modems/direwolf/vendor/direwolf/`, GPL-2.0-or-later) included.
 
 ## What you fill in
 

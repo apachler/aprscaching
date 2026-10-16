@@ -199,8 +199,6 @@ the per-port arbiter, the client registry, `KissServerCore`); the KISS server ru
 - [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS on the box (KISS over TCP is
       `apps/ingest/src/kiss.ts`, SMACK framing is in `packages/aprs/src/ax25.ts`; the browser reaches a USB TNC
       over Web Serial).
-- [ ] **Supervised Direwolf** _(P1 · M)_ — the hub launches and manages a Direwolf instance
-      (config generation, ALSA/pulse device pick, restart-on-crash) for soundcard AFSK/IL2P.
 - [ ] **WA8DED hostmode TNC driver on serial** _(P2 · S)_ — TNC3/SCS-class firmware TNCs in hostmode on a
       serial port; the host-mode driver over TCP is `apps/ingest/src/hostmode.ts` (`HOSTMODE_HOST`).
 - [ ] **SCS PACTOR hostmode** _(P2 · L)_ — PTC-II/P4dragon hostmode incl. PACTOR level
@@ -229,6 +227,46 @@ the per-port arbiter, the client registry, `KissServerCore`); the KISS server ru
       through a pty bridge on the kernel tier is left.
 - [ ] **Fringe hardware** _(P3 · L)_ — LoRa RNode, RX-only SDR via rtl_tcp: roadmap-listed, attempted
       opportunistically after the core hardware.
+
+Decided, not planned:
+
+- **Supervised Direwolf** — the hub launching and managing a native Direwolf (config generation, audio device
+  pick, restart on crash) for the soundcard. The ingest runs Direwolf's modem itself, as WebAssembly, in every
+  shape (the Direwolf modem section below); an operator who wants a full native Direwolf connects it as a
+  KISS-TCP or AGWPE TNC, which the ingest already speaks.
+
+## Direwolf modem (WebAssembly)
+
+_Owner decision: Direwolf (GPL-2.0-or-later) compiled to WebAssembly is the modem for receive and transmit on
+every surface._ The package exists: `modems/direwolf` (`@aprscaching/direwolf`, AGPL-3.0-or-later) with the
+vendored Direwolf 1.8.1 sources, receive and transmit at 300 / 1200 / 9600 bd in AX.25, FX.25 and IL2P, a
+byte-reproducible build CI checks, and tests. No consumer uses it yet; the stages below switch them over, in
+order. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
+from Direwolf.
+
+- [ ] **Ingest soundcard port on Direwolf** _(P1 · M)_ — `apps/ingest`'s soundcard port receives and transmits
+      through `@aprscaching/direwolf` behind the interface it has (`arecord`/`aplay`, echo suppression,
+      `reset()` at unkey, CSMA from `dcd`), with a per-port transmit mode (AX.25 / FX.25 / IL2P) and speed
+      (300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback setting. Covers the ingest box,
+      bare metal and the Docker stack. _Depends on:_ —
+- [ ] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s Web Audio path runs the receiver in an
+      AudioWorklet (or a Worker fed by one), loaded only when the soundcard path opens, so the landing and the
+      map bundle carry none of it; the TypeScript modem remains the fallback when WebAssembly is blocked.
+      Transmit through the same gate as today. _Depends on:_ the ingest stage.
+- [ ] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds the `.wasm` like the SPA (the package
+      already runs under Bun) and its notices ship beside it; Pocket runs the ingest stage as is, tested on a
+      phone. _Depends on:_ the ingest stage.
+- [ ] **Retire the TypeScript demodulator** _(P3 · S)_ — once Direwolf has carried every surface through a
+      release without a fallback report, remove the `AfskRx` demodulator (1200 and 300 bd) from `packages/aprs`
+      (the MIT modulator stays for embedders). _Depends on:_ the browser and Desktop stages.
+
+Considered and not planned:
+
+- **APRStt** — Direwolf's touch-tone gateway is not compiled in: a DTMF sequence identifies its sender weakly,
+  so a find logged this way reaches Tier C at most, which APRS-IS already gives (as under APRS practice).
+- **IL2P on the APRS channel** — receive stays on, but no default or preset transmits IL2P on 144.390 / 144.800
+  MHz: ordinary AX.25 receivers cannot decode it, so most APRS stations would not hear the beacon. IL2P is a
+  per-port choice for links where both ends speak it.
 
 ## Native packaging
 

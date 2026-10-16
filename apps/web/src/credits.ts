@@ -26,3 +26,7 @@ export const OTHERS_NOT_AFFILIATED =
 /** The device database a station page names devices from; its licence asks for the credit wherever it is used. */
 export const DEVICEID_CREDIT = "Device names from aprs-deviceid, CC BY-SA 2.0";
 export const DEVICEID_LINK = "https://github.com/aprsorg/aprs-deviceid";
+
+/** The soundcard modem: Direwolf compiled to WebAssembly (modems/direwolf); its licence travels with the credit. */
+export const DIREWOLF_CREDIT = "Soundcard modem: Direwolf by John Langner, WB2OSZ, GPL-2.0-or-later";
+export const DIREWOLF_LINK = "https://github.com/wb2osz/direwolf";
