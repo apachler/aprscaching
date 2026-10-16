@@ -197,11 +197,28 @@ they must talk to. Three tiers (full detail in `tools/interop/README.md`):
 - **Modem transports** — `tools/interop/direwolf/docker-compose.yml` joins two **Direwolf** modems
   with a UDP audio cable. The ingest's KISS TCP and AGWPE clients key one and hear the other over
   Bell-202 1200 bd AFSK, in both directions, and the ingest's RX-IGate delivers what its Direwolf hears
-  to **aprsc** with `qAR,<igate>`.
+  to **aprsc** with `qAR,<igate>`. Direwolf's `kissutil` dials the ingest's KISS server: it prints a frame the
+  ingest's Direwolf heard, and a frame it sends with transmit off never reaches the air.
 
 The peers run in the **weekly** `interop` workflow and the modem transports in the **weekly**
 `transports` workflow (both scheduled + manual dispatch), never the PR loop — peer downloads and
 kernel modules are not PR-gating dependencies.
+
+## Modem benchmark
+
+`tools/bench/afsk-wav.mjs` runs the soundcard modem's demodulator (`AfskRx`) over recorded audio and counts
+the frames that pass the FCS check, total and distinct. The standard recording is the
+[WA8LMF TNC Test CD](http://wa8lmf.net/TNCtest/): download its BIN/CUE image and point the script at the
+`.cue`, and it reads tracks 1 (flat discriminator audio) and 2 (the same traffic de-emphasized, as a speaker
+delivers it) straight from the image. Direwolf's `atest` decodes the same tracks, so the counts compare
+directly with Direwolf's.
+
+```sh
+node tools/bench/afsk-wav.mjs --cue TNC_Test_Ver-1.1.cue --tracks 1,2
+node tools/bench/afsk-wav.mjs capture.wav --frames frames.txt   # one hex line per frame, for a diff
+```
+
+The benchmark needs the downloaded image, so it runs by hand, not in CI.
 
 ## Pocket in Termux
 

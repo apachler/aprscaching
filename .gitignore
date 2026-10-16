@@ -47,3 +47,6 @@ __pycache__/
 
 # the coverage report (pnpm run coverage)
 /coverage/
+
+# the Direwolf package's native cross-check build (modems/direwolf/build.sh native)
+modems/direwolf/build/

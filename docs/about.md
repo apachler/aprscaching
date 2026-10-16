@@ -48,7 +48,8 @@ open:
 | Part | Licence | Why |
 |------|---------|-----|
 | **App & gateway** — `apps/`, `workers/gateway`, `servers/`, `db/`, `tools/` | **AGPL-3.0-or-later** | A hosted network service — the AGPL §13 network-use clause keeps any *hosted* fork's source open to its users, not only redistributed copies. |
-| **Reusable libraries** — `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/tools`, `packages/shared` | **MIT** | So other amateur-radio software can embed the decoders and contracts freely. |
+| **Reusable libraries** — `packages/aprs`, `packages/ax25`, `packages/packet`, `packages/hub`, `packages/tools`, `packages/shared` | **MIT** | So other amateur-radio software can embed the decoders and contracts freely. |
+| **Modem** — `modems/direwolf` | **AGPL-3.0-or-later**; the vendored [Direwolf](https://github.com/wb2osz/direwolf) sources and its glue code **GPL-2.0-or-later** | Direwolf's modem, compiled to WebAssembly. Direwolf's "or any later version" lets it combine with AGPL code under GPLv3 §13, so the built modem ships under the AGPL, with its complete source in the repository. |
 | **Documentation** — `docs/` | **CC-BY-SA-4.0** | Free-culture share-alike for prose, specs, and diagrams. |
 
 Each file's licence is that of the unit it lives in — every source file carries an `SPDX-License-Identifier`
@@ -82,7 +83,9 @@ Imported places name
 and link their source; that source's own terms apply to its data. DXCC entities and prefixes come from the Amateur
 Radio Country Files by Jim Reisert, AD1C (MIT). Device names on station pages come from
 [`aprs-deviceid`](https://github.com/aprsorg/aprs-deviceid), the APRS device identification database by Hessu,
-OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime.
+OH7LZB (CC BY-SA 2.0), which each instance fetches at runtime. The soundcard modem is
+[Direwolf](https://github.com/wb2osz/direwolf) by John Langner, WB2OSZ (GPL-2.0-or-later), compiled to WebAssembly
+(`modems/direwolf`, with its source).
 
 Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur callsign list,
 reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media Authority information.

@@ -42,6 +42,7 @@ turns an unattended station into a channel hog.
 | MeshCom sends | message | `MESHCOM_TX_BURST`, `MESHCOM_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
 | TX-IGate (APRS-IS to RF) | message | `IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 | FBB forwarding | session | `BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC` | 4, then 1 per 300 s | 10, then 1 per 60 s |
+| [KISS server](../radios/kiss-server.md) clients, all together | frame | `KISS_SERVER_TX_BURST`, `KISS_SERVER_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 
 A refused transmit is always logged:
 

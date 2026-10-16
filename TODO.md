@@ -158,10 +158,11 @@ transport becomes core:
       Direwolf/tfkiss partners so ONE conformance suite covers the box drivers and the shack
       drivers alike.
 
-## Station hub — parked until after launch
+## Station hub — started; the rest after launch
 
-_The box as protocol driver + universal hardware interface (owner-decided design)._ Parked: it is a
-separate product scope that carries transmit liability, and it does not advance the caching game.
+_The box as protocol driver + universal hardware interface (owner-decided design)._ The hub has started with
+its KISS-over-TCP server ([Share the box's radio](docs/run/radios/kiss-server.md)); the rest waits until after
+launch: it is a separate product scope that carries transmit liability, and it does not advance the caching game.
 
 The inversion of the transport work above: the box _consumes_ protocols; this program makes
 it also _serve_ them, so third-party packet software uses our box as its TNC/driver (the TFPCX
@@ -171,31 +172,33 @@ taps everything that flows through. Decided scope: all three southbound servers,
 shared arbitration, core hardware through PACTOR, the full rig program including re-export, the full
 PTT set, GPS, a separate hub daemon, weekly client-conformance legs, and fringe hardware last.
 
-**Architecture** — new `packages/hub` (pure protocol/driver cores, unit-testable) + a separate
-hub daemon process shipped in the same box image next to the ingest process: crash-isolated,
-restartable, talks to ingest over the existing local seam. MIT-clean like the other packages.
+**Architecture** — `packages/hub` (pure protocol/driver cores, unit-testable; MIT-clean like the other
+packages) + a separate hub daemon process shipped in the same box image next to the ingest process:
+crash-isolated, restartable, talks to ingest over the existing local seam. The cores exist (KISS client framing,
+the per-port arbiter, the client registry, `KissServerCore`); the KISS server runs inside the ingest process
+(`apps/ingest/src/hubserver.ts`) until the daemon exists, and moves into it unchanged.
 
 **Southbound servers (what 3rd-party software connects to):**
 
 - [ ] **AGWPE-TCP server** _(P1 · M)_ — the modern lingua franca (UI-View lineage, QtTermTCP,
       APRS clients): registration, monitor frames, raw frames, connected sessions.
-- [ ] **KISS-over-TCP server** _(P1 · S)_ — universal fallback every packet program speaks;
-      multi-client with per-client port filters.
+- [x] **KISS-over-TCP server** _(P1 · S)_ — universal fallback every packet program speaks;
+      multi-client with per-client port filters (single-port listeners), transmit opt-in under listed base
+      calls through the box's gate; ingest-hosted, cores in `packages/hub`.
 - [ ] **WA8DED/TF hostmode server over TCP + pty** _(P1 · M)_ — the literal TFPCX/TFKISS role for
       Paxon/LinKT-class software: channel polling, monitor headers, autobaud prompt on the pty.
 - [ ] **TNC2 command-mode emulation (`cmd:`) on telnet + pty** _(P2 · M)_ — vintage terminal
       programs get the classic prompt: C/D/MHEARD/MYCALL against our real stack.
 - [ ] **Channel arbitration + monitor fan-out** _(P1 · M)_ — shared model: every connected
       app receives RX; TX serialized through a fair per-port queue with per-app budgets; session
-      ownership tracked so connected-mode links stay coherent.
+      ownership tracked so connected-mode links stay coherent. The fan-out and the fair queue with budgets exist
+      (`packages/hub` `TxArbiter`, used by the KISS server); session ownership across servers is what's left.
 
 **Northbound hardware drivers (core hardware):**
 
 - [ ] **Serial KISS TNC** _(P1 · S)_ — classic serial/USB KISS on the box (KISS over TCP is
       `apps/ingest/src/kiss.ts`, SMACK framing is in `packages/aprs/src/ax25.ts`; the browser reaches a USB TNC
       over Web Serial).
-- [ ] **Supervised Direwolf** _(P1 · M)_ — the hub launches and manages a Direwolf instance
-      (config generation, ALSA/pulse device pick, restart-on-crash) for soundcard AFSK/IL2P.
 - [ ] **WA8DED hostmode TNC driver on serial** _(P2 · S)_ — TNC3/SCS-class firmware TNCs in hostmode on a
       serial port; the host-mode driver over TCP is `apps/ingest/src/hostmode.ts` (`HOSTMODE_HOST`).
 - [ ] **SCS PACTOR hostmode** _(P2 · L)_ — PTC-II/P4dragon hostmode incl. PACTOR level
@@ -219,9 +222,51 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **Client-side conformance legs in weekly `transports.yml`** _(P1 · M)_ — the mirror image
       of the interop suite: real third-party clients dial OUR servers in CI (Direwolf as AGW/KISS
       client, `call`/axcall via kissattach against our KISS-TCP, tfkiss-driven hostmode session,
-      hamlib `rigctl` against the re-export). Every server above lands with its leg.
+      hamlib `rigctl` against the re-export). Every server above lands with its leg. The KISS server's leg runs:
+      Direwolf's `kissutil` against it (`tools/interop/tests/kiss-server-loop.mjs`); `kissattach` + `axcall`
+      through a pty bridge on the kernel tier is left.
 - [ ] **Fringe hardware** _(P3 · L)_ — LoRa RNode, RX-only SDR via rtl_tcp: roadmap-listed, attempted
       opportunistically after the core hardware.
+
+Decided, not planned:
+
+- **Supervised Direwolf** — the hub launching and managing a native Direwolf (config generation, audio device
+  pick, restart on crash) for the soundcard. The ingest runs Direwolf's modem itself, as WebAssembly, in every
+  shape (the Direwolf modem section below); an operator who wants a full native Direwolf connects it as a
+  KISS-TCP or AGWPE TNC, which the ingest already speaks.
+
+## Direwolf modem (WebAssembly)
+
+_Owner decision: Direwolf (GPL-2.0-or-later) compiled to WebAssembly is the modem for receive and transmit on
+every surface._ The package exists: `modems/direwolf` (`@aprscaching/direwolf`, AGPL-3.0-or-later) with the
+vendored Direwolf 1.8.1 sources, receive and transmit at 300 / 1200 / 9600 bd in AX.25, FX.25 and IL2P, a
+byte-reproducible build CI checks, and tests. No consumer uses it yet; the stages below switch them over, in
+order. Building our own FX.25, IL2P or 9600-bd modem in TypeScript is superseded by this: those modes come
+from Direwolf.
+
+- [ ] **Ingest soundcard port on Direwolf** _(P1 · M)_ — `apps/ingest`'s soundcard port receives and transmits
+      through `@aprscaching/direwolf` behind the interface it has (`arecord`/`aplay`, echo suppression,
+      `reset()` at unkey, CSMA from `dcd`), with a per-port transmit mode (AX.25 / FX.25 / IL2P) and speed
+      (300 / 1200 / 9600), and the TypeScript modem kept as a per-port fallback setting. Covers the ingest box,
+      bare metal and the Docker stack. _Depends on:_ —
+- [ ] **Browser soundcard on Direwolf** _(P1 · M)_ — `apps/web`'s Web Audio path runs the receiver in an
+      AudioWorklet (or a Worker fed by one), loaded only when the soundcard path opens, so the landing and the
+      map bundle carry none of it; the TypeScript modem remains the fallback when WebAssembly is blocked.
+      Transmit through the same gate as today. _Depends on:_ the ingest stage.
+- [ ] **Desktop and Pocket** _(P2 · S)_ — the Desktop binary embeds the `.wasm` like the SPA (the package
+      already runs under Bun) and its notices ship beside it; Pocket runs the ingest stage as is, tested on a
+      phone. _Depends on:_ the ingest stage.
+- [ ] **Retire the TypeScript demodulator** _(P3 · S)_ — once Direwolf has carried every surface through a
+      release without a fallback report, remove the `AfskRx` demodulator (1200 and 300 bd) from `packages/aprs`
+      (the MIT modulator stays for embedders). _Depends on:_ the browser and Desktop stages.
+
+Considered and not planned:
+
+- **APRStt** — Direwolf's touch-tone gateway is not compiled in: a DTMF sequence identifies its sender weakly,
+  so a find logged this way reaches Tier C at most, which APRS-IS already gives (as under APRS practice).
+- **IL2P on the APRS channel** — receive stays on, but no default or preset transmits IL2P on 144.390 / 144.800
+  MHz: ordinary AX.25 receivers cannot decode it, so most APRS stations would not hear the beacon. IL2P is a
+  per-port choice for links where both ends speak it.
 
 ## Native packaging
 
@@ -572,7 +617,7 @@ Considered and not planned:
         the hub's own transmit ports, a separate path.)
       - Docs: `docs/shack/rig-weather.md` (the option), `docs/run/radios/ingest-box.md` (the settings, running
         `rigctld -m <model> -r <port>` beside the box), `docs/reference/rig-library.md` (the client's user).
-      The Station hub's parked **rigctld client** item above is the same client from the hub side.
+      The Station hub's **rigctld client** item above is the same client from the hub side.
 
 - [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
       so a dark or Phosphor app opens onto a bright map. A dark style from the same tiles would follow the

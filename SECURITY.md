@@ -49,7 +49,7 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
   callsign check that can be bypassed, or a certificate parser crash — `verify_lotw.ts`, `x509.ts`), the
   operator bootstrap, and sysop manual verification.
 - **Ingest & parsers** — a single crafted packet that crashes or hangs the ingest/gateway
-  (`packages/aprs`, `packages/packet`, `apps/ingest`).
+  (`packages/aprs`, `packages/packet`, `packages/hub`, `apps/ingest`).
 - **The tool-plugin sandbox** (`packages/tools`, `apps/web/src/tools/`) — sandbox escape or
   signature-verification bypass.
 - **Resource exhaustion** — unbounded growth or connection storms that take down a long-running box.

@@ -4,7 +4,15 @@
 // html for reading, lcov for tools, json-summary for the totals. No threshold: the number is measured, not gated.
 import { defineConfig } from "vitest/config";
 
-const units = ["packages/aprs", "packages/ax25", "packages/packet", "packages/shared", "packages/tools"];
+const units = [
+  "packages/aprs",
+  "packages/ax25",
+  "packages/packet",
+  "packages/hub",
+  "packages/shared",
+  "packages/tools",
+  "modems/direwolf",
+];
 const apps = ["workers/gateway", "servers/node", "apps/ingest", "apps/web"];
 
 export default defineConfig({
