@@ -21,13 +21,16 @@ from OPEN specs (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). Never copy 
 pnpm monorepo. apps/web = React+MapLibre, served by the gateway's host (Caddy, the Node server or the desktop
 binary) on the same origin as the API. workers/gateway = the runtime-neutral gateway app (it holds no Worker; TODO.md
 tracks moving it out of `workers/`) run by `servers/node` (Node + SQLite) and `servers/bun` (Bun +
-`bun:sqlite`). **Canonical host = `aprscaching.net`** (the network peer + marketing landing + platform), on the
+`bun:sqlite`). **Canonical host = `aprscaching.net`** (the network peer + front-door landing + platform), on the
 box's public IP; `INSTANCE`/`APP_URL`/`RP_ID` = `.net`. The same instance also answers on
 `https://aprscaching.oe8apr.ampr.org` (`EXTRA_ORIGINS`, over the 44Net Connect tunnel: a second path and the
-callsign identity), where passkeys work as a WebAuthn related origin. `aprscaching.com` (+ `www.`) redirects to
-`.net` at the registrar (pre-auth, never a sign-in origin, never in `EXTRA_ORIGINS`). `aprscaching.org` is the
-project's own site, not an instance: `docs.aprscaching.org` serves the manual from GitHub Pages, `(www.)aprscaching.org`
-a project landing page.
+callsign identity), where passkeys work as a WebAuthn related origin. `aprscaching.com` and `aprscaching.org`
+(+ `www.`) are the project's own sites, not instances: static landing pages on the owner's Hetzner web hosting, from the
+private repositories `apachler/aprscaching-com` (the game) and `apachler/aprscaching-org` (the Shack and the project),
+one family with the app's tokens (Light for `.com`, Dark and Phosphor for `.org`). Their calls to action reach the
+instance's public tours (`/tour/game`, `/tour/shack`: the app on demo data, `apps/web/src/demo/tourMode.ts`) and its
+join link (`/join?call=…`); neither is a sign-in origin or in `EXTRA_ORIGINS`. `docs.aprscaching.org` serves the
+manual from GitHub Pages.
 apps/ingest = the operator-local RF/APRS-IS ingest (Pi/PC/mini-PC; a cloud box MAY run an IS-only
 feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs = pure parser (runs in
 Node, Bun, browser and any other WebCrypto runtime). packages/shared = zod contracts. packages/hub = the station hub's pure cores (KISS server clients, framing, the per-port transmit arbiter; MIT), hosted by `apps/ingest/src/hubserver.ts`. modems/direwolf

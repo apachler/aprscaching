@@ -32,7 +32,7 @@ export function ShackPanel(props: {
         Launch one, or pin it to the left rail. <InfoTip text={TERMS.shack} label="What is the Shack?" />
       </p>
 
-      <div className="shack-apps" role="list">
+      <div className="shack-apps" role="list" data-tour="shack-apps">
         {props.apps.map((app) => {
           const pinned = props.pinned.includes(app.id);
           return (

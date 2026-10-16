@@ -9,7 +9,7 @@
  * links outside the app (the manual) close the rail, opening in a new tab.
  */
 import { Icon, type IconName, Button, Hint } from "./ui/index.js";
-import { NAV_ITEMS, NAV_LINKS, type NavItem, type PinnedItem, type View } from "./nav.js";
+import { NAV_ITEMS, NAV_LINKS, railHook, type NavItem, type PinnedItem, type View } from "./nav.js";
 
 export function NavRail(props: {
   /** The lit item's key (see nav.ts activeKey). */
@@ -29,7 +29,7 @@ export function NavRail(props: {
         onClick={onClick}
         aria-current={props.active === key ? "page" : undefined}
         aria-describedby={props.attention.has(key) ? "rail-attn" : undefined}
-        data-tour={key === "nearby" ? "nearby" : undefined}
+        data-tour={railHook(key)}
       >
         <Icon name={icon} size={21} />
         {props.attention.has(key) && <span className="nav-dot" aria-hidden="true" />}

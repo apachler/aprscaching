@@ -282,7 +282,7 @@ export function DetailPanel(props: {
         </div>
       )}
 
-      <div className="detail-stats">
+      <div className="detail-stats" data-tour="cache">
         <Stat label="Difficulty">
           <DtBars value={c.difficulty} />
           <div className="mt-2">{c.difficulty.toFixed(1)} / 5</div>

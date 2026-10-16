@@ -15,12 +15,12 @@ with a web browser. At the end your find is in the cache's logbook, with a badge
 ### Sign in
 
 1. Open the address in your browser. The front page opens.
-2. Tap **Sign in with your callsign**, or **Sign in** in the top bar. The sign-in sheet opens.
-3. Type your **Callsign** and tap **Continue**.
+2. Type your callsign under **Your callsign** and tap **Join**. The sign-in sheet opens on your callsign. You
+   can also tap **Sign in** in the top bar, type your **Callsign** there and tap **Continue**.
 
     ![The sign-in sheet on a phone, with the callsign field and the Continue button](../assets/shots/signin-mobile.webp){ width="280" loading=lazy }
 
-4. Tap **Create account with a passkey**. Your phone asks for your fingerprint, face or PIN, and stores the
+3. Tap **Create account with a passkey**. Your phone asks for your fingerprint, face or PIN, and stores the
    [passkey](../glossary.md#passkey). There is no password. You can tap **Email me a link** instead.
 
 The map opens. Your callsign shows in the top bar, marked **unverified**.

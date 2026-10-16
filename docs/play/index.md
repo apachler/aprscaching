@@ -20,6 +20,10 @@ about servers. A term you don't know is explained in a line or two in the [Gloss
 Around the game sits **[the Shack](../shack/index.md)**: packet-radio tools in your browser for when you want
 to operate.
 
+To try it before you join, open the game tour at `/tour/game` on any instance, for example
+[aprscaching.net/tour/game](https://aprscaching.net/tour/game). It is the real app on demo data: nothing you do
+there is kept or sent.
+
 ## Your journey
 
 1. [Join](join.md): sign in with your callsign and verify it.

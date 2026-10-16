@@ -22,3 +22,22 @@ export function opensPlatform(search: string): boolean {
   const q = new URLSearchParams(search);
   return q.has("view") || q.has("v") || cacheFromQuery(search) != null;
 }
+
+/**
+ * The callsign a join link names (`/join?call=OE8APR`, the form on the landing page and on the project's own sites),
+ * upper-cased; `""` for a join link without a usable call, and null for any other address. The sign-in panel opens
+ * on that call, so a visitor who typed it elsewhere does not type it again.
+ */
+export function joinCall(pathname: string, search: string): string | null {
+  if (pathname.replace(/\/+$/, "") !== "/join") return null;
+  const c = new URLSearchParams(search).get("call")?.trim().toUpperCase() ?? "";
+  return /^[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,4}$/.test(c) ? c : "";
+}
+
+export type TourName = "game" | "shack";
+
+/** The public tour an address opens (`/tour/game`, `/tour/shack`), or null. */
+export function tourFromPath(pathname: string): TourName | null {
+  const m = /^\/tour\/(game|shack)\/?$/.exec(pathname);
+  return m ? (m[1] as TourName) : null;
+}

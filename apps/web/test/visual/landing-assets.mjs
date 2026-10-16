@@ -2,7 +2,8 @@
 /**
  * The landing page's images, made from the real app on the demo fixtures: the map band (the live map over the
  * real vector basemap, chrome hidden), a phone screenshot (a cache sheet), a desktop screenshot (Nearby beside a
- * cache) and the Open Graph card (the hero itself), plus the hero photo at three widths. Each is written to
+ * cache) and the Open Graph card (the hero itself), plus the hero photo at three widths. The phone and desktop
+ * screenshots are for the project's own sites (aprscaching.com and aprscaching.org), which copy them from a release. Each is written to
  * apps/web/public/landing/ as AVIF and WebP by encode.py (Pillow), next to this file.
  *
  *   pnpm --filter @aprscaching/web build && node apps/web/test/visual/landing-assets.mjs

@@ -9,7 +9,7 @@ import { AccountData } from "./identity/AccountData.js";
 import { SessionEndedNotice } from "./identity/SessionEndedNotice.js";
 import { ASSET } from "./brand.js";
 import { UpdateNotice } from "./shell/UpdateNotice.js";
-import { opensPlatform } from "./deeplink.js";
+import { joinCall, opensPlatform, type TourName } from "./deeplink.js";
 
 // The signed-in / explore platform owns MapLibre (~1 MB) plus all the map code. Lazy-load it so the
 // signed-out marketing landing paints without ever fetching the map bundle: the
@@ -36,11 +36,22 @@ const prerenderShown = () =>
   !!document.getElementById("landing-pre") &&
   document.documentElement.dataset.prerender !== "off";
 
-export function App() {
+export function App(props: { tour?: TourName }) {
   const session = useSession();
   const [prerendered] = useState(prerenderShown);
+  // a join link (`/join?call=…`) opens sign-in on its callsign, over the landing
+  const [joinAt] = useState(() => joinCall(location.pathname, location.search));
   // the sign-in panel, opened on its callsign step or on "Get or erase my data"
-  const [showSignIn, setShowSignIn] = useState<false | "signin" | "data">(false);
+  const [showSignIn, setShowSignIn] = useState<false | "signin" | "data">(joinAt === null ? false : "signin");
+  const [signInCall, setSignInCall] = useState(joinAt || undefined);
+  // the join link has done its job once read; the address goes back to the front page
+  useEffect(() => {
+    if (joinAt !== null) history.replaceState(history.state, "", "/");
+  }, [joinAt]);
+  const openSignIn = useCallback((call?: string) => {
+    setSignInCall(call || undefined);
+    setShowSignIn("signin");
+  }, []);
   // landing gate: signed-in skips the landing; signed-out sees it until they Explore
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
   const [explored, setExplored] = useState(() => {
@@ -98,13 +109,14 @@ export function App() {
           )
         ) : !active ? (
           <>
-            <Landing onSignIn={() => setShowSignIn("signin")} onExplore={onExplore} resume={prerendered} />
+            <Landing onSignIn={openSignIn} onExplore={onExplore} resume={prerendered} />
             {session.accountData && !showSignIn && (
               <AccountData onSignOut={() => void session.signOut()} onErased={() => void session.signOutErased()} />
             )}
             {showSignIn && (
               <SignIn
                 start={showSignIn}
+                call={showSignIn === "signin" ? signInCall : undefined}
                 onDone={() => {
                   session.refresh();
                   setShowSignIn(false);
@@ -119,7 +131,7 @@ export function App() {
           </>
         ) : (
           <Suspense fallback={<Splash />}>
-            <Platform session={session} startTour={startTour} />
+            <Platform session={session} startTour={startTour} tour={props.tour} />
           </Suspense>
         )}
         {/* signed out by a suspension, a released callsign or an erasure: say why, wherever the person lands */}
@@ -130,7 +142,7 @@ export function App() {
             onSignIn={() => {
               void session.dismissEnded();
               toLanding();
-              setShowSignIn("signin");
+              openSignIn();
             }}
             onData={() => {
               void session.dismissEnded();

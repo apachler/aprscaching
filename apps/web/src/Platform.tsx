@@ -29,6 +29,9 @@ import {
 import { TopBar } from "./TopBar.js";
 import { RadioLinkHost } from "./rf/RadioLinkHost.js";
 import { Tour, TOUR_STEPS, Button, useToast, Icon, usePoll } from "./ui/index.js";
+import { GAME_TOUR_STEPS, SHACK_TOUR_STEPS } from "./ui/tourSteps.js";
+import { TourBanner } from "./platform/TourBanner.js";
+import type { TourName } from "./deeplink.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET } from "./brand.js";
 import { tokenHex } from "./shell/tokenColor.js";
@@ -220,7 +223,16 @@ function returnStore(): ReturnStore | null {
  * (`selectedId` / `remote`) because it coexists with a left panel on wide screens. The session and the
  * map reach the surfaces through PlatformContext.
  */
-export default function Platform({ session, startTour }: { session: SessionState; startTour: boolean }) {
+export default function Platform({
+  session,
+  startTour,
+  tour,
+}: {
+  session: SessionState;
+  startTour: boolean;
+  /** A public tour: the app runs on demo data, under its banner, with that tour's coach marks. */
+  tour?: TourName;
+}) {
   const [mapNode, setMapNode] = useState<HTMLDivElement | null>(null);
   const toast = useToast();
   const draftMarker = useRef<maplibregl.Marker | null>(null);
@@ -262,7 +274,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     messagesOpen: isPanel("messages"),
   });
   const hiding = isPanel("hide");
-  const [tourOpen, setTourOpen] = useState(startTour);
+  const [tourOpen, setTourOpen] = useState(startTour || !!tour);
   // the phone's More sheet and search sheet (TabBar, TopBar below 960px)
   const [moreOpen, setMoreOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1421,7 +1433,15 @@ export default function Platform({ session, startTour }: { session: SessionState
               onClose={() => setSearchOpen(false)}
             />
           )}
-          {tourOpen && <Tour steps={TOUR_STEPS} signedIn={!!callsign} onDone={() => setTourOpen(false)} />}
+          {tour && <TourBanner tour={tour} onReplay={() => setTourOpen(true)} />}
+          {tourOpen && (
+            <Tour
+              steps={tour === "game" ? GAME_TOUR_STEPS : tour === "shack" ? SHACK_TOUR_STEPS : TOUR_STEPS}
+              signedIn={!!callsign}
+              keepUnseen={!!tour}
+              onDone={() => setTourOpen(false)}
+            />
+          )}
         </div>
       </FormatContext.Provider>
     </PlatformContext.Provider>

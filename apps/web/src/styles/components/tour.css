@@ -69,9 +69,83 @@
       position: fixed;
       position-anchor: --tour-target;
       position-area: block-end;
-      position-try-fallbacks: flip-block, flip-inline;
+      position-try-fallbacks: flip-block, flip-inline, --tour-inside;
       max-width: min(460px, calc(100vw - 32px));
       margin: var(--space-sm);
     }
+    /* on a phone the anchor is often a small tab at the foot: the card takes the screen's width, above it or below */
+    @media (max-width: 680px) {
+      .tour-scrim[data-anchored="true"] .tour-card {
+        position-area: block-start;
+        position-try-fallbacks: block-end, --tour-inside;
+        /* in the row, not on the anchor's centre, which would push it off a narrow screen */
+        justify-self: center;
+      }
+    }
+  }
+
+  /* An element too large to sit beside (the map): the card goes inside it, at its top. */
+  @position-try --tour-inside {
+    position-area: center;
+    align-self: start;
+    justify-self: center;
+    margin-top: var(--space-lg);
+  }
+
+  /* the strip a public tour runs under: what this is, and the ways out. On a phone it sits under the top bar; with
+     the rail it moves to the foot of the map, above the coordinate readout and the map tools, clear of the
+     basemap's attribution. */
+  .tour-banner {
+    position: fixed;
+    top: calc(var(--topbar-h) + var(--space-sm) + env(safe-area-inset-top));
+    left: 50%;
+    translate: -50% 0;
+    z-index: var(--z-banner);
+    /* narrow enough to sit in the map between a left and a right panel */
+    width: min(380px, calc(100% - 2 * var(--space-sm)));
+    display: grid;
+    gap: var(--space-2xs);
+    padding: var(--space-sm) var(--space-sm) var(--space-xs) var(--space-md);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--elevation-floating);
+    font-size: var(--text-data);
+  }
+  @media (min-width: 681px) {
+    .tour-banner {
+      top: auto;
+      /* above the readout and the tools, which sit in the map's bottom corners */
+      bottom: calc(var(--space-lg) + var(--hit) + var(--space-xl) + env(safe-area-inset-bottom));
+      left: calc(50% + var(--rail-w) / 2);
+    }
+  }
+  .tour-banner p {
+    margin: 0;
+  }
+  .tour-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs) var(--space-sm);
+  }
+  .tour-banner-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit);
+    color: var(--accent-text);
+    font-weight: var(--weight-strong);
+  }
+  .tour-banner-actions .tour-banner-join {
+    padding: 0 var(--space-md);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+  }
+  .tour-banner-actions .tour-banner-join:hover {
+    background: color-mix(in oklab, var(--accent) 88%, var(--shade));
   }
 }

@@ -22,7 +22,7 @@
     </script>
     <script>
       /* The landing is in this page as HTML (#landing-pre, vite-prerender.ts). When it is not what opens (a
-         remembered session, a visit to the platform this session, a deep link), hide it before it paints. Its hero,
+         remembered session, a visit to the platform this session, a deep link, a tour), hide it before it paints. Its hero,
          the largest paint, is an eager high-priority image in that HTML, so the browser fetches it as soon as it
          reads the page; a separate preload would only go unused wherever the landing does not open. */
       (function () {
@@ -34,7 +34,8 @@
             q.has("view") ||
             q.has("v") ||
             q.has("cache") ||
-            q.has("demo");
+            q.has("demo") ||
+            location.pathname.indexOf("/tour/") === 0;
           if (off) document.documentElement.dataset.prerender = "off";
         } catch (e) {
           /* storage refused: the prerendered landing shows until the app decides */

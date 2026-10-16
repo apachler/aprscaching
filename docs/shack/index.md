@@ -9,6 +9,10 @@ A laptop and a radio are a complete station, even with no internet: the apps tal
 the left rail (on a phone: **More → Shack**). Each app opens its own screen. The pin button next to an app, or next
 to a tool inside **Tools**, puts it on the left rail; on a phone, pinned apps and tools are in **More**.
 
+To try the Shack before you join, open the Shack tour at `/tour/shack` on any instance, for example
+[aprscaching.net/tour/shack](https://aprscaching.net/tour/shack). It is the real app on demo data, with no radio
+connected: nothing you do there is kept, sent or transmitted.
+
 ## Your journey
 
 1. [Your radio in the browser](my-radio.md): connect a TNC, a Mobilinkd or a soundcard.
