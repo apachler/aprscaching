@@ -12,9 +12,8 @@
  * `SOUNDCARD_MODEM` picks the modem: `1200` (Bell 202, VHF and UHF FM, the default), `hf300` (300 baud,
  * 1600/1800 Hz, through an SSB radio on HF) or `9600` (G3RUH, through a radio's 9600-capable data port). An
  * `hf300` port takes a TXDELAY long enough for an HF radio's transmit-receive switching unless a setting names
- * one. `SOUNDCARD_DEMOD` picks the implementation: `direwolf` (the default) or `builtin`, the TypeScript modem,
- * which has neither 9600 baud nor FX.25 and IL2P. `SOUNDCARD_FEC` picks the transmit framing (`off`, `fx25`,
- * `il2p`) and `SOUNDCARD_FX25_CHECK_BYTES` the FX.25 code (16, 32 or 64); every port receives all three.
+ * one. Every port runs Direwolf's modem. `SOUNDCARD_FEC` picks the transmit framing (`off`, `fx25`, `il2p`) and
+ * `SOUNDCARD_FX25_CHECK_BYTES` the FX.25 code (16, 32 or 64); every port receives all three.
  *
  * `SOUNDCARD_AUDIO` picks the audio tools (audioio.ts): `alsa` (the default), with ALSA device names, or `pulse`,
  * with PulseAudio source and sink names (`default` is the server's own), as on a phone in Termux.
@@ -24,7 +23,7 @@ import { parsePttSpec } from "./ptt/index.js";
 import { withPttMax } from "./ptt/termuxusb.js";
 import { AUDIO_BACKENDS, type AudioBackend } from "./audioio.js";
 import type { SoundcardConfig } from "./soundcard.js";
-import { builtinProblem, type SoundcardDemod, type SoundcardFec, type SoundcardModem } from "./soundcardmodem.js";
+import type { SoundcardFec, SoundcardModem } from "./soundcardmodem.js";
 
 export interface SoundcardPortSettings extends SoundcardConfig {
   /** The call this port transmits under (`SOUNDCARD_CALL`, default `BOX_CALL`, `IGATE_CALL`, `DIGI_CALL`). */
@@ -44,7 +43,6 @@ type RangedField = keyof typeof RANGES;
 
 const RATES = [44100, 48000];
 const MODEMS: readonly SoundcardModem[] = ["1200", "hf300", "9600"];
-const DEMODS: readonly SoundcardDemod[] = ["direwolf", "builtin"];
 const FECS: readonly SoundcardFec[] = ["off", "fx25", "il2p"];
 const CHECK_BYTES = [16, 32, 64] as const;
 /** The TXDELAY an `hf300` port takes when no setting names one: an HF radio's relays switch slower than an FM rig's. */
@@ -56,7 +54,6 @@ const FIELDS = new Set([
   "audio",
   "rate",
   "modem",
-  "demod",
   "fec",
   "fx25CheckBytes",
   "tx",
@@ -78,18 +75,11 @@ function readCheckBytes(raw: unknown, at: string): 16 | 32 | 64 {
   return hit;
 }
 
-/** The modem fields, checked together: the built-in modem has no 9600 baud and no FX.25 or IL2P. */
+/** The modem fields a further port inherits unless it sets its own. */
 interface ModemFields {
   modem: SoundcardModem;
-  demod: SoundcardDemod;
   fec: SoundcardFec;
   fx25CheckBytes: 16 | 32 | 64;
-}
-
-function checkModem(m: ModemFields, at: string): ModemFields {
-  const why = m.demod === "builtin" ? builtinProblem(m) : null;
-  if (why) throw new Error(`${at}: ${why}; set the demodulator to direwolf`);
-  return m;
 }
 
 /** The HF TXDELAY for an `hf300` port whose settings name none. */
@@ -112,7 +102,6 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
   const modem = env.SOUNDCARD_MODEM?.trim() ? oneOf(MODEMS, env.SOUNDCARD_MODEM, "SOUNDCARD_MODEM") : "1200";
   const fields: ModemFields = {
     modem,
-    demod: env.SOUNDCARD_DEMOD?.trim() ? oneOf(DEMODS, env.SOUNDCARD_DEMOD, "SOUNDCARD_DEMOD") : "direwolf",
     fec: env.SOUNDCARD_FEC?.trim() ? oneOf(FECS, env.SOUNDCARD_FEC, "SOUNDCARD_FEC") : "off",
     fx25CheckBytes: env.SOUNDCARD_FX25_CHECK_BYTES?.trim()
       ? readCheckBytes(env.SOUNDCARD_FX25_CHECK_BYTES, "SOUNDCARD_FX25_CHECK_BYTES")
@@ -131,7 +120,7 @@ export function soundcardPorts(env: Record<string, string | undefined>): Soundca
       playback: env.SOUNDCARD_PLAYBACK?.trim() || device,
       ...pulseOnly(audio),
       rate,
-      ...checkModem(fields, "SOUNDCARD_DEMOD"),
+      ...fields,
       tx: env.SOUNDCARD_TX === "1",
       ptt: withPttMax(parsePttSpec(env.SOUNDCARD_PTT), ranged.pttMaxMs),
       call,
@@ -190,18 +179,14 @@ function extraPort(
   const audio = o.audio === undefined ? inherit.audio : oneOf(AUDIO_BACKENDS, o.audio, `${at}.audio`);
   const rate = o.rate === undefined ? inherit.rate : Number(o.rate);
   if (!RATES.includes(rate)) throw new Error(`${at}.rate: expected ${RATES.join(" or ")}`);
-  const fields = checkModem(
-    {
-      modem: o.modem === undefined ? inherit.fields.modem : oneOf(MODEMS, o.modem, `${at}.modem`),
-      demod: o.demod === undefined ? inherit.fields.demod : oneOf(DEMODS, o.demod, `${at}.demod`),
-      fec: o.fec === undefined ? inherit.fields.fec : oneOf(FECS, o.fec, `${at}.fec`),
-      fx25CheckBytes:
-        o.fx25CheckBytes === undefined
-          ? inherit.fields.fx25CheckBytes
-          : readCheckBytes(o.fx25CheckBytes, `${at}.fx25CheckBytes`),
-    },
-    at,
-  );
+  const fields: ModemFields = {
+    modem: o.modem === undefined ? inherit.fields.modem : oneOf(MODEMS, o.modem, `${at}.modem`),
+    fec: o.fec === undefined ? inherit.fields.fec : oneOf(FECS, o.fec, `${at}.fec`),
+    fx25CheckBytes:
+      o.fx25CheckBytes === undefined
+        ? inherit.fields.fx25CheckBytes
+        : readCheckBytes(o.fx25CheckBytes, `${at}.fx25CheckBytes`),
+  };
   const tx = o.tx === true || o.tx === 1 || o.tx === "1";
   if (o.tx !== undefined && !tx && o.tx !== false && o.tx !== 0 && o.tx !== "0")
     throw new Error(`${at}.tx: expected true or false`);

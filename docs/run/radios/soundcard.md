@@ -204,11 +204,10 @@ noisy signal.
 transmit level for about 3 kHz deviation; a radio's microphone filtering ruins 9600 baud, so use the data port.
 `SOUNDCARD_TXDELAY_MS` can be shorter than at 1200 baud when the radio switches fast.
 
-**The built-in modem.** `SOUNDCARD_DEMOD=builtin` runs the ingest's own TypeScript modem instead,
-at 1200 and 300 baud, plain AX.25 only. It is the fallback for one release: set it if the WebAssembly modem
-misbehaves on your box, and report what you saw. If Direwolf's WebAssembly fails to load at start, a 1200 or
-300 baud port runs the built-in modem by itself and logs `the Direwolf modem did not load`; a 9600 baud port
-cannot, and faults.
+**When the modem does not load.** Direwolf's WebAssembly is the port's only modem. If it fails to load at
+start, the port faults: it neither captures nor transmits, the log says `FAULT: the Direwolf modem did not
+load`, and the doctor's `ingest.soundcard_modem` check fails. The other ports and the rest of the ingest keep
+running.
 
 ## Choose how the radio is keyed
 
@@ -265,7 +264,7 @@ two seconds closes the connection, so a late answer can never be taken for the n
 | Setting | Default | What it does |
 |---|---|---|
 | `SOUNDCARD_TXDELAY_MS` | `300` | Preamble sent before each frame (HDLC flags, or IL2P's preamble), while the radio's transmitter comes up. Raise it for a slow radio. |
-| `SOUNDCARD_TXTAIL_MS` | `50` | The same pattern sent after the frame, so the radio does not cut its end. The built-in modem keeps the PTT keyed in silence instead. |
+| `SOUNDCARD_TXTAIL_MS` | `50` | The same pattern sent after the frame, so the radio does not cut its end. |
 | `SOUNDCARD_PERSIST` | `63` | Once the channel is clear, the chance (p+1)/256 of sending in a slot, so stations that waited do not all start at once. |
 | `SOUNDCARD_SLOTTIME_MS` | `100` | The slot length for that draw, and for checking a busy channel again. |
 | `SOUNDCARD_PTT_MAX_MS` | `10000` | The watchdog: the longest the PTT may stay keyed (1000 to 60000). |
@@ -337,7 +336,7 @@ The port checks the gate when a function hands over a frame and again at the mom
 ## Several ports
 
 `SOUNDCARD_PORTS` adds ports, as a JSON array of objects with the same fields in short form: `device`
-(required), `name`, `playback`, `rate`, `modem`, `demod`, `fec`, `fx25CheckBytes`, `tx`, `ptt`, `call`,
+(required), `name`, `playback`, `rate`, `modem`, `fec`, `fx25CheckBytes`, `tx`, `ptt`, `call`,
 `txDelayMs`, `txTailMs`, `persist`, `slotTimeMs`, `pttMaxMs`, `txLevel` and `dutyPct`.
 
 ```
@@ -367,7 +366,7 @@ sets its own, but never `tx` or `ptt`. Each port has its own PTT, watchdog and d
 - **`… Device or resource busy`**: another program, such as a separate Direwolf, holds the card. A card
   serves one modem.
 - **`the Direwolf modem did not load`**: the install lacks `modems/direwolf/wasm`. Run `pnpm install` in the
-  checkout again, or pull the current image. Meanwhile a 1200 or 300 baud port runs the built-in modem.
+  checkout again, or pull the current image, then restart the ingest. Until then the port is faulted.
 - **Nothing decodes**: check the receive level and the cable, and that squelch is closed. Record a minute
   with `arecord -D plughw:1,0 -f S16_LE -r 48000 -c 1 test.wav` and listen to it.
 - **`PTT … unavailable`**: the log names the missing package, tool or permission. The port then receives

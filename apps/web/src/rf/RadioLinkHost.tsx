@@ -9,7 +9,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { WebSerialKiss, WebBluetoothKiss } from "./kiss.js";
 import { WebSerialMeshtastic } from "./extralinks.js";
 import { SoundcardLink } from "./soundcard.js";
-import { readAudioDemod } from "./soundcardModem.js";
 import { fieldStation } from "./fieldStation.js";
 import { readKissTiming } from "./kissTiming.js";
 import { RadioLinkStore, LINK_LABEL, holdRadio, radioBusyText, type RadioState } from "./radioLink.js";
@@ -19,15 +18,6 @@ import { useConfirm, useToast } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 const TIMING_KEY = "acs.rf.kiss-timing"; // TXDELAY, PERSIST and SLOTTIME sent to a KISS TNC
-const DEMOD_KEY = "acs.rf.audio-modem"; // the soundcard modem: Direwolf (absent) or the built-in one
-
-function storedAudioDemod() {
-  try {
-    return readAudioDemod(localStorage.getItem(DEMOD_KEY));
-  } catch {
-    return readAudioDemod(null);
-  }
-}
 
 function storedKissTiming() {
   try {
@@ -53,10 +43,7 @@ export const radioLink: RadioLinkStore = new RadioLinkStore(
         : kind === "ble"
           ? new WebBluetoothKiss(onFrame, onClose)
           : kind === "audio" || kind === "hf"
-            ? new SoundcardLink(onFrame, onClose, {
-                baud: kind === "hf" ? 300 : 1200,
-                demod: radioLink.getState().audioDemod,
-              })
+            ? new SoundcardLink(onFrame, onClose, { baud: kind === "hf" ? 300 : 1200 })
             : new WebSerialMeshtastic(onFrame, onClose),
     forward: (packets, s) =>
       s.mode === "signed" && s.callsign.length >= 3
@@ -82,19 +69,11 @@ export const radioLink: RadioLinkStore = new RadioLinkStore(
         /* storage blocked: the settings last for this page only */
       }
     },
-    saveAudioDemod: (d) => {
-      try {
-        if (d === "builtin") localStorage.setItem(DEMOD_KEY, d);
-        else localStorage.removeItem(DEMOD_KEY);
-      } catch {
-        /* storage blocked: the choice lasts for this page only */
-      }
-    },
     connectError: (err) => radioBusyText(err, "bridge"),
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
   },
-  { gatewayUrl: storedGatewayUrl(), kissTiming: storedKissTiming(), audioDemod: storedAudioDemod() },
+  { gatewayUrl: storedGatewayUrl(), kissTiming: storedKissTiming() },
 );
 
 // the packet terminal reads this to name the RF bridge when both reach for one port

@@ -34,7 +34,6 @@ describe("soundcardPorts", () => {
         playback: "plughw:1,0",
         rate: 48000,
         modem: "1200",
-        demod: "direwolf",
         fec: "off",
         fx25CheckBytes: 16,
         tx: false,
@@ -115,40 +114,31 @@ describe("soundcardPorts", () => {
 
   it("runs Direwolf with plain AX.25 transmit unless set; framing, check bytes and modem are per port", () => {
     const [def] = soundcardPorts({ SOUNDCARD_DEVICE: "a" });
-    expect(def).toMatchObject({ modem: "1200", demod: "direwolf", fec: "off", fx25CheckBytes: 16 });
+    expect(def).toMatchObject({ modem: "1200", fec: "off", fx25CheckBytes: 16 });
     const ports = soundcardPorts({
       SOUNDCARD_DEVICE: "a",
       SOUNDCARD_FEC: "fx25",
       SOUNDCARD_FX25_CHECK_BYTES: "32",
       SOUNDCARD_PORTS: JSON.stringify([
         { name: "node", device: "b", modem: "9600", fec: "il2p" },
-        { name: "aprs", device: "c", fec: "off", demod: "builtin" },
+        { name: "aprs", device: "c", fec: "off" },
         { name: "fx64", device: "d", fx25CheckBytes: 64 },
       ]),
     });
-    expect(ports.map((p) => [p.name, p.modem, p.demod, p.fec, p.fx25CheckBytes])).toEqual([
-      ["1", "1200", "direwolf", "fx25", 32],
-      ["node", "9600", "direwolf", "il2p", 32],
-      ["aprs", "1200", "builtin", "off", 32],
-      ["fx64", "1200", "direwolf", "fx25", 64],
+    expect(ports.map((p) => [p.name, p.modem, p.fec, p.fx25CheckBytes])).toEqual([
+      ["1", "1200", "fx25", 32],
+      ["node", "9600", "il2p", 32],
+      ["aprs", "1200", "off", 32],
+      ["fx64", "1200", "fx25", 64],
     ]);
   });
 
   it.each([
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_RATE: "8000" }, /SOUNDCARD_RATE/],
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_MODEM: "4800" }, /SOUNDCARD_MODEM: expected 1200, hf300, 9600/],
-    [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_DEMOD: "soundmodem" }, /SOUNDCARD_DEMOD: expected direwolf, builtin/],
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_FEC: "on" }, /SOUNDCARD_FEC: expected off, fx25, il2p/],
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_FX25_CHECK_BYTES: "8" }, /SOUNDCARD_FX25_CHECK_BYTES: expected 16, 32, 64/],
-    [
-      { SOUNDCARD_DEVICE: "x", SOUNDCARD_MODEM: "9600", SOUNDCARD_DEMOD: "builtin" },
-      /SOUNDCARD_DEMOD: 9600 baud needs the Direwolf modem/,
-    ],
-    [
-      { SOUNDCARD_DEVICE: "x", SOUNDCARD_FEC: "il2p", SOUNDCARD_DEMOD: "builtin" },
-      /SOUNDCARD_DEMOD: FX.25 and IL2P need the Direwolf modem/,
-    ],
-    [{ SOUNDCARD_PORTS: '[{"device":"a","demod":"builtin","fec":"fx25"}]' }, /SOUNDCARD_PORTS\[0\]: FX.25/],
+    [{ SOUNDCARD_PORTS: '[{"device":"a","demod":"builtin"}]' }, /unknown field "demod"/],
     [{ SOUNDCARD_PORTS: '[{"device":"a","fx25CheckBytes":48}]' }, /SOUNDCARD_PORTS\[0\]\.fx25CheckBytes/],
     [{ SOUNDCARD_PORTS: '[{"device":"a","modem":"300"}]' }, /SOUNDCARD_PORTS\[0\]\.modem/],
     [{ SOUNDCARD_DEVICE: "x", SOUNDCARD_PTT: "cm108:/dev/hidraw0:12" }, /GPIO must be/],
@@ -544,14 +534,12 @@ describe("soundcard doctor checks", () => {
     expect(rows[5]!.message).toMatch(/the gateway confirms OE8APR-10 for this box/);
   });
 
-  it("fails the modem row when Direwolf's WebAssembly does not load, and names the fallback", async () => {
+  it("fails the modem row when Direwolf's WebAssembly does not load: the port is faulted", async () => {
     const rows = await soundcardChecks(env, deps({ wasm: new Uint8Array([0, 1, 2]) }));
     const modem = rows.find((r) => r.kind === "modem")!;
     expect(modem).toMatchObject({ status: "fail", port: "1" });
-    expect(modem.message).toMatch(/the Direwolf modem does not load/);
-    expect(modem.fix).toMatch(/SOUNDCARD_DEMOD=builtin/);
-    const builtin = await soundcardChecks({ ...env, SOUNDCARD_DEMOD: "builtin" }, deps());
-    expect(builtin.find((r) => r.kind === "modem")).toMatchObject({ status: "pass" });
+    expect(modem.message).toMatch(/the Direwolf modem did not load: .*faulted: it neither captures nor transmits/);
+    expect(modem.fix).toMatch(/modems\/direwolf\/wasm/);
   });
 
   it("fails on missing ALSA tools and on a capture device that does not open", async () => {

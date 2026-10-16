@@ -25,7 +25,6 @@ import type { Packet } from "@aprscaching/shared";
 import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
 import { aprsTxNote, type TxEntry, type TxFeature, type TxNote } from "./txLog.js";
 import { KISS_TIMING_DEFAULTS, type KissTiming } from "./kissTiming.js";
-import { AUDIO_DEMOD_DEFAULT, type AudioDemod } from "./soundcardModem.js";
 
 export type LinkKind = "serial" | "ble" | "audio" | "hf" | "mesh";
 
@@ -69,10 +68,10 @@ export interface RadioState {
   verified: boolean;
   /** The channel access a KISS TNC is sent; persisted by the host. */
   kissTiming: KissTiming;
-  /** The modem the soundcard links run (Direwolf unless the operator picks the built-in one); persisted by the host. */
-  audioDemod: AudioDemod;
   /** How the live link decodes, in a few words (the soundcard modem), or "" when it has nothing to say. */
   linkNote: string;
+  /** Why the last connect failed, for the link's status line, or "" (cleared by the next attempt). */
+  linkError: string;
 }
 
 /** Something the user should hear about; the host turns these into toasts. */
@@ -103,8 +102,6 @@ export interface RadioDeps {
   saveGatewayUrl?(url: string): void;
   /** Persist the KISS channel-access settings. */
   saveKissTiming?(t: KissTiming): void;
-  /** Persist the soundcard modem choice. */
-  saveAudioDemod?(d: AudioDemod): void;
   /** Turn a connect error into the words the user sees, or null to stay quiet (a cancelled chooser). */
   connectError?(err: Error): string | null;
   setTimer?(fn: () => void, ms: number): unknown;
@@ -139,7 +136,7 @@ export class RadioLinkStore {
 
   constructor(
     private deps: RadioDeps,
-    init: { gatewayUrl?: string; kissTiming?: KissTiming; audioDemod?: AudioDemod } = {},
+    init: { gatewayUrl?: string; kissTiming?: KissTiming } = {},
   ) {
     this.state = {
       link: null,
@@ -159,8 +156,8 @@ export class RadioLinkStore {
       callsign: "",
       verified: false,
       kissTiming: { ...(init.kissTiming ?? KISS_TIMING_DEFAULTS) },
-      audioDemod: init.audioDemod ?? AUDIO_DEMOD_DEFAULT,
       linkNote: "",
+      linkError: "",
     };
   }
 
@@ -285,7 +282,7 @@ export class RadioLinkStore {
 
   async connect(kind: LinkKind): Promise<void> {
     if (this.state.busy || this.current) return;
-    this.set({ busy: true });
+    this.set({ busy: true, linkError: "" });
     // A lost link is torn down like a Disconnect; a link already torn down (or never up) reports nothing.
     const onClose = (err?: Error) => {
       if (this.current !== l) return;
@@ -315,7 +312,10 @@ export class RadioLinkStore {
         : CANCELLED.test(err.message || "")
           ? null
           : err.message;
-      if (message) this.emit({ kind: "connect-failed", message });
+      if (message) {
+        this.set({ linkError: message });
+        this.emit({ kind: "connect-failed", message });
+      }
     }
   }
 
@@ -360,13 +360,6 @@ export class RadioLinkStore {
     this.set({ kissTiming: next });
     this.deps.saveKissTiming?.(next);
     if (this.current) void this.sendTiming(this.current);
-  }
-
-  /** Pick the soundcard modem; it takes effect when a soundcard link next connects. */
-  setAudioDemod(d: AudioDemod): void {
-    if (d === this.state.audioDemod) return;
-    this.set({ audioDemod: d });
-    this.deps.saveAudioDemod?.(d);
   }
 
   /** Send a link its channel access when it is a KISS TNC; a failure is reported and leaves the link up. */

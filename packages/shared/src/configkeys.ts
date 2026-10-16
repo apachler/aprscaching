@@ -334,7 +334,6 @@ export const CONFIG_KEYS = {
   SOUNDCARD_PLAYBACK: { type: "string", units: ["ingest"] },
   SOUNDCARD_RATE: { type: "enum", units: ["ingest"], default: "48000", values: ["44100", "48000"] },
   SOUNDCARD_MODEM: { type: "enum", units: ["ingest"], default: "1200", values: ["1200", "hf300", "9600"] },
-  SOUNDCARD_DEMOD: { type: "enum", units: ["ingest"], default: "direwolf", values: ["direwolf", "builtin"] },
   SOUNDCARD_FEC: { type: "enum", units: ["ingest"], default: "off", values: ["off", "fx25", "il2p"] },
   SOUNDCARD_FX25_CHECK_BYTES: { type: "enum", units: ["ingest"], default: "16", values: ["16", "32", "64"] },
   SOUNDCARD_TX: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },

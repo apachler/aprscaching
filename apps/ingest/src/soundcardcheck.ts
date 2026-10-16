@@ -25,7 +25,7 @@ import { describePtt, openPtt, pttProblem, type Ptt, type PttDeps, type PttSpec 
 import { installPttRelease, trackPtt, untrackPtt } from "./ptt/release.js";
 import { PttWatchdog } from "./ptt/watchdog.js";
 import { soundcardPorts, type SoundcardPortSettings } from "./soundcardconfig.js";
-import { describeModem, direwolfModem, openModem } from "./soundcardmodem.js";
+import { describeModem, openModem } from "./soundcardmodem.js";
 
 export type CheckStatus = "pass" | "warn" | "fail";
 /** One result; `kind` is alsa, pulse, audio, modem, ptt or tx, and `port` names the port (empty for the tools). */
@@ -186,17 +186,14 @@ async function modemRow(p: SoundcardPortSettings, deps: CheckDeps): Promise<Chec
     message,
     fix,
   });
-  if (p.demod === "builtin") return row("pass", `port ${p.name}: ${describeModem(p)} (SOUNDCARD_DEMOD=builtin)`);
   try {
-    await direwolfModem(p, deps.wasm);
+    await openModem(p, deps.wasm);
     return row("pass", `port ${p.name}: ${describeModem(p)}`);
   } catch (e) {
     return row(
       "fail",
-      `port ${p.name}: the Direwolf modem does not load: ${(e as Error).message}`,
-      p.modem === "9600"
-        ? "reinstall the ingest (pnpm install) so modems/direwolf/wasm is there"
-        : "reinstall the ingest (pnpm install) so modems/direwolf/wasm is there, or set SOUNDCARD_DEMOD=builtin",
+      `port ${p.name}: ${(e as Error).message}; the port is faulted: it neither captures nor transmits`,
+      "reinstall the ingest (pnpm install) or pull the current image, so modems/direwolf/wasm is there, then restart it",
     );
   }
 }
@@ -345,7 +342,7 @@ export async function pttTest(
     };
   let rx;
   try {
-    rx = await openModem(p, { wasm: deps.wasm });
+    rx = await openModem(p, deps.wasm);
   } catch (e) {
     return { ok: false, message: `refused: no carrier detect on port ${p.name}: ${(e as Error).message}` };
   }

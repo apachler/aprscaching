@@ -3,8 +3,9 @@
  * The soundcard port: a modem in the ingest box, with no TNC between the radio and the box: Bell 202 at 1200
  * baud for an FM radio, the 300-baud HF modem (1600/1800 Hz) for an SSB radio on 30 m (`SOUNDCARD_MODEM=hf300`),
  * or G3RUH at 9600 baud for a radio's 9600 data port (`SOUNDCARD_MODEM=9600`). Audio comes in through `arecord`
- * and goes out through `aplay` (alsa.ts); the DSP is Direwolf's modem in WebAssembly, or the built-in TypeScript
- * modem as a fallback (soundcardmodem.ts).
+ * and goes out through `aplay` (alsa.ts), or through PulseAudio's `parec` and `pacat` (audioio.ts,
+ * `SOUNDCARD_AUDIO=pulse`, as on a phone in Termux); the DSP is Direwolf's modem in WebAssembly (soundcardmodem.ts). A
+ * modem that does not load faults the port: it neither captures nor transmits.
  *
  * Receive: PCM → the modem → AX.25 frames (sent as plain AX.25, FX.25 or IL2P, all alike), delivered as a KISS
  * TNC's are (port `soundcard`, a local RF transport, stamped with the receiving site when heard directly), and
@@ -24,8 +25,8 @@
  *  - capture runs (carrier detect needs it), and the port is not faulted (the PTT watchdog latched).
  * A refused frame is dropped and logged. An accepted one waits for a clear channel (carrier detect from the
  * demodulator, then p-persistence CSMA with the KISS defaults) and for the duty-cycle budget, then keys the
- * PTT, plays the frame with its TXDELAY preamble in the port's framing (`SOUNDCARD_FEC`), waits for the playback
- * and TXTAIL to end, and unkeys. A frame that waited 30 s is dropped. The watchdog bounds the key time.
+ * PTT, plays the frame in the port's framing (`SOUNDCARD_FEC`) with its TXDELAY preamble and TXTAIL flags inside
+ * the audio, waits for the playback to end, and unkeys. A frame that waited 30 s is dropped. The watchdog bounds the key time.
  */
 import { decodeAx25, encodeAx25 } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
@@ -46,7 +47,6 @@ import {
   openModem,
   type HeardFrame,
   type PortModem,
-  type SoundcardDemod,
   type SoundcardFec,
   type SoundcardModem,
 } from "./soundcardmodem.js";
@@ -66,8 +66,6 @@ export interface SoundcardConfig {
   rate: number;
   /** The modem (`SOUNDCARD_MODEM`); Bell 202 when absent. */
   modem?: SoundcardModem;
-  /** Which implementation runs it (`SOUNDCARD_DEMOD`); Direwolf when absent. */
-  demod?: SoundcardDemod;
   /** The framing the port transmits in (`SOUNDCARD_FEC`); plain AX.25 when absent. */
   fec?: SoundcardFec;
   /** FX.25 Reed–Solomon check bytes (`SOUNDCARD_FX25_CHECK_BYTES`); 16 when absent. */
@@ -191,19 +189,19 @@ export class SoundcardPort {
 
   /**
    * Load the modem, open the PTT (when transmit is on) and start capturing. A modem that does not load faults the
-   * port (it neither receives nor transmits), unless the built-in modem can stand in.
+   * port: it neither receives nor transmits until the ingest restarts.
    */
   async start(): Promise<void> {
     try {
-      this.modem = await openModem(this.cfg, {
-        wasm: this.deps.wasm,
-        onFallback: (why) => this.error(`${this.tag} ${why} (SOUNDCARD_DEMOD=builtin silences this)`),
-      });
-      this.log(`${this.tag} modem: ${describeModem({ ...this.cfg, demod: this.modem.kind })}`);
+      this.modem = await openModem(this.cfg, this.deps.wasm);
+      this.log(`${this.tag} modem: ${describeModem(this.cfg)}`);
     } catch (e) {
       this.faultKind = "modem";
       this.faultReason = (e as Error).message;
-      this.error(`${this.tag} FAULT: ${this.faultReason}. The port is off until the ingest restarts.`);
+      this.error(
+        `${this.tag} FAULT: ${this.faultReason}. The port neither captures nor transmits until the ingest restarts;` +
+          " reinstall the ingest or pull the current image so modems/direwolf/wasm is there",
+      );
       return;
     }
     if (this.cfg.tx) {
@@ -264,9 +262,8 @@ export class SoundcardPort {
   label(): string {
     const speed = this.cfg.modem === "hf300" ? " HF 300 baud" : this.cfg.modem === "9600" ? " 9600 baud" : "";
     const fec = this.cfg.fec === "fx25" ? " FX.25" : this.cfg.fec === "il2p" ? " IL2P" : "";
-    const builtin = this.modem?.kind === "builtin" ? " (built-in modem)" : "";
     const fault = this.faultReason ? ` (fault: ${this.faultKind})` : "";
-    return `soundcard ${this.cfg.name}${speed}${fec}${builtin}${fault}`;
+    return `soundcard ${this.cfg.name}${speed}${fec}${fault}`;
   }
 
   /**
@@ -341,8 +338,8 @@ export class SoundcardPort {
     while (this.queue.length && !this.stopped) {
       const item = this.queue.shift()!;
       try {
-        const { audio, tailMs } = await this.modem!.modulate(item.frame);
-        const airMs = (audio.length / 2 / this.cfg.rate) * 1000 + tailMs;
+        const audio = await this.modem!.modulate(item.frame);
+        const airMs = (audio.length / 2 / this.cfg.rate) * 1000;
         if (airMs >= this.cfg.pttMaxMs) {
           this.error(
             `${this.tag} a ${Math.round(airMs)} ms transmission exceeds the PTT watchdog (SOUNDCARD_PTT_MAX_MS ${this.cfg.pttMaxMs}); frame dropped`,
@@ -361,7 +358,7 @@ export class SoundcardPort {
           this.queue = [];
           break;
         }
-        await this.transmit(item.frame, audio, airMs, tailMs);
+        await this.transmit(item.frame, audio, airMs);
       } catch (e) {
         this.error(`${this.tag} transmit failed: ${(e as Error).message}`);
       }
@@ -392,7 +389,7 @@ export class SoundcardPort {
     }
   }
 
-  private async transmit(frame: Uint8Array, audio: Buffer, airMs: number, tailMs: number): Promise<void> {
+  private async transmit(frame: Uint8Array, audio: Buffer, airMs: number): Promise<void> {
     const ptt = this.ptt!;
     this.transmitting = true;
     this.sent.remember(frame);
@@ -400,7 +397,6 @@ export class SoundcardPort {
     try {
       await ptt.key();
       await this.play(audio, airMs + PLAY_SLACK_MS);
-      if (!this.faultReason && tailMs > 0) await this.sleep(tailMs);
     } finally {
       // the watchdog already released a tripped PTT; this unkey is then a second, harmless one
       await ptt.unkey().catch((e: Error) => this.error(`${this.tag} PTT unkey failed: ${e.message}`));

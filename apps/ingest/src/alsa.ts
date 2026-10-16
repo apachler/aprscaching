@@ -32,16 +32,6 @@ export function alsaArgs(device: string, rate: number): string[] {
   return ["-q", "-D", device, "-t", "raw", "-f", "S16_LE", "-c", "1", "-r", String(rate)];
 }
 
-/** Float PCM (−1…1) as S16_LE bytes, clipped. */
-export function floatToS16(pcm: Float32Array, level = 1): Buffer {
-  const out = Buffer.alloc(pcm.length * 2);
-  for (let i = 0; i < pcm.length; i++) {
-    const v = Math.max(-1, Math.min(1, pcm[i]! * level));
-    out.writeInt16LE(Math.round(v * 32767), i * 2);
-  }
-  return out;
-}
-
 /** A converter from S16_LE chunks to float samples that keeps an odd trailing byte for the next chunk. */
 export function s16Reader(): (chunk: Buffer) => Float32Array {
   let carry: Buffer | null = null;
