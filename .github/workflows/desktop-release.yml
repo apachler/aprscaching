@@ -39,6 +39,9 @@ jobs:
         with: { bun-version-file: .bun-version }
       - run: pnpm install --frozen-lockfile
       - run: bash deploy/desktop/build-exe.sh "${TAG:-$GITHUB_REF_NAME}"
+      # The Linux binary on this runner: it starts from its embedded build and serves the web app's
+      # WebAssembly (Direwolf's modem) as application/wasm, before anything is uploaded.
+      - run: bash deploy/desktop/smoke.sh dist/desktop/aprscaching-linux-x64
       # dist/desktop holds the binaries and the Bun runtime's licence notices (THIRD-PARTY-NOTICES.txt,
       # BUN-LICENSE.txt), so both uploads below carry the notices with the binaries.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

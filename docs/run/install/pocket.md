@@ -147,6 +147,10 @@ for three independent reasons (checked in the `termux/termux-docker` image and u
 | Direwolf from source | Does not build unmodified: it needs ALSA or OSS sound headers, which Termux does not ship. Reading audio only from stdin (`rtl_fm … \| direwolf -r 24000 -`) would need a patch. |
 | CPU, battery, heat | Not measured: nothing runs far enough to measure. |
 
+Direwolf's modem in WebAssembly, which the ingest's [soundcard port](../radios/soundcard.md) runs, does load
+under Termux's Node; the monthly Termux check proves it. The soundcard port still does not run on the phone: it
+reads and writes audio through ALSA's `arecord` and `aplay`, which Termux lacks.
+
 Pocket therefore installs neither. For RF on the phone use a TNC, [on USB](../pocket/field-station.md#a-usb-tnc-on-the-phone)
 or [over Bluetooth in the browser](../pocket/field-station.md#your-radio-in-the-browser), or a MeshCom node. For
 an SDR receiver, run `rtl_fm | direwolf` on a Raspberry Pi as the station's [ingest box](../radios/rf-ingest.md).
