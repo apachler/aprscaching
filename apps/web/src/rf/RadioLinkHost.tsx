@@ -12,7 +12,8 @@ import { WebAudioAfsk, WebSerialMeshtastic } from "./extralinks.js";
 import { fieldStation } from "./fieldStation.js";
 import { readKissTiming } from "./kissTiming.js";
 import { RadioLinkStore, LINK_LABEL, holdRadio, radioBusyText, type RadioState } from "./radioLink.js";
-import { ingestPackets, ingestSigned } from "../api.js";
+import { ingestPackets, ingestSigned, recordSentMessage } from "../api.js";
+import { BrowserRetry } from "./msgRetry.js";
 import { useConfirm, useToast } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
@@ -50,7 +51,10 @@ export const radioLink = new RadioLinkStore(
         : s.secret
           ? ingestPackets(packets, s.secret, s.gatewayUrl || undefined)
           : null,
-    feedLocal: (f) => fieldStation.feed(f),
+    feedLocal: (f) => {
+      fieldStation.feed(f);
+      messageRetry.heard(f.frame.src, f.frame.payload);
+    },
     saveGatewayUrl: (url) => {
       try {
         localStorage.setItem(FWD_KEY, url);
@@ -74,6 +78,34 @@ export const radioLink = new RadioLinkStore(
 
 // the packet terminal reads this to name the RF bridge when both reach for one port
 radioLink.subscribe(() => holdRadio("bridge", radioLink.getState().link != null));
+
+/** The numbered messages this tab's radio repeats until they are acked, for as long as the tab and its radio last. */
+export const messageRetry = new BrowserRetry({
+  now: () => Date.now(),
+  canTransmit: (call) => radioLink.canTransmit() && radioLink.txCall() === call,
+  transmit: (f, feature) => radioLink.transmit(f, feature),
+  // the outcome joins the message in the Messages list; a failed report leaves it "sent"
+  report: (m) =>
+    void recordSentMessage({
+      from: m.from,
+      to: m.to,
+      text: m.text,
+      msgNo: m.msgNo,
+      delivery: { tries: m.tries, outcome: m.outcome },
+    }).catch(() => {}),
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (t) => clearInterval(t as ReturnType<typeof setInterval>),
+});
+// a radio that goes away, or transmit switched off, ends the repeats
+radioLink.subscribe(() => {
+  const s = radioLink.getState();
+  if (!s.link || !s.txOn) messageRetry.stopAll();
+});
+
+/** The browser radio's message repeats: how many wait for an ack, and the totals of this tab. */
+export function useMessageRetry() {
+  return useSyncExternalStore(messageRetry.subscribe, messageRetry.getSnapshot);
+}
 
 /** The radio link's state; re-renders on every change. */
 export function useRadioLink(): RadioState {

@@ -19,7 +19,17 @@ export const MAILBOX_SENT_NOTE = "Already sent on the air, so it can no longer b
 
 /** Where a message stands, in one word the thread shows beside it. */
 export type ItemState =
-  "queued" | "sent" | "acked" | "failed" | "waiting" | "sent-no-ack" | "delivered" | "undelivered" | "expired";
+  | "queued"
+  | "sent"
+  | "acked"
+  | "failed"
+  | "rejected"
+  | "unacked"
+  | "waiting"
+  | "sent-no-ack"
+  | "delivered"
+  | "undelivered"
+  | "expired";
 
 export interface ThreadItem {
   key: string;
@@ -34,6 +44,8 @@ export interface ThreadItem {
   /** Delivered by the Mailbox: left in the app or by a MAIL command, sent when the station was heard. */
   viaMailbox?: boolean;
   state?: ItemState;
+  /** A sent message its radio repeated: how often it went out. */
+  tries?: number;
   /** A Mailbox message the operator left and can still take back: one not yet sent on the air. */
   withdrawId?: number;
 }
@@ -95,6 +107,7 @@ export function threadsOf(
         text: m.body,
         transport: m.transport,
         state: m.delivery ?? "sent",
+        ...(m.tries ? { tries: m.tries } : {}),
       });
     } else if (mine(m.toCall)) {
       const delivered = svc && m.fromCall.toUpperCase() === svc ? DELIVERED.exec(m.body) : null;

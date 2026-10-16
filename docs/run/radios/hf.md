@@ -81,11 +81,14 @@ map as local RF hearings. On a quiet band, wait: the channel carries a frame eve
   `BOX_TX_PATH` names one. HF has no digipeaters, and an empty path saves the 14 bytes of `WIDE1-1,WIDE2-1`,
   0.37 s at 300 baud.
 - **No digipeating.** The digipeater repeats on the box's VHF and UHF ports, never on an HF port.
-- **Mic-E beacons.** A [remote beacon](remote-box.md#what-the-remote-box-app-can-do) on an HF radio goes out
-  in Mic-E, nine bytes for the position. Its comment rides on every fourth beacon only, and the box sends at most
-  one beacon in 10 minutes. Queue one every 10 to 15 minutes; the box does not beacon by itself.
-- **Messages.** The box sends a message once. HF fades: when no acknowledgement comes back, send it again, a
-  minute or more apart, up to 5 to 10 times.
+- **Mic-E beacons.** A beacon on an HF radio goes out in Mic-E, nine bytes for the position. Its comment rides
+  on every fourth beacon only, and the box sends at most one beacon in 10 minutes. With `BEACON=fixed` or
+  `BEACON=smart` the box beacons by itself, every 10 minutes at most whatever the mode
+  ([Automatic beacons](beacons.md)); a [remote beacon](remote-box.md#what-the-remote-box-app-can-do) follows the
+  same limit.
+- **Messages.** HF fades, so the box repeats a numbered message until the station acknowledges it: 2, 4, 8 and
+  16 minutes apart, then every 30 minutes, ten tries in all
+  ([Messages](../../shack/messages.md#repeats-until-acknowledged)).
 
 ## Trust
 
@@ -101,4 +104,5 @@ someone else's IGate reaches the instance over APRS-IS and stays
 ## Next
 
 - [Soundcard port](soundcard.md): levels, PTT, timing and the transmit gate.
-- [Remote control of your box](remote-box.md): queue the beacons the box sends.
+- [Automatic beacons](beacons.md): let the box beacon by itself.
+- [Remote control of your box](remote-box.md): queue a beacon by hand.

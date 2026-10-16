@@ -23,7 +23,10 @@ also record a rendezvous.
 You and the station were in the same place at the same time. The game takes one of your radio positions and
 the station's position closest to it in time. The two positions must be at most 5 minutes apart and within
 150 m of each other, so a station that sends its position less often than every 5 minutes is hard to meet: a
-hider sets a short interval on the station.
+hider sets a short interval on the station. A phone running a [Pocket](../../run/install/pocket.md) box with
+SmartBeaconing makes a good living cache: it beacons every 90 s at speed and on every turn. Its slow rate, the
+interval while it stands, must be 4 minutes or less, or a player who meets it parked finds no position close
+enough ([Automatic beacons](../../run/radios/beacons.md#a-living-cache-on-the-move)).
 
 ## How it is logged and verified
 

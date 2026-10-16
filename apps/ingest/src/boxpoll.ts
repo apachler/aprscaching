@@ -34,6 +34,12 @@
  * third-party traffic from the service call under the box's licensed call, or through the MeshCom node
  * that heard it. They pass the same opt-in, transmit switch and age gates. The poll reports what the box
  * can send, so the gateway only routes answers here while it can deliver them.
+ *
+ * A numbered APRS message the box sends on its radio (an operator's message, a Mailbox or near-cache message) is
+ * repeated until its addressee acks or rejects it (`MessageRetrier`): 30 s, 1, 2 and 4 min apart on VHF, from 2 min
+ * doubling to 30 min on HF, each repeat through the same gates and token bucket as the first send. The box hears
+ * the ack on its own radios, or on its APRS-IS feed, so the repeats run with no gateway at all; once a message is
+ * settled the box reports its tries and outcome with the command's ack. Switching transmit off stops every repeat.
  */
 import { gatewayFetch } from "./gatewayauth.js";
 import {
@@ -45,6 +51,10 @@ import {
   hfBeacon,
   isAprsObjectName,
   rfBytes,
+  MessageRetrier,
+  type PendingRetry,
+  type RetryOutcome,
+  type TryResult,
 } from "@aprscaching/aprs";
 import { TokenBucket } from "./txlimit.js";
 
@@ -78,7 +88,14 @@ export interface BoxResult {
   result: string;
   /** Where a beacon said the station is: the box's configured position, reported with the ack. */
   position?: { lat: number; lon: number };
+  /** The number a message went out with, so the gateway matches the station's ack to it. */
+  msgNo?: string;
 }
+
+/** A report owed to the gateway: a command's result, or later how a message it sent ended. */
+type PendingAck = ({ id: number } & BoxResult) | { id: number; delivery: { tries: number; outcome: RetryOutcome } };
+
+type Frame = { src: string; dst: string; path?: string[]; payload: string };
 
 /** A MeshCom sender the box can hand answers to (the opt-in `MeshcomSender`). */
 export interface BoxMeshcom {
@@ -177,8 +194,12 @@ const fmtState = (v: boolean | null) => (v == null ? "n/a" : v ? "on" : "off");
 
 export class BoxPoller {
   private bucket: TokenBucket;
-  private pendingAcks: ({ id: number } & BoxResult)[] = [];
+  private pendingAcks: PendingAck[] = [];
   private timer?: ReturnType<typeof setInterval>;
+  private retryTimer?: ReturnType<typeof setInterval>;
+  /** The numbered messages the box repeats until they are acked, and the frame each repeat sends. */
+  readonly retrier: MessageRetrier;
+  private retryFrames = new Map<number, Frame>();
   private inFlight = false;
   private failing = false;
   private loggedAt = 0;
@@ -200,6 +221,35 @@ export class BoxPoller {
     this.log = o.log ?? ((m) => console.log(m));
     this.bucket = new TokenBucket({ burst: o.burst ?? 3, refillSec: o.refillSec ?? 60, now: this.now });
     this.startedAt = this.now();
+    this.retrier = new MessageRetrier({
+      now: this.now,
+      resend: (m) => this.resend(m),
+      onSettle: (m, outcome) => {
+        const id = Number(m.ref);
+        this.retryFrames.delete(id);
+        this.log(`[box] message ${m.msgNo} to ${m.to}: ${outcome} after ${m.tries} ${m.tries === 1 ? "try" : "tries"}`);
+        this.pendingAcks.push({ id, delivery: { tries: m.tries, outcome } });
+      },
+    });
+  }
+
+  /** A frame heard on any of the box's radios or its APRS-IS feed: an ack or rej settles a message it repeats. */
+  heard(src: string, payload: string): void {
+    this.retrier.heard(src, payload);
+  }
+
+  /** Repeat a message: every gate of the first send holds again; switching transmit off stops the repeats. */
+  private resend(m: PendingRetry): TryResult {
+    const frame = this.retryFrames.get(Number(m.ref));
+    if (!frame || !this.o.remoteTx || !this.o.state.tx || !this.o.radio) return "stop";
+    if (!this.bucket.take()) return "held";
+    return this.o.radio.send(frame) ? "sent" : "held";
+  }
+
+  /** Repeat a numbered message the radio just sent until its addressee acks it. */
+  private repeat(cmd: BoxCommand, from: string, to: string, msgNo: string, frame: Frame): void {
+    this.retryFrames.set(cmd.id, frame);
+    this.retrier.track({ from, to, msgNo, hf: !!this.o.radio?.hf, ref: cmd.id });
   }
 
   get state(): BoxState {
@@ -209,6 +259,9 @@ export class BoxPoller {
   start(): void {
     this.timer = setInterval(() => void this.tick(), this.o.pollMs ?? 5000);
     this.timer.unref?.();
+    // repeats need only the radio: they go on while the gateway is unreachable
+    this.retryTimer = setInterval(() => this.retrier.tick(), 5000);
+    this.retryTimer.unref?.();
     void this.requestPairingCode();
     void this.tick();
   }
@@ -237,6 +290,7 @@ export class BoxPoller {
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.retryTimer) clearInterval(this.retryTimer);
     this.timer = undefined;
   }
 
@@ -360,16 +414,18 @@ export class BoxPoller {
     if (limited) return limited;
     const tocall = this.o.tocall ?? "APZACG";
     const call = this.o.boxCall.toUpperCase();
-    const ok = this.o.radio.send({
+    const frame: Frame = {
       src: call,
       dst: tocall,
       path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
       // text the gateway originates goes out as UTF-8 bytes
       payload: rfBytes(`}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text, msgNo)}`),
-    });
-    return ok
-      ? { status: "done", result: `answer to ${to} sent as ${call}` }
-      : fail("the radio refused the frame (TNC link down, or the soundcard port's transmit gate)");
+    };
+    if (!this.o.radio.send(frame))
+      return fail("the radio refused the frame (TNC link down, or the soundcard port's transmit gate)");
+    // a numbered answer is repeated until the station acks it to the service call
+    if (msgNo) this.repeat(cmd, from, to, msgNo, frame);
+    return { status: "done", result: `answer to ${to} sent as ${call}` };
   }
 
   /** A MeshCom answer, handed to the node that heard the message. The sender applies its own checks. */
@@ -439,22 +495,23 @@ export class BoxPoller {
     cmd: BoxCommand,
     payload: string,
     what: string,
-    to: { dst?: string; path?: string[] } = {},
+    to: { dst?: string; path?: string[]; sent?: (f: Frame) => void } = {},
   ): BoxResult {
     const g = this.txGate(cmd);
     if ("status" in g) return g;
-    const ok = this.o.radio!.send({
+    const frame: Frame = {
       src: g.src,
       dst: to.dst ?? this.o.tocall ?? "APZACG",
       path: to.path ?? this.o.path ?? ["WIDE1-1", "WIDE2-1"],
       payload: rfBytes(payload),
-    });
-    return ok
-      ? { status: "done", result: `${what} sent as ${g.src}` }
-      : {
-          status: "failed",
-          result: "the radio refused the frame (TNC link down, or the soundcard port's transmit gate)",
-        };
+    };
+    if (!this.o.radio!.send(frame))
+      return {
+        status: "failed",
+        result: "the radio refused the frame (TNC link down, or the soundcard port's transmit gate)",
+      };
+    to.sent?.(frame);
+    return { status: "done", result: `${what} sent as ${g.src}` };
   }
 
   /**
@@ -570,9 +627,13 @@ export class BoxPoller {
         const text = String(p.text ?? "").trim();
         if (!/^[A-Z0-9-]{1,9}$/.test(to)) return { status: "failed", result: "message needs a valid addressee" };
         if (!text) return { status: "failed", result: "message text is empty" };
-        // numbered, so the addressee's station acknowledges it
+        // numbered, so the addressee's station acknowledges it, and repeated until it does
         this.msgNo = (this.msgNo % 99_999) + 1;
-        return this.transmit(cmd, encodeAprsMessage(to, text, String(this.msgNo)), `message to ${to}`);
+        const no = String(this.msgNo);
+        const res = this.transmit(cmd, encodeAprsMessage(to, text, no), `message to ${to}`, {
+          sent: (f) => this.repeat(cmd, f.src, to, no, f),
+        });
+        return res.status === "done" ? { ...res, msgNo: no } : res;
       }
       case "tx":
         return this.toggle(cmd, "tx", "transmit");

@@ -8,6 +8,8 @@ import { serviceCall } from "./servicecall.js";
 import { callSuspended } from "./moderation.js";
 import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
+import { deliveryStatement, parseDelivery } from "./delivery.js";
+import { mailboxRepeatsSettled } from "./mailbox.js";
 
 type OutboxRow = { id: number; src_call: string; tocall: string; kind: string; payload: string; target: string };
 
@@ -90,11 +92,32 @@ export async function dropQueuedFor(env: Env, calls: string[]): Promise<void> {
 
 export async function outboxAck(req: Request, env: Env): Promise<Response> {
   if (!ingestOrServiceBoxOk(req, env)) return new Response("unauthorized", { status: 401 });
-  const b = (await req.json().catch(() => null)) as { ids?: unknown } | null;
+  const b = (await req.json().catch(() => null)) as { ids?: unknown; deliveries?: unknown } | null;
   if (!b) return json({ error: "a JSON body {ids} is required" }, { status: 400 });
   const ids: unknown[] = b.ids === undefined ? [] : Array.isArray(b.ids) ? b.ids : [null];
   if (!ids.every((id) => Number.isInteger(id)))
     return json({ error: "ids must be a list of message ids" }, { status: 400 });
+  // how messages published earlier ended: the uplink repeats a numbered message until the station acks it
+  const deliveries: unknown[] = Array.isArray(b.deliveries) ? b.deliveries.slice(0, 100) : [];
+  const reports = deliveries.flatMap((d) => {
+    const id = (d as { id?: unknown } | null)?.id;
+    const r = parseDelivery(d);
+    return Number.isInteger(id) && r ? [{ id: id as number, ...r }] : [];
+  });
+  if (reports.length) {
+    const now = nowS();
+    await env.DB.batch(reports.map((r) => deliveryStatement(env, { sql: "outbox_id = ?", binds: [r.id] }, r, now)));
+    // a Mailbox send from the service call whose repeats are over
+    const service = serviceCall(env);
+    for (const r of reports) {
+      const row = await env.DB.prepare("SELECT src_call, payload FROM aprs_outbox WHERE id = ?")
+        .bind(r.id)
+        .first<{ src_call: string; payload: string }>();
+      const m =
+        row && row.src_call.toUpperCase() === service ? /^:(.{9}):.*\{([A-Za-z0-9]{1,5})$/s.exec(row.payload) : null;
+      if (m) await mailboxRepeatsSettled(env, m[1]!.trim(), m[2]!, r.outcome === "acked");
+    }
+  }
   if (ids.length) {
     const now = nowS();
     // a message an operator sent through the instance shows as sent in their conversation from here on

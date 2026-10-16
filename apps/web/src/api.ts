@@ -573,11 +573,16 @@ export function sendAprsMessage(m: {
   });
 }
 
+/**
+ * Record a message this browser's radio sent, so it joins the conversation; with `delivery`, report how often the
+ * radio sent it and how that ended.
+ */
 export function recordSentMessage(m: {
   from: string;
   to: string;
   text: string;
   msgNo?: string;
+  delivery?: { tries: number; outcome: string };
 }): Promise<{ ok: true }> {
   return call(`/api/messages/sent`, { method: "POST", body: JSON.stringify(m) });
 }

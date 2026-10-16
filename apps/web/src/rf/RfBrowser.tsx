@@ -13,7 +13,7 @@ import {
 } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
 import { KissTimingSettings } from "./KissTimingSettings.js";
-import { radioLink, useRadioLink } from "./RadioLinkHost.js";
+import { messageRetry, radioLink, useMessageRetry, useRadioLink } from "./RadioLinkHost.js";
 import { LINK_LABEL, type LinkKind } from "./radioLink.js";
 import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
 import { nextMsgNo } from "./msgNo.js";
@@ -55,6 +55,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
   const { link, busy, frames, count, fwdOn, mode, txOn, ssid, gatewayUrl, secret, sent } = useRadioLink();
+  const retry = useMessageRetry();
   const rxOnlyLink = link === "audio" || link === "hf" || link === "mesh";
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
   const [msg, setMsg] = useState({ to: "", text: "" });
@@ -127,11 +128,17 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   // Transmit, gated on callsign control-verification and this session's consent; every send is a deliberate,
   // confirmed action.
-  async function tx(payload: string, what: string): Promise<boolean> {
+  async function tx(
+    payload: string,
+    what: string,
+    sentFrame?: (f: { src: string; dst: string; path: string[]; payload: string }) => void,
+  ): Promise<boolean> {
     if (!radioLink.canTransmit()) return false;
     setTxBusy(true);
     try {
-      await radioLink.transmit({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload }, "My radio");
+      const frame = { src: txCall, dst: "APRS", path: ["WIDE1-1"], payload };
+      await radioLink.transmit(frame, "My radio");
+      sentFrame?.(frame);
       toast(`Transmitted: ${what}`);
       return true;
     } catch (e) {
@@ -181,8 +188,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       return;
     // a numbered message asks the addressee's station to acknowledge it
     const msgNo = nextMsgNo();
-    if (await tx(encodeAprsMessage(msg.to, msg.text, msgNo), `message to ${msg.to.toUpperCase()}`))
-      void recordSentMessage({ from: txCall, to: msg.to.trim().toUpperCase(), text: msg.text.trim(), msgNo }).catch(
+    const to = msg.to.trim().toUpperCase();
+    const text = msg.text.trim();
+    // sent again until the station acks it, while this tab and its radio stay up
+    const repeat = (frame: { src: string; dst: string; path: string[]; payload: string }) =>
+      messageRetry.track({ to, text, msgNo, frame, feature: "My radio" });
+    if (await tx(encodeAprsMessage(msg.to, msg.text, msgNo), `message to ${to}`, repeat))
+      void recordSentMessage({ from: txCall, to, text, msgNo }).catch(
         () => {}, // the Messages list misses it; the message itself went out
       );
   }
@@ -495,6 +507,16 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
             Clear
           </Button>
         </div>
+        {retry.stats.messages > 0 && (
+          <p className="muted fine" role="status">
+            Messages: {retry.waiting} waiting for an ack · {retry.stats.retries} resent · {retry.stats.acked} acked ·{" "}
+            {retry.stats.rejected} rejected · {retry.stats.expired + retry.stats.cancelled} never acked.{" "}
+            <InfoTip
+              label="How messages are repeated"
+              text="A numbered message goes out again until the station acknowledges it: 30 seconds, then 1, 2 and 4 minutes apart, five tries in all. The repeats stop when this tab closes, the radio disconnects or transmit is switched off."
+            />
+          </p>
+        )}
         {sent.length === 0 ? (
           <EmptyState>Nothing transmitted in this session.</EmptyState>
         ) : (

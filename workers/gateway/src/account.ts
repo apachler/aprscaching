@@ -208,7 +208,7 @@ export async function handleAccountExport(req: Request, env: Env, named: string)
     // traffic (a sysop's base call with the service SSID) is the instance's, with others' Mailbox texts in it.
     messages: await rows(
       env,
-      `SELECT ts, from_call, to_call, body, ack, direction, transport, sent_at, acked_at FROM messages WHERE ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY ts`,
+      `SELECT ts, from_call, to_call, body, ack, direction, transport, sent_at, acked_at, tries, gave_up FROM messages WHERE ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY ts`,
       ...by("from_call").binds,
       ...by("to_call").binds,
     ),
