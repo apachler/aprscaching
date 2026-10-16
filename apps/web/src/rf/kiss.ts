@@ -111,6 +111,8 @@ export interface RfLink {
    * write (a receive-only TNC) skips it, since it never keys the radio.
    */
   setTiming?(t: KissTiming): Promise<void>;
+  /** A few words on how the link decodes, for its status line (the soundcard link's modem); set once it is up. */
+  readonly note?: string;
 }
 
 /**

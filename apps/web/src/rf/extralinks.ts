@@ -1,29 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
-  decodeAx25,
-  decodeAprs,
   deframeMeshtastic,
   parseFromRadio,
   wantConfigFrame,
   MeshtasticLicensedNodes,
-  rfText,
   type ParsedFrame,
   type AprsData,
   type MeshFix,
 } from "@aprscaching/aprs";
-import { AfskRx, BELL_202, type AfskModem } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
-import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.js";
+import type { RfFrame, RfLink, TxFrame } from "./kiss.js";
 
 /**
- * extralinks.ts — two more browser-direct RF ingests behind the same RfLink contract as the KISS
- * reader:
- *   WebAudioAfsk        — soundcard AFSK modem (Bell 202, or 300 baud on HF): mic → AudioContext → AfskRx →
- *                         AX.25 frames.
+ * extralinks.ts — the Meshtastic link and the Web Audio check for the soundcard link (`soundcard.ts`):
  *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → FromRadio → positions of
  *                         licensed nodes only, under their callsigns.
- * Both stay RX-only and Tier C (a browser is never an attested receiving site); send() is gated on callsign
- * control-verification. Chromium-only.
+ * It stays RX-only and Tier C (a browser is never an attested receiving site). Chromium-only.
  */
 
 export const webAudioSupported = (): boolean =>
@@ -36,82 +28,6 @@ interface SerialPortLike {
   writable: WritableStream<Uint8Array> | null;
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
-}
-
-/** Decode a bare AX.25 frame (from the soundcard modem) to an RfFrame, or null if it isn't APRS. */
-function ax25ToRfFrame(ax: Uint8Array): RfFrame | null {
-  const frame = decodeAx25(ax);
-  if (!frame) return null;
-  try {
-    const data = decodeAprs({ ...frame, payload: rfText(frame.payload) });
-    return { frame, data, packet: frameToPacket(frame, data, Math.floor(Date.now() / 1000)), at: Date.now() };
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------- soundcard AFSK
-export class WebAudioAfsk implements RfLink {
-  private ctx: AudioContext | null = null;
-  private stream: MediaStream | null = null;
-  private node: ScriptProcessorNode | null = null;
-
-  constructor(
-    private onFrame: (f: RfFrame) => void,
-    private onClose?: (e?: Error) => void,
-    private modem: AfskModem = BELL_202,
-  ) {}
-
-  async connect(): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    });
-    const Ctx = (window as unknown as { AudioContext: typeof AudioContext }).AudioContext;
-    this.ctx = new Ctx();
-    const src = this.ctx.createMediaStreamSource(this.stream);
-    const rx = new AfskRx(
-      this.ctx.sampleRate,
-      (ax) => {
-        const f = ax25ToRfFrame(ax);
-        if (f) this.onFrame(f);
-      },
-      this.modem,
-    );
-    const sp = this.ctx.createScriptProcessor(4096, 1, 1); // deprecated but universally available; no module URL
-    sp.onaudioprocess = (e) => rx.push(e.inputBuffer.getChannelData(0));
-    const mute = this.ctx.createGain();
-    mute.gain.value = 0; // keep the graph pulling without audible output/feedback
-    src.connect(sp);
-    sp.connect(mute);
-    mute.connect(this.ctx.destination);
-    this.node = sp;
-    this.stream.getAudioTracks()[0]?.addEventListener("ended", () => this.onClose?.());
-  }
-
-  async send(_frame: TxFrame): Promise<void> {
-    throw new Error("AFSK transmit is gated on callsign control-verification and not enabled here");
-  }
-
-  async disconnect(): Promise<void> {
-    try {
-      this.node?.disconnect();
-    } catch {
-      /* */
-    }
-    try {
-      this.stream?.getTracks().forEach((t) => t.stop());
-    } catch {
-      /* */
-    }
-    try {
-      await this.ctx?.close();
-    } catch {
-      /* */
-    }
-    this.ctx = null;
-    this.stream = null;
-    this.node = null;
-  }
 }
 
 // ---------------------------------------------------------------- Meshtastic over Web Serial

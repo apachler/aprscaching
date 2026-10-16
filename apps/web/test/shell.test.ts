@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { precacheList } from "../vite-sw.js";
+import { onDemandList, precacheList } from "../vite-sw.js";
 import { forgetSession, recallSession, rememberSession, type SessionStore } from "../src/identity/sessionMemory.js";
 
 describe("the precache list", () => {
@@ -42,6 +42,19 @@ describe("the precache list", () => {
       "/index.html",
       "/manifest.webmanifest",
     ]);
+  });
+});
+
+describe("the on-demand files", () => {
+  it("leaves the WebAssembly out of the precache list and stores it on demand", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acs-sw-"));
+    fs.mkdirSync(path.join(dir, "assets"));
+    for (const f of ["index.html", "assets/modem-1.wasm"]) fs.writeFileSync(path.join(dir, f), "");
+    // the code that fetches it names it, which must not pull it into the precache list
+    fs.writeFileSync(path.join(dir, "assets/app-1.js"), 'fetch("/assets/modem-1.wasm")');
+    const emitted = ["index.html", "assets/app-1.js", "assets/modem-1.wasm"];
+    expect(precacheList(dir, emitted)).toEqual(["/assets/app-1.js", "/index.html"]);
+    expect(onDemandList(emitted)).toEqual(["/assets/modem-1.wasm"]);
   });
 });
 

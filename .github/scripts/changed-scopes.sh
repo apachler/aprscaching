@@ -14,8 +14,8 @@
 #   ingest    apps/ingest/
 #   packages  packages/: the gateway, the web app and the ingest import every one of them
 #   audio     the code the audio and tool-sandbox e2e scripts bundle or serve: apps/web/src/rf/,
-#             apps/web/src/tools/, apps/web/public/tools/, tools/e2e/audio-mic.mjs, tools/e2e/tool-sandbox.mjs,
-#             tools/e2e/fixtures/
+#             apps/web/src/tools/, apps/web/public/tools/, modems/direwolf/src/, modems/direwolf/wasm/,
+#             tools/e2e/audio-mic.mjs, tools/e2e/tool-sandbox.mjs, tools/e2e/fixtures/
 #   e2e       tools/e2e/
 #   devtools  tools/dev/ (docs-theme.mjs excepted) and tools/webauthn/, which pnpm dev:check runs
 #   direwolf  modems/direwolf/: the WebAssembly modem, rebuilt and compared byte for byte
@@ -87,8 +87,8 @@ else
       packages/*) packages=true ;;
     esac
     case "$f" in
-      apps/web/src/rf/* | apps/web/src/tools/* | apps/web/public/tools/* | tools/e2e/audio-mic.mjs \
-        | tools/e2e/tool-sandbox.mjs | tools/e2e/fixtures/*)
+      apps/web/src/rf/* | apps/web/src/tools/* | apps/web/public/tools/* | modems/direwolf/src/* \
+        | modems/direwolf/wasm/* | tools/e2e/audio-mic.mjs | tools/e2e/tool-sandbox.mjs | tools/e2e/fixtures/*)
         audio=true ;;
     esac
     case "$f" in
