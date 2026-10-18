@@ -9,6 +9,13 @@ describe("TNC2", () => {
     expect(f.path).toContain("qAR");
   });
   it("ignores comments", () => expect(parseTNC2("# server msg")).toBeNull());
+  it("refuses a line with an empty source or destination", () => {
+    expect(parseTNC2(">:x")).toBeNull();
+    expect(parseTNC2(">APRS:x")).toBeNull();
+    expect(parseTNC2("OE8APR>:x")).toBeNull();
+    expect(parseTNC2("OE8APR>,WIDE1-1:x")).toBeNull();
+    expect(parseTNC2("OE8APR>APRS:x")).toMatchObject({ src: "OE8APR", dst: "APRS" });
+  });
 });
 describe("q-construct", () => {
   it("flags RF-gated", () => {

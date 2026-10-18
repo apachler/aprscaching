@@ -132,6 +132,14 @@ describe("APRS object encoder", () => {
     expect(d.lon).toBeCloseTo(-151.2153, 4);
   });
 
+  it("round-trips a numeric overlay, sent as a-j in a compressed position", () => {
+    const info = encodeAprsObject({ name: "AC-3", lat: 47.07, lon: 15.43, symbol: "3#", at });
+    expect(info.charAt(18)).toBe("d");
+    expect(decode(info)).toMatchObject({ kind: "object", symbol: { table: "3", code: "#", overlay: "3" } });
+    const beacon = decode(`!${info.slice(18, 31)}`);
+    expect(beacon).toMatchObject({ symbol: { table: "3", overlay: "3" } });
+  });
+
   it("encodes a killed object", () => {
     const info = encodeAprsObject({ name: "AC-1234", lat: 47.07, lon: 15.43, alive: false, at });
     expect(info.slice(0, 11)).toBe(";AC-1234  _");

@@ -172,7 +172,9 @@ Set `DIGI_CALL`, and optionally `DIGI_ALIASES` (default `WIDE1,WIDE2`), to repea
 paradigm, over a KISS TNC or a soundcard port. With several radio ports, each frame is repeated on the port
 that heard it. It inserts your call with the has-been-repeated bit and decrements `WIDEn-N`, with a
 loop guard and a 30-second window that keeps it from repeating the same frame twice. When a path already
-holds eight digipeaters, the most AX.25 carries, it decrements without inserting its call.
+holds eight digipeaters, the most AX.25 carries, it decrements without inserting its call. A hop that asks for
+more than its n allows, such as `WIDE2-7` or `WIDE1-5`, is not repeated, so an over-long path cannot flood the
+channel.
 
 An entry of `DIGI_ALIASES` is either a generic n-N prefix, letters and the hop role (`WIDE1`, `WIDE2`), which
 answers `WIDE2-2`, `WIDE2-1` and so on, or an exact alias such as `RELAY` or `EOC-1`, which answers only that

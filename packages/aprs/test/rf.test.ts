@@ -40,6 +40,12 @@ describe("digipeater (new n-N paradigm)", () => {
   it("replaces the alias on the last hop (WIDE2-1 -> us)", () => {
     expect(digipeat(f(["OE9YYY*", "WIDE2-1"]), opts)!.path).toEqual(["OE9YYY*", "OE8XXX*"]);
   });
+  it("refuses a WIDEn-N hop whose N exceeds its n (the n-N hop trap)", () => {
+    expect(digipeat(f(["WIDE2-7"]), opts)).toBeNull();
+    expect(digipeat(f(["WIDE1-5"]), opts)).toBeNull();
+    expect(digipeat(f(["WIDE1-1", "WIDE2-3"]), opts)!.path).toEqual(["OE8XXX*", "WIDE2-3"]);
+    expect(digipeat(f(["OE9YYY*", "WIDE2-3"]), opts)).toBeNull();
+  });
   it("handles a fill-in WIDE1-1", () => {
     expect(digipeat(f(["WIDE1-1"]), opts)!.path).toEqual(["OE8XXX*"]);
   });

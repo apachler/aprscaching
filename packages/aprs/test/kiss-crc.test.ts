@@ -37,11 +37,14 @@ describe("KISS CRC probes", () => {
     expect(flexTable.slice(0, 8)).toEqual(FLEX_ROW0);
   });
 
-  it("strips a valid SMACK CRC and drops a broken one", () => {
+  it("strips a valid SMACK CRC, and keeps a 0x8n-0xFn frame without one as data on port 8-15", () => {
     const ok = frame(0x80, [...AX, ...smackCrc([0x80, ...AX])]);
     expect(kissStripCrc(ok)).toEqual(frame(0x00, AX));
     const bad = frame(0x80, [...AX, 0x00, 0x00]);
-    expect(kissStripCrc(bad)).toBeNull();
+    expect(kissStripCrc(bad)).toBe(bad);
+    const port8 = frame(0x80, AX);
+    expect(kissStripCrc(port8)).toBe(port8);
+    expect(kissStripCrc(port8).port).toBe(8);
   });
 
   it("strips a valid FlexNet CRC, and keeps a 0x20 frame without one as data on port 2", () => {

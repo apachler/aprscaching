@@ -78,6 +78,21 @@ describe("KISS channels", () => {
     expect(sent[0]![0]).toBe(0x20); // a data frame on channel 2
   });
 
+  it("reports a frame heard on channel 8 on port kiss-tnc-8: a type byte with bit 7 set and no SMACK CRC is data", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    cleanups.push(() => vi.restoreAllMocks());
+    const tnc0 = await fakeTnc([onChannel(8, HEARD)]);
+    const got: Packet[] = [];
+    const tnc = new KissTnc(
+      { host: "127.0.0.1", port: tnc0.port, channels: [0, 8], timing: null },
+      { onPacket: (p) => got.push(p) },
+    );
+    tnc.start();
+    cleanups.push(() => tnc["link"].stop());
+    await until(() => got.length > 0);
+    expect(got.map((p) => [p.port, p.payload])).toEqual([["kiss-tnc-8", ">on channel 2"]]);
+  });
+
   it("ignores a frame on a channel the box does not list", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     cleanups.push(() => vi.restoreAllMocks());

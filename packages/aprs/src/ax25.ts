@@ -97,10 +97,11 @@ const FLEX_TABLE = crcTable(0x8408, 0x0f87);
 /**
  * A KISS frame with the CRC a SMACK or FlexNet host appends, as the Linux mkiss driver sends while it probes
  * for one: a type byte with bit 7 set carries a SMACK CRC-16, one with bit 5 set a FlexNet CRC, each over the
- * type byte and the frame. Returns the frame with its CRC and flag removed, `null` when a SMACK CRC fails, and
- * the frame unchanged otherwise: a type byte of 0x2n whose FlexNet CRC fails is data on port 2. Pure.
+ * type byte and the frame. Returns the frame with its CRC and flag removed when the CRC holds, and the frame
+ * unchanged otherwise: a type byte of 0x8n-0xFn whose SMACK CRC fails is data on port 8-15, and one of 0x2n
+ * whose FlexNet CRC fails is data on port 2. Pure.
  */
-export function kissStripCrc(k: KissFrame): KissFrame | null {
+export function kissStripCrc(k: KissFrame): KissFrame {
   const type = (k.port << 4) | k.command;
   if (type <= 0x0f || k.frame.length < 2) return k;
   const all = [type, ...k.frame];
@@ -108,7 +109,8 @@ export function kissStripCrc(k: KissFrame): KissFrame | null {
   if (type & 0x80) {
     let crc = 0;
     for (const b of all) crc = (crc >>> 8) ^ SMACK_TABLE[(crc ^ b) & 0xff]!;
-    return crc === 0 ? strip(type & ~0x80) : null;
+    if (crc === 0) return strip(type & ~0x80);
+    return k;
   }
   if (type & 0x20) {
     let crc = 0xffff;
