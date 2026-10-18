@@ -86,6 +86,8 @@ jobs:
       - run: node tools/checks/dead-exports.mjs
       # the docs stay present-tense, the schema lists every config key the code reads, and nav and links stay whole
       - run: node tools/checks/docs.mjs
+      # a workflow job holding a write token keeps it out of .git/config and restores no cache
+      - run: node tools/checks/workflows.mjs
       # the configuration page's key tables, both .env.example files and the deploy helpers' export match the schema
       - run: node tools/config/generate.mjs --check
 

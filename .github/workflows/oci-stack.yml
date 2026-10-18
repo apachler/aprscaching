@@ -38,7 +38,7 @@ jobs:
       TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { ref: "${{ env.TAG }}" }
+        with: { ref: "${{ env.TAG }}", persist-credentials: false }
       # The "Deploy to Oracle Cloud" button hands Resource Manager a zip URL sight unseen, so the
       # consistency guard runs here too rather than trusting that CI saw this commit.
       - run: node tools/checks/oci-stack.mjs

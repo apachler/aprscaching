@@ -255,7 +255,9 @@ Pocket's USB TNC bridge is written from the USB CDC-ACM class specification. Pri
 CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent, `dead-exports.mjs`
 fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
 present-tense, every configuration key the code reads documented (and every documented key read), the
-manual's nav complete, and the links outside the manual whole. CI also runs `node tools/config/generate.mjs --check`,
+manual's nav complete, and the links outside the manual whole. `workflows.mjs` fails when a workflow job that
+holds a write token checks out without `persist-credentials: false` or restores a cache, so install scripts and
+build tools never run beside a token they could take. CI also runs `node tools/config/generate.mjs --check`,
 which fails when a file generated from the configuration schema (the configuration reference's tables, the
 `.env.example` files, `deploy/lib/config-keys.*`) is out of date
 ([Add a configuration key](architecture.md#add-a-configuration-key)). `tools/interop/` runs
