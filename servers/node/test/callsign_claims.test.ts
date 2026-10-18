@@ -878,4 +878,29 @@ describe("the internet proofs of a claim", () => {
         for (let i = 0; i < 5; i++) expect((await start(c, "198.51.100.3")).status).toBe(200);
       expect((await start(claims[4]!, "198.51.100.3")).status).toBe(429);
     });
+
+  for (const method of ["ampr", "lotw"] as const)
+    it(`keep the holder's own ${method} starts on a budget of the call's, apart from every claim's`, async () => {
+      const env = claimEnv();
+      const holder = await emailSignup(env, "squat@example.test", "OE8APR");
+      const own = (ip: string) =>
+        call(env, "POST", `/verify/${method}/start`, { callsign: "OE8APR" }, { cookie: holder.cookie }, ip);
+      const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
+      for (let i = 0; i < 5; i++)
+        expect(
+          (
+            await call(
+              env,
+              "POST",
+              `/verify/${method}/start`,
+              { callsign: "OE8APR", claim: a.data.claim },
+              {},
+              "198.51.100.1",
+            )
+          ).status,
+        ).toBe(200);
+      // the claim's spent starts leave the holder's alone, and the holder's are five an hour for the call
+      for (let i = 0; i < 5; i++) expect((await own(`198.51.100.${10 + i}`)).status).toBe(200);
+      expect((await own("198.51.100.20")).status).toBe(429);
+    });
 });
