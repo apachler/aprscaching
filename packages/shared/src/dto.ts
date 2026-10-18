@@ -22,6 +22,12 @@ export type CacheStatus = z.infer<typeof CacheStatus>;
 export const TrustTier = z.enum(["A", "B", "C"]);
 export type TrustTier = z.infer<typeof TrustTier>;
 
+/**
+ * The reason on a find an attested site heard but that stays below Tier A because the logger's call is not
+ * control-verified: anyone can sign up with a call, so its hearings verify no find of an unproven holder.
+ */
+export const UNVERIFIED_CALL_REASON = "verify your callsign for Radio-verified finds";
+
 /** Per-cache minimum-trust override: only A or B may be required (C = "no requirement"). */
 export const MinTrust = z.enum(["A", "B"]);
 

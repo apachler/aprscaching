@@ -27,6 +27,7 @@
  */
 
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
+import { UNVERIFIED_CALL_REASON } from "@aprscaching/shared";
 
 export type TrustTier = "A" | "B" | "C";
 
@@ -128,9 +129,6 @@ interface VerifyDeps {
    *  account that has not proven control of the call has not shown the station heard is theirs */
   loggerControlVerified?: boolean;
 }
-
-/** Why a find the attested RF fixes would have made Tier A stays below it. */
-export const UNVERIFIED_CALL_REASON = "verify your callsign for Radio-verified finds";
 
 function effectiveMinTier(cache: CacheRow, policy: VerifyPolicy): TrustTier {
   return cache.min_trust ?? policy.minTier;
