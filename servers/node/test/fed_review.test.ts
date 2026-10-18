@@ -94,6 +94,8 @@ describe("the fetch guard", () => {
     "http://[::7f00:1]/",
     "http://[64:ff9b::7f00:1]/",
     "http://[64:ff9b::a00:1]/",
+    // the local-use NAT64 prefix translates into a site's own IPv4 plan, private ranges included
+    "http://[64:ff9b:1::5db8:d822]/",
   ])
     it(`refuses ${u}`, async () => {
       await expect(guard(u)).rejects.toThrow(/refused/);

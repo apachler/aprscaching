@@ -58,6 +58,9 @@ function blockedAddress(ip: string): string | null {
           })();
     return blockedAddress(v4);
   }
+  // the local-use NAT64 prefix (64:ff9b:1::/48) translates into the site's own IPv4 plan, private ranges included,
+  // and carries the address in a form no peer's DNS64 synthesises
+  if (/^64:ff9b:1:/.test(s)) return "NAT64 local-use";
   if (s === "::1") return "loopback";
   if (s === "::") return "unspecified";
   if (/^f[cd][0-9a-f]{2}:/.test(s)) return "private";
