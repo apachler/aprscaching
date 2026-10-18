@@ -100,4 +100,26 @@ describe("sealing NFC stages for offline packs", () => {
     const right = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: SERIAL });
     expect(((await right.json()) as { unlocked: boolean }).unlocked).toBe(true);
   });
+
+  it("a stage edit changes the pack's generation, so a refresh carries the new start and seal", async () => {
+    const { env, id } = await setup();
+    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: STAGES });
+    const pack = () => serve(env)(new Request("https://stages.example/api/offline/pack?grid=JN77"));
+    const first = await pack();
+    const etag = first.headers.get("etag")!;
+    const before = ((await first.json()) as PackResponse).caches[0]!.stages;
+    const moved = [
+      { ...STAGES[0]!, lat: 47.105 },
+      { ...STAGES[1]!, secret: "04:B7:00:11:22:33:44" },
+      ...STAGES.slice(2),
+    ];
+    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: moved });
+    const res = await serve(env)(
+      new Request("https://stages.example/api/offline/pack?grid=JN77", { headers: { "if-none-match": etag } }),
+    );
+    expect(res.status).toBe(200);
+    const after = ((await res.json()) as PackResponse).caches[0]!.stages;
+    expect(after[0]!.open).toMatchObject({ lat: 47.105 });
+    expect(after[1]!.sealed).not.toEqual(before[1]!.sealed);
+  });
 });
