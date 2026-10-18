@@ -184,7 +184,7 @@ const PUSH_TIMEOUT_MS = 5000;
  * loopback, private, link-local or `localhost`. Push services (FCM, Mozilla autopush, Apple, WNS) all sit on
  * public names, so an IP literal is refused as well.
  */
-export function pushEndpointAllowed(endpoint: unknown): endpoint is string {
+function pushEndpointAllowed(endpoint: unknown): endpoint is string {
   if (typeof endpoint !== "string" || endpoint.length > ENDPOINT_MAX) return false;
   let u: URL;
   try {
