@@ -20,31 +20,45 @@ interface LivingRow {
   lon: number | null;
 }
 
-/** Best-effort: record rendezvous for any just-heard living cache. Never throws into the ingest path. */
+/**
+ * Best-effort: record rendezvous for any just-heard living cache. Never throws into the ingest path.
+ * It runs on every ingest batch, so it reads the opted-in living caches once, through their partial index,
+ * with each one's station joined on the stations primary key (station keys are upper-case), and matches the
+ * batch's sources against them in memory: most batches hold none of their stations.
+ */
 export async function recordRendezvous(env: Env, heard: { src: string; lat: number; lon: number }[]): Promise<void> {
+  if (!heard.length) return;
   const now = nowS();
+  const living = (
+    await env.DB.prepare(
+      `SELECT c.id, c.station_call, s.lat, s.lon, s.last_seen AS lastSeen
+         FROM caches c LEFT JOIN stations s ON s.callsign = UPPER(c.station_call)
+        WHERE c.type='aprs_living' AND c.rendezvous=1 AND c.status='active' AND c.removed_at IS NULL
+          AND c.station_call IS NOT NULL
+        ORDER BY c.id`,
+    ).all<LivingRow & { lastSeen: number | null }>()
+  ).results;
+  if (!living.length) return;
+  const byCall = new Map<string, LivingRow>();
+  for (const l of living) {
+    const call = l.station_call.toUpperCase();
+    if (!byCall.has(call)) byCall.set(call, l);
+  }
+
   for (const h of heard) {
-    const me = await env.DB.prepare(
-      `SELECT id, station_call, lat, lon FROM caches
-        WHERE type='aprs_living' AND rendezvous=1 AND status='active' AND removed_at IS NULL
-          AND UPPER(station_call)=UPPER(?)`,
-    )
-      .bind(h.src)
-      .first<LivingRow>();
+    const src = h.src.toUpperCase();
+    const me = byCall.get(src);
     if (!me) continue;
 
     // other opted-in living caches whose station was heard recently, with a current position
-    const others = (
-      await env.DB.prepare(
-        `SELECT c.id, c.station_call, s.lat, s.lon, s.last_seen AS lastSeen
-         FROM caches c JOIN stations s ON UPPER(s.callsign)=UPPER(c.station_call)
-        WHERE c.type='aprs_living' AND c.rendezvous=1 AND c.status='active' AND c.removed_at IS NULL
-          AND UPPER(c.station_call)<>UPPER(?)
-          AND s.last_seen >= ? AND s.lat IS NOT NULL AND s.lon IS NOT NULL`,
-      )
-        .bind(h.src, now - HEARD_WINDOW)
-        .all<LivingRow & { lastSeen: number }>()
-    ).results;
+    const others = living.filter(
+      (o) =>
+        o.station_call.toUpperCase() !== src &&
+        o.lastSeen != null &&
+        o.lastSeen >= now - HEARD_WINDOW &&
+        o.lat != null &&
+        o.lon != null,
+    );
 
     for (const o of others) {
       if (o.lat == null || o.lon == null) continue;
