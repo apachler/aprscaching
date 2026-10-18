@@ -208,7 +208,7 @@ export async function handleSupportPage(_req: Request, env: Env): Promise<Respon
   const linkHtml = links.length
     ? links.map((l) => `<a href="${escapeHtml(l.url)}" rel="noopener">${escapeHtml(l.label)}</a>`).join(" · ")
     : "<span class=m>Donation links are configured per instance.</span>";
-  const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+  const html = `<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Support · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
 h1{font-size:1.4rem}.m{opacity:.7}table{border-collapse:collapse;width:100%;margin:1rem 0}

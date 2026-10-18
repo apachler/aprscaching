@@ -68,7 +68,7 @@ environment) before making the instance public.</div>`;
 
 const page = (title: string, body: string): Response =>
   new Response(
-    `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+    `<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>${title} · APRScaching</title>${STYLE}${body}
 <p class=m><a href="/imprint">Imprint</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms of use</a> · <a href="/source" rel="noopener">Source (AGPL-3.0)</a></p>`,
     { headers: { "content-type": "text/html; charset=utf-8" } },
