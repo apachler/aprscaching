@@ -661,7 +661,9 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
         .catch(() => undefined);
     const msg = (e as Error).message ?? "";
     if (/UNIQUE/i.test(msg)) return json({ error: "code already exists" }, { status: 409 });
-    return json({ error: "create failed", detail: msg }, { status: 500 });
+    // the database's message names tables and server state: it goes to the log, never to the caller
+    console.error("cache create failed:", e);
+    return json({ error: "create failed" }, { status: 500 });
   }
   const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   // the cache exists either way: a badge that fails to award is not the hide failing

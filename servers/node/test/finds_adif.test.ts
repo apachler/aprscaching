@@ -33,4 +33,29 @@ describe("GET /api/v1/profile/:call.adif", () => {
     const body = await res.text();
     expect(body.match(/<EOR>/g)).toHaveLength(2);
   });
+
+  it("leaves out a cache the sysop removed, and keeps one archived the ordinary way", async () => {
+    const env = instanceEnv("adif.example", null);
+    const fetch = serve(env);
+    const kept = await addCache(env);
+    const archived = await addCache(env);
+    const removed = await addCache(env);
+    await env.DB.prepare("UPDATE caches SET status='archived' WHERE id IN (?, ?)").bind(archived, removed).run();
+    await env.DB.prepare("UPDATE caches SET removed_at=1700000100 WHERE id=?").bind(removed).run();
+    for (const id of [kept, archived, removed])
+      await env.DB.prepare(
+        "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified) VALUES (?, 'OE8APR', 1700000000, 'found', 1)",
+      )
+        .bind(id)
+        .run();
+    const code = (id: number) =>
+      env.DB.prepare("SELECT code FROM caches WHERE id=?")
+        .bind(id)
+        .first<{ code: string }>()
+        .then((r) => r!.code);
+    const body = await (await fetch(new Request("https://adif.example/api/v1/profile/OE8APR.adif"))).text();
+    expect(body.match(/<EOR>/g)).toHaveLength(2);
+    expect(body).toContain(await code(archived));
+    expect(body).not.toContain(await code(removed));
+  });
 });
