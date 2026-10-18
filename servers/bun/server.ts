@@ -17,12 +17,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
-import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
+import { clientIp, stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { validateConfig } from "@aprscaching/shared";
 import { migrate, type Migration } from "@aprscaching/gateway/migrate";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
-import { liveRegionOf } from "@aprscaching/gateway/live";
 import { BunDb } from "./d1.ts";
 import { roomHandlers, type WsData } from "./rooms.ts";
 import { makeFsMedia } from "../node/src/media.ts";
@@ -137,17 +136,26 @@ export function createServer(opts: BunServerOptions): BunServer {
     },
     async fetch(req, srv) {
       const url = new URL(req.url);
+      // the socket address is the client identity for rate limits: overwrite any client-supplied
+      // x-real-ip and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared
+      const stamped = () => {
+        const headers = new Headers(req.headers);
+        stampClientIp(headers, srv.requestIP(req)?.address, env);
+        return headers;
+      };
       if (url.pathname === "/ws") {
-        const region = liveRegionOf(url);
-        if (!region) return new Response("unknown region", { status: 400 });
-        if (srv.upgrade(req, { data: { region } })) return undefined;
+        const holder = clientIp(new Request(url, { headers: stamped() }), env);
+        const admitted = rooms.admit(url, holder);
+        if ("status" in admitted)
+          return new Response(admitted.error, {
+            status: admitted.status,
+            headers: admitted.status === 429 ? { "retry-after": "60" } : {},
+          });
+        if (srv.upgrade(req, { data: { region: admitted.region, holder } })) return undefined;
         return new Response("websocket upgrade failed", { status: 400 });
       }
       if (opts.spa && !isGatewayPath(url.pathname)) return opts.spa(url.pathname, req);
-      // the socket address is the client identity for rate limits: overwrite any client-supplied
-      // x-real-ip and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared
-      const headers = new Headers(req.headers);
-      stampClientIp(headers, srv.requestIP(req)?.address, env);
+      const headers = stamped();
       const res = await handle(new Request(req, { headers }), env, {
         waitUntil: (p) => void Promise.resolve(p).catch(() => {}),
       });

@@ -2,7 +2,7 @@
 // The in-memory region rooms the self-host runtimes (Node over `ws`, Bun over Bun.serve) share:
 // subscription filtering, backpressure, and the ping/pong liveness sweep.
 import { describe, it, expect } from "vitest";
-import { RoomsCore, type RoomSocket } from "../src/rooms-core.js";
+import { RoomsCore, LIVE_SOCKETS_PER_CLIENT, type RoomSocket } from "../src/rooms-core.js";
 import type { LiveEnvelope } from "../src/live.js";
 
 class FakeSocket implements RoomSocket {
@@ -138,5 +138,20 @@ describe("rooms-core", () => {
     expect((r as unknown as { rooms: Map<string, unknown> }).rooms.size).toBe(0);
     r.join("global", a);
     expect(r.count("global")).toBe(1);
+  });
+
+  it(`admits at most ${LIVE_SOCKETS_PER_CLIENT} sockets per client address, and only on a live region`, () => {
+    const r = rooms();
+    const url = new URL("http://localhost/ws?region=global");
+    expect(r.admit(new URL("http://localhost/ws?region=mars"), "10.0.0.1")).toMatchObject({ status: 400 });
+    const members = [];
+    for (let i = 0; i < LIVE_SOCKETS_PER_CLIENT; i++) {
+      expect(r.admit(url, "10.0.0.1")).toEqual({ region: "global" });
+      members.push(r.join("global", new FakeSocket(), "10.0.0.1"));
+    }
+    expect(r.admit(url, "10.0.0.1")).toMatchObject({ status: 429 });
+    expect(r.admit(url, "10.0.0.2")).toEqual({ region: "global" });
+    members[0]!.leave();
+    expect(r.admit(url, "10.0.0.1")).toEqual({ region: "global" });
   });
 });

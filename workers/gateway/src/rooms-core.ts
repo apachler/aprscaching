@@ -14,11 +14,22 @@
  * stream (heardfeed.ts) sees every dispatch the live map sees, from the same memory, with no database read.
  */
 import { Subscribe } from "@aprscaching/shared";
-import { deliveriesFor, type LiveEnvelope } from "./live.js";
+import { deliveriesFor, liveRegionOf, type LiveEnvelope } from "./live.js";
 
 const HEARTBEAT_MS = 30_000;
 /** Bytes queued to one client past which it is not draining and is dropped. */
 const MAX_BUFFERED = 1 << 20;
+
+/**
+ * The largest frame a client may send. A subscription is a few hundred bytes, and a runtime buffers a whole
+ * message before handing it over, so a larger one closes the socket (1009) instead of being held in memory.
+ */
+export const LIVE_MESSAGE_MAX_BYTES = 4096;
+/**
+ * Live sockets one client address holds open at once: room for a few tabs and devices behind one address.
+ * The upgrade needs no sign-in, so without a bound one client could open sockets until the process runs out.
+ */
+export const LIVE_SOCKETS_PER_CLIENT = 16;
 
 /** The four things the rooms need from a runtime's WebSocket. */
 export interface RoomSocket {
@@ -43,6 +54,8 @@ export interface RoomMember {
 interface State {
   sub?: Subscribe;
   alive: boolean;
+  /** The client address the socket was opened from (clientIp). */
+  holder: string;
 }
 
 /** An in-process listener on a region's dispatches, and who holds it (an API key or a client address). */
@@ -64,10 +77,25 @@ export class RoomsCore {
     }
   }
 
-  join(region: string, socket: RoomSocket): RoomMember {
+  /**
+   * Whether `holder` (the client address, clientIp) may open a live socket for the upgrade `url`: the room's
+   * region, or the status and reason the runtime refuses the upgrade with.
+   */
+  admit(url: URL, holder: string): { region: string } | { status: 400 | 429; error: string } {
+    const region = liveRegionOf(url);
+    if (!region) return { status: 400, error: "unknown region" };
+    let held = 0;
+    for (const room of this.rooms.values()) for (const state of room.values()) if (state.holder === holder) held++;
+    if (held >= LIVE_SOCKETS_PER_CLIENT)
+      return { status: 429, error: `at most ${LIVE_SOCKETS_PER_CLIENT} live sockets open at once` };
+    return { region };
+  }
+
+  /** Add a socket to `region`'s room; `holder` is the client address {@link admit} counts it against. */
+  join(region: string, socket: RoomSocket, holder = ""): RoomMember {
     let room = this.rooms.get(region);
     if (!room) this.rooms.set(region, (room = new Map()));
-    const state: State = { alive: true };
+    const state: State = { alive: true, holder };
     room.set(socket, state);
     const members = room;
     return {

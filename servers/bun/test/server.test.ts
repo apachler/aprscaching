@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { createServer, type BunServer } from "../server.ts";
 import { migrationsFromDir } from "../../node/src/migrate.ts";
 import { BODY_MAX_BYTES } from "../../node/src/host.ts";
+import { LIVE_MESSAGE_MAX_BYTES, LIVE_SOCKETS_PER_CLIENT } from "@aprscaching/gateway/rooms-core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = migrationsFromDir(join(HERE, "../../../db/migrations"));
@@ -102,6 +103,45 @@ describe("a request", () => {
       expect(await res.text()).toBe(JSON.stringify({ error: "internal error" }));
     } finally {
       logged.mockRestore();
+    }
+  });
+});
+
+describe("the live socket", () => {
+  const openWs = (s: BunServer) =>
+    new Promise<WebSocket>((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${s.server.port}/ws?region=global`);
+      ws.onopen = () => resolve(ws);
+      ws.onerror = () => reject(new Error("refused"));
+    });
+
+  it("closes on a frame larger than LIVE_MESSAGE_MAX_BYTES", async () => {
+    const ws = await openWs(start());
+    const closed = new Promise<number | "open">((r) => {
+      ws.onclose = (e) => r(e.code);
+      setTimeout(() => r("open"), 2000);
+    });
+    ws.send("x".repeat(LIVE_MESSAGE_MAX_BYTES * 2));
+    // Bun drops the connection (1006) rather than sending a 1009 close frame
+    expect([1006, 1009]).toContain(await closed);
+  });
+
+  it(`refuses the upgrade past ${LIVE_SOCKETS_PER_CLIENT} sockets from one client address`, async () => {
+    const s = start();
+    const open: WebSocket[] = [];
+    try {
+      for (let i = 0; i < LIVE_SOCKETS_PER_CLIENT; i++) open.push(await openWs(s));
+      const res = await fetch(`${base(s)}/ws?region=global`, {
+        headers: {
+          upgrade: "websocket",
+          connection: "Upgrade",
+          "sec-websocket-version": "13",
+          "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+        },
+      });
+      expect(res.status).toBe(429);
+    } finally {
+      for (const ws of open) ws.close();
     }
   });
 });
