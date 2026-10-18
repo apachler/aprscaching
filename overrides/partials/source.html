@@ -1,0 +1,13 @@
+{#- The repository link in the header and the nav, as a plain link. Material's own partial marks it
+    data-md-component="source", and its script then asks the GitHub API for the repository's release, stars and
+    forks on every page view, so each reader's address would reach a third party. Without the marker the manual
+    makes no request outside its own site. -#}
+<a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-source">
+  <div class="md-source__icon md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.repo_name }}
+  </div>
+</a>
