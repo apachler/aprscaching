@@ -48,7 +48,7 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Landing", null],
-      ["Sign in", click("link|button", /^Sign in with your callsign\b/i)],
+      ["Sign in", click("button", /^Sign in$/i)],
       ["Enter a call", "fill:Callsign:OE8APR"],
     ],
   },
@@ -140,15 +140,18 @@ function serve() {
 }
 
 async function act(page, how) {
-  if (typeof how === "string") {
-    const [kind, a, b] = how.split(":");
-    if (kind === "key") return page.keyboard.press(a);
-    if (kind === "fill") return page.getByLabel(a, { exact: false }).first().fill(b, { timeout: 5000 });
-    throw new Error(`unknown step "${how}"`);
-  }
+  const [kind, a, b] = typeof how === "string" ? how.split(":") : [];
+  if (kind === "key") return page.keyboard.press(a);
+  if (kind && kind !== "fill") throw new Error(`unknown step "${how}"`);
   // an open modal dialog is all a person can reach: look there first
   const dialog = page.locator('[role="dialog"][aria-modal="true"]').last();
   const scope = (await dialog.count()) ? dialog : page;
+  if (kind === "fill") {
+    // the exact label, so a field whose label only contains the words ("Your callsign") does not stand in for it
+    const field = scope.getByLabel(a, { exact: true }).first();
+    if (await field.count()) return field.fill(b, { timeout: 5000 });
+    throw new Error(`no field labelled "${a}"`);
+  }
   for (const role of how.role.split("|")) {
     const loc = scope.getByRole(role, { name: how.name }).first();
     if (await loc.count()) return loc.click({ timeout: 5000 });
