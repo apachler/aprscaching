@@ -30,6 +30,8 @@ Each callsign is verified on its own. A verified callsign shows **✓ you contro
 is held, not proven: its licensee can take it over ([Take over your callsign](#take-over-your-callsign)), so
 verify every callsign that is yours.
 
+Your account holds at most three unverified callsigns at a time. To add a fourth, verify one of them first.
+
 If **Add** says another account holds the callsign without having proven control, Settings shows the steps of
 [Take over your callsign](#take-over-your-callsign) right there: tap **Prove control** to start. The callsign
 then joins your account, verified.
