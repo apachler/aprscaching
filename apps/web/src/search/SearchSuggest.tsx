@@ -95,12 +95,22 @@ export function SearchSuggest(props: {
         setOpen(false);
         props.onSubmitRaw(props.q);
       }
-    } else if (e.key === "Escape") {
+    } else if (e.key === "Escape" && open) {
+      // an open list takes this Escape: it closes alone, not the surface around the field
+      e.stopPropagation();
       setOpen(false);
     }
   }
 
   const showEmpty = open && !loading && hits.length === 0 && props.q.trim().length >= 2;
+  const listed = open && hits.length > 0;
+  // what a screen reader hears once a search settles; the field says only whether its list is open
+  const settled = open && !loading && props.q.trim().length >= 2;
+  const said = !settled
+    ? ""
+    : hits.length === 0
+      ? "No matches. Try a grid like JN77, or a latitude and longitude."
+      : `${hits.length} ${hits.length === 1 ? "result" : "results"}`;
 
   return (
     <div className={`topsearch-wrap${props.className ? ` ${props.className}` : ""}`} ref={wrapRef}>
@@ -108,8 +118,8 @@ export function SearchSuggest(props: {
         <Icon name="search" size={16} />
         <input
           role="combobox"
-          aria-expanded={open}
-          aria-controls={`${ids}-listbox`}
+          aria-expanded={listed}
+          aria-controls={listed ? `${ids}-listbox` : undefined}
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${ids}-opt-${active}` : undefined}
           value={props.q}
@@ -124,7 +134,7 @@ export function SearchSuggest(props: {
         />
         {loading && <span className="search-spin" aria-hidden="true" />}
       </label>
-      {open && hits.length > 0 && (
+      {listed && (
         <ul className="search-pop" id={`${ids}-listbox`} role="listbox" aria-label="Search results">
           {hits.map((h, i) => (
             <li
@@ -160,12 +170,16 @@ export function SearchSuggest(props: {
         </ul>
       )}
       {showEmpty && (
-        <ul className="search-pop" role="listbox" aria-label="Search results">
-          <li className="search-empty">
+        // not a listbox: it holds no option, only the way on, which the status line below announces
+        <div className="search-pop">
+          <p className="search-empty">
             No matches — try a grid like <span className="mono">JN77</span> or “lat, lon”.
-          </li>
-        </ul>
+          </p>
+        </div>
       )}
+      <span className="sr-only" role="status">
+        {said}
+      </span>
     </div>
   );
 }

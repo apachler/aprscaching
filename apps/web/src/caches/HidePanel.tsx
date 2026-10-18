@@ -188,7 +188,7 @@ export function HidePanel(props: {
             {quota.remaining} of {quota.limit} new {quota.limit === 1 ? "cache" : "caches"} left for today.
           </p>
         ))}
-      <h4 className="set-subh">Location</h4>
+      <h3 className="section-h set-subh">Location</h3>
       <p className="muted" role="status" aria-live="polite">
         {props.draft ? (
           <>
@@ -251,7 +251,7 @@ export function HidePanel(props: {
           radioOnly={radioOnly}
         />
       )}
-      <h4 className="set-subh">Basics</h4>
+      <h3 className="section-h set-subh">Basics</h3>
       <label>
         Title
         <input value={title} maxLength={TEXT_LIMITS.title} onChange={(e) => setTitle(e.target.value)} />
@@ -299,7 +299,7 @@ export function HidePanel(props: {
           </Row>
         </>
       )}
-      <h4 className="set-subh">Difficulty &amp; terrain</h4>
+      <h3 className="section-h set-subh">Difficulty &amp; terrain</h3>
       <p className="muted fine">
         Difficulty: how hard the cache is to find. Terrain: how hard the place is to reach. Both add to a find&apos;s
         points.
@@ -329,9 +329,9 @@ export function HidePanel(props: {
         </label>
       </div>
       <Advanced label="Advanced: hint, description, rating & sharing">
-        <h4 className="set-subh">
+        <h3 className="section-h set-subh">
           Details <span className="muted fw-normal">· all optional</span>
-        </h4>
+        </h3>
         <label>
           Hint <span className="muted">(optional)</span>
           <input value={hint} maxLength={TEXT_LIMITS.hint} onChange={(e) => setHint(e.target.value)} />
@@ -375,10 +375,10 @@ export function HidePanel(props: {
             ))}
           </div>
         )}
-        <h4 className="set-subh" aria-labelledby="hide-verif-title">
+        <h3 className="section-h set-subh" aria-labelledby="hide-verif-title">
           <span id="hide-verif-title">Verification, rating &amp; federation</span>{" "}
           <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
-        </h4>
+        </h3>
         <Row
           label="Radio-verified finds only"
           help="A find counts as verified only when a receiving station heard the finder there. Off: this instance's minimum applies."

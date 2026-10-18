@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   attentionLogs,
   ensureDeviceKey,
@@ -70,6 +70,7 @@ export function LogForm(props: {
   const [hadGeo, setHadGeo] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  const noteId = useId();
   const [note, setNote] = useState("");
   const [flagMaintenance, setFlagMaintenance] = useState(false);
   const [flaggedNote, setFlaggedNote] = useState(false);
@@ -283,6 +284,9 @@ export function LogForm(props: {
             <div className="mt-3">
               <textarea
                 rows={2}
+                aria-label="Note"
+                // the button that opened it is gone, so focus moves to the field it opened
+                autoFocus
                 placeholder="Add a note…"
                 value={note}
                 maxLength={TEXT_LIMITS.logComment}
@@ -373,14 +377,20 @@ export function LogForm(props: {
             {busy === "dnf" ? "…" : "Couldn't find it"}
           </Button>
         )}
-        <Button variant="quiet" onClick={() => setNoteOpen((v) => !v)}>
+        <Button
+          variant="quiet"
+          aria-expanded={noteOpen}
+          aria-controls={noteOpen ? noteId : undefined}
+          onClick={() => setNoteOpen((v) => !v)}
+        >
           Add a note
         </Button>
       </div>
       {noteOpen && (
-        <div className="mt-2">
+        <div className="mt-2" id={noteId}>
           <textarea
             rows={2}
+            aria-label="Note"
             placeholder="Note…"
             value={note}
             maxLength={TEXT_LIMITS.logComment}

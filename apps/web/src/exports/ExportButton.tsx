@@ -26,7 +26,7 @@ export function ExportButton(props: {
       await downloadExport(p, props.filename);
       toast(`Saved ${props.filename}`);
     } catch (e) {
-      toast(`Couldn't download: ${(e as Error).message}`);
+      toast(`Couldn't download: ${(e as Error).message}`, { kind: "error" });
     } finally {
       setBusy(false);
     }

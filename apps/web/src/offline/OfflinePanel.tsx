@@ -125,7 +125,7 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
       toast(r.changed ? `${p.name} updated` : `${p.name} is up to date`);
       props.onChanged();
     } catch (e) {
-      toast(`Couldn't refresh ${p.name}: ${(e as Error).message}`);
+      toast(`Couldn't refresh ${p.name}: ${(e as Error).message}`, { kind: "error" });
     } finally {
       setProgress(null);
     }
@@ -238,7 +238,7 @@ function OwnerPack(props: { packs: PackMeta[]; onSaved: () => void; disabled: bo
       toast(existing ? "Your caches are up to date" : "Your caches are packed");
       props.onSaved();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }

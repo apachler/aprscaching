@@ -24,6 +24,15 @@
     gap: var(--space-sm);
     padding: 7px 11px;
   }
+  /* the heading around the toggle adds no look of its own */
+  .group .group-title {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    margin: 0;
+    font: inherit;
+    letter-spacing: inherit;
+  }
   .group-toggle {
     flex: 1;
     border: none;

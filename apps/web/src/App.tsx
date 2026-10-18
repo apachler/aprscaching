@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import "./styles/index.css";
 import { ToastProvider, ConfirmProvider, tourSeen } from "./ui/index.js";
 import { useSession } from "./identity/useSession.js";
@@ -10,6 +10,7 @@ import { SessionEndedNotice } from "./identity/SessionEndedNotice.js";
 import { ASSET } from "./brand.js";
 import { UpdateNotice } from "./shell/UpdateNotice.js";
 import { joinCall, opensPlatform, type TourName } from "./deeplink.js";
+import { takeOverLanding } from "./landingTakeover.js";
 
 // The signed-in / explore platform owns MapLibre (~1 MB) plus all the map code. Lazy-load it so the
 // signed-out marketing landing paints without ever fetching the map bundle: the
@@ -93,10 +94,12 @@ export function App(props: { tour?: TourName }) {
     prevSignedIn.current = session.signedIn;
   }, [session.signedIn, toLanding]);
 
-  // the app's own landing or platform is up: the prerendered copy goes (the platform also hides it by CSS)
+  // the app's own landing or platform is up: the prerendered copy goes (the platform also hides it by CSS), handing
+  // over the callsign typed into it, its scroll offset and its focus; a layout effect, so the swap is never painted
   const ready = !session.loading;
-  useEffect(() => {
-    if (ready) document.getElementById("landing-pre")?.remove();
+  useLayoutEffect(() => {
+    const pre = ready ? document.getElementById("landing-pre") : null;
+    if (pre) takeOverLanding(pre, document.getElementById("root") ?? document);
   }, [ready]);
 
   return (

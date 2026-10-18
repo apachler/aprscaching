@@ -64,7 +64,7 @@ export function FilterPanel(props: {
       await navigator.clipboard?.writeText(url).catch(() => {});
       toast("Share link copied");
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
   const toggle = (t: CacheType) =>
@@ -93,7 +93,7 @@ export function FilterPanel(props: {
           onChange={(e) => setFilters({ ...filters, q: e.target.value })}
         />
       </label>
-      <h4>Cache type</h4>
+      <h3 className="section-h">Cache type</h3>
       <div className="badges">
         {FILTER_TYPES.map((t) => {
           const m = TYPE_META[t];
@@ -105,7 +105,7 @@ export function FilterPanel(props: {
           );
         })}
       </div>
-      <h4>Country and tags</h4>
+      <h3 className="section-h">Country and tags</h3>
       {countries.length === 0 && tags.length === 0 ? (
         <p className="muted fine">No cache in view has a country or tags.</p>
       ) : (
@@ -138,7 +138,7 @@ export function FilterPanel(props: {
           <p className="muted fine">Only this instance's caches carry a country and tags.</p>
         </>
       )}
-      <h4>Network data</h4>
+      <h3 className="section-h">Network data</h3>
       <div className="row between">
         <label>
           Include unvetted network data
@@ -150,7 +150,7 @@ export function FilterPanel(props: {
           onChange={props.setIncludeUnvetted}
         />
       </div>
-      <h4>Live layers</h4>
+      <h3 className="section-h">Live layers</h3>
       <div className="row between">
         <label>
           Live stations
@@ -243,7 +243,7 @@ export function FilterPanel(props: {
           </div>
         </div>
       )}
-      <h4>Share and download</h4>
+      <h3 className="section-h">Share and download</h3>
       <div className="row between">
         <span className="muted">Save this map view (centre, layers, filters) as a link.</span>
         <Button onClick={share}>

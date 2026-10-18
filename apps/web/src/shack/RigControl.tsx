@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { APRS_FREQ, type CatRig } from "@aprscaching/aprs";
 import { cat, catSupported, useCatConnected, type RigProfile } from "../rf/cat.js";
-import { Button, useToast, InfoTip } from "../ui/index.js";
+import { Button, useToast, InfoTip, Field } from "../ui/index.js";
 
 /**
  * Rig control: connect a transceiver over Web Serial CAT and one-click tune it — the
@@ -42,7 +42,7 @@ export function RigControl() {
       toast("Rig connected");
     } catch (e) {
       const m = (e as Error).message || "";
-      if (!/No port selected|cancel|NotFound/i.test(m)) toast(`Could not connect: ${m}`);
+      if (!/No port selected|cancel|NotFound/i.test(m)) toast(`Could not connect: ${m}`, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -53,7 +53,7 @@ export function RigControl() {
       await cat.tune(hz, mode);
       toast(`Tuned to ${(hz / 1e6).toFixed(3)} MHz`);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -89,34 +89,45 @@ export function RigControl() {
             </select>
           </label>
           <div className="row">
-            <label>
-              Baud{" "}
-              <InfoTip
-                text="The serial speed set in the radio's CAT menu; both ends must match."
-                label="Which baud rate?"
-              />{" "}
-              <select aria-label="Baud" value={baud} onChange={(e) => setBaud(+e.target.value)}>
-                {BAUDS.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {rig === "icom" && (
-              <label>
-                CI-V addr{" "}
+            <Field
+              label="Baud"
+              info={
                 <InfoTip
-                  text="The radio's CI-V address in hex, from its CI-V menu."
-                  label="What is the CI-V address?"
-                />{" "}
-                <input
-                  className="mono field-xs"
-                  aria-label="CI-V address"
-                  value={addr}
-                  onChange={(e) => setAddr(e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 2))}
+                  text="The serial speed set in the radio's CAT menu; both ends must match."
+                  label="Which baud rate?"
                 />
-              </label>
+              }
+            >
+              {(id) => (
+                <select id={id} value={baud} onChange={(e) => setBaud(+e.target.value)}>
+                  {BAUDS.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            {rig === "icom" && (
+              <Field
+                label="CI-V addr"
+                info={
+                  <InfoTip
+                    text="The radio's CI-V address in hex, from its CI-V menu."
+                    label="What is the CI-V address?"
+                  />
+                }
+              >
+                {(id) => (
+                  <input
+                    id={id}
+                    className="mono field-xs"
+                    aria-label="CI-V address"
+                    value={addr}
+                    onChange={(e) => setAddr(e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 2))}
+                  />
+                )}
+              </Field>
             )}
           </div>
           <div className="row end">

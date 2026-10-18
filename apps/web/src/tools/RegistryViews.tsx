@@ -468,7 +468,7 @@ export function useReconfirm(scope: RegistryListScope, after: () => void) {
       toast(`${reg.label} is pinned to key ${fingerprint}.`);
       after();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   };
 }
@@ -540,7 +540,7 @@ export function MyRegistries(props: { list: ToolRegistryList; onChanged: () => v
       toast(`Removed ${r.label}.`);
       changed();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   };
   const toggle = async (r: ToolRegistryEntry, on: boolean) => {
@@ -548,7 +548,7 @@ export function MyRegistries(props: { list: ToolRegistryList; onChanged: () => v
       await updateToolRegistry("my", r.id, { enabled: on });
       changed();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   };
   const allowed = props.list.players.allowed;

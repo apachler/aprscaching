@@ -116,6 +116,12 @@
     padding: var(--space-sm) var(--space-md);
     background: color-mix(in oklch, var(--warn) 8%, transparent);
   }
+  /* the permission prompt is a modal dialog over the page: an opaque card that scrolls when its list is long */
+  .confirm-dialog.tool-prompt {
+    background: color-mix(in oklab, var(--warn) 8%, var(--surface));
+    max-height: calc(100dvh - 2 * var(--space-lg));
+    overflow-y: auto;
+  }
   .tool-surfaces {
     font-size: var(--text-caption);
     color: var(--muted);

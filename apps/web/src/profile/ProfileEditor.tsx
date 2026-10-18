@@ -46,7 +46,7 @@ export function ProfileEditor(props: { callsign: string }) {
       await updateProfile({ ...p, links: (p.links ?? []).filter((l) => l.url.trim()) });
       toast("Profile saved");
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }

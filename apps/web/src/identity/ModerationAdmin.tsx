@@ -86,7 +86,7 @@ function useRemove() {
       toast(`${label} removed`);
       return true;
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
       return false;
     }
   };
@@ -123,7 +123,7 @@ export function ReportsAdmin(props: { onChanged?: () => void }) {
       reports.reload();
       props.onChanged?.();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     } finally {
       setBusy(null);
     }
@@ -364,7 +364,7 @@ function ErasedCallRow(props: { s: ErasedCallSuspension; onLifted: () => void })
       toast(`${s.callsign} is free again`);
       props.onLifted();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -438,7 +438,7 @@ function AccountDetail(props: { callsign: string; onBack: () => void }) {
       toast(`${props.callsign} ${done}`);
       acct.reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     } finally {
       setBusy(false);
     }

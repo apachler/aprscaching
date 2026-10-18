@@ -8,7 +8,11 @@ import type { ReactNode } from "react";
 import { Icon } from "./Icon.js";
 import { Hint } from "./Hint.js";
 
-/** `title` is the badge's one-line meaning, shown on hover by Hint and read as its description. */
+/**
+ * `title` is the badge's one-line meaning, shown on mouse hover by Hint. The chip is not a control, so neither a tap
+ * nor the keyboard reaches that hint: a term the reader needs explained (a trust tier, a verified callsign) carries
+ * an InfoTip on the same surface.
+ */
 export function Badge(props: { kind?: string; title?: string; className?: string; children: ReactNode }) {
   const cls = ["badge", props.kind, props.className].filter(Boolean).join(" ");
   const badge = <span className={cls}>{props.children}</span>;

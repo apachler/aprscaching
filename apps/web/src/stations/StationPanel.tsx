@@ -173,7 +173,7 @@ export function StationPanel(props: {
                     setStation({ ...station, registered: true, mine: true });
                     toast(`${station.callsign} added to your stations`);
                   } catch (e) {
-                    toast((e as Error).message);
+                    toast((e as Error).message, { kind: "error" });
                   }
                 }}
               >

@@ -2,18 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Panel, Badge, EmptyState, ErrorState, Icon, Tabs, tabPanelId, InfoTip } from "../ui/index.js";
+import { Button, Panel, Badge, EmptyState, ErrorState, Icon, Tabs, tabPanelId, InfoTip, Field } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
-
-/** Enter/Space activate a role="button" row so it's keyboard-operable (ui-ux.md §7). */
-const rowKey = (fn: () => void) => (e: React.KeyboardEvent) => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    fn();
-  }
-};
 
 type Tab = "inbox" | "sent" | "bulletins" | "compose";
 
@@ -160,7 +152,12 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
         onClick={() => openMessage(m)}
       >
         <span className="bbs-row-h">
-          {kind === "inbox" && m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
+          {kind === "inbox" && m.readAt == null && (
+            <>
+              <span className="bbs-dot" aria-hidden="true" />
+              <span className="sr-only">unread, </span>
+            </>
+          )}
           {kind === "bulletins" && <Badge>{m.toCall}</Badge>}
           <strong>{m.fromCall}</strong>
           <span className="muted bbs-row-date">{fmt.dateTime(m.postedAt)}</span>
@@ -203,16 +200,14 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             {tree.length > 1 && <div className="bbs-thread-h muted">Thread · {tree.length} messages</div>}
             <div className="bbs-thread">
               {tree.map(({ msg: t, depth }) => (
-                <div
-                  key={t.id}
-                  className={`bbs-node depth-${Math.min(depth, 6)}${t.id === selected.id ? " on" : ""}`}
-                  onClick={() => setSelected(t)}
-                  onKeyDown={rowKey(() => setSelected(t))}
-                  role="button"
-                  tabIndex={0}
-                >
+                <div key={t.id} className={`bbs-node depth-${Math.min(depth, 6)}${t.id === selected.id ? " on" : ""}`}>
                   <div className="bbs-msg">
-                    <div className="bbs-msg-h">
+                    {/* the header line is the control, so the message body is not read as its name */}
+                    <Button
+                      className="bbs-msg-h"
+                      aria-current={t.id === selected.id ? "true" : undefined}
+                      onClick={() => setSelected(t)}
+                    >
                       {depth > 0 && (
                         <span className="bbs-reply-mark" aria-hidden="true">
                           ↳
@@ -221,7 +216,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
                       <strong className="mono">{t.fromCall}</strong>
                       <span className="muted">→ {t.toCall}</span>
                       <span className="muted bbs-node-date">{fmt.dateTime(t.postedAt)}</span>
-                    </div>
+                    </Button>
                     <div className="comment">{t.body}</div>
                   </div>
                 </div>
@@ -331,18 +326,23 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
         {tab === "compose" && (
           <>
             {replyTo != null && <p className="muted">↳ reply to message #{replyTo} (threaded)</p>}
-            <label>
-              Type{" "}
-              <InfoTip
-                text="Personal goes to one callsign, a bulletin to everyone, Traffic is an NTS radiogram."
-                label="What do the types mean?"
-              />
-              <select aria-label="Type" value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
-                <option value="P">Personal</option>
-                <option value="B">Bulletin</option>
-                <option value="T">Traffic (NTS)</option>
-              </select>
-            </label>
+            <Field
+              label="Type"
+              info={
+                <InfoTip
+                  text="Personal goes to one callsign, a bulletin to everyone, Traffic is an NTS radiogram."
+                  label="What do the types mean?"
+                />
+              }
+            >
+              {(id) => (
+                <select id={id} value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
+                  <option value="P">Personal</option>
+                  <option value="B">Bulletin</option>
+                  <option value="T">Traffic (NTS)</option>
+                </select>
+              )}
+            </Field>
             <label>
               To <span className="muted">(callsign, or ALL/BLN… for a bulletin)</span>
               <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="OE8APR" />

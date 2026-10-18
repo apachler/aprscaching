@@ -76,7 +76,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       await radioLink.transmit({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info }, "My radio");
       toast(`ACK ${mm.msgNo} → ${mm.from}`);
     } catch (e) {
-      toast(`TX failed: ${(e as Error).message}`);
+      toast(`TX failed: ${(e as Error).message}`, { kind: "error" });
     } finally {
       setTxBusy(false);
     }
@@ -111,7 +111,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       fieldStation.clearHeard();
       toast(`Synced ${packets.length} heard frame(s).`);
     } catch (e) {
-      toast(`Sync failed: ${(e as Error).message}`);
+      toast(`Sync failed: ${(e as Error).message}`, { kind: "error" });
     }
   }
 
@@ -143,7 +143,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       toast(`Transmitted: ${what}`);
       return true;
     } catch (e) {
-      toast(`TX failed: ${(e as Error).message}`);
+      toast(`TX failed: ${(e as Error).message}`, { kind: "error" });
       return false;
     } finally {
       setTxBusy(false);

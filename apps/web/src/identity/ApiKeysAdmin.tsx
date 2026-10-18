@@ -26,7 +26,7 @@ export function ApiKeysAdmin() {
       toast("API key revoked");
       reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   }
 

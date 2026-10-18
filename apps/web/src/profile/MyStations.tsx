@@ -31,6 +31,7 @@ import {
   useToast,
   InfoTip,
   Disclosure,
+  Field,
 } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { WxTxToggles } from "./WxTxToggles.js";
@@ -74,7 +75,7 @@ export function MyStations(props: { callsign: string }) {
       toast(r.station.wx ? "Weather station added: point it at its push URL" : "Station added");
       stations.reload();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
 
@@ -89,7 +90,7 @@ export function MyStations(props: { callsign: string }) {
       const r = await becomeACache();
       toast(`You're a cache now: ${r.cache.code}`);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
 
@@ -175,7 +176,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
       props.onChanged();
       setOpen(false);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -193,7 +194,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
       toast("Station removed");
       props.onChanged();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
 
@@ -239,7 +240,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
                   const r = await stationToCache(props.station.id, { living: kind === "living" });
                   toast(`Cache created: ${r.cache.code}`);
                 } catch (e) {
-                  toast((e as Error).message);
+                  toast((e as Error).message, { kind: "error" });
                 }
               }}
             >
@@ -266,7 +267,7 @@ function LivingCacheRow(props: { cache: NonNullable<OperatedStation["livingCache
       toast(v ? `${props.cache.code} logs rendezvous` : `${props.cache.code} stops logging rendezvous`);
     } catch (e) {
       setOn(!v);
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -308,17 +309,25 @@ function StationFields(props: {
   return (
     <>
       {props.callsignEditable && (
-        <label>
-          Callsign <span className="muted">(with SSID, e.g. {example(props.base ?? "", 1)})</span>{" "}
-          <InfoTip text={TERMS.ssid} label="What is an SSID?" />
-          <input
-            className="mono"
-            value={v.callsign ?? ""}
-            maxLength={11}
-            placeholder={example(props.base ?? "", 1)}
-            onChange={(e) => set({ callsign: e.target.value.toUpperCase() })}
-          />
-        </label>
+        <Field
+          label={
+            <>
+              Callsign <span className="muted">(with SSID, e.g. {example(props.base ?? "", 1)})</span>
+            </>
+          }
+          info={<InfoTip text={TERMS.ssid} label="What is an SSID?" />}
+        >
+          {(id) => (
+            <input
+              id={id}
+              className="mono"
+              value={v.callsign ?? ""}
+              maxLength={11}
+              placeholder={example(props.base ?? "", 1)}
+              onChange={(e) => set({ callsign: e.target.value.toUpperCase() })}
+            />
+          )}
+        </Field>
       )}
       <div className="row gap-2">
         <label className="flex-1">
@@ -401,7 +410,7 @@ function StationWxKeyPanel(props: { stationId: number }) {
       setInfo(await issueStationWxKey(props.stationId));
       toast(info?.key ? "New key issued" : "Weather push enabled");
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -437,37 +446,46 @@ function StationWxKeyPanel(props: { stationId: number }) {
         </div>
       ) : (
         <>
-          <label>
-            Ecowitt — custom server path
-            <span className="copyrow">
-              <input
-                className="mono"
-                readOnly
-                value={info.ecowittPath ?? ""}
-                onFocus={(e) => e.currentTarget.select()}
-              />
-              <Button
-                variant="icon-subtle"
-                aria-label="Copy Ecowitt URL"
-                onClick={() => void copy(info.ecowittPath ?? "", "Ecowitt URL")}
-              >
-                Copy
-              </Button>
-            </span>
-          </label>
-          <label>
-            Weather Underground — Rapidfire URL
-            <span className="copyrow">
-              <input className="mono" readOnly value={info.wuUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
-              <Button
-                variant="icon-subtle"
-                aria-label="Copy Weather Underground URL"
-                onClick={() => void copy(info.wuUrl ?? "", "WU URL")}
-              >
-                Copy
-              </Button>
-            </span>
-          </label>
+          <Field label="Ecowitt — custom server path">
+            {(id) => (
+              <span className="copyrow">
+                <input
+                  id={id}
+                  className="mono"
+                  readOnly
+                  value={info.ecowittPath ?? ""}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button
+                  variant="icon-subtle"
+                  aria-label="Copy Ecowitt URL"
+                  onClick={() => void copy(info.ecowittPath ?? "", "Ecowitt URL")}
+                >
+                  Copy
+                </Button>
+              </span>
+            )}
+          </Field>
+          <Field label="Weather Underground — Rapidfire URL">
+            {(id) => (
+              <span className="copyrow">
+                <input
+                  id={id}
+                  className="mono"
+                  readOnly
+                  value={info.wuUrl ?? ""}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button
+                  variant="icon-subtle"
+                  aria-label="Copy Weather Underground URL"
+                  onClick={() => void copy(info.wuUrl ?? "", "WU URL")}
+                >
+                  Copy
+                </Button>
+              </span>
+            )}
+          </Field>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
           <h5 className="mt-2">Transmit (optional)</h5>
           <p className="muted fine">

@@ -56,7 +56,7 @@ export function ToolRegistriesAdmin() {
       toast(`${r.label} switched ${on ? "on" : "off"}.`);
       reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   };
   const remove = async (r: ToolRegistryEntry) => {
@@ -72,7 +72,7 @@ export function ToolRegistriesAdmin() {
       toast(`Removed ${r.label}.`);
       reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   };
   const status = (r: ToolRegistryEntry) => {

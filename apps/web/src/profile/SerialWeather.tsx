@@ -63,7 +63,7 @@ export function SerialWeather(props: { wxKey: string | null }) {
       setConnected(true);
       toast("Weather station connected");
     } catch (e) {
-      if ((e as Error).name !== "NotFoundError") toast((e as Error).message); // NotFound = user cancelled the picker
+      if ((e as Error).name !== "NotFoundError") toast((e as Error).message, { kind: "error" }); // NotFound = user cancelled the picker
     }
   }
   async function disconnect() {

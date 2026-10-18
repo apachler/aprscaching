@@ -124,7 +124,11 @@
   .landing-nav-links a:focus-visible {
     text-decoration: underline;
   }
-  .landing-nav > button {
+  /* a call to action is a form only so it works before the app loads; its button lays out as if it were bare */
+  .landing-cta-form {
+    display: contents;
+  }
+  .landing-nav > .landing-cta-form > button {
     margin-left: auto;
     min-height: var(--hit);
   }
@@ -132,7 +136,7 @@
     .landing-nav-links {
       display: flex;
     }
-    .landing-nav > button {
+    .landing-nav > .landing-cta-form > button {
       margin-left: 0;
     }
   }

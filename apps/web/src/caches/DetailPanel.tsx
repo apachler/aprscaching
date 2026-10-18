@@ -147,7 +147,7 @@ export function DetailPanel(props: {
       setLogCursor(r.nextCursor);
       setLogsMore(r.hasMore);
     } catch (e) {
-      if (shownId.current === id) toast((e as Error).message);
+      if (shownId.current === id) toast((e as Error).message, { kind: "error" });
     } finally {
       setLogsLoading(false);
     }
@@ -165,7 +165,7 @@ export function DetailPanel(props: {
       setFav(r);
     } catch (e) {
       setFav({ on: c.favorited, count: c.favorites });
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
   const minTier: Tier = c.minTrust ?? "B"; // the site default minimum is B
@@ -488,7 +488,7 @@ export function DetailPanel(props: {
       )}
 
       <div className="row between logbook-h">
-        <h4 className="m-0">Logbook</h4>
+        <h3 className="section-h m-0">Logbook</h3>
         <span className="ulabel">
           {c.finds} verified find{c.finds === 1 ? "" : "s"}
         </span>

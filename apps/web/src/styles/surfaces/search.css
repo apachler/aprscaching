@@ -183,6 +183,7 @@
     white-space: nowrap;
   }
   .search-empty {
+    margin: 0;
     padding: var(--space-md) var(--space-sm);
     color: var(--ink-2);
     font-size: var(--text-label);
