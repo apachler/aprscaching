@@ -223,7 +223,7 @@ app have no https listener: they refuse to start while any of these is set.
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | The SMTP server that sends the mail, its port, and how the connection is secured: `starttls` (upgrade a plain connection, refused when the server cannot), `tls` (TLS from the first byte) or `none` (in the clear, only for a relay on the same box or a trusted LAN). Set, SMTP is used even when `EMAIL_API_KEY` is set too | — / `587` / `tls` on port 465, else `starttls` |
 | `SMTP_USER` / `SMTP_PASS` | The SMTP login, often the full sender address, and its password. Without `SMTP_USER` the instance sends without logging in | — |
 | `EMAIL_API_KEY` | API key of the Resend email API, used when `SMTP_HOST` is unset | — |
-| `VAPID_PUBLIC` / `VAPID_PRIVATE` | Web-push keys (absent ⇒ push off) | — |
+| `VAPID_PUBLIC` / `VAPID_PRIVATE` | Web-push keys (absent ⇒ push off). A subscription is stored only for a push service's public `https` endpoint, at most ten per account, and every send passes the same guard as a tool-registry fetch and gives up after 5 s | — |
 | `VAPID_SUBJECT` | The contact a push service sees in each push request (RFC 8292): a `mailto:` or `https:` URI | `mailto:` + `OPERATOR_EMAIL`; else `https://` + the instance's host |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |
 | `IMPORT_ALLOW` | Import sources whose terms need the provider's permission, comma-separated: `wwff`, `iota`, `gcau`. Name one only once that provider has granted this instance its use; an import of an unnamed one is refused with the permission it needs · *[Instance setting](#instance-settings)* | none |

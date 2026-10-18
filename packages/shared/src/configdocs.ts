@@ -764,7 +764,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "—",
       ],
       ["`EMAIL_API_KEY`", "API key of the Resend email API, used when `SMTP_HOST` is unset", "—"],
-      ["`VAPID_PUBLIC` / `VAPID_PRIVATE`", "Web-push keys (absent ⇒ push off)", "—"],
+      [
+        "`VAPID_PUBLIC` / `VAPID_PRIVATE`",
+        "Web-push keys (absent ⇒ push off). A subscription is stored only for a push service's public `https` endpoint, at most ten per account, and every send passes the same guard as a tool-registry fetch and gives up after 5 s",
+        "—",
+      ],
       [
         "`VAPID_SUBJECT`",
         "The contact a push service sees in each push request (RFC 8292): a `mailto:` or `https:` URI",

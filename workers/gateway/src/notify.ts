@@ -11,8 +11,10 @@
  *   GET/POST /api/notify/unsubscribe  the digest's signed one-click unsubscribe (confirm page, then POST)
  *
  * A push carries no payload: it is the VAPID-signed wake-up alone, and the service worker fetches the alert
- * text from the app. Push is config-gated (off unless VAPID_* set) and strictly best-effort. Each digest
- * mail links the instance and a signed unsubscribe link, and carries `List-Unsubscribe` headers for it.
+ * text from the app. Push is config-gated (off unless VAPID_* set) and strictly best-effort. An endpoint is a
+ * URL the subscriber hands in, so it is held to the tool-fetch guard: a public https host only, checked when it
+ * is stored and again on every send. Each digest mail links the instance and a signed unsubscribe link, and
+ * carries `List-Unsubscribe` headers for it.
  */
 import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { escapeHtml } from "./util/html.js";
@@ -20,7 +22,8 @@ import { nowS } from "./util/time.js";
 import { instanceHost, type Env } from "./env.js";
 import { json } from "./http.js";
 import { setting } from "./siteconfig.js";
-import { sendEmail } from "./mail.js";
+import { deliverMail, mailTransport } from "./mail.js";
+import { isLocalHost, toolFetch } from "./fetchguard.js";
 import { purposeMac, sessionIdentity, timingSafeEqual } from "./auth.js";
 import { appBase } from "./sitemap.js";
 
@@ -69,15 +72,17 @@ export function composeDigest(
   alerts: DigestAlert[],
   appUrl: string,
   unsubscribeUrl?: string | null,
+  total = alerts.length,
 ): { subject: string; text: string } {
-  const n = alerts.length;
+  const n = Math.max(total, alerts.length);
   const lines = alerts.map((a) => `• ${lineOf(a)}`);
   const settings = "turn off Email digest under Settings → Notifications";
   const off = unsubscribeUrl
     ? `To stop this digest, open ${unsubscribeUrl} and confirm, or ${settings}.`
     : `To stop this digest, ${settings}.`;
   const text =
-    `${n} new alert${n === 1 ? "" : "s"} on APRScaching:\n\n${lines.join("\n")}\n\n` +
+    `${n} new alert${n === 1 ? "" : "s"} on APRScaching${n > alerts.length ? `, the latest ${alerts.length}` : ""}:\n\n` +
+    `${lines.join("\n")}\n\n` +
     `See them on the map: ${appUrl}/\n\n-- \n${off}\n`;
   return { subject: digestSubject(alerts), text };
 }
@@ -167,6 +172,32 @@ export async function handleNotifyUnsubscribe(req: Request, env: Env): Promise<R
 }
 
 // ---- VAPID key + subscriptions ----
+/** The longest endpoint stored; push services hand out URLs of a few hundred characters. */
+const ENDPOINT_MAX = 2048;
+/** Subscriptions kept per account (one per browser or device); a new one past this replaces the oldest. */
+const SUBS_PER_ACCOUNT = 10;
+/** How long one push request may take before it is given up. */
+const PUSH_TIMEOUT_MS = 5000;
+
+/**
+ * Whether an endpoint may be stored and sent to: an https URL without credentials on a named host that is not
+ * loopback, private, link-local or `localhost`. Push services (FCM, Mozilla autopush, Apple, WNS) all sit on
+ * public names, so an IP literal is refused as well.
+ */
+export function pushEndpointAllowed(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== "string" || endpoint.length > ENDPOINT_MAX) return false;
+  let u: URL;
+  try {
+    u = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password) return false;
+  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host || isLocalHost(host) || host.includes(":") || /^[\d.]+$/.test(host)) return false;
+  return !(host.endsWith(".local") || host.endsWith(".internal") || !host.includes("."));
+}
+
 export function handlePushKey(_req: Request, env: Env): Response {
   return json({ key: env.VAPID_PUBLIC ?? null });
 }
@@ -179,10 +210,20 @@ export async function handlePushSubscribe(req: Request, env: Env): Promise<Respo
     topics?: string[];
   };
   if (!b.endpoint) return json({ error: "endpoint required" }, { status: 400 });
+  if (!pushEndpointAllowed(b.endpoint))
+    return json({ error: "endpoint must be a push service's https URL" }, { status: 400 });
+  const topics = Array.isArray(b.topics) ? b.topics.filter((t) => typeof t === "string").slice(0, 8) : ["watch"];
   await env.DB.prepare(
     "INSERT OR REPLACE INTO push_subs (account_id, endpoint, p256dh, auth, topics, created_at) VALUES (?,?,?,?,?,?)",
   )
-    .bind(acct, b.endpoint, b.keys?.p256dh ?? null, b.keys?.auth ?? null, (b.topics ?? ["watch"]).join(","), nowS())
+    .bind(acct, b.endpoint, b.keys?.p256dh ?? null, b.keys?.auth ?? null, topics.join(","), nowS())
+    .run();
+  // keep the newest few: each browser or device holds one, and every alert sends to all of them
+  await env.DB.prepare(
+    `DELETE FROM push_subs WHERE account_id = ? AND id NOT IN
+       (SELECT id FROM push_subs WHERE account_id = ? ORDER BY id DESC LIMIT ${SUBS_PER_ACCOUNT})`,
+  )
+    .bind(acct, acct)
     .run();
   return json({ ok: true }, { status: 201 });
 }
@@ -212,8 +253,14 @@ export async function handleNotifyPrefs(req: Request, env: Env): Promise<Respons
   return json({ digest: (r?.digest ?? 0) === 1, hasEmail: !!r?.email, pushConfigured: !!env.VAPID_PUBLIC });
 }
 
-/** Scheduled: email each account its un-notified watch alerts, then mark them sent. */
+/**
+ * Scheduled: email each account its un-notified watch alerts, then mark them sent. The mail counts every alert
+ * waiting and lists the latest ones; once the transport accepts it, those alerts are marked, and one raised
+ * while it was on its way waits for the next digest. A failed send leaves them for the next run. An instance
+ * with no mail transport marks them all, so no backlog builds for a digest that cannot go out.
+ */
 export async function runDigests(env: Env): Promise<void> {
+  const canMail = mailTransport(env) !== null;
   const accts = (
     await env.DB.prepare(
       `SELECT DISTINCT wa.account_id AS acct, a.email AS email FROM watch_alerts wa
@@ -222,24 +269,37 @@ export async function runDigests(env: Env): Promise<void> {
     ).all<{ acct: string; email: string }>()
   ).results;
   for (const r of accts) {
+    // the newest alert waiting bounds what this digest covers
+    const top = await env.DB.prepare(
+      "SELECT MAX(id) AS maxId, COUNT(*) AS n FROM watch_alerts WHERE account_id = ? AND notified = 0",
+    )
+      .bind(r.acct)
+      .first<{ maxId: number | null; n: number }>();
+    if (!top?.maxId) continue;
+    const markSent = () =>
+      env.DB.prepare("UPDATE watch_alerts SET notified = 1 WHERE account_id = ? AND notified = 0 AND id <= ?")
+        .bind(r.acct, top.maxId)
+        .run();
+    if (!canMail) {
+      await markSent();
+      continue;
+    }
     const alerts = (
       await env.DB.prepare(
-        "SELECT id, callsign, kind, detail, ts FROM watch_alerts WHERE account_id = ? AND notified = 0 ORDER BY ts DESC LIMIT 50",
+        "SELECT id, callsign, kind, detail, ts FROM watch_alerts WHERE account_id = ? AND notified = 0 AND id <= ? ORDER BY ts DESC, id DESC LIMIT 50",
       )
-        .bind(r.acct)
+        .bind(r.acct, top.maxId)
         .all<DigestAlert>()
     ).results;
     if (!alerts.length) continue;
     const unsub = await unsubscribeUrl(env, r.acct);
-    const { subject, text } = composeDigest(alerts, appBase(env), unsub);
+    const { subject, text } = composeDigest(alerts, appBase(env), unsub, top.n);
     const headers = unsub
       ? { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
       : undefined;
-    const sent = await sendEmail(env, r.email, subject, text, headers);
-    await env.DB.prepare("UPDATE watch_alerts SET notified = 1 WHERE account_id = ? AND notified = 0")
-      .bind(r.acct)
-      .run();
-    if (!sent) console.log("digest (no email provider): %s alerts for %s", alerts.length, r.acct);
+    const sent = await deliverMail(env, r.email, subject, text, undefined, headers);
+    if (sent.ok) await markSent();
+    else console.log("digest not sent, kept for the next run: %s alerts for %s: %s", top.n, r.acct, sent.error);
   }
 }
 
@@ -248,20 +308,35 @@ export async function runDigests(env: Env): Promise<void> {
 // which renders a generic "watchlist alert" and can pull the detail from /api/watch/alerts. This
 // avoids the RFC-8291 aes128gcm payload encryption entirely — the specific text already lives in the
 // in-app feed and the email digest.
-export async function pushAlert(env: Env, accountId: string): Promise<void> {
-  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return; // disabled unless configured
+//
+// The sends run after the caller moves on: ingest and the find flows raise alerts inside a request, and a push
+// service that is slow, or an endpoint that never answers, must not hold that request.
+export function pushAlert(env: Env, accountId: string): Promise<void> {
+  // disabled unless configured
+  if (env.VAPID_PUBLIC && env.VAPID_PRIVATE) void deliverPushes(env, accountId).catch(() => {});
+  return Promise.resolve();
+}
+
+/**
+ * Send the wake-up to every subscription of the account, side by side, each bounded by PUSH_TIMEOUT_MS. A
+ * subscription the push service no longer knows (404, 410) is dropped.
+ */
+export async function deliverPushes(env: Env, accountId: string): Promise<void> {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return;
   const subs = (
-    await env.DB.prepare("SELECT endpoint FROM push_subs WHERE account_id = ?")
-      .bind(accountId)
+    await env.DB.prepare("SELECT endpoint FROM push_subs WHERE account_id = ? ORDER BY id DESC LIMIT ?")
+      .bind(accountId, SUBS_PER_ACCOUNT)
       .all<{ endpoint: string }>()
   ).results;
-  for (const s of subs) {
-    try {
-      await webPush(env, s.endpoint);
-    } catch {
-      /* best-effort */
-    }
-  }
+  await Promise.allSettled(
+    subs.map(async (s) => {
+      const status = await webPush(env, s.endpoint);
+      if (status === 404 || status === 410)
+        await env.DB.prepare("DELETE FROM push_subs WHERE account_id = ? AND endpoint = ?")
+          .bind(accountId, s.endpoint)
+          .run();
+    }),
+  );
 }
 
 /**
@@ -304,12 +379,17 @@ async function vapidJwt(env: Env, aud: string): Promise<string> {
   return `${header}.${body}.${bytesToB64url(sig)}`;
 }
 
-async function webPush(env: Env, endpoint: string): Promise<void> {
-  await fetch(endpoint, {
+/** One payload-less push through the tool-fetch guard; the push service's status, or null when not sent. */
+async function webPush(env: Env, endpoint: string): Promise<number | null> {
+  if (!pushEndpointAllowed(endpoint)) return null;
+  const res = await toolFetch(env, endpoint, {
     method: "POST",
     headers: {
       TTL: "86400",
       Authorization: `vapid t=${await vapidJwt(env, new URL(endpoint).origin)}, k=${env.VAPID_PUBLIC}`,
     },
+    signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
   });
+  await res.body?.cancel().catch(() => {});
+  return res.status;
 }
