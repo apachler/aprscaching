@@ -7,22 +7,21 @@
  * never stored or synced to an account, and only a development build or an automated browser (the visual and
  * accessibility harness) takes them.
  */
-
-/** Demo installs run without a prompt, so only where no person is asked: a development build or a driven browser. */
-const demoToolsAllowed = (): boolean => import.meta.env.DEV || navigator.webdriver === true;
 import { BUILTIN_TOOL_REGISTRY } from "@aprscaching/shared";
 import { checkPinnedRegistry, type SignedRegistry } from "@aprscaching/tools";
 import { installTool } from "../tools/installed.js";
 import { toolOwner } from "../tools/toolOwner.js";
 import { fetchToolManifest } from "../tools/sandbox.js";
 import { DIRECT, registryUrl } from "../tools/registries.js";
+import { demoAllowed } from "./allowed.js";
 
 /**
  * Install `names` from the bundled registry for this page. In the app, `afterSession` waits until the session is
  * known and the installs are claimed for it, which would otherwise stop these page-only ones again.
  */
 export async function installDemoTools(names: readonly string[], afterSession = false): Promise<void> {
-  if (!demoToolsAllowed()) return;
+  // demo installs run without a prompt, so only where no person is asked
+  if (!demoAllowed()) return;
   for (let i = 0; afterSession && toolOwner() === null && i < 200; i++) await new Promise((r) => setTimeout(r, 50));
   const url = registryUrl(BUILTIN_TOOL_REGISTRY, location.href);
   const doc = await fetch(url)

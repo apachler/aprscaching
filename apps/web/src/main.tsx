@@ -7,6 +7,7 @@ import { loadSettings, makeFormatters, FormatContext } from "./format.js";
 import { applyTheme } from "./shell/theme.js";
 import { registerServiceWorker } from "./shell/serviceWorker.js";
 import { tourFromPath } from "./deeplink.js";
+import { demoAllowed } from "./demo/allowed.js";
 
 // The offline app shell (public/sw.js). Development serves unhashed modules, so there is nothing to store.
 if (import.meta.env.PROD) void registerServiceWorker();
@@ -17,9 +18,10 @@ applyTheme(loadSettings());
 
 const root = createRoot(document.getElementById("root")!);
 // `/?demo=packet|bbs|1` mounts the hardware-free design harness (real components + in-process simulator)
-// instead of the app — a durable bench for the packet/BBS shells (and the Phosphor terminal look).
+// instead of the app — a durable bench for the packet/BBS shells (and the Phosphor terminal look). The benches run
+// only in development or a driven browser (demo/allowed.ts); anywhere else `?demo=` is ignored and the app loads.
 const params = new URLSearchParams(location.search);
-const demo = params.get("demo");
+const demo = demoAllowed() ? params.get("demo") : null;
 // `/tour/game` and `/tour/shack`: the public tours, the whole app on demo data with nothing kept (demo/tourMode.ts)
 const tour = tourFromPath(location.pathname);
 if (tour) {
