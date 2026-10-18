@@ -35,8 +35,15 @@ export function gatewayBase(req: Request, env: Env): string {
   return requestOrigin(req, env);
 }
 
-/** XML text/attribute escape — the shared markup escape, which XML accepts as-is. */
-export const xmlEscape = escapeHtml;
+/** The code points XML 1.0 forbids anywhere in a document, even as character references. */
+const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+
+/**
+ * XML text/attribute escape — the shared markup escape, after dropping the code points XML cannot carry.
+ * Bulletin bodies arrive from packet radio with Ctrl-Z, BEL or ESC in them; one such character would make
+ * the whole document unreadable to every XML parser.
+ */
+export const xmlEscape = (s: string): string => escapeHtml(s.replace(XML_ILLEGAL, ""));
 
 /** A deep-link URL for a surface: the map is the root, panels carry `?view=<key>`. */
 export function surfaceUrl(env: Env, view: string | null): string {
@@ -92,7 +99,7 @@ export function handleSitemapPage(req: Request, env: Env): Response {
   const feedHtml = FEEDS.map(
     (f) => `<li><a href="${e(gw + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
   ).join("");
-  const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+  const html = `<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Site map · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem}
 h1{font-size:1.4rem}h2{font-size:1.05rem;margin:1.4rem 0 .4rem;text-transform:uppercase;letter-spacing:.05em;opacity:.75}
