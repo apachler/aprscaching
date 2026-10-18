@@ -193,7 +193,9 @@ export function pushEndpointAllowed(endpoint: unknown): endpoint is string {
     return false;
   }
   if (u.protocol !== "https:" || u.username || u.password) return false;
-  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  // a fully qualified name's trailing dot names the same host, so `localhost.` is `localhost`
+  let host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  while (host.endsWith(".")) host = host.slice(0, -1);
   if (!host || isLocalHost(host) || host.includes(":") || /^[\d.]+$/.test(host)) return false;
   return !(host.endsWith(".local") || host.endsWith(".internal") || !host.includes("."));
 }
