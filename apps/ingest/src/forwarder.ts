@@ -97,8 +97,12 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
       });
       return ((await r.json().catch(() => ({}))) as { id?: number }).id ?? 0;
     },
-    markRead: async (id) => {
-      await gatewayFetch(`${base}/api/bbs/messages/${id}/read`, { method: "POST", headers: h() });
+    markRead: async (id, call) => {
+      await gatewayFetch(`${base}/api/bbs/messages/${id}/read`, {
+        method: "POST",
+        headers: h(),
+        body: JSON.stringify({ call }),
+      });
     },
     kill: async (id, call) => {
       await gatewayFetch(`${base}/api/bbs/kill`, { method: "POST", headers: h(), body: JSON.stringify({ id, call }) });

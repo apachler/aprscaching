@@ -22,8 +22,8 @@ export interface CachedBbsBackend {
     body: string;
     replyTo?: number | null;
   }): Promise<number>;
-  /** Mark a personal message read (best-effort). */
-  markRead?(id: number): Promise<void>;
+  /** Mark a personal message read for `call`, its addressee (best-effort). */
+  markRead?(id: number, call: string): Promise<void>;
   /** Kill a message the caller authored/received (best-effort). */
   kill?(id: number, call: string): Promise<void>;
 }
@@ -111,9 +111,11 @@ export class CachedBbsStore implements MessageStore {
   read(id: number): BbsMsgFull | null {
     const m = this.cache.find((x) => x.id === id);
     if (!m) return null; // not in this caller's snapshot → not readable
-    if (m.type !== "B" && !m.readAt) {
+    // Only the addressee's reading marks mail read: the snapshot holds the caller's sent mail too, and a
+    // sender looking at it must not hide it from the station it is for.
+    if (m.type !== "B" && !m.readAt && m.to === this.call) {
       m.readAt = 1;
-      void this.backend.markRead?.(id);
+      void this.backend.markRead?.(id, this.call);
     }
     return m;
   }

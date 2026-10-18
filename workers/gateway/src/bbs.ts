@@ -232,6 +232,11 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
   // only the addressee marks its mail read
   const denied = await requireMailbox(req, env, msg.to_call);
   if (denied) return denied;
+  // The ingest box acts for every mailbox, so it names the station reading; the sender reading its own
+  // sent mail must not mark it read for the addressee.
+  const body = (await req.json().catch(() => ({}))) as { call?: unknown };
+  if (typeof body.call === "string" && mailboxCall(body.call) !== mailboxCall(msg.to_call))
+    return json({ error: "only the addressee marks its mail read" }, { status: 403 });
   await env.DB.prepare("UPDATE bbs_messages SET read_at=? WHERE id=? AND read_at IS NULL").bind(nowS(), id).run();
   return json({ ok: true });
 }

@@ -52,6 +52,22 @@ describe("CachedBbsStore", () => {
     expect(store.read(999)).toBeNull(); // not in the caller's snapshot → not readable
   });
 
+  it("read() by the sender leaves the addressee's mail unread", async () => {
+    const sender = fakeBackend(snapshot());
+    const asSender = new CachedBbsStore("OE8APR", sender.backend);
+    await asSender.refresh();
+    expect(asSender.read(2)!.body).toBe("welcome"); // OE8APR reads the mail it sent to OE1USR
+    expect(sender.read).toEqual([]);
+    expect(asSender.listAll().find((m) => m.id === 2)).toBeDefined();
+
+    const addressee = fakeBackend(snapshot());
+    const asAddressee = new CachedBbsStore("oe1usr", addressee.backend);
+    await asAddressee.refresh();
+    asAddressee.read(2);
+    expect(addressee.read).toEqual([2]);
+    expect(asAddressee.listNew("OE1USR").map((m) => m.id)).toEqual([1]);
+  });
+
   it("post() is optimistic (visible immediately) and reconciles the real id", async () => {
     const { backend, posted } = fakeBackend(snapshot());
     const store = new CachedBbsStore("OE1USR", backend);

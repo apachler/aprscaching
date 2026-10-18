@@ -1441,6 +1441,15 @@ ok(
   JSON.stringify(list1.data?.messages?.[0]),
 );
 
+const senderRead = await call("POST", `/api/bbs/messages/${msgId}/read`, { call: "OE8APR" });
+const afterSenderRead = await call("GET", "/api/bbs/messages?to=OE7BBS");
+ok(
+  "the ingest box cannot mark mail read for a station other than its addressee",
+  senderRead.status === 403 &&
+    (afterSenderRead.data?.messages ?? []).some((mm) => mm.id === msgId && mm.readAt == null),
+  JSON.stringify({ status: senderRead.status, msg: afterSenderRead.data?.messages?.find((mm) => mm.id === msgId) }),
+);
+
 await call(
   "POST",
   "/ingest",
