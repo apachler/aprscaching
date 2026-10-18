@@ -71,6 +71,18 @@ describe("registry freshness and failure", () => {
     expect((await loadRegistry(registryEnv(DB, authority))).get("x.example")?.key).toBe("NEW");
   });
 
+  it("an oversized registry document is not read, and the last good one keeps binding", async () => {
+    const authority = await newFedKey();
+    const { DB } = freshDb();
+    const good = await signedRegistry(authority, 100, [{ instance: "x.example", key: "GOOD" }]);
+    const newer = await signedRegistry(authority, 200, [{ instance: "x.example", key: "BIG" }]);
+    const routes = stubFetch({ [DOH]: dohServe(`url=${REG}/r.json`), [REG]: async () => Response.json(good) });
+    expect((await loadRegistry(registryEnv(DB, authority))).get("x.example")?.key).toBe("GOOD");
+    // a valid, newer document padded past the cap: read whole, it would replace the good one
+    routes[REG] = async () => new Response(JSON.stringify(newer) + " ".repeat(5 * 1024 * 1024));
+    expect((await loadRegistry(registryEnv(DB, authority))).get("x.example")?.key).toBe("GOOD");
+  });
+
   it("a fetch failure keeps the last good registry's instances bound, so spoofing stays refused", async () => {
     const authority = await newFedKey();
     const genuine = await newFedKey();

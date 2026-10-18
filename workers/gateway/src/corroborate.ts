@@ -28,6 +28,7 @@ import {
   instanceRequester,
   isRelaySpoke,
   localRelayResult,
+  MAX_ANSWER_BYTES,
   signRelayRequest,
   SELF_REQUESTER,
 } from "./relay.js";
@@ -840,7 +841,9 @@ export async function askPeers(
       // a refusal (4xx) is an answer; a rate limit or a server error is a peer not reached
       if (!r.ok) return { ...none, unreachable: r.status === 429 || r.status >= 500 };
       try {
-        const verdict = await acceptAnswer(new Uint8Array(await r.arrayBuffer()), {
+        const answer = await readCappedBody(r, MAX_ANSWER_BYTES);
+        if (!answer) return none; // an oversized answer is no answer
+        const verdict = await acceptAnswer(answer, {
           instance,
           identity: peerIdentity(registry, peer, keys),
           keys,

@@ -136,7 +136,7 @@ export async function spokeAuth(
 }
 
 /** Largest answer a spoke may post: a full relayed feed page, base64, with room to spare. */
-const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
+export const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
 
 /**
  * Nightly housekeeping of the relay queue: an HTTP query older than an hour is stale, but a query

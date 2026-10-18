@@ -17,7 +17,7 @@
 import { b64urlToBytes } from "./util/b64.js";
 import { TOOL_API_VERSION } from "@aprscaching/tools/api";
 import { nowS } from "./util/time.js";
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { displayCall } from "./auth.js";
@@ -463,6 +463,9 @@ export function federationConfigError(env: Env): string | null {
 }
 
 const REGISTRY_TTL_MS = 5 * 60_000;
+/** Largest DoH answer and registry document read: whoever serves them must not stream a body into memory. */
+const MAX_DOH_BYTES = 64 * 1024;
+const MAX_REGISTRY_BYTES = 4 * 1024 * 1024;
 const registryCache = new WeakMap<object, { exp: number; map: Map<string, RegistryEntry> }>();
 
 interface RegistryState {
@@ -494,14 +497,18 @@ async function registryFromDns(env: Env, name: string, authority: string): Promi
       headers: { accept: "application/dns-json" },
       signal: AbortSignal.timeout(3000),
     });
-    if (doh.ok) {
-      const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
+    const dohBody = doh.ok ? await readCappedBody(doh, MAX_DOH_BYTES) : null;
+    if (dohBody) {
+      const answers =
+        (JSON.parse(new TextDecoder().decode(dohBody)) as { Answer?: { data: string }[] }).Answer ?? [];
       for (const a of answers) {
         const { url } = parseRegistryTxt(a.data);
         if (!url) continue;
         const r = await fedFetch(env, url, { signal: AbortSignal.timeout(3000) });
         if (!r.ok) continue;
-        const doc = (await r.json()) as SignedRegistry;
+        const body = await readCappedBody(r, MAX_REGISTRY_BYTES);
+        if (!body) continue; // an oversized document is not read into memory
+        const doc = JSON.parse(new TextDecoder().decode(body)) as SignedRegistry;
         const at = Number.isInteger(doc?.at) ? (doc.at as number) : 0;
         if (stored && at < stored.max_at) continue; // a replayed older registry
         const map = await registryToMap(doc, authority);

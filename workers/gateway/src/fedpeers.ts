@@ -29,7 +29,7 @@ import {
 } from "./federation.js";
 import { forgetTransitPeer, supersedeTransitPeer } from "./fedtransit.js";
 import { givenUpUnseen } from "./fedgaps.js";
-import { storedEndpoints } from "./fedtransport.js";
+import { MAX_DESCRIPTOR_BYTES, storedEndpoints } from "./fedtransport.js";
 import { endpointBaseUrls } from "@aprscaching/shared";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
@@ -347,8 +347,6 @@ function discoveryView(raw: string | null, endpoints: string | null, pinnedFp: s
 
 /** A descriptor fetch gives up after this long. */
 const DESCRIPTOR_TIMEOUT_MS = 8000;
-/** Largest descriptor read when adding a peer. */
-const MAX_DESCRIPTOR_BYTES = 256 * 1024;
 const RAW_KEY_RE = /^[A-Za-z0-9_-]{43}$/; // 32 bytes, base64url without padding
 
 /** What adding a peer shows its sysop before anything is stored. */
