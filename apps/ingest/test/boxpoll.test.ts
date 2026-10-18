@@ -11,6 +11,7 @@ import {
   type BoxPollerOpts,
   type BoxState,
 } from "../src/boxpoll.js";
+import { gateCheck } from "../src/callverify.js";
 
 type Sent = { src: string; dst: string; path?: string[]; payload: string };
 
@@ -60,6 +61,36 @@ describe("remote transmit", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ src: "OE8APR-7", dst: "APZACG", path: ["WIDE1-1", "WIDE2-1"] });
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
+  });
+
+  it("sends a command that names the bare base call under BOX_CALL, so the radio's call gate judges a call it knows", async () => {
+    const judged: string[][] = [];
+    const verifier = {
+      refusal: (calls: readonly string[]) => {
+        judged.push([...calls]);
+        return calls.every((c) => c === "OE8APR-10") ? null : `${calls.join(",")} not confirmed`;
+      },
+    };
+    const open = gateCheck(
+      verifier,
+      () => ["OE8APR-10"],
+      undefined,
+      () => true,
+      () => {},
+    );
+    const sent: Sent[] = [];
+    const radio = {
+      send: (f: Sent) => {
+        if (!open([f.src, ...(f.path ?? [])])) return false;
+        sent.push(f);
+        return true;
+      },
+    };
+    const { poller, nowSec } = setup({ radio });
+    const r = await poller.execute(cmd({ kind: "beacon", callsign: "OE8APR", createdAt: nowSec() }));
+    expect(r).toMatchObject({ status: "done", result: "beacon sent as OE8APR-10" });
+    expect(sent[0]).toMatchObject({ src: "OE8APR-10" });
+    expect(judged).toEqual([["OE8APR-10"]]);
   });
 
   it("on an HF radio: a Mic-E beacon with no path, the comment on every fourth, at most one in 10 min", async () => {

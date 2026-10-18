@@ -484,7 +484,10 @@ export class BoxPoller {
     if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC or a soundcard port)");
     const limited = this.rateLimited();
     if (limited) return limited;
-    return { src };
+    // An account call is a base call, and the radio's call gate matches exact station calls: a command that
+    // names only the base call goes out under BOX_CALL, the station call the gate knows. An explicit SSID keeps
+    // its own call, and the gate judges that one.
+    return { src: src.replace(/-0$/, "") === baseCall(src) ? this.o.boxCall.toUpperCase() : src };
   }
 
   /**

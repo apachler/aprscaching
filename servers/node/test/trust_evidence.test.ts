@@ -149,6 +149,25 @@ describe("a beacon this instance asked a box to send", () => {
     expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).toBe("C");
   });
 
+  it("tags any SSID of a bare base call, since the box sends such a beacon under its own station call", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await boxBeacon(env, "OE8BOX");
+    await heard(env, "OE8BOX-10");
+    await heard(env, "OE8LOG-9");
+    const rows = (
+      await env.DB.prepare("SELECT callsign, commanded FROM positions ORDER BY callsign").all<{
+        callsign: string;
+        commanded: number;
+      }>()
+    ).results;
+    expect(rows).toEqual([
+      { callsign: "OE8BOX-10", commanded: 1 },
+      { callsign: "OE8LOG-9", commanded: 0 },
+    ]);
+    expect((await scoreFind(env, trad, "OE8BOX-10", now())).result.tier).toBe("C");
+  });
+
   it("leaves another call's hearings, and the same call far from the beacon the box reported, untagged", async () => {
     const env = world();
     const trad = await cache(env, { type: "traditional" });

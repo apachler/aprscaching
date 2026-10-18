@@ -45,6 +45,11 @@ command's callsign has the same base call as the box's station call (`BOX_CALL`,
   [soundcard port](soundcard.md);
 - fit the box's rate limit: three in a burst, then one per minute.
 
+A beacon or a message goes out under `BOX_CALL` when the command names the bare base call, as the app does with
+your account's call. A command that names a call with an SSID goes out under that call. The radio's
+[transmit gate](rf-ingest.md#transmit-gate) then judges the call the frame goes out under, so that call must be one of the box's
+station calls.
+
 A beacon goes out at the position set on the box, `BOX_LAT` and `BOX_LON` in degrees; a box without them
 refuses to beacon. The command carries no position, so a beacon queued from anywhere places the station where
 the box stands. The box reports that position with its ack, and the gateway tags every fix it hears of the
