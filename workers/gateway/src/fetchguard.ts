@@ -213,6 +213,23 @@ export function trimTrailingSlashes(s: string): string {
   return s.slice(0, end);
 }
 
+/** Largest control answer read from a peer or hub (a ticket, a mark, a cursor): a few fields of JSON. */
+export const MAX_CONTROL_BYTES = 64 * 1024;
+
+/** A JSON body of at most `max` bytes, read through {@link readCappedBody}; null when larger or not JSON. */
+export async function readCappedJson<T>(
+  src: { headers: Headers; body: ReadableStream<Uint8Array> | null },
+  max: number,
+): Promise<T | null> {
+  const body = await readCappedBody(src, max);
+  if (!body) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as T;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Read a request or response body up to `max` bytes; null when it is larger. Checks a declared
  * content-length first and never buffers past the cap, so an oversized body costs at most `max`.

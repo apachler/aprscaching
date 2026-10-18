@@ -9,7 +9,7 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { secretOk } from "./auth.js";
 import { nowS } from "./util/time.js";
-import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, MAX_CONTROL_BYTES, readCappedBody, readCappedJson, trimTrailingSlashes } from "./fetchguard.js";
 import {
   isInstanceId,
   keyFingerprint,
@@ -431,7 +431,7 @@ async function readMarks(
   }
   if (hubDown(res.status)) return "network";
   if (res.ok) {
-    const body = (await res.json().catch(() => null)) as { marks?: Record<string, PushMark> } | null;
+    const body = await readCappedJson<{ marks?: Record<string, PushMark> }>(res, MAX_CONTROL_BYTES);
     if (body?.marks)
       for (const def of PUSH_FEEDS) {
         const m = body.marks[def.type];
@@ -522,10 +522,10 @@ async function pushCycle(
         cursor: built.nextCursor,
         ...(!complete && built.nextId !== undefined && { id: built.nextId }),
       };
-      const answer = (await res.json().catch(() => null)) as {
-        mark?: PushMark & { type?: string };
-        held?: unknown;
-      } | null;
+      const answer = await readCappedJson<{ mark?: PushMark & { type?: string }; held?: unknown }>(
+        res,
+        MAX_CONTROL_BYTES,
+      );
       const mark = answer?.mark?.type === def.type && Number.isFinite(answer.mark.cursor) ? answer.mark : null;
       let next: PushMark = mark ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) } : sent;
       // the hub holds this feed of ours whole only up to below where this page started: send again from there,
