@@ -400,8 +400,10 @@ resource "oci_core_instance" "this" {
 
 # ---- backups ----
 # A private bucket the VM writes its nightly archive to (deploy/aprscaching backup, under archives/). The VM's
-# own identity (instance principal) may manage objects in this bucket only; it cannot delete the bucket or
-# reach any other. A lifecycle rule expires archives after 14 days, so the VM never needs to delete anything.
+# own identity (instance principal) may create, list and read objects in this bucket only, never delete or
+# overwrite one, so a compromised VM cannot wipe its own backups; it cannot delete the bucket or reach any
+# other. Archive names carry their UTC time, so an upload never replaces an existing one. Lifecycle rules
+# expire archives after 14 days and abort a failed multipart upload, so the VM never needs to delete anything.
 resource "oci_objectstorage_bucket" "backups" {
   count          = var.create_backup_bucket ? 1 : 0
   compartment_id = var.compartment_ocid
@@ -428,7 +430,10 @@ resource "oci_identity_policy" "vm" {
   name           = "aprscaching-${local.name_suffix}"
   description    = "The APRScaching VM writes its backups to its own bucket; Object Storage expires them"
   statements = [
-    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
+    # list and get, for restore
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
+    # put, multipart included; OBJECT_CREATE alone grants neither delete nor overwrite
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to manage objects in compartment id ${var.compartment_ocid} where all {target.bucket.name = '${local.bucket_name}', request.permission = 'OBJECT_CREATE'}",
     "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read buckets in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
     # the VM looks up its own public address, for APP_URL when no hostname is given
     "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read vnics in compartment id ${var.compartment_ocid}",
@@ -450,6 +455,15 @@ resource "oci_objectstorage_object_lifecycle_policy" "backups" {
     object_name_filter {
       inclusion_prefixes = ["archives/"]
     }
+  }
+  # aborting a multipart upload needs OBJECT_DELETE, which the VM does not hold
+  rules {
+    name        = "abort-failed-uploads"
+    action      = "ABORT"
+    target      = "multipart-uploads"
+    is_enabled  = true
+    time_amount = 1
+    time_unit   = "DAYS"
   }
   depends_on = [oci_identity_policy.vm]
 }

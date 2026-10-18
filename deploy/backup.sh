@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# The snapshot holds account emails and unused sign-in tokens: every file and directory this script makes is
+# its owner's alone, whatever umask cron runs it with.
+umask 077
 # Nightly SQLite snapshot -> object storage. Add to cron:  0 3 * * * /opt/aprscaching/deploy/backup.sh
 #
 # A backup that only stages a file to /tmp is not a backup — /tmp is wiped and the snapshot is lost.
@@ -42,8 +45,9 @@ expired_keys() {
 }
 
 if [ -n "${BACKUP_DIR:-}" ]; then
-  mkdir -p "$BACKUP_DIR"
+  install -d -m 700 "$BACKUP_DIR"
   cp "$GZ" "${BACKUP_DIR}/${TS}.db.gz"
+  chmod 600 "${BACKUP_DIR}/${TS}.db.gz"
   # prune by mtime
   find "$BACKUP_DIR" -name '*.db.gz' -type f -mtime "+${RETAIN}" -delete 2>/dev/null || true
   echo "backup: wrote ${BACKUP_DIR}/${TS}.db.gz"

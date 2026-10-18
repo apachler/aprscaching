@@ -3,8 +3,14 @@
 # EXTRA_SITES: the instance's further addresses (EXTRA_ORIGINS in .env, separated by spaces by the caddy
 # service's command). An https:// one gets automatic TLS like DOMAIN; an http:// one (a HAMNET name or
 # address, or a LAN address) is served as plain http, with no certificate and no redirect to https.
+# CF_RANGES: the addresses allowed to name the visitor in cf-connecting-ip, which the gateway keys its rate
+# limits on under TRUST_CF=1. Caddy drops the header from every other address, so a client that reaches the box
+# directly cannot pick a new identity on every request, whatever the firewall lets through. Unset, every address
+# may send it.
 (instance) {
 	encode zstd gzip
+	@cf_untrusted not remote_ip {$CF_RANGES:0.0.0.0/0 ::/0}
+	request_header @cf_untrusted -Cf-Connecting-Ip
 	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /ingest/* /outbox* /federation/* /source /support /imprint /privacy /terms /health /.well-known/* /feeds/* /sitemap /sitemap.xml /robots.txt /embed /embed/* /v/* /tiles/*
 	# handle blocks, because Caddy runs try_files (a rewrite) before reverse_proxy: without them every
 	# gateway path would first be rewritten to /index.html and served the SPA

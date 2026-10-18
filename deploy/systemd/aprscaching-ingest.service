@@ -16,5 +16,13 @@ TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching
+# The sandbox: the ingest writes no file, so the file system is read-only to it and its own files are the
+# service user's alone. Devices, /sys and the address families stay open: serial and USB TNCs, soundcards,
+# GPIO and USB PTT, Bluetooth and the network ports are what it runs on.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
 [Install]
 WantedBy=multi-user.target

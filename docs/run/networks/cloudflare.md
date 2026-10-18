@@ -73,8 +73,19 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day |
     | `/`, files ending in `.html`, `/sw.js` and the web manifest | never cached, so a new release reaches every visitor at once |
 
-4. Without the tunnel, let only Cloudflare reach the box: restrict ports 80 and 443 to
-   [Cloudflare's address ranges](https://www.cloudflare.com/ips/), and set `TRUST_CF=1` in `deploy/.env`.
+4. Without the tunnel, let only Cloudflare name the visitor. In the repository's top directory, write
+   [Cloudflare's address ranges](https://www.cloudflare.com/ips/) to `CF_RANGES` in `deploy/.env`, set
+   `TRUST_CF=1` there, and restart the stack:
+
+    ```bash
+    echo "CF_RANGES=\"$({ curl -fsS https://www.cloudflare.com/ips-v4; echo; curl -fsS https://www.cloudflare.com/ips-v6; } | tr -s '\n' ' ')\"" >>deploy/.env
+    echo "TRUST_CF=1" >>deploy/.env
+    (cd deploy && docker compose up -d)
+    ```
+
+    Caddy then drops `cf-connecting-ip` from every other address. To close ports 80 and 443 to everyone else
+    as well, use the cloud provider's firewall or rules in Docker's `DOCKER-USER` chain: `ufw` and `firewalld`
+    rules do not reach the ports Docker publishes.
 
 ## Visitor addresses
 
@@ -82,7 +93,7 @@ The gateway rate-limits by the visitor's address. Behind Cloudflare, every reque
 which names the visitor in the `cf-connecting-ip` header. With `TRUST_CF=1` the gateway keeps that header;
 without it, the gateway drops it, so a client that reaches the box directly cannot pick a new identity on
 every request. Set `TRUST_CF=1` only when Cloudflare is the only way in: the tunnel, or proxied DNS with
-ports 80 and 443 limited to Cloudflare.
+`CF_RANGES` naming Cloudflare's ranges.
 
 ## Check that it worked
 

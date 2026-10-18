@@ -15,7 +15,9 @@
 //     scripts/build-oci-stack.sh rewrites, which would silently publish a release stack that tracks main
 //     instead of pinning its tag, or that deploys its tag without checking the commit,
 //   • the hash-pinned OCI CLI (oci-cli-requirements.txt) compiled for another Python than the VM image ships,
-//     resolved through an override, or holding a click without the PYSEC-2026-2132 fix.
+//     resolved through an override, or holding a click without the PYSEC-2026-2132 fix,
+//   • a policy statement that lets the VM delete or overwrite its backups: an off-host backup exists for the
+//     day the host is compromised, so the VM's own identity may only create, list and read objects.
 //
 // Terraform's own `validate` covers syntax and provider schema; it cannot see any of the above,
 // because schema.yaml and the build script are outside its world.
@@ -180,6 +182,30 @@ const atLeast = (v, min) => {
 if (!click || !atLeast(click, "8.3.3"))
   fail(`oci-cli-requirements.txt pins click ${click ?? "(none)"}; PYSEC-2026-2132 is fixed in 8.3.3`);
 
+// ---- the VM's policy: its backups are write-once ----
+// `manage objects` (or a wider family) grants OBJECT_DELETE and OBJECT_OVERWRITE unless a condition narrows it to
+// OBJECT_CREATE; `use objects` lets it rewrite metadata. Only `inspect`, `read` and the narrowed `manage` pass.
+const vmStatements = [
+  ...mainTf.matchAll(/"(Allow dynamic-group \$\{oci_identity_dynamic_group\.vm\[0\]\.name\}[^"\n]*)"/g),
+].map((m) => m[1]);
+if (!vmStatements.length) fail("main.tf grants the VM's dynamic group nothing: the policy guard found no statement");
+let creates = 0;
+for (const st of vmStatements) {
+  const verb = /\bto (inspect|read|use|manage) ([\w-]+)/.exec(st);
+  if (!verb) {
+    fail(`a VM policy statement the guard cannot read: ${st}`);
+    continue;
+  }
+  const [, how, what] = verb;
+  if (!/^(objects|object-family|all-resources)$/.test(what) || how === "inspect" || how === "read") continue;
+  const perms = [...st.matchAll(/request\.permission\s*=\s*'(\w+)'/g)].map((m) => m[1]);
+  const createOnly = perms.length === 1 && perms[0] === "OBJECT_CREATE" && /where all \{/.test(st);
+  if (how === "manage" && what === "objects" && createOnly) creates++;
+  else fail(`the VM may delete or overwrite its backups: "${how} ${what}" without a sole OBJECT_CREATE condition`);
+}
+if (vmStatements.length && !creates)
+  fail("main.tf no longer lets the VM create objects in its bucket: uploads would fail");
+
 if (problems.length) {
   console.error(
     `oci-stack guard: ${problems.length} inconsistenc${problems.length === 1 ? "y" : "ies"} in deploy/oci:`,
@@ -188,5 +214,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `oci-stack guard: ${tfVariables.size} variables and ${tfOutputs.size} outputs match schema.yaml; the release zip pins its ref; ${pins.length} OCI CLI pins fit Python ${python}.`,
+  `oci-stack guard: ${tfVariables.size} variables and ${tfOutputs.size} outputs match schema.yaml; the release zip pins its ref; ${pins.length} OCI CLI pins fit Python ${python}; the VM's ${vmStatements.length} policy statements cannot delete or overwrite a backup.`,
 );

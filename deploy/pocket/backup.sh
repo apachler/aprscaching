@@ -12,15 +12,18 @@
 # The snapshot uses SQLite's online backup API through better-sqlite3, which the gateway already needs,
 # so no sqlite3 package is required; the copy is checked (quick_check) before it is packed.
 #
-# Shared storage has no per-app permissions: any app allowed to read storage can read the archive. The
-# .env holds INGEST_SECRET and OPERATOR_SECRET and session.secret signs the sessions, so --no-env leaves
-# them out when the archive is to stay on the phone or travel through a cloud folder.
+# Shared storage has no per-app permissions: any app allowed to read storage, and any app that syncs the
+# folder to a cloud, can read the archive. The .env holds INGEST_SECRET and OPERATOR_SECRET and
+# session.secret signs the sessions, so an archive on shared storage never holds them: they go into a second
+# archive, aprscaching-pocket-<UTC time>-secrets.tar.gz, in Termux's private ~/.aprscaching/backups/ (owner
+# only), and --restore takes them from there. An archive written anywhere else holds them itself.
 #
 # Options:
 #   --dest DIR           where the archives go          (APRSCACHING_BACKUP_DIR,
 #                                                        default ~/storage/shared/aprscaching-backups)
 #   --keep N             archives to keep in DIR        (default 7)
 #   --no-env             leave out the .env and the *.secret files
+#   --with-secrets       put the .env and the *.secret files in the archive, even on shared storage
 #   --media              include the media directory whatever its size
 #   --no-media           leave the media directory out
 #                        (default: included while it is at most APRSCACHING_BACKUP_MEDIA_MAX_MB, 50 MiB)
@@ -39,7 +42,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DEST="${APRSCACHING_BACKUP_DIR:-}"
 KEEP=7
-WITH_SECRETS=1
+# private: in the archive, or beside it in private storage when the archive lies on shared storage;
+# archive: in the archive wherever it lies; none: left out.
+SECRETS=private
 MEDIA_MODE=auto
 MEDIA_MAX_MB="${APRSCACHING_BACKUP_MEDIA_MAX_MB:-50}"
 RESTORE=""
@@ -48,7 +53,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dest) DEST="${2:-}"; shift ;;
     --keep) KEEP="${2:-}"; shift ;;
-    --no-env) WITH_SECRETS=0 ;;
+    --no-env) SECRETS=none ;;
+    --with-secrets) SECRETS=archive ;;
     --media) MEDIA_MODE=yes ;;
     --no-media) MEDIA_MODE=no ;;
     --restore) RESTORE="${2:-}"; shift ;;
@@ -100,6 +106,21 @@ if (check !== "ok") { console.error("quick_check: " + check); process.exit(1); }
 console.log(db.prepare("select count(*) n from sqlite_master where type = ?").get("table").n);'
 node_sqlite() { (cd "$DIR/servers/node" && node -e "$@"); }
 
+# The archives' place for the secrets they leave out: Termux's private storage, which no other app reads.
+PRIVATE="$DATA/backups"
+
+# Whether DIR lies on the phone's shared storage (~/storage links into it).
+on_shared_storage() {
+  local real storage
+  real="$(cd "$1" && pwd -P)"
+  case "$real" in /storage/* | /sdcard* | /mnt/*) return 0 ;; esac
+  if [ -d "$HOME/storage" ]; then
+    storage="$(cd "$HOME/storage" && pwd -P)"
+    case "$real/" in "$storage"/*) return 0 ;; esac
+  fi
+  return 1
+}
+
 STAGE=""
 cleanup() { if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi; }
 trap cleanup EXIT
@@ -113,6 +134,16 @@ if [ -n "$RESTORE" ]; then
   tar -xzf "$RESTORE" -C "$STAGE"
   src="$(find "$STAGE" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   [ -n "$src" ] && [ -f "$src/aprscaching.db" ] || die "$RESTORE is not a Pocket backup (no aprscaching.db inside)."
+  secrets="$PRIVATE/$(basename "$src")-secrets.tar.gz"
+  if grep -q '^secrets: ' "$src/MANIFEST" 2>/dev/null; then
+    if [ -f "$secrets" ]; then
+      tar -xzf "$secrets" -C "$STAGE"
+      info "secrets taken from $secrets"
+    else
+      warn "the archive's secrets were kept in $secrets, which is not on this phone:" \
+        "the database comes back without them, and the current .env and secrets stay."
+    fi
+  fi
   tables="$(node_sqlite "$CHECK_JS" "$src/aprscaching.db")" || die "the database in $RESTORE fails its check."
   info "database: $tables tables, check ok"
 
@@ -190,16 +221,31 @@ tables="$(node_sqlite "$SNAPSHOT_JS" "$DB" "$OUT/aprscaching.db")" || die "the s
 info "$tables tables, check ok"
 included="database"
 
-if [ "$WITH_SECRETS" -eq 1 ]; then
+SHARED=0
+if on_shared_storage "$DEST"; then SHARED=1; fi
+SECRETS_TAR=""
+if [ "$SECRETS" != none ]; then
+  SEC="$OUT"
+  if [ "$SECRETS" = private ] && [ "$SHARED" -eq 1 ]; then
+    SEC="$STAGE/secrets/$NAME"
+    mkdir -p "$SEC"
+    SECRETS_TAR="$PRIVATE/$NAME-secrets.tar.gz"
+  fi
+  secret_names=""
   if [ -f "$ENV_FILE" ]; then
-    cp "$ENV_FILE" "$OUT/env"
-    included="$included, .env"
+    cp "$ENV_FILE" "$SEC/env"
+    secret_names=".env"
   fi
   for f in "$DB_DIR"/*.secret; do
     [ -e "$f" ] || continue
-    cp "$f" "$OUT/"
-    included="$included, $(basename "$f")"
+    cp "$f" "$SEC/"
+    secret_names="${secret_names:+$secret_names, }$(basename "$f")"
   done
+  if [ -z "$SECRETS_TAR" ]; then
+    if [ -n "$secret_names" ]; then included="$included, $secret_names"; fi
+  elif [ -z "$secret_names" ]; then
+    SECRETS_TAR=""
+  fi
 fi
 
 if [ -d "$MEDIA" ] && [ "$MEDIA_MODE" != no ]; then
@@ -218,6 +264,7 @@ fi
   printf 'commit: %s\n' "$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   printf 'database: %s (%s tables)\n' "$DB" "$tables"
   printf 'contains: %s\n' "$included"
+  if [ -n "$SECRETS_TAR" ]; then printf 'secrets: %s (%s)\n' "$SECRETS_TAR" "$secret_names"; fi
 } >"$OUT/MANIFEST"
 
 step "Writing $DEST/$NAME.tar.gz"
@@ -227,18 +274,27 @@ cp "$STAGE/$NAME.tar.gz" "$DEST/.$NAME.tar.gz.partial"
 mv "$DEST/.$NAME.tar.gz.partial" "$DEST/$NAME.tar.gz"
 info "$(du -h "$DEST/$NAME.tar.gz" | cut -f1): $included"
 
-if [ "$WITH_SECRETS" -eq 1 ]; then
-  real_dest="$(cd "$DEST" && pwd -P)"
-  case "$real_dest" in
-    /storage/* | /sdcard* | /mnt/*)
-      warn "the archive holds the instance secrets (.env, session.secret) and lies on shared storage, which" \
-        "any app with storage permission can read. Move it somewhere private, or use --no-env." ;;
-  esac
+if [ -n "$SECRETS_TAR" ]; then
+  (umask 077 && mkdir -p "$PRIVATE")
+  chmod 700 "$PRIVATE"
+  (umask 077 && tar -czf "$PRIVATE/.$NAME-secrets.tar.gz.partial" -C "$STAGE/secrets" "$NAME")
+  mv "$PRIVATE/.$NAME-secrets.tar.gz.partial" "$SECRETS_TAR"
+  info "$secret_names kept off shared storage, in $SECRETS_TAR (--restore takes them from there)"
 fi
 
-# Keep the newest $KEEP archives (the names sort by time).
-mapfile -t old < <(find "$DEST" -maxdepth 1 -type f -name 'aprscaching-pocket-*.tar.gz' | sort | head -n "-$KEEP")
-for f in "${old[@]}"; do
-  rm -f "$f"
-  info "removed the older $(basename "$f")"
-done
+if [ "$SECRETS" = archive ] && [ "$SHARED" -eq 1 ]; then
+  warn "the archive holds the instance secrets (.env, session.secret) and lies on shared storage, which" \
+    "any app with storage permission can read. Move it somewhere private, or leave out --with-secrets."
+fi
+
+# Keep the newest $KEEP archives (the names sort by time), and as many of the secrets kept beside them.
+prune() {
+  local f
+  mapfile -t old < <(find "$1" -maxdepth 1 -type f -name "$2" | sort | head -n "-$KEEP")
+  for f in "${old[@]}"; do
+    rm -f "$f"
+    info "removed the older $(basename "$f")"
+  done
+}
+prune "$DEST" 'aprscaching-pocket-*Z.tar.gz'
+if [ -d "$PRIVATE" ]; then prune "$PRIVATE" 'aprscaching-pocket-*-secrets.tar.gz'; fi

@@ -278,6 +278,7 @@ VITE_SAT_TILES	string	web			0	0	selfhost,baremetal,pocket	Satellite raster tile 
 VITE_SAT_ATTRIBUTION	string	web			0	0	selfhost,baremetal,pocket	Attribution shown with the satellite layer	
 DOMAIN	string	deploy	:80		0	0	selfhost	What Caddy serves: a hostname gets Let's Encrypt TLS, :80 serves plain HTTP	
 TUNNEL_TOKEN	string	deploy			1	0	selfhost	Cloudflare Tunnel token of a named tunnel	
+CF_RANGES	string	deploy	0.0.0.0/0 ::/0		0	0	selfhost	Addresses whose cf-connecting-ip Caddy passes on: Cloudflare's, behind its proxied DNS	
 BACKUP_DIR	string	deploy			0	0	selfhost,baremetal,desktop	Local or mounted directory for database backups, off the database's disk	
 OCI_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	OCI Object Storage bucket for backups (needs the oci CLI)	
 BACKUP_BUCKET	string	deploy			0	0	selfhost,baremetal,desktop	S3-compatible bucket for backups; needs R2_ENDPOINT and the aws CLI	

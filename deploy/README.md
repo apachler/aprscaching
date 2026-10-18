@@ -32,7 +32,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 export SOURCE_COMMIT=$(git rev-parse HEAD)                              # the commit the source link names
 docker compose up -d --build                                            # Caddy with TLS, or LAN
 docker compose -f docker-compose.yml -f compose.home.yml up -d --build  # Cloudflare Tunnel
-#   optional CDN in front of a public box: restrict 80/443 to Cloudflare's ranges, set TRUST_CF=1, then
+#   optional CDN in front of a public box: set CF_RANGES to Cloudflare's ranges and TRUST_CF=1 in .env, then
 CF_API_TOKEN=… CF_ZONE_ID=… ./cloudflare/cache-rules.sh
 
 # Desktop (no Node/Docker): build executables for every OS from one machine

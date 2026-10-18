@@ -32,6 +32,7 @@ stops background apps, and battery and heat are real limits.
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
+| `test/backup-test.sh` | checks where `backup.sh` and the scheduled backup put the instance secrets, with a stand-in better-sqlite3; CI runs it |
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 | `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`, the home instance; CI runs it |
 | `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
@@ -276,8 +277,10 @@ bash ~/aprscaching/deploy/pocket/backup.sh          # to ~/storage/shared/aprsca
 ```
 
 The snapshot is consistent while the gateway runs (SQLite's online backup, through the better-sqlite3 the
-gateway already uses). The archive holds the `.env` and `session.secret`, and shared storage is readable by
-any app with storage permission: `--no-env` leaves them out. `--dest DIR`, `--keep N`, `--media` /
+gateway already uses). Shared storage is readable by any app with storage permission, so an archive there
+leaves out the `.env` and `session.secret`: they go into a secrets archive in `~/.aprscaching/backups/`, owner
+only, and `--restore` takes them from there. `--no-env` leaves them out everywhere, `--with-secrets` puts them in
+the archive. `--dest DIR`, `--keep N`, `--media` /
 `--no-media` (media is included up to 50 MiB by default), and `--restore FILE`, which stops the station,
 keeps the current database in `~/.aprscaching/before-restore-<time>/` and starts it again.
 
