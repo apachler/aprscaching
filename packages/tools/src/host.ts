@@ -123,10 +123,14 @@ export function normalizeBeacon(spec: unknown): BeaconSpec | string {
   const comment = typeof o.comment === "string" ? o.comment.replace(/[\r\n\0]+/g, " ").trim() : "";
   if (!comment) return "a beacon needs a comment";
   if (comment.startsWith("}")) return "a tool may not send third-party traffic";
+  // a beacon goes out as a status, so every rule for a status holds for it (no leading grid locator: a position)
+  const text = comment.slice(0, BEACON_COMMENT_MAX);
+  const why = txInfoProblem(">" + text);
+  if (why) return why;
   const sec = Number(o.intervalSec);
   if (!Number.isFinite(sec)) return "a beacon needs an interval in seconds";
   return {
-    comment: comment.slice(0, BEACON_COMMENT_MAX),
+    comment: text,
     intervalSec: Math.round(Math.min(BEACON_MAX_INTERVAL_SEC, Math.max(BEACON_MIN_INTERVAL_SEC, sec))),
   };
 }

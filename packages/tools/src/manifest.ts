@@ -30,6 +30,8 @@ export interface ToolManifest {
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const MAX_CONNECT = 8;
+/** Dot-separated labels of letters, digits and inner hyphens (the URL parser has lowercased and punycoded it). */
+const DNS_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** 32 bytes in standard base64: 43 characters and one `=`. */
 const SHA256_B64_RE = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/;
 
@@ -44,6 +46,9 @@ export function connectOrigin(x: unknown): string | null {
   }
   if (u.protocol !== "https:" && u.protocol !== "wss:") return null;
   if (u.username || u.password || (u.pathname !== "/" && u.pathname !== "") || u.search || u.hash) return null;
+  // One concrete host: a DNS name, an IPv4 or a bracketed IPv6 literal. The URL parser keeps `*`, which the frame's
+  // CSP reads as a wildcard reaching every host, the app's own API included.
+  if (!DNS_HOST_RE.test(u.hostname) && !/^\[[0-9a-f:.]+\]$/i.test(u.hostname)) return null;
   return `${u.protocol}//${u.host}`;
 }
 

@@ -13,6 +13,7 @@ describe("CW (Morse) decoder", () => {
   it("reads a token named like an Object property as unknown, not as the property", () => {
     expect(decodeMorse("constructor __proto__ toString")).toBe("");
     expect(decodeMorse(".... ..  constructor")).toBe("HI");
+    expect(decodeMorse("constructor __proto__ toString .... ..")).toBe("HI");
   });
   it("leaves out a word with nothing it can send, rather than an empty word", () => {
     expect(encodeMorse("hi \u00c4\u00d6 there")).toBe(".... .. / - .... . .-. .");
@@ -37,6 +38,7 @@ describe("PSK31 varicode codec", () => {
   });
   it("reads a code named like an Object property as unknown, not as the property", () => {
     expect(decodeVaricode("constructor00__proto__00hasOwnProperty")).toBe("");
+    expect(decodeVaricode("00constructor00__proto__00hasOwnProperty00")).toBe("");
   });
   it("every varicode is '00'-free and 1-framed (the defining property)", () => {
     const inner = encodeVaricode("The quick brown fox").slice(2, -2);

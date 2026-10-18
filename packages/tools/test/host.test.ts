@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   ToolHost,
   validateManifest,
+  connectOrigin,
   expand,
   withNow,
   parseBlocks,
@@ -52,6 +53,12 @@ describe("Tool manifest validation", () => {
     const base = { name: "net-tool", title: "T", author: "X", version: "1", api: "1.0", permissions: ["network"] };
     for (const bad of ["http://example.org", "https://example.org/path", "https://u:p@example.org", "*", 42])
       expect(validateManifest({ ...base, connect: [bad] }).ok).toBe(false);
+    // a wildcard host is a CSP pattern, not one origin: it would reach every host, the app's own API included
+    for (const bad of ["https://*", "https://*.example.net", "wss://*", "wss://*:443", "https://a_b.example"]) {
+      expect(connectOrigin(bad)).toBeNull();
+      expect(validateManifest({ ...base, connect: [bad] }).ok).toBe(false);
+    }
+    expect(validateManifest({ ...base, connect: ["https://[::1]:8443", "https://10.0.0.2"] }).ok).toBe(true);
     expect(validateManifest({ ...base, connect: Array.from({ length: 9 }, (_, i) => `https://h${i}.org`) }).ok).toBe(
       false,
     );
@@ -287,6 +294,22 @@ describe("Transmit and beacons — gated, checked and rate-limited by the host",
     expect(long.comment).toHaveLength(62);
     for (const bad of [null, {}, { comment: "" }, { comment: "x" }, { comment: "}spoof", intervalSec: 900 }])
       expect(typeof normalizeBeacon(bad)).toBe("string");
+  });
+
+  it("normalizeBeacon holds a beacon to the status rules: no leading grid locator, which reports a position", () => {
+    for (const comment of ["JN77sb/- here", "jn77 hello", "JN77QA moving"])
+      expect(normalizeBeacon({ comment, intervalSec: 600 })).toBe("a status may not start with a grid locator");
+    expect(normalizeBeacon({ comment: "QRV on 144.800", intervalSec: 600 })).toEqual({
+      comment: "QRV on 144.800",
+      intervalSec: 600,
+    });
+    const onBeacon = vi.fn();
+    let ctx!: ToolContext;
+    const host = new ToolHost({ txGate: () => true, onBeacon });
+    host.register(txTool((c) => (ctx = c)));
+    host.setEnabled("tx-tool", true);
+    expect(() => ctx.scheduleBeacon({ comment: "JN77sb/- here", intervalSec: 600 })).toThrow(/grid locator/);
+    expect(onBeacon).not.toHaveBeenCalled();
   });
 });
 
