@@ -125,10 +125,11 @@ export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | nu
     off += 7;
     if (a.last) break;
   }
-  if (addrs.length < 2) return null;
+  if (addrs.length < 2 || !addrs[addrs.length - 1]!.last) return null; // the address field ends within 10
   const [dst, src, ...digis] = addrs;
   const command = dst!.cbit; // v2: dst C bit set ⇒ command
 
+  if (off >= bytes.length) return null; // no control field: an undefined byte would read as an I frame
   const ctrl = bytes[off++]!;
   let pf = !!(ctrl & PF),
     isExt = false;
@@ -142,6 +143,7 @@ export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | nu
     // I frame
     type = "I";
     if (extended) {
+      if (off >= bytes.length) return null;
       const c2 = bytes[off++]!;
       isExt = true;
       ns = (ctrl >> 1) & 0x7f;
@@ -157,6 +159,7 @@ export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | nu
     // S frame
     type = S_REV[(ctrl >> 2) & 3]!;
     if (extended) {
+      if (off >= bytes.length) return null;
       const c2 = bytes[off]!; // S-frame has no info field, so `off` isn't advanced past here
       isExt = true;
       nr = (c2 >> 1) & 0x7f;
