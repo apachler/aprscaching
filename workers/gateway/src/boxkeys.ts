@@ -33,7 +33,7 @@
  */
 import { SIG_DOMAIN, SITE_CALL_RE, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
-import { b64urlToBytes } from "./util/b64.js";
+import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
@@ -402,9 +402,14 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
     // read through the ingest batch's byte cap: a larger body is never one a box sends, and is not buffered
     const body = await readCappedBody(req.clone(), BODY_MAX);
     if (!body) return;
+    // A signature is taken only in the one spelling a box writes, unpadded base64url: the decoder forgives
+    // padding, whitespace, the other alphabet and the unused bits of the last character, so any other
+    // spelling would name the same signature under a different text.
+    const sigBytes = b64urlToBytes(sig);
+    if (sigBytes.length !== 64 || bytesToB64url(sigBytes) !== sig) return;
     const ok = await verifyDomain(
       await importVerifyKey(row.public_key),
-      b64urlToBytes(sig),
+      sigBytes,
       SIG_DOMAIN.box,
       boxRequestMessage({
         box,
@@ -416,8 +421,10 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
       }),
     );
     if (!ok) return;
-    // each signature once: a copy replayed inside the freshness window is refused
-    if (await rateLimitedDurable(env, `box-once:${await sha256Hex(sig)}`, Date.now(), 1, 2 * FRESH_S * 1000)) return;
+    // each signed request once, keyed on what the signature covers: a copy replayed inside the freshness
+    // window is refused, whatever its signature looks like
+    const once = await sha256Hex(`${box}|${at}|${nonce}`);
+    if (await rateLimitedDurable(env, `box-once:${once}`, Date.now(), 1, 2 * FRESH_S * 1000)) return;
     setBoxPrincipal(req, { box, callsign: row.callsign, services: row.services === 1 });
     const now = nowS();
     if (!row.last_seen_at || now - row.last_seen_at > 300)
