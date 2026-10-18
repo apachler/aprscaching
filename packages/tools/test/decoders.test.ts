@@ -10,6 +10,14 @@ describe("CW (Morse) decoder", () => {
   it("round-trips through encodeMorse", () => {
     expect(decodeMorse(encodeMorse("CQ DE OE8APR"))).toBe("CQ DE OE8APR");
   });
+  it("reads a token named like an Object property as unknown, not as the property", () => {
+    expect(decodeMorse("constructor __proto__ toString")).toBe("");
+    expect(decodeMorse(".... ..  constructor")).toBe("HI");
+  });
+  it("leaves out a word with nothing it can send, rather than an empty word", () => {
+    expect(encodeMorse("hi \u00c4\u00d6 there")).toBe(".... .. / - .... . .-. .");
+    expect(encodeMorse("\u00c4\u00d6")).toBe("");
+  });
   it("classifies a keyed on/off envelope into Morse (unit-estimated)", () => {
     // "E T" — dot, letter-gap, dash
     const events = [
@@ -26,6 +34,9 @@ describe("PSK31 varicode codec", () => {
     const bits = encodeVaricode("cq de oe8apr 73");
     expect(/^0{2}[01]+0{2}$/.test(bits)).toBe(true); // idle-framed
     expect(decodeVaricode(bits)).toBe("cq de oe8apr 73");
+  });
+  it("reads a code named like an Object property as unknown, not as the property", () => {
+    expect(decodeVaricode("constructor00__proto__00hasOwnProperty")).toBe("");
   });
   it("every varicode is '00'-free and 1-framed (the defining property)", () => {
     const inner = encodeVaricode("The quick brown fox").slice(2, -2);

@@ -94,7 +94,8 @@ const VARICODE: Record<string, string> = {
   "\n": "11101111",
   "\r": "11101111",
 };
-const REV: Record<string, string> = Object.fromEntries(Object.entries(VARICODE).map(([c, v]) => [v, c]));
+// a Map, so a code spelled like an Object property ("constructor", "__proto__") reads as unknown
+const REV = new Map(Object.entries(VARICODE).map(([c, v]) => [v, c]));
 
 /** Encode text → a varicode bitstream ("00"-separated, framed by an idle "00" each side). */
 export function encodeVaricode(text: string): string {
@@ -112,7 +113,7 @@ export function encodeVaricode(text: string): string {
 export function decodeVaricode(bits: string): string {
   return bits
     .split("00")
-    .map((code) => (code ? (REV[code] ?? "") : ""))
+    .map((code) => (code ? (REV.get(code) ?? "") : ""))
     .join("");
 }
 
