@@ -20,6 +20,8 @@ import { fedBbsOn } from "./fedbbsgate.js";
 import { ours, originKeys } from "./fedpeers.js";
 import { mergeEndpoints, storedEndpoints } from "./fedtransport.js";
 import { keepForTransit } from "./fedtransit.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { trimTrailingSlashes } from "./fetchguard.js";
 import {
   accountActionMessage,
   decodeFedFrame,
@@ -503,6 +505,8 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
  */
 /** How long a relay frame stays answerable: store-and-forward is slow, but not this slow. */
 const RELAY_FRAME_MAX_AGE_S = 3 * 86400;
+/** Relay queries one origin may have answered over the air in an hour. */
+const RELAY_ANSWERS_PER_HOUR = 30;
 
 async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "rejected" | "elsewhere"> {
   const us = (ours(env) ?? "").toLowerCase();
@@ -531,6 +535,17 @@ async function actOnRelayFrame(
   if (rec.kind === "relayQuery") {
     // the answer goes back over FBB, which carries nothing while FED_BBS is off
     if (!fedBbsOn(env)) return "rejected";
+    // each answer is a signed bulletin on scarce FBB/RF airtime: only a trusted peer or this spoke's own hub may
+    // ask, and within a per-origin budget, so no origin can turn queries into a flood of transmissions
+    const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : "";
+    const asker = await env.DB.prepare(
+      "SELECT 1 AS x FROM fed_peers WHERE instance = ? AND trust != 'blocked' AND (trust = 'trusted' OR url = ?)",
+    )
+      .bind(rec.origin, hub)
+      .first();
+    if (!asker) return "rejected";
+    if (await rateLimitedDurable(env, `relay-answer:${rec.origin}`, Date.now(), RELAY_ANSWERS_PER_HOUR, 3600_000))
+      return "rejected";
     const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
     let params: unknown;
     try {

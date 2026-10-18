@@ -492,7 +492,9 @@ The rendezvous relay rides the same carrier for a packet-only spoke, with `FED_B
 sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
 scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.
 The frame signatures bind both directions to their instances, so no secret material ever rides the air.
-Each relay frame is acted on once (by gid) and only within three days of its signing time. On the HTTP
+Each relay frame is acted on once (by gid) and only within three days of its signing time. Every answer is a
+transmission, so the spoke answers only a trusted peer or its own hub (`FED_HUB_URL`), and at most 30 queries per
+origin an hour; a query over the budget is not remembered, so a later copy of it can still be answered. On the HTTP
 legs, the spoke signs each lease and answer request with its federation key over
 `"acs-relay/1\n" || METHOD " " path?query "\n" at "\n" hex(SHA-256(body))`, sent as `x-relay-instance`,
 `x-relay-at` (±120 s) and `x-relay-sig`; the hub verifies it against the accept set it holds for that

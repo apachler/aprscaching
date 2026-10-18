@@ -115,6 +115,32 @@ describe("records only move forward", () => {
     expect(n?.n).toBe(1);
   });
 
+  const relayQuery = (a: Env, id: number) =>
+    frame(a, "relayQuery", `a.example:relay:${id}`, nowS(), {
+      id,
+      target: "hub.example",
+      kind: "feed",
+      paramsJson: JSON.stringify({ feed: "caches" }),
+    });
+  const answers = async (hub: Env) =>
+    (await hub.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages WHERE to_call = 'ACSFED'").first<{ n: number }>())
+      ?.n;
+
+  it("a relay query from a peer that is not trusted is not answered over the air", async () => {
+    const { a, hub } = await pair({ FED_BBS: "1" });
+    await hub.DB.prepare("UPDATE fed_peers SET trust = 'unvetted'").run();
+    const r = await applyFedFrames(hub, [await relayQuery(a, 1), await relayQuery(a, 2)]);
+    expect(r.applied).toBe(0);
+    expect(await answers(hub)).toBe(0);
+  });
+
+  it("relay answers over the air are rate-limited per origin", async () => {
+    const { a, hub } = await pair({ FED_BBS: "1" });
+    const queries = await Promise.all(Array.from({ length: 40 }, (_, i) => relayQuery(a, i + 1)));
+    await applyFedFrames(hub, queries);
+    expect(await answers(hub)).toBe(30);
+  });
+
   it("a local cache edited twice in one second is served at a strictly higher version", async () => {
     const { decodeFedFrame } = await import("@aprscaching/shared");
     const a = instanceEnv("a.example", await newFedKey());
