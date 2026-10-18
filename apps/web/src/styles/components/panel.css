@@ -13,7 +13,9 @@
     max-width: calc(100% - 24px);
     z-index: var(--z-panel);
     overflow: auto;
-    padding: var(--space-lg);
+    /* the padding as one value, so a row that bleeds to the panel's edges cancels exactly this much */
+    --panel-pad: var(--space-lg);
+    padding: var(--panel-pad);
     container: panel / inline-size;
     background: var(--surface);
     border: 1px solid var(--line);

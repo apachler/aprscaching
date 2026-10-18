@@ -13,7 +13,7 @@
     justify-items: center;
     padding: calc(var(--topbar-h) + var(--space-lg) + env(safe-area-inset-top)) var(--space-lg) 0;
     background: color-mix(in oklch, var(--shade) 50%, transparent);
-    animation: tour-in 0.18s ease;
+    animation: tour-in var(--motion-base) var(--ease-standard);
   }
   .tour-card {
     width: min(460px, 100%);

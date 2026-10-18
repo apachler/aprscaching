@@ -45,7 +45,7 @@
     padding: var(--space-sm) 15px;
     font-size: var(--text-data);
     box-shadow: var(--elevation-floating);
-    animation: toast-in 0.18s ease;
+    animation: toast-in var(--motion-base) var(--ease-standard);
   }
   @keyframes toast-in {
     from {

@@ -77,6 +77,7 @@
     --selected-bg: color-mix(in oklch, var(--brand) 22%, transparent); /* the selected rail item, segment or chip */
     --pin-edge: oklch(1 0 0); /* map-marker outline + glyph — white ring reads on any basemap */
     --map-control-ink: oklch(0.25 0.02 245); /* glyphs on MapLibre's control stack, which is white in every theme */
+    --map-control-bad: oklch(0.5 0.19 27); /* the blocked state on that white stack */
     --pin-station: oklch(0.86 0.012 230); /* default (roleless) station-pin fill */
     /* cache types: the pin fill and the type chip's hue (the brand palette) */
     --type-green: oklch(0.71 0.18 128); /* traditional */
@@ -122,6 +123,9 @@
     --hero-control-bg: oklch(0.27 0.015 225); /* a secondary button */
     --hero-control-ink: oklch(0.94 0.006 220);
     --hero-control-line: oklch(0.42 0.02 225);
+    --hero-term-bg: oklch(0.22 0.012 220); /* the terminal card, deepened toward --shade where it is drawn */
+    --hero-term-ink: oklch(0.88 0.12 135); /* the frame's text: a phosphor green */
+    --hero-term-dim: oklch(0.8 0.03 220); /* the frame's quieter parts */
 
     /* ---- role scales (docs/contribute/design/design-language.md) ----
        Named by what a value is for, so a heading, a card or a dialog picks its step by role. */

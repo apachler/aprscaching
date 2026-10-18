@@ -41,7 +41,7 @@
   }
   .chev {
     color: var(--muted);
-    transition: transform 0.15s ease;
+    transition: transform var(--motion-base) var(--ease-standard); /* a disclosure */
     display: inline-block;
   }
   .chev.open {

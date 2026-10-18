@@ -301,7 +301,7 @@
   /* the terminal: one frame arrives line by line, then its stamp */
   .landing-term {
     margin: 0;
-    background: color-mix(in oklch, var(--shade) 64%, oklch(0.22 0.012 220));
+    background: color-mix(in oklch, var(--shade) 64%, var(--hero-term-bg));
     border: 1px solid color-mix(in oklch, var(--chrome-ink) 22%, transparent);
     border-radius: var(--radius-card);
     box-shadow: var(--elevation-hero);
@@ -329,14 +329,14 @@
     font-family: var(--font-mono);
     font-size: var(--text-label);
     line-height: 1.7;
-    color: oklch(0.88 0.12 135);
+    color: var(--hero-term-ink);
   }
   .landing-frame {
     margin: 0;
     overflow-wrap: anywhere; /* wraps on a phone instead of scrolling */
   }
   .landing-term-body .dim {
-    color: oklch(0.8 0.03 220);
+    color: var(--hero-term-dim);
   }
   .landing-stamp {
     display: inline-flex;
@@ -355,7 +355,8 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .landing-term-rx {
-      animation: landing-blink 1.6s infinite step-end;
+      /* three blinks, under the 5 s past which motion needs a pause control (WCAG 2.2.2); it ends lit */
+      animation: landing-blink 1.6s step-end 3;
     }
     /* --landing-skew: the app's copy, taking over from the prerendered one, carries on where it is (Landing.tsx) */
     .landing-frame,

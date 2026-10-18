@@ -17,24 +17,32 @@
     color: var(--muted);
     min-width: 3.5rem;
   }
-  /* map pins */
+  /* map pins: MapLibre positions a marker through its root's inline transform, so the button stays unrotated and
+   its inner shape turns into the teardrop, with the glyph turned back upright inside it */
   .cache-pin {
-    background: var(--tc, var(--type-grey));
     width: 25px;
     height: 25px;
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    border: 2px solid var(--pin-edge);
-    box-shadow: var(--elevation-raised);
+    border: none;
+    background: none;
     cursor: pointer;
     color: var(--pin-edge);
     font-size: var(--text-label);
     padding: 0;
+  }
+  .cache-pin-shape {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    background: var(--tc, var(--type-grey));
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 2px solid var(--pin-edge);
+    box-shadow: var(--elevation-raised);
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .cache-pin > span {
+  .cache-pin-shape > span {
     transform: rotate(45deg);
   }
   .cache-pin.found::after {
@@ -42,7 +50,6 @@
     position: absolute;
     right: -3px;
     top: -3px;
-    transform: rotate(45deg);
     background: var(--accent);
     color: var(--accent-ink);
     width: 13px;
@@ -110,8 +117,10 @@
     z-index: 2;
   }
   .cache-pin.mirrored {
-    border-style: dashed;
     opacity: 0.9;
+  }
+  .cache-pin.mirrored .cache-pin-shape {
+    border-style: dashed;
     box-shadow:
       0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent),
       var(--elevation-raised);
@@ -328,14 +337,11 @@
       display: none;
     }
   }
-  /* phone layout: clear the bottom tab bar and stack the tools above the readout so the two
-   bottom chips never overlap each other (they share one row on wider screens) */
+  /* phone layout: the readout, the legend and a spot's card clear the bottom tab bar (the map runs on under it) */
   @media (max-width: 680px) {
-    .coordreadout {
+    .coordreadout,
+    .spot-card {
       bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
-    }
-    .maptools {
-      bottom: calc(126px + env(safe-area-inset-bottom));
     }
     .mc-legend {
       bottom: calc(var(--tabbar-h) + var(--space-md) + 72px + env(safe-area-inset-bottom));
@@ -400,6 +406,13 @@
     flex-direction: column;
     align-items: flex-end;
     gap: var(--space-xs);
+  }
+  /* on a phone the tools stack above the readout, so the two bottom chips never overlap each other (they share
+   one row on wider screens); after the rule above, which it overrides */
+  @media (max-width: 680px) {
+    .maptools {
+      bottom: calc(126px + env(safe-area-inset-bottom));
+    }
   }
   .maptools-bar {
     display: flex;
@@ -521,8 +534,7 @@
   }
   /* blocked for this site: a struck-through look, so the state reads without the colour */
   .maplibregl-ctrl-group button.locate-btn[data-blocked] {
-    color: var(--bad-text);
-    opacity: 0.8;
+    color: var(--map-control-bad);
   }
   .maplibregl-ctrl-group button.locate-btn[data-blocked]::before {
     content: "";

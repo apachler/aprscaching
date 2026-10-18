@@ -89,6 +89,15 @@ const SURFACES = [
   { name: "recovery", as: "fresh", query: "", wait: ".recovery-notice" },
   { name: "recovery-settings", as: "fresh", query: "?view=settings", wait: ".recovery-inline" },
   { name: "map", as: "user", query: "", wait: ".topbar" },
+  // a shared view with the spots layer on: a park activation's card, with the button to the cache beside it
+  {
+    name: "spot",
+    as: "user",
+    query: "?v=spots",
+    wait: ".spot-pin",
+    steps: [["click", ".spot-pin"]],
+    after: ".spot-card .spot-cta",
+  },
   // the top bar's search field from 960px up; narrower screens open it in a sheet from the search button
   {
     name: "search",
@@ -576,6 +585,74 @@ function layoutFindings() {
           ? `${key} "${text}": its words reach past the control's edge`
           : `${key} "${text}" overflows its ${box.className.split(" ")[0]} by ${Math.round(Math.max(r.right - b.right, b.left - r.left))}px`,
       );
+    }
+  }
+  // a panel or sheet is never wider than itself: a sideways scroll there is a row bleeding past its padding
+  for (const p of document.querySelectorAll(".panel")) {
+    if (!p.getClientRects().length) continue;
+    if (p.scrollWidth > p.clientWidth + 1)
+      out.push(`${p.className.split(" ")[0]} scrolls sideways by ${p.scrollWidth - p.clientWidth}px`);
+    // the phone sheet's grip (its ::before) sits at the top of the padding: the first row starts below it
+    const grip = getComputedStyle(p, "::before");
+    const first = p.firstElementChild;
+    if (grip.content !== "none" && grip.display !== "none" && first) {
+      // measured as if scrolled to the top: a scrolled sheet carries its first row up past the grip on purpose
+      const top = p.getBoundingClientRect().top + p.clientTop + parseFloat(getComputedStyle(p).paddingTop);
+      const rowTop = first.getBoundingClientRect().top + p.scrollTop;
+      if (first.getBoundingClientRect().height && rowTop < top - 1)
+        out.push(`${p.className.split(" ")[0]}'s first row rides ${Math.round(top - rowTop)}px over the sheet's grip`);
+    }
+  }
+  // the map's own controls and cards stay clear of the chrome over the map: a tap at a control's centre reaches it,
+  // not the tab bar, the top bar or the rail (map markers pan under the chrome by design)
+  for (const el of document.querySelectorAll(".mapwrap :is(button, a, input, select)")) {
+    if (el.closest(".maplibregl-marker")) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || getComputedStyle(el).visibility === "hidden") continue;
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+    const hit = document.elementFromPoint(x, y);
+    const chrome = hit?.closest(".tabbar, .topbar, .rail");
+    if (chrome && !el.contains(hit)) {
+      const name = `${el.tagName.toLowerCase()}.${String(el.className).trim().split(/\s+/).join(".")}`;
+      out.push(
+        `${name} "${(el.textContent || "").trim().slice(0, 30)}" is under the ${chrome.className.split(" ")[0]}`,
+      );
+    }
+  }
+  // MapLibre writes a marker's position as the inline transform of the marker's root element, so a stylesheet
+  // transform there never applies: a pin's shape is drawn by an element inside it
+  const markers = [...document.querySelectorAll(".maplibregl-marker")];
+  const ruleSets = (rules) =>
+    [...rules].flatMap((r) => {
+      if (r instanceof CSSMediaRule && !matchMedia(r.conditionText).matches) return [];
+      const nested = r.cssRules ? ruleSets(r.cssRules) : [];
+      return r instanceof CSSStyleRule ? [r, ...nested] : nested;
+    });
+  if (markers.length) {
+    for (const sheet of document.styleSheets) {
+      if (/maplibre/.test(sheet.href ?? "")) continue;
+      let rules;
+      try {
+        rules = ruleSets(sheet.cssRules);
+      } catch {
+        continue; // a cross-origin sheet
+      }
+      for (const rule of rules) {
+        const st = rule.style;
+        if (!["transform", "rotate", "scale", "translate"].some((k) => st.getPropertyValue(k))) continue;
+        let el;
+        try {
+          el = markers.find((m) => m.matches(rule.selectorText));
+        } catch {
+          continue; // a pseudo-element selector
+        }
+        if (el && !seen.has(rule.selectorText)) {
+          seen.add(rule.selectorText);
+          out.push(`${rule.selectorText} sets a transform on a MapLibre marker's root, which MapLibre overwrites`);
+        }
+      }
     }
   }
   // a touch hit extension (styles/components/hittarget.css) on a control that is not positioned anchors to the

@@ -39,7 +39,7 @@
     display: block;
     margin-inline: auto;
     opacity: 1;
-    transition: opacity var(--motion-fast) ease;
+    transition: opacity var(--motion-fast) var(--ease-standard);
   }
   @starting-style {
     .hint[data-open] {

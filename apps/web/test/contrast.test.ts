@@ -169,6 +169,13 @@ const PAIRS: Pair[] = [
     behind: "oklch(1 0 0)",
     min: 3,
   },
+  {
+    name: "blocked locate glyph on MapLibre's white",
+    fg: "var(--map-control-bad)",
+    bg: "oklch(1 0 0)",
+    behind: "oklch(1 0 0)",
+    min: 3,
+  },
   { name: "Tier A icon on a panel", fg: "var(--tier-a-text)", bg: "var(--surface)", min: 3 },
   { name: "Tier B icon on a panel", fg: "var(--tier-b-text)", bg: "var(--surface)", min: 3 },
   { name: "rail focus ring on the rail", fg: "var(--heading)", bg: "var(--rail-bg)", behind: "var(--rail-bg)", min: 3 },
@@ -182,6 +189,17 @@ const PAIRS: Pair[] = [
       ["hero links and focus ring over the photo", "var(--hero-heading)", 4.5],
     ] as const
   ).map(([name, fg, min]): Pair => ({ name, fg, bg: "var(--hero-scrim-top)", behind: "oklch(1 0 0)", min })),
+  ...(
+    [
+      ["text in the landing's terminal card", "var(--hero-term-ink)"],
+      ["quiet text in the landing's terminal card", "var(--hero-term-dim)"],
+    ] as const
+  ).map(([name, fg]): Pair => ({
+    name,
+    fg,
+    bg: "color-mix(in oklch, var(--shade) 64%, var(--hero-term-bg))",
+    min: 4.5,
+  })),
   { name: "text on the hero's primary button", fg: "var(--hero-accent-ink)", bg: "var(--hero-accent)", min: 4.5 },
   {
     name: "text on the hero's secondary button",
