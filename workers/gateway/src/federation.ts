@@ -499,8 +499,7 @@ async function registryFromDns(env: Env, name: string, authority: string): Promi
     });
     const dohBody = doh.ok ? await readCappedBody(doh, MAX_DOH_BYTES) : null;
     if (dohBody) {
-      const answers =
-        (JSON.parse(new TextDecoder().decode(dohBody)) as { Answer?: { data: string }[] }).Answer ?? [];
+      const answers = (JSON.parse(new TextDecoder().decode(dohBody)) as { Answer?: { data: string }[] }).Answer ?? [];
       for (const a of answers) {
         const { url } = parseRegistryTxt(a.data);
         if (!url) continue;

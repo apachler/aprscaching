@@ -123,8 +123,7 @@ describe("records only move forward", () => {
       paramsJson: JSON.stringify({ feed: "caches" }),
     });
   const answers = async (hub: Env) =>
-    (await hub.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages WHERE to_call = 'ACSFED'").first<{ n: number }>())
-      ?.n;
+    (await hub.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages WHERE to_call = 'ACSFED'").first<{ n: number }>())?.n;
 
   it("a relay query from a peer that is not trusted is not answered over the air", async () => {
     const { a, hub } = await pair({ FED_BBS: "1" });

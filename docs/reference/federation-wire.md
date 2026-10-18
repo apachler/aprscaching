@@ -422,7 +422,9 @@ Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed 
 submission is one key — a second key smuggled into the batch is rejected; the body is capped at 4 MiB).
 The submitted key must be one the hub already verified for that instance under any peer row (and the
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
-`unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
+`unvetted`. A peer the hub pulls but holds no key for yet (a `FED_PEERS` entry whose address names the instance,
+before its first sync, or a registry entry without a key) is reserved: a submission claiming it is refused `403`
+unless its key matches the fingerprint pinned on that entry (`<url>#<fingerprint>`). A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
 moves the spoke's pin only along them, by the same rules as a pulled peer. Every submission carries
 `x-fed-secret`, the shared `FED_SUBMIT_SECRET`: a hub without one answers `403`, a wrong value `401`. A spoke
 pushes every feed the pull serves, in the pull's order (tombstone, cache, find, key, account-move, bulletin),

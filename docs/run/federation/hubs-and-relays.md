@@ -47,6 +47,9 @@ Restart both. What happens then:
   hub; it does not say who the spoke is, so trusting it stays your call.
 - **The hub refuses** a submission for an instance it knows under another key, and one for a blocked instance.
   A submission body is capped at 4 MiB.
+- **A spoke the hub also pulls** (in the hub's `FED_PEERS`) can push before the hub's first pull of it only when
+  that entry pins its key fingerprint (`https://spoke.example#3f2a9c01bb7e4d10`). Until then the address is
+  reserved for whoever answers there, so another holder of the secret cannot claim it.
 - **A spoke that rotated its key** sends its rotation records with each push (`FED_ROTATIONS`), so the hub
   follows the rotation from the key it pinned.
 - **Pushes resume.** The spoke keeps how far it pushed each feed in its database. It advances only when the hub

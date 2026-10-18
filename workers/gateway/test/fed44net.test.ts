@@ -312,8 +312,7 @@ function stubNames(txts: Record<string, string[]>, wks: Record<string, unknown> 
       return { ok: true, status: 200, json: async () => doh } as Response;
     }
     const wk = wks[url.hostname];
-    if (url.pathname === "/.well-known/aprscaching" && wk)
-      return wk instanceof Response ? wk : Response.json(wk);
+    if (url.pathname === "/.well-known/aprscaching" && wk) return wk instanceof Response ? wk : Response.json(wk);
     throw new Error("unreachable");
   }) as typeof fetch;
 }
