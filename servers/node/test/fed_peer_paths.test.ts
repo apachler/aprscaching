@@ -348,6 +348,39 @@ describe("a peer's own addresses", () => {
     expect((await stored()).map((e) => e.address)).toEqual(["https://third.a.example", HOST, "https://new.a.example"]);
     expect((await peerRow(hub, `http://${HOST}`))?.endpoints_source).toBe("dns");
   });
+
+  it("a replayed, stale or future-dated beacon changes nothing", async () => {
+    const key = await newFedKey();
+    const a = instanceEnv("a.example", key);
+    const hub = instanceEnv("hub.example", await newFedKey());
+    await insertPeer(hub, A, { instance: "a.example", public_key: key.pub, trust: "unvetted", added_via: "admin" });
+    const announce = async (address: string, at: number) =>
+      (await signFedRecord(a, {
+        kind: "peer",
+        gid: "a.example:peer:announce",
+        origin: "a.example",
+        v: at,
+        at,
+        signer: "a.example",
+        body: { addresses: [{ transport: "https", address, priority: 20 }] },
+      }))!;
+    const addresses = async () =>
+      (JSON.parse(String((await peerRow(hub, A))?.endpoints)) as { address: string }[]).map((e) => e.address);
+    const t = nowS();
+    const older = await announce("https://old.a.example", t - 600);
+    expect((await applyFedFrames(hub, [await announce("https://new.a.example", t)])).applied).toBe(1);
+    // the older announce, recorded off the air and replayed after the peer moved
+    expect((await applyFedFrames(hub, [older])).applied).toBe(0);
+    expect(await addresses()).toContain("https://new.a.example");
+    expect(await addresses()).not.toContain("https://old.a.example");
+    // signed a day ahead, it would hold the set against every genuine beacon until then
+    expect((await applyFedFrames(hub, [await announce("https://ahead.a.example", t + 86400)])).applied).toBe(0);
+    // weeks old, with no newer beacon heard
+    const fresh = instanceEnv("hub2.example", await newFedKey());
+    await insertPeer(fresh, A, { instance: "a.example", public_key: key.pub, trust: "unvetted", added_via: "admin" });
+    expect((await applyFedFrames(fresh, [await announce("https://old.a.example", t - 30 * 86400)])).applied).toBe(0);
+    expect(await addresses()).not.toContain("https://ahead.a.example");
+  });
 });
 
 describe("trust decisions", () => {

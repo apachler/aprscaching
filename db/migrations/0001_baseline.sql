@@ -1215,6 +1215,9 @@ CREATE TABLE fed_peers (
   -- 'descriptor' (the `addresses` its own descriptor lists, read on each sync) or 'announce' (a verified
   -- presence beacon). A sync replaces only a set it learned itself, never one DNS set.
   endpoints_source    TEXT,
+  -- the signing time of the last presence beacon applied: a beacon applies only when it is newer, so one
+  -- recorded off the air and replayed after the peer moved never rolls its endpoints back
+  announce_at         INTEGER,
   -- the key a FED_PEERS fingerprint pin matched. The pin then holds for every key reached from it along the
   -- peer's verified rotation chain, so a rotation past its grace period keeps the peer.
   pin_matched_key     TEXT,

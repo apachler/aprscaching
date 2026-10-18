@@ -439,6 +439,9 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
   return applyFrames(env, frames, { keysFor: (origin) => originKeys(env, origin, registry, keyCache) });
 }
 
+/** How long a presence beacon stays applicable: it may arrive store-and-forward, but its endpoints age. */
+const ANNOUNCE_MAX_AGE_S = 3 * 86400;
+
 /**
  * A verified peer-announce (an HF presence beacon) refreshes a KNOWN peer's self-attested endpoint
  * set — addressing only, never a trust input, and strictly an UPDATE: hearing an announce never
@@ -446,14 +449,19 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
  * through the typed validator so a malformed address never rides an announce in. The announced
  * addresses merge into the stored set (mergeEndpoints): a beacon trimmed to fit one datagram
  * (`partial`) drops nothing, a whole list replaces what the peer said before, and what DNS attested
- * and the row's own address always stay.
+ * and the row's own address always stay. A beacon applies only while fresh and when it was signed after the last
+ * one applied to that row, so a recorded beacon replayed after the peer moved changes nothing.
  */
 async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Promise<boolean> {
   const addresses = parseEndpoints(rec.body.addresses);
   if (!addresses.length) return false;
+  const t = nowS();
+  if (rec.at > t + MAX_FUTURE_S || rec.at < t - ANNOUNCE_MAX_AGE_S) return false;
   const rows = (
-    await env.DB.prepare("SELECT url, endpoints FROM fed_peers WHERE instance = ? AND trust != 'blocked'")
-      .bind(origin)
+    await env.DB.prepare(
+      "SELECT url, endpoints FROM fed_peers WHERE instance = ? AND trust != 'blocked' AND COALESCE(announce_at, -1) < ?",
+    )
+      .bind(origin, rec.at)
       .all<{ url: string; endpoints: string | null }>()
   ).results;
   let changed = false;
@@ -463,9 +471,10 @@ async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Prom
       replace: rec.body.partial !== true,
     });
     const res = await env.DB.prepare(
-      "UPDATE fed_peers SET endpoints = ?, endpoints_source = COALESCE(endpoints_source, 'announce') WHERE url = ?",
+      `UPDATE fed_peers SET endpoints = ?, endpoints_source = COALESCE(endpoints_source, 'announce'), announce_at = ?
+       WHERE url = ? AND COALESCE(announce_at, -1) < ?`,
     )
-      .bind(JSON.stringify(merged), row.url)
+      .bind(JSON.stringify(merged), rec.at, row.url, rec.at)
       .run();
     changed ||= !!res.meta.changes;
   }

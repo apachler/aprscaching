@@ -288,7 +288,9 @@ A peer's stored endpoint set comes from one of four places (`fed_peers.endpoints
 - `descriptor`: the `addresses` of the peer's own descriptor, read on every sync once its identity and keys
   check out. It replaces what the descriptor said before.
 - `announce`: a verified presence beacon (a `peer` record). A beacon trimmed to fit one datagram carries
-  `partial: true` and only adds; a whole list replaces what the peer said before.
+  `partial: true` and only adds; a whole list replaces what the peer said before. A beacon applies only when it
+  was signed after the last one applied (`fed_peers.announce_at`), at most 3 days ago and no more than 5 minutes ahead of this clock,
+  so a recorded beacon replayed after the peer moved changes nothing.
 - `discovered`: a trusted peer's [peer list](#peer-exchange), on a row that has no address of its own yet (one
   only discovery brought, or an origin known through a hub). It only adds, and the peer's own descriptor
   replaces it once the peer is followed.
