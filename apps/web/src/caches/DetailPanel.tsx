@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   toggleFavorite,
   rateCache,
@@ -130,22 +130,34 @@ export function DetailPanel(props: {
     setLogCursor(c.logsCursor ?? null);
     setLogsMore(!!c.logsHasMore);
   }, [c.id, c.logsCursor, c.logsHasMore]);
+  // the cache on screen now: the sheet stays mounted when another cache opens in it, so a page of the
+  // previous cache's logbook that answers late is dropped rather than appended under the new one
+  const shownId = useRef(c.id);
+  useEffect(() => {
+    shownId.current = c.id;
+  }, [c.id]);
   async function loadMoreLogs() {
     if (!logCursor || logsLoading) return;
+    const id = c.id;
     setLogsLoading(true);
     try {
-      const r = await getCacheLogs(c.id, logCursor);
+      const r = await getCacheLogs(id, logCursor);
+      if (shownId.current !== id) return;
       setMoreLogs((m) => [...m, ...r.logs]);
       setLogCursor(r.nextCursor);
       setLogsMore(r.hasMore);
     } catch (e) {
-      toast((e as Error).message);
+      if (shownId.current === id) toast((e as Error).message);
     } finally {
       setLogsLoading(false);
     }
   }
   async function toggleFav() {
-    if (callsign.length < 3) return;
+    if (callsign.length < 3) {
+      toast("Sign in to give a favourite");
+      props.onSignIn();
+      return;
+    }
     const want = !fav.on;
     setFav((f) => ({ on: want, count: f.count + (want ? 1 : -1) })); // optimistic
     try {
@@ -192,7 +204,13 @@ export function DetailPanel(props: {
           )}
           <Button
             className={`heart${fav.on ? " on" : ""}`}
-            hint={fav.on ? "Take back your favourite" : "Give this cache a favourite; the number counts every player's"}
+            hint={
+              callsign.length < 3
+                ? "Sign in to give this cache a favourite; the number counts every player's"
+                : fav.on
+                  ? "Take back your favourite"
+                  : "Give this cache a favourite; the number counts every player's"
+            }
             onClick={toggleFav}
           >
             {fav.on ? "♥" : "♡"} {fav.count}
@@ -430,9 +448,11 @@ export function DetailPanel(props: {
         </div>
       )}
 
-      {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={callsign} />}
+      {/* keyed per cache: a log result, a note draft or a stage list belongs to the cache it was made for */}
+      {c.stageCount > 0 && <StagesSection key={`stages-${c.id}`} cacheId={c.id} callsign={callsign} />}
 
       <LogForm
+        key={`log-${c.id}`}
         cacheId={c.id}
         cacheCode={c.code}
         cacheLat={c.lat ?? null}

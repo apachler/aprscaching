@@ -95,14 +95,23 @@ export function Conversations(props: {
         return { items: r.messages, nextCursor: r.nextCursor, hasMore: r.hasMore };
       }),
     [base],
+    { keyOf: (m) => m.id },
   );
   const box = useLoad(() => getMailbox(), [base]);
   const reload = () => {
     messages.reload();
     box.reload();
   };
-  // delivery states move on their own (the box sends, the station acks): look again while the view is open
-  usePoll(reload, 30_000, { immediate: false });
+  // delivery states move on their own (the box sends, the station acks): look again while the view is open,
+  // merging the newest page in so the older pages the user loaded stay
+  usePoll(
+    () => {
+      messages.refresh();
+      box.reload();
+    },
+    30_000,
+    { immediate: false },
+  );
 
   const threads = useMemo(
     () => threadsOf(messages.items, box.data, me, service),

@@ -39,6 +39,32 @@ const WINDOWS = [
   { d: 30, label: "30d" },
 ];
 
+/** The track's line and its fixes, coloured by how each was heard. */
+function lineOf(p: StationTrackPoint[]): GeoJSON.FeatureCollection {
+  return p.length
+    ? {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: p.map((x) => [x.lon, x.lat]) },
+          },
+        ],
+      }
+    : EMPTY;
+}
+function pointsOf(p: StationTrackPoint[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: p.map((x) => ({
+      type: "Feature",
+      properties: { via: x.heardVia },
+      geometry: { type: "Point", coordinates: [x.lon, x.lat] },
+    })),
+  };
+}
+
 function reducedMotion(): boolean {
   try {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -47,7 +73,12 @@ function reducedMotion(): boolean {
   }
 }
 
-export function TrackReplay(props: { map: maplibregl.Map | null; callsign: string }) {
+export function TrackReplay(props: {
+  map: maplibregl.Map | null;
+  callsign: string;
+  /** Bumps after the map's style was swapped, which removes every style layer this view added. */
+  styleEpoch?: number;
+}) {
   const fmt = useFmt();
   const [days, setDays] = useState(1);
   const [day, setDay] = useState(""); // optional specific date (YYYY-MM-DD)
@@ -58,6 +89,11 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const acRef = useRef<AbortController | null>(null);
+  // the loaded track and the playhead, for redrawing after a style swap without re-running on every step
+  const shown = useRef({ pts, idx });
+  useEffect(() => {
+    shown.current = { pts, idx };
+  });
 
   const setData = (id: string, data: GeoJSON.FeatureCollection) =>
     (props.map?.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
@@ -69,9 +105,10 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
     if (!m?.isStyleLoaded()) return;
     paintFromTokens(m, TRACK_PAINT);
     if (m.getLayer("trk-pts-l")) m.setPaintProperty("trk-pts-l", "circle-color", viaColor());
-  }, [props.map, theme]);
+  }, [props.map, theme, props.styleEpoch]);
 
-  // one-time: add empty sources + cheap line/circle layers; remove them when this view goes away
+  // add the sources + cheap line/circle layers, again after each style swap (with the loaded track drawn back
+  // in); remove them when this view goes away
   useEffect(() => {
     const m = props.map;
     if (!m) return;
@@ -103,6 +140,12 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
             "circle-stroke-width": 3,
           },
         });
+      const { pts: p, idx: i } = shown.current;
+      if (p.length) {
+        setData(SRC.line, lineOf(p));
+        setData(SRC.pts, pointsOf(p));
+        drawHead(p, i);
+      }
     };
     const cancel = whenStyleReady(m, setup);
     return () => {
@@ -110,7 +153,8 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
       for (const l of ["trk-line-l", "trk-pts-l", "trk-head-l"]) if (m.getLayer(l)) m.removeLayer(l);
       for (const id of Object.values(SRC)) if (m.getSource(id)) m.removeSource(id);
     };
-  }, [props.map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setData/drawHead read the map from props
+  }, [props.map, props.styleEpoch]);
 
   // reset everything when the inspected station changes
   useEffect(() => {
@@ -157,29 +201,8 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
       const p = r.positions;
       setPts(p);
       setIdx(Math.max(0, p.length - 1));
-      setData(
-        SRC.line,
-        p.length
-          ? {
-              type: "FeatureCollection",
-              features: [
-                {
-                  type: "Feature",
-                  properties: {},
-                  geometry: { type: "LineString", coordinates: p.map((x) => [x.lon, x.lat]) },
-                },
-              ],
-            }
-          : EMPTY,
-      );
-      setData(SRC.pts, {
-        type: "FeatureCollection",
-        features: p.map((x) => ({
-          type: "Feature",
-          properties: { via: x.heardVia },
-          geometry: { type: "Point", coordinates: [x.lon, x.lat] },
-        })),
-      });
+      setData(SRC.line, lineOf(p));
+      setData(SRC.pts, pointsOf(p));
       drawHead(p, p.length - 1);
       if (p.length) {
         const lons = p.map((x) => x.lon),

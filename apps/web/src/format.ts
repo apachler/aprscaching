@@ -85,6 +85,20 @@ export function browserTimeZone(): string {
     return "UTC";
   }
 }
+/**
+ * The zone itself when Intl accepts it, otherwise "" (follow the browser). An unknown zone makes every
+ * `Intl.DateTimeFormat` throw, and a stored or account-synced one would then crash each start. Pure.
+ */
+export function validTimeZone(tz: string | undefined | null): string {
+  const t = (tz ?? "").trim();
+  if (!t) return "";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: t });
+    return t;
+  } catch {
+    return "";
+  }
+}
 /** The time zones of the imperial regions: the United States, Liberia and Myanmar. */
 const IMPERIAL_ZONE =
   /^(America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Adak|Boise|Detroit|Juneau|Sitka|Metlakatla|Nome|Yakutat|Menominee|Indiana\/.+|Kentucky\/.+|North_Dakota\/.+)|Pacific\/Honolulu|US\/.+|Africa\/Monrovia|Asia\/(Yangon|Rangoon))$/;
@@ -113,6 +127,7 @@ export function loadSettings(): LocaleSettings {
     if (raw) {
       const s = { ...defaultSettings(), ...(JSON.parse(raw) as Partial<LocaleSettings>) };
       s.theme = normalizeTheme(s.theme);
+      s.timeZone = validTimeZone(s.timeZone);
       return s;
     }
   } catch {
@@ -152,7 +167,7 @@ const KN_TO_KMH = 1.852,
 
 export function makeFormatters(settings: LocaleSettings): Formatters {
   const locale = settings.locale ? canonicalLocale(settings.locale) : browserLocale();
-  const timeZone = settings.timeZone || browserTimeZone();
+  const timeZone = validTimeZone(settings.timeZone) || browserTimeZone();
   const imperial = settings.units === "imperial";
   const nf = (max: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: max });
 

@@ -98,7 +98,7 @@ pnpm dev:gateway / dev:web / dev:ingest   # the parts on their own (the gateway 
 `pnpm dev` runs everything from source: Vite hot-reloads the web app; `tsx watch` restarts the gateway on any
 change under `workers/gateway/src`, `servers/node/src`, `packages/*/src` or `db/migrations`.
 `apps/web`'s `test` runs three guard scripts (no emoji, tour anchors resolve, vendored MapLibre) and a vitest suite over its
-pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse check under jsdom); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
+pure logic modules (`apps/web/test/*.test.ts`; under jsdom only the Mermaid parse check and a few component and hook tests); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
 the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
 

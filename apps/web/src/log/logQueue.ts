@@ -146,10 +146,21 @@ export async function flush<B extends QueuedBody>(
   return { sent, refused: refused.length, ...(waits.length && { nextAt: Math.min(...waits) }) };
 }
 
+/**
+ * Which log an entry is: its cache and when it was queued. A retry queues it again under a new time, so the
+ * key follows one entry while the list around it moves (another retry, a re-refusal, a second tab); a
+ * position in the list would point at whichever entry slid into it.
+ */
+export interface LogKey {
+  cacheId: number;
+  queuedAt: number;
+}
+const isKey = (q: QueuedLog, k: LogKey) => q.cacheId === k.cacheId && q.queuedAt === k.queuedAt;
+
 /** Put a refused log back in the queue, with a new comment when given; it goes with the next flush. */
-export async function retryAttention(store: QueueStore, index: number, now: number, comment?: string): Promise<void> {
+export async function retryAttention(store: QueueStore, key: LogKey, now: number, comment?: string): Promise<void> {
   const list = await loadAttention(store);
-  const item = list[index];
+  const item = list.find((a) => isKey(a, key));
   if (!item) return;
   const { reason: _r, status: _s, refusedAt: _t, ...rest } = item;
   const body = comment === undefined ? rest.body : { ...rest.body, comment: comment.trim() || undefined };
@@ -157,7 +168,7 @@ export async function retryAttention(store: QueueStore, index: number, now: numb
   await write(
     store,
     ATTENTION_KEY,
-    list.filter((_, i) => i !== index),
+    list.filter((a) => a !== item),
   );
 }
 
@@ -171,10 +182,10 @@ export async function removeQueued(store: QueueStore, cacheId: number, queuedAt:
 }
 
 /** Remove a refused log for good, at the user's request. */
-export async function discardAttention(store: QueueStore, index: number): Promise<void> {
+export async function discardAttention(store: QueueStore, key: LogKey): Promise<void> {
   await write(
     store,
     ATTENTION_KEY,
-    (await loadAttention(store)).filter((_, i) => i !== index),
+    (await loadAttention(store)).filter((a) => !isKey(a, key)),
   );
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRadioLink } from "../rf/RadioLinkHost.js";
 import { LINK_LABEL } from "../rf/radioLink.js";
 import {
@@ -15,7 +15,7 @@ import {
   type SourceInfo,
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
-import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
+import { useFmt, browserLocale, browserTimeZone, validTimeZone, type LocaleSettings } from "../format.js";
 import {
   Panel,
   Group,
@@ -338,14 +338,7 @@ export function SettingsPanel(props: {
                 onChange={(e) => props.onApply({ ...s, locale: e.target.value.trim() })}
               />
             </label>
-            <label>
-              Time zone
-              <input
-                value={s.timeZone}
-                placeholder={`browser (${browserTimeZone()})`}
-                onChange={(e) => props.onApply({ ...s, timeZone: e.target.value.trim() })}
-              />
-            </label>
+            <TimeZoneField value={s.timeZone} onApply={(timeZone) => props.onApply({ ...s, timeZone })} />
           </Advanced>
           <Row label="Preview">
             <span className="mono">
@@ -476,6 +469,39 @@ export function SettingsPanel(props: {
         </Group>
       )}
     </Panel>
+  );
+}
+
+/**
+ * The time zone override. The typed text is a draft and reaches the settings only once it is blank or a zone
+ * Intl accepts: the prefixes typed on the way to "Europe/Vienna" ("E", "Eu") are not zones, and a stored
+ * unknown zone would break every date on the page and on each device the account syncs to.
+ */
+function TimeZoneField(props: { value: string; onApply: (tz: string) => void }) {
+  const id = useId();
+  const [draft, setDraft] = useState<{ base: string; text: string } | null>(null);
+  const text = draft && draft.base === props.value ? draft.text : props.value;
+  const invalid = text.trim() !== "" && validTimeZone(text) === "";
+  return (
+    <label>
+      Time zone
+      <input
+        value={text}
+        placeholder={`browser (${browserTimeZone()})`}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? `${id}-msg` : undefined}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDraft({ base: props.value, text: next });
+          if (next.trim() === "" || validTimeZone(next)) props.onApply(validTimeZone(next));
+        }}
+      />
+      {invalid && (
+        <span id={`${id}-msg`} className="muted error">
+          Not a known time zone yet — use a name like Europe/Vienna, or leave it blank.
+        </span>
+      )}
+    </label>
   );
 }
 

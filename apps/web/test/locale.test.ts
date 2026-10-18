@@ -2,7 +2,15 @@
 // A locale tag the browser or a stored setting supplies always becomes one Intl accepts, so the
 // formatters build instead of throwing a RangeError.
 import { describe, expect, it } from "vitest";
-import { canonicalLocale, makeFormatters, unitsFor, type LocaleSettings } from "../src/format.js";
+import {
+  browserTimeZone,
+  canonicalLocale,
+  loadSettings,
+  makeFormatters,
+  unitsFor,
+  validTimeZone,
+  type LocaleSettings,
+} from "../src/format.js";
 
 describe("canonicalLocale", () => {
   const table: [string | undefined | null, string][] = [
@@ -56,5 +64,32 @@ describe("the starting unit system", () => {
   it("falls back to the locale's region without a place in the zone", () => {
     expect(unitsFor("en-US", "UTC")).toBe("imperial");
     expect(unitsFor("en-GB", "")).toBe("metric");
+  });
+});
+
+describe("a stored time zone override", () => {
+  const base: LocaleSettings = { locale: "en-US", timeZone: "", units: "metric", theme: "dark", crt: false };
+
+  it("keeps a real IANA zone", () => {
+    expect(validTimeZone("Europe/Vienna")).toBe("Europe/Vienna");
+    expect(makeFormatters({ ...base, timeZone: "Europe/Vienna" }).resolvedTimeZone).toBe("Europe/Vienna");
+  });
+
+  it.each(["E", "Eu", "Bogus/Zone", "   "])("drops %j and follows the browser instead of throwing", (timeZone) => {
+    expect(validTimeZone(timeZone)).toBe("");
+    const fmt = makeFormatters({ ...base, timeZone });
+    expect(fmt.resolvedTimeZone).toBe(browserTimeZone());
+    expect(fmt.date(0)).toMatch(/19(69|70)/);
+  });
+
+  it("is cleaned when the settings are read back, so a bad value cannot crash every start", () => {
+    const store = new Map<string, string>([["acs.locale", JSON.stringify({ timeZone: "Bogus/Zone" })]]);
+    const ls = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) };
+    (globalThis as { localStorage?: unknown }).localStorage = ls;
+    try {
+      expect(loadSettings().timeZone).toBe("");
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 });
