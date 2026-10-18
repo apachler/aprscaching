@@ -28,7 +28,7 @@ export function mainOrigin(env: Env): string | null {
 }
 
 /** The valid EXTRA_ORIGINS entries as origins, APP_URL's own left out. */
-export function extraOrigins(env: Env): string[] {
+function extraOrigins(env: Env): string[] {
   const main = mainOrigin(env);
   return parseOriginList(env.EXTRA_ORIGINS).origins.filter((o) => o !== main);
 }
@@ -40,7 +40,7 @@ export function instanceOrigins(env: Env): string[] {
 }
 
 /** Is `origin` a secure context a browser offers passkeys and the other https-only features on? */
-export function secureOrigin(origin: string): boolean {
+function secureOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     return u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname));

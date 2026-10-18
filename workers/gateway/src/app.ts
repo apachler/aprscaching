@@ -79,8 +79,6 @@ import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConf
 import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
 import { corsAllowlist, crossOriginWrite, handleWebauthnOrigins } from "./origins.js";
-
-export { corsAllowlist } from "./origins.js";
 import {
   handleActivityFeed,
   handleCachesFeed,
