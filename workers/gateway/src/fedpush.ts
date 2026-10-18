@@ -198,8 +198,10 @@ const isPulledUrl = (url: string): boolean => /^https?:\/\//i.test(url);
 async function unsyncedAt(env: Env, instance: string): Promise<PeerKeyRow[]> {
   const rows = (
     await env.DB.prepare(
-      "SELECT url, public_key, accept_keys, trust, pinned_fingerprint FROM fed_peers WHERE instance IS NULL AND trust != 'blocked'",
-    ).all<PeerKeyRow>()
+      "SELECT url, public_key, accept_keys, trust, pinned_fingerprint FROM fed_peers WHERE instance IS NULL AND trust != 'blocked' AND url LIKE ?",
+    )
+      .bind(`%${instance}%`)
+      .all<PeerKeyRow>()
   ).results;
   return rows.filter((r) => {
     if (!isPulledUrl(r.url)) return false;
