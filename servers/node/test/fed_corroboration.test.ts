@@ -369,6 +369,14 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     expect(s.result.method).toBe("aprs_rf_peer");
   });
 
+  it("is never sought for a call its holder has not control-verified", async () => {
+    const hub = await setup();
+    const s = await scoreFind(hub.env, cache, LOGGER, now(), undefined, false);
+    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).not.toBe("aprs_rf_peer");
+    expect(s.retry).toBeUndefined();
+  });
+
   it("is refused when the logger's own attested local fix puts them hundreds of km away", async () => {
     const hub = await setup();
     await hub.env.DB.prepare(
