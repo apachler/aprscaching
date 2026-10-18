@@ -80,6 +80,8 @@ interface FindRow {
 interface KeyRow {
   id: number;
   fed_seq: number;
+  /** The key's place in the keys feed: renumbered whenever its call's verification changes. */
+  fed_rev: number;
   callsign: string;
   public_key: string;
   created_at: number;
@@ -848,7 +850,7 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
   selectRows: async (env, since, limit) => {
     const rows = (
       await env.DB.prepare(
-        "SELECT id, fed_seq, callsign, public_key, created_at FROM callsign_keys WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
+        "SELECT id, fed_seq, fed_rev, callsign, public_key, created_at FROM callsign_keys WHERE fed_rev > ? ORDER BY fed_rev LIMIT ?",
       )
         .bind(since, limit)
         .all<Omit<KeyRow, "verified">>()
@@ -859,9 +861,10 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
     );
     return rows.map((r) => ({ ...r, verified: verified.has(baseCall(r.callsign)) }));
   },
-  // the key's place in the keys sequence: a restored database never hands it out again, so a new key gets past
-  // every peer's cursor under a global id of its own
-  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_seq, data: keyData(r) }),
+  // the global id is the key's first place in the keys sequence, which a restored database never hands out again,
+  // so a new key gets past every peer's cursor under a global id of its own; the cursor and version move on when
+  // the call's verification changes, so peers take the key again with its current `verified` flag
+  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_rev, data: keyData(r) }),
 };
 
 export const handleFederationCaches = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, CACHE_FEED);
