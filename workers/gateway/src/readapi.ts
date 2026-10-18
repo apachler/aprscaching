@@ -49,7 +49,7 @@ const windowSec = (env: Env) => Number(setting(env, "API_RATE_WINDOW_SEC")) || 6
 const anonMax = (env: Env) => Number(setting(env, "API_RATE_ANON")) || 60;
 const keyedMax = (env: Env) => Number(setting(env, "API_RATE_KEYED")) || 600;
 /** Largest bounding-box side, in degrees, a read may ask for. */
-const MAX_BBOX_DEG = 20;
+export const MAX_BBOX_DEG = 20;
 
 const ENDPOINTS = [
   { method: "GET", path: "/api/v1/caches?bbox=minLon,minLat,maxLon,maxLat", desc: "caches in a bbox (capped)" },

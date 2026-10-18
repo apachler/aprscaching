@@ -14,6 +14,7 @@ import { gatewayBase } from "./sitemap.js";
 import { requestOrigin } from "./origins.js";
 import { qrSvg } from "./qr.js";
 import { escapeHtml } from "./util/html.js";
+import { MAX_BBOX_DEG } from "./readapi.js";
 
 /** Serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
  *  escape `<`, `>`, `&`, or the line separators, so a raw value like `</script><script>…` breaks out
@@ -26,13 +27,26 @@ const jsonForScript = (o: unknown) =>
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
 
-/** A bbox query param is trusted only if it is exactly four finite numbers; anything else → null. */
+/** One side of a bbox no wider than the read API takes: a wider side shrinks around its centre. */
+function narrowSide(lo: number, hi: number): [number, number] {
+  if (Math.abs(hi - lo) <= MAX_BBOX_DEG) return [lo, hi];
+  const mid = (lo + hi) / 2;
+  return [mid - MAX_BBOX_DEG / 2, mid + MAX_BBOX_DEG / 2];
+}
+
+/**
+ * A bbox query param is trusted only if it is exactly four finite numbers; anything else → null. A side
+ * wider than the read API's MAX_BBOX_DEG is narrowed around its centre, since the API refuses such a box.
+ */
 function safeBbox(raw: string | null): string | null {
   if (!raw) return null;
   const p = raw.split(",");
   if (p.length !== 4) return null;
   const n = p.map(Number);
-  return n.every((x) => Number.isFinite(x)) ? n.join(",") : null;
+  if (!n.every((x) => Number.isFinite(x))) return null;
+  const [minLon, maxLon] = narrowSide(n[0]!, n[2]!);
+  const [minLat, maxLat] = narrowSide(n[1]!, n[3]!);
+  return [minLon, minLat, maxLon, maxLat].join(",");
 }
 
 /** The origin of an http(s) URL, or null for anything else (another scheme, not a URL at all). */
@@ -96,6 +110,7 @@ export function handleEmbed(req: Request, env: Env): Response {
 <style>html,body,#m{height:100%;margin:0}#m{font:14px system-ui}
 .acg-cta{position:absolute;left:8px;bottom:8px;z-index:2;background:#0b76b8;color:#fff;padding:6px 10px;border-radius:8px;text-decoration:none;font:600 13px system-ui}
 .acg-pin{width:16px;height:16px;border-radius:50% 50% 50% 0;background:#0b76b8;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.acg-note{position:absolute;left:8px;right:8px;top:8px;z-index:2;margin:0;background:#fff;color:#222;padding:6px 10px;border-radius:8px;font:13px system-ui}
 .maplibregl-popup-content{font:13px system-ui}</style></head>
 <body><div id="m"></div>
 <a class="acg-cta" id="cta" href="${escapeHtml(app)}" target="_blank" rel="noopener">Open in APRScaching →</a>
@@ -125,6 +140,10 @@ function pin(c){
     .setPopup(new maplibregl.Popup({offset:12}).setDOMContent(tip)).addTo(map);
   return [c.lon,c.lat];
 }
+function note(text){
+  const el=document.createElement('p'); el.className='acg-note'; el.setAttribute('role','status');
+  el.textContent=text; document.body.append(el);
+}
 map.on('load', async () => {
   try {
     if (CFG.cache) {
@@ -132,8 +151,10 @@ map.on('load', async () => {
       const c = d.cache || d; const ll = pin(c); if (ll) map.flyTo({center:ll, zoom:14});
       document.getElementById('cta').href = CFG.app+'/?cache='+encodeURIComponent(CFG.cache);
     } else {
-      const bbox = CFG.bbox || '-180,-90,180,90';
-      const d = await (await fetch(CFG.api+'/api/v1/caches?bbox='+bbox)).json();
+      // no bbox: the read API's own default area
+      const res = await fetch(CFG.api+'/api/v1/caches'+(CFG.bbox ? '?bbox='+CFG.bbox : ''));
+      const d = await res.json();
+      if (!res.ok) { note(d.error || 'the map could not load its caches'); return; }
       const b = new maplibregl.LngLatBounds();
       (d.caches||[]).forEach(c => { const ll = pin(c); if (ll) b.extend(ll); });
       if (!b.isEmpty()) map.fitBounds(b, {padding:40, maxZoom:14});

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { handleEmbed, handleQr } from "../src/embed.js";
+import { MAX_BBOX_DEG } from "../src/readapi.js";
 import type { Env } from "../src/env.js";
 import { DEFAULT_BASEMAP_STYLE, GRATICULE_PALETTE, MAPLIBRE_VENDOR_DIR } from "@aprscaching/shared";
 
@@ -42,6 +43,24 @@ describe("embed widget + QR", () => {
     const body = await res.text();
     expect(body.match(/<\/script>/gi)?.length).toBe(1); // the widget's own module script, none injected
     expect(body).not.toContain("<b>x");
+  });
+
+  it("an area map with no bbox asks the read API for its default area, never a box it refuses", async () => {
+    const body = await handleEmbed(new Request("https://api.example/embed"), env).text();
+    expect(body).toContain('"bbox":null');
+    expect(body).not.toContain("-180,-90,180,90");
+    // a refusal is shown on the map instead of an empty map
+    expect(body).toContain("res.ok");
+  });
+
+  it("narrows a bbox wider than the read API takes to one around its centre", async () => {
+    const body = await handleEmbed(new Request("https://api.example/embed?bbox=0,40,30,60"), env).text();
+    const bbox = /"bbox":"([^"]+)"/.exec(body)![1]!.split(",").map(Number);
+    expect(bbox[2]! - bbox[0]!).toBeLessThanOrEqual(MAX_BBOX_DEG);
+    expect(bbox[3]! - bbox[1]!).toBeLessThanOrEqual(MAX_BBOX_DEG);
+    expect(bbox).toEqual([5, 40, 25, 60]);
+    const exact = await handleEmbed(new Request("https://api.example/embed?bbox=5,45,25,55"), env).text();
+    expect(exact).toContain('"bbox":"5,45,25,55"');
   });
 
   it("accepts a valid four-number bbox", async () => {
