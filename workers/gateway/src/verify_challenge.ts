@@ -6,7 +6,7 @@
  * stands in for a session. An account's challenge is good only while the account still holds the call, a
  * claim's only while the claim is open. Starting again replaces the starter's outstanding challenge;
  * completing it spends it; failed completions count toward a cap that locks it. Starts and completions are
- * rate limited per starter and per call.
+ * rate limited per starter; the holder's starts also per call, a claim's per claim and per client address.
  */
 import { bytesToB64url } from "./util/b64.js";
 import { nowS } from "./util/time.js";
@@ -14,7 +14,7 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { baseCall } from "@aprscaching/aprs";
 import { sessionIdentity, accountHoldsCall } from "./auth.js";
-import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { claimByToken, claimOpen, claimPrincipal, type Claim } from "./claims.js";
 
 type ChallengeMethod = "ampr_dns" | "lotw";
@@ -22,9 +22,10 @@ type ChallengeMethod = "ampr_dns" | "lotw";
 /** Failed completions before a challenge locks. */
 const CHALLENGE_MAX_ATTEMPTS = 5;
 const WINDOW_MS = 3_600_000;
-/** Per hour: starts per starter and per call, and completion attempts per starter. */
+/** Per hour: starts per starter, per call (or per claim) and per claimant address, and completion attempts per starter. */
 const STARTS_PER_ACCOUNT = 10;
 const STARTS_PER_CALL = 5;
+const STARTS_PER_IP = 20;
 const COMPLETES_PER_ACCOUNT = 10;
 
 const CALL_RE = /^[A-Z0-9]{3,9}$/;
@@ -41,6 +42,8 @@ export interface Caller {
   body: Record<string, unknown>;
   /** The open claim the caller proves control for, or null for a holder verifying their own call. */
   claim: Claim | null;
+  /** The client address the request came from. */
+  ip: string;
 }
 
 /**
@@ -55,13 +58,13 @@ export async function holderOf(req: Request, env: Env): Promise<Caller | Respons
     const claim = await claimByToken(env, body.claim);
     if (!claim || !claimOpen(claim) || claim.callsign !== cs)
       return json({ error: "no open claim on this callsign — start the claim again" }, { status: 409 });
-    return { accountId: claimPrincipal(claim.id), cs, body, claim };
+    return { accountId: claimPrincipal(claim.id), cs, body, claim, ip: clientIp(req, env) };
   }
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   if (!(await accountHoldsCall(env, me.accountId, cs)))
     return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
-  return { accountId: me.accountId, cs, body, claim: null };
+  return { accountId: me.accountId, cs, body, claim: null, ip: clientIp(req, env) };
 }
 
 /** Issue (or replace) the caller's challenge for `method`. Returns null when the start rate is exceeded. */
@@ -72,13 +75,15 @@ export async function issueChallenge(
   challenge: string,
 ): Promise<{ createdAt: number } | null> {
   const t = Date.now();
-  // a claimant's starts and the holder's count apart, so neither can use up the other's
-  const callKey = `${method}-start:${c.claim ? "claim" : "call"}:${c.cs}`;
-  if (
-    (await rateLimitedDurable(env, `${method}-start:acct:${c.accountId}`, t, STARTS_PER_ACCOUNT, WINDOW_MS)) ||
-    (await rateLimitedDurable(env, callKey, t, STARTS_PER_CALL, WINDOW_MS))
-  )
-    return null;
+  // A claim's starts are bounded per claim and per client address, never per call: claimants on one call are
+  // strangers to each other, so a budget they shared would let any of them use it up for the licensee. The
+  // holder's own starts count apart from every claim's.
+  const limited = c.claim
+    ? (await rateLimitedDurable(env, `${method}-start:claim:${c.claim.id}`, t, STARTS_PER_CALL, WINDOW_MS)) ||
+      (await rateLimitedDurable(env, `${method}-start:claim-ip:${c.ip}`, t, STARTS_PER_IP, WINDOW_MS))
+    : (await rateLimitedDurable(env, `${method}-start:acct:${c.accountId}`, t, STARTS_PER_ACCOUNT, WINDOW_MS)) ||
+      (await rateLimitedDurable(env, `${method}-start:call:${c.cs}`, t, STARTS_PER_CALL, WINDOW_MS));
+  if (limited) return null;
   const createdAt = nowS();
   await env.DB.prepare(
     `INSERT INTO callsign_challenges (callsign, method, account_id, challenge, attempts, created_at)

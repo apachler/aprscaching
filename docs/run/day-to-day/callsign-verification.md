@@ -115,8 +115,9 @@ call nobody holds is registered only through your sign-in link or by a claim, ne
 Nor does a claim take a call while its holder's account is suspended: the claimant is told to ask you, and
 **Release** below still frees it.
 
-Each claim gets its own on-air codes: five an hour per claim, and twenty an hour per client address across
-its claims. Two claimants on one call never use up each other's codes.
+Each claim gets its own codes and challenges, on air, through ampr.org and through LoTW: five starts an hour
+per claim for each method, and twenty an hour per client address across its claims. Two claimants on one call
+never use up each other's starts.
 
 The account that loses a call keeps its other calls. What it wrote in the app under the call (caches, logs,
 ratings, favourites, watches, badges, saved views) stays on that account and shows under its remaining call,
