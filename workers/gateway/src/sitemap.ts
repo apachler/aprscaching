@@ -14,7 +14,7 @@
 import type { Env } from "./env.js";
 import { json, xml } from "./http.js";
 import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching/shared";
-import { escapeHtml } from "./util/html.js";
+import { xmlEscape } from "./util/html.js";
 import { trimEndChars } from "./util/text.js";
 import { requestOrigin } from "./origins.js";
 
@@ -35,15 +35,8 @@ export function gatewayBase(req: Request, env: Env): string {
   return requestOrigin(req, env);
 }
 
-/** The code points XML 1.0 forbids anywhere in a document, even as character references. */
-const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
-
-/**
- * XML text/attribute escape — the shared markup escape, after dropping the code points XML cannot carry.
- * Bulletin bodies arrive from packet radio with Ctrl-Z, BEL or ESC in them; one such character would make
- * the whole document unreadable to every XML parser.
- */
-export const xmlEscape = (s: string): string => escapeHtml(s.replace(XML_ILLEGAL, ""));
+/** XML text/attribute escape, for the feeds, the sitemap and the exports. */
+export { xmlEscape };
 
 /** A deep-link URL for a surface: the map is the root, panels carry `?view=<key>`. */
 export function surfaceUrl(env: Env, view: string | null): string {

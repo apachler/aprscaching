@@ -6,7 +6,7 @@
  * mapping is conformance-tested on both runtimes.
  */
 import { nowS } from "./util/time.js";
-import { escapeHtml } from "./util/html.js";
+import { xmlEscape } from "./util/html.js";
 import type { Env } from "./env.js";
 import { lastSeenLagS } from "./downsample.js";
 
@@ -72,12 +72,12 @@ const staleSecFor = (env: Env) => COT_STALE_SEC + lastSeenLagS(env);
 /** Build a single CoT <event> for a station. `now` = current unix seconds. */
 export function stationToCotEvent(s: CotStation, now: number, staleSec = COT_STALE_SEC): string {
   const hae = s.altitudeM != null ? s.altitudeM.toFixed(1) : UNK.toFixed(1);
-  const detail: string[] = [`<contact callsign="${escapeHtml(s.callsign)}"/>`];
+  const detail: string[] = [`<contact callsign="${xmlEscape(s.callsign)}"/>`];
   if (s.course != null || s.speedKn != null)
     detail.push(`<track course="${s.course ?? 0}" speed="${((s.speedKn ?? 0) * KN_TO_MS).toFixed(2)}"/>`);
-  detail.push(`<remarks>${escapeHtml(`APRS ${s.symbol ?? ""}${s.comment ? ` ${s.comment}` : ""}`.trim())}</remarks>`);
+  detail.push(`<remarks>${xmlEscape(`APRS ${s.symbol ?? ""}${s.comment ? ` ${s.comment}` : ""}`.trim())}</remarks>`);
   return (
-    `<event version="2.0" uid="APRS.${escapeHtml(s.callsign)}" type="${cotType(s.symbol)}"` +
+    `<event version="2.0" uid="APRS.${xmlEscape(s.callsign)}" type="${cotType(s.symbol)}"` +
     ` time="${iso(now)}" start="${iso(s.lastSeen)}" stale="${iso(s.lastSeen + staleSec)}" how="m-g">` +
     `<point lat="${s.lat}" lon="${s.lon}" hae="${hae}" ce="${UNK}" le="${UNK}"/>` +
     `<detail>${detail.join("")}</detail></event>`
