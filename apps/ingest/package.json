@@ -15,10 +15,10 @@
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/hub": "workspace:*",
-    "@aprscaching/direwolf": "workspace:*"
+    "@aprscaching/direwolf": "workspace:*",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "@types/node": "^26.6.5",
     "vitest": "^5.0.3"
