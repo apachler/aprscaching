@@ -245,18 +245,50 @@ describe("the later attempt", () => {
 
   it("still needs the logger's own track to allow the presence", async () => {
     const { hub, p1, cache } = await setup(1);
+    (hub as unknown as Record<string, string>).FIRST_PARTY_SITES = "DB0XX"; // the hub's own attested site
     await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
     stubFetch({ [P1]: down, [P2]: down });
     const { logId, at } = await logFind(hub, cache);
-    // a local fix, heard after the find was logged, puts the logger hundreds of km away
+    // a local fix, heard by the hub's attested site after the find was logged, puts the logger hundreds of km away
     await hub.DB.prepare(
-      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES (?, ?, 52.52, 13.40, 'aprs_is', 'DB0XX', 'aprs', 'aprs-is')",
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc')",
     )
       .bind(LOGGER, at - 1100)
       .run();
     stubFetch({ [P1]: serve(p1.env) });
     expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(0);
     expect((await logRow(hub, logId))?.tier).not.toBe("A");
+  });
+
+  it("never lifts a find while a beacon the hub asked a box to send under the call falls in the window", async () => {
+    const { hub, p1, cache } = await setup(1);
+    await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+    stubFetch({ [P1]: down, [P2]: down });
+    const { logId, at } = await logFind(hub, cache);
+    expect(await retryRow(hub, logId)).not.toBeNull();
+    await hub.DB.prepare(
+      "INSERT INTO box_commands (box_id, callsign, kind, status, created_at, sent_at, acked_at) VALUES ('pi-home', ?, 'beacon', 'done', ?, ?, ?)",
+    )
+      .bind(LOGGER, at - 900, at - 900, at - 895)
+      .run();
+    stubFetch({ [P1]: serve(p1.env) });
+    expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(0);
+    expect((await logRow(hub, logId))?.tier).not.toBe("A");
+  });
+
+  it("is not held back by an APRS-IS fix far away: anyone can inject one under the call", async () => {
+    const { hub, p1, cache } = await setup(1);
+    await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+    stubFetch({ [P1]: down, [P2]: down });
+    const { logId, at } = await logFind(hub, cache);
+    await hub.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES (?, ?, 52.52, 13.40, 'aprs_is', 'DB0XX', 'aprs', 'aprs-is')",
+    )
+      .bind(LOGGER, at - 1100)
+      .run();
+    stubFetch({ [P1]: serve(p1.env) });
+    expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(1);
+    expect((await logRow(hub, logId))?.tier).toBe("A");
   });
 
   it("drops a retry whose log went", async () => {

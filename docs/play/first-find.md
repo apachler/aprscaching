@@ -32,8 +32,8 @@ The map opens. Your callsign shows in the top bar, marked **unverified**.
 2. Tap **verify** next to your callsign and follow the steps. The usual way is a short APRS message from your
    radio. [Verify your callsign](join.md#verify-your-callsign) explains every method.
 
-You can log finds before this step. A verified callsign puts your finds on the leaderboard and lets you log
-from your radio.
+You can log finds before this step. A verified callsign puts your finds on the leaderboard, lets you log
+from your radio, and is needed for a **Radio-verified** find.
 
 ### Choose your cache
 

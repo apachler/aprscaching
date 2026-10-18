@@ -187,7 +187,8 @@ calls and stations travel with the question as exclusions.
   question's hash. No middlebox, a plain-http 44Net peer included, can forge an answer or replay it against
   another question. Asking requires a signing key.
 - **The logger's own track.** A local fix that puts the logger somewhere the answer's location cannot be
-  reached from at a plausible speed keeps the find below Tier A. A living cache is asked about where its
+  reached from at a plausible speed keeps the find below Tier A. Only a fix heard at an attested site, or one
+  the logger's own browser bridge signed, counts; an APRS-IS fix never does. A living cache is asked about where its
   station last was.
 - **No location oracle.** The answerer snaps and bounds every question (radius 150–1000 m, a bucketed window
   of at most an hour, no older than seven days) and coarsens every answer. The exact IGate is revealed only if

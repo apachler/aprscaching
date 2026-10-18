@@ -155,7 +155,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // PUBLIC gateway accepts browser RF without handing out the shared secret. Signed batches are NOT trusted
   // to attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
   const trusted = ingestOrBoxOk(req, env);
-  let signer: { callsign: string } | null = null;
+  let signer: { callsign: string; key: string } | null = null;
   if (!trusted) {
     signer = await verifySignedIngest(req, env, body.data.packets);
     if (!signer) return new Response("unauthorized", { status: 401 });
@@ -317,6 +317,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           igateCall: p.igateCall ?? null,
           path: p.path,
           signed: signer != null,
+          ...(signer ? { signer } : {}),
           // routing hints come only from the trusted ingest box, never from a signed browser batch
           ...(trusted && p.box ? { box: p.box } : {}),
           ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),

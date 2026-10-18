@@ -31,6 +31,8 @@ flowchart TB
 
 All of these must hold:
 
+- Your callsign is verified ([Verify your callsign](join.md#verify-your-callsign)). Until it is, anyone could
+  have signed up with it, so its beacons verify no find of yours.
 - Your radio beacons its position, and the beacon is heard **on the air** by a receiving station your
   instance trusts. The instance's sysop vouches for each such station. The beacon can be APRS or MeshCom; a
   MeshCom position counts only when a trusted node hears it directly, not one relayed over the mesh or passed
@@ -41,8 +43,8 @@ All of these must hold:
   where the box is, not where you are, and never counts.
 - The position is within **150 m** of the cache.
 - The beacon was heard in the **30 minutes** before you logged.
-- Your track makes sense. A beacon at the cache while your other beacons are far away, too far to travel
-  between them, does not count.
+- Your track makes sense. A beacon at the cache while your other beacons heard on the air are far away, too far
+  to travel between them, does not count. A position that only came over the internet never counts against you.
 
 Another instance in the network can also confirm that it heard you on the air. That can happen after you log;
 the logbook then shows *confirmed later*.

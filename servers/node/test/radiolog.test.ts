@@ -175,6 +175,46 @@ describe("a command that arrived only over the internet", () => {
   });
 });
 
+describe("the time a signed browser batch gives a command", () => {
+  const DAY = 24 * 3600;
+  /** The player's device key, registered `age` seconds ago; the cache was hidden `cacheAge` seconds ago. */
+  function setup(age: number, cacheAge: number) {
+    sqlite
+      .prepare("INSERT INTO callsign_keys (callsign, public_key, created_at) VALUES ('OE8APR', 'dev-key', ?)")
+      .run(t - age);
+    sqlite.prepare("UPDATE caches SET created_at = ? WHERE code = 'AC-0001'").run(t - cacheAge);
+  }
+  const signed = (ts: number) =>
+    overIs({ signed: true, igateCall: null, ts, signer: { callsign: "OE8APR", key: "dev-key" } });
+
+  it("is its own time within the bounds, scored against the track before it", async () => {
+    setup(30 * DAY, 30 * DAY);
+    beaconAtCache("OE8APR-7", 3 * DAY + 60);
+    await handleRadioMessage(env, signed(t - 3 * DAY));
+    expect(logs()[0]).toMatchObject({ ts: t - 3 * DAY, tier: "A", field_time_rejected: null });
+  });
+
+  it("never comes before the cache was hidden", async () => {
+    setup(30 * DAY, 0);
+    beaconAtCache("OE8APR-7", 3 * DAY + 60); // heard at the spot days before the cache was there
+    await handleRadioMessage(env, signed(t - 3 * DAY));
+    const [log] = logs();
+    expect(Number(log!.ts)).toBeGreaterThanOrEqual(t);
+    expect(log).toMatchObject({ field_time_rejected: "before_cache" });
+    expect(log!.tier).not.toBe("A");
+  });
+
+  it("never comes before the key that signed it was registered", async () => {
+    setup(DAY, 30 * DAY);
+    beaconAtCache("OE8APR-7", 3 * DAY + 60);
+    await handleRadioMessage(env, signed(t - 3 * DAY));
+    const [log] = logs();
+    expect(Number(log!.ts)).toBeGreaterThanOrEqual(t);
+    expect(log).toMatchObject({ field_time_rejected: "before_key" });
+    expect(log!.tier).not.toBe("A");
+  });
+});
+
 describe("attribution and rejection", () => {
   it("a callsign that is not verified here is acked and rejected", async () => {
     await handleRadioMessage(env, onAir({ src: "OE5NEW" }));
