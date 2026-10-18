@@ -25,6 +25,7 @@ import {
   plainData,
   sandboxTool,
   workerPayload,
+  workerSource,
 } from "../src/tools/sandbox.js";
 
 describe("the tool frame's CSP", () => {
@@ -54,6 +55,69 @@ describe("connectSources", () => {
         app,
       ),
     ).toEqual(["https://a.example"]);
+  });
+  it("drops a wildcard host, which the CSP would read as every host, the app's own included", () => {
+    expect(connectSources(["network"], ["https://*", "wss://*.example.net", "https://a.example"], app)).toEqual([
+      "https://a.example",
+    ]);
+  });
+});
+
+describe("the worker's register()", () => {
+  /** Run the worker bootstrap against a stand-in `self` and load `script` with `permissions`. */
+  function loadInWorker(script: string, permissions: string[]): Record<string, unknown> {
+    const out: Record<string, unknown>[] = [];
+    const self: { postMessage: (m: unknown) => void; onmessage?: (ev: { data: unknown }) => void } = {
+      postMessage: (m) => out.push(m as Record<string, unknown>),
+    };
+    new Function("self", workerSource())(self);
+    self.onmessage!({ data: { type: "load", script, network: false, ipc: false, permissions, api: {}, features: [] } });
+    return out.at(-1)!;
+  }
+  const all = `register({
+    commands: { hi: () => "hi" },
+    colourRules: [{ src: "OE8APR", colorVar: "--warn" }],
+    panel: { title: "P", rows: [] },
+    decoders: [{ id: "d", label: "D", decode: (s) => s }],
+  });`;
+
+  it("refuses each contribution whose permission the tool does not hold", () => {
+    const granted = ["command", "monitor", "panel", "decoder"];
+    expect(loadInWorker(all, granted)).toMatchObject({ type: "loaded", commands: ["hi"] });
+    for (const missing of granted)
+      expect(
+        loadInWorker(
+          all,
+          granted.filter((c) => c !== missing),
+        ),
+      ).toEqual({ type: "error", error: `permission '${missing}' not granted` });
+  });
+  it("accepts an empty contribution without its permission", () => {
+    expect(loadInWorker("register({ commands: {}, colourRules: [], panel: null, decoders: [] });", [])).toMatchObject({
+      type: "loaded",
+    });
+  });
+});
+
+describe("SandboxBridge.loaded", () => {
+  it("keeps only the contributions the tool holds the permission for", () => {
+    const loaded = {
+      type: "loaded" as const,
+      commands: ["hi"],
+      remoteOff: [],
+      colourRules: [{ src: "OE8APR", colorVar: "--warn" }],
+      panel: { title: "P" },
+      decoders: [{ id: "d", label: "D", kind: "d" }],
+    };
+    const none = new SandboxBridge(() => {}, []);
+    none.loaded(loaded);
+    expect([none.commands, none.colourRules, none.panel, none.decoders]).toEqual([[], [], null, []]);
+    const all = new SandboxBridge(() => {}, ["command", "monitor", "panel", "decoder"]);
+    all.loaded(loaded);
+    expect(all.commands).toEqual(["hi"]);
+    expect(all.colourRules).toHaveLength(1);
+    expect(all.panel).toEqual({ title: "P" });
+    expect(all.decoders).toHaveLength(1);
   });
 });
 
