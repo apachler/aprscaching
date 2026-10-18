@@ -18,7 +18,8 @@
  *
  * The box asks every three minutes. An answer that a call is not verified, or not this box's operator's,
  * closes the gate for that call at once. While the gateway cannot be reached (a network error, a timeout, a
- * 5xx, a 404 from a gateway without the endpoint, an answer without a valid MAC), the last confirmed answer
+ * 5xx, a 404 from a gateway without the endpoint, another 4xx, logged with the gateway's error, an answer
+ * without a valid MAC), the last confirmed answer
  * keeps counting for the grace the sysop sets (`TX_GATE_GRACE`, 6 minutes to 24 hours, default 6 minutes);
  * past it the gate closes until the gateway answers again. Meanwhile the box asks again after 30 s, backing
  * off to the interval, and logs each distinct failure once. A gateway that refuses the box's credential
@@ -36,6 +37,8 @@ export type TxGateLookup = (calls: string[]) => Promise<Map<string, GateAnswer>>
 /** `TX_GATE_GRACE`: the default, and the bounds it is clamped to. */
 const GRACE_MIN = 6;
 const GRACE_MAX = 24 * 60;
+/** Calls per lookup: the most the gateway judges in one request. */
+const LOOKUP_CALLS = 16;
 
 /**
  * `TX_GATE_GRACE` in ms: minutes as a plain number (`30`), or with a unit (`30m`, `2h`). Blank is the default,
@@ -72,6 +75,8 @@ export class CallVerifier {
   private loggedError: string | null = null;
   /** The gateway has no /ingest/txgate: said once, in its own words. */
   private unsupported = false;
+  /** The gateway answered, but rejected the request itself: a mistake in what the box asks, not an outage. */
+  private rejected = false;
   private interval: number;
   private grace: number;
   private retry: number;
@@ -94,18 +99,23 @@ export class CallVerifier {
     const list = [...new Set(calls.map((c) => c.trim().toUpperCase()).filter(Boolean))];
     if (!list.length) return true;
     try {
-      const got = await this.lookup(list);
+      const got = new Map<string, GateAnswer>();
+      // the gateway judges at most LOOKUP_CALLS calls per request
+      for (let i = 0; i < list.length; i += LOOKUP_CALLS)
+        for (const [c, a] of await this.lookup(list.slice(i, i + LOOKUP_CALLS))) got.set(c, a);
       const at = this.now();
       for (const c of list) this.answers.set(c, { answer: got.get(c) ?? { ok: false, reason: "no answer" }, at });
       this.failures = 0;
       this.lastError = null;
       this.loggedError = null;
       this.unsupported = false;
+      this.rejected = false;
       return true;
     } catch (e) {
       this.failures++;
       this.lastError = (e as Error).message;
       this.unsupported = e instanceof TxGateUnsupported;
+      this.rejected = e instanceof TxGateRejected;
       // a refused credential is an answer, not an outage: it closes the gate at once
       if (e instanceof TxGateRefused) {
         const at = this.now();
@@ -130,7 +140,9 @@ export class CallVerifier {
         this.o.log?.(
           this.unsupported
             ? `[txgate] ${this.lastError}; transmit stays off until the gateway is updated`
-            : `[txgate] the gateway did not answer (${this.lastError}); asking again in ${Math.round(wait / 1000)} s`,
+            : this.rejected
+              ? `[txgate] ${this.lastError}; asking again in ${Math.round(wait / 1000)} s`
+              : `[txgate] the gateway did not answer (${this.lastError}); asking again in ${Math.round(wait / 1000)} s`,
         );
       }
       this.timer = setTimeout(() => void tick(), wait);
@@ -214,6 +226,8 @@ export function gateCheck(
 export class TxGateUnsupported extends Error {}
 /** The gateway refused the box's credential (401, 403): the gate closes at once. */
 export class TxGateRefused extends Error {}
+/** The gateway rejected the request itself (another 4xx): counted as unreachable, logged in the gateway's words. */
+export class TxGateRejected extends Error {}
 
 const isLoopback = (host: string) => /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/i.test(host);
 
@@ -241,6 +255,17 @@ export function gatewayTxGateLookup(o: {
     if (r.status === 404) throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
     if (r.status === 401 || r.status === 403)
       throw new TxGateRefused(`the gateway refused this box's credential (HTTP ${r.status})`);
+    if (r.status >= 400 && r.status < 500) {
+      const text = await r.text().catch(() => "");
+      let error = text.trim().slice(0, 200);
+      try {
+        const e = (JSON.parse(text) as { error?: unknown }).error;
+        if (typeof e === "string") error = e.slice(0, 200);
+      } catch {
+        // a body that is not JSON is quoted as it is
+      }
+      throw new TxGateRejected(`the gateway rejected the request (HTTP ${r.status}${error ? `: ${error}` : ""})`);
+    }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const body = await r.text();
     if (!o.boxKey) {

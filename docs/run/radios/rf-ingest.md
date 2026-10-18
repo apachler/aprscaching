@@ -205,7 +205,9 @@ sends under: control-verified, not suspended, and held by whoever runs the box
 ([The transmit gate](soundcard.md#the-transmit-gate)). The gate judges each frame by the box's calls it carries,
 as source or as a via hop, so a call the gateway refuses holds back only its own frames: an `IGATE_CALL` you keep
 receive-only does not silence the digipeater. Receiving goes on regardless. The log says why:
-`[kiss] transmit refused: verify OE8APR-10 to transmit — control-verification required`.
+`[kiss] transmit refused: verify OE8APR-10 to transmit — control-verification required`. A call in the box's
+settings that is not an AX.25 callsign (six letters and digits at most, SSID 0 to 15), such as `OE8APR-GW`, is
+refused on its own and holds back only its own frames.
 
 The box asks the gateway every three minutes. An answer that a call is not verified, is suspended, or is not
 this box's operator's, closes the gate for that call at once. While the gateway cannot be reached (no network, a timeout, a server

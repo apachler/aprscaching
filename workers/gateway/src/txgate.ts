@@ -64,8 +64,7 @@ export async function handleTxGate(req: Request, env: Env): Promise<Response> {
         .filter(Boolean),
     ),
   ];
-  if (!calls.length || calls.length > MAX_CALLS || !calls.every((c) => CALL_RE.test(c)))
-    return json({ error: `calls: 1 to ${MAX_CALLS} callsigns such as OE8APR-10` }, { status: 400 });
+  if (!calls.length) return json({ error: "calls: one or more callsigns such as OE8APR-10" }, { status: 400 });
   const nonce = url.searchParams.get("nonce") ?? "";
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(nonce))
     return json({ error: "nonce: 16 to 64 letters and digits" }, { status: 400 });
@@ -83,10 +82,19 @@ export async function handleTxGate(req: Request, env: Env): Promise<Response> {
       if (holder) operators.add(holder);
     }
   const ownerSuspended = owner !== null && !!(await suspensionOf(env, owner));
-  const verified = await verificationsOf(env, calls);
-
+  // A malformed call, or one past the limit, is refused on its own: the lookup still answers the valid calls,
+  // so one bad entry in a box's settings closes transmit only under that entry.
   const out: Record<string, TxGateAnswer> = {};
+  const judged: string[] = [];
   for (const call of calls) {
+    if (!CALL_RE.test(call)) out[call] = { ok: false, reason: "not an AX.25 callsign (CALL-SSID, SSID 0-15)" };
+    else if (judged.length >= MAX_CALLS)
+      out[call] = { ok: false, reason: `too many calls in one request (at most ${MAX_CALLS})` };
+    else judged.push(call);
+  }
+  const verified = await verificationsOf(env, judged);
+
+  for (const call of judged) {
     const base = baseCall(call);
     if (ownerSuspended || (await callSuspended(env, call))) {
       out[call] = { ok: false, reason: "suspended" };
