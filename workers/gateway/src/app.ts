@@ -77,6 +77,7 @@ import { handleWellKnownSource, handleSourceRedirect, sourceInfo } from "./sourc
 import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "./legal.js";
+import { withPageHeaders } from "./pageheaders.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
 import { corsAllowlist, crossOriginWrite, handleWebauthnOrigins } from "./origins.js";
 import {
@@ -278,7 +279,7 @@ async function handleRequest(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
   if (res.ok && isFederatedWrite(req.method, path)) ctx.waitUntil(notifyPeers(env).catch(() => {}));
   // a spoke pushes to its hub a few seconds after a local write; a push with nothing new sends nothing
   if (res.ok && isLocalWrite(req.method, path)) pushSoon(env);
-  return withCors(res, req, env);
+  return withCors(withPageHeaders(res), req, env);
 }
 
 /**

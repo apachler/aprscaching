@@ -18,6 +18,7 @@ import { WebSocketServer } from "ws";
 import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { clientIp, stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import type { Env } from "@aprscaching/gateway/env";
+import { PAGE_HEADERS } from "@aprscaching/gateway/pageheaders";
 import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { spaFile } from "./spa.js";
@@ -287,7 +288,7 @@ async function sendSpa(
   nres.statusCode = 200;
   nres.setHeader("content-type", f.contentType);
   nres.setHeader("cache-control", f.cacheControl);
-  nres.setHeader("x-content-type-options", "nosniff");
+  for (const [k, v] of Object.entries(PAGE_HEADERS)) nres.setHeader(k, v);
   if (vary) nres.setHeader("vary", "Accept-Encoding");
   if (encoding) {
     const body = await compressed(`${f.file}\0${stat.size}\0${stat.mtimeMs}`, encoding, () =>

@@ -116,7 +116,18 @@ services:
     # apps/web/dist is gitignored, so a fresh clone has no host build — the image is the source
     # of truth for the static bundle and this copy step keeps Caddy self-contained.
     image: aprscaching:local
-    command: ["sh", "-c", "rm -rf /srv/web/* && cp -r /app/apps/web/dist/. /srv/web/"]
+    # Caddy keeps serving while this runs, so the volume never lacks a file the shell names: the new
+    # build's hashed assets land first, the shell is swapped in last, in one rename, and the previous
+    # build's assets stay for the pages still open on them until no build has named them for a week.
+    command:
+      - sh
+      - -c
+      - >-
+        set -e; cd /app/apps/web/dist; mkdir -p /srv/web/assets;
+        cp -r assets/. /srv/web/assets/;
+        tar -cf - --exclude=./assets --exclude=./index.html . | tar -xf - -C /srv/web;
+        cp index.html /srv/web/.index.html.new; mv -f /srv/web/.index.html.new /srv/web/index.html;
+        find /srv/web/assets -type f -mtime +7 -delete
     volumes: ["webdist:/srv/web"]
     restart: "no"
     logging: *default-logging

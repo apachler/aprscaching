@@ -12,16 +12,43 @@
 	@cf_untrusted not remote_ip {$CF_RANGES:0.0.0.0/0 ::/0}
 	request_header @cf_untrusted -Cf-Connecting-Ip
 	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /ingest/* /outbox* /federation/* /source /support /imprint /privacy /terms /health /.well-known/* /feeds/* /sitemap /sitemap.xml /robots.txt /embed /embed/* /v/* /tiles/*
-	# handle blocks, because Caddy runs try_files (a rewrite) before reverse_proxy: without them every
+	# handle blocks, because Caddy runs rewrite before reverse_proxy: without them every
 	# gateway path would first be rewritten to /index.html and served the SPA
 	handle @dynamic {
 		reverse_proxy gateway:8080
 	}
+	# The web build, with the page headers the Node server and the desktop app send too
+	# (workers/gateway/src/pageheaders.ts; deploy/test/caddy-serve-test.sh holds the two together). Its hashed
+	# assets cache for good; everything else revalidates, so a release reaches the browser on its next visit.
 	handle {
 		root * /srv/web
-		try_files {path} /index.html
+		header {
+			Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+			X-Frame-Options SAMEORIGIN
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+		}
+		@hashed path /assets/*
+		@unhashed not path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header @unhashed Cache-Control no-cache
+		# only a client-side route (a last segment with no extension) falls back to the shell: a missing
+		# asset stays a 404 rather than an HTML page the browser would run as a script
+		@route {
+			not path_regexp \.[^/]+$
+			file {path} /index.html
+		}
+		rewrite @route {file_match.relative}
 		file_server
 	}
+	# an error answer (a missing file) is never cached, least of all as an immutable asset
+	handle_errors {
+		header Cache-Control no-store
+		respond "{err.status_code} {err.status_text}"
+	}
+	# HSTS on the https addresses only: an http:// one (HAMNET, LAN, DOMAIN=:80) has no certificate to pin
+	@https protocol https
+	header @https Strict-Transport-Security "max-age=31536000"
 }
 
 {$DOMAIN} {$EXTRA_SITES} {

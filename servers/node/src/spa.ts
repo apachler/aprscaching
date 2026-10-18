@@ -15,6 +15,7 @@ export interface SpaFile {
 }
 
 const HTML = "text/html; charset=utf-8";
+const IMMUTABLE = "public, max-age=31536000, immutable";
 const TYPES: Record<string, string> = {
   html: HTML,
   js: "text/javascript",
@@ -74,10 +75,24 @@ export function spaFile(root: string, pathname: string): SpaFile | null {
     return {
       file: wanted,
       contentType: contentTypeOf(wanted),
-      cacheControl: wanted.startsWith(path.join(base, "assets") + path.sep)
-        ? "public, max-age=31536000, immutable"
-        : "no-cache",
+      cacheControl: wanted.startsWith(path.join(base, "assets") + path.sep) ? IMMUTABLE : "no-cache",
     };
-  if (path.extname(decoded) !== "" && decoded !== "/index.html") return null;
+  if (!isClientRoute(decoded)) return null;
   return isFile(index) ? { file: index, contentType: HTML, cacheControl: "no-cache" } : null;
 }
+
+/**
+ * The same answer from a build embedded in the desktop binary: `files` maps each path of the build
+ * ("/index.html", "/assets/…") to the embedded file.
+ */
+export function embeddedSpaFile(files: Readonly<Record<string, string>>, pathname: string): SpaFile | null {
+  const own = pathname === "/" || pathname === "/index.html" ? undefined : files[pathname];
+  if (own) return { file: own, contentType: contentTypeOf(pathname), cacheControl: cacheControlOf(pathname) };
+  const index = files["/index.html"];
+  return index && isClientRoute(pathname) ? { file: index, contentType: HTML, cacheControl: "no-cache" } : null;
+}
+
+/** A path the build has no file for is a client-side route when its last segment has no extension. */
+const isClientRoute = (pathname: string): boolean => path.posix.extname(pathname) === "" || pathname === "/index.html";
+
+const cacheControlOf = (pathname: string): string => (pathname.startsWith("/assets/") ? IMMUTABLE : "no-cache");

@@ -39,6 +39,11 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     Docker Compose 2.24 or newer; `deploy/aprscaching doctor` fails `service.tunnel_ports` when Caddy still
     publishes them.
 
+5. **Turn on HSTS at Cloudflare.** Caddy sends `Strict-Transport-Security` only on the https addresses it holds
+   a certificate for; behind the tunnel it serves plain http and sends none. Turn it on under **SSL/TLS → Edge
+   Certificates → HTTP Strict Transport Security (HSTS)**. Leave *Include subdomains* off unless every name
+   under the domain serves https.
+
 ## Put the CDN in front
 
 1. **Proxy your hostname's DNS record.** In the Cloudflare dashboard, open your domain, then **DNS → Records**.

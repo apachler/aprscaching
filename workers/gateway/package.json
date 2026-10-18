@@ -56,7 +56,8 @@
     "./support": "./src/support.ts",
     "./stages": "./src/stages.ts",
     "./community": "./src/community.ts",
-    "./feeds": "./src/feeds.ts"
+    "./feeds": "./src/feeds.ts",
+    "./pageheaders": "./src/pageheaders.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
