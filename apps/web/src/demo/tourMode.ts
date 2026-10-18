@@ -12,6 +12,7 @@
  * never opens either, so the visitor's own session never rides into the demo.
  */
 import type { TourName } from "../deeplink.js";
+import { apiOrigin } from "../api.js";
 import { installAppFixtures } from "./fixtures.js";
 
 /** A Storage that forgets everything when the page goes. */
@@ -104,13 +105,16 @@ class SilentSocket extends EventTarget {
 
 /**
  * Underneath the fixtures: a call to the instance they do not answer goes without the visitor's cookies, and a write
- * never leaves the browser.
+ * never leaves the browser. The instance is the page's origin and the gateway's, which `VITE_API_BASE` may put on
+ * another host that still takes the visitor's session cookie.
  */
 function keepWritesLocal(): void {
   const real = window.fetch.bind(window);
+  const gateway = apiOrigin();
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
-    if (new URL(req.url, location.href).origin !== location.origin) return real(req);
+    const origin = new URL(req.url, location.href).origin;
+    if (origin !== location.origin && origin !== gateway) return real(req);
     if (req.method !== "GET" && req.method !== "HEAD") return Response.json({ ok: true });
     return real(new Request(req, { credentials: "omit" }));
   };

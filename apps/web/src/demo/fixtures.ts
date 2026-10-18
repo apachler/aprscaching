@@ -50,6 +50,7 @@ import type {
   SiteSettings,
   SiteSettingView,
 } from "../api.js";
+import { apiOrigin } from "../api.js";
 import {
   CONFIG_KEYS,
   RETENTION_FIELDS,
@@ -1274,14 +1275,17 @@ function fixtureAnswer(method: string, path: string, persona: Persona): unknown 
 export function installAppFixtures(persona: Persona, network = false): void {
   if (persona !== "out") seedRecentTransmissions();
   const real = window.fetch.bind(window);
+  // a gateway on its own host (`VITE_API_BASE`) is the instance too, so its API is answered here as well
+  const gateway = apiOrigin();
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
     const url = new URL(req.url, location.href);
-    if (url.origin !== location.origin && !/^https?:\/\/127\.0\.0\.1:8787$/.test(url.origin)) {
+    const instance = url.origin === location.origin || url.origin === gateway;
+    if (!instance && !/^https?:\/\/127\.0\.0\.1:8787$/.test(url.origin)) {
       if (network) return real(input, init);
       return new Response("third-party request refused by the demo fixtures", { status: 503 });
     }
-    if (url.origin === location.origin && !/^\/(api|auth|verify|federation|\.well-known|keys|v)\b/.test(url.pathname))
+    if (instance && !/^\/(api|auth|verify|federation|\.well-known|keys|v)\b/.test(url.pathname))
       return real(input, init);
     const body = fixtureAnswer(req.method, url.pathname, persona);
     if (body === undefined) {

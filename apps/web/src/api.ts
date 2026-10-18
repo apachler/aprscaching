@@ -77,6 +77,9 @@ export function trimTrailingSlashes(url: string): string {
  */
 export const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
+/** The gateway's origin: the page's own, or `VITE_API_BASE`'s when the gateway lives on another host. */
+export const apiOrigin = (): string => new URL(API_BASE || location.origin, location.href).origin;
+
 /**
  * The browser could not reach the gateway at all (offline, DNS, CORS, the server down). It stays a
  * `TypeError`, as `fetch` throws, so offline handling that tests for one still recognises it, but carries
