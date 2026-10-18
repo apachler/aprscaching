@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The live-room upgrade on the Node server bounds what one anonymous client can hold: a frame larger than a
 // subscription closes the socket (1009) instead of being buffered, one client address holds at most
-// LIVE_SOCKETS_PER_CLIENT sockets, and an upgrade whose Host header is no valid host is answered 400 and closed.
+// LIVE_SOCKETS_PER_CLIENT sockets, the Host header plays no part in routing, and an upgrade whose target is no
+// valid URL is answered 400 and closed.
 import { describe, it, expect, afterEach } from "vitest";
 import http from "node:http";
 import net from "node:net";

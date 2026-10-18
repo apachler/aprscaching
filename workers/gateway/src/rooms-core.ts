@@ -22,7 +22,7 @@ const MAX_BUFFERED = 1 << 20;
 
 /**
  * The largest frame a client may send. A subscription is a few hundred bytes, and a runtime buffers a whole
- * message before handing it over, so a larger one closes the socket (1009) instead of being held in memory.
+ * message before handing it over, so a larger one closes the socket instead of being held in memory.
  */
 export const LIVE_MESSAGE_MAX_BYTES = 4096;
 /**

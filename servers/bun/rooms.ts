@@ -13,7 +13,7 @@ export type WsData = { region: string; holder: string; member?: RoomMember };
 /** Bun.serve `websocket` handlers that keep `rooms` in step with each socket. */
 export function roomHandlers(rooms: RoomsCore): WebSocketHandler<WsData> {
   return {
-    // a frame past it closes the socket (1009) before Bun buffers it whole
+    // Bun drops the connection on a frame past it (the client sees 1006) instead of buffering it whole
     maxPayloadLength: LIVE_MESSAGE_MAX_BYTES,
     open(ws: ServerWebSocket<WsData>) {
       ws.data.member = rooms.join(
