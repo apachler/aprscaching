@@ -13,6 +13,7 @@
  * its rate limit exactly as it does for any tool. Commands and decoders answer asynchronously from the worker.
  */
 import {
+  concreteHost,
   isToolEvent,
   REPLY_MAX,
   REPLY_TTL_MS,
@@ -108,7 +109,7 @@ export function compileRules(rules: readonly ColourRule[]): Colouriser {
 }
 
 /** The worker bootstrap (stringified): locks down globals, runs the tool, and bridges its API over postMessage. */
-function workerSource(): string {
+export function workerSource(): string {
   return `
     let commands = {}, colourRules = [], panel = null, decoderFns = {}, decoderMeta = [], granted = [], features = [];
     const subs = {}, handlers = {}, services = {}, pending = {};
@@ -160,6 +161,11 @@ function workerSource(): string {
       call: (name, args) => { need("ipc"); return ipc.call(name, args); },
     };
     const register = (t) => {
+      // each contribution needs its permission: registering one without it fails the load, so the author sees why
+      if (t && t.commands && Object.keys(t.commands).length) need("command");
+      if (t && Array.isArray(t.colourRules) && t.colourRules.length) need("monitor");
+      if (t && t.panel != null) need("panel");
+      if (t && Array.isArray(t.decoders) && t.decoders.length) need("decoder");
       commands = {};
       const c = (t && t.commands) || {};
       for (const w of Object.keys(c)) {
@@ -249,7 +255,9 @@ export function frameCsp(connect: string[]): string {
 /**
  * The origins a tool's frame may connect to: its manifest's `connect` list when it holds the 'network'
  * grant, minus the app's own origins (the page and the API, in http and ws form), so a tool never
- * addresses the app's API from inside the sandbox.
+ * addresses the app's API from inside the sandbox. An entry that is not one origin on one concrete host (a wildcard
+ * host, which the CSP would read as every host) drops, whatever manifest it was stored from; the manifest's own
+ * check (`connectOrigin`) is what holds a tool to https and wss.
  */
 export function connectSources(granted: Capability[], connect: string[] | undefined, appOrigins: string[]): string[] {
   if (!granted.includes("network") || !connect?.length) return [];
@@ -263,7 +271,14 @@ export function connectSources(granted: Capability[], connect: string[] | undefi
       /* not a URL */
     }
   }
-  return connect.filter((o) => !own.has(o));
+  return connect.filter((o) => {
+    try {
+      const u = new URL(o);
+      return `${u.protocol}//${u.host}` === o && concreteHost(u.hostname) && !own.has(o);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** The frame document: its CSP, then a relay between the parent window and the tool's worker. */
@@ -577,13 +592,17 @@ export class SandboxBridge {
     }, 100);
   }
 
-  /** Take what the tool registered while it loaded. */
+  /**
+   * Take what the tool registered while it loaded, each contribution only with its permission. The worker refuses
+   * one without it, but the tool's own code can post this message too, so the host decides here.
+   */
   loaded(m: Extract<FrameMessage, { type: "loaded" }>): void {
-    this.commands = m.commands;
-    this.remoteOff = m.remoteOff.filter((w) => m.commands.includes(w));
-    this.decoders = m.decoders;
-    if (m.colourRules.length) this.setRules(m.colourRules);
-    if (m.panel != null) this.panel = m.panel;
+    const has = (c: Capability) => this.granted.includes(c);
+    this.commands = has("command") ? m.commands : [];
+    this.remoteOff = m.remoteOff.filter((w) => this.commands.includes(w));
+    this.decoders = has("decoder") ? m.decoders : [];
+    if (has("monitor") && m.colourRules.length) this.setRules(m.colourRules);
+    if (has("panel") && m.panel != null) this.panel = m.panel;
   }
 
   /** Apply the tool's contributions to its context (switched on), or forget the context (switched off). */

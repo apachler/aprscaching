@@ -30,8 +30,18 @@ export interface ToolManifest {
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const MAX_CONNECT = 8;
+/** Dot-separated labels of letters, digits and inner hyphens (the URL parser has lowercased and punycoded it). */
+const DNS_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** 32 bytes in standard base64: 43 characters and one `=`. */
 const SHA256_B64_RE = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/;
+
+/**
+ * Whether a URL's hostname names one concrete host: a DNS name, an IPv4 or a bracketed IPv6 literal. The URL parser
+ * keeps a `*` host, which a CSP source reads as a wildcard reaching every host, the app's own API included.
+ */
+export function concreteHost(hostname: string): boolean {
+  return DNS_HOST_RE.test(hostname) || /^\[[0-9a-f:.]+\]$/i.test(hostname);
+}
 
 /** Normalise one `connect` entry to its origin; only https: and wss: origins with no path qualify. */
 export function connectOrigin(x: unknown): string | null {
@@ -44,6 +54,7 @@ export function connectOrigin(x: unknown): string | null {
   }
   if (u.protocol !== "https:" && u.protocol !== "wss:") return null;
   if (u.username || u.password || (u.pathname !== "/" && u.pathname !== "") || u.search || u.hash) return null;
+  if (!concreteHost(u.hostname)) return null;
   return `${u.protocol}//${u.host}`;
 }
 
