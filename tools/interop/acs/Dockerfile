@@ -1,6 +1,6 @@
 # Our full stack for the interop environment: the Node gateway + the ingest (AXUDP port, NET/ROM
 # node, SID-gated BBS, FBB forwarding scheduler) in one container. Built from the repo root context.
-FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
 # better-sqlite3 compiles from source (v13 ships no prebuilt binaries) — node-gyp needs
 # python3 + a C/C++ toolchain, which the slim image lacks.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
