@@ -89,13 +89,20 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   // The generation: what in the area's box could change the pack. Cheap aggregates, so a refresh with no
   // change costs no build. A log rewritten in place (anonymised by an erasure, removed by the sysop, edited)
   // changes neither the count nor the highest id, so the logs' revision count (cache_log_revs) is part of it.
+  // Stages and thumbnails are rewritten in place without touching the cache row, so their content is part of
+  // it too: a moved start or a resealed NFC stage must reach a phone that refreshes.
   const stat = await env.DB.prepare(
     `WITH s AS (SELECT id, updated_at FROM caches WHERE ${scopeSql}${typeSql})
      SELECT
        (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0) FROM s) AS c,
        (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_logs WHERE cache_id IN (SELECT id FROM s))
          || ':' || (SELECT COALESCE(SUM(rev), 0) FROM cache_log_revs WHERE cache_id IN (SELECT id FROM s)) AS l,
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_media WHERE cache_id IN (SELECT id FROM s)) AS m,
+       (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) || ':' || COALESCE(GROUP_CONCAT(COALESCE(thumb_key, ''), ','), '')
+          FROM (SELECT id, thumb_key FROM cache_media WHERE cache_id IN (SELECT id FROM s) ORDER BY id)) AS m,
+       (SELECT COALESCE(GROUP_CONCAT(stage_no || ',' || COALESCE(unlock, '') || ',' || COALESCE(lat, '') || ','
+          || COALESCE(lon, '') || ',' || COALESCE(clue, '') || ',' || COALESCE(media_key, '') || ','
+          || COALESCE(sealed, ''), ';'), '')
+          FROM (SELECT * FROM cache_stages WHERE cache_id IN (SELECT id FROM s) ORDER BY cache_id, stage_no)) AS st,
        ${
          mine
            ? "'' AS r"
@@ -106,9 +113,9 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
        }`,
   )
     .bind(...box, ...types, ...(mine ? [] : [...box, ...types, includeUnvetted ? 1 : 0]))
-    .first<{ c: string; l: string; m: string; r: string }>();
+    .first<{ c: string; l: string; m: string; st: string; r: string }>();
   const who = mine ? `${(await sessionIdentity(req, env))?.accountId}|` : "";
-  const key = `${who}${u.searchParams.toString()}|${stat?.c}|${stat?.l}|${stat?.m}|${stat?.r}`;
+  const key = `${who}${u.searchParams.toString()}|${stat?.c}|${stat?.l}|${stat?.m}|${stat?.st}|${stat?.r}`;
   const generation = await sha256Hex(key);
   const etag = `"${generation}"`;
   if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag } });

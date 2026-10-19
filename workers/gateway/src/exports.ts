@@ -210,7 +210,7 @@ export async function handleFindsAdif(req: Request, env: Env, call: string): Pro
       `SELECT c.code, c.title, c.owner_call AS ownerCall, c.station_call AS stationCall, l.ts
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
        WHERE (l.logger_call = ? OR l.logger_call LIKE ? || '-%') AND l.log_type = 'found' AND l.verified = 1
-         AND c.fed_scope != 'unlisted' ORDER BY l.ts DESC LIMIT 2000`,
+         AND c.fed_scope != 'unlisted' AND c.removed_at IS NULL ORDER BY l.ts DESC LIMIT 2000`,
     )
       .bind(person, person)
       .all<ExpFind>()

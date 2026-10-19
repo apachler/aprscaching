@@ -108,7 +108,7 @@ async function unsubscribeAccount(env: Env, token: string | null): Promise<strin
 
 function unsubscribePage(title: string, body: string, status = 200): Response {
   return new Response(
-    `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+    `<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=referrer content=no-referrer>
 <title>${escapeHtml(title)} · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}

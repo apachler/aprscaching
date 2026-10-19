@@ -14,7 +14,7 @@
 import type { Env } from "./env.js";
 import { json, xml } from "./http.js";
 import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching/shared";
-import { escapeHtml } from "./util/html.js";
+import { xmlEscape } from "./util/html.js";
 import { trimEndChars } from "./util/text.js";
 import { requestOrigin } from "./origins.js";
 
@@ -35,8 +35,8 @@ export function gatewayBase(req: Request, env: Env): string {
   return requestOrigin(req, env);
 }
 
-/** XML text/attribute escape — the shared markup escape, which XML accepts as-is. */
-export const xmlEscape = escapeHtml;
+/** XML text/attribute escape, for the feeds, the sitemap and the exports. */
+export { xmlEscape };
 
 /** A deep-link URL for a surface: the map is the root, panels carry `?view=<key>`. */
 export function surfaceUrl(env: Env, view: string | null): string {
@@ -92,7 +92,7 @@ export function handleSitemapPage(req: Request, env: Env): Response {
   const feedHtml = FEEDS.map(
     (f) => `<li><a href="${e(gw + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
   ).join("");
-  const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+  const html = `<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Site map · APRScaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem}
 h1{font-size:1.4rem}h2{font-size:1.05rem;margin:1.4rem 0 .4rem;text-transform:uppercase;letter-spacing:.05em;opacity:.75}

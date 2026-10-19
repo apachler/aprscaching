@@ -36,6 +36,12 @@ describe("CoT event builder", () => {
     expect(xml).not.toContain("</detail></detail>");
   });
 
+  it("drops the control characters XML cannot carry from a comment heard on RF", () => {
+    const xml = stationToCotEvent(station({ comment: "mob\u0007ile\u001A" }), 2000);
+    expect(xml).toContain("<remarks>APRS /&gt; mobile</remarks>");
+    expect(xml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
+  });
+
   it("a station stays live on TAK until its next stored beacon is due", () => {
     const stale = (xml: string) => /stale="([^"]+)"/.exec(xml)![1];
     expect(stale(stationToCotEvent(station(), 2000))).toBe(new Date((1000 + 300) * 1000).toISOString());

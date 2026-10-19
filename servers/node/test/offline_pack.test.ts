@@ -202,6 +202,16 @@ describe("image thumbnails", () => {
     expect(pack.caches[0]!.images[0]).toMatchObject({ thumbUrl: list.media[0]!.thumbUrl, thumbBytes: 800 });
   });
 
+  it("a new thumbnail changes the pack's generation, so a refresh fetches it", async () => {
+    const t = await withImage();
+    await t.thumb(jpegOf(800));
+    const first = await get(t.env, "grid=JN77");
+    await t.thumb(jpegOf(900));
+    const again = await get(t.env, "grid=JN77", { "if-none-match": first.etag! });
+    expect(again.status).toBe(200);
+    expect((again.body as PackResponse).caches[0]!.images[0]).toMatchObject({ thumbBytes: 900 });
+  });
+
   it("only the owner, only a small JPEG or WebP", async () => {
     const t = await withImage();
     expect((await t.thumb(new Uint8Array(800), { "x-owner-call": "OE1XYZ" })).status).toBe(403);

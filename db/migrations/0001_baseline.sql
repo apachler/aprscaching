@@ -341,6 +341,8 @@ CREATE INDEX idx_caches_status ON caches (status);
 CREATE UNIQUE INDEX idx_caches_external ON caches (source, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX idx_caches_fed_rev ON caches (fed_rev);
 CREATE INDEX idx_caches_fed_id ON caches (fed_id);
+-- the living caches opted into rendezvous, which every ingest batch reads (rendezvous.ts)
+CREATE INDEX idx_caches_living ON caches (status) WHERE type = 'aprs_living' AND rendezvous = 1;
 
 -- Stages of a staged cache. Stage 0 is the public start; a later stage reveals once the finder unlocks
 -- the prior one: by reaching its geofence, after its audio clue, or by presenting an NFC tag's secret
