@@ -5,8 +5,9 @@
 // Such a job (one whose permissions, or the workflow's when the job sets none, grant any `write` scope):
 //   • checks out with `persist-credentials: false`, so the GITHUB_TOKEN is not left in .git/config for the
 //     install scripts and build tools that run after the checkout to read,
-//   • restores no dependency cache (`cache:` on a setup action, or actions/cache), so it reads only its own
-//     lockfile and the registry, never a store another run wrote.
+//   • restores no cache (actions/cache, a `cache:` input that is not false, a Buildx `cache-from: type=gha`, or
+//     setup-bun and setup-go, which cache unless told not to), so it reads only its own lockfile and the
+//     registry, never a store another run wrote.
 // A job that needs both a write token and the build splits in two: the build with a read token uploads an
 // artifact, and a job with the write token and no checkout attaches it.
 //
@@ -39,6 +40,18 @@ function grantsWrite(lines, at) {
   const inline = lines[at].replace(/#.*/, "").split("permissions:")[1].trim();
   if (inline) return /write/.test(inline);
   return block(lines, at).some((l) => /^\s*[\w-]+:\s*write\b/.test(l));
+}
+
+/** Whether a step's text restores a cache: actions/cache, a `cache:` input other than false, a Buildx cache
+ *  from the Actions cache, or a setup action that caches unless told not to (setup-bun, setup-go). */
+function restoresCache(text) {
+  if (/uses:\s*actions\/cache[@/]/.test(text)) return true;
+  if (/\bcache-from:[^\n]*type=gha/.test(text)) return true;
+  const cache = /(?:^|[\s{,])cache:\s*["']?([\w-]+)/.exec(text);
+  if (cache && cache[1] !== "false") return true;
+  if (/uses:\s*oven-sh\/setup-bun@/.test(text) && !/\bno-cache:\s*["']?true\b/.test(text)) return true;
+  if (/uses:\s*actions\/setup-go@/.test(text) && !cache) return true;
+  return false;
 }
 
 for (const name of readdirSync(DIR)
@@ -82,8 +95,7 @@ for (const name of readdirSync(DIR)
       const text = step.map((l) => l.replace(/\s+#.*$/, "")).join("\n");
       if (/uses:\s*actions\/checkout@/.test(text) && !/persist-credentials:\s*false\b/.test(text))
         problems.push(`${where}: checks out without persist-credentials: false while it holds a write token`);
-      if (/uses:\s*actions\/cache[@/]/.test(text) || /\bcache:\s*[\w'"]/.test(text))
-        problems.push(`${where}: restores a cache while it holds a write token`);
+      if (restoresCache(text)) problems.push(`${where}: restores a cache while it holds a write token`);
     }
   }
 }
