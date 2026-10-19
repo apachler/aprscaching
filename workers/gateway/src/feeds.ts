@@ -17,6 +17,8 @@ import { userFeedPath } from "@aprscaching/shared";
 import { gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
 import { requestOrigin } from "./origins.js";
 import { displayCall, isFormerMarker, isWithdrawnCall } from "./auth.js";
+import { baseSql, OF_BASE, VERIFIED_LOGGER } from "./findrules.js";
+import { baseCall } from "@aprscaching/aprs";
 
 const rfc822 = (unixSec: number) => new Date(unixSec * 1000).toUTCString();
 
@@ -167,14 +169,15 @@ export async function handleBulletinsFeed(req: Request, env: Env): Promise<Respo
   });
 }
 
-/** GET /feeds/leaderboard.xml — a snapshot; all items share the build time. */
+/** GET /feeds/leaderboard.xml — a snapshot; all items share the build time. It ranks people as the app's
+ *  leaderboard does: every SSID of a base call together, and only control-verified calls. */
 export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
-      `SELECT l.logger_call AS loggerCall, COUNT(DISTINCT l.cache_id) AS finds
+      `SELECT ${baseSql("l.logger_call")} AS loggerCall, COUNT(DISTINCT l.cache_id) AS finds
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL AND ${NOT_A_MARKER}
-       GROUP BY l.logger_call ORDER BY finds DESC LIMIT 25`,
+       WHERE l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL AND ${NOT_A_MARKER} ${VERIFIED_LOGGER}
+       GROUP BY loggerCall ORDER BY finds DESC LIMIT 25`,
     ).all<any>()
   ).results;
   const t = nowS();
@@ -196,33 +199,37 @@ export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Res
   });
 }
 
-/** GET /feeds/u/<callsign>.xml — a callsign's finds, badge awards and scoring. */
+/** GET /feeds/u/<callsign>.xml — a person's finds, badge awards and scoring: finds under any SSID of the base
+ *  call count, as on the profile. */
 export async function handleUserFeed(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
+  const person = baseCall(cs);
   const finds = (
     await env.DB.prepare(
       `SELECT l.id, l.ts, l.tier, l.verified, c.code AS cacheCode, c.title AS cacheTitle
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.logger_call = ? AND l.log_type = 'found' AND c.fed_scope != 'unlisted' AND c.removed_at IS NULL
+       WHERE ${OF_BASE} AND l.log_type = 'found' AND c.fed_scope != 'unlisted' AND c.removed_at IS NULL
        ORDER BY l.ts DESC LIMIT 50`,
     )
-      .bind(cs)
+      .bind(person, person)
       .all<any>()
   ).results;
   const badges = (
     await env.DB.prepare(
-      "SELECT badge, earned_at AS earnedAt FROM achievements WHERE callsign = ? ORDER BY earned_at DESC LIMIT 50",
+      // badges belong to the person and are awarded to the base call; the exact call is read too, as on the profile
+      `SELECT badge, MIN(earned_at) AS earnedAt FROM achievements WHERE callsign IN (?, ?)
+       GROUP BY badge ORDER BY earnedAt DESC LIMIT 50`,
     )
-      .bind(cs)
+      .bind(person, cs)
       .all<any>()
   ).results;
   const findCount =
     (
       await env.DB.prepare(
         `SELECT COUNT(DISTINCT l.cache_id) AS n FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-          WHERE l.logger_call = ? AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL`,
+          WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL`,
       )
-        .bind(cs)
+        .bind(person, person)
         .first<{ n: number }>()
     )?.n ?? 0;
   const hides =

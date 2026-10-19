@@ -46,10 +46,36 @@ export async function alreadyFound(
   return r?.call ?? null;
 }
 
-/** SQL matching `l.logger_call` to a person: an SSID of the base call (`?`, `?`) or a call on the account (`?`). */
-const BY_PERSON = `(l.logger_call = ? OR l.logger_call LIKE ? || '-%'
+/**
+ * SQL matching a callsign column to a person: the base call or an SSID of it (`?`, `?`), or a call on the account,
+ * or an SSID of one (`?`). {@link personBinds} gives the three values. `col` names its table (`u.callsign`,
+ * `favorites.callsign`): a bare `callsign` would resolve to `account_callsigns.callsign` inside the subquery.
+ */
+export const ofPersonSql = (col: string): string => `(${col} = ? OR ${col} LIKE ? || '-%'
    OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
-              AND (l.logger_call = ac.callsign OR l.logger_call LIKE ac.callsign || '-%')))`;
+              AND (${col} = ac.callsign OR ${col} LIKE ac.callsign || '-%')))`;
+
+/** The binds for {@link ofPersonSql}: the base call twice, then the account (the one holding the base call when
+ *  no account id is given). */
+export async function personBinds(
+  env: Env,
+  call: string,
+  accountId: string | null = null,
+): Promise<[string, string, string | null]> {
+  const base = baseCall(call.toUpperCase());
+  return [base, base, accountId ?? (await baseHolder(env, base))];
+}
+
+/** SQL matching `l.logger_call` to a person; binds as {@link ofPersonSql}. */
+const BY_PERSON = ofPersonSql("l.logger_call");
+
+/** A person's finds by base call: the call and every SSID of it (`?`, `?`). */
+export const OF_BASE = "(l.logger_call = ? OR l.logger_call LIKE ? || '-%')";
+
+/** Competitive credit requires proven control of the callsign (anti-gaming): the logger's base call must be
+ *  control-verified (an on-air VERIFY heard at an attested site, the operator bootstrap, or a sysop). Personal
+ *  profiles still show every find. */
+export const VERIFIED_LOGGER = `AND ${baseSql("l.logger_call")} IN (SELECT callsign FROM callsign_verifications WHERE status='verified')`;
 
 /**
  * The person's own attempt at the cache: `found` when they found it, else `dnf` when they logged a did-not-find,
@@ -107,26 +133,22 @@ export async function personSettled(
   };
 }
 
-/** Has this person unlocked the stage? An unlock by any SSID of the base call, or any call on the account, counts. */
-async function hasUnlocked(
+/** The stages of a cache this person has unlocked. An unlock by any SSID of the base call, or any call on the
+ *  account, counts: the stage list, the next stage's prerequisite and the find check all read it. */
+export async function unlockedStages(
   env: Env,
   cacheId: number,
-  stageNo: number,
-  loggerCall: string,
-  accountId: string | null,
-): Promise<boolean> {
-  const base = baseCall(loggerCall);
-  const acct = accountId ?? (await baseHolder(env, base));
-  const r = await env.DB.prepare(
-    `SELECT 1 AS x FROM stage_unlocks u WHERE u.cache_id = ? AND u.stage_no = ? AND (
-       u.callsign = ? OR u.callsign LIKE ? || '-%'
-       OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
-                  AND (u.callsign = ac.callsign OR u.callsign LIKE ac.callsign || '-%'))
-     ) LIMIT 1`,
-  )
-    .bind(cacheId, stageNo, base, base, acct)
-    .first();
-  return !!r;
+  call: string,
+  accountId: string | null = null,
+): Promise<Set<number>> {
+  const rows = (
+    await env.DB.prepare(
+      `SELECT DISTINCT u.stage_no FROM stage_unlocks u WHERE u.cache_id = ? AND ${ofPersonSql("u.callsign")}`,
+    )
+      .bind(cacheId, ...(await personBinds(env, call, accountId)))
+      .all<{ stage_no: number }>()
+  ).results;
+  return new Set(rows.map((r) => r.stage_no));
 }
 
 /**
@@ -194,7 +216,7 @@ export async function logRefusal(
     const last = await env.DB.prepare("SELECT MAX(stage_no) AS n FROM cache_stages WHERE cache_id = ?")
       .bind(cache.id)
       .first<{ n: number | null }>();
-    if (last?.n && !(await hasUnlocked(env, cache.id, last.n, loggerCall, accountId)))
+    if (last?.n && !(await unlockedStages(env, cache.id, loggerCall, accountId)).has(last.n))
       return `unlock every stage of ${cache.code} first: a find needs its last stage`;
   }
   return null;

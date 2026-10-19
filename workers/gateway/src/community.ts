@@ -11,7 +11,7 @@ import { displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { actor } from "./caches.js";
-import { baseSql } from "./findrules.js";
+import { baseSql, OF_BASE, VERIFIED_LOGGER, ofPersonSql, personBinds } from "./findrules.js";
 import { baseCall } from "@aprscaching/aprs";
 import { RateRequest } from "@aprscaching/shared";
 
@@ -20,11 +20,6 @@ const DAY = 86400;
 // per distinct found cache: trust-tier base + difficulty + terrain (best find wins)
 const POINTS =
   "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
-// competitive credit requires proven control of the callsign (anti-gaming): the logger's callsign
-// must be control-verified (an on-air VERIFY heard at an attested site, the operator bootstrap, or a sysop). Personal profiles still show all finds.
-const VERIFIED_LOGGER = `AND ${baseSql("l.logger_call")} IN (SELECT callsign FROM callsign_verifications WHERE status='verified')`;
-// a person's finds: their base call and every SSID of it (finds are stored under the exact call logged with)
-const OF_PERSON = "(l.logger_call = ? OR l.logger_call LIKE ? || '-%')";
 
 function periodStart(period: string | null): number {
   if (period === "month") return nowS() - 30 * DAY;
@@ -77,7 +72,7 @@ export async function standing(env: Env, person: string): Promise<{ finds: numbe
   const stat = await env.DB.prepare(
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
+       WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
   )
     .bind(person, person)
     .first<{ finds: number; points: number }>();
@@ -107,7 +102,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points, MIN(firstTs) AS firstFind, MAX(lastTs) AS lastFind FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts, MIN(l.ts) AS firstTs, MAX(l.ts) AS lastTs
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
+       WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.cache_id)`,
   )
     .bind(person, person)
     .first<{ finds: number; points: number; firstFind: number | null; lastFind: number | null }>();
@@ -115,7 +110,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   const byTier = (
     await env.DB.prepare(
       `SELECT l.tier, COUNT(*) AS n FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.tier`,
+      WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY l.tier`,
     )
       .bind(person, person)
       .all<{ tier: string | null; n: number }>()
@@ -123,7 +118,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   const byType = (
     await env.DB.prepare(
       `SELECT c.type, COUNT(DISTINCT l.cache_id) AS n FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY c.type`,
+      WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1 AND c.removed_at IS NULL GROUP BY c.type`,
     )
       .bind(person, person)
       .all<{ type: string; n: number }>()
@@ -256,15 +251,22 @@ async function toggleSet(
   callsign: string,
   on?: boolean,
 ): Promise<{ on: boolean; count: number }> {
-  const cs = callsign.toUpperCase();
-  const exists = await env.DB.prepare(`SELECT 1 AS x FROM ${table} WHERE callsign=? AND cache_id=?`)
-    .bind(cs, cacheId)
+  // one row per person, stored under the base call: any SSID or other call on the account finds and clears it
+  const who = await personBinds(env, callsign);
+  const exists = await env.DB.prepare(
+    `SELECT 1 AS x FROM ${table} WHERE cache_id=? AND ${ofPersonSql(`${table}.callsign`)} LIMIT 1`,
+  )
+    .bind(cacheId, ...who)
     .first();
   const want = on ?? !exists;
   if (want && !exists)
-    await env.DB.prepare(`INSERT OR IGNORE INTO ${table} (callsign, cache_id) VALUES (?,?)`).bind(cs, cacheId).run();
+    await env.DB.prepare(`INSERT OR IGNORE INTO ${table} (callsign, cache_id) VALUES (?,?)`)
+      .bind(who[0], cacheId)
+      .run();
   if (!want && exists)
-    await env.DB.prepare(`DELETE FROM ${table} WHERE callsign=? AND cache_id=?`).bind(cs, cacheId).run();
+    await env.DB.prepare(`DELETE FROM ${table} WHERE cache_id=? AND ${ofPersonSql(`${table}.callsign`)}`)
+      .bind(cacheId, ...who)
+      .run();
   const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE cache_id=?`)
     .bind(cacheId)
     .first<{ n: number }>();
@@ -331,14 +333,15 @@ export async function cacheHealth(
 // ---------------------------------------------------------------- rating (1–5 stars, owner-gated)
 type RatingPolicy = "finders" | "all" | "off";
 
-/** True if `callsign` is permitted to rate this cache under its policy (a verified finder, or anyone). */
+/** True if `callsign` is permitted to rate this cache under its policy (a verified finder, or anyone). A find
+ *  under any SSID of the base call, or any call on the account, makes the person a finder. */
 async function mayRate(env: Env, cacheId: number, policy: RatingPolicy, callsign: string): Promise<boolean> {
   if (policy === "off") return false;
   if (policy === "all") return true;
   const found = await env.DB.prepare(
-    `SELECT 1 AS x FROM cache_logs l WHERE cache_id=? AND ${OF_PERSON} AND log_type='found' AND verified=1 LIMIT 1`,
+    `SELECT 1 AS x FROM cache_logs l WHERE cache_id=? AND ${ofPersonSql("l.logger_call")} AND log_type='found' AND verified=1 LIMIT 1`,
   )
-    .bind(cacheId, baseCall(callsign), baseCall(callsign))
+    .bind(cacheId, ...(await personBinds(env, callsign)))
     .first();
   return !!found;
 }
@@ -357,8 +360,10 @@ export async function ratingInfo(
     canRate = false;
   if (callsign) {
     const cs = callsign.toUpperCase();
-    const r = await env.DB.prepare("SELECT stars FROM cache_ratings WHERE cache_id=? AND callsign=?")
-      .bind(cacheId, cs)
+    const r = await env.DB.prepare(
+      `SELECT stars FROM cache_ratings WHERE cache_id=? AND ${ofPersonSql("cache_ratings.callsign")} ORDER BY ts DESC LIMIT 1`,
+    )
+      .bind(cacheId, ...(await personBinds(env, cs)))
       .first<{ stars: number }>();
     mine = r?.stars ?? null;
     canRate = await mayRate(env, cacheId, policy, cs);
@@ -381,12 +386,18 @@ export async function handleRate(req: Request, env: Env, cacheId: number): Promi
       { error: policy === "off" ? "rating is disabled for this cache" : "only finders may rate this cache" },
       { status: 403 },
     );
-  await env.DB.prepare(
-    `INSERT INTO cache_ratings (cache_id, callsign, stars, ts) VALUES (?,?,?,?)
-     ON CONFLICT(cache_id, callsign) DO UPDATE SET stars=excluded.stars, ts=excluded.ts`,
-  )
-    .bind(cacheId, who, parsed.data.stars, nowS())
-    .run();
+  // one rating per person, stored under the base call: a rating from another SSID or another call on the account
+  // replaces it rather than adding a second one
+  const person = await personBinds(env, who);
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM cache_ratings WHERE cache_id=? AND callsign != ? AND ${ofPersonSql("cache_ratings.callsign")}`,
+    ).bind(cacheId, person[0], ...person),
+    env.DB.prepare(
+      `INSERT INTO cache_ratings (cache_id, callsign, stars, ts) VALUES (?,?,?,?)
+       ON CONFLICT(cache_id, callsign) DO UPDATE SET stars=excluded.stars, ts=excluded.ts`,
+    ).bind(cacheId, person[0], parsed.data.stars, nowS()),
+  ]);
   return json({ rating: await ratingInfo(env, cacheId, policy, who) });
 }
 
@@ -400,8 +411,10 @@ export async function favoritesInfo(
     .first<{ n: number }>();
   let favorited = false;
   if (callsign)
-    favorited = !!(await env.DB.prepare("SELECT 1 AS x FROM favorites WHERE cache_id=? AND callsign=?")
-      .bind(cacheId, callsign.toUpperCase())
+    favorited = !!(await env.DB.prepare(
+      `SELECT 1 AS x FROM favorites WHERE cache_id=? AND ${ofPersonSql("favorites.callsign")} LIMIT 1`,
+    )
+      .bind(cacheId, ...(await personBinds(env, callsign)))
       .first());
   return { favorites: count?.n ?? 0, favorited };
 }
@@ -435,7 +448,7 @@ export async function awardFindBadges(env: Env, callsign: string): Promise<void>
   const finds =
     (
       await env.DB.prepare(
-        `SELECT COUNT(DISTINCT cache_id) AS n FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1`,
+        `SELECT COUNT(DISTINCT cache_id) AS n FROM cache_logs l WHERE ${OF_BASE} AND log_type='found' AND verified=1`,
       )
         .bind(cs, cs)
         .first<{ n: number }>()
@@ -443,7 +456,7 @@ export async function awardFindBadges(env: Env, callsign: string): Promise<void>
   for (const b of FIND_BADGES) if (finds >= b.min) stmts.push(grant(b.badge));
   if (
     await env.DB.prepare(
-      `SELECT 1 AS x FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1 AND tier='A' LIMIT 1`,
+      `SELECT 1 AS x FROM cache_logs l WHERE ${OF_BASE} AND log_type='found' AND verified=1 AND tier='A' LIMIT 1`,
     )
       .bind(cs, cs)
       .first()
@@ -451,7 +464,7 @@ export async function awardFindBadges(env: Env, callsign: string): Promise<void>
     stmts.push(grant("rf-verified"));
   const types = (
     await env.DB.prepare(
-      `SELECT DISTINCT c.type FROM cache_logs l JOIN caches c ON c.id=l.cache_id WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1`,
+      `SELECT DISTINCT c.type FROM cache_logs l JOIN caches c ON c.id=l.cache_id WHERE ${OF_BASE} AND l.log_type='found' AND l.verified=1`,
     )
       .bind(cs, cs)
       .all<{ type: string }>()

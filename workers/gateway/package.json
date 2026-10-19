@@ -53,7 +53,10 @@
     "./updatecheck": "./src/updatecheck.ts",
     "./siteconfig": "./src/siteconfig.ts",
     "./retention": "./src/retention.ts",
-    "./support": "./src/support.ts"
+    "./support": "./src/support.ts",
+    "./stages": "./src/stages.ts",
+    "./community": "./src/community.ts",
+    "./feeds": "./src/feeds.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
