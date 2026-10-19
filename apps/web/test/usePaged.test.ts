@@ -80,4 +80,29 @@ describe("usePaged", () => {
     act(() => hook.loadMore());
     expect(calls[3]!.cursor).toBe("c2");
   });
+
+  it("takes a refreshed page whole, with its cursor, when it does not reach the loaded rows", async () => {
+    render("all");
+    await answer(calls[0], page(rows(5, 4), "c1"));
+    act(() => hook.refresh());
+    // more than a page arrived since: merging would leave a hole between 8 and 5 that no cursor can reach
+    await answer(calls[1], page(rows(9, 8), "x"));
+    expect(hook.items.map((r) => r.id)).toEqual([9, 8]);
+    act(() => hook.loadMore());
+    expect(calls[2]!.cursor).toBe("x");
+  });
+
+  it("takes a refreshed page whole when it holds the entire list", async () => {
+    render("all");
+    await answer(calls[0], page([]));
+    expect(hook.hasMore).toBe(false);
+    act(() => hook.refresh());
+    await answer(calls[1], page(rows(3, 2), "x"));
+    expect(hook.items.map((r) => r.id)).toEqual([3, 2]);
+    expect(hook.hasMore).toBe(true);
+    act(() => hook.refresh());
+    await answer(calls[2], page(rows(3)));
+    expect(hook.items.map((r) => r.id)).toEqual([3]);
+    expect(hook.hasMore).toBe(false);
+  });
 });

@@ -32,9 +32,11 @@ export function usePaged<T>(
   // the latest fetcher and key, for refresh(); `deps` alone drives the loads
   const fetchRef = useRef(fetcher);
   const keyOf = useRef(opts.keyOf);
+  const itemsRef = useRef(items);
   useEffect(() => {
     fetchRef.current = fetcher;
     keyOf.current = opts.keyOf;
+    itemsRef.current = items;
   });
 
   const load = useCallback(async (from: string | null, reset: boolean) => {
@@ -67,8 +69,10 @@ export function usePaged<T>(
     void load(null, true);
   }, [load]);
 
-  // The first page again, merged in front of what is loaded: its rows replace their loaded copies, the older
-  // loaded rows stay, and the cursor still points past the oldest of them.
+  // The first page again. When its oldest row is one already loaded, it is merged in front: its rows replace
+  // their loaded copies, the older loaded rows stay, and the cursor still points past the oldest of them.
+  // Otherwise it replaces the list with its own cursor: either it is the whole list, or more than a page
+  // arrived since and a merge would leave a gap no cursor reaches.
   const refresh = useCallback(() => {
     const key = keyOf.current;
     if (!key) {
@@ -79,6 +83,15 @@ export function usePaged<T>(
     fetchRef.current(null).then(
       (r) => {
         if (g !== gen.current) return;
+        const last = r.items[r.items.length - 1];
+        const reaches =
+          r.hasMore && last !== undefined && itemsRef.current.some((it) => key(it) === key(last));
+        if (!reaches) {
+          setItems(r.items);
+          setCursor(r.nextCursor);
+          setHasMore(r.hasMore);
+          return;
+        }
         setItems((prev) => {
           const fresh = new Set(r.items.map(key));
           return [...r.items, ...prev.filter((it) => !fresh.has(key(it)))];
