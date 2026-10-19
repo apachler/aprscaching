@@ -357,6 +357,7 @@
     .landing-term-rx {
       /* three blinks, under the 5 s past which motion needs a pause control (WCAG 2.2.2); it ends lit */
       animation: landing-blink 1.6s step-end 3;
+      animation-delay: var(--landing-skew, 0s);
     }
     /* --landing-skew: the app's copy, taking over from the prerendered one, carries on where it is (Landing.tsx) */
     .landing-frame,

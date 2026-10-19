@@ -95,4 +95,26 @@ describe("motion", () => {
       .map((d) => `${d.line} ${d.prop}: ${d.value}`);
     expect(loops).toEqual([]);
   });
+
+  // the app's landing takes over from the prerendered one mid-sequence; an animation that ignores the skew starts
+  // again from the beginning, and the page plays it twice
+  it("starts every landing animation where the prerendered copy is", () => {
+    const landing = files.find((f) => f.name === "surfaces/landing.css")!;
+    const css = landing.css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: m[1]!.split(",").map((s) => s.trim()),
+      body: m[2]!,
+    }));
+    const animated = blocks
+      .filter((b) => /(?:^|[;\s])animation\s*:\s*(?!none)/.test(b.body))
+      .flatMap((b) => b.selectors);
+    expect(animated.length).toBeGreaterThan(2);
+    const skewed = (sel: string) =>
+      blocks.some(
+        (b) =>
+          b.selectors.some((s) => s === sel || s.startsWith(sel)) &&
+          /animation(-delay)?\s*:[^;]*var\(--landing-skew/.test(b.body),
+      );
+    expect(animated.filter((s) => !skewed(s))).toEqual([]);
+  });
 });
