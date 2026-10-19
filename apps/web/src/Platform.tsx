@@ -29,6 +29,8 @@ import {
 import { TopBar } from "./TopBar.js";
 import { RadioLinkHost } from "./rf/RadioLinkHost.js";
 import { Tour, TOUR_STEPS, Button, useToast, Icon, usePoll } from "./ui/index.js";
+import { latestOnly, onceEvery } from "./ui/latest.js";
+import { startOperatorCheck } from "./identity/operatorCheck.js";
 import { GAME_TOUR_STEPS, SHACK_TOUR_STEPS } from "./ui/tourSteps.js";
 import { TourBanner } from "./platform/TourBanner.js";
 import type { TourName } from "./deeplink.js";
@@ -84,6 +86,7 @@ import {
   CACHES_EVENT,
   cacheIdByCode,
   cacheLoadText,
+  errorText,
   ensureDeviceKey,
   offlineReady,
   listWatch,
@@ -353,25 +356,17 @@ export default function Platform({
   // basemap/tools and apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
   // untouched (the endpoint is session-gated). localStorage stays the source of truth.
   // Instance-operator (sysop) check — reveals the admin surface only for the ham who deployed this instance.
-  useEffect(() => {
-    if (!session.signedIn) {
-      setSysop(false);
-      setOperatorPending(false);
-      setSysopKnown(true);
-      return;
-    }
-    adminWhoami()
-      .then((r) => {
-        setSysop(!!r.sysop);
-        setOperatorPending(r.pending === "verify");
-      })
-      .catch(() => {
-        setSysop(false);
-        setOperatorPending(false);
-      })
-      .finally(() => setSysopKnown(true));
-    // re-asked when the call's verification changes: the operator confirms it from the CLI, then re-checks
-  }, [session.signedIn, session.verified]);
+  // Re-asked when the call's verification changes (the operator confirms it from the CLI, then re-checks) and when
+  // the session's call changes (another account, or a switch between its calls): the answer is per call.
+  useEffect(
+    () =>
+      startOperatorCheck(session.signedIn, adminWhoami, (s) => {
+        setSysop(s.sysop);
+        setOperatorPending(s.pending);
+        setSysopKnown(s.known);
+      }),
+    [session.signedIn, session.verified, session.callsign],
+  );
   useEffect(() => {
     const onSync = () => setLocSettings(loadSettings());
     window.addEventListener(PREFS_EVENT, onSync);
@@ -797,43 +792,62 @@ export default function Platform({
     [send],
   );
 
+  // Refreshes overlap (every pan, the layer toggles, the offline poll) and answer in arrival order: only the
+  // newest run writes, so the markers always belong to the viewport on screen. A failed cache load says so,
+  // once per half minute rather than on every pan; an offline answer is not a failure (it reads the pack).
+  const [refreshTurn] = useState(latestOnly);
+  const [mapLoadNotice] = useState(() => onceEvery(30_000));
   const refresh = useCallback(async () => {
     const m = mapRef.current;
     if (!m && !mapFailed) return;
+    const current = refreshTurn();
     const bbox = m ? bboxOf(m) : fallbackBbox(location.hash, DEFAULT_CENTER);
     subscribeLive(bbox);
     try {
       const r = await listCaches(bbox, includeUnvettedRef.current);
+      if (!current()) return;
       setCaches(r.caches);
       setOfflineMap(r.offline ? { source: r.source ?? null } : null);
     } catch (e) {
       console.error(e);
+      if (!current()) return;
+      if (mapLoadNotice()) toast(`Couldn't load the caches here: ${errorText(e)}`);
     } finally {
       setReady(true);
     }
     if (stationsOnRef.current) {
       try {
-        setStations((await getStations(bbox)).stations);
+        const r = await getStations(bbox);
+        if (!current()) return;
+        setStations(r.stations);
       } catch (e) {
         console.error(e);
       }
     }
     if (meshcomRef.current.on) {
       try {
-        setMeshcomNodes((await getMeshcomNodes(bbox)).nodes);
-        if (meshcomRef.current.links) setMeshcomLinks((await getMeshcomLinks(bbox)).links);
+        const nodes = await getMeshcomNodes(bbox);
+        if (!current()) return;
+        setMeshcomNodes(nodes.nodes);
+        if (meshcomRef.current.links) {
+          const links = await getMeshcomLinks(bbox);
+          if (!current()) return;
+          setMeshcomLinks(links.links);
+        }
       } catch (e) {
         console.error(e);
       }
     }
     if (spotsOnRef.current) {
       try {
-        setSpots((await getSpots(bbox, spotFiltersRef.current)).spots);
+        const r = await getSpots(bbox, spotFiltersRef.current);
+        if (!current()) return;
+        setSpots(r.spots);
       } catch (e) {
         console.error(e);
       }
     }
-  }, [subscribeLive, mapRef, mapFailed]);
+  }, [subscribeLive, mapRef, mapFailed, refreshTurn, mapLoadNotice, toast]);
   refreshRef.current = refresh;
 
   // re-fetch the map when the unvetted-network toggle flips
@@ -1224,7 +1238,12 @@ export default function Platform({
               />
             )}
             {view.kind === "station" && (
-              <StationPanel picked={view.call} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
+              <StationPanel
+                picked={view.call}
+                onFly={(lat, lon) => flyTo(lat, lon, 12)}
+                onClose={closeView}
+                styleEpoch={styleEpoch}
+              />
             )}
             {isPanel("signin") && (
               <SignIn

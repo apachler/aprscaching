@@ -2,6 +2,7 @@
 import {
   type AttentionLog,
   type FlushResult,
+  type LogKey,
   type QueuedLog,
   type QueueStore,
   type SendFailure,
@@ -2200,8 +2201,12 @@ async function askForBackgroundSync(instance: string): Promise<void> {
 }
 
 /** Queue a refused log again (optionally with a new comment) and try it at once. */
-export async function retryAttentionLog(index: number, comment?: string): Promise<FlushResult> {
-  await retryAttention(queueStore, index, Date.now(), comment);
+export async function retryAttentionLog(key: LogKey, comment?: string): Promise<FlushResult> {
+  // under the flush's lock, so a flush in this page or the service worker never writes over it; released
+  // before the flush below, which takes the lock itself
+  await withQueueLock(() =>
+    retryAttention(queueStore, { cacheId: key.cacheId, queuedAt: key.queuedAt }, Date.now(), comment),
+  );
   queueChanged();
   return flushLogQueue();
 }
@@ -2217,8 +2222,8 @@ export async function knownServiceCall(): Promise<string | null> {
 }
 
 /** Remove a refused log for good. */
-export async function discardAttentionLog(index: number): Promise<void> {
-  await discardAttention(queueStore, index);
+export async function discardAttentionLog(key: LogKey): Promise<void> {
+  await withQueueLock(() => discardAttention(queueStore, { cacheId: key.cacheId, queuedAt: key.queuedAt }));
   queueChanged();
 }
 

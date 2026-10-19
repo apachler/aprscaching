@@ -41,11 +41,18 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
   const [scanning, setScanning] = useState(false);
 
   const [loadErr, setLoadErr] = useState(false);
+  // only the latest request writes the list: an earlier one (another cache, or before sign-in) may answer last
+  const loadSeq = useRef(0);
   const load = useCallback(() => {
+    const seq = ++loadSeq.current;
     setLoadErr(false);
     getStages(props.cacheId, props.callsign || undefined)
-      .then((r) => setStages(r.stages))
-      .catch(() => setLoadErr(true));
+      .then((r) => {
+        if (seq === loadSeq.current) setStages(r.stages);
+      })
+      .catch(() => {
+        if (seq === loadSeq.current) setLoadErr(true);
+      });
   }, [props.cacheId, props.callsign]);
   useEffect(() => {
     load();

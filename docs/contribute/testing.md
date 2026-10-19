@@ -53,8 +53,9 @@ and writes `coverage/` (html, lcov, json-summary). The `unit test coverage` CI j
 report as an artifact. No threshold applies; the number is measured, not gated.
 
 `servers/bun` intentionally has no vitest: the Bun **conformance** job (below) covers it. `apps/web`
-runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse
-check under jsdom: data loading, polling, navigation history) beside its typecheck + build and three guards:
+runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`: data loading, polling, navigation
+history) beside its typecheck + build and three guards. Only the Mermaid parse check and a few component and hook
+tests run under jsdom, for state that must hold when a sheet re-renders or a late answer lands. The guards are
 `no-emoji.mjs`, `tour-anchors.mjs` (every tour anchor resolves) and `vendor-maplibre.mjs` (the vendored
 MapLibre).
 

@@ -86,11 +86,36 @@ describe("the offline log queue", () => {
     await enqueue(s, { cacheId: 2, body: body() }, T0);
     await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
     expect(await loadAttention(s)).toHaveLength(2);
-    await retryAttention(s, 0, T0 + 1, "new");
+    await retryAttention(s, { cacheId: 1, queuedAt: T0 }, T0 + 1, "new");
     expect(await loadQueue(s)).toMatchObject([{ cacheId: 1, body: { comment: "new" }, queuedAt: T0 + 1 }]);
     expect((await loadQueue(s))[0]).not.toHaveProperty("reason");
-    await discardAttention(s, 0);
+    await discardAttention(s, { cacheId: 2, queuedAt: T0 });
     expect(await loadAttention(s)).toEqual([]);
+  });
+
+  it("discards the refused log the user picked, even when the list moved under the confirm dialog", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, body: body() }, T0);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
+    // the user taps Discard on cache 2 (second in the list) and, while the dialog is open, retries cache 1,
+    // which the instance refuses again: the list is now [2, 1]
+    const picked = (await loadAttention(s))[1]!;
+    await retryAttention(s, { cacheId: 1, queuedAt: T0 }, T0 + 1);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0 + 1);
+    expect((await loadAttention(s)).map((a) => a.cacheId)).toEqual([2, 1]);
+    await discardAttention(s, { cacheId: picked.cacheId, queuedAt: picked.queuedAt });
+    expect((await loadAttention(s)).map((a) => a.cacheId)).toEqual([1]);
+  });
+
+  it("changes nothing for a refused log that is no longer in the list", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
+    await discardAttention(s, { cacheId: 1, queuedAt: T0 + 99 });
+    await retryAttention(s, { cacheId: 9, queuedAt: T0 }, T0 + 1);
+    expect(await loadAttention(s)).toHaveLength(1);
+    expect(await loadQueue(s)).toEqual([]);
   });
 
   it("keeps a log queued while a flush is still sending", async () => {

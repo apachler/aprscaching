@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
+import { TimeZoneField } from "./TimeZoneField.js";
 import { useRadioLink } from "../rf/RadioLinkHost.js";
 import { LINK_LABEL } from "../rf/radioLink.js";
 import {
@@ -15,7 +16,7 @@ import {
   type SourceInfo,
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
-import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
+import { useFmt, browserLocale, type LocaleSettings } from "../format.js";
 import {
   Panel,
   Group,
@@ -338,14 +339,7 @@ export function SettingsPanel(props: {
                 onChange={(e) => props.onApply({ ...s, locale: e.target.value.trim() })}
               />
             </label>
-            <label>
-              Time zone
-              <input
-                value={s.timeZone}
-                placeholder={`browser (${browserTimeZone()})`}
-                onChange={(e) => props.onApply({ ...s, timeZone: e.target.value.trim() })}
-              />
-            </label>
+            <TimeZoneField value={s.timeZone} onApply={(timeZone) => props.onApply({ ...s, timeZone })} />
           </Advanced>
           <Row label="Preview">
             <span className="mono">

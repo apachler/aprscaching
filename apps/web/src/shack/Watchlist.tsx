@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, type WatchEntry } from "../api.js";
+import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, errorText, type WatchEntry } from "../api.js";
 import { useFmt } from "../format.js";
 import { alertKindView } from "./alertKinds.js";
 import {
@@ -51,12 +51,21 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
     }
   }
   async function remove(cs: string) {
-    await removeWatch(cs).catch(() => {});
+    try {
+      await removeWatch(cs);
+    } catch (e) {
+      toast(`Couldn't stop watching ${cs}: ${errorText(e)}`);
+    }
     loadSummary();
   }
   async function clearSeen() {
-    await markWatchSeen().catch(() => {});
-    summary.setData((d) => (d ? { ...d, unseen: 0 } : d));
+    try {
+      await markWatchSeen();
+      // the count drops only once the instance has the change; otherwise it would come back on the next poll
+      summary.setData((d) => (d ? { ...d, unseen: 0 } : d));
+    } catch (e) {
+      toast(`Couldn't mark the alerts seen: ${errorText(e)}`);
+    }
     alerts.reload();
   }
 

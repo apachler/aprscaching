@@ -105,13 +105,8 @@ export function OutboxPanel(props: { onClose: () => void }) {
               <p className="muted">Nothing was refused.</p>
             ) : (
               <ul className="outbox">
-                {attention.map((l, i) => (
-                  <AttentionItem
-                    key={`${l.cacheId}-${l.refusedAt}-${i}`}
-                    log={l}
-                    index={i}
-                    when={fmt.dateTime(madeAt(l))}
-                  />
+                {attention.map((l) => (
+                  <AttentionItem key={`${l.cacheId}-${l.queuedAt}`} log={l} when={fmt.dateTime(madeAt(l))} />
                 ))}
               </ul>
             )}
@@ -155,7 +150,7 @@ export function OutboxPanel(props: { onClose: () => void }) {
   );
 }
 
-function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; when: string }) {
+function AttentionItem(props: { log: AttentionLog<QueueBody>; when: string }) {
   const l = props.log;
   const confirm = useConfirm();
   const toast = useToast();
@@ -166,7 +161,7 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; whe
   async function retry() {
     setBusy(true);
     try {
-      const r = await retryAttentionLog(props.index, edited ? comment : undefined);
+      const r = await retryAttentionLog(l, edited ? comment : undefined);
       toast(r.sent ? "Sent" : r.refused ? "Refused again" : "Queued; it goes when the connection allows");
     } catch (e) {
       toast(`Retry failed: ${errorText(e)}`);
@@ -181,10 +176,10 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; whe
       confirmLabel: "Discard",
       danger: true,
     });
-    if (ok) await discardAttentionLog(props.index);
+    if (ok) await discardAttentionLog(l);
   }
 
-  const noteId = `outbox-note-${props.index}`;
+  const noteId = `outbox-note-${l.cacheId}-${l.queuedAt}`;
   return (
     <li className="outbox-item">
       <div className="row">

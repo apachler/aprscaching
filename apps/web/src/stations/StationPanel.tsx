@@ -34,6 +34,8 @@ export function StationPanel(props: {
   picked: string;
   onFly: (lat: number, lon: number) => void;
   onClose: () => void;
+  /** The map's style epoch: the track replay re-adds its layers when it bumps. */
+  styleEpoch?: number;
 }) {
   const { callsign, map } = usePlatform();
   const fmt = useFmt();
@@ -198,7 +200,7 @@ export function StationPanel(props: {
             />
           </section>
           <MeshcomSection callsign={station.callsign} />
-          <TrackReplay map={map} callsign={station.callsign} />
+          <TrackReplay map={map} callsign={station.callsign} styleEpoch={props.styleEpoch} />
           <StationGraphs callsign={station.callsign} />
           <StationPackets callsign={station.callsign} />
         </Card>
