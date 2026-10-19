@@ -147,7 +147,8 @@ signed-out visitor reaches them too. It skips without a Chromium, fails in CI wi
 - **The UI kit** — `/?demo=ui` in a running app (`pnpm dev`): every token, the role scales and every
   primitive in every state, with a theme, density and scale switch ([Design language](design/design-language.md)).
 - **The whole app on fixtures** — `/?demo=app` serves the app from canned gateway answers
-  (`apps/web/src/demo/fixtures.ts`); `&as=sysop` or `&as=out` changes who is signed in.
+  (`apps/web/src/demo/fixtures.ts`); `&as=sysop` or `&as=out` changes who is signed in. The `?demo=` benches load
+  in a development build and under the visual harness's driven browser; a production page ignores `?demo=`.
 - **Visual and axe harness** — after `pnpm --filter @aprscaching/web build`:
 
     ```bash

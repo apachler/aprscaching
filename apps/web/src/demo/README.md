@@ -7,8 +7,14 @@ in-process simulator, so the surfaces render fully populated.
 ## Use
 
 ```
-pnpm --filter @aprscaching/web dev      # or: build + vite preview
+pnpm --filter @aprscaching/web dev
 ```
+
+The benches load only in a development build or a driven browser (`navigator.webdriver`, as the visual and
+accessibility harness runs it), through `demoAllowed()` in `allowed.ts`. A production page a person opens ignores
+`?demo=` and loads the app: a bench signs the page in as a fixture account with a verified callsign and writes to
+the visitor's own storage. The public tours (`/tour/game`, `/tour/shack`, `tourMode.ts`) are the isolated demo for
+visitors.
 
 Then open:
 
@@ -30,7 +36,7 @@ Then open:
   `BbsPanel` populates with no gateway. Only `/api/bbs/*` is intercepted; everything else passes through.
 - **`DemoHarness.tsx`** — mounts the surfaces; reached via the `?demo=` branch in `main.tsx`.
 
-Nothing here ships in the production app path: the `?demo=` code-splits into its own chunk, and
+The `?demo=` code splits into its own chunk that a production page loads only under webdriver, and
 `PacketTerminal` with no `makeTransport` uses real Web Serial behind its support gate.
 
 ## Why it exists
