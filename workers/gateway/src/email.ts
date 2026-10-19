@@ -2,7 +2,6 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
-import { corsAllowlist } from "./app.js";
 import { json } from "./http.js";
 import { reclaimStatements } from "./claims.js";
 import {
@@ -27,7 +26,7 @@ import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
 import { appBase, gatewayBase } from "./sitemap.js";
 import { linkOrigin } from "./visitor.js";
-import { instanceOrigins, isInstanceOrigin, requestOrigin } from "./origins.js";
+import { instanceOrigins, isInstanceOrigin, requestOrigin, sameSiteOrigin } from "./origins.js";
 import { sendEmail } from "./mail.js";
 import { linkPageResponse, wantsPage } from "./linkpage.js";
 
@@ -267,19 +266,6 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
     account: existing ? "existing" : "new",
     expiresIn: TTL_SEC,
   });
-}
-
-/** A browser POST must come from this gateway's own page or the configured app origins. A request with
- *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
-function sameSiteOrigin(req: Request, env: Env): boolean {
-  const origin = req.headers.get("origin");
-  if (origin === null) return true;
-  try {
-    const o = new URL(origin);
-    return o.host === new URL(req.url).host || corsAllowlist(env).has(o.origin);
-  } catch {
-    return false; // "null" (sandboxed/opaque) or garbage
-  }
 }
 
 /** What a link's confirm can end in, short of a session: the API's JSON error, and the page a browser sees. */

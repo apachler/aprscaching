@@ -856,3 +856,51 @@ describe("the on-air proof of a claim", () => {
     expect((await start(claims[4]!, "198.51.100.3")).status).toBe(429);
   });
 });
+
+describe("the internet proofs of a claim", () => {
+  for (const method of ["ampr", "lotw"] as const)
+    it(`bound ${method} starts per claim and per client address, so no claimant uses up another's`, async () => {
+      const env = claimEnv();
+      await emailSignup(env, "squat@example.test", "OE8APR");
+      const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
+      const b = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.2");
+      const start = (claim: string, ip: string) =>
+        call(env, "POST", `/verify/${method}/start`, { callsign: "OE8APR", claim }, {}, ip);
+      for (let i = 0; i < 5; i++) expect((await start(a.data.claim, "198.51.100.1")).status).toBe(200);
+      expect((await start(a.data.claim, "198.51.100.1")).status).toBe(429);
+      // another claimant on the same call, from another address, still gets a challenge
+      expect((await start(b.data.claim, "198.51.100.2")).status).toBe(200);
+      // one address opening claim after claim runs into its own budget: 20 starts an hour across its claims
+      const claims: string[] = [];
+      for (let i = 0; i < 5; i++)
+        claims.push((await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.3")).data.claim);
+      for (const c of claims.slice(0, 4))
+        for (let i = 0; i < 5; i++) expect((await start(c, "198.51.100.3")).status).toBe(200);
+      expect((await start(claims[4]!, "198.51.100.3")).status).toBe(429);
+    });
+
+  for (const method of ["ampr", "lotw"] as const)
+    it(`keep the holder's own ${method} starts on a budget of the call's, apart from every claim's`, async () => {
+      const env = claimEnv();
+      const holder = await emailSignup(env, "squat@example.test", "OE8APR");
+      const own = (ip: string) =>
+        call(env, "POST", `/verify/${method}/start`, { callsign: "OE8APR" }, { cookie: holder.cookie }, ip);
+      const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
+      for (let i = 0; i < 5; i++)
+        expect(
+          (
+            await call(
+              env,
+              "POST",
+              `/verify/${method}/start`,
+              { callsign: "OE8APR", claim: a.data.claim },
+              {},
+              "198.51.100.1",
+            )
+          ).status,
+        ).toBe(200);
+      // the claim's spent starts leave the holder's alone, and the holder's are five an hour for the call
+      for (let i = 0; i < 5; i++) expect((await own(`198.51.100.${10 + i}`)).status).toBe(200);
+      expect((await own("198.51.100.20")).status).toBe(429);
+    });
+});

@@ -28,7 +28,7 @@ export function mainOrigin(env: Env): string | null {
 }
 
 /** The valid EXTRA_ORIGINS entries as origins, APP_URL's own left out. */
-export function extraOrigins(env: Env): string[] {
+function extraOrigins(env: Env): string[] {
   const main = mainOrigin(env);
   return parseOriginList(env.EXTRA_ORIGINS).origins.filter((o) => o !== main);
 }
@@ -40,7 +40,7 @@ export function instanceOrigins(env: Env): string[] {
 }
 
 /** Is `origin` a secure context a browser offers passkeys and the other https-only features on? */
-export function secureOrigin(origin: string): boolean {
+function secureOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     return u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname));
@@ -113,4 +113,59 @@ export function handleWebauthnOrigins(env: Env): Response {
   return new Response(JSON.stringify({ origins: passkeyOrigins(env) }), {
     headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" },
   });
+}
+
+/** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
+ *  APP_URL, the instance's other addresses (EXTRA_ORIGINS) and any CORS_ORIGINS, each only when it is https
+ *  or loopback: a page on a plain-http origin can be rewritten by anyone on its network path, so it never
+ *  rides a member's cookie across origins (the app on that origin is same-origin and needs no CORS). An empty
+ *  list allows none: an unconfigured instance serves only non-credentialed CORS, so no third-party page can
+ *  ride a signed-in user's cookie. */
+export function corsAllowlist(env: Env): Set<string> {
+  const list = new Set<string>();
+  const add = (u?: string) => {
+    const s = u?.trim();
+    if (!s) return;
+    try {
+      const origin = new URL(s).origin;
+      if (secureOrigin(origin)) list.add(origin);
+    } catch {
+      /* ignore a malformed entry */
+    }
+  };
+  add(env.APP_URL);
+  for (const o of extraOrigins(env)) add(o);
+  for (const o of (env.CORS_ORIGINS ?? "").split(",")) add(o);
+  return list;
+}
+
+/** A browser POST must come from this gateway's own page or the configured app origins. A request with
+ *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
+export function sameSiteOrigin(req: Request, env: Env): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) return true;
+  try {
+    const o = new URL(origin);
+    return o.host === new URL(req.url).host || corsAllowlist(env).has(o.origin);
+  } catch {
+    return false; // "null" (sandboxed/opaque) or garbage
+  }
+}
+
+/**
+ * Is this a state-changing request that rides the session cookie from a page outside the instance? The
+ * cookie is SameSite=Lax, which keeps it off cross-site requests only: a page on another port of the same
+ * host, or on a sibling subdomain, is same-site, and its POST carries the cookie. A text/plain body needs no
+ * preflight, so the request itself must say where it came from. The browser's Sec-Fetch-Site decides when it
+ * is sent (same-origin, or a direct navigation, or else a configured app origin); without it the Origin
+ * header does. A request without the cookie (ingest, federation, a box, a Bearer key) is not one.
+ */
+export function crossOriginWrite(req: Request, env: Env): boolean {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return false;
+  if (!/(?:^|;\s*)acs=/.test(req.headers.get("cookie") ?? "")) return false;
+  const site = req.headers.get("sec-fetch-site")?.toLowerCase();
+  if (site === undefined) return !sameSiteOrigin(req, env);
+  if (site === "same-origin" || site === "none") return false;
+  const origin = req.headers.get("origin");
+  return origin === null || !corsAllowlist(env).has(origin);
 }

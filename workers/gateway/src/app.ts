@@ -78,7 +78,7 @@ import { handleSecurityTxt } from "./securitytxt.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleImprintPage, handlePrivacyPage, handleTermsPage } from "./legal.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
-import { extraOrigins, handleWebauthnOrigins, secureOrigin } from "./origins.js";
+import { corsAllowlist, crossOriginWrite, handleWebauthnOrigins } from "./origins.js";
 import {
   handleActivityFeed,
   handleCachesFeed,
@@ -269,6 +269,8 @@ const internalError = (): Response => json({ error: "internal error" }, { status
 async function handleRequest(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   applyDerivedDefaults(env);
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
+  if (crossOriginWrite(req, env))
+    return withCors(json({ error: "cross-origin write refused" }, { status: 403 }), req, env);
   await loadSiteSettings(env);
   const res = await route(req, env, ctx);
   const path = new URL(req.url).pathname;
@@ -922,30 +924,6 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (importedPlace && m === "DELETE") return handleRemoveImportedPlace(req, env, Number(importedPlace[1]));
 
   return new Response("not found", { status: 404 });
-}
-
-/** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
- *  APP_URL, the instance's other addresses (EXTRA_ORIGINS) and any CORS_ORIGINS, each only when it is https
- *  or loopback: a page on a plain-http origin can be rewritten by anyone on its network path, so it never
- *  rides a member's cookie across origins (the app on that origin is same-origin and needs no CORS). An empty
- *  list allows none: an unconfigured instance serves only non-credentialed CORS, so no third-party page can
- *  ride a signed-in user's cookie. */
-export function corsAllowlist(env: Env): Set<string> {
-  const list = new Set<string>();
-  const add = (u?: string) => {
-    const s = u?.trim();
-    if (!s) return;
-    try {
-      const origin = new URL(s).origin;
-      if (secureOrigin(origin)) list.add(origin);
-    } catch {
-      /* ignore a malformed entry */
-    }
-  };
-  add(env.APP_URL);
-  for (const o of extraOrigins(env)) add(o);
-  for (const o of (env.CORS_ORIGINS ?? "").split(",")) add(o);
-  return list;
 }
 
 /** CORS that reflects the request origin so the SPA (different origin) can call the API. Credentials

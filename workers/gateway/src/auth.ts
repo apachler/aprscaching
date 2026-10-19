@@ -705,6 +705,35 @@ async function addRefusal(env: Env, base: string): Promise<CallRefusal | null> {
 }
 
 /**
+ * An unverified held call answers every other sign-up for it with "prove you control it", so an account holds
+ * only a few calls unverified at a time: proving control of one makes room for another. Without the cap one
+ * account could take on a whole licence list and leave each licensee to a claim or the sysop.
+ */
+const MAX_UNVERIFIED_CALLS = 3;
+/** Taking on a new call, per client address and per account. */
+const ADD_CALL_LIMITS = { perIp: 20, perIdentity: 10, windowMs: 3_600_000 };
+
+/** The answer refusing `accountId` another new call (the throttle or the cap), or null to go ahead. */
+async function addCallRefusal(req: Request, env: Env, accountId: string): Promise<Response | null> {
+  const limited = await authThrottled(env, req, "addcall", accountId, ADD_CALL_LIMITS);
+  if (limited) return limited;
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM account_callsigns ac WHERE ac.account_id = ? AND NOT EXISTS
+       (SELECT 1 FROM callsign_verifications v WHERE v.callsign = ac.callsign AND v.status = 'verified')`,
+  )
+    .bind(accountId)
+    .first<{ n: number }>();
+  if ((row?.n ?? 0) < MAX_UNVERIFIED_CALLS) return null;
+  return json(
+    {
+      reason: "too_many_unverified",
+      error: `you hold ${MAX_UNVERIFIED_CALLS} callsigns you have not verified — verify one before adding another`,
+    },
+    { status: 409 },
+  );
+}
+
+/**
  * POST /auth/callsigns {callsign} — add another base call to the signed-in account (unverified;
  * verify it by an on-air VERIFY challenge). Does NOT change the active call. A base call can be held by
  * only one account, so a call already on another account is rejected.
@@ -719,6 +748,8 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
   if (holder === me.accountId) return json({ error: "you already hold that callsign" }, { status: 409 });
   const refused = await addRefusal(env, base);
   if (refused) return refusalResponse(refused);
+  const capped = await addCallRefusal(req, env, me.accountId);
+  if (capped) return capped;
   try {
     await env.DB.batch(holdCall(env, me.accountId, base, false, nowS()));
   } catch {
@@ -745,6 +776,10 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   const owner = await baseHolder(env, next);
   const refused = owner === me.accountId ? null : await addRefusal(env, next);
   if (refused) return refusalResponse(refused);
+  if (!owner) {
+    const capped = await addCallRefusal(req, env, me.accountId);
+    if (capped) return capped;
+  }
   const now = nowS();
   // a held call keeps its verification (no re-verify); a brand-new base call is held, unverified
   const verified = owner === me.accountId && (await isCallsignVerified(env, next));
