@@ -84,8 +84,7 @@ export function usePaged<T>(
       (r) => {
         if (g !== gen.current) return;
         const last = r.items[r.items.length - 1];
-        const reaches =
-          r.hasMore && last !== undefined && itemsRef.current.some((it) => key(it) === key(last));
+        const reaches = r.hasMore && last !== undefined && itemsRef.current.some((it) => key(it) === key(last));
         if (!reaches) {
           setItems(r.items);
           setCursor(r.nextCursor);
