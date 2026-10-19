@@ -14,6 +14,15 @@ export interface SpaFile {
   cacheControl: string;
 }
 
+/**
+ * The headers of the answer when no file answers. It is never cached: a 404 for an asset a new build is
+ * still copying in, kept by a cache in front, would outlive the copy.
+ */
+export const SPA_NOT_FOUND_HEADERS: Readonly<Record<string, string>> = {
+  "content-type": "text/plain; charset=utf-8",
+  "cache-control": "no-store",
+};
+
 const HTML = "text/html; charset=utf-8";
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const TYPES: Record<string, string> = {

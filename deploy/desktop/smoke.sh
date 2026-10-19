@@ -44,7 +44,9 @@ grep -qi "^cache-control: no-cache$" <<<"$head" || fail "the web app at / is cac
 ok "with the page headers, revalidated on every load"
 code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/assets/missing-000.js")"
 [ "$code" = 404 ] || fail "a missing asset answers $code, not 404"
-ok "a missing asset is a 404"
+miss="$(curl -sS -o /dev/null -D - --max-time 5 "$BASE/assets/missing-000.js" | tr -d '\r')"
+grep -qi "^cache-control: no-store$" <<<"$miss" || fail "a missing asset answers a 404 a cache may keep"
+ok "a missing asset is a 404, never cached"
 
 n=0
 while IFS= read -r -d '' f; do

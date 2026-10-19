@@ -23,7 +23,7 @@ import { createServer, type BunServer } from "../../servers/bun/server.ts";
 import { migrationsFromDir } from "../../servers/node/src/migrate.ts";
 import { resolveInstanceSecrets } from "../../servers/node/src/secrets.ts";
 import { compressed, negotiate } from "../../servers/node/src/compress.ts";
-import { embeddedSpaFile, spaFile } from "../../servers/node/src/spa.ts";
+import { embeddedSpaFile, SPA_NOT_FOUND_HEADERS, spaFile } from "../../servers/node/src/spa.ts";
 import { PAGE_HEADERS } from "../../workers/gateway/src/pageheaders.ts";
 
 declare const BUILD_VERSION: string;
@@ -75,7 +75,7 @@ if (!resolved.ok) {
  */
 async function serveSpa(pathname: string, req: Request): Promise<Response> {
   const f = embedded ? embeddedSpaFile(SPA, pathname) : spaFile(WEB_DIST, pathname);
-  if (!f) return new Response("not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+  if (!f) return new Response("not found", { status: 404, headers: SPA_NOT_FOUND_HEADERS });
   const body = Bun.file(f.file);
   const { encoding, vary } = negotiate(f.contentType, body.size, {
     acceptEncoding: req.headers.get("accept-encoding"),

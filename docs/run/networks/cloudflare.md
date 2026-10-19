@@ -75,8 +75,10 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     | Paths | Rule |
     |---|---|
     | `/api`, `/auth`, `/ws`, `/ingest`, `/outbox`, `/federation`, `/.well-known`, `/source` | never cached |
-    | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day |
+    | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day; an error answer, such as a 404 for a file a new release is still copying in, is never cached |
     | `/`, files ending in `.html`, `/sw.js` and the web manifest | never cached, so a new release reaches every visitor at once |
+
+    The command prints Cloudflare's answer and fails when Cloudflare rejects the rules; the zone then keeps the rules it had.
 
 4. Without the tunnel, let only Cloudflare name the visitor. In the repository's top directory, write
    [Cloudflare's address ranges](https://www.cloudflare.com/ips/) to `CF_RANGES` in `deploy/.env`, set

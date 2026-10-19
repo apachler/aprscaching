@@ -21,7 +21,7 @@ import type { Env } from "@aprscaching/gateway/env";
 import { PAGE_HEADERS } from "@aprscaching/gateway/pageheaders";
 import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
-import { spaFile } from "./spa.js";
+import { SPA_NOT_FOUND_HEADERS, spaFile } from "./spa.js";
 import { BODY_MAX_BYTES } from "./host.js";
 import { compressed, negotiate } from "./compress.js";
 
@@ -269,16 +269,14 @@ async function sendSpa(
   headers: http.IncomingHttpHeaders,
 ): Promise<void> {
   if (!f) {
-    nres.statusCode = 404;
-    nres.setHeader("content-type", "text/plain; charset=utf-8");
-    nres.end("not found");
+    nres.writeHead(404, { ...SPA_NOT_FOUND_HEADERS }).end("not found");
     return;
   }
   let stat: fs.Stats;
   try {
     stat = fs.statSync(f.file);
   } catch {
-    nres.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found");
+    nres.writeHead(404, { ...SPA_NOT_FOUND_HEADERS }).end("not found");
     return;
   }
   const { encoding, vary } = negotiate(f.contentType, stat.size, {

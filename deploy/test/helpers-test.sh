@@ -801,4 +801,27 @@ mkdir -p "$PK/c/deploy/pocket" && cp "$PK/src/deploy/pocket/lib.sh" "$PK/c/deplo
 check "pocket.sh installs a branch with --unverified" pocket "$PK/c" --unverified
 check "  … through that branch's install.sh" grep -q -- "--branch main" "$PK/called"
 
+# ---- deploy/cloudflare/cache-rules.sh, against a mocked curl ----------------------------------------------
+CF="$TMP/cf"
+mkdir -p "$CF/bin"
+# the stub keeps the ruleset it was sent and answers as $CF_ANSWER says
+cat >"$CF/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+while [ $# -gt 0 ]; do [ "$1" = --data ] && { printf '%s' "$2" >"$CF_SENT"; shift; }; shift; done
+printf '%s' "$CF_ANSWER"
+STUB
+chmod +x "$CF/bin/curl"
+cache_rules() { # cache_rules ANSWER: runs the script against the stub
+  PATH="$CF/bin:$PATH" CF_SENT="$CF/sent" CF_ANSWER="$1" CF_API_TOKEN=t CF_ZONE_ID=z \
+    bash "$DEPLOY/cloudflare/cache-rules.sh" >"$CF/out" 2>&1
+}
+rm -f "$CF/sent"
+check "cache-rules.sh succeeds when Cloudflare accepts the rules" cache_rules '{"success":true,"errors":[]}'
+assets_rule() { node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).rules.find((x)=>x.expression.includes("/assets/")); console.log(JSON.stringify(r.action_parameters.edge_ttl.status_code_ttl ?? null))' "$CF/sent"; }
+check "  … and keeps no error answer at the edge, whatever the edge TTL of /assets/" \
+  eq "$(assets_rule)" '[{"status_code_range":{"from":400,"to":599},"value":-1}]'
+check "cache-rules.sh fails when Cloudflare rejects the rules" \
+  bash -c "! PATH='$CF/bin:$PATH' CF_SENT='$CF/sent' CF_ANSWER='{\"success\":false,\"errors\":[{\"message\":\"bad rule\"}]}' CF_API_TOKEN=t CF_ZONE_ID=z bash '$DEPLOY/cloudflare/cache-rules.sh' >'$CF/out' 2>&1"
+check "  … and quotes what Cloudflare said" grep -q "bad rule" "$CF/out"
+
 if [ "$FAILED" = 0 ]; then echo; echo "all helper checks passed"; else echo; echo "helper checks FAILED"; exit 1; fi

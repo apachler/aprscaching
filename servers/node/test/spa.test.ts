@@ -295,6 +295,8 @@ describe("page headers", () => {
       const missing = await fetch(`http://127.0.0.1:${s.port}/assets/gone-000.js`);
       expect(missing.status).toBe(404);
       expect(missing.headers.get("content-type")).not.toContain("text/html");
+      // a 404 for a file a new build is still copying in must not be kept by a cache in front
+      expect(missing.headers.get("cache-control")).toBe("no-store");
     } finally {
       await s.close();
     }
