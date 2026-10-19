@@ -465,6 +465,7 @@ export const CONFIG_KEYS = {
   VITE_SAT_ATTRIBUTION: { type: "string", units: ["web"] },
   DOMAIN: { type: "string", units: ["deploy"], default: ":80", shapes: ["selfhost"] },
   TUNNEL_TOKEN: { type: "string", units: ["deploy"], secret: true, shapes: ["selfhost"] },
+  CF_RANGES: { type: "string", units: ["deploy"], default: "0.0.0.0/0 ::/0", shapes: ["selfhost"] },
   BACKUP_DIR: { type: "string", units: ["deploy"], shapes: ["selfhost", "baremetal", "desktop"] },
   OCI_BUCKET: { type: "string", units: ["deploy"], shapes: ["selfhost", "baremetal", "desktop"] },
   BACKUP_BUCKET: { type: "string", units: ["deploy"], shapes: ["selfhost", "baremetal", "desktop"] },

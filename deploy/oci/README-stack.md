@@ -91,10 +91,11 @@ cd /opt/aprscaching/deploy && sudo docker compose up -d
 With **Nightly backups to a bucket** (the default) the stack creates:
 
 - a private Object Storage bucket, `aprscaching-backups-<suffix>` (the `backup_bucket` output), versioning off;
-- a lifecycle rule that deletes archives after **14 days**;
-- a dynamic group that matches this VM only, and a policy that lets it manage objects in that one bucket and
-  read its own network card (for its public address). The policy also lets the Object Storage service of the
-  region expire objects, which lifecycle rules need.
+- lifecycle rules that delete archives after **14 days** and abort a failed multipart upload after a day;
+- a dynamic group that matches this VM only, and a policy that lets it create, list and read objects in that one
+  bucket and read its own network card (for its public address). The VM can neither delete nor overwrite an
+  object, so a compromised VM cannot wipe its own backups. The policy also lets the Object Storage service of
+  the region expire objects, which lifecycle rules need.
 
 Every night, at a random time between 02:30 and 03:30 UTC, the `aprscaching-backup.timer` runs
 `deploy/aprscaching backup --with-media`. The archive holds the database, the settings, the generated secrets

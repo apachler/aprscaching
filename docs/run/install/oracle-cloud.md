@@ -73,7 +73,8 @@ more unless you set **Allow beyond Always Free**.
 With **Nightly backups to a bucket** on, the VM runs `deploy/aprscaching backup --with-media` every night between
 02:30 and 03:30 UTC. The archive holds the database, the settings, the secrets and the media, and goes to the
 private bucket named in the `backup_bucket` output. The bucket deletes archives after 14 days, and the VM keeps the
-newest three on its own disk. `deploy/aprscaching doctor` reports the age of the newest archive.
+newest three on its own disk. The VM may add archives to the bucket and read them, never delete or overwrite one,
+so a compromised VM cannot wipe its own backups. `deploy/aprscaching doctor` reports the age of the newest archive.
 
 To restore after losing the VM, select **Apply** on the stack again, wait for the first boot, then on the new VM:
 

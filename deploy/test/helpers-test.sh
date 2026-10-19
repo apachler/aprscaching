@@ -71,6 +71,13 @@ check "the image runs as UID 10001, not as root" grep -qx 'USER 10001' "$DEPLOY/
 check "  … which owns /data and /srv/web" grep -q 'chown -R 10001:10001 /data /srv/web' "$DEPLOY/Dockerfile"
 check "  … and is the UID the helper hands the volumes to" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; [ \"\$SELFHOST_UID\" = 10001 ]"
 check "the tunnel overlay resets Caddy's ports" grep -qE '^    ports: !reset \[\]' "$DEPLOY/compose.home.yml"
+# Every image the stack pulls is pinned by version and multi-arch index digest, and Dependabot reads the files
+# that name them; the image the stack builds itself (aprscaching:local) is the one exception.
+IMAGES="$(sed -n -E 's/^ +image: *//p' "$DEPLOY"/*.yml | grep -vx 'aprscaching:local' || true)"
+check "the stack pulls images" test -n "$IMAGES"
+check "  … each pinned by version and index digest" bash -c "! grep -vE '^[a-z0-9./-]+:[0-9][0-9.]*(-[a-z0-9]+)?@sha256:[0-9a-f]{64}\$' <<<\"\$1\"" _ "$IMAGES"
+check "  … and Dependabot refreshes the compose files that name them" \
+  bash -c "awk '/package-ecosystem: docker-compose/ { on = 1 } on && /\"\/deploy\"/ { found = 1 } END { exit !found }' '$DEPLOY/../.github/dependabot.yml'"
 for p in '**/.env' '**/.env.*' '!**/*.example' '**/*.secret' 'deploy/.shape' 'deploy/backups' '**/data' '**/*.db'; do
   check "the image leaves out $p" grep -qxF -- "$p" "$DEPLOY/../.dockerignore"
 done
@@ -84,6 +91,10 @@ if have docker && docker compose version >/dev/null 2>&1; then
   check "with the tunnel overlay, Caddy publishes no port" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; ! selfhost_publishes caddy <<<\"\$1\"" _ \
     "$(merged -f docker-compose.yml -f compose.home.yml)"
   check "  … without it, 80 and 443" bash -c ". '$DEPLOY/lib/shapes/selfhost.sh'; selfhost_publishes caddy <<<\"\$1\"" _ "$(merged -f docker-compose.yml)"
+  check "without CF_RANGES, Caddy passes every address's cf-connecting-ip" \
+    grep -qE "^ +CF_RANGES: 0\.0\.0\.0/0 ::/0\$" <<<"$(merged -f docker-compose.yml)"
+  check "  … with the tunnel overlay, only the stack network's" \
+    grep -qE "^ +CF_RANGES: private_ranges\$" <<<"$(merged -f docker-compose.yml -f compose.home.yml)"
 else
   echo "skip the merged compose configuration (needs docker compose)"
 fi
@@ -347,6 +358,7 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
   check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
   check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
   check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
+  check "  … makes data/ the service user's alone" grep -q "\[acs\] install -d -m 700 /srv/acs/data" "$TMP/out"
   check "  … says the checkout is unverified" grep -q "without verification" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
   check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --no-start --call OE8APR
@@ -391,12 +403,27 @@ render() {
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
     BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'"
 }
-U="$(render)"
-check "a rendered unit uses the install directory" bash -c "grep -q '^WorkingDirectory=/srv/acs\$' <<<'$U' && ! grep -q /opt/aprscaching <<<'$U'"
-check "  … the service user" bash -c "grep -q '^User=acs\$' <<<'$U'"
-check "  … the port" bash -c "grep -q '^Environment=PORT=8090\$' <<<'$U'"
-check "  … the web app" bash -c "grep -q '^Environment=WEB_DIST=/srv/acs/apps/web/dist\$' <<<'$U'"
-check "  … pnpm by absolute path" bash -c "grep -qE '^ExecStart=/[^ ]*(pnpm|corepack pnpm) --filter @aprscaching/node-gateway start\$' <<<'$U'"
+U="$TMP/gateway.unit"
+render >"$U"
+check "a rendered unit uses the install directory" bash -c "grep -q '^WorkingDirectory=/srv/acs\$' '$U' && ! grep -q /opt/aprscaching '$U'"
+check "  … the service user" bash -c "grep -q '^User=acs\$' '$U'"
+check "  … the port" bash -c "grep -q '^Environment=PORT=8090\$' '$U'"
+check "  … the web app" bash -c "grep -q '^Environment=WEB_DIST=/srv/acs/apps/web/dist\$' '$U'"
+check "  … pnpm by absolute path" bash -c "grep -qE '^ExecStart=/[^ ]*(pnpm|corepack pnpm) --filter @aprscaching/node-gateway start\$' '$U'"
+check "  … a read-only system with data/ the one writable place" bash -c "grep -qx 'ProtectSystem=strict' '$U' && grep -qx 'ReadWritePaths=/srv/acs/data' '$U'"
+check "  … no new privileges, no capabilities, owner-only files" bash -c "grep -qx 'NoNewPrivileges=yes' '$U' && grep -qx 'CapabilityBoundingSet=' '$U' && grep -qx 'UMask=0077' '$U'"
+check "  … no devices and no home directories" bash -c "grep -qx 'PrivateDevices=yes' '$U' && grep -qx 'ProtectHome=yes' '$U'"
+I="$TMP/ingest.unit"
+bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
+  BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-ingest.service'" >"$I"
+check "the ingest unit: a read-only system, owner-only files" bash -c "grep -qx 'ProtectSystem=strict' '$I' && grep -qx 'NoNewPrivileges=yes' '$I' && grep -qx 'UMask=0077' '$I'"
+check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|RestrictAddressFamilies)=' '$I'"
+check "  … and data/ writable, for the MeshCom transmit audit (MESHCOM_TX_AUDIT)" bash -c "grep -qx 'ReadWritePaths=/srv/acs/data' '$I'"
+# An install directory under /home: ProtectHome=yes would hide the gateway's own code, so /home is read-only there.
+HOMEUNIT="$TMP/gateway-home.unit"
+bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
+  BM_DIR=/home/op/aprscaching BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'" >"$HOMEUNIT"
+check "a gateway installed under /home sees its checkout read-only" bash -c "grep -qx 'ProtectHome=read-only' '$HOMEUNIT' && ! grep -qx 'ProtectHome=yes' '$HOMEUNIT' && grep -qx 'ReadWritePaths=/home/op/aprscaching/data' '$HOMEUNIT'"
 
 # ---- doctor ------------------------------------------------------------------------------------------------
 # A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket
@@ -553,6 +580,22 @@ else
   ok "a restore without --yes changes nothing when nobody can be asked"
 fi
 check "  … the settings are untouched" eq "$(env_file_get "$PDATA/.env" APP_URL)" "http://192.168.43.1:8787"
+
+# ---- deploy/backup.sh: the nightly snapshot is its owner's alone, whatever umask cron runs it with ----------
+mkdir -p "$TMP/sqlbin"
+cat >"$TMP/sqlbin/sqlite3" <<'MOCK'
+#!/bin/sh
+# stand-in for: sqlite3 DB ".backup 'DST'"
+dst="${2#.backup \'}"
+cp "$1" "${dst%\'}"
+MOCK
+chmod +x "$TMP/sqlbin/sqlite3"
+printf 'a database\n' >"$TMP/nightly.db"
+(umask 022 && PATH="$TMP/sqlbin:$PATH" DB_PATH="$TMP/nightly.db" BACKUP_DIR="$TMP/nightly" bash "$DEPLOY/backup.sh" >/dev/null)
+SNAP="$(find "$TMP/nightly" -name '*.db.gz' 2>/dev/null | head -n 1)"
+check "deploy/backup.sh writes a snapshot to BACKUP_DIR" test -n "$SNAP"
+check "  … readable by its owner only" eq "$(file_mode "${SNAP:-$TMP/none}" 2>/dev/null)" 600
+check "  … in a directory of its owner's" eq "$(file_mode "$TMP/nightly" 2>/dev/null)" 700
 
 # ---- OCI bucket: upload, restore from it, and its age in doctor (the oci CLI mocked) --------------------------
 mkdir -p "$TMP/ocibin"

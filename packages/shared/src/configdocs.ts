@@ -290,6 +290,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   VITE_SAT_ATTRIBUTION: "Attribution shown with the satellite layer",
   DOMAIN: "What Caddy serves: a hostname gets Let's Encrypt TLS, :80 serves plain HTTP",
   TUNNEL_TOKEN: "Cloudflare Tunnel token of a named tunnel",
+  CF_RANGES: "Addresses whose cf-connecting-ip Caddy passes on: Cloudflare's, behind its proxied DNS",
   BACKUP_DIR: "Local or mounted directory for database backups, off the database's disk",
   OCI_BUCKET: "OCI Object Storage bucket for backups (needs the oci CLI)",
   BACKUP_BUCKET: "S3-compatible bucket for backups; needs R2_ENDPOINT and the aws CLI",
@@ -376,7 +377,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TRUST_CF`",
-        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
+        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare: the tunnel, or proxied DNS with `CF_RANGES` set to Cloudflare's ranges; otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
         "off",
       ],
       [
@@ -986,6 +987,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`deploy/compose.home.yml`",
         "The Cloudflare Tunnel token for a named tunnel created in the Cloudflare dashboard",
         "—",
+      ],
+      [
+        "`CF_RANGES`",
+        "`deploy/Caddyfile`",
+        "The addresses, separated by spaces, whose `cf-connecting-ip` Caddy passes on to the gateway; it drops the header from every other, so a client that reaches the box directly cannot choose its rate-limit identity under `TRUST_CF=1`. Behind Cloudflare's proxied DNS, set it to [Cloudflare's address ranges](https://www.cloudflare.com/ips/). `compose.home.yml` sets `private_ranges` for the tunnel",
+        "`0.0.0.0/0 ::/0` (every address)",
       ],
       [
         "`BACKUP_DIR`",

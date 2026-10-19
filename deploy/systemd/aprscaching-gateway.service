@@ -21,5 +21,28 @@ TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching
+# The sandbox: the gateway answers the internet, so a process that is taken over must not rewrite the code it
+# runs, its .env or anything else on the host. It may write data/ only (the database, session.secret, media);
+# the checkout, the service user's home and the rest of the file system are read-only, /home is hidden, and
+# its files are the service user's alone. No MemoryDenyWriteExecute: V8's JIT needs writable code pages.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/aprscaching/data
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
 [Install]
 WantedBy=multi-user.target

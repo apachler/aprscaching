@@ -30,8 +30,9 @@
 #   axe          (the axe shards)       all, web, packages
 #   pocket       (Pocket scripts)       deploy/pocket/, deploy/lib/, ci.yml, this script
 #   direwolf     (Direwolf WebAssembly)  direwolf, ci.yml, this script
-#   helpers      (Deploy helpers)       the deploy/ helper scripts and their tests, docs/reference/cli.md, ci.yml,
-#                                       this script
+#   helpers      (Deploy helpers)       the deploy/ helper scripts and their tests, the files they check (the
+#                                       compose files, the Caddyfile, dependabot.yml), docs/reference/cli.md,
+#                                       ci.yml, this script
 set -euo pipefail
 
 all=false code=false gateway=false web=false packages=false audio=false e2e=false devtools=false
@@ -61,7 +62,8 @@ else
     esac
     case "$f" in
       deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/desktop/*.sh | deploy/cloudflare/*.sh \
-        | deploy/systemd/* | deploy/.env.example | deploy/oci/* | docs/reference/cli.md | .github/workflows/ci.yml \
+        | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/Caddyfile | deploy/docker-compose.yml \
+        | deploy/compose.*.yml | .github/dependabot.yml | docs/reference/cli.md | .github/workflows/ci.yml \
         | .github/scripts/changed-scopes.sh)
         helpers=true ;;
     esac

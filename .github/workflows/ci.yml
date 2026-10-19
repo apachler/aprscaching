@@ -103,6 +103,7 @@ jobs:
       - run: cd deploy/pocket/extras && python3 -m unittest discover -s test -v
       - run: bash deploy/pocket/test/wizard-test.sh
       - run: bash deploy/pocket/test/net44-test.sh
+      - run: bash deploy/pocket/test/backup-test.sh
 
   helpers:
     name: Deploy helpers (shellcheck, tests)
@@ -118,6 +119,8 @@ jobs:
       # setup, desktop-build and Cloudflare scripts): bash, checked like the Pocket scripts
       - run: shellcheck -x -S warning deploy/aprscaching deploy/*.sh deploy/desktop/*.sh deploy/cloudflare/*.sh deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh deploy/oci/*.sh deploy/oci/test/*.sh
       - run: bash deploy/test/helpers-test.sh
+      # deploy/Caddyfile in the Caddy image the stack pins: who may name the visitor in cf-connecting-ip
+      - run: bash deploy/test/caddy-test.sh
       # deploy/aprscaching net44, against mocked WireGuard, ip, systemd, nft and iptables
       - run: bash deploy/test/net44-test.sh
       # the OCI stack's Bastion login helper, against a mocked OCI CLI and ssh

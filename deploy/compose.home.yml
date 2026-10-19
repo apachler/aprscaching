@@ -9,8 +9,11 @@ services:
     # No published ports: the tunnel reaches caddy on the internal network. `!reset` drops the base file's
     # ports (a plain `[]` merges with them and publishes 80/443 anyway); it needs Docker Compose 2.24 or newer.
     ports: !reset []
+    environment:
+      # only cloudflared, on the stack's own network, names the visitor in cf-connecting-ip
+      CF_RANGES: private_ranges
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN} # from a named tunnel created in the Cloudflare dashboard

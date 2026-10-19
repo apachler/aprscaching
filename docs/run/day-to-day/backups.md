@@ -74,8 +74,9 @@ with a nightly timer, `aprscaching-backup.timer`, that runs `backup --with-media
 ## Scheduled snapshots with backup.sh
 
 `deploy/backup.sh` takes a consistent SQLite `.backup` snapshot while the gateway writes, gzips it and copies it
-to one destination. It needs the `sqlite3` command and reads its settings from the environment, so the cron
-entry supplies them:
+to one destination. The snapshot holds account emails and unused sign-in tokens, so in `BACKUP_DIR` it is
+readable by its owner only, and a `BACKUP_DIR` it creates is its owner's alone. It needs the `sqlite3` command and reads its settings
+from the environment, so the cron entry supplies them:
 
 ```bash
 0 3 * * * DB_PATH=/opt/aprscaching/data/aprscaching.db BACKUP_DIR=/mnt/backups /opt/aprscaching/deploy/backup.sh
@@ -114,7 +115,7 @@ oci os object-lifecycle-policy put -bn <bucket> --items \
 
 Where a lifecycle rule is not available, `BACKUP_PRUNE_BUCKET=1` makes `backup.sh` delete bucket snapshots older
 than `BACKUP_RETENTION_DAYS` after each upload, judged by the timestamp in the snapshot's name. The bucket key
-then needs delete permission.
+then needs delete permission. The Oracle Cloud stack's VM holds none, so it relies on the bucket's lifecycle rule.
 
 ## Pocket
 
@@ -126,16 +127,20 @@ bash ~/aprscaching/deploy/pocket/backup.sh            # to ~/storage/shared/aprs
 ```
 
 The archive, `aprscaching-pocket-<UTC time>.tar.gz`, holds a consistent snapshot of the database taken while the
-gateway runs, the `.env`, `session.secret` and the media while it is at most 50 MiB
-(`APRSCACHING_BACKUP_MEDIA_MAX_MB`; `--media` or `--no-media` decides it yourself). The newest 7 are kept
-(`--keep <n>`); `--dest <dir>` writes elsewhere.
+gateway runs and the media while it is at most 50 MiB (`APRSCACHING_BACKUP_MEDIA_MAX_MB`; `--media` or
+`--no-media` decides it yourself). The newest 7 are kept (`--keep <n>`); `--dest <dir>` writes elsewhere.
 
-Shared storage is readable by any app with storage permission. `--no-env` leaves the `.env` and the secret files
-out of the archive.
+Shared storage is readable by any app with storage permission, and by any app that syncs the folder to a cloud.
+So an archive there leaves out the `.env` and `session.secret`: they go into
+`~/.aprscaching/backups/aprscaching-pocket-<UTC time>-secrets.tar.gz`, in Termux's own storage, readable by its
+owner only. An archive written with `--dest` outside shared storage holds them itself. `--no-env` leaves them out
+everywhere; `--with-secrets` puts them in the archive even on shared storage. Copy the secrets archive somewhere
+private to restore the station on another phone.
 
 To restore one, run `bash ~/aprscaching/deploy/pocket/backup.sh --restore <file>`. It stops the station, moves
 the current database, media and secrets aside to `~/.aprscaching/before-restore-<time>/`, puts the archive's in
-place and starts the station again if it was running. The `.env` comes back only with `--with-env`. `deploy/aprscaching restore`
+place and starts the station again if it was running. It takes the secrets from the secrets archive in
+`~/.aprscaching/backups/` when the archive left them there. The `.env` comes back only with `--with-env`. `deploy/aprscaching restore`
 accepts these archives too. The station CA stays on the phone; a station restored elsewhere makes a new one.
 
 [Pocket extras](../pocket/extras.md) schedule this backup to run daily while the phone charges.

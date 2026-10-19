@@ -73,6 +73,8 @@ bm_render_unit() {
     /^User=/ { $0 = "User=" u }
     /^Environment=PORT=/ { $0 = "Environment=PORT=" p }
     /^ExecStart=\/usr\/bin\/pnpm / { sub(/^ExecStart=\/usr\/bin\/pnpm/, "ExecStart=" c) }
+    # ProtectHome=yes hides /home, /root and /run/user, so a checkout there gets them read-only instead
+    /^ProtectHome=yes$/ && d ~ /^\/(home|root|run\/user)(\/|$)/ { $0 = "ProtectHome=read-only" }
     { print }' "$src"
 }
 
@@ -213,8 +215,9 @@ shape_init() {
     bm_user git clone --quiet "$repo" "$BM_DIR"
     bm_user git -C "$BM_DIR" checkout --quiet "$ref"
   fi
-  # the database and media live here (the units' DB_PATH), owned by the service user
-  bm_user mkdir -p "$BM_DIR/data"
+  # the database and media live here (the units' DB_PATH), the service user's alone: the database holds
+  # account emails and unused sign-in tokens
+  bm_user install -d -m 700 "$BM_DIR/data"
 
   step "Dependencies and the web build"
   # The gateway and the ingest run from source (tsx); the web app is the one thing to build.

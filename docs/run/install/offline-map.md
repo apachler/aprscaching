@@ -40,7 +40,7 @@ the archive now and then: a pack keeps the map it was made with, until it is mad
 | Shape | How |
 |---|---|
 | Self-host (Docker) | Put the file in the data volume, e.g. `docker compose cp austria.pmtiles gateway:/data/offline.pmtiles`, set `OFFLINE_TILES_PATH=/data/offline.pmtiles` in `.env`, and apply it with `docker compose up -d` (from `deploy/`). |
-| Bare metal, Pocket, Desktop | Set `OFFLINE_TILES_PATH` to the file's path. |
+| Bare metal, Pocket, Desktop | Set `OFFLINE_TILES_PATH` to the file's path. On bare metal the gateway sees no `/home`: put the file in `/opt/aprscaching/data`. |
 | Hosted elsewhere | Set `OFFLINE_TILES_URL` to its URL. The host must allow offline use and answer byte ranges with CORS (`Access-Control-Allow-Origin`, and `Content-Range` exposed). |
 
 The instance serves the file at `/tiles/offline.pmtiles`; `GET /api/offline/tiles` tells the app where it is.

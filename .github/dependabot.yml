@@ -88,3 +88,21 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
+
+  # The images the stack pulls (Caddy, cloudflared), named in the compose files and pinned the same way. Caddy
+  # stays on 2.x; cloudflared's versions are dates, so its new year is no breaking change and is proposed.
+  - package-ecosystem: docker-compose
+    directories:
+      - "/deploy"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: "caddy"
+        update-types: ["version-update:semver-major"]
+    groups:
+      compose-images:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"

@@ -49,7 +49,14 @@ proxy terminates TLS and forwards the whole site to that port.
    `http://127.0.0.1:8080`.
 
 The gateway applies the database migrations when it starts. The database and media live in
-`/opt/aprscaching/data`.
+`/opt/aprscaching/data`, readable by the service user only.
+
+The units run in a systemd sandbox. The gateway may write `/opt/aprscaching/data` and nothing else: the checkout,
+its `.env` and the rest of the system are read-only to it, and it sees no `/home` and no devices. So `DB_PATH` and
+`MEDIA_DIR` stay under `data/`, and an `OFFLINE_TILES_PATH` file lies outside `/home`, for example in `data/`.
+Installed under `/home`, the gateway sees `/home` read-only instead. The ingest may write `data/` only, so a
+`MESHCOM_TX_AUDIT` file goes there; its serial, sound, GPIO and USB devices stay open.
+`systemctl edit aprscaching-gateway` adds a `ReadWritePaths=` line for another place to write.
 
 ## What it installs
 
