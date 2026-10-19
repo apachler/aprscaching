@@ -45,7 +45,8 @@ expired_keys() {
 }
 
 if [ -n "${BACKUP_DIR:-}" ]; then
-  install -d -m 700 "$BACKUP_DIR"
+  # a directory that exists keeps its mode: a mounted share may refuse a chmod, and the snapshot is 600 anyway
+  [ -d "$BACKUP_DIR" ] || install -d -m 700 "$BACKUP_DIR"
   cp "$GZ" "${BACKUP_DIR}/${TS}.db.gz"
   chmod 600 "${BACKUP_DIR}/${TS}.db.gz"
   # prune by mtime

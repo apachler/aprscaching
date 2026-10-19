@@ -418,6 +418,12 @@ bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . 
   BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-ingest.service'" >"$I"
 check "the ingest unit: a read-only system, owner-only files" bash -c "grep -qx 'ProtectSystem=strict' '$I' && grep -qx 'NoNewPrivileges=yes' '$I' && grep -qx 'UMask=0077' '$I'"
 check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|RestrictAddressFamilies)=' '$I'"
+check "  … and data/ writable, for the MeshCom transmit audit (MESHCOM_TX_AUDIT)" bash -c "grep -qx 'ReadWritePaths=/srv/acs/data' '$I'"
+# An install directory under /home: ProtectHome=yes would hide the gateway's own code, so /home is read-only there.
+HOMEUNIT="$TMP/gateway-home.unit"
+bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
+  BM_DIR=/home/op/aprscaching BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'" >"$HOMEUNIT"
+check "a gateway installed under /home sees its checkout read-only" bash -c "grep -qx 'ProtectHome=read-only' '$HOMEUNIT' && ! grep -qx 'ProtectHome=yes' '$HOMEUNIT' && grep -qx 'ReadWritePaths=/home/op/aprscaching/data' '$HOMEUNIT'"
 
 # ---- doctor ------------------------------------------------------------------------------------------------
 # A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket

@@ -73,6 +73,8 @@ bm_render_unit() {
     /^User=/ { $0 = "User=" u }
     /^Environment=PORT=/ { $0 = "Environment=PORT=" p }
     /^ExecStart=\/usr\/bin\/pnpm / { sub(/^ExecStart=\/usr\/bin\/pnpm/, "ExecStart=" c) }
+    # ProtectHome=yes hides /home, /root and /run/user, so a checkout there gets them read-only instead
+    /^ProtectHome=yes$/ && d ~ /^\/(home|root|run\/user)(\/|$)/ { $0 = "ProtectHome=read-only" }
     { print }' "$src"
 }
 

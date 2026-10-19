@@ -75,7 +75,7 @@ with a nightly timer, `aprscaching-backup.timer`, that runs `backup --with-media
 
 `deploy/backup.sh` takes a consistent SQLite `.backup` snapshot while the gateway writes, gzips it and copies it
 to one destination. The snapshot holds account emails and unused sign-in tokens, so in `BACKUP_DIR` it is
-readable by its owner only, in a directory of its owner's. It needs the `sqlite3` command and reads its settings
+readable by its owner only, and a `BACKUP_DIR` it creates is its owner's alone. It needs the `sqlite3` command and reads its settings
 from the environment, so the cron entry supplies them:
 
 ```bash

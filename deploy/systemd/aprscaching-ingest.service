@@ -16,12 +16,14 @@ TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching
-# The sandbox: the ingest writes no file, so the file system is read-only to it and its own files are the
-# service user's alone. Devices, /sys and the address families stay open: serial and USB TNCs, soundcards,
-# GPIO and USB PTT, Bluetooth and the network ports are what it runs on.
+# The sandbox: the file system is read-only to the ingest except data/, where a MeshCom transmit audit
+# (MESHCOM_TX_AUDIT) goes, and its own files are the service user's alone. Devices, /sys and the address
+# families stay open: serial and USB TNCs, soundcards, GPIO and USB PTT, Bluetooth and the network ports are
+# what it runs on.
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
+ReadWritePaths=/opt/aprscaching/data
 ProtectHome=read-only
 PrivateTmp=yes
 [Install]
