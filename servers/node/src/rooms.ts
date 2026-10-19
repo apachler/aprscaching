@@ -6,16 +6,20 @@
 import type { WebSocket } from "ws";
 import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
 
-export function joinRoom(rooms: RoomsCore, region: string, ws: WebSocket): void {
-  const member = rooms.join(region, {
-    send: (text) => {
-      ws.send(text);
-      return true; // `ws` queues every frame; its backlog shows in bufferedAmount
+export function joinRoom(rooms: RoomsCore, region: string, ws: WebSocket, holder: string): void {
+  const member = rooms.join(
+    region,
+    {
+      send: (text) => {
+        ws.send(text);
+        return true; // `ws` queues every frame; its backlog shows in bufferedAmount
+      },
+      bufferedAmount: () => ws.bufferedAmount,
+      ping: () => ws.ping(),
+      terminate: () => ws.terminate(),
     },
-    bufferedAmount: () => ws.bufferedAmount,
-    ping: () => ws.ping(),
-    terminate: () => ws.terminate(),
-  });
+    holder,
+  );
   ws.on("message", (data) => member.message(String(data)));
   ws.on("pong", () => member.pong());
   ws.on("close", () => member.leave());

@@ -13,12 +13,12 @@
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import { handle, isGatewayPath } from "@aprscaching/gateway/app";
-import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
+import { clientIp, stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import type { Env } from "@aprscaching/gateway/env";
-import { liveRegionOf } from "@aprscaching/gateway/live";
-import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
+import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { spaFile } from "./spa.js";
 import { BODY_MAX_BYTES } from "./host.js";
@@ -117,21 +117,51 @@ export function createGatewayServer(opts: ListenerOptions): http.Server {
   const server = opts.tls
     ? https.createServer({ cert: opts.tls.cert, key: opts.tls.key }, listener)
     : http.createServer(listener);
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: LIVE_MESSAGE_MAX_BYTES });
   server.on("upgrade", (req, socket, head) => {
-    const u = new URL(req.url ?? "/", `${scheme}://${req.headers.host ?? "localhost"}`);
+    socket.on("error", () => socket.destroy());
+    // Node applies no server timeouts to a socket once it is upgraded, so every path out of here either
+    // hands the socket to `ws` or closes it. The path and query alone route /ws: the Host header, which Node
+    // does not validate, plays no part.
+    let u: URL;
+    let holder: string;
+    try {
+      u = new URL(req.url ?? "/", "http://localhost");
+      holder = clientIp(new Request(u, { headers: clientHeaders(req, opts.env) }), opts.env);
+    } catch {
+      refuseUpgrade(socket, 400, "Bad Request");
+      return;
+    }
     if (u.pathname !== "/ws") {
       socket.destroy();
       return;
     }
-    const region = liveRegionOf(u);
-    if (!region) {
-      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+    const admitted = opts.rooms.admit(u, holder);
+    if ("status" in admitted) {
+      refuseUpgrade(socket, admitted.status, admitted.status === 429 ? "Too Many Requests" : "Bad Request");
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => joinRoom(opts.rooms, region, ws));
+    wss.handleUpgrade(req, socket, head, (ws) => joinRoom(opts.rooms, admitted.region, ws, holder));
   });
   return server;
+}
+
+function refuseUpgrade(socket: Duplex, status: number, reason: string): void {
+  const retry = status === 429 ? "Retry-After: 60\r\n" : "";
+  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\n${retry}Content-Length: 0\r\n\r\n`);
+}
+
+/** A request's headers as Web Headers, with the client identity stamped from its socket (stampClientIp). */
+function clientHeaders(nreq: http.IncomingMessage, env: Env): Headers {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(nreq.headers)) {
+    if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
+    else if (v != null) headers.set(k, v);
+  }
+  // The socket address is the ONLY client identity we mint ourselves — overwrite any client-supplied
+  // x-real-ip, and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared (TRUST_CF).
+  stampClientIp(headers, nreq.socket.remoteAddress, env);
+  return headers;
 }
 
 async function serveRequest(
@@ -166,14 +196,7 @@ async function serveRequest(
         return;
       }
     }
-    const headers = new Headers();
-    for (const [k, v] of Object.entries(nreq.headers)) {
-      if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
-      else if (v != null) headers.set(k, v);
-    }
-    // The socket address is the ONLY client identity we mint ourselves — overwrite any client-supplied
-    // x-real-ip, and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared (TRUST_CF).
-    stampClientIp(headers, nreq.socket.remoteAddress, env);
+    const headers = clientHeaders(nreq, env);
     const hasBody = method !== "GET" && method !== "HEAD";
     // readBody returns raw bytes — the gateway speaks JSON on most routes but BINARY on the
     // federation wire (CBOR sync pages, beacon datagrams); a utf8 round-trip would corrupt those.

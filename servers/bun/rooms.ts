@@ -5,20 +5,27 @@
  * Bun.serve reports a socket's traffic through its `websocket` handlers ({@link roomHandlers}).
  */
 import type { ServerWebSocket, WebSocketHandler } from "bun";
-import type { RoomsCore, RoomMember } from "@aprscaching/gateway/rooms-core";
+import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore, type RoomMember } from "@aprscaching/gateway/rooms-core";
 
-export type WsData = { region: string; member?: RoomMember };
+/** `holder` is the client address the socket counts against (RoomsCore.admit). */
+export type WsData = { region: string; holder: string; member?: RoomMember };
 
 /** Bun.serve `websocket` handlers that keep `rooms` in step with each socket. */
 export function roomHandlers(rooms: RoomsCore): WebSocketHandler<WsData> {
   return {
+    // Bun drops the connection on a frame past it (the client sees 1006) instead of buffering it whole
+    maxPayloadLength: LIVE_MESSAGE_MAX_BYTES,
     open(ws: ServerWebSocket<WsData>) {
-      ws.data.member = rooms.join(ws.data.region, {
-        send: (text) => ws.send(text) !== -1, // -1: Bun dropped the frame under backpressure
-        bufferedAmount: () => ws.getBufferedAmount(),
-        ping: () => void ws.ping(),
-        terminate: () => ws.terminate(),
-      });
+      ws.data.member = rooms.join(
+        ws.data.region,
+        {
+          send: (text) => ws.send(text) !== -1, // -1: Bun dropped the frame under backpressure
+          bufferedAmount: () => ws.getBufferedAmount(),
+          ping: () => void ws.ping(),
+          terminate: () => ws.terminate(),
+        },
+        ws.data.holder,
+      );
     },
     message(ws, msg) {
       ws.data.member?.message(String(msg));

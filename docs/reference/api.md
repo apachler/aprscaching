@@ -209,7 +209,7 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 
 | Method | Path              | Purpose                                                                      | Auth   |
 | ------ | ----------------- | ---------------------------------------------------------------------------- | ------ |
-| GET    | `/ws?region=`     | Upgrade to the live room (positions/finds); `region` is `global` or absent, anything else is `400` | public |
+| GET    | `/ws?region=`     | Upgrade to the live room (positions/finds); `region` is `global` or absent, anything else is `400`. One client address (the rate-limit identity, see `TRUST_PROXY` and `TRUST_CF`) holds at most 16 live sockets at once (`429` past it), and a client frame larger than 4 KiB closes the socket | public |
 | GET    | `/api/spots`      | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED`              | public |
 | GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`)                                   | public |
 | GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates | public |
