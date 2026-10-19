@@ -92,7 +92,7 @@ export function useCacheMarkers(
         if (c.type !== "aprs_living") {
           // toggle, never assign: className would drop the maplibregl-marker classes that position the pin
           el.classList.toggle("mirrored", !!c.mirrored);
-          const span = el.querySelector("span");
+          const span = el.querySelector(".cache-pin-shape > span");
           if (span) span.textContent = phosphor ? meta.cog : meta.glyph;
         }
       } else {
@@ -111,7 +111,8 @@ export function useCacheMarkers(
           const btn = document.createElement("button");
           btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
           btn.dataset.ctype = c.type;
-          btn.innerHTML = `<span aria-hidden="true">${phosphor ? meta.cog : meta.glyph}</span>`;
+          // the teardrop is an inner element: MapLibre owns the marker root's transform (its position)
+          btn.innerHTML = `<span class="cache-pin-shape" aria-hidden="true"><span>${phosphor ? meta.cog : meta.glyph}</span></span>`;
           el = btn;
         }
         markers.current.set(

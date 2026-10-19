@@ -45,8 +45,8 @@ never kept as a second hand-made colour. Every colour has one role:
 | Trust | `--tier-a`, `--tier-b`, `--tier-c` (fills); `--tier-a-text`, `--tier-b-text`, `--tier-c-text` | Tier A Radio-verified, Tier B Location-verified, Tier C Logged |
 | Status | `--ok`, `--warn`, `--bad` (fills); `--ok-text`, `--warn-text`, `--bad-text` | Success, warning, error and danger |
 | Destructive action | `--danger-fill` (fill), `--danger-ink` (text on the fill) | The confirm button of a delete, archive or remove |
-| Map controls | `--map-control-ink` | Glyphs on MapLibre's control stack, which is white in every theme |
-| Landing hero | `--hero-*` | The photo's scrim and what sits on it: the Dark values in every theme |
+| Map controls | `--map-control-ink`, `--map-control-bad` | Glyphs on MapLibre's white control stack (Phosphor draws its own); a blocked control |
+| Landing hero | `--hero-*` | The photo's scrim and what sits on it, and the terminal card: the Dark values in every theme |
 
 **The accent has two roles.** The brand green fills the primary button, with dark ink on it. As text, a link or an
 icon on a light surface, the same green is too light to read, so text uses `--accent-text`: a darker green in
@@ -138,9 +138,10 @@ Motion explains a change; it never decorates.
 | `--motion-base` | 200 ms | Sheets, panels, disclosures |
 | `--motion-slow` | 320 ms | The landing page's one entrance |
 
-Easing is `--ease-standard`. Only `transform` and `opacity` animate over the
+Easing is `--ease-standard`. Every transition and one-shot animation takes these tokens; only an ambient loop (a
+spinner, a pulse) keeps its own timing. Only `transform` and `opacity` animate over the
 map (`css.md`). When the system asks for reduced motion, every duration is zero. The landing page has a budget:
-one entrance and the terminal card's short sequence, nothing on scroll.
+one entrance and the terminal card's short sequence, played once, nothing on scroll.
 
 ## Imagery
 

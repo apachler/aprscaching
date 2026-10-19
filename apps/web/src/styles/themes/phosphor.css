@@ -128,13 +128,17 @@
    The corners sit at the window edges (title-bar ::before/::after); the flex spacer becomes the
    horizontal fill rule; the close ✕ is the top-right control. (bleeds to the frame; padding offset) */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child {
-    margin: -16px -16px var(--space-sm);
+    margin: calc(-1 * var(--panel-pad)) calc(-1 * var(--panel-pad)) var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     gap: var(--space-sm);
     align-items: center;
     flex-wrap: nowrap;
     background: color-mix(in oklch, var(--accent) 12%, transparent);
     border-bottom: 1px solid var(--accent);
+  }
+  /* the title bar is the window's top edge, so a phone sheet draws no grip above it */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"]::before {
+    content: none;
   }
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child::before {
     content: "┌─";
@@ -247,6 +251,10 @@
   }
   :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group button.locate-btn {
     color: var(--ink);
+  }
+  /* the control stack is the theme's surface here, not MapLibre's white */
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group button.locate-btn[data-blocked] {
+    color: var(--bad-text);
   }
   :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-attrib {
     background: var(--surface);

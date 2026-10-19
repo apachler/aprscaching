@@ -41,7 +41,7 @@
   }
   .chev {
     color: var(--muted);
-    transition: transform 0.15s ease;
+    transition: transform var(--motion-base) var(--ease-standard); /* a disclosure */
     display: inline-block;
   }
   .chev.open {
@@ -96,8 +96,10 @@
     font-size: var(--text-label);
     margin-top: 1px;
   }
+  /* never wider than its row: a wide control (fields and a button on one line) shrinks its fields instead */
   .setrow-c {
     flex: none;
+    max-width: 100%;
     display: flex;
     align-items: center;
     gap: var(--space-xs);

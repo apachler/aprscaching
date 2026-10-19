@@ -33,6 +33,7 @@ import type {
   StationSummary,
   BbsMessage,
   CoverageResponse,
+  Spot,
 } from "@aprscaching/shared";
 import type {
   AdminAdoptions,
@@ -959,6 +960,24 @@ const siteSettings = (): SiteSettings => ({
   }),
 });
 
+/** A park activation beside the Schlossberg cache, shown when a shared view (`?v=spots`) turns the spots layer on. */
+const SPOTS: Spot[] = [
+  {
+    id: "pota:OE6POTA:OE-0042",
+    source: "pota",
+    callsign: "OE6POTA",
+    ref: "OE-0042",
+    name: "Schlossberg",
+    lat: 47.075,
+    lon: 15.4395,
+    freqHz: 14_285_000,
+    mode: "SSB",
+    band: "20m",
+    comment: "QRV from the clock tower",
+    spottedAt: NOW - 4 * MIN,
+  },
+];
+
 type Route = [method: string, pattern: RegExp, answer: (m: RegExpMatchArray, persona: Persona) => unknown];
 const page = <T extends object>(o: T) => ({ ...o, nextCursor: null, hasMore: false });
 
@@ -1058,7 +1077,18 @@ const ROUTES: Route[] = [
       return page({ group, messages: MESHCOM_GROUP_MESSAGES[group] ?? [] });
     },
   ],
-  ["GET", /^\/api\/spots$/, () => ({ enabled: false, count: 0, fetchedAt: NOW, spots: [] })],
+  ["GET", /^\/api\/spots$/, () => ({ enabled: true, count: SPOTS.length, fetchedAt: NOW, spots: SPOTS })],
+  [
+    "GET",
+    /^\/v\/spots$/,
+    () => ({
+      slug: "spots",
+      name: "Activations",
+      ownerCall: "OE8APR",
+      createdAt: NOW,
+      state: { layers: { spots: true } },
+    }),
+  ],
   ["GET", /^\/api\/search$/, () => SEARCH],
   ["GET", /^\/api\/activity$/, () => page({ activity: ACTIVITY })],
   ["GET", /^\/api\/leaderboard$/, () => ({ leaderboard: LEADERS })],

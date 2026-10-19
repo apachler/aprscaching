@@ -380,7 +380,7 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .radio-chip-tx {
-      animation: radio-tx var(--motion-slow) ease-out;
+      animation: radio-tx var(--motion-slow) var(--ease-standard);
     }
   }
   @keyframes radio-tx {
@@ -577,7 +577,8 @@
       max-width: none;
       max-height: 74vh;
       border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-      padding: var(--space-md) var(--space-md) var(--space-lg);
+      --panel-pad: var(--space-md);
+      padding: var(--panel-pad) var(--panel-pad) var(--space-lg);
     }
     .panel::before {
       content: "";

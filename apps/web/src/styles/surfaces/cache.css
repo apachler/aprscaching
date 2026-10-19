@@ -596,7 +596,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .find-dial.at-pin .find-needle,
     .find-dial.no-fix .find-needle {
-      transition: opacity var(--motion-base) ease;
+      transition: opacity var(--motion-base) var(--ease-standard);
     }
   }
   /* share funnel: copy-link + printable QR on the cache detail */
