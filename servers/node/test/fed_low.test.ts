@@ -37,7 +37,7 @@ describe("signed ingest", () => {
         method: "POST",
         headers: { "x-acs-callsign": "OE8BRW", "x-acs-key": dev.pub, "x-acs-sig": sig, "x-acs-at": String(at) },
       });
-    expect(await verifySignedIngest(req(), env, packets)).toEqual({ callsign: "OE8BRW" });
+    expect(await verifySignedIngest(req(), env, packets)).toEqual({ callsign: "OE8BRW", key: dev.pub });
     expect(await verifySignedIngest(req(), env, packets)).toBeNull();
   });
 

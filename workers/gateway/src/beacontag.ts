@@ -64,6 +64,12 @@ export async function commandedBeacons(
   return out;
 }
 
+/** Did this instance ask a box to beacon as `call` (exact call) in a window that reaches into [since, until]? */
+export async function beaconCommandedIn(env: Env, call: string, since: number, until: number): Promise<boolean> {
+  const beacons = (await commandedBeacons(env, [call], since)).get(call.toUpperCase()) ?? [];
+  return beacons.some((b) => b.from <= until && b.until >= since);
+}
+
 /**
  * True when a fix of `call` at `ts`, ingested at `now`, is a commanded beacon's hearing: inside a beacon's window
  * by its own time or by its arrival, and near the position the box reported (any position while the box has not

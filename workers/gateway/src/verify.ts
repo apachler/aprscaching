@@ -27,6 +27,7 @@
  */
 
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
+import { UNVERIFIED_CALL_REASON } from "@aprscaching/shared";
 
 export type TrustTier = "A" | "B" | "C";
 
@@ -124,6 +125,9 @@ interface VerifyDeps {
   loggerOwnBoxes?: Set<string>;
   /** request/log time (unix s) — Tier-B app-reading freshness is checked against this */
   now?: number;
+  /** false when the logger's call is not control-verified: their RF fixes then lift no find to Tier A, since an
+   *  account that has not proven control of the call has not shown the station heard is theirs */
+  loggerControlVerified?: boolean;
 }
 
 function effectiveMinTier(cache: CacheRow, policy: VerifyPolicy): TrustTier {
@@ -146,6 +150,15 @@ function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
 /** The logger's own track: their fixes, without the ones that matched a commanded box beacon. */
 const trackOf = (deps: VerifyDeps): PositionRow[] => deps.loggerPositions.filter((p) => !p.commanded);
 
+/**
+ * May this fix of the logger contradict a presence? Only a fix as hard to fake as the evidence it judges: one
+ * heard at a first-party-attested site, or one the logger's own browser bridge signed (a signed batch carries
+ * only its signer's frames). An APRS-IS, tunnelled or unattested fix is anyone's to inject under any call, so it
+ * never takes a presence away, as it never grants one.
+ */
+export const contradicts = (p: PositionRow): boolean =>
+  !p.commanded && (p.firstPartyAttested === true || p.source === "browser-rf");
+
 /** The station fixes that place a living cache for Tier A or B: attested or the owner's own signed ones. */
 const stationEvidence = (deps: VerifyDeps): PositionRow[] =>
   (deps.cacheStationPositions ?? []).filter((c) => (c.firstPartyAttested || c.ownerSigned) && !c.commanded);
@@ -153,15 +166,16 @@ const stationEvidence = (deps: VerifyDeps): PositionRow[] =>
 /**
  * "plausible track": a matched Tier-A fix must be reachable from the logger's own
  * neighbouring fixes at a sane ground speed. A single forged/replayed beacon dropped at the cache
- * while the real track is elsewhere implies an impossible speed → not a real presence. With no other
- * fix in the window there is nothing to contradict (benign single-beacon case) → allowed.
+ * while the real track is elsewhere implies an impossible speed → not a real presence. Only fixes that
+ * {@link contradicts} count as neighbours; with none in the window there is nothing to contradict (benign
+ * single-beacon case) → allowed.
  */
 function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPolicy): boolean {
   const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
   let nearest: PositionRow | null = null,
     bestDt = Infinity;
-  for (const p of trackOf(deps)) {
-    if (p === match || p.id === match.id) continue;
+  for (const p of deps.loggerPositions) {
+    if (!contradicts(p) || p === match || p.id === match.id) continue;
     const dt = Math.abs(p.ts - match.ts);
     if (dt < bestDt) {
       bestDt = dt;
@@ -178,8 +192,9 @@ function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPoli
  * "plausible presence" for evidence that did not come from the logger's own fixes (a peer's
  * corroboration): the logger's nearest local fix in time must be able to reach `point` at a sane
  * ground speed. `slackSec` widens the time gap by the evidence's time resolution (a peer's answer is
- * bucketed), so coarsening never turns a real presence into a teleport. With no local fix there is
- * nothing to contradict → allowed.
+ * bucketed), so coarsening never turns a real presence into a teleport. Only local fixes that
+ * {@link contradicts} count, so a caller passes them stamped with attestation; with none there is nothing to
+ * contradict → allowed.
  */
 export function plausiblePresence(
   point: { lat: number; lon: number; ts: number },
@@ -191,6 +206,7 @@ export function plausiblePresence(
   let nearest: PositionRow | null = null,
     bestDt = Infinity;
   for (const p of loggerPositions) {
+    if (!contradicts(p)) continue;
     const dt = Math.abs(p.ts - point.ts);
     if (dt < bestDt) {
       bestDt = dt;
@@ -308,7 +324,8 @@ export function verifyFind(
   const min = effectiveMinTier(cache, policy);
 
   // Try strongest first.
-  const rf = cache.type === "aprs_living" ? tryLiving(cache, deps, policy) : tryRf(cache, deps, policy);
+  const heard = cache.type === "aprs_living" ? tryLiving(cache, deps, policy) : tryRf(cache, deps, policy);
+  const rf = deps.loggerControlVerified === false ? null : heard;
   const app = tryApp(cache, appGeo, deps, policy);
 
   const best = rf ?? app ?? null;
@@ -330,7 +347,7 @@ export function verifyFind(
           method: "aprs_is",
           matchedPositionId: p.id,
           distanceM: d,
-          reason: "IS-only, uncorroborated",
+          reason: heard && !rf ? UNVERIFIED_CALL_REASON : "IS-only, uncorroborated",
         };
       }
     }

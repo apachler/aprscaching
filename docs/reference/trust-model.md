@@ -14,7 +14,7 @@ Every find carries exactly one tier, graded by the evidence behind it:
 
 | Tier | Name | Requirement |
 |------|------|-------------|
-| **A** | Radio-verified | The station was heard directly on the air by a receiving site the operator attests (the site's own TNC, soundcard port or MeshCom node, delivered by its own ingest box), on a plausible track, and the finder does **not** operate that site. An APRS-IS copy (`qAR,<site>`) never counts. |
+| **A** | Radio-verified | The station was heard directly on the air by a receiving site the operator attests (the site's own TNC, soundcard port or MeshCom node, delivered by its own ingest box), on a plausible track, and the finder does **not** operate that site. An APRS-IS copy (`qAR,<site>`) never counts. A signed-in finder's callsign must be control-verified. |
 | **B** | Location-verified | The finder's own device reported a first-party geolocation that matches the cache at log time. |
 | **C** | Logged | Nothing independent placed the finder at the cache: at most a bare APRS-IS beacon reached the instance. Recorded, not verified. |
 
@@ -24,6 +24,16 @@ Every find carries exactly one tier, graded by the evidence behind it:
   `MIN_TRUST=A`. A cache's own `min_trust`, set by its hider (**Radio-verified finds only**), takes
   precedence; clearing it returns the cache to the instance's minimum.
 - A radio message carries no device reading, so a find logged by radio reaches Tier A or C, never B.
+- Tier A rests on the finder's callsign being heard, so a find logged in the app reaches it only once the
+  account has control-verified that call ([Identity](#identity)). Until then the call's RF fixes lift no
+  find, locally or through peers, and the find records the reason; a phone reading still reaches Tier B. A
+  find logged by radio already needs a verified call.
+- The plausible track is judged only against fixes as hard to fake as the evidence: the finder's fixes heard
+  at an attested site, and the ones their own browser bridge signed. An APRS-IS or tunnelled fix under the
+  call, which anyone with a public passcode can inject, never takes Tier A away, as it never grants it.
+- A find time the finder's own clock gives (a signed web log, or a FOUND in a signed browser batch) is taken
+  only after the cache was hidden and the signing key registered; otherwise the find is timed by its arrival
+  and keeps the reason (`field_time_rejected`).
 - A living cache is wherever its station was heard. Only a station fix that is first-party attested, or that
   the cache owner's own browser bridge signed (a `browser-rf` batch under a base call the owner's account
   holds), places it for Tier A or B. A match against a station fix that only came over APRS-IS stays Tier C,
@@ -43,7 +53,9 @@ Tier A demands a hearing the finder does not control. Three kinds of fix never c
   position (`BOX_LAT`, `BOX_LON`), and the box reports that position with its ack. Every fix ingested under the
   beacon's call, near that position and within 15 minutes of the beacon, is stored with
   `positions.commanded = 1`, and neither the verify engine, a peer's corroboration answer nor a later
-  corroboration attempt takes it as evidence. The box itself drops its own transmissions on all of its ports:
+  corroboration attempt takes it as evidence. A peer cannot tell such a beacon from the station's own, so no
+  peer is asked about the call, and no later attempt lifts the find, while a beacon commanded under it falls in
+  the window. The box itself drops its own transmissions on all of its ports:
   a frame one port sent and another port hears within 30 s is never reported as a hearing.
 
 The tiers grade a single find. A verified *callsign* (control of the licence) is a separate fact about the

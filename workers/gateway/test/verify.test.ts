@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   verifyFind,
+  plausiblePresence,
   DEFAULT_POLICY,
   type CacheRow,
   type PositionRow,
@@ -135,6 +136,28 @@ describe("verifyFind — tier A plausible track", () => {
       loggerOwnIgates: new Set(["OE8APR"]),
     });
     expect(r).toMatchObject({ verified: true, tier: "A" });
+  });
+
+  it("an APRS-IS fix far away at nearly the same time does not veto an attested RF fix", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [
+        pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 42 }),
+        pos({ ...FAR, heard_via: "aprs_is", igate_call: "T2TEST", firstPartyAttested: false, ts: 1060, id: 43 }),
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A", matchedPositionId: 42 });
+  });
+
+  it("the logger's own signed browser-RF fix far away still contradicts the attested fix", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [
+        pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 42 }),
+        pos({ ...FAR, heard_via: "rf", source: "browser-rf", firstPartyAttested: false, ts: 1060, id: 43 }),
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).not.toBe("A");
   });
 
   it("grants tier A on a lone fix (no neighbour to contradict — benign single beacon)", () => {
@@ -345,5 +368,17 @@ describe("verifyFind — living (moving) cache", () => {
       cacheStationPositions: [pos({ lat: 46.5001, lon: 14.5, heard_via: "aprs_is", ts: 1000 + 10 * 60 })],
     });
     expect(r.verified).toBe(false);
+  });
+});
+
+describe("plausiblePresence — what may contradict a peer's corroboration", () => {
+  const atCache = { lat: CACHE.lat!, lon: CACHE.lon!, ts: 1000 };
+  it("an APRS-IS fix far away does not refuse the presence", () => {
+    const far = pos({ ...FAR, heard_via: "aprs_is", firstPartyAttested: false, ts: 1030 });
+    expect(plausiblePresence(atCache, [far])).toBe(true);
+  });
+  it("an attested fix far away does", () => {
+    const far = pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 1030 });
+    expect(plausiblePresence(atCache, [far])).toBe(false);
   });
 });

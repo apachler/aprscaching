@@ -194,6 +194,27 @@ describe("signed requests", () => {
     expect((await signed(env, k, "GET", "/ingest/check", undefined, stale)).status).toBe(401);
   });
 
+  it("a signature written another way is the same signature: its replay is refused", async () => {
+    const env = boxEnv();
+    const k = await enrolled(env);
+    const first = await signed(env, k, "GET", "/ingest/check");
+    expect(first.status).toBe(200);
+    const sig = first.headers["x-box-sig"]!;
+    // the last of 86 characters carries 4 unused bits; flipping one names the same 64 bytes
+    const last = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const lowBit = last[last.indexOf(sig.at(-1)!) ^ 1]!;
+    for (const variant of [
+      `${sig}==`,
+      `${sig.slice(0, 40)} ${sig.slice(40)}`,
+      sig.replace(/-/g, "+").replace(/_/g, "/"),
+      sig.slice(0, -1) + lowBit,
+    ]) {
+      const replay = { ...first.headers, "x-box-sig": variant };
+      expect((await signed(env, k, "GET", "/ingest/check", undefined, replay)).status, variant).toBe(401);
+    }
+    expect((await signed(env, k, "GET", "/ingest/check")).status).toBe(200);
+  });
+
   it("a key signs only for its own box id", async () => {
     const env = boxEnv();
     const k = await enrolled(env, "shack-1");

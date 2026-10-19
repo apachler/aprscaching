@@ -45,6 +45,7 @@ import { alreadyFound, logRefusal } from "./findrules.js";
 import { serviceCall } from "./servicecall.js";
 import { leaveMail, isBoxRadioPort } from "./mailbox.js";
 import { setNearRadio } from "./nearradio.js";
+import { fieldTime } from "./fieldtime.js";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -157,6 +158,8 @@ export interface RadioMessage {
   path: string[];
   /** The batch was signed by the sender's own registered device key. */
   signed: boolean;
+  /** The call and device key whose signature carried a signed batch: they bound the time the batch gives. */
+  signer?: { callsign: string; key: string };
   /** The ingest box, and the station on it, that received the message over its own radio (routing only). */
   box?: string;
   rxCall?: string;
@@ -206,6 +209,7 @@ type CacheForLog = CacheRow & {
   id: number;
   code: string;
   title: string;
+  created_at: number;
   status: string;
   owner_call: string;
   source: string | null;
@@ -356,13 +360,19 @@ async function commitCommand(
   row: Pick<CommandRow, "from_call" | "account_id" | "command" | "body" | "sent_at">,
   cache: CacheForLog,
   score: FindScore | null,
+  fieldTimeRejected: string | null = null,
 ): Promise<{ logId?: number; duplicate?: boolean; refused?: string }> {
   // checked again at commit: a cache archived, or a find logged another way, while the command waited
   const refused = await logRefusal(env, cache, row.from_call, row.command, row.account_id);
   if (refused) return { refused };
   if (row.command === "found") {
     if (await alreadyFound(env, cache.id, row.from_call, row.account_id)) return { duplicate: true };
-    const c = await commitFind(env, cache, row.from_call, row.sent_at, row.body, score!);
+    const c = await commitFind(env, cache, row.from_call, row.sent_at, row.body, score!, {
+      signerKey: null,
+      authorSig: null,
+      signedAt: null,
+      fieldTimeRejected,
+    });
     return c.duplicate ? { duplicate: true } : { logId: c.logId };
   }
   const logType = row.command === "dnf" ? "dnf" : "note";
@@ -459,7 +469,18 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
   if (parsed.command === "found" && (await alreadyFound(env, cache.id, src, acct.account_id)))
     return reject(`${cache.code} is already logged as found`, { accountId: acct.account_id, cache });
 
-  const score = parsed.command === "found" ? await scoreFind(env, cache, src, m.ts) : null;
+  // A signed batch is timed by the sender's own clock, so its time is taken only within the bounds of a signed
+  // web log's (fieldtime.ts): never before the cache was hidden or the signing key registered. Outside them the
+  // command is timed by its arrival, and the log keeps the reason. A trusted ingest's time is its own box's.
+  const ft = m.signed
+    ? await fieldTime(env, {
+        now: nowS(),
+        loggerCall: m.signer?.callsign ?? src,
+        cacheCreatedAt: cache.created_at,
+        signed: { at: m.ts, key: m.signer?.key ?? "" },
+      })
+    : { foundAt: m.ts, rejected: null };
+  const score = parsed.command === "found" ? await scoreFind(env, cache, src, ft.foundAt) : null;
   const base = {
     accountId: acct.account_id,
     command: parsed.command,
@@ -478,9 +499,16 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
 
   const c = await commitCommand(
     env,
-    { from_call: src, account_id: acct.account_id, command: parsed.command, body: parsed.body ?? null, sent_at: m.ts },
+    {
+      from_call: src,
+      account_id: acct.account_id,
+      command: parsed.command,
+      body: parsed.body ?? null,
+      sent_at: ft.foundAt,
+    },
     cache,
     score,
+    ft.rejected,
   );
   if (c.refused) return reject(c.refused, { accountId: acct.account_id, cache });
   if (c.duplicate) return reject(`${cache.code} is already logged as found`, { accountId: acct.account_id, cache });

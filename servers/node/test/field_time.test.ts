@@ -2,9 +2,10 @@
 // A find queued offline reaches the gateway hours after it was made. Its device-key signature carries the
 // time it was made, and within bounds that is the find time: the find is scored, stored and federated at
 // that moment, so it gets the verification it would have had if sent at once. Outside the bounds the find
-// time is the receive time and the log keeps the reason.
+// time is the receive time and the log keeps the reason. A FOUND sent over the air through the player's own
+// browser bridge is a signed batch too, and its time is held to the same bounds.
 import { describe, it, expect } from "vitest";
-import { authorshipMessage } from "@aprscaching/shared";
+import { authorshipMessage, ingestMessage, sha256Hex, stableStringify, SIG_DOMAIN } from "@aprscaching/shared";
 import { FIND_FEED } from "@aprscaching/gateway/federation";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 import { emailSignup } from "./helpers/authflow.js";
@@ -169,5 +170,68 @@ describe("outside the bounds the find time is the receive time", () => {
     expect((await log(queued, null, { offline: true })).body.fieldTimeRejected).toBe("unsigned");
     const live = await setup();
     expect((await log(live, null)).body.fieldTimeRejected).toBeNull();
+  });
+});
+
+describe("a FOUND in a signed browser batch", () => {
+  /** The player's browser bridge sends `FOUND <code>` to the service call, the packet stamped `at`. */
+  async function radioFound(s: Setup, at: number) {
+    await s.env.DB.prepare(
+      "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('acct-log', ?, 1, 0)",
+    )
+      .bind(LOGGER)
+      .run();
+    await s.env.DB.prepare(
+      "INSERT INTO callsign_verifications (callsign, method, status, attempts, created_at, verified_at) VALUES (?, 'operator', 'verified', 0, 0, 0)",
+    )
+      .bind(LOGGER)
+      .run();
+    const packets = [
+      {
+        src: `${LOGGER}-7`,
+        dst: "APRS",
+        path: ["WIDE1-1"],
+        payload: `:APRSCG   :FOUND ${s.code}{1`,
+        kind: "message",
+        heardVia: "rf",
+        port: "webserial-kiss",
+        ts: at,
+      },
+    ];
+    const signedAt = now();
+    const digest = await sha256Hex(stableStringify(packets));
+    const msg = SIG_DOMAIN.ingest + ingestMessage({ callsign: LOGGER, at: signedAt, count: 1, digest });
+    const sig = b64u(await crypto.subtle.sign("Ed25519", s.kp.privateKey, new TextEncoder().encode(msg)));
+    const res = await serve(s.env)(
+      new Request(`https://${INSTANCE}/ingest`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-acs-callsign": LOGGER,
+          "x-acs-key": s.pub,
+          "x-acs-sig": sig,
+          "x-acs-at": String(signedAt),
+        },
+        body: JSON.stringify({ packets }),
+      }),
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    return s.env.DB.prepare("SELECT * FROM cache_logs WHERE cache_id = ?")
+      .bind(s.id)
+      .first<{ ts: number; field_time_rejected: string | null; tier: string | null; logger_call: string }>();
+  }
+
+  it("is logged at its own time within the bounds", async () => {
+    const s = await setup();
+    const at = now() - 2 * DAY;
+    const r = await radioFound(s, at);
+    expect(r).toMatchObject({ logger_call: `${LOGGER}-7`, ts: at, field_time_rejected: null });
+  });
+
+  it("never before the cache was hidden: the arrival times it", async () => {
+    const s = await setup({ cacheAge: DAY });
+    const r = await radioFound(s, now() - 2 * DAY);
+    expect(Math.abs(r!.ts - now())).toBeLessThanOrEqual(1);
+    expect(r?.field_time_rejected).toBe("before_cache");
   });
 });

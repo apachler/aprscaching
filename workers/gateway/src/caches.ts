@@ -35,6 +35,7 @@ import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
+import { beaconCommandedIn } from "./beacontag.js";
 import { cacheGid } from "./federation.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
@@ -925,7 +926,10 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     });
   }
 
-  const score = await scoreFind(env, cache, loggerCall, foundAt, appGeo);
+  // Tier A says the logger was heard on the air, so a signed-in player's call must be control-verified for it;
+  // the ingest plane attributes a heard callsign as the trusted backend.
+  const controlVerified = sessionCall ? await isCallsignVerified(env, loggerCall) : true;
+  const score = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
   const committed = await commitFind(env, cache, loggerCall, foundAt, comment ?? null, score, {
     signerKey,
     authorSig,
@@ -990,7 +994,8 @@ async function ownerSignsFor(env: Env, cacheId: number, stationCall: string | nu
  * Score a found log for `loggerCall` at time `at`: the logger's positions in the verification window
  * before `at`, stamped with first-party attestation, the Tier-A independence set, and — when local
  * evidence falls short of Tier A — federation peers. Writes nothing, so a radio command can be scored
- * when its message is heard and committed later.
+ * when its message is heard and committed later. `controlVerified: false` (a call its holder has not proven
+ * control of) keeps the find below Tier A, locally and through peers.
  */
 export async function scoreFind(
   env: Env,
@@ -998,6 +1003,7 @@ export async function scoreFind(
   loggerCall: string,
   at: number,
   appGeo?: AppGeo,
+  controlVerified = true,
 ): Promise<FindScore> {
   const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
@@ -1068,6 +1074,7 @@ export async function scoreFind(
       loggerOwnIgates,
       loggerOwnBoxes,
       now: at, // app-reading freshness is judged against log time
+      loggerControlVerified: controlVerified,
     },
     { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) },
   );
@@ -1083,7 +1090,8 @@ export async function scoreFind(
   // if we couldn't reach Tier A locally, ask peers whether the logger was independently heard on RF
   // near the cache (cross-instance corroboration), excluding every IGate the logger controls. A living
   // cache is asked about where its station last was, not where it started. A hit upgrades the find
-  // to Tier A only if the logger's own local track could have been there.
+  // to Tier A only if the logger's own local track could have been there. A peer never hears that a beacon was
+  // one this instance asked a box to send, so no peer is asked while such a beacon of the call falls in the window.
   let corroboratedBy: string | null = null;
   let retry: RetryPlan | undefined;
   // The route of the matched packet, kept with the log: positions are pruned, the log's explanation is not.
@@ -1101,7 +1109,9 @@ export async function scoreFind(
       : cache.lat != null && cache.lon != null
         ? { lat: cache.lat, lon: cache.lon }
         : null;
-  if (result.tier !== "A" && point) {
+  const boxBeaconed = async () =>
+    lp.results.some((p) => !!p.commanded) || (await beaconCommandedIn(env, loggerCall, since, at));
+  if (result.tier !== "A" && point && controlVerified && !(await boxBeaconed())) {
     const query = {
       callsign: loggerCall,
       lat: point.lat,
@@ -1118,8 +1128,7 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    const track = lp.results.filter((p) => !p.commanded);
-    if (ev && plausiblePresence({ ...point, ts: ev.ts }, track, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+    if (ev && plausiblePresence({ ...point, ts: ev.ts }, attest(lp.results), DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";

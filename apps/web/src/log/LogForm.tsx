@@ -11,15 +11,16 @@ import {
   type AppGeo,
 } from "../api.js";
 import { signAuthorship } from "../crypto.js";
-import { useFmt, type Formatters } from "../format.js";
+import { useFmt } from "../format.js";
 import { haversine } from "../map/geo.js";
-import { Button, TierBadge, TIER_NAME, useConfirm, usePrompt, Card, Icon, InfoTip, ManualLink } from "../ui/index.js";
+import { Button, TierBadge, useConfirm, usePrompt, Card, Icon, InfoTip, ManualLink } from "../ui/index.js";
 import { TERMS } from "../terms.js";
 import { TEXT_LIMITS, type LogType } from "@aprscaching/shared";
 import { refusalMessage } from "../caches/formLimits.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { RadioLogHint } from "./RadioLogHint.js";
+import { findWhy } from "./findWhy.js";
 
 /**
  * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
@@ -29,29 +30,6 @@ import { RadioLogHint } from "./RadioLogHint.js";
 const MATCH_RADIUS_M = 150;
 const MAX_ACCURACY_M = 200;
 const reachM = (g: AppGeo) => MATCH_RADIUS_M + Math.max(0, Math.min(g.accuracyM, MAX_ACCURACY_M));
-
-/** What placed (or failed to place) the finder at the cache, in words, for the result card. */
-function findWhy(r: LogResult, fmt: Formatters, geoAwayM: number | null, hadGeo: boolean): string {
-  const d = r.distanceM != null ? fmt.distance(r.distanceM) : null;
-  if (r.verified) {
-    if (r.tier === "A")
-      return `A receiving station heard your transmission on the air at the cache${
-        r.corroboratedBy ? `, confirmed by ${r.corroboratedBy}` : ""
-      }.`;
-    if (r.tier === "B")
-      return `Your device was ${d ?? "at the cache"}${d ? " from the cache" : ""} when you logged it.`;
-    return "This cache counts every logged find.";
-  }
-  const needs = /requires tier ([ABC])/.exec(r.reason ?? "")?.[1] as "A" | "B" | "C" | undefined;
-  if (needs && r.tier)
-    return `This cache needs a ${TIER_NAME[needs]} find. Yours was ${TIER_NAME[r.tier]}, so it is on record but does not count as verified.`;
-  if (r.method === "aprs_is")
-    return "Only an internet (APRS-IS) position placed you here. Anyone can send one, so it cannot verify a find.";
-  if (geoAwayM != null) return `Your device was ${fmt.distance(geoAwayM)} from the cache — too far to verify the find.`;
-  if (!hadGeo)
-    return "Your location was not available and no receiving station heard you here. Allow location access and log at the cache to verify a find.";
-  return "Nothing placed you at the cache when you logged it.";
-}
 
 /**
  * One-tap log (the core action). A found is one per cache and callsign and is scored once, when it is

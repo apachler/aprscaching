@@ -350,8 +350,9 @@ describe("the answerer is not a location or time oracle", () => {
 });
 
 describe("peer-corroborated finds still need a plausible local track", () => {
+  // DB0XX is the hub's own attested site
   async function setup() {
-    const hub = await asker();
+    const hub = await asker({ FIRST_PARTY_SITES: "DB0XX" });
     const p1 = await answerer("p1.example");
     const p2 = await answerer("p2.example");
     await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
@@ -368,7 +369,26 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     expect(s.result.method).toBe("aprs_rf_peer");
   });
 
-  it("is refused when the logger's own local fix puts them hundreds of km away", async () => {
+  it("is never sought for a call its holder has not control-verified", async () => {
+    const hub = await setup();
+    const s = await scoreFind(hub.env, cache, LOGGER, now(), undefined, false);
+    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).not.toBe("aprs_rf_peer");
+    expect(s.retry).toBeUndefined();
+  });
+
+  it("is refused when the logger's own attested local fix puts them hundreds of km away", async () => {
+    const hub = await setup();
+    await hub.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(LOGGER, now() - 1100)
+      .run();
+    const s = await scoreFind(hub.env, cache, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+  });
+
+  it("is not refused by an APRS-IS fix hundreds of km away: anyone can inject one under the call", async () => {
     const hub = await setup();
     await hub.env.DB.prepare(
       "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES (?, ?, 52.52, 13.40, 'aprs_is', 'DB0XX', 'aprs', 'aprs-is')",
@@ -376,7 +396,39 @@ describe("peer-corroborated finds still need a plausible local track", () => {
       .bind(LOGGER, now() - 1100)
       .run();
     const s = await scoreFind(hub.env, cache, LOGGER, now());
-    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).toBe("aprs_rf_peer");
+  });
+
+  /** The hub asked a box to beacon as LOGGER `ago` seconds back; `heard` stores the hub's own hearing of it. */
+  async function commanded(env: Env, heard: boolean, ago = 900) {
+    await env.DB.prepare(
+      "INSERT INTO box_commands (box_id, callsign, kind, status, created_at, sent_at, acked_at) VALUES ('pi-home', ?, 'beacon', 'done', ?, ?, ?)",
+    )
+      .bind(LOGGER, now() - ago, now() - ago, now() - ago + 5)
+      .run();
+    if (heard)
+      await env.DB.prepare(
+        "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport, commanded) VALUES (?, ?, ?, ?, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc', 1)",
+      )
+        .bind(LOGGER, now() - ago + 2, LAT, LON)
+        .run();
+  }
+
+  it("is never lifted while a beacon the hub asked a box to send under the call falls in the window", async () => {
+    const heard = await setup();
+    await commanded(heard.env, true);
+    const a = await scoreFind(heard.env, cache, LOGGER, now());
+    expect(a.result.tier).not.toBe("A");
+    expect(a.result.method).not.toBe("aprs_rf_peer");
+    expect(a.retry).toBeUndefined();
+    // the peers heard the beacon the hub never heard itself
+    const unheard = await setup();
+    await commanded(unheard.env, false);
+    expect((await scoreFind(unheard.env, cache, LOGGER, now())).result.method).not.toBe("aprs_rf_peer");
+    // a beacon commanded long before the window leaves the lift alone
+    const earlier = await setup();
+    await commanded(earlier.env, false, 4 * 3600);
+    expect((await scoreFind(earlier.env, cache, LOGGER, now())).result.method).toBe("aprs_rf_peer");
   });
 
   it("asks about a living cache where its station was, not where it was hidden", async () => {

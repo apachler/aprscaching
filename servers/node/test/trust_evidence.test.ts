@@ -2,11 +2,12 @@
 // What counts as Tier A/B evidence, through the real gateway over a migrated SQLite: a living cache is where its
 // station was heard by an attested site or by the owner's own signed browser bridge, and an APRS-IS-only fix of
 // the station caps the find at Tier C; a fix that matches a beacon this instance asked a box to send is tagged
-// and never lifts a find; a fix delivered by a box the logger's account owns is the logger's own hearing.
+// and never lifts a find; a fix delivered by a box the logger's account owns is the logger's own hearing; and a
+// signed-in player's find reaches Tier A only once their call is control-verified.
 import { describe, it, expect } from "vitest";
 import { scoreFind } from "@aprscaching/gateway/caches";
 import type { Env } from "@aprscaching/gateway/env";
-import { authEnv, call, markCallVerified } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, markCallVerified } from "./helpers/authflow.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const SITE = "OE8XXX-10";
@@ -222,5 +223,53 @@ describe("a box the logger's account owns", () => {
     const trad = await cache(env, { type: "traditional" });
     await position(env, { call: "OE8LOG-9", igate: "OE3LND-10", transport: "tnc", source: "firehose", box: "pi-home" });
     expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+  });
+});
+
+describe("a signed-in player whose call is not control-verified", () => {
+  it("never reaches Tier A on the call's RF fixes, and does once the call is verified", async () => {
+    const env = world();
+    const player = await emailSignup(env, "log@example.test", "OE8LOG");
+    expect(player.status).toBe(200);
+    const log = async () => {
+      const c = await cache(env, { type: "traditional" });
+      await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+      const r = await call(
+        env,
+        "POST",
+        `/api/caches/${(c as { id: number }).id}/logs`,
+        {
+          logType: "found",
+          loggerCall: "OE8LOG-9",
+        },
+        { cookie: player.cookie },
+      );
+      expect(r.status, JSON.stringify(r.data)).toBe(200);
+      const row = await env.DB.prepare("SELECT tier, verified, corroborator_igate FROM cache_logs WHERE cache_id = ?")
+        .bind((c as { id: number }).id)
+        .first<{ tier: string; verified: number; corroborator_igate: string | null }>();
+      return { res: r.data, row };
+    };
+    const before = await log();
+    expect(before.res.tier).toBe("C");
+    expect(before.res.reason).toMatch(/verify/);
+    expect(before.row).toMatchObject({ tier: "C", verified: 0, corroborator_igate: null });
+    // a phone reading still reaches Tier B: it rests on the player's own device, not on the call
+    const c = await cache(env, { type: "traditional" });
+    const b = await call(
+      env,
+      "POST",
+      `/api/caches/${(c as { id: number }).id}/logs`,
+      {
+        logType: "found",
+        appGeo: phoneAtSpot(),
+      },
+      { cookie: player.cookie },
+    );
+    expect(b.data).toMatchObject({ tier: "B", verified: true });
+
+    await markCallVerified(env, "OE8LOG");
+    const after = await log();
+    expect(after.res).toMatchObject({ tier: "A", verified: true });
   });
 });

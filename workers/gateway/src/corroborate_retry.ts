@@ -34,6 +34,9 @@ import {
 import { COARSEN } from "./corroborate_privacy.js";
 import { DEFAULT_POLICY, plausiblePresence, type PositionRow } from "./verify.js";
 import { awardFindBadges } from "./community.js";
+import { attestation, sitesFor } from "./attestedsites.js";
+import { provenanceOf } from "./provenance.js";
+import { beaconCommandedIn } from "./beacontag.js";
 
 /** When each attempt is due, after the find; their count is the attempt limit. */
 export const RETRY_AFTER_S = [3600, 6 * 3600, 24 * 3600];
@@ -111,7 +114,8 @@ const removeRow = (env: Env, id: number) =>
 
 /**
  * Lift a found log to Tier A on a later quorum, when the logger's own local track allows the corroborated
- * presence, as when the find was logged. True when the log was lifted.
+ * presence, as when the find was logged, and no beacon this instance asked a box to send under the call falls
+ * in the window (a peer cannot tell that hearing from the station's own). True when the log was lifted.
  */
 async function liftLater(
   env: Env,
@@ -120,12 +124,22 @@ async function liftLater(
   winner: Evidence,
   now: number,
 ): Promise<boolean> {
+  const until = (r.log_ts ?? 0) + 60;
   const lp = await env.DB.prepare(
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND commanded = 0 ORDER BY ts DESC LIMIT 500",
+    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
   )
-    .bind(r.logger_call, q.since, (r.log_ts ?? 0) + 60)
+    .bind(r.logger_call, q.since, until)
     .all<PositionRow>();
-  if (!plausiblePresence({ lat: q.lat, lon: q.lon, ts: winner.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec))
+  if (lp.results.some((p) => !!p.commanded) || (await beaconCommandedIn(env, r.logger_call as string, q.since, until)))
+    return false;
+  // the track the presence is judged against carries its attestation, as at log time (verify.ts contradicts)
+  const attested = await attestation(env);
+  const track = lp.results.map((p) => ({
+    ...p,
+    commanded: false,
+    firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
+  }));
+  if (!plausiblePresence({ lat: q.lat, lon: q.lon, ts: winner.ts }, track, DEFAULT_POLICY, COARSEN.timeBucketSec))
     return false;
   const igate = corroboratorIgate({
     method: "aprs_rf_peer",

@@ -102,7 +102,7 @@ export async function verifySignedIngest(
   req: Request,
   env: Env,
   packets: unknown[],
-): Promise<{ callsign: string } | null> {
+): Promise<{ callsign: string; key: string } | null> {
   const callsign = (req.headers.get("x-acs-callsign") ?? "").toUpperCase();
   const key = req.headers.get("x-acs-key") ?? "";
   const sig = req.headers.get("x-acs-sig") ?? "";
@@ -123,7 +123,7 @@ export async function verifySignedIngest(
     // replay, remembered for as long as the window lasts
     const once = await sha256Hex(`${key}|${at}|${digest}`);
     if (await rateLimitedDurable(env, `ingest-once:${once}`, Date.now(), 1, 600_000)) return null;
-    return { callsign };
+    return { callsign, key };
   } catch {
     return null;
   }
