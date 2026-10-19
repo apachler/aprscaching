@@ -15,6 +15,7 @@ import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { CACHE_POINT, moveRefusal, placePins } from "./cacheplace.js";
 import { removedCacheResponse } from "./moderation.js";
+import { unlockedStages } from "./findrules.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import {
   MEDIA_LIMITS,
@@ -61,15 +62,6 @@ async function isRemoved(env: Env, cacheId: number): Promise<boolean> {
   return r?.removed_at != null;
 }
 const REMOVED_REFUSAL = () => json({ error: "the sysop removed this cache — it cannot be edited" }, { status: 403 });
-async function unlockedSet(env: Env, cacheId: number, callsign: string): Promise<Set<number>> {
-  const rows = (
-    await env.DB.prepare("SELECT stage_no FROM stage_unlocks WHERE cache_id=? AND callsign=?")
-      .bind(cacheId, callsign.toUpperCase())
-      .all<{ stage_no: number }>()
-  ).results;
-  return new Set(rows.map((r) => r.stage_no));
-}
-
 /** Whether a stage unlocks offline, and why not when it does not. */
 interface StageOffline {
   stageNo: number;
@@ -324,7 +316,7 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
       const cs = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
       const allowed =
         (!!owner && (await mayActAsOwner(req, env, owner))) ||
-        (!!cs && (await unlockedSet(env, cacheId, cs)).has(st.stage_no));
+        (!!cs && (await unlockedStages(env, cacheId, cs)).has(st.stage_no));
       if (!allowed) return new Response("not found", { status: 404 });
       cacheControl = "private, no-store"; // the clip is the finder's once unlocked, never a shared cache's
     }
@@ -359,7 +351,7 @@ export async function handleGetStages(req: Request, env: Env, cacheId: number): 
       .bind(cacheId)
       .all<StageRow>()
   ).results;
-  const unlocked = callsign ? await unlockedSet(env, cacheId, callsign) : new Set<number>();
+  const unlocked = callsign ? await unlockedStages(env, cacheId, callsign) : new Set<number>();
   // the owner sees every stage as set, tag codes included, to edit them
   const owner = await ownerOf(env, cacheId);
   const isOwner = !!owner && (await mayActAsOwner(req, env, owner));
@@ -403,7 +395,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   if (!prev) return json({ error: "previous stage missing" }, { status: 409 });
 
   // must have reached the previous stage first
-  const unlocked = await unlockedSet(env, cacheId, cs);
+  const unlocked = await unlockedStages(env, cacheId, cs);
   if (stageNo - 1 > 0 && !unlocked.has(stageNo - 1))
     return json(
       { error: "reach the previous stage first", reason: "previous_stage", needStage: stageNo - 1 },

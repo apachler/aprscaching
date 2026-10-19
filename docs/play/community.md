@@ -6,13 +6,14 @@ alerts, badges and ranks, and how to report something wrong. It is for every pla
 ## Ratings
 
 A cache page shows its **Rating**: the average of 1 to 5 stars and the number of ratings. You rate with the
-stars under it. Tap again to change your rating; each callsign has one rating per cache.
+stars under it. Tap again to change your rating. You have one rating per cache, whichever SSID or callsign
+on your account you rate with.
 
 The owner decides who may rate when they hide the cache:
 
 | **Who can rate** | Who may rate |
 |---|---|
-| **Finders only** (default) | A callsign with a verified find on this cache |
+| **Finders only** (default) | A player with a verified find on this cache, under any of their callsigns |
 | **Anyone signed in** | Every signed-in player |
 | **Nobody (disabled)** | Nobody |
 
@@ -22,8 +23,8 @@ this cache* or *Sign in to rate*.
 
 ## Favourites
 
-The heart at the top of a cache page marks it as a favourite. The number beside it counts everyone who did.
-Tap it again to take your favourite back.
+The heart at the top of a cache page marks it as a favourite. The number beside it counts everyone who did,
+each player once. Tap it again to take your favourite back.
 
 ## Alerts and the watchlist
 
