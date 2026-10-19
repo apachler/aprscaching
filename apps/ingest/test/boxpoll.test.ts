@@ -88,7 +88,7 @@ describe("remote transmit", () => {
     };
     const { poller, nowSec } = setup({ radio });
     const r = await poller.execute(cmd({ kind: "beacon", callsign: "OE8APR", createdAt: nowSec() }));
-    expect(r).toMatchObject({ status: "done", result: "beacon sent as OE8APR-10" });
+    expect(r).toMatchObject({ status: "done", result: "beacon sent as OE8APR-10", sentAs: "OE8APR-10" });
     expect(sent[0]).toMatchObject({ src: "OE8APR-10" });
     expect(judged).toEqual([["OE8APR-10"]]);
   });

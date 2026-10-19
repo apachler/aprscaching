@@ -60,6 +60,51 @@ describe("message delivery reports", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("a box message queued under a base call is recorded under the call the box sent it as, so the station's ack marks it", async () => {
+    const env = authEnv({ ROOMS });
+    const cmd = await env.DB.prepare(
+      "INSERT INTO box_commands (box_id, callsign, kind, payload, status, created_at) VALUES ('box-d', 'OE8DLV', 'message', ?, 'sent', ?)",
+    )
+      .bind(JSON.stringify({ to: "OE3ABC", text: "sent as box" }), now())
+      .run();
+    const id = Number(cmd.meta.last_row_id);
+    const ack = { id, status: "done", msgNo: "124", sentAs: "OE8DLV-10" };
+    expect((await call(env, "POST", "/api/box/box-d/commands/ack", ack, SECRET)).status).toBe(200);
+    const row = await env.DB.prepare("SELECT from_call FROM messages WHERE body = 'sent as box'").first<{
+      from_call: string;
+    }>();
+    expect(row!.from_call).toBe("OE8DLV-10");
+
+    const heard = {
+      src: "OE3ABC",
+      dst: "APRS",
+      path: [],
+      payload: ":OE8DLV-10:ack124",
+      kind: "message",
+      heardVia: "rf",
+      port: "kiss-tnc",
+      ts: now(),
+    };
+    expect((await call(env, "POST", "/ingest", { packets: [heard] }, SECRET)).status).toBe(200);
+    expect(await listed(env, "sent as box")).toMatchObject({ delivery: "acked" });
+  });
+
+  it("ignores a sent-as call that is not an SSID of the command's base call", async () => {
+    const env = authEnv({ ROOMS });
+    const cmd = await env.DB.prepare(
+      "INSERT INTO box_commands (box_id, callsign, kind, payload, status, created_at) VALUES ('box-d', 'OE8DLV', 'message', ?, 'sent', ?)",
+    )
+      .bind(JSON.stringify({ to: "OE3ABC", text: "foreign call" }), now())
+      .run();
+    const id = Number(cmd.meta.last_row_id);
+    const ack = { id, status: "done", msgNo: "125", sentAs: "OE3XYZ-10" };
+    expect((await call(env, "POST", "/api/box/box-d/commands/ack", ack, SECRET)).status).toBe(200);
+    const row = await env.DB.prepare("SELECT from_call FROM messages WHERE body = 'foreign call'").first<{
+      from_call: string;
+    }>();
+    expect(row!.from_call).toBe("OE8DLV");
+  });
+
   it("the uplink reports how an APRS-IS message ended with its outbox ack", async () => {
     const env = authEnv({ ROOMS });
     const ob = await env.DB.prepare(

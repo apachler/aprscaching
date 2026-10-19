@@ -90,6 +90,8 @@ export interface BoxResult {
   position?: { lat: number; lon: number };
   /** The number a message went out with, so the gateway matches the station's ack to it. */
   msgNo?: string;
+  /** The call the frame went out under, which is BOX_CALL for a command that names the bare base call. */
+  sentAs?: string;
 }
 
 /** A report owed to the gateway: a command's result, or later how a message it sent ended. */
@@ -514,7 +516,7 @@ export class BoxPoller {
         result: "the radio refused the frame (TNC link down, or the soundcard port's transmit gate)",
       };
     to.sent?.(frame);
-    return { status: "done", result: `${what} sent as ${g.src}` };
+    return { status: "done", result: `${what} sent as ${g.src}`, sentAs: g.src };
   }
 
   /**
