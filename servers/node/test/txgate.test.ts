@@ -95,15 +95,30 @@ describe("GET /ingest/txgate", () => {
     expect((await lookup(env, { key: lent })(["OE8APR-10"])).get("OE8APR-10")?.ok).toBe(false);
   });
 
-  it("refuses a wrong secret, and malformed calls or nonce", async () => {
+  it("refuses a wrong secret, a missing call list and a malformed nonce", async () => {
     const { env } = await world();
     await expect(lookup(env, { secret: "wrong" })(["OE8APR-10"])).rejects.toThrow(/HTTP 401/);
     const ask = (q: string) =>
       serve(env)(new Request(`${ORIGIN}/ingest/txgate?${q}`, { headers: { "x-ingest-secret": SECRET } }));
     expect((await ask("calls=OE8APR-10")).status).toBe(400); // no nonce
-    expect((await ask("calls=NOT%20A%20CALL&nonce=abcdefghijklmnop")).status).toBe(400);
-    const seventeen = Array.from({ length: 17 }, (_, i) => `OE${i}AA`).join(",");
-    expect((await ask(`calls=${seventeen}&nonce=abcdefghijklmnop`)).status).toBe(400);
+    expect((await ask("calls=&nonce=abcdefghijklmnop")).status).toBe(400);
     expect((await ask(`calls=OE8APR-10&nonce=abcdefghijklmnop`)).status).toBe(200);
+  });
+
+  it("answers a malformed call on its own, so the valid calls of the same lookup still pass", async () => {
+    const { env } = await world();
+    const got = await lookup(env, { secret: SECRET })(["OE8APR-10", "OE8APR-GW"]);
+    expect(got.get("OE8APR-10")?.ok).toBe(true);
+    expect(got.get("OE8APR-GW")).toEqual({ ok: false, reason: "not an AX.25 callsign (CALL-SSID, SSID 0-15)" });
+  });
+
+  it("answers the calls past the per-request limit as refused, and the rest as usual", async () => {
+    const { env } = await world();
+    const calls = ["OE8APR-10", ...Array.from({ length: 16 }, (_, i) => `OE${i}AA`)];
+    const got = await lookup(env, { secret: SECRET })(calls);
+    expect(got.size).toBe(17);
+    expect(got.get("OE8APR-10")?.ok).toBe(true);
+    expect(got.get("OE14AA")).toMatchObject({ ok: false, reason: "not control-verified" });
+    expect(got.get("OE15AA")).toEqual({ ok: false, reason: "too many calls in one request (at most 16)" });
   });
 });

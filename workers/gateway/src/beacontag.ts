@@ -9,7 +9,7 @@
  * box reported, is stored with `positions.commanded = 1`; the verify engine, the corroboration answer and the
  * later corroboration attempt never take such a fix as evidence.
  */
-import { haversineMeters } from "@aprscaching/aprs";
+import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
 
 /** How long after its lease a beacon's hearings arrive: digipeated copies and APRS-IS copies take minutes. */
@@ -24,19 +24,25 @@ interface CommandedBeacon {
   until: number;
   lat?: number;
   lon?: number;
+  /** The call the box reported it sent the beacon under; unset until it acks, or when it is the command's call. */
+  sentAs?: string;
 }
 
 /** How long a box may take to ack a beacon it sent (its acks wait while the gateway is unreachable). */
 const ACK_DELAY_S = 3600;
 
-/** The commanded beacons of `calls` (exact calls, any case) whose window may reach back to `since`, by call. */
+/**
+ * The commanded beacons of `calls` (any case) whose window may reach back to `since`, by the call the command
+ * names. A command that names a bare base call goes out under the box's own station call, an SSID of that base
+ * call the gateway does not know, so the beacons are looked up under the base call of each of `calls` too.
+ */
 export async function commandedBeacons(
   env: Env,
   calls: string[],
   since: number,
 ): Promise<Map<string, CommandedBeacon[]>> {
   const out = new Map<string, CommandedBeacon[]>();
-  const wanted = [...new Set(calls.map((c) => c.toUpperCase()))];
+  const wanted = [...new Set(calls.flatMap((c) => [c.toUpperCase(), baseCall(c)]))];
   if (!wanted.length) return out;
   const rows = (
     await env.DB.prepare(
@@ -48,7 +54,7 @@ export async function commandedBeacons(
       .all<{ callsign: string; payload: string | null; sentAt: number; ackedAt: number | null }>()
   ).results;
   for (const r of rows) {
-    let at: { lat?: unknown; lon?: unknown } = {};
+    let at: { lat?: unknown; lon?: unknown; sentAs?: unknown } = {};
     try {
       at = r.payload ? (JSON.parse(r.payload) as typeof at) : {};
     } catch {
@@ -58,6 +64,7 @@ export async function commandedBeacons(
       from: r.sentAt - BEACON_SKEW_S,
       until: Math.max(r.sentAt, r.ackedAt ?? 0) + BEACON_ECHO_S,
       ...(typeof at.lat === "number" && typeof at.lon === "number" ? { lat: at.lat, lon: at.lon } : {}),
+      ...(typeof at.sentAs === "string" ? { sentAs: at.sentAs.toUpperCase() } : {}),
     };
     out.set(r.callsign, [...(out.get(r.callsign) ?? []), b]);
   }
@@ -73,14 +80,19 @@ export async function beaconCommandedIn(env: Env, call: string, since: number, u
 /**
  * True when a fix of `call` at `ts`, ingested at `now`, is a commanded beacon's hearing: inside a beacon's window
  * by its own time or by its arrival, and near the position the box reported (any position while the box has not
- * reported one yet).
+ * reported one yet). A beacon commanded under a bare base call matches a fix of any SSID of it until the box
+ * reports the call it went out under, and only that call's fixes after, so the operator's other stations stay
+ * evidence.
  */
 export function isCommandedBeacon(
   beacons: Map<string, CommandedBeacon[]>,
   fix: { call: string; ts: number; lat: number; lon: number },
   now: number,
 ): boolean {
-  for (const b of beacons.get(fix.call.toUpperCase()) ?? []) {
+  const call = fix.call.toUpperCase();
+  const base = baseCall(call);
+  for (const b of [...(beacons.get(call) ?? []), ...(base !== call ? (beacons.get(base) ?? []) : [])]) {
+    if (b.sentAs && b.sentAs !== call) continue;
     const inWindow = (t: number) => t >= b.from && t <= b.until;
     if (!inWindow(fix.ts) && !inWindow(now)) continue;
     if (b.lat == null || b.lon == null) return true;

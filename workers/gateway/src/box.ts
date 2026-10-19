@@ -316,12 +316,13 @@ function parsePayload(raw: string | null): Record<string, unknown> {
 /** POST /api/box/:id/commands/ack — the box reports execution. */
 export async function handleBoxAck(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
-  const { id, status, result, position, msgNo, delivery } = (await req.json().catch(() => ({}))) as {
+  const { id, status, result, position, msgNo, sentAs, delivery } = (await req.json().catch(() => ({}))) as {
     id?: number;
     status?: string;
     result?: string;
     position?: { lat?: unknown; lon?: unknown };
     msgNo?: unknown;
+    sentAs?: unknown;
     delivery?: unknown;
   };
   // a later report on a message the box sent: how often its radio sent it, and how that ended
@@ -339,6 +340,7 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
     const cmd = await env.DB.prepare("SELECT callsign, kind, payload FROM box_commands WHERE id=?")
       .bind(id)
       .first<{ callsign: string | null; kind: string; payload: string | null }>();
+    const extra: Record<string, unknown> = {};
     // A beacon's ack names where the box sent it from: its hearings are told from the station's travels by it.
     const lat = position?.lat,
       lon = position?.lon;
@@ -349,29 +351,34 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
       Math.abs(lat) <= 90 &&
       Math.abs(lon) <= 180
     )
-      await env.DB.prepare("UPDATE box_commands SET payload = ? WHERE id = ?")
-        .bind(JSON.stringify({ ...parsePayload(cmd.payload), lat, lon }), id)
-        .run();
+      Object.assign(extra, { lat, lon });
+    // The call the frame went out under: a command that names a bare base call goes out under the box's station
+    // call. Only an SSID of the command's own base call is taken, so a box cannot move a command to another call.
+    const call = (cmd?.callsign ?? "").toUpperCase();
+    const sent = typeof sentAs === "string" ? sentAs.trim().toUpperCase() : "";
+    const via = call && AX25_CALL.test(sent) && baseCall(sent) === baseCall(call) ? sent : call;
+    if (via !== call) extra.sentAs = via;
     const p =
       cmd?.kind === "message" && cmd.payload ? (JSON.parse(cmd.payload) as { to?: string; text?: string }) : null;
     // the number the box gave it, so the station's ack marks it acknowledged
     const no = typeof msgNo === "string" && MSG_NO.test(msgNo) ? msgNo : null;
-    if (cmd?.callsign && p?.to && p.text) {
-      if (no)
-        await env.DB.prepare("UPDATE box_commands SET payload = ? WHERE id = ?")
-          .bind(JSON.stringify({ ...parsePayload(cmd.payload), msgNo: no }), id)
-          .run();
+    if (p?.to && p.text && no) extra.msgNo = no;
+    if (cmd && Object.keys(extra).length)
+      await env.DB.prepare("UPDATE box_commands SET payload = ? WHERE id = ?")
+        .bind(JSON.stringify({ ...parsePayload(cmd.payload), ...extra }), id)
+        .run();
+    if (call && p?.to && p.text)
       await env.DB.prepare(
         "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'tx', 'tnc')",
       )
-        .bind(nowS(), cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.text, no)
+        .bind(nowS(), via, p.to.toUpperCase(), p.text, no)
         .run();
-    }
   }
   return json({ ok: true });
 }
 
 const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
+const AX25_CALL = /^[A-Z0-9]{1,6}(?:-(?:1[0-5]|[0-9]))?$/;
 
 const OUTCOME_TEXT: Record<DeliveryReport["outcome"], string> = {
   acked: "acknowledged",
@@ -401,7 +408,7 @@ async function boxDelivery(env: Env, boxId: string, id: number, raw: unknown): P
         env,
         {
           sql: "from_call = ? AND to_call = ? AND ack = ? AND transport = 'tnc'",
-          binds: [cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.msgNo],
+          binds: [(typeof p.sentAs === "string" ? p.sentAs : cmd.callsign).toUpperCase(), p.to.toUpperCase(), p.msgNo],
         },
         d,
         nowS(),

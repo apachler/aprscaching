@@ -489,6 +489,45 @@ describe("the gateway lookup", () => {
     await expect(lookup(["OE8APR-10"])).rejects.toBeInstanceOf(TxGateUnsupported);
   });
 
+  it("names a gateway's 4xx as a rejected request, quoting the gateway's error", async () => {
+    const lookup = gatewayTxGateLookup({
+      ingestUrl: "http://gw/ingest",
+      secret: SECRET,
+      boxKey: false,
+      fetch: (async () =>
+        new Response(JSON.stringify({ error: "nonce: 16 to 64 letters and digits" }), { status: 400 })) as typeof fetch,
+    });
+    await expect(lookup(["OE8APR-10"])).rejects.toThrow(
+      "the gateway rejected the request (HTTP 400: nonce: 16 to 64 letters and digits)",
+    );
+    const logs: string[] = [];
+    vi.useFakeTimers();
+    try {
+      const v = new CallVerifier(lookup, { log: (m) => logs.push(m) });
+      v.start(["OE8APR-10"]);
+      await vi.advanceTimersByTimeAsync(0);
+      v.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(logs).toEqual([
+      "[txgate] the gateway rejected the request (HTTP 400: nonce: 16 to 64 letters and digits); asking again in 30 s",
+    ]);
+  });
+
+  it("asks about at most 16 calls at a time, and merges the answers", async () => {
+    const asked: string[][] = [];
+    const v = new CallVerifier(async (calls) => {
+      asked.push(calls);
+      if (calls.length > 16) throw new Error("HTTP 400");
+      return new Map(calls.map((c) => [c, { ok: true }]));
+    });
+    const calls = Array.from({ length: 20 }, (_, i) => `OE8APR-${i % 16}`).concat(["OE8ABC-1", "OE8ABD-1"]);
+    expect(await v.refresh(calls)).toBe(true);
+    expect(asked.map((a) => a.length)).toEqual([16, 2]);
+    expect(v.refusal(["OE8APR-3", "OE8ABD-1"])).toBeNull();
+  });
+
   it("an enrolled box takes the answer only over https or loopback", async () => {
     const g = gateway(body);
     const remote = gatewayTxGateLookup({ ingestUrl: "http://gw.example/ingest", secret: "", boxKey: true, fetch: g.f });
