@@ -216,9 +216,11 @@ export async function handleUserFeed(req: Request, env: Env, callsign: string): 
   ).results;
   const badges = (
     await env.DB.prepare(
-      "SELECT badge, earned_at AS earnedAt FROM achievements WHERE callsign = ? ORDER BY earned_at DESC LIMIT 50",
+      // badges belong to the person and are awarded to the base call; the exact call is read too, as on the profile
+      `SELECT badge, MIN(earned_at) AS earnedAt FROM achievements WHERE callsign IN (?, ?)
+       GROUP BY badge ORDER BY earnedAt DESC LIMIT 50`,
     )
-      .bind(cs)
+      .bind(person, cs)
       .all<any>()
   ).results;
   const findCount =

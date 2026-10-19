@@ -178,4 +178,14 @@ describe("RSS feeds rank and list the person", () => {
     expect(body).toContain("AC-0003");
     expect(body).toContain("2 verified finds");
   });
+
+  it("the feed of an SSID lists the person's finds and the badges they earned under the base call", async () => {
+    // badges are awarded to the base call, as awardFindBadges stores them
+    sqlite.prepare("INSERT INTO achievements (callsign, badge, earned_at) VALUES ('OE8APR','first-find',?)").run(t);
+    const body = await (
+      await handleUserFeed(new Request("http://gw.test/feeds/u/OE8APR-7.xml"), env, "OE8APR-7")
+    ).text();
+    expect(body).toContain("AC-0003");
+    expect(body).toContain("Earned badge: first-find");
+  });
 });
