@@ -10,7 +10,6 @@
     z-index: var(--z-toast);
     display: flex;
     flex-direction: column-reverse;
-    gap: var(--space-sm);
     align-items: center;
     pointer-events: none;
   }
@@ -38,15 +37,17 @@
   .update-notice button {
     min-height: var(--hit);
   }
-  /* the two live regions, errors above confirmations; each stacks its own toasts the same way */
+  /* the two live regions, errors nearest the tab bar and confirmations above them; each stacks its own toasts the
+     same way. An empty region stays rendered (it has no size), since a live region must already be in the
+     accessibility tree when its first toast arrives for that toast to be announced */
   .toast-region {
     display: flex;
     flex-direction: column-reverse;
     gap: var(--space-sm);
     align-items: center;
   }
-  .toast-region:empty {
-    display: none;
+  .toast-region:has(.toast) + .toast-region:has(.toast) {
+    margin-bottom: var(--space-sm);
   }
   .toast {
     display: flex;

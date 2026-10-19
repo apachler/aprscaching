@@ -59,7 +59,10 @@ export function ToastProvider(props: { children: ReactNode }) {
   const push = useCallback<Push>(
     (msg, opts) => {
       const t: ToastItem = { id: nextId.current++, msg, kind: opts?.kind };
-      setToasts((all) => [...all, t]);
+      // an error stays until dismissed, so one already on screen is not stacked again by a repeated failure
+      setToasts((all) =>
+        t.kind === "error" && all.some((x) => x.kind === "error" && x.msg === msg) ? all : [...all, t],
+      );
       schedule(t);
     },
     [schedule],
