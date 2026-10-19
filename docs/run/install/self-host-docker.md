@@ -108,7 +108,7 @@ the shape for the other [helper commands](../day-to-day/helper-command.md). `--n
 |---|---|---|
 | `gateway` | Node and SQLite gateway on port 8080 inside the stack | Not published; Caddy proxies to it. The database and cache media (`/data/media`) live in the `data` volume. Health check on `/health`. It refuses to start without `INGEST_SECRET` |
 | `ingest` | The APRS-IS feed and any RF transports | Starts once the gateway is healthy. It gets `.env` with the operator secret, the session secret and the federation key blanked: it holds only `INGEST_SECRET` |
-| `webdist` | One-shot | Copies the web app built inside the image into the volume Caddy serves |
+| `webdist` | One-shot | Copies the web app built inside the image into the volume Caddy serves. The previous release's files stay for a week, so a page still open on it keeps loading |
 | `caddy` | TLS, the web app and the reverse proxy | `DOMAIN=:80` serves plain http (LAN, or behind the tunnel); `DOMAIN=<your host>` gets a Let's Encrypt certificate |
 | `cloudflared` | The tunnel connector | Only with `compose.home.yml`; Caddy then publishes no port |
 

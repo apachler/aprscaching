@@ -23,7 +23,8 @@ import { createServer, type BunServer } from "../../servers/bun/server.ts";
 import { migrationsFromDir } from "../../servers/node/src/migrate.ts";
 import { resolveInstanceSecrets } from "../../servers/node/src/secrets.ts";
 import { compressed, negotiate } from "../../servers/node/src/compress.ts";
-import { contentTypeOf } from "../../servers/node/src/spa.ts";
+import { embeddedSpaFile, SPA_NOT_FOUND_HEADERS, spaFile } from "../../servers/node/src/spa.ts";
+import { PAGE_HEADERS } from "../../workers/gateway/src/pageheaders.ts";
 
 declare const BUILD_VERSION: string;
 const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
@@ -67,33 +68,28 @@ if (!resolved.ok) {
 // ---- SPA serving ----
 
 /**
- * One SPA file: embedded in the binary, or from the build on disk in dev. Text assets go out brotli- or
- * gzip-compressed when the browser accepts it, as the Node server sends them (servers/node/src/compress.ts).
+ * One SPA file: embedded in the binary, or from the build on disk in dev, chosen by the rules the Node server
+ * serves WEB_DIST with (servers/node/src/spa.ts) — a missing asset is a 404, never index.html. Text assets go
+ * out brotli- or gzip-compressed when the browser accepts it, as the Node server sends them
+ * (servers/node/src/compress.ts).
  */
 async function serveSpa(pathname: string, req: Request): Promise<Response> {
-  const p = pathname === "/" ? "/index.html" : pathname;
-  let file: string;
-  let type: string;
-  if (embedded) {
-    file = SPA[p] ?? SPA["/index.html"]!; // SPA-router fallback
-    type = contentTypeOf(SPA[p] ? p : "/index.html");
-  } else {
-    const fp = join(WEB_DIST, p.replace(/^\/+/, ""));
-    if (!fp.startsWith(WEB_DIST)) return new Response("bad path", { status: 400 });
-    const found = existsSync(fp);
-    file = found ? fp : join(WEB_DIST, "index.html");
-    type = found ? contentTypeOf(fp) : "text/html; charset=utf-8";
-  }
-  const body = Bun.file(file);
-  const { encoding, vary } = negotiate(type, body.size, {
+  const f = embedded ? embeddedSpaFile(SPA, pathname) : spaFile(WEB_DIST, pathname);
+  if (!f) return new Response("not found", { status: 404, headers: SPA_NOT_FOUND_HEADERS });
+  const body = Bun.file(f.file);
+  const { encoding, vary } = negotiate(f.contentType, body.size, {
     acceptEncoding: req.headers.get("accept-encoding"),
     range: req.headers.get("range"),
   });
-  const headers: Record<string, string> = { "content-type": type };
+  const headers: Record<string, string> = {
+    "content-type": f.contentType,
+    "cache-control": f.cacheControl,
+    ...PAGE_HEADERS,
+  };
   if (vary) headers.vary = "Accept-Encoding";
   if (!encoding) return new Response(body, { headers });
   // an embedded file never changes; one on disk is keyed by its version, so a rebuild is picked up
-  const key = embedded ? file : `${file}\0${body.size}\0${body.lastModified}`;
+  const key = embedded ? f.file : `${f.file}\0${body.size}\0${body.lastModified}`;
   const out = await compressed(key, encoding, async () => new Uint8Array(await body.arrayBuffer()));
   headers["content-encoding"] = encoding;
   return new Response(out, { headers });

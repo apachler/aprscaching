@@ -1,4 +1,12 @@
 # Response headers for Cloudflare Pages; the other hosts ignore this file.
+# Every file carries the page headers the Node server, the desktop app and Caddy send
+# (workers/gateway/src/pageheaders.ts says why; servers/node/test/spa.test.ts holds them together).
+/*
+  Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
 # The embed widget, served by the API host, loads MapLibre from the app origin as a module script and a
 # module worker. Both are CORS requests, so the vendored copy is open to every origin.
 /vendor/*

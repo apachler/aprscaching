@@ -11,7 +11,8 @@ import zlib from "node:zlib";
 import type { AddressInfo } from "node:net";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { instanceEnv } from "./helpers/fedpeer.js";
-import { spaFile } from "../src/spa.js";
+import { PAGE_HEADERS } from "@aprscaching/gateway/pageheaders";
+import { embeddedSpaFile, spaFile } from "../src/spa.js";
 import { createGatewayServer } from "../src/listen.js";
 import { pickEncoding } from "../src/compress.js";
 
@@ -208,5 +209,115 @@ describe("the desktop app compresses its embedded SPA the same way", () => {
     const launcher = fs.readFileSync(path.join(here, "../../../deploy/desktop/launcher.ts"), "utf8");
     expect(launcher).toContain('from "../../servers/node/src/compress.ts"');
     expect(launcher).toContain('req.headers.get("accept-encoding")');
+  });
+});
+
+describe("the desktop app's embedded build", () => {
+  const files = {
+    "/index.html": "/$bunfs/index.html",
+    "/assets/index-abc123.js": "/$bunfs/assets/index-abc123.js",
+    "/sw.js": "/$bunfs/sw.js",
+  };
+
+  it("answers a file of the build, with the type and cache of the Node server's answer", () => {
+    expect(embeddedSpaFile(files, "/assets/index-abc123.js")).toEqual({
+      file: "/$bunfs/assets/index-abc123.js",
+      contentType: "text/javascript",
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+    expect(embeddedSpaFile(files, "/sw.js")?.cacheControl).toBe("no-cache");
+    expect(embeddedSpaFile(files, "/")).toEqual({
+      file: "/$bunfs/index.html",
+      contentType: "text/html; charset=utf-8",
+      cacheControl: "no-cache",
+    });
+  });
+
+  it("answers a client-side route with index.html and a missing asset with nothing", () => {
+    expect(embeddedSpaFile(files, "/cache/AC1234")?.file).toBe("/$bunfs/index.html");
+    expect(embeddedSpaFile(files, "/assets/gone-000.js")).toBeNull();
+    expect(embeddedSpaFile(files, "/favicon.ico")).toBeNull();
+  });
+
+  it("serves the build with the page headers and a 404 for a missing asset", () => {
+    const here = path.dirname(new URL(import.meta.url).pathname);
+    const launcher = fs.readFileSync(path.join(here, "../../../deploy/desktop/launcher.ts"), "utf8");
+    expect(launcher).toContain("embeddedSpaFile(SPA, pathname)");
+    expect(launcher).toContain("spaFile(WEB_DIST, pathname)");
+    expect(launcher).toContain("...PAGE_HEADERS");
+    expect(launcher).toContain("status: 404");
+  });
+});
+
+describe("page headers", () => {
+  async function serve(): Promise<{ port: number; close: () => Promise<void> }> {
+    const server = createGatewayServer({
+      env: instanceEnv("localhost", null, { APP_URL: "http://localhost:8787" }),
+      rooms: new RoomsCore(),
+      webDist: dist(),
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    return { port, close: () => new Promise((r) => server.close(() => r())) };
+  }
+  it("a Cloudflare Pages copy of the build sends the same headers", () => {
+    const here = path.dirname(new URL(import.meta.url).pathname);
+    const file = fs.readFileSync(path.join(here, "../../../apps/web/public/_headers"), "utf8");
+    const all = /^\/\*\n((?: {2}.+\n)+)/m.exec(file)?.[1] ?? "";
+    const sent = Object.fromEntries(
+      all.split("\n").flatMap((l) =>
+        l.trim()
+          ? [
+              l
+                .trim()
+                .split(/: (.*)/s)
+                .slice(0, 2),
+            ]
+          : [],
+      ),
+    ) as Record<string, string>;
+    const lower = Object.fromEntries(Object.entries(sent).map(([k, v]) => [k.toLowerCase(), v]));
+    expect(lower).toEqual(PAGE_HEADERS);
+  });
+
+  const expectPageHeaders = (res: Response, what: string) => {
+    for (const [k, v] of Object.entries(PAGE_HEADERS)) expect(res.headers.get(k), `${what}: ${k}`).toBe(v);
+  };
+
+  it("the app's shell, a client-side route and a build asset carry them", async () => {
+    const s = await serve();
+    try {
+      for (const p of ["/", "/cache/AC1234", "/assets/index-abc123.js", "/manifest.webmanifest"]) {
+        const res = await fetch(`http://127.0.0.1:${s.port}${p}`);
+        expect(res.status, p).toBe(200);
+        expectPageHeaders(res, p);
+      }
+      const missing = await fetch(`http://127.0.0.1:${s.port}/assets/gone-000.js`);
+      expect(missing.status).toBe(404);
+      expect(missing.headers.get("content-type")).not.toContain("text/html");
+      // a 404 for a file a new build is still copying in must not be kept by a cache in front
+      expect(missing.headers.get("cache-control")).toBe("no-store");
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("the gateway's own HTML pages carry them, and the embed widget keeps its own frame policy", async () => {
+    const s = await serve();
+    try {
+      for (const p of ["/imprint", "/privacy", "/terms", "/sitemap", "/support"]) {
+        const res = await fetch(`http://127.0.0.1:${s.port}${p}`, { headers: { accept: "text/html" } });
+        expect(res.headers.get("content-type"), p).toContain("text/html");
+        expectPageHeaders(res, p);
+      }
+      const embed = await fetch(`http://127.0.0.1:${s.port}/embed?bbox=14,46,16,48`);
+      expect(embed.headers.get("content-security-policy")).toContain("frame-ancestors *");
+      expect(embed.headers.get("x-frame-options")).toBeNull();
+      // a JSON answer is not a page
+      const health = await fetch(`http://127.0.0.1:${s.port}/health`);
+      expect(health.headers.get("x-frame-options")).toBeNull();
+    } finally {
+      await s.close();
+    }
   });
 });

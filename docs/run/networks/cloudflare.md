@@ -39,6 +39,11 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     Docker Compose 2.24 or newer; `deploy/aprscaching doctor` fails `service.tunnel_ports` when Caddy still
     publishes them.
 
+5. **Turn on HSTS at Cloudflare.** Caddy sends `Strict-Transport-Security` only on the https addresses it holds
+   a certificate for; behind the tunnel it serves plain http and sends none. Turn it on under **SSL/TLS → Edge
+   Certificates → HTTP Strict Transport Security (HSTS)**. Leave *Include subdomains* off unless every name
+   under the domain serves https.
+
 ## Put the CDN in front
 
 1. **Proxy your hostname's DNS record.** In the Cloudflare dashboard, open your domain, then **DNS → Records**.
@@ -70,8 +75,10 @@ Cloudflare's free plan, and neither bills by what the instance writes.
     | Paths | Rule |
     |---|---|
     | `/api`, `/auth`, `/ws`, `/ingest`, `/outbox`, `/federation`, `/.well-known`, `/source` | never cached |
-    | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day |
+    | `/assets/` (the build's content-hashed files) and files ending in `.woff2`, `.pmtiles` | cached at the edge for one day; an error answer, such as a 404 for a file a new release is still copying in, is never cached |
     | `/`, files ending in `.html`, `/sw.js` and the web manifest | never cached, so a new release reaches every visitor at once |
+
+    The command prints Cloudflare's answer and fails when Cloudflare rejects the rules; the zone then keeps the rules it had.
 
 4. Without the tunnel, let only Cloudflare name the visitor. In the repository's top directory, write
    [Cloudflare's address ranges](https://www.cloudflare.com/ips/) to `CF_RANGES` in `deploy/.env`, set

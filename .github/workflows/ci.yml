@@ -37,7 +37,7 @@ jobs:
   #   dev-stack             web, gateway, packages, devtools
   #   axe                   web, packages; never on a push to dev (pull requests run it, visual.yml nightly)
   #   Pocket scripts        deploy/pocket/, deploy/lib/, ci.yml
-  #   Deploy helpers        the deploy/ helper scripts and their tests, docs/reference/cli.md, ci.yml
+  #   Deploy helpers        the deploy/ helper scripts and their tests, the Caddyfile, docs/reference/cli.md, ci.yml
   #   Direwolf WebAssembly  modems/direwolf/, ci.yml (its unit tests run in unit tests + builds)
   # `lint + format` always runs. A skipped job reports as skipped, which a required check accepts. When the diff
   # cannot be read, everything runs.
@@ -125,6 +125,8 @@ jobs:
       - run: bash deploy/test/caddy-test.sh
       # deploy/aprscaching net44, against mocked WireGuard, ip, systemd, nft and iptables
       - run: bash deploy/test/net44-test.sh
+      # the stack's Caddy and webdist one-shot, in their own images: missing assets, caching, page headers, HSTS
+      - run: bash deploy/test/caddy-serve-test.sh
       # the OCI stack's Bastion login helper, against a mocked OCI CLI and ssh
       - run: bash deploy/oci/test/bastion-ssh-test.sh
       # the OCI VM's first boot, against mocked apt, gpg, git and docker
