@@ -19,11 +19,11 @@
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/tools": "workspace:*",
-    "maplibre-gl": "^6.13.0",
+    "maplibre-gl": "^6.14.0",
     "node-forge": "^1.4.0",
     "pmtiles": "^4.5.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "uplot": "^1.6.30"
   },
   "devDependencies": {
