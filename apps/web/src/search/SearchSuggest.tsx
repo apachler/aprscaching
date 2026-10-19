@@ -120,6 +120,8 @@ export function SearchSuggest(props: {
           role="combobox"
           aria-expanded={listed}
           aria-controls={listed ? `${ids}-listbox` : undefined}
+          // the list or its no-matches note is showing: an Escape here is the popup's, not the dialog's around it
+          data-popup-open={open && (listed || showEmpty) ? "" : undefined}
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${ids}-opt-${active}` : undefined}
           value={props.q}

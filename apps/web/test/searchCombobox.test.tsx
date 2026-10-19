@@ -5,6 +5,7 @@
 // an open list closes the list alone.
 import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Sheet } from "../src/ui/Sheet.js";
 import { press, render } from "./support/dom.js";
 
 const results = vi.hoisted(() => ({ caches: [] as unknown[], stations: [] as unknown[] }));
@@ -16,7 +17,7 @@ function Field(props: { onOuterKey?: () => void }) {
   return (
     <div onKeyDown={(e) => e.key === "Escape" && props.onOuterKey?.()}>
       <SearchSuggest q={q} onChange={setQ} onSubmitRaw={() => {}} onPickCache={() => {}} onPickStation={() => {}} />
-      <button type="button" onClick={() => setQ("JN77")}>
+      <button type="button" className="type-q" onClick={() => setQ("JN77")}>
         type
       </button>
     </div>
@@ -24,7 +25,7 @@ function Field(props: { onOuterKey?: () => void }) {
 }
 
 async function typeQuery() {
-  act(() => document.querySelector<HTMLButtonElement>("button")!.click());
+  act(() => document.querySelector<HTMLButtonElement>(".type-q")!.click());
   await act(async () => {
     vi.advanceTimersByTime(200);
   });
@@ -67,5 +68,23 @@ describe("search combobox", () => {
     press(input(), "Escape");
     expect(document.querySelector("[role=listbox]")).toBeNull();
     expect(outer).not.toHaveBeenCalled();
+  });
+
+  it("in a sheet: Escape on the no-matches note closes the note, then the sheet", async () => {
+    results.caches = [];
+    results.stations = [];
+    const sheetClose = vi.fn();
+    render(
+      <Sheet title="Search" edge="top" onClose={sheetClose}>
+        <Field />
+      </Sheet>,
+    );
+    await typeQuery();
+    expect(document.querySelector(".search-empty")).not.toBeNull();
+    press(input(), "Escape");
+    expect(document.querySelector(".search-empty")).toBeNull();
+    expect(sheetClose).not.toHaveBeenCalled();
+    press(input(), "Escape");
+    expect(sheetClose).toHaveBeenCalledTimes(1);
   });
 });

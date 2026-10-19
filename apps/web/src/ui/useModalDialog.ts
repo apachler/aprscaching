@@ -23,9 +23,14 @@ export function useModalDialog(ref: RefObject<HTMLElement | null>, onClose: () =
     )?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // An open list inside the dialog (a combobox's suggestions) takes the first Escape, so it closes alone.
+        // An open popup inside the dialog takes the first Escape, so it closes alone: a combobox's list of options,
+        // or the note it shows in their place (`data-popup-open`, since a combobox with no options is not expanded).
         const t = e.target as Element | null;
-        if (t?.getAttribute?.("role") === "combobox" && t.getAttribute("aria-expanded") === "true") return;
+        if (
+          t?.getAttribute?.("role") === "combobox" &&
+          (t.getAttribute("aria-expanded") === "true" || t.hasAttribute("data-popup-open"))
+        )
+          return;
         // Stopping here keeps the key from the surfaces around this one: a native listener of an outer dialog
         // and React's root and portal listeners, through which a panel's onKeyDown would close it too.
         e.preventDefault();
