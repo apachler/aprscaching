@@ -44,7 +44,7 @@ export class KissClientStream {
     const out: ClientFrame[] = [];
     const before = this.rx.overflows;
     for (const raw of this.rx.push(chunk)) {
-      const k = kissStripCrc(raw) ?? raw;
+      const k = kissStripCrc(raw);
       if (k.command !== 0) {
         this.counts.commands++;
         continue;

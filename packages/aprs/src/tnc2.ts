@@ -14,6 +14,7 @@ export function parseTNC2(line: string): ParsedFrame | null {
   const src = header.slice(0, gt);
   const rest = header.slice(gt + 1).split(",");
   const dst = rest[0] ?? "";
+  if (!src || !dst) return null; // a frame names both its sender and its destination
   const path = rest.slice(1);
   return { src, dst, path, payload, raw: s };
 }

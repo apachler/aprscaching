@@ -118,7 +118,7 @@ every frame, connected-mode frames too, so a long `axcall` session through the s
 | A frame one program transmits | Goes to the radio only. Other programs do not see it; Direwolf behaves the same unless its `KISSCOPY` option is set. |
 | A KISS command from a program (TXDELAY, PERSIST, SLOTTIME, TXTAIL, FULLDUPLEX, SETHARDWARE) | Ignored. The box sets its TNC's timing ([TNC timing](rf-ingest.md#tnc-timing)); one program must not change the channel access the others share. |
 | Return from KISS (`0xFF`) | Ignored; the connection stays in KISS. |
-| A SMACK or FlexNet CRC (the Linux `mkiss` driver's probes) | Checked and removed. |
+| A SMACK or FlexNet CRC (the Linux `mkiss` driver's probes) | Checked and removed. A frame whose CRC does not check is taken as data on its KISS port (8-15 or 2). |
 
 The log names each program as it connects and leaves, and says once per program why a frame was refused:
 

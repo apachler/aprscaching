@@ -68,6 +68,9 @@ export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   }
   // served generic n-N prefix with hops remaining
   if (isGeneric(base) && aliases.has(base) && ssid >= 1) {
+    // n is the hops the path asked for and N the hops left, so N above n is an over-long request
+    // (WIDE2-7): trap it rather than flood a shared channel with it
+    if (ssid > Number(base.slice(-1))) return null;
     if (ssid === 1) {
       hops[i] = { call: mycall, used: true }; // last hop: replace alias with us
     } else {

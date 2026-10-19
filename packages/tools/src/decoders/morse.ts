@@ -54,7 +54,8 @@ const MORSE: Record<string, string> = {
   "(": "-.--.",
   ")": "-.--.-",
 };
-const REV: Record<string, string> = Object.fromEntries(Object.entries(MORSE).map(([c, m]) => [m, c]));
+// a Map, so a token spelled like an Object property ("constructor", "__proto__") reads as unknown
+const REV = new Map(Object.entries(MORSE).map(([c, m]) => [m, c]));
 
 /** Decode "…. . .-.. .-.. ---" (letters space-separated, words by " / " or a double space) → text. */
 export function decodeMorse(input: string): string {
@@ -70,7 +71,7 @@ export function decodeMorse(input: string): string {
         .trim()
         .split(/\s+/)
         .filter(Boolean)
-        .map((t) => REV[t] ?? "")
+        .map((t) => REV.get(t) ?? "")
         .join(""),
     )
     .join(" ")
@@ -89,6 +90,7 @@ export function encodeMorse(text: string): string {
         .filter(Boolean)
         .join(" "),
     )
+    .filter(Boolean) // a word with no character Morse can send
     .join(" / ");
 }
 

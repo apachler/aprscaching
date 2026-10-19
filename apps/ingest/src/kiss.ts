@@ -217,7 +217,7 @@ export class KissLink {
     for (const crcd of frames) {
       // a KISS host such as the Linux kernel's mkiss opens with SMACK and FlexNet CRC probes
       const k = kissStripCrc(crcd);
-      if (!k || k.command !== 0) continue; // a failed CRC, or a KISS command rather than a frame
+      if (k.command !== 0) continue; // a KISS command rather than a frame
       this.onData(k);
     }
   }

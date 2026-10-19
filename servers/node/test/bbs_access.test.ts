@@ -102,6 +102,26 @@ describe("reading a mailbox", () => {
     expect((await call(env, "POST", "/api/bbs/messages/999999/read", undefined, bob)).status).toBe(404);
   });
 
+  it("the ingest box marks mail read only for the station it names as its addressee", async () => {
+    const { env, bob } = await twoOperators();
+    const post = await call(
+      env,
+      "POST",
+      "/api/bbs/messages",
+      { fromCall: "OE1AAA", toCall: "OE2BBB", body: "x" },
+      INGEST,
+    );
+    const id = post.data.id as number;
+    const unread = async () =>
+      (await call(env, "GET", "/api/bbs/messages?to=OE2BBB", undefined, bob)).data.messages.find(
+        (m: { id: number }) => m.id === id,
+      ).readAt;
+    expect((await call(env, "POST", `/api/bbs/messages/${id}/read`, { call: "OE1AAA" }, INGEST)).status).toBe(403);
+    expect(await unread()).toBeNull();
+    expect((await call(env, "POST", `/api/bbs/messages/${id}/read`, { call: "oe2bbb" }, INGEST)).status).toBe(200);
+    expect(await unread()).not.toBeNull();
+  });
+
   it("a thread shows personal mail only to its parties, and bulletins to everyone", async () => {
     const { env, alice, bob } = await twoOperators();
     const carol = await emailSignup(env, "carol@example.test", "OE3CCC");

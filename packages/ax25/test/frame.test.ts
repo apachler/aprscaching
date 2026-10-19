@@ -16,6 +16,31 @@ describe("ax25 frame codec", () => {
     expect(addrStr(d.src)).toBe("OE8APR-1");
   });
 
+  it("refuses a frame cut short: no control byte, no second extended control octet, no end of address", () => {
+    const D = parseAddr("OE8DIG");
+    const ui = encodeFrame({
+      dst: B,
+      src: A,
+      digis: [D],
+      command: true,
+      type: "UI",
+      pf: false,
+      info: Uint8Array.of(0x41),
+    });
+    expect(decodeFrame(ui.subarray(0, 21))).toBeNull(); // three addresses and nothing after them
+
+    const iExt = encodeFrame({ dst: B, src: A, command: true, type: "I", pf: false, ns: 3, nr: 5, extended: true });
+    expect(decodeFrame(iExt, true)).not.toBeNull();
+    expect(decodeFrame(iExt.subarray(0, 15), true)).toBeNull(); // first control octet only
+    const rrExt = encodeFrame({ dst: B, src: A, command: true, type: "RR", pf: true, nr: 9, extended: true });
+    expect(decodeFrame(rrExt.subarray(0, 15), true)).toBeNull();
+
+    const noEnd = new Uint8Array(71); // ten addresses, none with its end-of-address bit, then a control byte
+    noEnd.fill(0x40, 0, 70);
+    noEnd[70] = 0x03;
+    expect(decodeFrame(noEnd)).toBeNull();
+  });
+
   it("round-trips a UA response (F=1)", () => {
     const d = roundtrip({ dst: A, src: B, command: false, type: "UA", pf: true });
     expect(d.type).toBe("UA");

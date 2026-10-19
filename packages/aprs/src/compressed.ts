@@ -39,7 +39,9 @@ export function parseCompressed(s: string): CompressedFix | null {
   const lat = 90 - y / 380926;
   const lon = -180 + x / 190463;
 
-  const table = s[0]!,
+  // a numeric overlay travels as 'a'-'j', since a digit there would read as an uncompressed latitude
+  const lead = s[0]!;
+  const table = lead >= "a" && lead <= "j" ? String(lead.charCodeAt(0) - 97) : lead,
     code = s[9]!;
   const c = s[10]!,
     cc = s[11]!,
