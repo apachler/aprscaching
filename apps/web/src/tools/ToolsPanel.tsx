@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   checkManifestSignature,
   resolveTrust,
@@ -203,7 +204,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       });
       setListening(true);
     } catch (e) {
-      toast(`Mic: ${(e as Error).message}`);
+      toast(`Mic: ${(e as Error).message}`, { kind: "error" });
     }
   }
 
@@ -561,53 +562,59 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       {prompt &&
         (() => {
           const ti = trustInfo(prompt.trust);
-          return (
-            <div
-              className="tool-prompt"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Approve tool permissions"
-              ref={promptRef}
-            >
-              <p>
-                <strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span>{" "}
-                requests:
-              </p>
-              <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
-              {(prompt.manifest.permissions.includes("tx") || prompt.manifest.permissions.includes("beacon")) && (
+          // a real modal over the whole page, portalled out of the panel (a query container, which would hold a
+          // fixed backdrop inside it)
+          return createPortal(
+            <div className="confirm-backdrop" onClick={() => setPrompt(null)}>
+              <div
+                className="confirm-dialog tool-prompt"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Approve tool permissions"
+                ref={promptRef}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <p>
-                  <strong>May transmit status and messages under your callsign</strong>, at most once a minute and six
-                  times an hour.
+                  <strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span>{" "}
+                  requests:
                 </p>
-              )}
-              {prompt.manifest.remote && (
-                <p className="tool-surfaces">Stations connected to you may run its remote commands.</p>
-              )}
-              <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
-              {prompt.manifest.connect?.length ? (
-                <p className="tool-surfaces">
-                  connects to: <span className="mono">{prompt.manifest.connect.join(", ")}</span>
+                <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
+                {(prompt.manifest.permissions.includes("tx") || prompt.manifest.permissions.includes("beacon")) && (
+                  <p>
+                    <strong>May transmit status and messages under your callsign</strong>, at most once a minute and six
+                    times an hour.
+                  </p>
+                )}
+                {prompt.manifest.remote && (
+                  <p className="tool-surfaces">Stations connected to you may run its remote commands.</p>
+                )}
+                <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
+                {prompt.manifest.connect?.length ? (
+                  <p className="tool-surfaces">
+                    connects to: <span className="mono">{prompt.manifest.connect.join(", ")}</span>
+                  </p>
+                ) : null}
+                <p>
+                  <Badge kind={ti.kind}>{ti.label}</Badge>
                 </p>
-              ) : null}
-              <p>
-                <Badge kind={ti.kind}>{ti.label}</Badge>
-              </p>
-              {prompt.listedBy && <p className="tool-surfaces">listed by: {prompt.listedBy}</p>}
-              <p className="muted fine">
-                It runs in a sealed frame, apart from your session, passkeys and stored keys.{" "}
-                {prompt.manifest.connect?.length
-                  ? "It reaches the network only with the network capability, and then only the origins under connects to."
-                  : "It names no origin to connect to, so it cannot reach the network."}{" "}
-                A tool transmits only with your verified callsign and the consent you give this tab, at most once a
-                minute.
-              </p>
-              <div className="row gap-2 end">
-                <Button onClick={() => setPrompt(null)}>Cancel</Button>
-                <Button variant="primary" onClick={approveInstall}>
-                  Approve and install
-                </Button>
+                {prompt.listedBy && <p className="tool-surfaces">listed by: {prompt.listedBy}</p>}
+                <p className="muted fine">
+                  It runs in a sealed frame, apart from your session, passkeys and stored keys.{" "}
+                  {prompt.manifest.connect?.length
+                    ? "It reaches the network only with the network capability, and then only the origins under connects to."
+                    : "It names no origin to connect to, so it cannot reach the network."}{" "}
+                  A tool transmits only with your verified callsign and the consent you give this tab, at most once a
+                  minute.
+                </p>
+                <div className="row gap-2 end">
+                  <Button onClick={() => setPrompt(null)}>Cancel</Button>
+                  <Button variant="primary" onClick={approveInstall}>
+                    Approve and install
+                  </Button>
+                </div>
               </div>
-            </div>
+            </div>,
+            document.body,
           );
         })()}
     </div>

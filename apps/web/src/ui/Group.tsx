@@ -28,12 +28,20 @@ export function Group(props: {
   return (
     <section className="group">
       <header className="group-h">
-        <button className="group-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)}>
-          <span className={`chev${open ? " open" : ""}`} aria-hidden="true">
-            ▸
-          </span>{" "}
-          {props.title}
-        </button>
+        {/* the title is the group's heading, one level under the panel's, and its toggle is the button inside it */}
+        <h3 className="group-title">
+          <button
+            className="group-toggle"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span className={`chev${open ? " open" : ""}`} aria-hidden="true">
+              ▸
+            </span>{" "}
+            {props.title}
+          </button>
+        </h3>
         {props.status && <span className="group-status">{props.status}</span>}
         {props.master && (
           <Switch

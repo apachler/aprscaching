@@ -63,7 +63,7 @@ export function ApiKeys() {
       if (issued && k.prefix === issued.key.slice(0, k.prefix.length)) setIssued(null);
       reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   }
 

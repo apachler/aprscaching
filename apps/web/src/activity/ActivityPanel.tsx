@@ -2,7 +2,19 @@
 import { useMemo } from "react";
 import { getActivity, getLeaderboard, getCorroborators, type BBox } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad, Button } from "../ui/index.js";
+import {
+  Panel,
+  Badge,
+  TierBadge,
+  EmptyState,
+  ErrorState,
+  InfoTip,
+  LoadMore,
+  usePaged,
+  useLoad,
+  Button,
+} from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { activityBadge, activityVerb } from "./verbs.js";
 
@@ -29,7 +41,10 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
   const corr = useLoad(() => getCorroborators(bbox).then((r) => r.corroborators.slice(0, 5)), [bbox]).data ?? [];
   return (
     <Panel title="Activity" onClose={props.onClose}>
-      <h4>Recent logs</h4>
+      <div className="row">
+        <h3 className="section-h">Recent logs</h3>
+        <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
+      </div>
       {feed.error && feed.items.length === 0 ? (
         <ErrorState onRetry={feed.reload} />
       ) : feed.items.length === 0 ? (
@@ -52,7 +67,7 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
       )}
       <LoadMore hasMore={feed.hasMore} loading={feed.loading} onClick={feed.loadMore} />
       <div className="row between">
-        <h4>Top finders</h4>
+        <h3 className="section-h">Top finders</h3>
         <Button variant="quiet" onClick={props.onBoard}>
           All ranks →
         </Button>
@@ -70,7 +85,7 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
       {corr.length > 0 && (
         <>
           <div className="row between">
-            <h4>Top corroborators</h4>
+            <h3 className="section-h">Top corroborators</h3>
           </div>
           <p className="muted fine">
             Receiving stations that heard finds on the air and made them Radio-verified — infrastructure that feeds the

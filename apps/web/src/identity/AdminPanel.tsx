@@ -506,7 +506,7 @@ function CallsignAdmin() {
       list.reload();
       if (view?.callsign === v.callsign) void lookup(v.callsign);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
 
@@ -806,7 +806,7 @@ function TrustedStationsAdmin(props: { rev: number }) {
       toast(`${s.site} no longer trusted`);
       list.reload();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   const sites = list.data?.sites;
@@ -938,7 +938,7 @@ function BoxesAdmin(props: { onTrustChanged: () => void }) {
       refresh();
       props.onTrustChanged(); // a revoked box's trusted sites leave the list
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   const boxes = list.data?.boxes;
@@ -1130,7 +1130,7 @@ function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
       toast(`${name}: hearings no longer trusted`);
       props.onChanged();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setSaving(false);
     }
@@ -1219,7 +1219,7 @@ function BoxServicesRow(props: { box: EnrolledBox; onChanged: () => void }) {
       toast(on ? `${name}: runs this instance's services` : `${name}: services off`);
       props.onChanged();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setSaving(false);
     }
@@ -1343,7 +1343,7 @@ function AdoptionAdmin() {
       toast(done);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(null);
     }
@@ -2087,7 +2087,7 @@ function FederationAdmin() {
       toast(done);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   const sync = async (p: FedPeer) => {
@@ -2097,9 +2097,9 @@ function FederationAdmin() {
       if (r.ok && r.pulled) {
         const n = Object.values(r.pulled).reduce((a, b) => a + b, 0);
         toast(`${name}: pulled, ${n} ${n === 1 ? "record" : "records"} new`);
-      } else toast(`${name}: the pull failed: ${r.error ?? "unknown error"}`);
+      } else toast(`${name}: the pull failed: ${r.error ?? "unknown error"}`, { kind: "error" });
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
     refresh();
   };
@@ -2125,7 +2125,7 @@ function FederationAdmin() {
       toast(`${name} removed`);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   return (
@@ -2247,7 +2247,7 @@ function GivenUpRecords(props: { given: { count: number; gaps: FedGivenUp[] }; o
       toast(`${r.seen} ${r.seen === 1 ? "record" : "records"} marked seen`);
       props.onSeen();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   return (
@@ -2760,7 +2760,7 @@ function FederationSyncStatus(props: { onSynced: () => void }) {
         setBusy(false);
       }, 4000);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
       setBusy(false);
     }
   };
@@ -2969,7 +2969,7 @@ function ForwardingAdmin() {
       toast(`Forwarding to ${p.call} ${enabled ? "on" : "off"}`);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   // Federation over FBB spends the partner's link on machine data: turning it on asks first.
@@ -2988,7 +2988,7 @@ function ForwardingAdmin() {
       toast(`Federation over FBB with ${p.call} ${federation ? "on" : "off"}`);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   // the form keeps what was typed until the partner is saved, so a refused save is corrected, not retyped
@@ -3026,7 +3026,7 @@ function ForwardingAdmin() {
       toast(`Partner ${p.call} removed`);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   const submitRule = async () => {
@@ -3040,7 +3040,7 @@ function ForwardingAdmin() {
       setRule({ partner: "", route: "" });
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
   const removeRule = async (r: ForwardRuleRow) => {
@@ -3058,7 +3058,7 @@ function ForwardingAdmin() {
       toast("Rule removed");
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
 

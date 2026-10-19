@@ -28,7 +28,7 @@ export function WxTxToggles(props: { stationId: number; txIs?: boolean; txCwop?:
     } catch (e) {
       setTxIs(prev.txIs);
       setTxCwop(prev.txCwop);
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(false);
     }

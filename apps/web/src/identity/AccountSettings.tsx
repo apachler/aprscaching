@@ -25,7 +25,9 @@ import {
   useConfirm,
   useToast,
   useLoad,
+  InfoTip,
 } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 import { VerifyCall } from "./VerifyCall.js";
 import { ClaimCall } from "./ClaimCall.js";
 import { Passkeys } from "./Passkeys.js";
@@ -172,7 +174,10 @@ export function AccountSettings(props: {
             </div>
             <div className="setrow-c">
               {c.verified ? (
-                <CallVerifiedBadge />
+                <>
+                  <CallVerifiedBadge />{" "}
+                  <InfoTip text={TERMS["verified-callsign"]} label="What does a verified callsign mean?" />
+                </>
               ) : (
                 <Button
                   variant="quiet"

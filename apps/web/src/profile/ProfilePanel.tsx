@@ -99,7 +99,10 @@ export function ProfilePanel(props: {
           )}
           <p>
             {verified ? (
-              <CallVerifiedBadge />
+              <>
+                <CallVerifiedBadge />{" "}
+                <InfoTip text={TERMS["verified-callsign"]} label="What does a verified callsign mean?" />
+              </>
             ) : (
               <>
                 <Badge title="Your finds count on the leaderboard, and transmit opens, once your callsign is verified">

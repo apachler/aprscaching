@@ -136,6 +136,9 @@ export function Hint(props: {
       ref={tipRef}
       id={id}
       role="tooltip"
+      // the hint sits inside its control, so it is hidden from the control's name; aria-describedby still reads it,
+      // since a description takes the text of the element it points at even when that element is hidden
+      aria-hidden="true"
       popover="manual"
       className="hint"
       data-open={open ? "" : undefined}

@@ -19,7 +19,7 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
       await cat.tune(s.freqHz!, s.mode);
       toast(`Tuned to ${freqMHz} MHz`);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
   return (

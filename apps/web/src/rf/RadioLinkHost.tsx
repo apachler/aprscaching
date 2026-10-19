@@ -147,9 +147,9 @@ export function RadioLinkHost(props: { callsign: string; verified: boolean }) {
       radioLink.onEvent((e) => {
         if (e.kind === "connected") toast(`${LINK_LABEL[e.link]} connected`);
         else if (e.kind === "lost") toast(`Radio disconnected: ${e.message}`);
-        else if (e.kind === "connect-failed") toast(`Could not connect: ${e.message}`);
-        else if (e.kind === "forward-failed") toast(`Forwarding failed: ${e.message}`);
-        else if (e.kind === "timing-failed") toast(`The TNC did not take its timing: ${e.message}`);
+        else if (e.kind === "connect-failed") toast(`Could not connect: ${e.message}`, { kind: "error" });
+        else if (e.kind === "forward-failed") toast(`Forwarding failed: ${e.message}`, { kind: "error" });
+        else if (e.kind === "timing-failed") toast(`The TNC did not take its timing: ${e.message}`, { kind: "error" });
       }),
     [toast],
   );

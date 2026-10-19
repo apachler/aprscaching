@@ -126,7 +126,7 @@ export function Conversations(props: {
       toast(`Message for ${to} withdrawn`);
       box.reload();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     }
   }
 

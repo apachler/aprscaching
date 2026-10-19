@@ -29,6 +29,7 @@
 @layer components {
   /* section labels read like terminal headings */
   :where(:root[data-theme="phosphor"]) h4,
+  :where(:root[data-theme="phosphor"]) .section-h,
   :where(:root[data-theme="phosphor"]) .ulabel {
     text-transform: uppercase;
     letter-spacing: 0.08em;

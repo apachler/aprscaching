@@ -1,6 +1,7 @@
-/* Transient confirmation toasts. */
+/* Toasts: transient confirmations, and errors that stay until dismissed. */
 @layer components {
-  /* transient confirmation toasts — centred above the tab bar; animate transform/opacity only */
+  /* the toast stack — centred above the tab bar; animate transform/opacity only. The stack lets taps through to the
+     map, the toasts in it take the pointer (to hold them, and for their close button) */
   .toasts {
     position: absolute;
     left: 50%;
@@ -9,7 +10,6 @@
     z-index: var(--z-toast);
     display: flex;
     flex-direction: column-reverse;
-    gap: var(--space-sm);
     align-items: center;
     pointer-events: none;
   }
@@ -37,15 +37,47 @@
   .update-notice button {
     min-height: var(--hit);
   }
+  /* the two live regions, errors nearest the tab bar and confirmations above them; each stacks its own toasts the
+     same way. An empty region stays rendered (it has no size), since a live region must already be in the
+     accessibility tree when its first toast arrives for that toast to be announced */
+  .toast-region {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--space-sm);
+    align-items: center;
+  }
+  .toast-region:has(.toast) + .toast-region:has(.toast) {
+    margin-bottom: var(--space-sm);
+  }
   .toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    max-width: min(32rem, calc(100vw - 2 * var(--space-lg)));
     background: var(--surface-2);
     color: var(--ink);
     border: 1px solid var(--line);
     border-radius: var(--radius-sheet);
-    padding: var(--space-sm) 15px;
+    padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) 15px;
     font-size: var(--text-data);
     box-shadow: var(--elevation-floating);
+    pointer-events: auto;
     animation: toast-in var(--motion-base) var(--ease-standard);
+  }
+  .toast-msg {
+    overflow-wrap: anywhere;
+  }
+  .toast-close {
+    flex: none;
+    min-width: var(--hit);
+    min-height: var(--hit);
+    align-items: center;
+    justify-content: center;
+  }
+  /* an error is marked by its edge as well as by being kept, never by colour alone: it is the one with an alert */
+  .toast-error {
+    border-color: var(--bad);
+    border-inline-start-width: 4px;
   }
   @keyframes toast-in {
     from {

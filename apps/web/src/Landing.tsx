@@ -35,9 +35,9 @@ export function Landing(props: {
           AGPL-3.0, and every instance links the code it runs. No analytics, no adverts, no third-party scripts, and
           positions expire. Donations buy recognition, never features.
         </p>
-        <Button variant="primary" onClick={() => props.onSignIn()}>
+        <Cta to="join" variant="primary" onGo={() => props.onSignIn()}>
           Join with your callsign
-        </Button>
+        </Cta>
       </section>
       <footer className="landing-footer">
         <a href={`${API_BASE}/sitemap`}>Site map</a>
@@ -112,7 +112,9 @@ function Hero(props: { onSignIn: (call?: string) => void; onExplore: () => void 
             Manual
           </a>
         </span>
-        <Button onClick={() => props.onSignIn()}>Sign in</Button>
+        <Cta to="join" onGo={() => props.onSignIn()}>
+          Sign in
+        </Cta>
       </nav>
       <div className="landing-hero-grid">
         <div className="landing-hero-copy">
@@ -124,14 +126,42 @@ function Hero(props: { onSignIn: (call?: string) => void; onExplore: () => void 
             Hide a cache, hunt it down, and key the find over APRS. The radio network itself proves you were there.
           </p>
           <JoinForm onJoin={props.onSignIn} />
-          <p className="landing-or">
-            No licence yet? <Button onClick={props.onExplore}>Explore the live map</Button>
-          </p>
+          {/* a div, since a paragraph cannot hold the call to action's form */}
+          <div className="landing-or">
+            No licence yet?{" "}
+            <Cta to="map" onGo={props.onExplore}>
+              Explore the live map
+            </Cta>
+          </div>
         </div>
         <Terminal />
       </div>
       <LiveStats />
     </header>
+  );
+}
+
+/**
+ * A call to action that works in the prerendered copy, before the app has loaded: a form a tap submits, to the join
+ * page (sign-in) or to the front page with `view=map` (the platform, opensPlatform). Once the app is up it does the
+ * same in place.
+ */
+function Cta(props: { to: "join" | "map"; variant?: "primary"; onGo: () => void; children: ReactNode }) {
+  return (
+    <form
+      className="landing-cta-form"
+      action={props.to === "join" ? "/join" : "/"}
+      method="get"
+      onSubmit={(e) => {
+        e.preventDefault();
+        props.onGo();
+      }}
+    >
+      {props.to === "map" && <input type="hidden" name="view" value="map" />}
+      <Button variant={props.variant} type="submit">
+        {props.children}
+      </Button>
+    </form>
   );
 }
 
@@ -257,7 +287,9 @@ function MapBand(props: { onExplore: () => void }) {
           Caches, the stations around you, and how every find was confirmed. Off-grid packs keep it working without
           signal.
         </p>
-        <Button onClick={props.onExplore}>Explore the live map</Button>
+        <Cta to="map" onGo={props.onExplore}>
+          Explore the live map
+        </Cta>
         <p className="landing-attrib">Map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors</p>
       </div>
     </section>

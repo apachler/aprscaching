@@ -702,7 +702,7 @@ async function heroContrast(page) {
   const targets = await page.evaluate(() => {
     const out = [];
     const sel =
-      ".landing-eyebrow, .landing-slogan, .landing-sub, .landing-nav-links a, .landing-nav > button, .landing-cta button, .landing-stats dt, .landing-stats dd";
+      ".landing-eyebrow, .landing-slogan, .landing-sub, .landing-nav-links a, .landing-nav > .landing-cta-form > button, .landing-cta button, .landing-stats dt, .landing-stats dd";
     for (const el of document.querySelectorAll(`.landing-hero :is(${sel})`)) {
       const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       for (let t = w.nextNode(); t; t = w.nextNode()) {

@@ -138,7 +138,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
 
   return (
     <Panel title={`Edit ${c.code}`} onClose={props.onClose}>
-      <h4 className="set-subh">Basics</h4>
+      <h3 className="section-h set-subh">Basics</h3>
       <label>
         Title
         <input value={f.title} maxLength={TEXT_LIMITS.title} onChange={(e) => set("title", e.target.value)} />
@@ -178,7 +178,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
 
       {!living && (
         <>
-          <h4 className="set-subh">Location</h4>
+          <h3 className="section-h set-subh">Location</h3>
           {c.lat != null && c.lon != null && (
             <p className="muted">
               Now at{" "}
@@ -227,9 +227,9 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
         </>
       )}
 
-      <h4 className="set-subh">
+      <h3 className="section-h set-subh">
         Details <span className="muted fw-normal">· all optional</span>
-      </h4>
+      </h3>
       <label>
         Hint
         <input value={f.hint} maxLength={TEXT_LIMITS.hint} onChange={(e) => set("hint", e.target.value)} />
@@ -265,7 +265,7 @@ export function EditCachePanel(props: { detail: CacheDetail; onClose: () => void
         </p>
       )}
 
-      <h4 className="set-subh">Verification, rating &amp; sharing</h4>
+      <h3 className="section-h set-subh">Verification, rating &amp; sharing</h3>
       <Row
         label="Radio-verified finds only"
         help="A find counts as verified only when a receiving station heard the finder there. Off: this instance's minimum applies."

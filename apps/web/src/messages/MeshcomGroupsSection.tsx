@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { getMeshcomGroupMessages, type MeshcomGroup, type MeshcomGroupMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { EmptyState, ErrorState, LoadMore, usePaged, InfoTip } from "../ui/index.js";
+import { EmptyState, ErrorState, LoadMore, usePaged, InfoTip, Field } from "../ui/index.js";
 import { ContentMenu } from "../moderation/ContentMenu.js";
 
 /** How the receiving node heard a group message, in words. */
@@ -48,20 +48,25 @@ export function MeshcomGroupsSection(props: { groups: MeshcomGroup[] }) {
         </EmptyState>
       ) : (
         <>
-          <label>
-            Group{" "}
-            <InfoTip
-              text="A MeshCom chat channel named by a number, such as 232; * reaches every node."
-              label="What is a MeshCom group?"
-            />
-            <select aria-label="Group" value={group ?? ""} onChange={(e) => setPicked(e.target.value)}>
-              {props.groups.map((g) => (
-                <option key={g.group} value={g.group}>
-                  {groupName(g.group)} · {g.messages} {g.messages === 1 ? "message" : "messages"}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Field
+            label="Group"
+            info={
+              <InfoTip
+                text="A MeshCom chat channel named by a number, such as 232; * reaches every node."
+                label="What is a MeshCom group?"
+              />
+            }
+          >
+            {(id) => (
+              <select id={id} value={group ?? ""} onChange={(e) => setPicked(e.target.value)}>
+                {props.groups.map((g) => (
+                  <option key={g.group} value={g.group}>
+                    {groupName(g.group)} · {g.messages} {g.messages === 1 ? "message" : "messages"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
           {messages.error && messages.items.length === 0 ? (
             <ErrorState onRetry={messages.reload} />
           ) : messages.items.length === 0 && !messages.loading ? (

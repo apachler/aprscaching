@@ -40,9 +40,21 @@
     margin: var(--space-xs) 0;
     font-size: var(--text-heading);
   }
-  .panel h4 {
+  /* a section's heading: h4 inside a group, whose title is level 3 (ui/Group.tsx), and h3.section-h directly under
+     the panel's title; both draw the same */
+  .panel h4,
+  .panel h3.section-h {
     margin: var(--space-lg) 0 var(--space-xs);
     color: var(--heading);
+  }
+  .panel h3.section-h {
+    font-size: inherit;
+  }
+  .panel h3.section-h.set-subh {
+    font-size: var(--text-label);
+  }
+  .panel h3.section-h.set-subh:first-child {
+    margin-top: 0;
   }
   /* Shack apps are desktop-density (ui-ux.md §5) — while the panel is narrow (a phone sheet or a tablet
    drawer) it shows a one-line note. A container query on the panel, so the note follows the slot, not

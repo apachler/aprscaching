@@ -170,7 +170,10 @@ in every theme.
 - The map is never the only way to reach something: Nearby, search and the zoom buttons work without dragging.
 - Help is one step away everywhere: a control shows a one-line hint on hover and keyboard focus, the small
   **i** explains a term on a tap, and **Manual** in the nav opens the published manual in a new tab.
-- Status messages (toasts, an incoming message) are announced politely.
+- Status messages (toasts, an incoming message) are announced politely. A toast stays at least five seconds, longer
+  for a long one, and holds while the pointer or focus is on it; an error is announced at once and stays until it is
+  dismissed. Every toast has a **Dismiss** button.
+- Escape closes the innermost dialog or sheet only; on a search field with its list open, it closes the list.
 
 ## Next
 

@@ -99,9 +99,6 @@
     letter-spacing: 0.05em;
     margin: var(--space-2xs) 0 var(--space-xs);
   }
-  .bbs-node {
-    cursor: pointer;
-  }
   .bbs-node .bbs-msg {
     padding: var(--space-sm) 0;
     border-top: 1px solid var(--line);
@@ -143,6 +140,19 @@
     align-items: baseline;
     margin-bottom: var(--space-2xs);
     flex-wrap: wrap;
+  }
+  /* in a thread the header line is the button that opens that message: it keeps the line's look */
+  .bbs-node .bbs-msg-h {
+    width: 100%;
+    min-height: var(--hit);
+    align-items: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
   }
   .bbs-node-date {
     margin-left: auto;

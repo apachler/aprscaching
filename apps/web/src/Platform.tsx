@@ -811,7 +811,7 @@ export default function Platform({
     } catch (e) {
       console.error(e);
       if (!current()) return;
-      if (mapLoadNotice()) toast(`Couldn't load the caches here: ${errorText(e)}`);
+      if (mapLoadNotice()) toast(`Couldn't load the caches here: ${errorText(e)}`, { kind: "error" });
     } finally {
       setReady(true);
     }

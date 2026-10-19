@@ -70,7 +70,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
           pts · {profile.hides} hidden
         </p>
         {profile.lastFind && <p className="muted">last find {fmt.date(profile.lastFind)}</p>}
-        <h4>Badges</h4>
+        <h3 className="section-h">Badges</h3>
         {profile.badges.length ? (
           <div className="badges">
             {profile.badges.map((b) => {
@@ -92,7 +92,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
         ) : (
           <p className="muted">No badges yet.</p>
         )}
-        <h4>Finds by type</h4>
+        <h3 className="section-h">Finds by type</h3>
         <div className="badges">
           {Object.entries(profile.byType).map(([t, n]) => (
             <Badge key={t}>

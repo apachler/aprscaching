@@ -1,5 +1,19 @@
-/* Field helpers: copy rows and the settings search box. */
+/* Field helpers: Field, copy rows and the settings search box. */
 @layer components {
+  /* a Field (ui/Field.tsx) stands in for a label that would hold a button: the wrapper takes the bare label's
+     place and spacing (base.css), its label keeps to the line of words */
+  .field {
+    margin: var(--space-sm) 0;
+    font-size: var(--text-data);
+    color: var(--muted);
+  }
+  .field > label {
+    display: inline;
+    margin: 0;
+  }
+  .field :is(input, select, textarea) {
+    margin-top: 3px;
+  }
   /* a read-only value paired with a copy button (PWS URLs, share links) */
   .copyrow {
     display: flex;

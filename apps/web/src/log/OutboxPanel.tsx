@@ -83,7 +83,7 @@ export function OutboxPanel(props: { onClose: () => void }) {
             : "Still offline",
       );
     } catch (e) {
-      toast(`Sync failed: ${errorText(e)}`);
+      toast(`Sync failed: ${errorText(e)}`, { kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -164,7 +164,7 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; when: string }) {
       const r = await retryAttentionLog(l, edited ? comment : undefined);
       toast(r.sent ? "Sent" : r.refused ? "Refused again" : "Queued; it goes when the connection allows");
     } catch (e) {
-      toast(`Retry failed: ${errorText(e)}`);
+      toast(`Retry failed: ${errorText(e)}`, { kind: "error" });
     } finally {
       setBusy(false);
     }

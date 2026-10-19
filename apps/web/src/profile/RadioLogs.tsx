@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { getRadioCommands, decideRadioCommand, type RadioCommandRow } from "../api.js";
 import { useFmt } from "../format.js";
 import { useServiceCall } from "../log/RadioLogHint.js";
-import { Button, Group, Badge, TierBadge, EmptyState, ErrorState, useConfirm, useToast } from "../ui/index.js";
+import { Button, Group, Badge, TierBadge, EmptyState, ErrorState, InfoTip, useConfirm, useToast } from "../ui/index.js";
+import { TERMS } from "../terms.js";
 
 const STATUS_LABEL: Record<RadioCommandRow["status"], string> = {
   logged: "logged",
@@ -63,7 +64,7 @@ export function RadioLogs() {
             : `${c.cacheCode ?? c.command.toUpperCase()} logged`,
       );
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setBusy(null);
       load();
@@ -88,7 +89,7 @@ export function RadioLogs() {
         <span className="mono">HELP</span>) from your radio to{" "}
         {service ? <span className="mono">{service}</span> : "this instance's service call"}. A message heard by a
         receiving station this instance trusts is logged at once; one that only came over the internet waits here for
-        you to confirm.
+        you to confirm. <InfoTip text={TERMS.tier} label="What do the tiers mean?" />
       </p>
       {error ? (
         <ErrorState onRetry={load}>Couldn&apos;t load your radio logs.</ErrorState>

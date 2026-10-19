@@ -33,7 +33,7 @@ export function ImportsAdmin() {
       toast(`${p.code} removed`);
       list.reload();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
 

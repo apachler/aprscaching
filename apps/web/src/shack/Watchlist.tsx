@@ -47,14 +47,14 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
       setInput("");
       loadSummary();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
   async function remove(cs: string) {
     try {
       await removeWatch(cs);
     } catch (e) {
-      toast(`Couldn't stop watching ${cs}: ${errorText(e)}`);
+      toast(`Couldn't stop watching ${cs}: ${errorText(e)}`, { kind: "error" });
     }
     loadSummary();
   }
@@ -64,7 +64,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
       // the count drops only once the instance has the change; otherwise it would come back on the next poll
       summary.setData((d) => (d ? { ...d, unseen: 0 } : d));
     } catch (e) {
-      toast(`Couldn't mark the alerts seen: ${errorText(e)}`);
+      toast(`Couldn't mark the alerts seen: ${errorText(e)}`, { kind: "error" });
     }
     alerts.reload();
   }

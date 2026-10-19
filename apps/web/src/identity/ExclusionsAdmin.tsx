@@ -101,7 +101,7 @@ export function ExclusionsAdmin() {
       toast(`${call} is no longer excluded`);
       list.reload();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   };
 

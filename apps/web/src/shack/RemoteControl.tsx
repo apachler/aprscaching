@@ -66,7 +66,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean }) {
       toast(`${boxId} paired to your account`);
       refresh();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     } finally {
       setPairing(false);
     }
@@ -97,7 +97,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean }) {
       refresh();
     } catch (e) {
       if (needsPairing(e)) setUnpaired(true);
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
   function beacon() {

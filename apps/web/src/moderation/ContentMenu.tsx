@@ -43,7 +43,7 @@ export function ContentMenu(props: {
       toast(done);
       after?.();
     } catch (e) {
-      toast(errorText(e));
+      toast(errorText(e), { kind: "error" });
     } finally {
       setBusy(false);
     }

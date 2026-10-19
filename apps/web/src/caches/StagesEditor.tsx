@@ -168,7 +168,7 @@ export function StagesEditor(props: {
       setSaved((ss) => ss.map((s) => (s.stageNo === n ? { ...s, clip: true } : s)));
       toast(`Clip for stage ${n} uploaded`);
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { kind: "error" });
     }
   }
 
