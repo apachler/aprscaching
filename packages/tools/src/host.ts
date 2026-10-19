@@ -116,7 +116,10 @@ export function txInfoProblem(info: unknown): string | null {
   return "a tool may transmit only an APRS status (>) or message (:ADDRESSEE:text)";
 }
 
-/** Bring an untrusted beacon request into bounds: one-line comment, interval clamped. An error string if unusable. */
+/**
+ * Bring an untrusted beacon request into bounds: a one-line comment that passes every status rule (`txInfoProblem`),
+ * interval clamped. An error string if unusable.
+ */
 export function normalizeBeacon(spec: unknown): BeaconSpec | string {
   const o = spec && typeof spec === "object" ? (spec as Record<string, unknown>) : null;
   if (!o) return "a beacon needs { comment, intervalSec }";

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   BEACON_MIN_INTERVAL_SEC,
@@ -71,8 +72,10 @@ describe("the worker's register()", () => {
       postMessage: (m) => out.push(m as Record<string, unknown>),
     };
     new Function("self", workerSource())(self);
-    self.onmessage!({ data: { type: "load", script, network: false, ipc: false, permissions, api: {}, features: [] } });
-    return out.at(-1)!;
+    const ipc = permissions.includes("ipc");
+    self.onmessage!({ data: { type: "load", script, network: false, ipc, permissions, api: {}, features: [] } });
+    // the load's outcome, past any message the tool posted while it ran (a subscription, a log line)
+    return out.findLast((m) => m.type === "loaded" || m.type === "error")!;
   }
   const all = `register({
     commands: { hi: () => "hi" },
@@ -91,6 +94,16 @@ describe("the worker's register()", () => {
           granted.filter((c) => c !== missing),
         ),
       ).toEqual({ type: "error", error: `permission '${missing}' not granted` });
+  });
+  it("loads every bundled tool under the permissions its manifest asks for", () => {
+    const dir = new URL("../public/tools/tools/", import.meta.url);
+    const names = readdirSync(dir);
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const manifest = JSON.parse(readFileSync(new URL(`${name}/tool.json`, dir), "utf8")) as { permissions: string[] };
+      const script = readFileSync(new URL(`${name}/tool.js`, dir), "utf8");
+      expect({ name, ...loadInWorker(script, manifest.permissions) }).toMatchObject({ name, type: "loaded" });
+    }
   });
   it("accepts an empty contribution without its permission", () => {
     expect(loadInWorker("register({ commands: {}, colourRules: [], panel: null, decoders: [] });", [])).toMatchObject({
