@@ -86,6 +86,8 @@ jobs:
       - run: node tools/checks/dead-exports.mjs
       # the docs stay present-tense, the schema lists every config key the code reads, and nav and links stay whole
       - run: node tools/checks/docs.mjs
+      # a workflow job holding a write token keeps it out of .git/config and restores no cache
+      - run: node tools/checks/workflows.mjs
       # the configuration page's key tables, both .env.example files and the deploy helpers' export match the schema
       - run: node tools/config/generate.mjs --check
 
@@ -140,9 +142,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The vendored files are upstream's, byte for byte, at the tag and commit UPSTREAM names.
+      # The vendored files are upstream's, byte for byte, at the tag and commit UPSTREAM names: upstream's checkout
+      # matches SHA256SUMS, and so does the vendored copy, which holds no file the list leaves out
+      # (modems/direwolf/test/vendor.test.ts makes the same check in the unit test job).
       - name: vendored Direwolf matches its release
         run: |
+          vendor=modems/direwolf/vendor/direwolf
+          (cd "$vendor" && sha256sum --quiet --strict -c SHA256SUMS)
+          diff <(cd "$vendor" && find . -type f ! -name SHA256SUMS ! -name UPSTREAM | sed 's|^\./||' | sort) \
+            <(awk '{print $2}' "$vendor/SHA256SUMS" | sort)
           tag=$(sed -n 's/^Release: *//p' modems/direwolf/vendor/direwolf/UPSTREAM)
           commit=$(sed -n 's/^Commit: *\([0-9a-f]*\).*/\1/p' modems/direwolf/vendor/direwolf/UPSTREAM)
           git clone --quiet --depth 1 --branch "$tag" https://github.com/wb2osz/direwolf "$RUNNER_TEMP/direwolf"

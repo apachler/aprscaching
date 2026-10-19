@@ -74,13 +74,13 @@ importers:
       '@aprscaching/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -265,6 +265,9 @@ importers:
       multicast-dns:
         specifier: ^7.2.5
         version: 7.2.5
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -281,9 +284,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

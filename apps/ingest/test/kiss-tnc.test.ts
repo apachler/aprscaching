@@ -81,15 +81,18 @@ describe("KissTnc connection", () => {
   });
 });
 
-/** A fake TNC that keeps what each connection wrote to it; `dropFirst` closes the first connection soon after. */
-async function recordingTnc(opts: { dropFirst?: boolean } = {}) {
+/** A fake TNC that keeps what each connection wrote to it; `dropFirstAfter` closes the first connection once it
+ *  has received that many bytes (on the bytes, not a timer, so a slow client still gets them in first). */
+async function recordingTnc(opts: { dropFirstAfter?: number } = {}) {
   const conns: number[][] = [];
   const server = net.createServer((sock) => {
     sock.on("error", () => {});
     const got: number[] = [];
-    conns.push(got);
-    sock.on("data", (d: Buffer) => got.push(...d));
-    if (opts.dropFirst && conns.length === 1) setTimeout(() => sock.destroy(), 50);
+    const first = conns.push(got) === 1;
+    sock.on("data", (d: Buffer) => {
+      got.push(...d);
+      if (first && opts.dropFirstAfter !== undefined && got.length >= opts.dropFirstAfter) sock.destroy();
+    });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   cleanups.push(() => server.close());
@@ -100,7 +103,7 @@ const TIMING_BYTES = [0xc0, 0x01, 30, 0xc0, 0xc0, 0x02, 63, 0xc0, 0xc0, 0x03, 10
 
 describe("KissTnc timing", () => {
   it("sends TXDELAY, PERSIST and SLOTTIME after each connect, ahead of any frame", async () => {
-    const tnc0 = await recordingTnc({ dropFirst: true });
+    const tnc0 = await recordingTnc({ dropFirstAfter: TIMING_BYTES.length });
     vi.spyOn(console, "log").mockImplementation(() => {});
     cleanups.push(() => vi.restoreAllMocks());
     const tnc = new KissTnc(

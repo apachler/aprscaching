@@ -70,6 +70,17 @@ jobs:
           cache-dependency-path: docs/requirements.txt
       - run: pip install --require-hashes -r docs/requirements.txt
       - run: mkdocs build --strict
+      # The manual makes no request to another site: every page links the repository, and none marks the link for
+      # Material's script, which would fetch the repository's stars and forks from the GitHub API (overrides/partials/source.html)
+      - name: the repository link fetches nothing
+        run: |
+          pages=$(grep -rl 'class="md-source"' site | wc -l)
+          [ "$pages" -gt 0 ] || { echo "no page carries the repository link" >&2; exit 1; }
+          if grep -rl 'data-md-component="source"' site; then
+            echo "these pages fetch the repository's facts from the GitHub API" >&2
+            exit 1
+          fi
+          echo "$pages pages link the repository without fetching from it"
       - if: github.event_name == 'push' && github.ref_name == 'main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with: { path: site }
