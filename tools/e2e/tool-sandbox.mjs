@@ -267,7 +267,7 @@ async function main() {
         transmit: (t, info) => sent.push([t, info]),
         onBeacon: (t, spec) => beacons.push([t, spec]),
       });
-      const perms = ["command", "monitor", "event", "panel", "map", "ipc", "tx", "beacon"];
+      const perms = ["command", "monitor", "event", "panel", "map", "ipc", "tx", "beacon", "decoder"];
       const sb = await loadSandbox(await (await fetch("/api-tool.js")).text(), perms);
       const manifest = {
         name: "api",

@@ -61,6 +61,10 @@ describe("connectSources", () => {
     expect(connectSources(["network"], ["https://*", "wss://*.example.net", "https://a.example"], app)).toEqual([
       "https://a.example",
     ]);
+    // the scheme is the manifest check's to hold; here only the host must be concrete
+    expect(connectSources(["network"], ["http://127.0.0.1:8080", "http://*:8080"], app)).toEqual([
+      "http://127.0.0.1:8080",
+    ]);
   });
 });
 

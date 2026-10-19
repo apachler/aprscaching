@@ -13,7 +13,7 @@
  * its rate limit exactly as it does for any tool. Commands and decoders answer asynchronously from the worker.
  */
 import {
-  connectOrigin,
+  concreteHost,
   isToolEvent,
   REPLY_MAX,
   REPLY_TTL_MS,
@@ -255,8 +255,9 @@ export function frameCsp(connect: string[]): string {
 /**
  * The origins a tool's frame may connect to: its manifest's `connect` list when it holds the 'network'
  * grant, minus the app's own origins (the page and the API, in http and ws form), so a tool never
- * addresses the app's API from inside the sandbox. An entry that is not one concrete origin (a wildcard host, which
- * the CSP would read as every host) drops, whatever manifest it was stored from.
+ * addresses the app's API from inside the sandbox. An entry that is not one origin on one concrete host (a wildcard
+ * host, which the CSP would read as every host) drops, whatever manifest it was stored from; the manifest's own
+ * check (`connectOrigin`) is what holds a tool to https and wss.
  */
 export function connectSources(granted: Capability[], connect: string[] | undefined, appOrigins: string[]): string[] {
   if (!granted.includes("network") || !connect?.length) return [];
@@ -270,7 +271,14 @@ export function connectSources(granted: Capability[], connect: string[] | undefi
       /* not a URL */
     }
   }
-  return connect.filter((o) => connectOrigin(o) === o && !own.has(o));
+  return connect.filter((o) => {
+    try {
+      const u = new URL(o);
+      return `${u.protocol}//${u.host}` === o && concreteHost(u.hostname) && !own.has(o);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** The frame document: its CSP, then a relay between the parent window and the tool's worker. */
