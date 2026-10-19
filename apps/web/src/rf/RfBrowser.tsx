@@ -233,7 +233,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   return (
     <>
-      <div className="row gap-2">
+      <div className="row gap-2 wrap">
         {link ? (
           <Button variant="danger" onClick={() => void radioLink.disconnect()}>
             Disconnect
