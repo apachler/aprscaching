@@ -25,7 +25,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`). A mirror is stored under its gid, never under the BID it carries, so one instance cannot claim another's BID; the BID only skips a bulletin already held from FBB forwarding |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
-| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. For caches, finds, tombstones and account moves it is also the origin's **sequence** for that kind, rising across all its records of the kind: a cache's `fed_rev` (every insert and update takes the next number) and a find's, a tombstone's and an account move's `fed_seq`, each at least the time in milliseconds. The global id carries a number of the same sequence, never a row id: `<origin>:cache:<fed_id>` (the number the cache was made with), `<origin>:find:<fed_seq>`, `<origin>:tombstone:<fed_seq>`, `<origin>:move:<fed_seq>`. Per-origin sync tracks it ([Per-origin sync](#per-origin-sync)). A callsign key's `v` is its `fed_seq` too, numbered the same way, and the keys feed pages by it; a bulletin's `v` is its posting time |
+| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. For caches, finds, tombstones and account moves it is also the origin's **sequence** for that kind, rising across all its records of the kind: a cache's `fed_rev` (every insert and update takes the next number) and a find's, a tombstone's and an account move's `fed_seq`, each at least the time in milliseconds. The global id carries a number of the same sequence, never a row id: `<origin>:cache:<fed_id>` (the number the cache was made with), `<origin>:find:<fed_seq>`, `<origin>:tombstone:<fed_seq>`, `<origin>:move:<fed_seq>`. Per-origin sync tracks it ([Per-origin sync](#per-origin-sync)). A callsign key's global id is `<origin>:key:<fed_seq>`, numbered the same way; its `v` is its `fed_rev`, which takes a new number of the same counter whenever the call's verification changes, and the keys feed pages by it, so a peer takes the key again with its current `verified` flag; a bulletin's `v` is its posting time |
 | `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
 | `signer` (6) | The signing instance id; a mirrored record is accepted only when it equals `origin` |
 | `body` (7) | Type-specific fields, text-keyed, integer-scaled numbers only |
@@ -288,7 +288,9 @@ A peer's stored endpoint set comes from one of four places (`fed_peers.endpoints
 - `descriptor`: the `addresses` of the peer's own descriptor, read on every sync once its identity and keys
   check out. It replaces what the descriptor said before.
 - `announce`: a verified presence beacon (a `peer` record). A beacon trimmed to fit one datagram carries
-  `partial: true` and only adds; a whole list replaces what the peer said before.
+  `partial: true` and only adds; a whole list replaces what the peer said before. A beacon applies only when it
+  was signed after the last one applied (`fed_peers.announce_at`), at most 3 days ago and no more than 5 minutes ahead of this clock,
+  so a recorded beacon replayed after the peer moved changes nothing.
 - `discovered`: a trusted peer's [peer list](#peer-exchange), on a row that has no address of its own yet (one
   only discovery brought, or an origin known through a hub). It only adds, and the peer's own descriptor
   replaces it once the peer is followed.
@@ -402,7 +404,7 @@ Both halves ride the existing BBS machinery:
   `ACSFED` that expires after 30 days. Nothing on the instance calls it on its own. The content BID lands in
   `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts. `since` is a number that starts
   every feed there, or the previous answer's `cursors` object (`{<feed>: {cursor, id?}}`), which resumes each
-  feed from its own position: a bulletin's cursor is a time in seconds, the other feeds' a `fed_seq` value.
+  feed from its own position: a bulletin's cursor is a time in seconds, the keys feed's a `fed_rev` value, the other feeds' a `fed_seq` value.
 - **Receive** — an inbound forwarded message addressed to `ACSFED`, personal or bulletin, is taken only while
   `FED_BBS` is on and only from a partner marked for federation (the forwarding session names the partner);
   anything else is dropped unstored and never applied. A taken batch triggers the trust-gated apply on first
@@ -420,7 +422,9 @@ Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed 
 submission is one key — a second key smuggled into the batch is rejected; the body is capped at 4 MiB).
 The submitted key must be one the hub already verified for that instance under any peer row (and the
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
-`unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
+`unvetted`. A peer the hub pulls but holds no key for yet (a `FED_PEERS` entry whose address names the instance,
+before its first sync, or a registry entry without a key) is reserved: a submission claiming it is refused `403`
+unless its key matches the fingerprint pinned on that entry (`<url>#<fingerprint>`). A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
 moves the spoke's pin only along them, by the same rules as a pulled peer. Every submission carries
 `x-fed-secret`, the shared `FED_SUBMIT_SECRET`: a hub without one answers `403`, a wrong value `401`. A spoke
 pushes every feed the pull serves, in the pull's order (tombstone, cache, find, key, account-move, bulletin),
@@ -490,7 +494,9 @@ The rendezvous relay rides the same carrier for a packet-only spoke, with `FED_B
 sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
 scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.
 The frame signatures bind both directions to their instances, so no secret material ever rides the air.
-Each relay frame is acted on once (by gid) and only within three days of its signing time. On the HTTP
+Each relay frame is acted on once (by gid) and only within three days of its signing time. Every answer is a
+transmission, so the spoke answers only a trusted peer or its own hub (`FED_HUB_URL`), and at most 30 queries per
+origin an hour; a query over the budget is not remembered, so a later copy of it can still be answered. On the HTTP
 legs, the spoke signs each lease and answer request with its federation key over
 `"acs-relay/1\n" || METHOD " " path?query "\n" at "\n" hex(SHA-256(body))`, sent as `x-relay-instance`,
 `x-relay-at` (±120 s) and `x-relay-sig`; the hub verifies it against the accept set it holds for that

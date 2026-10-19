@@ -20,6 +20,8 @@ import { fedBbsOn } from "./fedbbsgate.js";
 import { ours, originKeys } from "./fedpeers.js";
 import { mergeEndpoints, storedEndpoints } from "./fedtransport.js";
 import { keepForTransit } from "./fedtransit.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { trimTrailingSlashes } from "./fetchguard.js";
 import {
   accountActionMessage,
   decodeFedFrame,
@@ -439,6 +441,9 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
   return applyFrames(env, frames, { keysFor: (origin) => originKeys(env, origin, registry, keyCache) });
 }
 
+/** How long a presence beacon stays applicable: it may arrive store-and-forward, but its endpoints age. */
+const ANNOUNCE_MAX_AGE_S = 3 * 86400;
+
 /**
  * A verified peer-announce (an HF presence beacon) refreshes a KNOWN peer's self-attested endpoint
  * set — addressing only, never a trust input, and strictly an UPDATE: hearing an announce never
@@ -446,14 +451,19 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
  * through the typed validator so a malformed address never rides an announce in. The announced
  * addresses merge into the stored set (mergeEndpoints): a beacon trimmed to fit one datagram
  * (`partial`) drops nothing, a whole list replaces what the peer said before, and what DNS attested
- * and the row's own address always stay.
+ * and the row's own address always stay. A beacon applies only while fresh and when it was signed after the last
+ * one applied to that row, so a recorded beacon replayed after the peer moved changes nothing.
  */
 async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Promise<boolean> {
   const addresses = parseEndpoints(rec.body.addresses);
   if (!addresses.length) return false;
+  const t = nowS();
+  if (rec.at > t + MAX_FUTURE_S || rec.at < t - ANNOUNCE_MAX_AGE_S) return false;
   const rows = (
-    await env.DB.prepare("SELECT url, endpoints FROM fed_peers WHERE instance = ? AND trust != 'blocked'")
-      .bind(origin)
+    await env.DB.prepare(
+      "SELECT url, endpoints FROM fed_peers WHERE instance = ? AND trust != 'blocked' AND COALESCE(announce_at, -1) < ?",
+    )
+      .bind(origin, rec.at)
       .all<{ url: string; endpoints: string | null }>()
   ).results;
   let changed = false;
@@ -463,9 +473,10 @@ async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Prom
       replace: rec.body.partial !== true,
     });
     const res = await env.DB.prepare(
-      "UPDATE fed_peers SET endpoints = ?, endpoints_source = COALESCE(endpoints_source, 'announce') WHERE url = ?",
+      `UPDATE fed_peers SET endpoints = ?, endpoints_source = COALESCE(endpoints_source, 'announce'), announce_at = ?
+       WHERE url = ? AND COALESCE(announce_at, -1) < ?`,
     )
-      .bind(JSON.stringify(merged), row.url)
+      .bind(JSON.stringify(merged), rec.at, row.url, rec.at)
       .run();
     changed ||= !!res.meta.changes;
   }
@@ -494,6 +505,8 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
  */
 /** How long a relay frame stays answerable: store-and-forward is slow, but not this slow. */
 const RELAY_FRAME_MAX_AGE_S = 3 * 86400;
+/** Relay queries one origin may have answered over the air in an hour. */
+const RELAY_ANSWERS_PER_HOUR = 30;
 
 async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "rejected" | "elsewhere"> {
   const us = (ours(env) ?? "").toLowerCase();
@@ -522,6 +535,17 @@ async function actOnRelayFrame(
   if (rec.kind === "relayQuery") {
     // the answer goes back over FBB, which carries nothing while FED_BBS is off
     if (!fedBbsOn(env)) return "rejected";
+    // each answer is a signed bulletin on scarce FBB/RF airtime: only a trusted peer or this spoke's own hub may
+    // ask, and within a per-origin budget, so no origin can turn queries into a flood of transmissions
+    const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : "";
+    const asker = await env.DB.prepare(
+      "SELECT 1 AS x FROM fed_peers WHERE instance = ? AND trust != 'blocked' AND (trust = 'trusted' OR url = ?)",
+    )
+      .bind(rec.origin, hub)
+      .first();
+    if (!asker) return "rejected";
+    if (await rateLimitedDurable(env, `relay-answer:${rec.origin}`, Date.now(), RELAY_ANSWERS_PER_HOUR, 3600_000))
+      return "rejected";
     const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
     let params: unknown;
     try {

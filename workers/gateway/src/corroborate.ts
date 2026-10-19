@@ -12,7 +12,7 @@
  * the trust-bearing exchange.
  */
 import { nowS } from "./util/time.js";
-import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, MAX_CONTROL_BYTES, readCappedBody, readCappedJson, trimTrailingSlashes } from "./fetchguard.js";
 import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 import { syncAddresses } from "./fedtransport.js";
 import { flagOn, type Env } from "./env.js";
@@ -28,6 +28,7 @@ import {
   instanceRequester,
   isRelaySpoke,
   localRelayResult,
+  MAX_ANSWER_BYTES,
   signRelayRequest,
   SELF_REQUESTER,
 } from "./relay.js";
@@ -656,7 +657,7 @@ async function askViaRelay(
         signal: AbortSignal.timeout(3000),
       });
       if (res.status !== 202) continue; // this hub does not relay for the peer
-      const b = (await res.json().catch(() => null)) as { relayed?: unknown; id?: unknown; ticket?: unknown } | null;
+      const b = await readCappedJson<{ relayed?: unknown; id?: unknown; ticket?: unknown }>(res, MAX_CONTROL_BYTES);
       if (b?.relayed === true && Number.isInteger(b.id) && typeof b.ticket === "string")
         return { hub: h.baseUrl, id: b.id as number, ticket: b.ticket };
     } catch {
@@ -840,7 +841,9 @@ export async function askPeers(
       // a refusal (4xx) is an answer; a rate limit or a server error is a peer not reached
       if (!r.ok) return { ...none, unreachable: r.status === 429 || r.status >= 500 };
       try {
-        const verdict = await acceptAnswer(new Uint8Array(await r.arrayBuffer()), {
+        const answer = await readCappedBody(r, MAX_ANSWER_BYTES);
+        if (!answer) return none; // an oversized answer is no answer
+        const verdict = await acceptAnswer(answer, {
           instance,
           identity: peerIdentity(registry, peer, keys),
           keys,
@@ -892,7 +895,8 @@ async function readRelayed(env: Env, ask: RelayedAsk): Promise<RelayState> {
     });
     if (res.status === 404) return null; // the hub dropped it
     if (!res.ok) return "unreachable";
-    return (await res.json()) as RelayState;
+    const state = await readCappedJson<Exclude<RelayState, null | "unreachable">>(res, MAX_ANSWER_BYTES);
+    return state ?? "unreachable"; // an oversized or garbled state is no state
   } catch {
     return "unreachable";
   }

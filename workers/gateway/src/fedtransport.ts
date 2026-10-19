@@ -30,7 +30,10 @@ import {
   type FedEndpoint,
   type FedTransportKind,
 } from "@aprscaching/shared";
-import { isLocalHost } from "./fetchguard.js";
+import { isLocalHost, readCappedBody } from "./fetchguard.js";
+
+/** Largest peer descriptor (`/.well-known/aprscaching`) read: a hostile peer must not stream a body into memory. */
+export const MAX_DESCRIPTOR_BYTES = 256 * 1024;
 
 const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
 /** A HAMNET host either routes from here or not at all: a short wait, then the next address. */
@@ -43,8 +46,8 @@ export interface FedSyncTransport {
   readonly baseUrl: string;
   /** GET an absolute path (leading slash) on the peer; timeout-bounded, returns the raw Response. */
   get(path: string): Promise<Response>;
-  /** GET + parse JSON, throwing on any non-2xx status. */
-  fetchJson<T>(path: string): Promise<T>;
+  /** GET + parse JSON of at most `max` bytes (a descriptor's cap by default), throwing on any non-2xx status. */
+  fetchJson<T>(path: string, max?: number): Promise<T>;
 }
 
 /** The peer row fields endpoint resolution reads (a subset of the fed_peers row). */
@@ -181,10 +184,12 @@ export function syncTransportFor(
       }
       throw last instanceof Error ? last : new Error(`no address of the peer answered: ${String(last)}`);
     },
-    async fetchJson<T>(path: string): Promise<T> {
+    async fetchJson<T>(path: string, max = MAX_DESCRIPTOR_BYTES): Promise<T> {
       const r = await this.get(path);
       if (!r.ok) throw new Error(`${r.status} ${r.statusText} <- ${this.baseUrl}${path}`);
-      return r.json() as Promise<T>;
+      const body = await readCappedBody(r, max);
+      if (!body) throw new Error(`response larger than ${max} bytes <- ${this.baseUrl}${path}`);
+      return JSON.parse(new TextDecoder().decode(body)) as T;
     },
   };
 }

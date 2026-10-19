@@ -28,7 +28,7 @@ function stubNet(doh: unknown, wk?: unknown) {
       return { ok: true, status: 200, json: async () => doh } as Response;
     if (url.includes("/.well-known/aprscaching")) {
       if (wk === undefined) throw new Error("unreachable");
-      return { ok: true, status: 200, json: async () => wk } as Response;
+      return wk instanceof Response ? wk : Response.json(wk);
     }
     throw new Error(`unexpected fetch ${url}`);
   }) as typeof fetch;
@@ -207,6 +207,17 @@ describe("handleFed44netAdd — admission policy", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("an oversized descriptor is not read: it counts as unchecked, like an unreachable one", async () => {
+    const { db, rows } = peersDb();
+    // a contradicting descriptor padded past the cap: read whole, it would refuse the admission
+    const big = JSON.stringify({ instance: "someone.else", publicKeys: [{ x: KEY }] }) + " ".repeat(300 * 1024);
+    stubNet(dohAnswer({ ad: true, txt: TXT }), new Response(big));
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(res.status).toBe(201);
+    expect((await res.json()).descriptorChecked).toBe(false);
+    expect(rows).toHaveLength(1);
+  });
+
   it("an unreachable descriptor does not block a DNSSEC-validated admission (the DNS key is the pin)", async () => {
     const { db, rows } = peersDb();
     stubNet(dohAnswer({ ad: true, txt: TXT })); // descriptor fetch throws
@@ -301,8 +312,7 @@ function stubNames(txts: Record<string, string[]>, wks: Record<string, unknown> 
       return { ok: true, status: 200, json: async () => doh } as Response;
     }
     const wk = wks[url.hostname];
-    if (url.pathname === "/.well-known/aprscaching" && wk)
-      return { ok: true, status: 200, json: async () => wk } as Response;
+    if (url.pathname === "/.well-known/aprscaching" && wk) return wk instanceof Response ? wk : Response.json(wk);
     throw new Error("unreachable");
   }) as typeof fetch;
 }

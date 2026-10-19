@@ -93,10 +93,25 @@ describe("the fetch guard", () => {
     "http://[::ffff:a9fe:a9fe]/latest/meta-data",
     "http://[::7f00:1]/",
     "http://[64:ff9b::7f00:1]/",
+    "http://[64:ff9b::a00:1]/",
+    // the local-use NAT64 prefix translates into a site's own IPv4 plan, private ranges included
+    "http://[64:ff9b:1::5db8:d822]/",
   ])
     it(`refuses ${u}`, async () => {
       await expect(guard(u)).rejects.toThrow(/refused/);
     });
+
+  // DNS64 / 464XLAT networks (IPv6-only mobile carriers) synthesise a 64:ff9b:: record for every IPv4-only peer
+  it("lets a NAT64 address that carries a public IPv4 through", async () => {
+    await expect(guard("http://[64:ff9b::5db8:d822]/")).resolves.toBeUndefined();
+    const dns64 = createFetchGuard({ resolve: async () => ["93.184.216.34", "64:ff9b::5db8:d822"] });
+    await expect(dns64("https://peer.example/")).resolves.toBeUndefined();
+  });
+
+  it("refuses a name whose NAT64 record carries a private IPv4", async () => {
+    const dns64 = createFetchGuard({ resolve: async () => ["64:ff9b::a00:1"] });
+    await expect(dns64("https://peer.example/")).rejects.toThrow(/refused/);
+  });
 
   it("re-checks every redirect hop", async () => {
     vi.stubGlobal("fetch", async (u: RequestInfo | URL) =>

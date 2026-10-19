@@ -114,6 +114,20 @@ describe("signed corroboration answers", () => {
     expect(ev?.instance).toBe("p1.example");
   });
 
+  it("does not read an answer declared larger than the cap", async () => {
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    const p1 = await answerer("p1.example");
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    const genuine = forged(p1.env, "p1.example");
+    stubFetch({
+      "https://p1.example": async (req) => {
+        const r = await genuine(req);
+        return new Response(r.body, { headers: { "content-length": String(64 * 1024 * 1024) } });
+      },
+    });
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+  });
+
   it("never answers from an APRS-IS qAR copy naming the peer's attested site", async () => {
     const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
     const p1 = await answerer("p1.example", { transport: "aprs-is" });

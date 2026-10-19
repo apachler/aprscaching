@@ -41,7 +41,9 @@ function blockedAddress(ip: string): string | null {
   if (v4) return v4Private(v4.slice(1).map(Number));
   if (!s.includes(":")) return null;
   // IPv4 carried in IPv6 — mapped (::ffff:), compatible (::) and NAT64 (64:ff9b::), in dotted or in the
-  // hex form the URL parser normalises to — is judged by the IPv4 address it carries
+  // hex form the URL parser normalises to — is judged by the IPv4 address it carries alone. A DNS64 network
+  // (an IPv6-only mobile carrier) synthesises a 64:ff9b:: record for every IPv4-only peer, so a NAT64 address
+  // carrying a public IPv4 is a public address
   const embedded =
     /^(?:::ffff:|::|64:ff9b::)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s) ??
     /^(?:::ffff:|::|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(s);
@@ -54,8 +56,11 @@ function blockedAddress(ip: string): string | null {
               lo = parseInt(embedded[2], 16);
             return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
           })();
-    return blockedAddress(v4) ?? (s.startsWith("64:ff9b:") ? "NAT64" : null);
+    return blockedAddress(v4);
   }
+  // the local-use NAT64 prefix (64:ff9b:1::/48) translates into the site's own IPv4 plan, private ranges included,
+  // and carries the address in a form no peer's DNS64 synthesises
+  if (/^64:ff9b:1:/.test(s)) return "NAT64 local-use";
   if (s === "::1") return "loopback";
   if (s === "::") return "unspecified";
   if (/^f[cd][0-9a-f]{2}:/.test(s)) return "private";
@@ -209,6 +214,23 @@ export function trimTrailingSlashes(s: string): string {
   let end = s.length;
   while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
   return s.slice(0, end);
+}
+
+/** Largest control answer read from a peer or hub (a ticket, a mark, a cursor): a few fields of JSON. */
+export const MAX_CONTROL_BYTES = 64 * 1024;
+
+/** A JSON body of at most `max` bytes, read through {@link readCappedBody}; null when larger or not JSON. */
+export async function readCappedJson<T>(
+  src: { headers: Headers; body: ReadableStream<Uint8Array> | null },
+  max: number,
+): Promise<T | null> {
+  const body = await readCappedBody(src, max);
+  if (!body) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as T;
+  } catch {
+    return null;
+  }
 }
 
 /**

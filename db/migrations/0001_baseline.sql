@@ -261,9 +261,11 @@ CREATE INDEX idx_licence_registry_source ON licence_registry (source, updated_at
 
 -- Device signing keys (Ed25519) bound to callsigns. A find signed by its logger's device key carries
 -- portable, instance-independent authorship; a signed browser-bridge batch is attributed by it.
--- Keys travel per peer, not per origin, but are numbered like the per-origin records: the keys cursor
--- pages by fed_seq, and the key's global id is `<instance>:key:<fed_seq>`, so a key registered after a
--- restore reaches every peer (trigger callsign_keys_fed_seq, under Federation).
+-- Keys travel per peer, not per origin, but are numbered like the per-origin records: the key's global id is
+-- `<instance>:key:<fed_seq>`, so a key registered after a restore reaches every peer (trigger
+-- callsign_keys_fed_seq, under Federation). The keys cursor and the signed version are `fed_rev`, which takes a
+-- new number whenever the call's verification changes (triggers callsign_verifications_key_*), so the key is
+-- served again with its current `verified` flag under the same global id.
 CREATE TABLE callsign_keys (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   callsign   TEXT NOT NULL,
@@ -271,10 +273,12 @@ CREATE TABLE callsign_keys (
   label      TEXT,
   created_at INTEGER NOT NULL,
   fed_seq    INTEGER NOT NULL DEFAULT 0,
+  fed_rev    INTEGER NOT NULL DEFAULT 0,
   UNIQUE (callsign, public_key)
 );
 CREATE INDEX idx_callsign_keys_call ON callsign_keys (callsign);
 CREATE INDEX idx_callsign_keys_fed_seq ON callsign_keys (fed_seq);
+CREATE INDEX idx_callsign_keys_fed_rev ON callsign_keys (fed_rev);
 
 
 -- ============================================================================================
@@ -1215,6 +1219,9 @@ CREATE TABLE fed_peers (
   -- 'descriptor' (the `addresses` its own descriptor lists, read on each sync) or 'announce' (a verified
   -- presence beacon). A sync replaces only a set it learned itself, never one DNS set.
   endpoints_source    TEXT,
+  -- the signing time of the last presence beacon applied: a beacon applies only when it is newer, so one
+  -- recorded off the air and replayed after the peer moved never rolls its endpoints back
+  announce_at         INTEGER,
   -- the key a FED_PEERS fingerprint pin matched. The pin then holds for every key reached from it along the
   -- peer's verified rotation chain, so a rotation past its grace period keeps the peer.
   pin_matched_key     TEXT,
@@ -1469,7 +1476,44 @@ CREATE TRIGGER callsign_keys_fed_seq AFTER INSERT ON callsign_keys
 WHEN NEW.fed_seq = 0
 BEGIN
   UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'key';
-  UPDATE callsign_keys SET fed_seq = (SELECT n FROM fed_seq WHERE kind = 'key') WHERE id = NEW.id;
+  UPDATE callsign_keys SET fed_seq = (SELECT n FROM fed_seq WHERE kind = 'key'),
+                           fed_rev = (SELECT n FROM fed_seq WHERE kind = 'key') WHERE id = NEW.id;
+END;
+-- A change of a call's verification renumbers the keys of the call and of its SSIDs, each with a number of its
+-- own, so a keys page that ends between two of them resumes at the next.
+CREATE VIEW callsign_keys_base AS
+  SELECT id, CASE WHEN instr(callsign, '-') > 0 THEN substr(callsign, 1, instr(callsign, '-') - 1) ELSE callsign END
+           AS base
+    FROM callsign_keys;
+CREATE TRIGGER callsign_verifications_key_insert AFTER INSERT ON callsign_verifications
+WHEN NEW.status = 'verified'
+BEGIN
+  UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'key';
+  UPDATE callsign_keys SET fed_rev = (SELECT n FROM fed_seq WHERE kind = 'key')
+      + (SELECT COUNT(*) FROM callsign_keys_base b WHERE b.base = NEW.callsign AND b.id < callsign_keys.id)
+   WHERE id IN (SELECT id FROM callsign_keys_base WHERE base = NEW.callsign);
+  UPDATE fed_seq SET n = MAX(n, n + (SELECT COUNT(*) FROM callsign_keys_base WHERE base = NEW.callsign) - 1)
+   WHERE kind = 'key';
+END;
+CREATE TRIGGER callsign_verifications_key_update AFTER UPDATE OF status, callsign ON callsign_verifications
+WHEN (OLD.status = 'verified') != (NEW.status = 'verified') OR OLD.callsign != NEW.callsign
+BEGIN
+  UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'key';
+  UPDATE callsign_keys SET fed_rev = (SELECT n FROM fed_seq WHERE kind = 'key')
+      + (SELECT COUNT(*) FROM callsign_keys_base b WHERE b.base IN (OLD.callsign, NEW.callsign) AND b.id < callsign_keys.id)
+   WHERE id IN (SELECT id FROM callsign_keys_base WHERE base IN (OLD.callsign, NEW.callsign));
+  UPDATE fed_seq SET n = MAX(n, n + (SELECT COUNT(*) FROM callsign_keys_base WHERE base IN (OLD.callsign, NEW.callsign)) - 1)
+   WHERE kind = 'key';
+END;
+CREATE TRIGGER callsign_verifications_key_delete AFTER DELETE ON callsign_verifications
+WHEN OLD.status = 'verified'
+BEGIN
+  UPDATE fed_seq SET n = MAX(n + 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)) WHERE kind = 'key';
+  UPDATE callsign_keys SET fed_rev = (SELECT n FROM fed_seq WHERE kind = 'key')
+      + (SELECT COUNT(*) FROM callsign_keys_base b WHERE b.base = OLD.callsign AND b.id < callsign_keys.id)
+   WHERE id IN (SELECT id FROM callsign_keys_base WHERE base = OLD.callsign);
+  UPDATE fed_seq SET n = MAX(n, n + (SELECT COUNT(*) FROM callsign_keys_base WHERE base = OLD.callsign) - 1)
+   WHERE kind = 'key';
 END;
 
 -- What this instance holds of each origin: for one record kind (cache | find | tombstone | account-move), every

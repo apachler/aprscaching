@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { b64urlToBytes, bytesToB64, bytesToB64url } from "./util/b64.js";
 import { nowS } from "./util/time.js";
-import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, readCappedJson, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
@@ -136,7 +136,9 @@ export async function spokeAuth(
 }
 
 /** Largest answer a spoke may post: a full relayed feed page, base64, with room to spare. */
-const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
+export const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
+/** Largest lease a spoke reads from its hub: 25 queries, each at most a corroboration question, base64. */
+const MAX_LEASE_BYTES = 2 * 1024 * 1024;
 
 /**
  * Nightly housekeeping of the relay queue: an HTTP query older than an hour is stale, but a query
@@ -451,10 +453,10 @@ export async function relayPoll(env: Env): Promise<void> {
   if (!leaseAuth) return; // no signing key — the hub could not tell us from anyone else
   const leaseRes = await fedFetch(env, leaseUrl, { headers: leaseAuth, signal: AbortSignal.timeout(5000) });
   if (!leaseRes.ok) return;
-  const { queries } = (await leaseRes.json().catch(() => ({ queries: [] }))) as {
-    queries: { id: number; kind: RelayKind; params: Record<string, unknown> }[];
-  };
-  for (const q of queries ?? []) {
+  const lease = await readCappedJson<{
+    queries?: { id: number; kind: RelayKind; params: Record<string, unknown> }[];
+  }>(leaseRes, MAX_LEASE_BYTES);
+  for (const q of lease?.queries ?? []) {
     const result = await answerRelayQuery(
       { kind: q.kind, params: q.params ?? {} },
       { feed: (p) => feedSource(env, p), corroborate: (p) => corroborateSource(env, p) },

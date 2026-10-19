@@ -9,9 +9,10 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { secretOk } from "./auth.js";
 import { nowS } from "./util/time.js";
-import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, MAX_CONTROL_BYTES, readCappedBody, readCappedJson, trimTrailingSlashes } from "./fetchguard.js";
 import {
   isInstanceId,
+  keyFingerprint,
   loadRegistry,
   parseAcceptKeys,
   resolvePeerKeys,
@@ -172,6 +173,47 @@ export async function handleSubmitMarks(req: Request, env: Env): Promise<Respons
   return json({ ok: true, instance, marks });
 }
 
+/** The key-binding fields of a fed_peers row. */
+interface PeerKeyRow {
+  url: string;
+  public_key: string | null;
+  accept_keys: string | null;
+  trust: TrustLevel;
+  pinned_fingerprint: string | null;
+}
+
+/** The keys a row's frames verify under now: its accept set, else its pin. */
+function rowKeys(r: PeerKeyRow): string[] {
+  const accept = parseAcceptKeys(r.accept_keys);
+  return accept.length ? usableKeys(accept, nowS()) : r.public_key ? [r.public_key] : [];
+}
+
+/** A row this hub pulls from an address, as opposed to a synthetic `submit:`, `transit:` or discovery row. */
+const isPulledUrl = (url: string): boolean => /^https?:\/\//i.test(url);
+
+/**
+ * The pulled peers not yet synced whose address names `instance` (an instance id is its host unless it sets
+ * INSTANCE): they learn their instance id from their first descriptor, so the id cannot match them yet.
+ */
+async function unsyncedAt(env: Env, instance: string): Promise<PeerKeyRow[]> {
+  const rows = (
+    await env.DB.prepare(
+      "SELECT url, public_key, accept_keys, trust, pinned_fingerprint FROM fed_peers WHERE instance IS NULL AND trust != 'blocked' AND url LIKE ?",
+    )
+      .bind(`%${instance}%`)
+      .all<PeerKeyRow>()
+  ).results;
+  return rows.filter((r) => {
+    if (!isPulledUrl(r.url)) return false;
+    try {
+      const u = new URL(r.url);
+      return u.host.toLowerCase() === instance || u.hostname.toLowerCase() === instance;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /**
  * The submit core: allowlist, the registry + TOFU key binding and spoke registration, then every frame
  * through the shared admission path (fedapply.ts) under the bound key — the same signature, origin,
@@ -210,15 +252,31 @@ async function submitFrames(
   // a spoke that discovery listed becomes the spoke its pushes register
   await absorbDiscovered(env, instance);
   const known = (
-    await env.DB.prepare("SELECT url, public_key, accept_keys, trust FROM fed_peers WHERE instance = ?")
+    await env.DB.prepare(
+      "SELECT url, public_key, accept_keys, trust, pinned_fingerprint FROM fed_peers WHERE instance = ?",
+    )
       .bind(instance)
-      .all<{ url: string; public_key: string | null; accept_keys: string | null; trust: TrustLevel }>()
+      .all<PeerKeyRow>()
   ).results;
   if (known.some((r) => r.trust === "blocked"))
     return json({ ok: false, error: "instance is blocked on this hub" }, { status: 403 });
+  // A peer this hub pulls but has no key for yet (a FED_PEERS entry not yet synced, which has no instance id
+  // either, or a registry entry without a key) is reserved for whoever answers at its address: a submission
+  // claiming it is refused unless its key matches the fingerprint the sysop pinned, so a secret-holder can
+  // never take over a peer before its first sync.
+  const fingerprint = await keyFingerprint(publicKey);
+  const reserved = [
+    ...known.filter((r) => isPulledUrl(r.url) && !rowKeys(r).length),
+    ...(await unsyncedAt(env, instance)),
+  ];
+  if (reserved.some((r) => r.pinned_fingerprint !== fingerprint))
+    return json(
+      { ok: false, error: "instance is a configured peer this hub has not synced yet; pin its key fingerprint" },
+      { status: 403 },
+    );
   for (const r of known) {
     const accept = parseAcceptKeys(r.accept_keys);
-    const keys = accept.length ? usableKeys(accept, nowS()) : r.public_key ? [r.public_key] : [];
+    const keys = rowKeys(r);
     if (!keys.length || keys.includes(publicKey)) continue;
     // A spoke that rotated proves it the same way a pulled peer does: rotation records (sent in
     // x-fed-rotations) leading from its pinned key to the new one. Only its own submit row moves.
@@ -373,7 +431,7 @@ async function readMarks(
   }
   if (hubDown(res.status)) return "network";
   if (res.ok) {
-    const body = (await res.json().catch(() => null)) as { marks?: Record<string, PushMark> } | null;
+    const body = await readCappedJson<{ marks?: Record<string, PushMark> }>(res, MAX_CONTROL_BYTES);
     if (body?.marks)
       for (const def of PUSH_FEEDS) {
         const m = body.marks[def.type];
@@ -464,10 +522,10 @@ async function pushCycle(
         cursor: built.nextCursor,
         ...(!complete && built.nextId !== undefined && { id: built.nextId }),
       };
-      const answer = (await res.json().catch(() => null)) as {
-        mark?: PushMark & { type?: string };
-        held?: unknown;
-      } | null;
+      const answer = await readCappedJson<{ mark?: PushMark & { type?: string }; held?: unknown }>(
+        res,
+        MAX_CONTROL_BYTES,
+      );
       const mark = answer?.mark?.type === def.type && Number.isFinite(answer.mark.cursor) ? answer.mark : null;
       let next: PushMark = mark ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) } : sent;
       // the hub holds this feed of ours whole only up to below where this page started: send again from there,

@@ -17,7 +17,7 @@
 import { b64urlToBytes } from "./util/b64.js";
 import { TOOL_API_VERSION } from "@aprscaching/tools/api";
 import { nowS } from "./util/time.js";
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { displayCall } from "./auth.js";
@@ -80,6 +80,8 @@ interface FindRow {
 interface KeyRow {
   id: number;
   fed_seq: number;
+  /** The key's place in the keys feed: renumbered whenever its call's verification changes. */
+  fed_rev: number;
   callsign: string;
   public_key: string;
   created_at: number;
@@ -463,6 +465,9 @@ export function federationConfigError(env: Env): string | null {
 }
 
 const REGISTRY_TTL_MS = 5 * 60_000;
+/** Largest DoH answer and registry document read: whoever serves them must not stream a body into memory. */
+const MAX_DOH_BYTES = 64 * 1024;
+const MAX_REGISTRY_BYTES = 4 * 1024 * 1024;
 const registryCache = new WeakMap<object, { exp: number; map: Map<string, RegistryEntry> }>();
 
 interface RegistryState {
@@ -494,14 +499,17 @@ async function registryFromDns(env: Env, name: string, authority: string): Promi
       headers: { accept: "application/dns-json" },
       signal: AbortSignal.timeout(3000),
     });
-    if (doh.ok) {
-      const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
+    const dohBody = doh.ok ? await readCappedBody(doh, MAX_DOH_BYTES) : null;
+    if (dohBody) {
+      const answers = (JSON.parse(new TextDecoder().decode(dohBody)) as { Answer?: { data: string }[] }).Answer ?? [];
       for (const a of answers) {
         const { url } = parseRegistryTxt(a.data);
         if (!url) continue;
         const r = await fedFetch(env, url, { signal: AbortSignal.timeout(3000) });
         if (!r.ok) continue;
-        const doc = (await r.json()) as SignedRegistry;
+        const body = await readCappedBody(r, MAX_REGISTRY_BYTES);
+        if (!body) continue; // an oversized document is not read into memory
+        const doc = JSON.parse(new TextDecoder().decode(body)) as SignedRegistry;
         const at = Number.isInteger(doc?.at) ? (doc.at as number) : 0;
         if (stored && at < stored.max_at) continue; // a replayed older registry
         const map = await registryToMap(doc, authority);
@@ -842,7 +850,7 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
   selectRows: async (env, since, limit) => {
     const rows = (
       await env.DB.prepare(
-        "SELECT id, fed_seq, callsign, public_key, created_at FROM callsign_keys WHERE fed_seq > ? ORDER BY fed_seq LIMIT ?",
+        "SELECT id, fed_seq, fed_rev, callsign, public_key, created_at FROM callsign_keys WHERE fed_rev > ? ORDER BY fed_rev LIMIT ?",
       )
         .bind(since, limit)
         .all<Omit<KeyRow, "verified">>()
@@ -853,9 +861,10 @@ export const KEY_FEED: FeedServeDef<KeyRow> = {
     );
     return rows.map((r) => ({ ...r, verified: verified.has(baseCall(r.callsign)) }));
   },
-  // the key's place in the keys sequence: a restored database never hands it out again, so a new key gets past
-  // every peer's cursor under a global id of its own
-  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_seq, data: keyData(r) }),
+  // the global id is the key's first place in the keys sequence, which a restored database never hands out again,
+  // so a new key gets past every peer's cursor under a global id of its own; the cursor and version move on when
+  // the call's verification changes, so peers take the key again with its current `verified` flag
+  recordOf: (r, instance) => ({ id: `${instance}:key:${r.fed_seq}`, cursor: r.fed_rev, data: keyData(r) }),
 };
 
 export const handleFederationCaches = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, CACHE_FEED);

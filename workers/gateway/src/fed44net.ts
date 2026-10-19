@@ -36,7 +36,8 @@
  * operator-set trust tier still governs whether its records count — transport is never trust.
  */
 import { nowS } from "./util/time.js";
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, readCappedBody } from "./fetchguard.js";
+import { MAX_DESCRIPTOR_BYTES } from "./fedtransport.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
@@ -231,7 +232,9 @@ async function descriptorMatches(
       signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
     });
     if (!res.ok) return { checked: false, ok: true, detail: `descriptor unreachable (${res.status})` };
-    const wk = (await res.json()) as {
+    const body = await readCappedBody(res, MAX_DESCRIPTOR_BYTES);
+    if (!body) return { checked: false, ok: true, detail: `descriptor at ${baseUrl} is too large` };
+    const wk = JSON.parse(new TextDecoder().decode(body)) as {
       instance?: string;
       publicKeys?: FedPublicKey[];
       aprsCall?: unknown;

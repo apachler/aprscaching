@@ -123,7 +123,7 @@ describe("beacon tier: emit + trust-gated receive", () => {
     expect(JSON.parse(String(knownSinks.endpointUpdates[0]![0]))).toEqual([
       { transport: "44net", address: "oe8apr.ampr.org", priority: 10 },
     ]);
-    expect(String(knownSinks.endpointUpdates[0]![1])).toBe("https://oe.pub");
+    expect(String(knownSinks.endpointUpdates[0]![2])).toBe("https://oe.pub");
 
     // unknown origin: quarantined, and no peer row appears
     const strangeSinks = { endpointUpdates: [] as unknown[][] };

@@ -18,6 +18,42 @@ function net(reachable: string[]) {
 
 const endpoints = (list: unknown[]) => ({ endpoints: JSON.stringify(list) });
 
+describe("syncTransportFor — bounded reads", () => {
+  /** A body of `chunks` 64 KiB chunks, counting how many the reader pulled. */
+  function stream(chunks: number) {
+    const seen = { pulled: 0 };
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (seen.pulled++ >= chunks) return c.close();
+        c.enqueue(new TextEncoder().encode(" ".repeat(64 * 1024)));
+      },
+    });
+    return { seen, body };
+  }
+
+  it("refuses a descriptor that streams past the cap, without reading the rest", async () => {
+    const { seen, body } = stream(64); // 4 MiB of JSON whitespace
+    const t = syncTransportFor({ url: "https://peer.example" }, async () => new Response(body))!;
+    await expect(t.fetchJson("/.well-known/aprscaching")).rejects.toThrow(/larger than/);
+    expect(seen.pulled).toBeLessThan(10);
+  });
+
+  it("refuses a declared content-length over the cap before reading", async () => {
+    const { seen, body } = stream(1);
+    const t = syncTransportFor(
+      { url: "https://peer.example" },
+      async () => new Response(body, { headers: { "content-length": "10000000" } }),
+    )!;
+    await expect(t.fetchJson("/.well-known/aprscaching")).rejects.toThrow(/larger than/);
+    expect(seen.pulled).toBeLessThan(2);
+  });
+
+  it("parses a descriptor within the cap", async () => {
+    const t = syncTransportFor({ url: "https://peer.example" }, async () => Response.json({ instance: "p" }))!;
+    expect(await t.fetchJson("/.well-known/aprscaching")).toEqual({ instance: "p" });
+  });
+});
+
 describe("syncTransportFor", () => {
   it("falls back from https to plain http on a 44Net name with a certificate", async () => {
     const { tried, fetchFn } = net(["http://aprscaching.oe8apr.ampr.org"]);
