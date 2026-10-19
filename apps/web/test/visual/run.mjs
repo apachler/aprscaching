@@ -655,6 +655,20 @@ function layoutFindings() {
       }
     }
   }
+  // a cache pin is anchored at its root's bottom centre (markerLayers.ts), so that is where the teardrop's tip
+  // points: the shape's lowest point sits on the cache's coordinate
+  for (const pin of document.querySelectorAll(".maplibregl-marker.cache-pin")) {
+    const shape = pin.querySelector(".cache-pin-shape");
+    const r = pin.getBoundingClientRect();
+    if (!shape || !r.width) continue;
+    const s = shape.getBoundingClientRect();
+    const dy = s.bottom - r.bottom;
+    const dx = (s.left + s.right) / 2 - (r.left + r.right) / 2;
+    if (Math.abs(dy) > 1 || Math.abs(dx) > 1) {
+      out.push(`a cache pin's tip is ${Math.round(dx)}px, ${Math.round(dy)}px off its coordinate`);
+      break;
+    }
+  }
   // a touch hit extension (styles/components/hittarget.css) on a control that is not positioned anchors to the
   // nearest positioned ancestor and covers it: taps meant for the controls beside it land on this one
   if (matchMedia("(pointer: coarse)").matches) {

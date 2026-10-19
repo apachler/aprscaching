@@ -35,7 +35,9 @@
     height: 100%;
     background: var(--tc, var(--type-grey));
     border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
+    /* turned, the square's corner reaches (√2 − 1) / 2 of its side below the box: lifted by that first, the tip
+       lands on the root's bottom centre, the point MapLibre anchors to the coordinate */
+    transform: translateY(-20.71%) rotate(-45deg);
     border: 2px solid var(--pin-edge);
     box-shadow: var(--elevation-raised);
     display: flex;
