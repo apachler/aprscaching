@@ -68,7 +68,7 @@
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/tools": "workspace:*",
-    "nodemailer": "^10.1.0"
+    "nodemailer": "^10.1.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
