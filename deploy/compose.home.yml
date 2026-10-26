@@ -13,7 +13,7 @@ services:
       # only cloudflared, on the stack's own network, names the visitor in cf-connecting-ip
       CF_RANGES: private_ranges
   cloudflared:
-    image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5
+    image: cloudflare/cloudflared:2026.10.3@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN} # from a named tunnel created in the Cloudflare dashboard
