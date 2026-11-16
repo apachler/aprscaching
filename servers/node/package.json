@@ -13,9 +13,9 @@
   "dependencies": {
     "@aprscaching/gateway": "workspace:*",
     "@aprscaching/shared": "workspace:*",
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^13.1.1",
     "multicast-dns": "^7.2.5",
-    "ws": "^8.22.0",
+    "ws": "^8.23.0",
     "tsx": "^4.23.15"
   },
   "devDependencies": {
