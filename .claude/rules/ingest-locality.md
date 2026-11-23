@@ -1,3 +1,13 @@
+---
+paths:
+  - "apps/ingest/**"
+  - "workers/gateway/**"
+  - "servers/**"
+  - "deploy/**"
+  - "apps/web/src/rf/**"
+  - "apps/web/src/packet/serialKiss.ts"
+---
+
 # Rule: RF ingest locality (operator-owned, never cloud-only)
 
 **Scope.** `apps/ingest`, the browser RF bridge in `apps/web` (Web Serial / Web Bluetooth), the

@@ -1,10 +1,13 @@
 # CLAUDE.md — APRScaching
 
 ## Rules (read before building/changing the relevant area)
-@.claude/rules/ui-ux.md
-@.claude/rules/css.md
-@.claude/rules/ingest-locality.md
 @.claude/rules/docs-and-comments.md
+
+These load on their own when a file they govern is read or edited (their `paths:` front matter); read them
+first when planning work in that area before touching a file:
+- `.claude/rules/ui-ux.md` and `.claude/rules/css.md` — everything under `apps/web`.
+- `.claude/rules/ingest-locality.md` — `apps/ingest`, the gateway's ingest boundary (`workers/gateway`,
+  `servers/`), `deploy/` and the browser RF bridge (`apps/web/src/rf`, `apps/web/src/packet/serialKiss.ts`).
 
 ## What this is
 APRScaching-first web app. APRScaching is the product; **the Shack** — a full ham-radio

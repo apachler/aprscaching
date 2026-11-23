@@ -1,3 +1,8 @@
+---
+paths:
+  - "apps/web/**"
+---
+
 # CSS Policy — when Claude Code MUST / SHOULD / MAY / WON'T use CSS over JavaScript
 
 A decision rulebook for styling `apps/web`. Read this **before writing any CSS, choosing a

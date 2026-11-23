@@ -1,3 +1,8 @@
+---
+paths:
+  - "apps/web/**"
+---
+
 # Rule: UI/UX Design Principles
 
 **Scope.** This is the design-principles spec for everything in `apps/web` — the cacher app, the
