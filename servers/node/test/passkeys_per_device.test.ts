@@ -52,7 +52,13 @@ describe("passkeys per device", () => {
       account_id: string;
     }>())!.account_id;
     // the previous holder begins an add, then the call changes hands before finish (the begin's stash survives)
-    const begin = await call(env, "POST", "/auth/passkey/register/begin", { callsign: "OE1RAC" }, { cookie: prev.cookie });
+    const begin = await call(
+      env,
+      "POST",
+      "/auth/passkey/register/begin",
+      { callsign: "OE1RAC" },
+      { cookie: prev.cookie },
+    );
     expect(begin.status).toBe(200);
     await env.DB.prepare("UPDATE account_callsigns SET account_id = ? WHERE callsign = 'OE1RAC'").bind(victimId).run();
     const fin = await passkeyRegisterFinish(env, "OE1RAC", await newAuthenticator(), begin.data.challenge, {
@@ -69,7 +75,13 @@ describe("passkeys per device", () => {
   it("a passkey add finishes only with a session of the account that began it", async () => {
     const env = authEnv();
     const owner = await passkeyRegister(env, "OE1FIN", await newAuthenticator());
-    const begin = await call(env, "POST", "/auth/passkey/register/begin", { callsign: "OE1FIN" }, { cookie: owner.cookie });
+    const begin = await call(
+      env,
+      "POST",
+      "/auth/passkey/register/begin",
+      { callsign: "OE1FIN" },
+      { cookie: owner.cookie },
+    );
     expect(begin.status).toBe(200);
     const fin = await passkeyRegisterFinish(env, "OE1FIN", await newAuthenticator(), begin.data.challenge);
     expect(fin.status).toBe(400);

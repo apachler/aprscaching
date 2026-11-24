@@ -86,6 +86,11 @@ function verifyLink(req: Request, env: Env, token: string): string {
  * POST /auth/email/start {email, callsign?, purpose?} — begin email register (needs callsign) or login. With
  * `purpose: "account-data"` it mails a link that opens only the data of an account holding no call
  * ({@link ACCOUNT_DATA_PURPOSE}).
+ *
+ * Every well-formed request gets the same answer, `{sent: true}`, whether or not an account uses the address: what
+ * the address may do (sign in, register, give a callsign, use another address) goes to the mailbox, so the answer
+ * never tells anyone else whether the address has an account. An instance that opts into dev tokens hands the
+ * mailbox's contents back instead (`linkSent`, `noticeSent`).
  */
 export async function handleEmailStart(req: Request, env: Env): Promise<Response> {
   const {
@@ -115,16 +120,39 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
       .trim();
     if (cs.length < 3)
       return callless
-        ? json(
-            {
-              error: "your account holds no callsign now — give the callsign you operate to sign in with it",
-              reason: "needs_callsign",
-            },
-            { status: 409 },
+        ? noticeSent(
+            env,
+            e,
+            SIGN_IN_SUBJECT,
+            "Your APRScaching account holds no callsign now, so this email carries no sign-in link. Start again " +
+              "from the sign-in page and give the callsign you operate.",
+            json(
+              {
+                error: "your account holds no callsign now — give the callsign you operate to sign in with it",
+                reason: "needs_callsign",
+              },
+              { status: 409 },
+            ),
           )
-        : json({ error: "callsign required to register" }, { status: 400 });
+        : noticeSent(
+            env,
+            e,
+            SIGN_IN_SUBJECT,
+            `${NO_ACCOUNT} To create one, start again from the sign-in page and give your callsign.`,
+            json({ error: "callsign required to register" }, { status: 400 }),
+          );
     const refused = await callRefusal(env, cs);
-    if (refused) return refusalResponse(refused);
+    if (refused)
+      return noticeSent(
+        env,
+        e,
+        SIGN_IN_SUBJECT,
+        callless
+          ? `${cs} cannot sign in to your APRScaching account: ${refused.error}.`
+          : `${NO_ACCOUNT} ${cs} cannot open a new one: ${refused.error}. If the callsign is yours, sign in with ` +
+              "the address on its account, or with your passkey.",
+        refusalResponse(refused),
+      );
   }
 
   const token = newToken();
@@ -146,23 +174,40 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   return linkSent(env, e, purpose, token, link, sent);
 }
 
+const SIGN_IN_SUBJECT = "Your APRScaching sign-in";
+const NO_ACCOUNT = "No APRScaching account uses this address, so this email carries no link.";
+const NOT_YOU = "\n\nIf you didn't ask for this, ignore this email.";
+const devTokens = (env: Env): boolean => env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true";
+const mailUnavailable = (): Response =>
+  json({ error: "email delivery is not configured on this instance" }, { status: 503 });
+
 /** The answer to a start once its mail went out, or the in-band link of an instance that opts into dev tokens. */
 function linkSent(env: Env, e: string, purpose: string, token: string, link: string, sent: boolean): Response {
-  if (sent) return json({ sent: true, purpose });
+  if (sent) return json({ sent: true });
   // The sign-in token must NOT be handed back to the caller on a real instance. Returning
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
   // explicit opt-in, never merely "email isn't configured". Off ⇒ fail closed.
-  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
+  if (devTokens(env)) {
     console.log("dev sign-in link for %s: %s", e, link); // the server log stands in for the mailbox
     return json({ sent: false, purpose, devToken: token, devLink: link });
   }
-  return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
+  return mailUnavailable();
+}
+
+/**
+ * The answer to a start that sends no link: `text` goes to the mailbox and the caller gets the same `{sent: true}`
+ * as a sent link. Under dev tokens, which already hand the mailbox's link to the caller, `devAnswer` (the outcome
+ * as an API error) stands in for the mail.
+ */
+async function noticeSent(env: Env, e: string, subject: string, text: string, devAnswer: Response): Promise<Response> {
+  if (await sendEmail(env, e, subject, text + NOT_YOU)) return json({ sent: true });
+  return devTokens(env) ? devAnswer : mailUnavailable();
 }
 
 /**
  * Mail the link that opens an account's data: only to the confirmed address of an account that holds no call, or of
  * a suspended account, which signs in nowhere else. Any other account with a call signs in as usual and finds export
- * and erasure in Settings.
+ * and erasure in Settings; that, or that no account uses the address, goes to the mailbox instead.
  */
 async function startAccountData(
   req: Request,
@@ -170,14 +215,28 @@ async function startAccountData(
   e: string,
   acct: { account_id: string; callsign: string } | null,
 ): Promise<Response> {
-  if (!acct) return json({ error: "no account uses this email address" }, { status: 404 });
+  if (!acct)
+    return noticeSent(
+      env,
+      e,
+      DATA_SUBJECT,
+      NO_ACCOUNT,
+      json({ error: "no account uses this email address" }, { status: 404 }),
+    );
   if (!isFormerMarker(acct.callsign) && !(await suspensionOf(env, acct.account_id)))
-    return json(
-      {
-        error: "your account holds a callsign — sign in with it, then get or erase your data in Settings",
-        reason: "has_callsign",
-      },
-      { status: 409 },
+    return noticeSent(
+      env,
+      e,
+      DATA_SUBJECT,
+      "Your APRScaching account holds a callsign, so this email carries no data link: sign in with it, then get " +
+        "or erase your data in Settings.",
+      json(
+        {
+          error: "your account holds a callsign — sign in with it, then get or erase your data in Settings",
+          reason: "has_callsign",
+        },
+        { status: 409 },
+      ),
     );
   const token = newToken();
   await env.DB.prepare(
@@ -189,12 +248,14 @@ async function startAccountData(
   const sent = await sendEmail(
     env,
     e,
-    "Your APRScaching data",
+    DATA_SUBJECT,
     `Open your APRScaching account's data to download a copy or erase it:\n${link}\n\n` +
       "The link opens your data and nothing else, and expires in 15 minutes. If you didn't request it, ignore this email.",
   );
   return linkSent(env, e, ACCOUNT_DATA_PURPOSE, token, link, sent);
 }
+
+const DATA_SUBJECT = "Your APRScaching data";
 
 /**
  * POST /auth/operator-link {callsign} with `x-operator-secret` — the operator mints a single-use sign-in
@@ -567,7 +628,7 @@ export async function sendEmailConfirmation(
     `Confirm this address for the APRScaching account of ${callsign}:\n${link}\n\nOnce confirmed, it signs you in and recovers the account. The link expires in 24 hours. If you did not create this account, ignore this email: the address is not used until it is confirmed.`,
   );
   if (sent) return { sent };
-  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") {
+  if (devTokens(env)) {
     console.log("dev confirmation link for %s: %s", email, link);
     return { sent, devToken: token, devLink: link };
   }

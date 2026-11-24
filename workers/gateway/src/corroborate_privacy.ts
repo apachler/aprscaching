@@ -187,7 +187,10 @@ function rawClientIp(req: Request, env: Env): string {
  * client it names. Anything that does not parse as an address is returned unchanged.
  */
 export function addressBucket(addr: string): string {
-  const a = addr.trim().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  const a = addr
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*$/, "");
   if (!a.includes(":")) return addr;
   const groups = ipv6Groups(a);
   if (!groups) return addr;
