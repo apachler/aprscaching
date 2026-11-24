@@ -36,7 +36,9 @@ vi.mock("../src/caches/CacheMedia.js", () => ({ CacheMedia: nothing }));
 vi.mock("../src/caches/EditCachePanel.js", () => ({ EditCachePanel: nothing }));
 vi.mock("../src/moderation/ContentMenu.js", () => ({ ContentMenu: nothing }));
 vi.mock("../src/packet/PacketRoute.js", () => ({ PacketRoute: nothing }));
-vi.mock("../src/exports/ExportButton.js", () => ({ ExportButton: nothing }));
+vi.mock("../src/exports/ExportButton.js", () => ({
+  ExportButton: (p: { filename: string }) => createElement("span", { "data-export": p.filename }),
+}));
 
 const getCacheLogs = vi.fn();
 const toggleFavorite = vi.fn();
@@ -141,5 +143,22 @@ describe("the favourite heart", () => {
     act(() => heart.click());
     expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(toggleFavorite).not.toHaveBeenCalled();
+  });
+});
+
+// The single-cache GPX export serves only what it may print: a native cache with a position that is not archived
+// (an archived cache can be an erased owner's, and the export answers it 404).
+describe("the cache's GPX button", () => {
+  const native = { source: "native", lat: 47.07, lon: 15.42 } as Partial<Detail>;
+  const gpx = () => host.querySelector(`[data-export$=".gpx"]`);
+
+  it("is offered for an active native cache", () => {
+    render(cache(1, native));
+    expect(gpx()?.getAttribute("data-export")).toBe("AC1.gpx");
+  });
+
+  it("is not offered for an archived cache", () => {
+    render(cache(1, { ...native, status: "archived" } as Partial<Detail>));
+    expect(gpx()).toBeNull();
   });
 });

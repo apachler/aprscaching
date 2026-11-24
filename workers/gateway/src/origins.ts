@@ -141,7 +141,7 @@ export function corsAllowlist(env: Env): Set<string> {
 
 /** A browser POST must come from this gateway's own page or the configured app origins. A request with
  *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
-export function sameSiteOrigin(req: Request, env: Env): boolean {
+function sameSiteOrigin(req: Request, env: Env): boolean {
   const origin = req.headers.get("origin");
   if (origin === null) return true;
   try {

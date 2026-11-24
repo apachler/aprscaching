@@ -186,7 +186,7 @@ function rawClientIp(req: Request, env: Env): string {
  * An IPv4-mapped IPv6 address (`::ffff:192.0.2.1`, what a dual-stack socket reports) is the IPv4
  * client it names. Anything that does not parse as an address is returned unchanged.
  */
-export function addressBucket(addr: string): string {
+function addressBucket(addr: string): string {
   const a = addr
     .trim()
     .replace(/^\[|\]$/g, "")
