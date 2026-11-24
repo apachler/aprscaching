@@ -29,6 +29,10 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # Its image on ghcr.io does not pull (.github/workflows/scorecard.yml); a later release is taken as usual.
+      - dependency-name: ossf/scorecard-action
+        versions: ["2.6.0"]
     commit-message:
       prefix: "ci(deps)"
 
