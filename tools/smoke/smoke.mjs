@@ -1247,10 +1247,24 @@ ok(
 );
 
 // ---- account data lifecycle: GDPR export/erasure + portability (signed by a registered key) ----
-const accMsg = (action, cs, at) =>
-  stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: wk.data?.instance, at });
+// an account route signs the digest of its other parameters (none here: `{}`); an import's proof signs none
+const accMsg = (action, cs, at, digest) =>
+  stableStringify({
+    v: 1,
+    action,
+    callsign: cs.toUpperCase(),
+    instance: wk.data?.instance,
+    at,
+    ...(digest === undefined ? {} : { digest }),
+  });
 const signAct = async (action, cs, at) =>
-  b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(accMsg(action, cs, at))));
+  b64u(
+    await crypto.subtle.sign(
+      "Ed25519",
+      kp.privateKey,
+      new TextEncoder().encode(accMsg(action, cs, at, await sha256hex(stableStringify({})))),
+    ),
+  );
 
 const unsignedExportRes = await call("POST", "/api/account/DL1ABC/export", {});
 ok(
