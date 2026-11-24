@@ -133,7 +133,7 @@ services:
     logging: *default-logging
 
   caddy: # TLS + static SPA + reverse proxy
-    image: caddy:2.11.7@sha256:504a44d7d74bd2bc28a66afc4774912fc21223ca8a67734af1c54ab2f999b489
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
     # 443/udp is HTTP/3 (QUIC), which Caddy serves beside HTTPS
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
