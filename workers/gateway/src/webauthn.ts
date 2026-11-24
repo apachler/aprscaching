@@ -18,7 +18,15 @@ export function randomChallenge(): string {
 // ---- minimal CBOR (decode only; subset used by attestationObject + COSE keys) ----
 // Every length and item count is checked against the bytes left before it is acted on: the input arrives from an
 // anonymous request, and a header that declares more than it carries must cost no more than its own size.
-// An array or map item takes at least one byte, so a count above the bytes left is refused before the loop.
+// An array or map item takes at least one byte, so a count above the bytes left is refused before the loop, and
+// the input itself is capped (WEBAUTHN_MAX_BYTES) so the items it can hold stay few.
+/** The largest attestationObject, authenticator data or clientDataJSON taken: a real one is at most a few KiB
+ *  (a credential id is under 1 KiB, an attestation certificate chain a few), and a larger one would let a single
+ *  anonymous request decode millions of one-byte items before anything is checked. */
+export const WEBAUTHN_MAX_BYTES = 64 * 1024;
+function capped(name: string, b: Uint8Array): void {
+  if (b.length > WEBAUTHN_MAX_BYTES) throw new Error(`${name} too large`);
+}
 const CBOR_MAX_DEPTH = 16; // an attestationObject nests three deep (attStmt.x5c); a COSE key two
 function cbor(buf: Uint8Array, off: number, depth = 0): [unknown, number] {
   if (depth > CBOR_MAX_DEPTH) throw new Error("cbor: nested too deep");
@@ -47,7 +55,9 @@ function cbor(buf: Uint8Array, off: number, depth = 0): [unknown, number] {
       off += 4;
       return v;
     }
-    throw new Error("cbor: length too large");
+    if (info === 27) throw new Error("cbor: 8-byte length unsupported");
+    if (info === 31) throw new Error("cbor: indefinite length unsupported");
+    throw new Error("cbor: reserved additional info " + info);
   };
   switch (major) {
     case 0:
@@ -214,6 +224,8 @@ export async function verifyRegistration(o: {
   origins: string[];
   rpId: string;
 }): Promise<{ credentialId: string; coseKey: string; signCount: number }> {
+  capped("clientDataJSON", o.clientDataJSON);
+  capped("attestationObject", o.attestationObject);
   checkClientData(o.clientDataJSON, "webauthn.create", o.challenge, o.origins);
   const att = cborFirst(o.attestationObject);
   if (!(att instanceof Map)) throw new Error("attestationObject is not a map");
@@ -237,6 +249,8 @@ export async function verifyAssertion(o: {
   rpId: string;
   storedCounter: number;
 }): Promise<{ newCounter: number }> {
+  capped("clientDataJSON", o.clientDataJSON);
+  capped("authenticatorData", o.authenticatorData);
   checkClientData(o.clientDataJSON, "webauthn.get", o.challenge, o.origins);
   const ad = parseAuthData(o.authenticatorData);
   const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(o.rpId)));

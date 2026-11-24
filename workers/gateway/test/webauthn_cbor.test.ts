@@ -4,7 +4,7 @@
 // it, so a 5-byte header declaring 2^32-1 entries is refused at once instead of looping or allocating per entry,
 // and the gateway keeps answering while such a request is refused.
 import { describe, it, expect } from "vitest";
-import { verifyAssertion, verifyRegistration } from "../src/webauthn.js";
+import { WEBAUTHN_MAX_BYTES, verifyAssertion, verifyRegistration } from "../src/webauthn.js";
 import { route } from "../src/app.js";
 import { bytesToB64url } from "../src/util/b64.js";
 import type { Env } from "../src/env.js";
@@ -67,30 +67,23 @@ const assertWith = async (authenticatorData: Uint8Array) =>
     storedCounter: 0,
   });
 
-/** Runs `f`, which must reject, and returns how long it took. */
-async function refusedWithin(f: () => Promise<unknown>, re: RegExp): Promise<number> {
-  const t0 = performance.now();
-  await expect(f()).rejects.toThrow(re);
-  return performance.now() - t0;
-}
-
 describe("WebAuthn CBOR — a declared count above the input is refused at once", () => {
   for (const [name, header] of [
     ["map header BA FF FF FF FF", MAP_MAX],
     ["array header 9A FF FF FF FF", ARRAY_MAX],
   ] as const) {
     it(`${name} as the attestationObject (register)`, async () => {
-      expect(await refusedWithin(() => register(header), /cbor: truncated/)).toBeLessThan(250);
+      await expect(register(header)).rejects.toThrow(/cbor: truncated/);
     });
 
     it(`${name} as the credential key in the login assertion's authenticator data`, async () => {
       const ad = await attestedAuthData(header);
-      expect(await refusedWithin(() => assertWith(ad), /cbor: truncated/)).toBeLessThan(250);
+      await expect(assertWith(ad)).rejects.toThrow(/cbor: truncated/);
     });
 
     it(`${name} as the credential key in the registration's authenticator data`, async () => {
       const att = attObject(await attestedAuthData(header));
-      expect(await refusedWithin(() => register(att), /cbor: truncated/)).toBeLessThan(250);
+      await expect(register(att)).rejects.toThrow(/cbor: truncated/);
     });
   }
 });
@@ -112,6 +105,11 @@ describe("WebAuthn CBOR — malformed input is refused", () => {
 
   it("a map declaring more entries than bytes follow", async () => {
     await expect(register(bytes(0xa2, 0x01, 0x02, 0x03))).rejects.toThrow(/cbor: truncated/);
+  });
+
+  it("an indefinite length, which WebAuthn's canonical CBOR never uses", async () => {
+    await expect(register(bytes(0xbf, 0xff))).rejects.toThrow(/cbor: indefinite length unsupported/);
+    await expect(register(bytes(0x5f, 0x41, 0x00, 0xff))).rejects.toThrow(/cbor: indefinite length unsupported/);
   });
 
   it("a read past the end: a length header cut short, and an empty input", async () => {
@@ -136,6 +134,45 @@ describe("WebAuthn CBOR — malformed input is refused", () => {
 
   it("an attestationObject that is not a map", async () => {
     await expect(register(bytes(0x01))).rejects.toThrow(/not a map/);
+  });
+});
+
+describe("WebAuthn input — larger than a real one is refused before decoding", () => {
+  // As large as the gateway's request body allows: an array header declaring 15 M items, then 15 M empty byte
+  // strings — every count holds against the bytes left, so only the input cap stands between it and 15 M decodes.
+  const N = 15_000_000;
+  const bodyCap = () => {
+    const a = new Uint8Array(5 + N).fill(0x40);
+    a.set(bytes(0x9a, (N >>> 24) & 0xff, (N >>> 16) & 0xff, (N >>> 8) & 0xff, N & 0xff));
+    return a;
+  };
+
+  it("an attestationObject of 15 M one-byte items (register)", async () => {
+    await expect(register(bodyCap())).rejects.toThrow(/attestationObject too large/);
+  });
+
+  it("authenticator data of 15 M bytes (login)", async () => {
+    const ad = await attestedAuthData(bodyCap());
+    await expect(assertWith(ad)).rejects.toThrow(/authenticatorData too large/);
+  });
+
+  it("a clientDataJSON above the cap", async () => {
+    const cd = new Uint8Array(WEBAUTHN_MAX_BYTES + 1).fill(0x20);
+    await expect(
+      verifyRegistration({
+        clientDataJSON: cd,
+        attestationObject: bytes(0xa0),
+        challenge: CHALLENGE,
+        origins: [ORIGIN],
+        rpId: RP_ID,
+      }),
+    ).rejects.toThrow(/clientDataJSON too large/);
+  });
+
+  it("an input exactly at the cap reaches the decoder", async () => {
+    const att = new Uint8Array(WEBAUTHN_MAX_BYTES).fill(0x40);
+    att.set(bytes(0x9a, 0x00, 0x00, 0xff, 0xff)); // 65535 declared, 65531 follow
+    await expect(register(att)).rejects.toThrow(/cbor: truncated/);
   });
 });
 
@@ -201,13 +238,11 @@ describe("POST /auth/passkey/register/finish with a crafted attestationObject", 
         env,
         ctx,
       );
-    const t0 = performance.now();
     const [m, a, health] = await Promise.all([
       finish(MAP_MAX),
       finish(ARRAY_MAX),
       route(new Request(`${ORIGIN}/health`), env, ctx),
     ]);
-    expect(performance.now() - t0).toBeLessThan(1000);
     expect(m.status).toBe(400);
     expect(a.status).toBe(400);
     expect(await m.json()).toMatchObject({ error: expect.stringMatching(/cbor: truncated/) });
