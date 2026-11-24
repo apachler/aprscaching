@@ -399,7 +399,9 @@ async function syncPeer(
   };
   // what the peer holds, per origin: its own records, and those of the origins it passes on, whose keys it hands on
   const origins = await summaryOf(ctx, caps.includes(ORIGIN_SYNC_CAPABILITY));
-  await learnTransitKeys(env, wk.instance, origins, registry);
+  // only a neighbour this instance trusts hands on keys for other origins: an unvetted one's claim would pin a
+  // key the origin's genuine frames then fail under, and take room in the transit-origin cap
+  if (ctx.trusted) await learnTransitKeys(env, wk.instance, origins, registry);
   const counts: Record<string, number> = { transit: 0 };
   const byOrigin = async (kinds: OriginKind[]) => {
     for (const e of origins)
