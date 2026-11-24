@@ -16,19 +16,33 @@ export function randomChallenge(): string {
 }
 
 // ---- minimal CBOR (decode only; subset used by attestationObject + COSE keys) ----
-function cbor(buf: Uint8Array, off: number): [unknown, number] {
+// Every length and item count is checked against the bytes left before it is acted on: the input arrives from an
+// anonymous request, and a header that declares more than it carries must cost no more than its own size.
+// An array or map item takes at least one byte, so a count above the bytes left is refused before the loop.
+const CBOR_MAX_DEPTH = 16; // an attestationObject nests three deep (attStmt.x5c); a COSE key two
+function cbor(buf: Uint8Array, off: number, depth = 0): [unknown, number] {
+  if (depth > CBOR_MAX_DEPTH) throw new Error("cbor: nested too deep");
+  const need = (n: number): void => {
+    if (n > buf.length - off) throw new Error("cbor: truncated");
+  };
+  need(1);
   const b0 = buf[off++]!;
   const major = b0 >> 5;
   const info = b0 & 0x1f;
   const len = (): number => {
     if (info < 24) return info;
-    if (info === 24) return buf[off++]!;
+    if (info === 24) {
+      need(1);
+      return buf[off++]!;
+    }
     if (info === 25) {
+      need(2);
       const v = (buf[off]! << 8) | buf[off + 1]!;
       off += 2;
       return v;
     }
     if (info === 26) {
+      need(4);
       const v = ((buf[off]! << 24) | (buf[off + 1]! << 16) | (buf[off + 2]! << 8) | buf[off + 3]!) >>> 0;
       off += 4;
       return v;
@@ -44,19 +58,22 @@ function cbor(buf: Uint8Array, off: number): [unknown, number] {
     }
     case 2: {
       const n = len();
+      need(n);
       const v = buf.slice(off, off + n);
       return [v, off + n];
     }
     case 3: {
       const n = len();
-      const v = new TextDecoder().decode(buf.slice(off, off + n));
+      need(n);
+      const v = new TextDecoder().decode(buf.subarray(off, off + n));
       return [v, off + n];
     }
     case 4: {
       const n = len();
+      need(n);
       const a: unknown[] = [];
       for (let i = 0; i < n; i++) {
-        const [v, no] = cbor(buf, off);
+        const [v, no] = cbor(buf, off, depth + 1);
         a.push(v);
         off = no;
       }
@@ -64,11 +81,12 @@ function cbor(buf: Uint8Array, off: number): [unknown, number] {
     }
     case 5: {
       const n = len();
+      need(2 * n);
       const map = new Map<unknown, unknown>();
       for (let i = 0; i < n; i++) {
-        const [k, n1] = cbor(buf, off);
+        const [k, n1] = cbor(buf, off, depth + 1);
         off = n1;
-        const [v, n2] = cbor(buf, off);
+        const [v, n2] = cbor(buf, off, depth + 1);
         off = n2;
         map.set(k, v);
       }
@@ -91,7 +109,8 @@ type AuthData = {
   credId?: Uint8Array;
   coseKey?: Uint8Array;
 };
-function parseAuthData(d: Uint8Array): AuthData {
+function parseAuthData(d: unknown): AuthData {
+  if (!(d instanceof Uint8Array) || d.length < 37) throw new Error("authenticator data truncated");
   const rpIdHash = d.slice(0, 32);
   const flags = d[32]!;
   const signCount = ((d[33]! << 24) | (d[34]! << 16) | (d[35]! << 8) | d[36]!) >>> 0;
@@ -99,8 +118,10 @@ function parseAuthData(d: Uint8Array): AuthData {
   if (flags & 0x40) {
     // AT — attested credential data present
     let off = 37 + 16; // skip aaguid
+    if (d.length < off + 2) throw new Error("authenticator data truncated");
     const credLen = (d[off]! << 8) | d[off + 1]!;
     off += 2;
+    if (credLen > d.length - off) throw new Error("authenticator data truncated");
     out.credId = d.slice(off, off + credLen);
     off += credLen;
     const end = cbor(d, off)[1]; // consume the COSE key to find its byte length
@@ -194,8 +215,9 @@ export async function verifyRegistration(o: {
   rpId: string;
 }): Promise<{ credentialId: string; coseKey: string; signCount: number }> {
   checkClientData(o.clientDataJSON, "webauthn.create", o.challenge, o.origins);
-  const att = cborFirst(o.attestationObject) as Map<string, unknown>;
-  const ad = parseAuthData(att.get("authData") as Uint8Array);
+  const att = cborFirst(o.attestationObject);
+  if (!(att instanceof Map)) throw new Error("attestationObject is not a map");
+  const ad = parseAuthData(att.get("authData"));
   const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(o.rpId)));
   if (!eq(ad.rpIdHash, rpHash)) throw new Error("rpId hash mismatch");
   if (!ad.up) throw new Error("user presence flag not set");
