@@ -68,12 +68,12 @@
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/packet": "workspace:*",
     "@aprscaching/tools": "workspace:*",
-    "nodemailer": "^10.1.0"
+    "nodemailer": "^10.6.1"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.1"
   },
   "private": true
 }
