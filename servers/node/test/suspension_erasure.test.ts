@@ -3,7 +3,7 @@
 // leaves on each base call it held only the call, the reason category and the end. Until the suspension ends or
 // the sysop lifts it, no registration, addition, switch or claim takes the call.
 import { describe, it, expect } from "vitest";
-import { accountActionMessage } from "@aprscaching/shared";
+import { accountActionDigest, accountActionMessage } from "@aprscaching/shared";
 import { runScheduled } from "@aprscaching/gateway/app";
 import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
 import { newFedKey } from "./helpers/fedpeer.js";
@@ -31,7 +31,13 @@ async function signedErase(env: Env, cs: string) {
     .run();
   const at = nowS();
   const msg = new TextEncoder().encode(
-    accountActionMessage({ action: "delete", callsign: cs, instance: "gw.test", at }),
+    accountActionMessage({
+      action: "delete",
+      callsign: cs,
+      instance: "gw.test",
+      at,
+      digest: await accountActionDigest({}),
+    }),
   );
   const sig = Buffer.from(await crypto.subtle.sign("Ed25519", dev.priv, msg)).toString("base64url");
   return call(env, "POST", `/api/account/${cs}/delete`, { key: dev.pub, sig, at });

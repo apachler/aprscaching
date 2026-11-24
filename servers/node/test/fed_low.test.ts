@@ -3,7 +3,14 @@
 // its mirrored key bindings and moves, a mirrored account move needs the mover's signed proof, and
 // standalone JSON signatures carry a domain prefix.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { accountActionMessage, ingestMessage, sha256Hex, stableStringify, SIG_DOMAIN } from "@aprscaching/shared";
+import {
+  accountActionDigest,
+  accountActionMessage,
+  ingestMessage,
+  sha256Hex,
+  stableStringify,
+  SIG_DOMAIN,
+} from "@aprscaching/shared";
 import { verifySignedIngest } from "@aprscaching/gateway/keys";
 import { verifyRotationRecord, verifyRegistry } from "@aprscaching/gateway/federation";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
@@ -157,7 +164,13 @@ describe("account moves and erasure across the network", () => {
     const at = nowS();
     const sig = await sign(
       dev,
-      accountActionMessage({ action: "delete", callsign: "OE7MOV", instance: "a.example", at }),
+      accountActionMessage({
+        action: "delete",
+        callsign: "OE7MOV",
+        instance: "a.example",
+        at,
+        digest: await accountActionDigest({}),
+      }),
     );
     const del = await serve(a)(
       new Request("https://a.example/api/account/OE7MOV/delete", {
