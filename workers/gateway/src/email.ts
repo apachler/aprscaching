@@ -26,7 +26,7 @@ import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
 import { appBase, gatewayBase } from "./sitemap.js";
 import { linkOrigin } from "./visitor.js";
-import { instanceOrigins, isInstanceOrigin, requestOrigin, sameSiteOrigin } from "./origins.js";
+import { instanceOrigins, isInstanceOrigin, requestOrigin } from "./origins.js";
 import { sendEmail } from "./mail.js";
 import { linkPageResponse, wantsPage } from "./linkpage.js";
 
@@ -370,6 +370,18 @@ function answerProblem(p: LinkProblem, asPage: boolean, app: string): Response {
   return json({ error: p.error, ...(p.suspended ? { suspended: p.suspended } : {}) }, { status: p.status });
 }
 
+const isFormPost = (req: Request): boolean =>
+  (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
+
+/**
+ * The answer to a sign-in posted from another site (`crossOriginWrite` refuses it before any handler runs): the
+ * "Sign-in refused" page for a browser form, such as a magic-link confirm, else null and the plain JSON refusal.
+ */
+export function crossSiteSignInPage(req: Request, env: Env): Response | null {
+  if (!isFormPost(req) && !wantsPage(req)) return null;
+  return problemPage(problem(403, "cross-site", "cross-site sign-in refused"), requestOrigin(req, env));
+}
+
 /** The app address a link's pages lead back to: the page's `app` when it is an address of this instance. */
 function appFor(req: Request, env: Env, app: string | null | undefined): string {
   return app && isInstanceOrigin(app, env) ? app : requestOrigin(req, env);
@@ -420,10 +432,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     });
   }
 
-  const isForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
+  const isForm = isFormPost(req);
   const asPage = isForm || wantsPage(req);
-  if (!sameSiteOrigin(req, env))
-    return answerProblem(problem(403, "cross-site", "cross-site sign-in refused"), asPage, requestOrigin(req, env));
   const form = isForm ? new URLSearchParams(await req.text().catch(() => "")) : null;
   const app = appFor(req, env, form?.get("app"));
   const token = form ? form.get("token") : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);

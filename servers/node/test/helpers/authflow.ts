@@ -222,30 +222,28 @@ export async function passkeyLoginFinish(
   challenge: string,
   ip?: string,
 ): Promise<Res> {
+  return call(env, "POST", "/auth/passkey/login/finish", await signedLogin(callsign, a, challenge), {}, ip);
+}
+
+/** The body of a login finish: `a`'s assertion over `challenge`, as a browser on ORIGIN posts it. */
+export async function signedLogin(callsign: string, a: Authenticator, challenge: string) {
   const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.get", challenge, origin: ORIGIN }));
   const ad = await authData(a, false);
   const clientHash = new Uint8Array(await crypto.subtle.digest("SHA-256", clientDataJSON));
   const sig = new Uint8Array(
     await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, a.priv, concat(ad, clientHash)),
   );
-  return call(
-    env,
-    "POST",
-    "/auth/passkey/login/finish",
-    {
-      callsign,
-      credential: {
-        id: b64url(a.credId),
-        response: {
-          clientDataJSON: b64url(clientDataJSON),
-          authenticatorData: b64url(ad),
-          signature: b64url(rawToDer(sig)),
-        },
+  return {
+    callsign,
+    credential: {
+      id: b64url(a.credId),
+      response: {
+        clientDataJSON: b64url(clientDataJSON),
+        authenticatorData: b64url(ad),
+        signature: b64url(rawToDer(sig)),
       },
     },
-    {},
-    ip,
-  );
+  };
 }
 
 /**
