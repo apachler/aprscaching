@@ -31,12 +31,17 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The plausible track is judged only against fixes as hard to fake as the evidence: the finder's fixes heard
   at an attested site, and the ones their own browser bridge signed. An APRS-IS or tunnelled fix under the
   call, which anyone with a public passcode can inject, never takes Tier A away, as it never grants it.
+- The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
+  not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
+  at the cache, can add a contradiction but never hide one.
 - A find time the finder's own clock gives (a signed web log, or a FOUND in a signed browser batch) is taken
   only after the cache was hidden and the signing key registered; otherwise the find is timed by its arrival
   and keeps the reason (`field_time_rejected`).
 - A living cache is wherever its station was heard. Only a station fix that is first-party attested, or that
   the cache owner's own browser bridge signed (a `browser-rf` batch under a base call the owner's account
-  holds), places it for Tier A or B. A match against a station fix that only came over APRS-IS stays Tier C,
+  holds), places it for Tier A or B. An owner-signed fix places it only where every attested fix of the station
+  in the window could have reached at 300 km/h or less: the owner asserts it, so it cannot move the cache to
+  wherever a finder was heard. A match against a station fix that only came over APRS-IS stays Tier C,
   whatever placed the finder.
 - The app shows the names everywhere a find's trust appears, with the letter as a secondary label.
 

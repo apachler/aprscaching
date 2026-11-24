@@ -20,6 +20,7 @@ import {
   DEFAULT_POLICY,
   instanceMinTier,
   plausiblePresence,
+  stationEvidence,
   type CacheRow,
   type PositionRow,
   type VerifyResult,
@@ -1060,8 +1061,9 @@ export async function scoreFind(
   const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
 
   // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
-  // browser bridge signed: a signed batch carries only its signer's base call, so a `browser-rf` fix under a base
-  // call the owner's account holds is the owner's own.
+  // browser bridge signed and the attested ones could have reached (verify.ts stationEvidence): a signed batch
+  // carries only its signer's base call, so a `browser-rf` fix under a base call the owner's account holds is the
+  // owner's own.
   const ownerSigned = cacheStationPositions?.length ? await ownerSignsFor(env, cache.id, cache.station_call) : false;
   const station = cacheStationPositions
     ? attest(cacheStationPositions).map((p) => ({ ...p, ownerSigned: ownerSigned && p.source === "browser-rf" }))
@@ -1102,7 +1104,7 @@ export async function scoreFind(
   let route: PacketRouteInfo | null = matched
     ? routeOf(matched, sitesFor(attested, matched.ingest_box), everySite(attested))
     : null;
-  const lastStation = station?.find((p) => p.ts <= at + 60 && (p.firstPartyAttested || p.ownerSigned) && !p.commanded);
+  const lastStation = station && stationEvidence(station).find((p) => p.ts <= at + 60);
   const point =
     cache.type === "aprs_living"
       ? lastStation

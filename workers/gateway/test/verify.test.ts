@@ -169,6 +169,51 @@ describe("verifyFind — tier A plausible track", () => {
   });
 });
 
+describe("verifyFind — plausible track judges every contradicting fix", () => {
+  // a beacon under the logger's call heard at an attested site at the cache, and the logger's real attested track
+  // 100 km away 60 s earlier
+  const spoof = pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 1 });
+  const home = pos({ lat: 47.97, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 940, id: 2 });
+  const own = new Set(["OE8APR"]);
+
+  it("refuses Tier A when the real attested track is 100 km away", () => {
+    const r = verifyFind(CACHE, undefined, { loggerPositions: [spoof, home], loggerOwnIgates: own });
+    expect(r.tier).not.toBe("A");
+  });
+
+  it("a signed fix of the logger's own beside the beacon does not hide the attested contradiction", () => {
+    const shadow = pos({ ...NEAR, heard_via: "rf", source: "browser-rf", firstPartyAttested: false, ts: 999, id: 3 });
+    const r = verifyFind(CACHE, undefined, { loggerPositions: [spoof, shadow, home], loggerOwnIgates: own });
+    expect(r.tier).not.toBe("A");
+  });
+
+  it("a fix far behind the nearest one still contradicts", () => {
+    // the nearest neighbour sits beside the match; the one that cannot reach it is further back in time
+    const beside = pos({ lat: 47.0705, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 990, id: 4 });
+    const r = verifyFind(CACHE, undefined, { loggerPositions: [spoof, beside, home], loggerOwnIgates: own });
+    expect(r.tier).not.toBe("A");
+  });
+
+  it("a fix of another SSID of the track contradicts, and never matches", () => {
+    const lone = { ...spoof, callsign: "OE8APR-7" };
+    const other = { ...home, callsign: "OE8APR-9" };
+    expect(verifyFind(CACHE, undefined, { loggerPositions: [lone], loggerOwnIgates: own }).tier).toBe("A");
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [lone],
+      loggerTrackPositions: [other],
+      loggerOwnIgates: own,
+    });
+    expect(r.tier).not.toBe("A");
+    const atCache = { ...spoof, callsign: "OE8APR-9", id: 5 };
+    const only = verifyFind(CACHE, undefined, {
+      loggerPositions: [],
+      loggerTrackPositions: [atCache],
+      loggerOwnIgates: own,
+    });
+    expect(only.tier).not.toBe("A");
+  });
+});
+
 describe("verifyFind — tier B (first-party app geolocation)", () => {
   it("verifies an in-app reading near the cache", () => {
     const appGeo: AppGeo = { ...NEAR, accuracyM: 20, ts: 1000 };
@@ -323,6 +368,46 @@ describe("verifyFind — living (moving) cache", () => {
     expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
   });
 
+  it("an owner-signed station fix the attested station track cannot reach places nothing", () => {
+    // the station's attested fix is 111 km away 120 s earlier; the owner's signed fix sits at the finder's
+    const r = verifyFind(living, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 7 })],
+      cacheStationPositions: [
+        pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 880, id: 20 }),
+        pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", source: "browser-rf", ts: 1000, id: 21, ownerSigned: true }),
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).not.toBe("A");
+  });
+
+  it("an owner-signed station fix the attested station track can reach places the cache", () => {
+    const r = verifyFind(living, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 7 })],
+      cacheStationPositions: [
+        pos({ lat: 47.075, lon: 15.42, heard_via: "rf", igate_call: "OE8YYY", ts: 880, id: 20 }),
+        pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", source: "browser-rf", ts: 1000, id: 21, ownerSigned: true }),
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A" });
+  });
+
+  it("an owner-signed station fix the attested station track cannot reach does not place a phone reading", () => {
+    const r = verifyFind(
+      hidden,
+      { ...NEAR, accuracyM: 10, ts: 1000 },
+      {
+        loggerPositions: [],
+        cacheStationPositions: [
+          pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 1200, id: 20 }),
+          pos({ lat: 47.0711, lon: 15.42, heard_via: "rf", source: "browser-rf", ts: 1060, id: 21, ownerSigned: true }),
+        ],
+      },
+    );
+    expect(r.tier).not.toBe("B");
+  });
+
   it("caps a phone reading next to an APRS-IS-only station fix at tier C", () => {
     const r = verifyFind(
       hidden,
@@ -376,6 +461,18 @@ describe("plausiblePresence — what may contradict a peer's corroboration", () 
   it("an APRS-IS fix far away does not refuse the presence", () => {
     const far = pos({ ...FAR, heard_via: "aprs_is", firstPartyAttested: false, ts: 1030 });
     expect(plausiblePresence(atCache, [far])).toBe(true);
+  });
+  it("a fix beside the point does not hide an attested fix far away", () => {
+    const beside = pos({
+      lat: 47.0705,
+      lon: 15.42,
+      heard_via: "rf",
+      source: "browser-rf",
+      firstPartyAttested: false,
+      ts: 1001,
+    });
+    const far = pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 940 });
+    expect(plausiblePresence(atCache, [beside, far])).toBe(false);
   });
   it("an attested fix far away does", () => {
     const far = pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 1030 });
