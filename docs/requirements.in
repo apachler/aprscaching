@@ -2,4 +2,4 @@
 # in by hash, and the docs workflow installs it with --require-hashes. Dependabot keeps both current.
 # Regenerate: cd docs && uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
 mkdocs>=1.6.1,<2
-mkdocs-material~=9.7
+mkdocs-material~=9.8
