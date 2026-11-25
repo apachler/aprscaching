@@ -42,6 +42,18 @@ export function keyFingerprint(pubkey: string): string {
 }
 
 /**
+ * Who a tool is shown as. Only a registry that lists the tool under its key vouches for the `author` its manifest
+ * names; a self-signed manifest can name any callsign, so it is shown by its key's fingerprint instead.
+ */
+export function toolSigner(
+  listed: boolean,
+  author: string,
+  pubkey: string | undefined,
+): { author: string } | { key: string } {
+  return listed ? { author } : { key: keyFingerprint(pubkey ?? "") };
+}
+
+/**
  * The trust of a manifest fetched from `url`: the registry's listed key when one lists it there, else the key pinned
  * for that address. The `author` the manifest names takes no part.
  */

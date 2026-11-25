@@ -26,7 +26,7 @@ import { carrierFor, DIRECT, listingFor, viaFor, type Carrier, type Listing, typ
 import { MyRegistries, RegistryGroups, useReconfirm, useToolRegistries } from "./RegistryViews.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { toolIcon } from "./toolIcons.js";
-import { keyFingerprint, pinKey, toolTrust } from "./toolKeys.js";
+import { pinKey, toolSigner, toolTrust } from "./toolKeys.js";
 import { toolPin, unpin, usePins } from "../shack/apps.js";
 import { Button, Badge, EmptyState, Icon, Switch, useConfirm, useToast, useModalDialog } from "../ui/index.js";
 
@@ -58,9 +58,14 @@ const FILTER_FROM = 7;
  * it up on whatever surface(s) its manifest declares (packet terminal, BBS, node, the map or this console). The
  * installs, their switches and their rail pins follow the player (installed.ts, prefs.ts). TX-capable tools need a
  * verified callsign and this tab's transmit consent. `tool` names the one to open with (a pin or a
- * `?view=tools&tool=` link): it is switched on, scrolled to, and its decoder is selected; a tool not installed yet
- * is looked up in the registry.
+ * `?view=tools&tool=` link): it is scrolled to and its decoder is selected; one the player switched off stays off,
+ * with focus on its switch, since a link never turns on what the player turned off. A tool not installed yet is
+ * looked up in the registry.
  */
+/** A tool's signer as the panel names it: the callsign a registry vouches for, or the key's fingerprint. */
+const signerLabel = (s: ReturnType<typeof toolSigner>) =>
+  "author" in s ? <span className="mono">{s.author}</span> : <span className="mono">key {s.key}</span>;
+
 export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: string }) {
   const host = useToolHost();
   const toast = useToast();
@@ -98,6 +103,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
 
   const running = installed.filter((v) => v.on && v.tool);
   const installedNames = new Set(installed.map((v) => v.record.name));
+  const promptSigner =
+    prompt && toolSigner(prompt.trust === "verified", prompt.manifest.author, prompt.manifest.pubkey);
 
   function toggle(v: InstalledView, on: boolean) {
     setInstalledOn(v.record.name, on);
@@ -303,8 +310,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
           <strong>{title}</strong>{" "}
           {m && (
             <span className="muted fine">
-              v{m.version} ·{" "}
-              {v.record.via ? m.author : <span className="mono">key {keyFingerprint(v.record.pubkey)}</span>}
+              v{m.version} · {signerLabel(toolSigner(!!v.record.via, m.author, v.record.pubkey))}
             </span>
           )}
           {m?.description && <div className="muted fine">{m.description}</div>}
@@ -559,13 +565,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
               >
                 <p>
                   <strong>{prompt.manifest.title}</strong>{" "}
-                  {prompt.trust === "verified" ? (
+                  {promptSigner && (
                     <>
-                      by <span className="mono">{prompt.manifest.author}</span>
-                    </>
-                  ) : (
-                    <>
-                      signed by key <span className="mono">{keyFingerprint(prompt.manifest.pubkey ?? "")}</span>
+                      {"author" in promptSigner ? "by" : "signed by"} {signerLabel(promptSigner)}
                     </>
                   )}{" "}
                   requests:

