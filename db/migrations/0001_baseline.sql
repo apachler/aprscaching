@@ -35,7 +35,8 @@ CREATE TABLE accounts (
   -- opt-in profile, self-curated
   display_name   TEXT,
   home_grid      TEXT,                             -- Maidenhead locator
-  avatar_url     TEXT,
+  avatar_key     TEXT,                             -- the uploaded picture in the media store, served from this instance
+  avatar_bytes   INTEGER,
   bio            TEXT,                             -- short plain text, length-capped + tag-stripped server-side
   links          TEXT,                             -- JSON [{label,url}], http(s) only, capped count
   public_contact TEXT,                             -- opt-in public email; NULL = not shown

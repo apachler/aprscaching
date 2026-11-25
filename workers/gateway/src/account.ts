@@ -177,7 +177,7 @@ export async function handleAccountExport(req: Request, env: Env, named: string)
   const verification = await verificationOf(env, cs);
   const verifiedFlag = verification ? 1 : 0;
   const accountRow = await env.DB.prepare(
-    `SELECT callsign, email, pending_email, created_at, display_name, home_grid, avatar_url, bio, links, public_contact,
+    `SELECT callsign, email, pending_email, created_at, display_name, home_grid, avatar_key, avatar_bytes, bio, links, public_contact,
             profile_public, announce_is, announce_tocall, notify_digest, tier, hide_nag, near_radio
        FROM accounts WHERE account_id=?`,
   )
@@ -550,6 +550,10 @@ async function eraseCall(
       .bind(...b)
       .all<{ id: number; media_key: string; thumb_key: string | null }>()
   ).results;
+  // the profile picture of the account this call is the anchor of: the row goes below, so its object goes too
+  const avatar = await env.DB.prepare("SELECT avatar_key FROM accounts WHERE callsign=? AND avatar_key IS NOT NULL")
+    .bind(cs)
+    .first<{ avatar_key: string }>();
   // the stages' audio clues on those caches: a recording of the owner's voice, so the objects go with them
   const clips = (
     await env.DB.prepare(
@@ -689,6 +693,7 @@ async function eraseCall(
     mediaKeys: [
       ...media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
       ...clips.map((c) => c.media_key),
+      ...(avatar ? [avatar.avatar_key] : []),
     ],
   };
 }

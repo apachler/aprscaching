@@ -90,6 +90,23 @@ describe("loadRegistry", () => {
     if (st.kind === "key-changed") expect(st.fingerprint).toMatch(/^[0-9a-f]{4}( [0-9a-f]{4}){3}$/);
   });
 
+  it("reads the carrier's refusal of a file signed by another key as key-changed, with that key", async () => {
+    const a = await keys();
+    const b = await keys();
+    const r = reg({ authority: a.pub });
+    const { f } = fakeFetch({
+      [carrierFor(r, "").fetchUrl(REG)]: new Response(
+        JSON.stringify({ error: "signed by another key", authority: b.pub }),
+        {
+          status: 409,
+        },
+      ),
+    });
+    const st = await loadRegistry(r, "", PAGE, f);
+    expect(st).toMatchObject({ kind: "key-changed", authority: b.pub });
+    if (st.kind === "key-changed") expect(st.fingerprint).toMatch(/^[0-9a-f]{4}( [0-9a-f]{4}){3}$/);
+  });
+
   it("reports a failure on its own, with the instance's reason", async () => {
     const { f } = fakeFetch({ [REG]: new Response(JSON.stringify({ error: "the host is down" }), { status: 502 }) });
     expect(await loadRegistry(reg({ proxied: false }), "", PAGE, f)).toEqual({

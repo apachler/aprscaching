@@ -3,9 +3,11 @@
  * sandbox.ts — the sandbox every tool runs in. The app has no tools of its own: each one, the project's first-party
  * tools included, is a signed script from a registry or an address, and runs in a Worker that lives inside an
  * `<iframe sandbox="allow-scripts" srcdoc>`. The frame has an opaque origin, so the tool shares no storage, cookies,
- * IndexedDB keys or service worker with the app, and the frame's CSP limits its connections to the origins its
- * manifest lists in `connect` when it holds the 'network' grant (none otherwise). Without that grant the worker's
- * network globals are shadowed as well.
+ * IndexedDB keys or service worker with the app. The frame's CSP is the network boundary: it limits the tool's
+ * connections to the origins its manifest lists in `connect` when it holds the 'network' grant, and to none
+ * otherwise. The worker's network globals stay as they are, because no script-side shadowing holds (a tool can
+ * `delete` an own property to reach the native one, and `import()` cannot be shadowed at all); the page's
+ * `frame-src` keeps the frame itself from navigating to another host.
  *
  * The script runs as the body of a function of `register`, `ipc` and `tool` (the tool reference documents the API).
  * Every message from the frame is shape-checked here, and every request a tool makes reaches the shared ToolHost
@@ -189,7 +191,6 @@ export function workerSource(): string {
         tool.permissions = granted.slice();
         tool.api = Object.freeze({ major: Number(m.api && m.api.major), minor: Number(m.api && m.api.minor) });
         features = Array.isArray(m.features) ? m.features.map(String) : [];
-        if (!m.network) { for (const g of ["fetch","XMLHttpRequest","WebSocket","WebTransport","EventSource","importScripts","Worker","SharedWorker"]) { try { self[g] = undefined; } catch (e) {} } }
         try {
           new Function("register", "ipc", "tool", m.script)(register, m.ipc ? ipc : undefined, tool);
           const words = Object.keys(commands);
@@ -836,7 +837,6 @@ interface SandboxOptions {
  * worker gets `ipc` only with the 'ipc' grant. `destroy()` removes the frame, which ends its worker.
  */
 export async function loadSandbox(script: string, granted: Capability[], opts: SandboxOptions = {}): Promise<Sandbox> {
-  const network = granted.includes("network");
   const csp = frameCsp(connectSources(granted, opts.connect, opts.appOrigins ?? [location.origin]));
   const frame = document.createElement("iframe");
   frame.setAttribute("sandbox", "allow-scripts");
@@ -876,7 +876,6 @@ export async function loadSandbox(script: string, granted: Capability[], opts: S
           post({
             type: "load",
             script,
-            network,
             ipc: granted.includes("ipc"),
             permissions: granted,
             api: TOOL_API,

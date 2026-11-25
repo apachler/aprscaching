@@ -2,7 +2,7 @@
 # Every file carries the page headers the Node server, the desktop app and Caddy send
 # (workers/gateway/src/pageheaders.ts says why; servers/node/test/spa.test.ts holds them together).
 /*
-  Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'
+  Content-Security-Policy: frame-ancestors 'self'; frame-src 'self'; base-uri 'self'; object-src 'none'
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

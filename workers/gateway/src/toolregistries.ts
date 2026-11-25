@@ -16,9 +16,13 @@
  * name and the scripts those name through this instance, so a player's address never reaches the registry's
  * host, and the last good copy keeps serving while the internet is down. The gateway fetches without
  * credentials, over https on every hop and never to a private or LAN address whatever the federation settings
- * allow (fetchguard.ts toolFetch), keeps each file for an hour, caps each file and each registry's total, and
- * fetches only files the registry itself leads to. It decides no trust: the browser verifies every signature
- * against the pinned key.
+ * allow (fetchguard.ts toolFetch), keeps each file for an hour, caps each file, each registry's total, each
+ * player's total over all their registries and every player's total on the instance, and
+ * fetches only files the registry itself leads to. It keeps and serves only what its signer vouches for, by the
+ * browser's own checks (unsigned()): a registry file its pinned key signed, manifests that file lists signed by the
+ * keys it lists, scripts with the hashes those manifests sign. A registry file signed by another key is answered
+ * 409 with that key, never relayed, until the person who pinned the old one confirms it. The browser checks every
+ * signature again; the instance decides no trust beyond what it carries.
  *
  *   GET    /api/tools/registries                     the effective list for this visitor
  *   GET    /api/tools/registries/preview?spec=…      a registry file before it is added, to compare its key
@@ -52,6 +56,15 @@ import { clientIp, rateLimited, rateLimitedDurable } from "./corroborate_privacy
 import { readCappedBody, toolFetch, ToolFetchRefused } from "./fetchguard.js";
 import { loadSiteSettings, setting } from "./siteconfig.js";
 import { nowS } from "./util/time.js";
+import {
+  checkEntryHash,
+  checkManifestSignature,
+  checkPinnedRegistry,
+  previewRegistry,
+  registryEntryFor,
+  registryFormatProblem,
+  type SignedRegistry,
+} from "@aprscaching/tools/registry";
 
 /** How long a fetched copy serves before the next request fetches it again. */
 export const REGISTRY_COPY_TTL_S = 3600;
@@ -61,6 +74,13 @@ const RETRY_AFTER_FAIL_S = 300;
 export const REGISTRY_FILE_CAP = { registry: 256 * 1024, manifest: 64 * 1024, script: 512 * 1024 } as const;
 /** The most bytes one registry's copies may take together. */
 const REGISTRY_TOTAL_CAP = 4 * 1024 * 1024;
+/**
+ * The most bytes the copies of one player's registries may take together, however many registries the player
+ * adds: the instance's disk grows with what a player stores, not with how many registries they split it over.
+ */
+export const PLAYER_COPIES_CAP = 4 * 1024 * 1024;
+/** The most bytes the copies of every player's registries may take on the instance together. */
+export const PLAYER_COPIES_INSTANCE_CAP = 256 * 1024 * 1024;
 /** The most entries of one registry whose files are fetched. */
 const REGISTRY_ENTRIES_MAX = 200;
 /** Upstream fetches one player's registries may cause in an hour. */
@@ -285,8 +305,11 @@ async function handleConfirm(req: Request, env: Env, s: Scope, id: string): Prom
   const now = nowS();
   await env.DB.batch([
     env.DB.prepare("UPDATE tool_registries SET authority=?, confirmed_at=? WHERE id=?").bind(b.authority, now, id),
+    // the copies were checked against the key this replaces; the next request fetches them under the new one
+    forgetCopies(env, id),
     ...auditOf(env, s, "confirm", id, row.label, `${row.authority} → ${b.authority}`),
   ]);
+  forgetLeads(env, id);
   return json({ registry: entryOf({ ...row, authority: b.authority, confirmed_at: now }) });
 }
 
@@ -504,6 +527,7 @@ function serveCopy(row: FileRow, kind: FileKind, reg: ToolRegistryEntry, stale: 
 }
 
 const unavailable = (why: string, status = 502) => json({ error: why }, { status });
+const keyChangedAnswer = (k: KeyChanged) => json({ error: k.error, authority: k.authority }, { status: 409 });
 
 /** Fetch one file of a registry from its host, within the caps; the text, or why not. */
 async function fetchUpstream(
@@ -511,7 +535,9 @@ async function fetchUpstream(
   reg: ToolRegistryEntry,
   url: string,
   kind: FileKind,
-): Promise<{ text: string } | { error: string }> {
+  accountId: string | null,
+  pinned = true,
+): Promise<{ text: string } | { error: string } | KeyChanged> {
   let res: Response;
   try {
     res = await toolFetch(env, url, {
@@ -533,6 +559,21 @@ async function fetchUpstream(
     .first<{ n: number }>();
   if ((others?.n ?? 0) + bytes.byteLength > REGISTRY_TOTAL_CAP)
     return { error: `the registry's files pass ${REGISTRY_TOTAL_CAP / 1024 / 1024} MB together` };
+  if (accountId) {
+    // every player's copies, and this player's, without the copy this fetch replaces
+    const held = await env.DB.prepare(
+      `SELECT COALESCE(SUM(f.bytes), 0) AS everyone,
+              COALESCE(SUM(CASE WHEN r.account_id = ? THEN f.bytes ELSE 0 END), 0) AS mine
+         FROM tool_registry_files f JOIN tool_registries r ON r.id = f.registry_id
+        WHERE r.account_id IS NOT NULL AND NOT (f.registry_id = ? AND f.url = ?)`,
+    )
+      .bind(accountId, reg.id, url)
+      .first<{ everyone: number; mine: number }>();
+    if ((held?.mine ?? 0) + bytes.byteLength > PLAYER_COPIES_CAP)
+      return { error: `your registries' files pass ${PLAYER_COPIES_CAP / 1024 / 1024} MB together` };
+    if ((held?.everyone ?? 0) + bytes.byteLength > PLAYER_COPIES_INSTANCE_CAP)
+      return { error: "this instance holds as many players' registry files as it keeps" };
+  }
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -540,7 +581,82 @@ async function fetchUpstream(
     return { error: "it is not UTF-8 text" };
   }
   if (kind !== "script" && parseJson(text) === null) return { error: "it is not JSON" };
-  return { text };
+  if (!pinned) {
+    // a registry about to be added has no pinned key yet: it must verify under the key it names
+    const seen = await previewRegistry(parseJson(text));
+    return seen.ok ? { text } : { error: seen.error };
+  }
+  const refused = await unsigned(env, reg, url, kind, text);
+  return refused ?? { text };
+}
+
+/** The registry's file names a key other than the pinned one; the person who pinned it confirms the new one. */
+interface KeyChanged {
+  error: string;
+  authority: string;
+}
+const KEY_CHANGED = "the registry is signed by another key than the one pinned: ";
+const keyChanged = (authority: string): KeyChanged => ({ error: `${KEY_CHANGED}${authority}`, authority });
+/** The key change a stored fetch error records, so a retry within the wait still reports it. */
+const keyChangedIn = (error: string | null): KeyChanged | null =>
+  error?.startsWith(KEY_CHANGED) ? keyChanged(error.slice(KEY_CHANGED.length)) : null;
+
+/**
+ * Why a fetched file is not one its signer vouches for, or null when it is. The carrier stores and relays only what
+ * the browser itself would accept, with the same checks from @aprscaching/tools: the registry file against the
+ * pinned authority, a manifest by its own signature under the key the verified registry lists for it, and a script
+ * by the SHA-256 its verified manifest signs. Anyone between the registry's host and this instance can otherwise
+ * park bytes here under a player's quota and have the instance serve them as the registry's.
+ */
+async function unsigned(
+  env: Env,
+  reg: ToolRegistryEntry,
+  url: string,
+  kind: FileKind,
+  text: string,
+): Promise<{ error: string } | KeyChanged | null> {
+  if (kind === "registry") {
+    const doc = parseJson(text);
+    switch (await checkPinnedRegistry(doc, reg.authority)) {
+      case "ok":
+        return null;
+      case "key-changed": {
+        // named only when the file is intact under the key it names: an unchecked authority string is the file's
+        // own claim, and would carry whatever it holds through this instance
+        const seen = await previewRegistry(doc);
+        return seen.ok
+          ? keyChanged(seen.preview.authority)
+          : { error: "the registry is signed by another key than the one pinned, and does not verify under it" };
+      }
+      case "format":
+        return { error: registryFormatProblem(doc) ?? "the registry's format is not one this app reads" };
+      default:
+        return { error: "the registry's signature does not verify under its pinned key" };
+    }
+  }
+  const held = (
+    await env.DB.prepare("SELECT url, body FROM tool_registry_files WHERE registry_id=? AND body IS NOT NULL")
+      .bind(reg.id)
+      .all<{ url: string; body: string }>()
+  ).results;
+  const bodies = new Map(held.map((r) => [r.url, r.body]));
+  if (kind === "manifest") {
+    const doc = parseJson(text) as Record<string, unknown> | null;
+    if (!doc || typeof doc !== "object") return { error: "the manifest is not a JSON object" };
+    const entries = (parseJson(bodies.get(reg.url)) as SignedRegistry | null)?.entries ?? [];
+    const entry = registryEntryFor(entries, String(doc.name), url, reg.url);
+    if (!entry) return { error: "the registry lists no tool of this name at this address" };
+    if ((await checkManifestSignature(doc)) !== "valid") return { error: "the manifest's signature does not verify" };
+    if (doc.pubkey !== entry.pubkey) return { error: "the manifest is signed by another key than the registry lists" };
+    return null;
+  }
+  const script = new TextEncoder().encode(text);
+  for (const m of manifestUrls(reg.url, parseJson(bodies.get(reg.url)))) {
+    const doc = parseJson(bodies.get(m));
+    if (scriptUrl(m, doc) === url && (await checkEntryHash(doc as { entrySha256?: unknown }, script)) === "ok")
+      return null;
+  }
+  return { error: "the script's SHA-256 is not the one its manifest signs" };
 }
 
 /** GET /api/tools/registries/:id/file?url=… */
@@ -576,14 +692,18 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
     return serveCopy(row, kind, reg, false);
   // a recent failure waits before the next attempt
   if (row && row.error && now - row.tried_at < RETRY_AFTER_FAIL_S)
-    return hasCopy ? serveCopy(row, kind, reg, true) : unavailable(`couldn't fetch the file: ${row.error}`);
+    return keyChangedIn(row.error)
+      ? keyChangedAnswer(keyChangedIn(row.error)!)
+      : hasCopy
+        ? serveCopy(row, kind, reg, true)
+        : unavailable(`couldn't fetch the file: ${row.error}`);
   if (
     accountId &&
     (await rateLimitedDurable(env, `toolreg-fetch:${accountId}`, Date.now(), PLAYER_FETCHES_PER_HOUR, 3600_000))
   )
     return hasCopy ? serveCopy(row, kind, reg, true) : unavailable("too many registry fetches; try again later", 429);
 
-  const got = await fetchUpstream(env, reg, target, kind);
+  const got = await fetchUpstream(env, reg, target, kind, accountId);
   if ("error" in got) {
     await env.DB.prepare(
       `INSERT INTO tool_registry_files (registry_id, url, bytes, tried_at, error) VALUES (?,?,0,?,?)
@@ -591,6 +711,8 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
     )
       .bind(reg.id, target, now, got.error.slice(0, 200))
       .run();
+    // a key change is reported even over a held copy: the person who pinned the key decides, not the cache
+    if ("authority" in got) return keyChangedAnswer(got);
     return hasCopy
       ? serveCopy({ ...row, error: got.error }, kind, reg, true)
       : unavailable(`couldn't fetch the file: ${got.error}`);
@@ -625,7 +747,7 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
 
 /**
  * GET /api/tools/registries/preview?spec=… — the registry file at an address someone is about to add, fetched
- * once and kept nowhere, so the person can compare its key's fingerprint before pinning it. For the sysop, and
+ * once and kept nowhere, and relayed only when it verifies under the key it names, so the person can compare its key's fingerprint before pinning it. For the sysop, and
  * for a signed-in player while players may add registries (counted against the player's fetches).
  */
 async function handlePreview(req: Request, env: Env): Promise<Response> {
@@ -651,7 +773,7 @@ async function handlePreview(req: Request, env: Env): Promise<Response> {
     url: where.url,
     enabled: true,
   };
-  const got = await fetchUpstream(env, probe, where.url, "registry");
+  const got = await fetchUpstream(env, probe, where.url, "registry", null, false);
   if ("error" in got) return unavailable(`couldn't fetch the registry: ${got.error}`);
   return new Response(got.text, {
     headers: {

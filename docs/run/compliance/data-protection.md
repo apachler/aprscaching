@@ -132,6 +132,7 @@ signed account-move record points attribution at the new instance across the net
 | Email sign-in and confirmation links | 1 day after use, else 2 days after they were sent | fixed |
 | A suspension's record on an erased account's callsigns | until the suspension ends or the sysop lifts it | — |
 | An excluded station's record: the callsign, the reason and the date | until the sysop lifts the exclusion | — |
+| A member's profile picture, uploaded to the instance | until the member replaces or removes it, a moderation removal clears the profile, or the member is erased | — |
 | A member's own tool registries, and the copies of their files the instance fetched for them | until the member removes them or is erased; a copy is refreshed hourly while in use | `TOOL_REGISTRIES_PLAYERS`, `TOOL_REGISTRIES_PROXY` |
 | Database backups | 30 days in `BACKUP_DIR`; a bucket by its lifecycle rule | `BACKUP_RETENTION_DAYS` |
 
