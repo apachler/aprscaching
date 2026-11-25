@@ -8,7 +8,7 @@ import { decodeFedFrame } from "@aprscaching/shared";
 import { queryPeerCorroboration, type CorroborationQuery } from "@aprscaching/gateway/corroborate";
 import { scoreFind } from "@aprscaching/gateway/caches";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
-import { newFedKey, instanceEnv, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
+import { newFedKey, instanceEnv, peerRow, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 afterEach(() => {
@@ -210,6 +210,38 @@ describe("quorum", () => {
     await addPeer(hub.env, "https://p2.example", "p2.example", p2.key);
     stubFetch({ "https://p1.example": serve(p1.env), "https://p2.example": serve(p2.env) });
     expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+  });
+});
+
+describe("quorum — auto-promoted peers", () => {
+  it("count only beside an operator-vetted peer, however many earned promotion", async () => {
+    const hub = await asker({ FED_AUTO_PROMOTE: "2" });
+    const [v1, v2, a1, a2] = await Promise.all([
+      answerer("v1.example"),
+      answerer("v2.example"),
+      answerer("a1.example"),
+      answerer("a2.example"),
+    ]);
+    await addPeer(hub.env, "https://v1.example", "v1.example", v1.key);
+    await addPeer(hub.env, "https://v2.example", "v2.example", v2.key);
+    await addPeer(hub.env, "https://a1.example", "a1.example", a1.key, "unvetted");
+    await addPeer(hub.env, "https://a2.example", "a2.example", a2.key, "unvetted");
+    stubFetch(Object.fromEntries([v1, v2, a1, a2].map((p) => [`https://${p.instance}`, serve(p.env)])));
+    // two finds the vetted peers confirm credit the unvetted peers' matching answers, which promotes them
+    for (let i = 0; i < 2; i++) expect((await queryPeerCorroboration(hub.env, query()))?.corroborators).toBe(2);
+    for (const url of ["https://a1.example", "https://a2.example"]) {
+      const row = await peerRow(hub.env, url);
+      expect(row?.trust).toBe("trusted");
+      expect(row?.auto_promoted_at).not.toBeNull();
+    }
+    // the vetted peers leave: the two promoted peers alone are two distinct keys, and no Tier A
+    await hub.env.DB.prepare(
+      "UPDATE fed_peers SET trust = 'blocked' WHERE url IN ('https://v1.example', 'https://v2.example')",
+    ).run();
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+    // one operator-vetted peer beside them is enough
+    await hub.env.DB.prepare("UPDATE fed_peers SET trust = 'trusted' WHERE url = 'https://v1.example'").run();
+    expect((await queryPeerCorroboration(hub.env, query()))?.corroborators).toBe(3);
   });
 });
 

@@ -45,7 +45,8 @@ A URL says where a peer answers, not who holds its key, so no peer is `trusted` 
   and over the operator secret alike. A peer with no key, such as one from the registry, syncs as `unvetted`
   first. The fingerprint must be the pinned key's. An instance only discovery listed is followed first.
 - **Auto-promotion** (`FED_AUTO_PROMOTE`) records that it raised a peer, beside how the peer arrived. Such a peer
-  never reaches the quorum alone, and any trust decision of the sysop's replaces the automatic one.
+  counts toward the quorum only beside a peer an operator vetted, however many promoted peers agree, and any
+  trust decision of the sysop's replaces the automatic one.
 - **A `FED_PEERS` entry** starts `unvetted`, unless it pins a fingerprint (`<url>#<fingerprint>`). Then the
   first sync refuses a key that does not match it, and a key that matches raises the peer to `trusted` once.
   Later the pin follows the rotation chain like any other, and the fingerprint holds for every key that chain
@@ -149,13 +150,15 @@ hub, a second hub and a Pocket station that carries records are the same thing h
   trusted neighbour that leaves a record out still moves the mark past it: trust decides whose word counts.
 - **What did not arrive is asked for on its own.** A frame that did not settle (signed ahead of the receiver's
   clock, one its database could not take at that moment, one that did not verify), a record kept past the hop
-  limit, and a record a trusted neighbour says it lacks become gaps. The mark moves on, every later record passes
+  limit, and a record a trusted neighbour says it lacks become gaps; an origin's page of its own records names no
+  record as lacking, and one it names anyway is ignored. The mark moves on, every later record passes
   on, and the receiver asks its neighbours for each gap by itself, backing off from 5 minutes to a day per
   neighbour. A copy over fewer hops closes a hop gap, so the record passes on from there. A gap no neighbour fills
   within 7 days and 5 asks counts as refused for good; **Instance admin → Federation → Records given up** and
-  `doctor` list it until the sysop marks it seen. A missing tombstone is never given up: it is asked for daily
-  until a neighbour supplies it, so a deletion always arrives. A record past the hop limit raises no alarm: at the edge of the
-  mesh every distant record is one, and its gap goes quietly after 30 days.
+  `doctor` list it until the sysop marks it seen. A missing tombstone a neighbour can supply is never given up: it
+  is asked for daily until a neighbour supplies it, so a deletion always arrives. A record past the hop limit raises
+  no alarm: at the edge of the mesh every distant record is one, and its gap, a tombstone's too, goes quietly after
+  30 days, at most 10000 per origin and kind.
 - **Numbers are never reused.** Each origin numbers its records, callsign keys included, at least by the time in
   milliseconds, and a record's global id is that number, never its row id. A database restored from an older backup still numbers its
   new records, deletions included, above what its peers hold, under global ids no peer holds or deleted. A peer the
@@ -206,7 +209,10 @@ calls and stations travel with the question as exclusions.
   The quorum counts the spoke's identity once, whichever path its answer took.
 - **Reputation.** Peers carry a reputation (`rep_confirmed` / `rep_failed`). A peer that denies a
   corroboration the quorum confirmed accrues a contradiction and is penalised. With `FED_AUTO_PROMOTE`, an
-  unvetted peer becomes trusted after that many confirmed corroborations.
+  unvetted peer becomes trusted after that many confirmed corroborations. Peers promoted this way meet no quorum
+  among themselves: an answer that matches a confirmed one takes little more than a good guess, so one party
+  running two such peers could earn both promotions. A quorum that holds a promoted peer also holds one an
+  operator vetted.
 
 ### Asked again, within bounds
 
@@ -216,6 +222,8 @@ one, six and 24 hours after the find, and never past 72 hours.
 
 - Evidence already in hand carries over, but counts only while its peer is still trusted.
 - The quorum, the exclusions and the logger's own-track check are the same as when the find was logged.
+- The logger's standing is judged at the lift: a call suspended since gets no Tier A, nor does the call of a
+  signed-in player whose control-verification a sysop revoked since.
 - A verified "no" from a trusted peer ends it at once; no later attempt follows one.
 - An answer through a hub's relay is read as soon as it arrives (`FED_RELAY_POLL_MS`, 15 s), not at the next
   attempt. A relayed question still unanswered after an hour goes to the next attempt like a peer not reached.

@@ -385,6 +385,26 @@ describe("the previous holder's content", () => {
     const s = await call(env, "POST", "/auth/email/verify", { token: back.data.devToken });
     expect((await session(env, s.cookie)).callsign).toBe("DL1SQU");
   });
+
+  it("keeps one found per cache when the remaining call already found it under an SSID", async () => {
+    const env = claimEnv();
+    await squatted(env, { otherCall: "DL1SQU" });
+    const cache = await env.DB.prepare("SELECT id FROM caches WHERE owner_call = 'DL1OWN'").first<{ id: number }>();
+    const t = Math.floor(Date.now() / 1000) + 5; // after the call was added to the account
+    for (const who of ["DL1SQU-9", "OE8APR"])
+      await env.DB.prepare(
+        "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier) VALUES (?, ?, ?, 'found', 0, 'C')",
+      )
+        .bind(cache!.id, who, t)
+        .run();
+    const opened = await openClaim(env, "OE8APR");
+    await proveAmpr(env, "OE8APR", opened.data.claim);
+    expect((await status(env, opened.data.claim)).data.status).toBe("done");
+    const founds = await env.DB.prepare("SELECT logger_call FROM cache_logs WHERE cache_id = ? AND log_type = 'found'")
+      .bind(cache!.id)
+      .all();
+    expect(founds.results).toEqual([{ logger_call: "DL1SQU-9" }]);
+  });
 });
 
 describe("federation", () => {

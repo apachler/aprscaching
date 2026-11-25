@@ -449,7 +449,7 @@ export function evidenceMatches(
 
 /** The effective quorum — when ANY auto-promoted peer contributed evidence to the winning
  *  set, a lone corroborator is not enough: a farmed promotion must never single-handedly mint Tier A.
- *  Pure + testable. */
+ *  {@link decide} also requires an operator-vetted hit in such a set. Pure + testable. */
 export function effectiveQuorum(baseQuorum: number, autoPromotedContributed: boolean): number {
   return autoPromotedContributed ? Math.max(baseQuorum, 2) : Math.max(baseQuorum, 1);
 }
@@ -704,8 +704,9 @@ interface Answered {
 /**
  * Apply the quorum to the evidence in hand and settle reputation. Tier A is decided from TRUSTED hits
  * only; unvetted hits are advisory. When an auto-promoted peer is among the evidence-bearing trusted
- * set, one voice is not enough — a farmed promotion must corroborate ALONGSIDE an operator-vetted peer,
- * never alone. A hit carried in counts only while its peer is still trusted.
+ * set, the set needs at least two voices and at least one of them from a peer an operator vetted: two
+ * promotions farmed by one party are two keys but no independent check. A hit carried in counts only
+ * while its peer is still trusted.
  */
 async function decide(
   env: Env,
@@ -720,11 +721,17 @@ async function decide(
     ...prior.filter((h) => trustedNow.has(h.url) && !answered.some((a) => a.url === h.url)),
     ...answered.filter((a) => a.ev && a.trust === "trusted").map((a) => ({ url: a.url, ev: a.ev as Evidence })),
   ];
-  const autoPromotedContributed = hits.some((h) => trustedNow.get(h.url)?.auto_promoted_at != null);
-  const winner = selectCorroboration(
-    hits.map((h) => h.ev),
-    effectiveQuorum(quorum, autoPromotedContributed),
-  );
+  const autoPromoted = (h: PeerHit) => trustedNow.get(h.url)?.auto_promoted_at != null;
+  const autoPromotedContributed = hits.some(autoPromoted);
+  // peers that farmed their promotion together meet any quorum among themselves, so a set holding one
+  // counts only beside a hit from a peer an operator vetted
+  const winner =
+    autoPromotedContributed && hits.every(autoPromoted)
+      ? null
+      : selectCorroboration(
+          hits.map((h) => h.ev),
+          effectiveQuorum(quorum, autoPromotedContributed),
+        );
   if (winner) {
     // reputation accrues ONLY for evidence that independently matches the confirmed
     // winner, so answering "yes" with fabricated evidence earns no rep toward promotion.

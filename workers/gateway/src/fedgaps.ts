@@ -15,14 +15,14 @@
  * minutes to a day. A gap nobody fills within 7 days and 5 asks is given up: it counts as refused for good, and the
  * sysop sees it listed (Instance admin → Federation, `doctor`) until marked seen, for at most 90 days; a listed
  * record marked seen goes 30 days later. A hop-limit gap is no fault anyone can fix but by a shorter path, and at
- * the edge of the mesh every distant record is one: it holds no mark back, counts toward no cap, and goes silently
- * after 30 days.
+ * the edge of the mesh every distant record is one: it holds no mark back, counts toward no cap but its own
+ * (MAX_HOP_GAPS per origin and kind), and goes silently after 30 days.
  *
- * A tombstone gap is never given up. A missing tombstone is a deletion, often an erasure, that never reached this
- * instance: giving it up would keep the deleted record here for good. Such a gap is asked for again, once a day per
- * neighbour once its backoff is at the longest, until one fills it. A tombstone gap past the hop limit that this
- * instance holds itself (`hops`) still goes after 30 days, since the deletion applied here; one a neighbour holds
- * past the hop limit (`upstream-hops`) stays, since this instance still lacks it.
+ * A tombstone gap a neighbour can fill is never given up. A missing tombstone is a deletion, often an erasure, that
+ * never reached this instance: giving it up would keep the deleted record here for good. Such a gap is asked for
+ * again, once a day per neighbour once its backoff is at the longest, until one fills it. A tombstone gap past the hop
+ * limit goes after 30 days like any hop-limit gap, whether this instance holds the deletion (`hops`) or a neighbour
+ * does (`upstream-hops`): only a shorter path fills it, and a neighbour's word alone must not keep rows here for good.
  */
 import type { Env } from "./env.js";
 import { json } from "./http.js";
@@ -44,8 +44,8 @@ const GAP_GIVE_UP_ASKS = 5;
 const QUIET_EXPIRY_S = 30 * 86400;
 /** Given-up records the sysop never marked seen leave the table after this long. */
 const UNSEEN_EXPIRY_S = 90 * 86400;
-/** SQL: a gap whose record is a deletion this instance does not hold, which is never given up. */
-const MISSING_DELETE = "(kind = 'tombstone' AND reason != 'hops')";
+/** SQL: a gap whose record is a deletion this instance lacks and a neighbour can fill, which is never given up. */
+const MISSING_DELETE = `(kind = 'tombstone' AND ${NOT_HOPS})`;
 const RETRY_FIRST_S = 300;
 const RETRY_MAX_S = 86400;
 
@@ -184,9 +184,7 @@ export async function giveUpGaps(env: Env): Promise<number> {
        ON CONFLICT(origin, kind, v) DO UPDATE SET given_up = excluded.given_up, seen_at = NULL`,
     ).bind(t, t - GAP_GIVE_UP_S, GAP_GIVE_UP_ASKS),
     env.DB.prepare(`DELETE FROM fed_origin_gaps WHERE ${due}`).bind(t - GAP_GIVE_UP_S, GAP_GIVE_UP_ASKS),
-    env.DB.prepare(
-      `DELETE FROM fed_origin_gaps WHERE NOT (${NOT_HOPS}) AND NOT ${MISSING_DELETE} AND first_seen <= ?`,
-    ).bind(t - QUIET_EXPIRY_S),
+    env.DB.prepare(`DELETE FROM fed_origin_gaps WHERE NOT (${NOT_HOPS}) AND first_seen <= ?`).bind(t - QUIET_EXPIRY_S),
     env.DB.prepare(
       "DELETE FROM fed_gaps_given_up WHERE (seen_at IS NOT NULL AND seen_at <= ?) OR (seen_at IS NULL AND given_up <= ?)",
     ).bind(t - QUIET_EXPIRY_S, t - UNSEEN_EXPIRY_S),

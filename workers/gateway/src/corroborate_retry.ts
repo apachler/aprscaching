@@ -36,6 +36,8 @@ import { DEFAULT_POLICY, plausiblePresence, type PositionRow } from "./verify.js
 import { awardFindBadges } from "./community.js";
 import { attestation, sitesFor } from "./attestedsites.js";
 import { provenanceOf } from "./provenance.js";
+import { callSuspended } from "./moderation.js";
+import { isCallsignVerified } from "./callsign.js";
 import { beaconCommandedIn } from "./beacontag.js";
 
 /** When each attempt is due, after the find; their count is the attempt limit. */
@@ -54,12 +56,14 @@ export interface RetryPlan {
   hits: PeerHit[];
   /** Questions waiting in a hub's relay queue for peers nobody can dial. */
   relayed: RelayedAsk[];
+  /** A signed-in player logged the find: a lift needs the call still control-verified. */
+  requireVerified?: boolean;
 }
 
 /** Queue a later attempt for a found log. */
 export async function scheduleRetry(env: Env, logId: number, loggedAt: number, plan: RetryPlan): Promise<void> {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO corroboration_retries (log_id, query, peers, hits, relayed, logged_at, attempts, next_at) VALUES (?,?,?,?,?,?,0,?)",
+    "INSERT OR IGNORE INTO corroboration_retries (log_id, query, peers, hits, relayed, logged_at, attempts, next_at, require_verified) VALUES (?,?,?,?,?,?,0,?,?)",
   )
     .bind(
       logId,
@@ -69,6 +73,7 @@ export async function scheduleRetry(env: Env, logId: number, loggedAt: number, p
       JSON.stringify(plan.relayed),
       loggedAt,
       loggedAt + RETRY_AFTER_S[0]!,
+      plan.requireVerified ? 1 : 0,
     )
     .run();
 }
@@ -82,6 +87,7 @@ interface RetryRow {
   logged_at: number;
   attempts: number;
   next_at: number;
+  require_verified: number;
   tier: string | null;
   logger_call: string | null;
   log_ts: number | null;
@@ -115,7 +121,9 @@ const removeRow = (env: Env, id: number) =>
 /**
  * Lift a found log to Tier A on a later quorum, when the logger's own local track allows the corroborated
  * presence, as when the find was logged, and no beacon this instance asked a box to send under the call falls
- * in the window (a peer cannot tell that hearing from the station's own). True when the log was lifted.
+ * in the window (a peer cannot tell that hearing from the station's own). The logger's standing is judged at
+ * the lift, not at the log: a call suspended since, or one whose control-verification a sysop revoked since
+ * a signed-in player logged the find, gets no Tier A. True when the log was lifted.
  */
 async function liftLater(
   env: Env,
@@ -124,6 +132,9 @@ async function liftLater(
   winner: Evidence,
   now: number,
 ): Promise<boolean> {
+  const call = r.logger_call as string;
+  if (await callSuspended(env, call)) return false;
+  if (r.require_verified && !(await isCallsignVerified(env, call))) return false;
   const until = (r.log_ts ?? 0) + 60;
   const lp = await env.DB.prepare(
     "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",

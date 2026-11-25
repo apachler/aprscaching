@@ -20,9 +20,12 @@ Every find carries exactly one tier, graded by the evidence behind it:
 
 - A bare internet packet never reaches Tier B on its own: Tier B requires the independent app reading, and
   Tier A requires independent RF evidence.
-- A find counts as verified from the instance's minimum up: **Tier B** by default, **Tier A** with
-  `MIN_TRUST=A`. A cache's own `min_trust`, set by its hider (**Radio-verified finds only**), takes
-  precedence; clearing it returns the cache to the instance's minimum.
+- A find counts as verified from the stricter of two minimums up: the instance's (**Tier B** by default,
+  **Tier A** with `MIN_TRUST=A`) and the cache's own `min_trust`, set by its hider (**Radio-verified finds
+  only**). A hider can ask more of their finders than the instance does, never less; clearing it returns the
+  cache to the instance's minimum.
+- One person logs one find per cache, under any SSID of their call: the database refuses a second, even when
+  two logs under two SSIDs arrive at once.
 - A radio message carries no device reading, so a find logged by radio reaches Tier A or C, never B.
 - Tier A rests on the finder's callsign being heard, so a find logged in the app reaches it only once the
   account has control-verified that call ([Identity](#identity)). Until then the call's RF fixes lift no

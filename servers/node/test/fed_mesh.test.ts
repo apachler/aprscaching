@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { pushToHub, syncAllPeers } from "@aprscaching/gateway/federation_sync";
-import { decodeFedSyncPage } from "@aprscaching/gateway/fedsync";
+import { decodeFedSyncPage, encodeFedSyncPage } from "@aprscaching/gateway/fedsync";
 import { call } from "./helpers/authflow.js";
 import { addCache, gid, instanceEnv, newFedKey, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
@@ -479,6 +479,41 @@ describe("what moves a mark", GATEWAYS, () => {
     });
     expect((await call(b.env, "POST", "/federation/gaps/seen", {}, OP)).data).toEqual({ ok: true, seen: 1 });
     expect((await call(b.env, "GET", "/federation/peers", undefined, OP)).data.givenUp.count).toBe(0);
+  });
+
+  it("not by gaps an origin names in a page of its own records: it lacks none of them", async () => {
+    const [a, b] = await Promise.all([node("a"), node("b")]);
+    await follow(b, a, "unvetted");
+    const ids = [];
+    for (let i = 0; i < 3; i++) ids.push(await addCache(a.env, now() - 60));
+    const top = await rev(a.env, ids[2]!);
+    // a's pages of its own records name every sequence below the top as lacking, apart and past the hop limit
+    stubFetch({
+      [a.url]: async (req) => {
+        const res = await serve(a.env)(req);
+        if (new URL(req.url).pathname !== "/federation/sync/origin" || res.status !== 200) return res;
+        const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
+        const below = Array.from({ length: 50 }, (_, i) => top - 100 - i);
+        return new Response(
+          encodeFedSyncPage(
+            pg.instance,
+            pg.nextCursor,
+            pg.complete,
+            pg.frames,
+            pg.nextId,
+            pg.hops,
+            pg.held,
+            below,
+            below.map((v) => v - 50),
+          ),
+          { headers: { "content-type": "application/cbor" } },
+        );
+      },
+    });
+    await syncAllPeers(b.env);
+    expect((await caches(b.env)).length).toBe(3);
+    expect(await rows(b.env, "SELECT v, reason FROM fed_origin_gaps")).toEqual([]);
+    expect(await mark(b.env, "cache")).toBe(top);
   });
 
   it("only forward, and never for a generation of the origin's marks that was forgotten", async () => {

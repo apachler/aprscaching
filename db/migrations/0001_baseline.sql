@@ -432,9 +432,13 @@ CREATE TABLE cache_logs (
 CREATE INDEX idx_logs_cache ON cache_logs (cache_id, ts DESC);
 CREATE INDEX idx_logs_logger ON cache_logs (logger_call, ts DESC);
 CREATE INDEX idx_logs_corroborator ON cache_logs (corroborator_igate);
--- A find is idempotent per (cache, logger): a racing or replayed POST can neither insert twice nor
--- double-count on the leaderboard (the handler uses INSERT OR IGNORE plus an already-found check).
-CREATE UNIQUE INDEX idx_cache_logs_found_unique ON cache_logs (cache_id, logger_call) WHERE log_type = 'found';
+-- One found per cache and base call, whatever the SSID (the part before the dash, as baseCall cuts it): a racing
+-- or replayed POST, or two logs under two SSIDs of one call, can neither insert twice nor double-count (the
+-- handler uses INSERT OR IGNORE plus an already-found check, which also covers the other base calls of an account).
+CREATE UNIQUE INDEX idx_cache_logs_found_unique ON cache_logs (
+  cache_id,
+  (CASE WHEN instr(logger_call, '-') > 0 THEN substr(logger_call, 1, instr(logger_call, '-') - 1) ELSE logger_call END)
+) WHERE log_type = 'found';
 CREATE INDEX idx_cache_logs_fed_seq ON cache_logs (fed_seq);
 
 -- A found log that missed Tier A only because trusted peers could not be reached is asked again: the same
@@ -450,7 +454,9 @@ CREATE TABLE corroboration_retries (
   next_at   INTEGER NOT NULL,
   -- questions waiting in a hub's relay queue for trusted peers nobody can dial, read on the relay timer
   -- until answered: JSON [{url, instance, hub, id, ticket, nonce, queryHash, askedAt}]
-  relayed   TEXT NOT NULL DEFAULT '[]'
+  relayed   TEXT NOT NULL DEFAULT '[]',
+  -- 1 when a signed-in player logged the find: the lift needs the call still control-verified, as the log did
+  require_verified INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_corr_retry_next ON corroboration_retries(next_at);
 

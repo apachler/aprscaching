@@ -196,7 +196,8 @@ repeats.
 
 - a frame on the page that did not settle: signed ahead of the consumer's clock, one its database could not take at that moment, one it could not keep for passing on, one that did not verify;
 - a record it keeps that crossed the hop limit;
-- a sequence the page names in `gaps`, or in `hopGaps`, which the consumer does not keep.
+- a sequence the page names in `gaps`, or in `hopGaps`, which the consumer does not keep. A page the origin serves
+  of its own records names none: the origin lacks none of them, so whatever it lists there is ignored.
 
 The mark moves past it, and the consumer asks for it by itself (`since=v-1&limit=1`), up to 20 a pull per origin
 and kind and 100 a pull in all, from each neighbour after a backoff that doubles from 5 minutes to a day. A
@@ -207,9 +208,9 @@ gaps of an origin and kind come from frames and `gaps`; past that the mark waits
 fills within 7 days and after 5 failed asks counts as refused for good (time alone is not enough, so a clock that
 jumps ahead gives up nothing): it moves to `fed_gaps_given_up`, which **Instance admin → Federation → Records given
 up** and `doctor` list until the sysop marks them seen (`POST /federation/gaps/seen`); a record seen 30 days ago
-leaves the table, and one never marked seen leaves it after 90 days. A tombstone gap is never given up: a missing
-tombstone is a deletion that never arrived, so it is asked for again, once a day per neighbour, until one fills it
-(a `hops` tombstone gap, whose deletion applied here, still goes after 30 days). A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
+leaves the table, and one never marked seen leaves it after 90 days. A tombstone gap a neighbour can fill is never
+given up: a missing tombstone is a deletion that never arrived, so it is asked for again, once a day per
+neighbour, until one fills it. A tombstone gap past the hop limit is a hop-limit gap like any other. A hop-limit gap (`hops`, or `upstream-hops` from `hopGaps`) is kept apart: at the edge of the
 mesh every distant record is one, and only a shorter path fills it. It holds no mark back, counts toward no
 limit, raises no alarm, at most 10000 are kept per origin and kind, and each goes quietly after 30 days. A frame kept for
 passing on (`fed_transit`) goes nightly once its record is deleted, superseded or tombstoned; tombstone frames

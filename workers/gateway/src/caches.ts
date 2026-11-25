@@ -19,6 +19,7 @@ import {
   verifyFind,
   DEFAULT_POLICY,
   instanceMinTier,
+  stricterMinTier,
   plausiblePresence,
   type CacheRow,
   type PositionRow,
@@ -439,8 +440,8 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const yourLog = who ? await personAttempt(env, id, who, null) : null;
   const detail: CacheDetail = {
     ...toSummary(row),
-    // the minimum a find meets: the cache's own, else the instance's
-    minTrust: (row.min_trust as "A" | "B" | null) ?? instanceMinTier(setting(env, "MIN_TRUST")),
+    // the minimum a find meets: the stricter of the cache's own and the instance's
+    minTrust: stricterMinTier(row.min_trust as "A" | "B" | null, instanceMinTier(setting(env, "MIN_TRUST"))),
     hint: row.hint,
     description: row.description,
     externalId: row.external_id,
@@ -931,7 +932,9 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   // Tier A says the logger was heard on the air, so a signed-in player's call must be control-verified for it;
   // the ingest plane attributes a heard callsign as the trusted backend.
   const controlVerified = sessionCall ? await isCallsignVerified(env, loggerCall) : true;
-  const score = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
+  const scored = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
+  // a later lift holds the signed-in player's call to the same control-verification
+  const score = scored.retry && sessionCall ? { ...scored, retry: { ...scored.retry, requireVerified: true } } : scored;
   const committed = await commitFind(env, cache, loggerCall, foundAt, comment ?? null, score, {
     signerKey,
     authorSig,
