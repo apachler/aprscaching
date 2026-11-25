@@ -11,6 +11,7 @@ import {
   flush,
   loadAttention,
   loadQueue,
+  ownedBy,
   retryAttention,
   removeQueued,
 } from "./log/logQueue.js";
@@ -1782,6 +1783,9 @@ export async function unlockStage(
     if (!code?.trim()) return { unlocked: false, reason: "no_code" };
     const payload = await openSealedStage(code, stage.sealed);
     if (!payload) return { unlocked: false, reason: "bad_code" };
+    // an unlock kept for nobody could only ever be confirmed under someone else's session
+    const owner = await queueOwner();
+    if (!owner) throw e;
     const unlocks = await localUnlocks();
     unlocks[`${cacheId}:${stageNo}`] = payload;
     await store.kvSet(STAGE_UNLOCKS_KEY, JSON.stringify(unlocks));
@@ -1792,6 +1796,7 @@ export async function unlockStage(
         cacheId,
         kind: "unlock",
         stageNo,
+        owner,
         body: { loggerCall: callsign, logType: "unlock", code: code.trim() },
         label: hit.cache.code,
         ...(instance && { instance }),
@@ -2096,6 +2101,21 @@ const queueStore: QueueStore = {
   get: async (k) => (await offlineReady()).kvGet(k),
   set: async (k, v) => (await offlineReady()).kvSet(k, v),
 };
+/**
+ * The signed-in callsign the queue is kept for, where the page and the service worker both read it: an entry
+ * is sent and listed only while its owner is signed in, since every send carries whichever session cookie is
+ * current. The session hook sets it from each server answer and clears it on sign-out; open lists then re-read.
+ */
+const QUEUE_OWNER = "acs.sync.owner";
+export async function setQueueOwner(callsign: string | null): Promise<void> {
+  const st = await offlineReady();
+  const next = callsign?.trim().toUpperCase() ?? "";
+  if (((await st.kvGet(QUEUE_OWNER)) ?? "") === next) return;
+  await st.kvSet(QUEUE_OWNER, next);
+  queueChanged();
+}
+const queueOwner = async (): Promise<string | null> => (await queueStore.get(QUEUE_OWNER)) || null;
+
 const isOffline = (e: unknown) => !navigator.onLine || e instanceof TypeError; // fetch network errors throw TypeError
 const queueChanged = () => {
   try {
@@ -2110,8 +2130,15 @@ export function logFind(cacheId: number, body: LogBody, label?: string): Promise
   return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) }).catch(
     async (e) => {
       if (!isOffline(e)) throw e;
+      // a log kept for nobody could only ever go out under someone else's session
+      const owner = await queueOwner();
+      if (!owner) throw e;
       const instance = await getInstance();
-      await enqueue(queueStore, { cacheId, body, ...(label && { label }), ...(instance && { instance }) }, Date.now());
+      await enqueue(
+        queueStore,
+        { cacheId, body, owner, ...(label && { label }), ...(instance && { instance }) },
+        Date.now(),
+      );
       queueChanged();
       void askForBackgroundSync(instance);
       return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
@@ -2119,8 +2146,12 @@ export function logFind(cacheId: number, body: LogBody, label?: string): Promise
   );
 }
 
-export const queuedLogs = (): Promise<QueuedLog<QueueBody>[]> => loadQueue<QueueBody>(queueStore);
-export const attentionLogs = (): Promise<AttentionLog<QueueBody>[]> => loadAttention<QueueBody>(queueStore);
+/** The signed-in player's waiting logs; another player's on this device stay out of sight. */
+export const queuedLogs = async (): Promise<QueuedLog<QueueBody>[]> =>
+  ownedBy(await loadQueue<QueueBody>(queueStore), await queueOwner());
+/** The signed-in player's refused logs. */
+export const attentionLogs = async (): Promise<AttentionLog<QueueBody>[]> =>
+  ownedBy(await loadAttention<QueueBody>(queueStore), await queueOwner());
 
 /**
  * Send the queued logs that are due (the signature and its time are kept, so the instance verifies each
@@ -2131,8 +2162,9 @@ export function flushLogQueue(): Promise<FlushResult> {
   return withQueueLock(flushUnlocked);
 }
 async function flushUnlocked(): Promise<FlushResult> {
+  const owner = await queueOwner();
   const queue = await queuedLogs();
-  if (!queue.length) return { sent: 0, refused: 0 };
+  if (!owner || !queue.length) return { sent: 0, refused: 0 };
   const instance = (await getInstance()) || undefined;
   // a signed log is taken only once its key is registered to the logger's call: register it first, where it can
   if (navigator.onLine)
@@ -2156,6 +2188,9 @@ async function flushUnlocked(): Promise<FlushResult> {
       } catch (e) {
         if (isOffline(e)) throw { kind: "offline" } satisfies SendFailure;
         const status = e instanceof ApiError ? e.status : 0;
+        // the session is no longer the owner's (it ended or another player signed in elsewhere): keep it for them
+        if (e instanceof ApiError && (e.data as { reason?: unknown } | null)?.reason === "other_call")
+          throw { kind: "held" } satisfies SendFailure;
         if (status === 0 || status >= 500 || status === 408 || status === 429)
           throw { kind: "retry" } satisfies SendFailure;
         const refusal = it.kind === "unlock" ? stageRefusal(e) : null;
@@ -2170,6 +2205,7 @@ async function flushUnlocked(): Promise<FlushResult> {
     },
     Date.now(),
     instance,
+    owner,
   );
   if (res.sent || res.refused) queueChanged();
   return res;

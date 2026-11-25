@@ -218,6 +218,7 @@ describe("Background Sync of the offline log queue", () => {
     cacheId,
     body: { logType: "found", comment: `c${cacheId}` },
     queuedAt: 1000 + cacheId,
+    owner: "OE8FND",
     ...(instance && { instance }),
     ...extra,
   });
@@ -225,6 +226,7 @@ describe("Background Sync of the offline log queue", () => {
     const st = idbStore();
     await st.kvSet("acs.sync.apiBase", API);
     await st.kvSet("acs.sync.instance", "here.example");
+    await st.kvSet("acs.sync.owner", "OE8FND");
     await st.kvSet("acs.logqueue", JSON.stringify(queue));
     await st.kvSet("acs.logqueue.attention", "[]");
     return st;
@@ -276,6 +278,7 @@ describe("Background Sync of the offline log queue", () => {
         stageNo: 2,
         body: { logType: "unlock", loggerCall: "OE8FND", code: "k7m2q9x4w8" },
         queuedAt: 9,
+        owner: "OE8FND",
         instance: "here.example",
       },
     ]);
@@ -291,6 +294,37 @@ describe("Background Sync of the offline log queue", () => {
       { url: `${API}/api/caches/7/stages/2/unlock`, body: { callsign: "OE8FND", code: "k7m2q9x4w8" } },
     ]);
     expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toEqual([]);
+  });
+
+  it("sends only the signed-in owner's entries; another player's wait, and none go once signed out", async () => {
+    const st = await seed([item(1, "here.example", { owner: "OE8AAA" }), item(2, "here.example", { owner: "OE8BBB" })]);
+    await st.kvSet("acs.sync.owner", "OE8BBB");
+    const posted: string[] = [];
+    const net = (url: string) => {
+      posted.push(url);
+      return Response.json({ logged: true });
+    };
+    await load({ net }).fire("sync", { tag: "acs-logqueue" });
+    expect(posted).toEqual([`${API}/api/caches/2/logs`]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toMatchObject([{ cacheId: 1, owner: "OE8AAA" }]);
+    await st.kvSet("acs.sync.owner", "");
+    await load({ net }).fire("sync", { tag: "acs-logqueue" });
+    expect(posted).toHaveLength(1);
+  });
+
+  it("keeps an entry the instance refuses as another player's: the stored owner lagged the session", async () => {
+    const st = await seed([item(1, "here.example"), item(2, "here.example")]);
+    const posted: string[] = [];
+    const w = load({
+      net: (url) => {
+        posted.push(url);
+        return Response.json({ error: "signed in as OE8BBB, not OE8FND", reason: "other_call" }, { status: 403 });
+      },
+    });
+    await w.fire("sync", { tag: "acs-logqueue" });
+    expect(posted).toEqual([`${API}/api/caches/1/logs`]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toMatchObject([{ cacheId: 1 }, { cacheId: 2 }]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue.attention"))!)).toEqual([]);
   });
 
   it("ignores other sync tags", async () => {

@@ -4,7 +4,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { sealStage, type PackCache } from "@aprscaching/shared";
-import { attentionLogs, flushLogQueue, offlineReady, unlockStage } from "../src/api.js";
+import { attentionLogs, flushLogQueue, offlineReady, queuedLogs, setQueueOwner, unlockStage } from "../src/api.js";
 import { stageRefusalText } from "../src/log/stageUnlock.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -69,6 +69,7 @@ describe("a refused stage unlock", () => {
       },
       [cache],
     );
+    await setQueueOwner("OE8FND");
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
     expect(await unlockStage(88, 1, "OE8FND", undefined, SERIAL)).toMatchObject({ unlocked: true, offline: true });
     vi.stubGlobal("fetch", answer(403, { unlocked: false, reason: "bad_code" }));
@@ -78,5 +79,21 @@ describe("a refused stage unlock", () => {
     Object.defineProperty(navigator, "onLine", { value: undefined, configurable: true });
     const attention = await attentionLogs();
     expect(attention.find((a) => a.cacheId === 88)?.reason).toBe("That tag/code doesn't match this stage.");
+  });
+
+  it("kept queued when the instance answers that the session is another player's", async () => {
+    const SERIAL = "04:A2:5F:1B:3C:80:91";
+    await setQueueOwner("OE8FND");
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+    expect(await unlockStage(88, 1, "OE8FND", undefined, SERIAL)).toMatchObject({ unlocked: true, offline: true });
+    const before = (await attentionLogs()).length;
+    // the stored owner lagged: the cookie is another player's, and the instance refuses the unlock as not theirs
+    vi.stubGlobal("fetch", answer(403, { error: "signed in as OE8BBB, not OE8FND", reason: "other_call" }));
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    const r = await flushLogQueue();
+    Object.defineProperty(navigator, "onLine", { value: undefined, configurable: true });
+    expect(r).toEqual({ sent: 0, refused: 0 });
+    expect((await queuedLogs()).filter((q) => q.cacheId === 88)).toHaveLength(1);
+    expect(await attentionLogs()).toHaveLength(before);
   });
 });

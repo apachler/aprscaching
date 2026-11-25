@@ -168,15 +168,27 @@ describe("trust is unchanged", () => {
     const r = await mint(env, { callsign: "OE8VIS", base: HOTSPOT });
     const ok = await confirm(env, tokenOf(r.data.link));
     const cookie = /(acs=[^;]*)/.exec(ok.headers.get("set-cookie") ?? "")![1]!;
-    const log = await visitor(env, "POST", `/api/caches/${cacheId}/logs`, {
-      headers: { cookie, origin: HOTSPOT, "content-type": "application/json" },
-      body: JSON.stringify({ logType: "found", loggerCall: "OE8APR" }),
-    });
-    expect(log.status).toBeLessThan(300);
-    const rows = await env.DB.prepare("SELECT logger_call, tier FROM cache_logs WHERE cache_id=?")
-      .bind(cacheId)
-      .all<{ logger_call: string; tier: string | null }>();
-    expect(rows.results.map((x) => x.logger_call)).toEqual(["OE8VIS"]);
-    expect(rows.results[0]!.tier).not.toBe("A");
+    const post = (body: object) =>
+      visitor(env, "POST", `/api/caches/${cacheId}/logs`, {
+        headers: { cookie, origin: HOTSPOT, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const rows = async () =>
+      (
+        await env.DB.prepare("SELECT logger_call, tier FROM cache_logs WHERE cache_id=? ORDER BY id")
+          .bind(cacheId)
+          .all<{ logger_call: string; tier: string | null }>()
+      ).results;
+    // a log naming another call is refused, never recorded under either call
+    const other = await post({ logType: "found", loggerCall: "OE8APR" });
+    expect(other.status).toBe(403);
+    expect(((await other.json()) as { reason?: string }).reason).toBe("other_call");
+    expect(await rows()).toEqual([]);
+    // naming the visitor's own call, or none, records it as the visitor
+    expect((await post({ logType: "found", loggerCall: "OE8VIS" })).status).toBeLessThan(300);
+    expect((await post({ logType: "note", comment: "back again" })).status).toBeLessThan(300);
+    const logged = await rows();
+    expect(logged.map((x) => x.logger_call)).toEqual(["OE8VIS", "OE8VIS"]);
+    for (const x of logged) expect(x.tier).not.toBe("A");
   });
 });
