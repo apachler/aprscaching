@@ -47,18 +47,37 @@ export function authorshipMessage(a: Authorship): string {
 }
 
 /**
- * The exact bytes signed to authorize a sensitive account action (data export, erasure, or a
- * migration to another instance). Signed by a device key already registered to the callsign;
- * `instance` binds it to where the action runs (the *target* instance for a migration).
+ * The exact bytes signed to authorize a sensitive account action (data export, erasure, a migration bundle or move,
+ * or the proof a migration import carries). Signed by a device key already registered to the callsign; `instance`
+ * binds it to where the action runs (the *target* instance for an import's proof). A request to an account route
+ * also signs `digest` ({@link accountActionDigest}), which binds the signature to that request's parameters, so it
+ * authorises no other body.
  */
-export function accountActionMessage(a: { action: string; callsign: string; instance: string; at: number }): string {
+export function accountActionMessage(a: {
+  action: string;
+  callsign: string;
+  instance: string;
+  at: number;
+  digest?: string;
+}): string {
   return stableStringify({
     v: 1,
     action: a.action,
     callsign: a.callsign.toUpperCase(),
     instance: a.instance,
     at: a.at,
+    ...(a.digest === undefined ? {} : { digest: a.digest }),
   });
+}
+
+/** The digest an account route's signature binds: SHA-256 (hex) of the request's canonical parameters, its body
+ *  without the `key`, `sig` and `at` that carry the signature. */
+export async function accountActionDigest(params: Record<string, unknown>): Promise<string> {
+  const rest: Record<string, unknown> = { ...params };
+  delete rest.key;
+  delete rest.sig;
+  delete rest.at;
+  return sha256Hex(stableStringify(rest));
 }
 
 /**

@@ -2416,11 +2416,11 @@ export function claim(callsign: string): Promise<{
 export function emailStart(
   email: string,
   callsign?: string,
-): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
+): Promise<{ sent: boolean; purpose?: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, callsign }) });
 }
 /** Email a link that opens the data of an account holding no callsign, to export or erase it. */
-export function accountDataStart(email: string): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
+export function accountDataStart(email: string): Promise<{ sent: boolean; purpose?: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, purpose: "account-data" }) });
 }
 /** The answer to an address change or a resend: the address waiting for confirmation, or the confirmed one

@@ -141,7 +141,7 @@ export function corsAllowlist(env: Env): Set<string> {
 
 /** A browser POST must come from this gateway's own page or the configured app origins. A request with
  *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
-export function sameSiteOrigin(req: Request, env: Env): boolean {
+function sameSiteOrigin(req: Request, env: Env): boolean {
   const origin = req.headers.get("origin");
   if (origin === null) return true;
   try {
@@ -158,11 +158,14 @@ export function sameSiteOrigin(req: Request, env: Env): boolean {
  * host, or on a sibling subdomain, is same-site, and its POST carries the cookie. A text/plain body needs no
  * preflight, so the request itself must say where it came from. The browser's Sec-Fetch-Site decides when it
  * is sent (same-origin, or a direct navigation, or else a configured app origin); without it the Origin
- * header does. A request without the cookie (ingest, federation, a box, a Bearer key) is not one.
+ * header does. A request without the cookie (ingest, federation, a box, a Bearer key) is not one, except under
+ * `/auth/`: the sign-in endpoints there issue the cookie to a visitor who carries none, so a cross-site form
+ * posting another account's ceremony would sign the visitor into it (login CSRF).
  */
 export function crossOriginWrite(req: Request, env: Env): boolean {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return false;
-  if (!/(?:^|;\s*)acs=/.test(req.headers.get("cookie") ?? "")) return false;
+  const signIn = new URL(req.url).pathname.startsWith("/auth/");
+  if (!signIn && !/(?:^|;\s*)acs=/.test(req.headers.get("cookie") ?? "")) return false;
   const site = req.headers.get("sec-fetch-site")?.toLowerCase();
   if (site === undefined) return !sameSiteOrigin(req, env);
   if (site === "same-origin" || site === "none") return false;

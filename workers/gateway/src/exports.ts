@@ -12,6 +12,7 @@ import { baseCall } from "@aprscaching/aprs";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { xmlEscape } from "./sitemap.js";
+import { displayCall } from "./auth.js";
 
 export interface ExpCache {
   code: string;
@@ -30,6 +31,14 @@ export interface ExpFind {
   stationCall: string | null;
   ts: number;
 }
+
+/** A row's calls as readers see them: a per-account withdrawn or former-holder suffix links one person's rows
+ *  together, so a file that leaves this instance carries only the plain marker (`displayCall`). */
+const shownCalls = <T extends { ownerCall: string; stationCall?: string | null }>(r: T): T => ({
+  ...r,
+  ownerCall: displayCall(r.ownerCall),
+  ...(r.stationCall ? { stationCall: displayCall(r.stationCall) } : {}),
+});
 
 const dt = (c: ExpCache) => `D${c.difficulty}/T${c.terrain}`;
 
@@ -118,7 +127,7 @@ async function bboxCaches(
       .bind(minLat, maxLat, minLon, maxLon)
       .all<ExpCache>()
   ).results;
-  return rows;
+  return rows.map(shownCalls);
 }
 
 function download(body: string, type: string, filename: string): Response {
@@ -139,7 +148,7 @@ export async function handleCachesKml(req: Request, env: Env): Promise<Response>
 }
 export async function handleCacheGpx(req: Request, env: Env, code: string): Promise<Response> {
   const c = await env.DB.prepare(
-    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND source = 'native' AND lat IS NOT NULL AND removed_at IS NULL",
+    "SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall FROM caches WHERE code = ? AND source = 'native' AND lat IS NOT NULL AND removed_at IS NULL AND status != 'archived'",
   )
     .bind(code)
     .first<ExpCache>();
@@ -148,7 +157,7 @@ export async function handleCacheGpx(req: Request, env: Env, code: string): Prom
       status: 404,
       headers: { "content-type": "application/json" },
     });
-  return download(cachesToGpx([c]), "application/gpx+xml", `${code}.gpx`);
+  return download(cachesToGpx([shownCalls(c)]), "application/gpx+xml", `${code}.gpx`);
 }
 // ---- station tracks: position history as JSON + KML LineString ----
 interface TrackPt {
@@ -214,6 +223,6 @@ export async function handleFindsAdif(req: Request, env: Env, call: string): Pro
     )
       .bind(person, person)
       .all<ExpFind>()
-  ).results;
+  ).results.map(shownCalls);
   return download(findsToAdif(finds, person), "text/plain", `${person}-finds.adif`);
 }

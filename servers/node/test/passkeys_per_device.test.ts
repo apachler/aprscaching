@@ -2,7 +2,15 @@
 // A ham signs in on several devices. Each device holds its own passkey, added from a session of the same
 // account; the account lists and removes them, and never loses its last way in.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, newAuthenticator, passkeyLogin, passkeyRegister } from "./helpers/authflow.js";
+import {
+  authEnv,
+  call,
+  emailSignup,
+  newAuthenticator,
+  passkeyLogin,
+  passkeyRegister,
+  passkeyRegisterFinish,
+} from "./helpers/authflow.js";
 
 describe("passkeys per device", () => {
   it("a signed-in holder adds a second device's passkey, and both sign in", async () => {
@@ -32,6 +40,52 @@ describe("passkeys per device", () => {
     );
     const list = await call(env, "GET", "/auth/passkeys", undefined, { cookie: owner.cookie });
     expect(list.data.passkeys).toHaveLength(1);
+  });
+
+  it("a passkey add binds to the account that began it, never to whoever holds the call at finish", async () => {
+    const env = authEnv();
+    const prev = await passkeyRegister(env, "OE1RAC", await newAuthenticator());
+    expect(prev.status).toBe(200);
+    const licensee = await emailSignup(env, "licensee@example.test", "OE1LIC");
+    expect(licensee.status).toBe(200);
+    const victimId = (await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = 'OE1LIC'").first<{
+      account_id: string;
+    }>())!.account_id;
+    // the previous holder begins an add, then the call changes hands before finish (the begin's stash survives)
+    const begin = await call(
+      env,
+      "POST",
+      "/auth/passkey/register/begin",
+      { callsign: "OE1RAC" },
+      { cookie: prev.cookie },
+    );
+    expect(begin.status).toBe(200);
+    await env.DB.prepare("UPDATE account_callsigns SET account_id = ? WHERE callsign = 'OE1RAC'").bind(victimId).run();
+    const fin = await passkeyRegisterFinish(env, "OE1RAC", await newAuthenticator(), begin.data.challenge, {
+      cookie: prev.cookie,
+    });
+    expect(fin.status).toBe(400);
+    expect(fin.cookie).toBe("");
+    const onVictim = await env.DB.prepare("SELECT COUNT(*) AS n FROM credentials WHERE account_id = ?")
+      .bind(victimId)
+      .first<{ n: number }>();
+    expect(onVictim?.n).toBe(0);
+  });
+
+  it("a passkey add finishes only with a session of the account that began it", async () => {
+    const env = authEnv();
+    const owner = await passkeyRegister(env, "OE1FIN", await newAuthenticator());
+    const begin = await call(
+      env,
+      "POST",
+      "/auth/passkey/register/begin",
+      { callsign: "OE1FIN" },
+      { cookie: owner.cookie },
+    );
+    expect(begin.status).toBe(200);
+    const fin = await passkeyRegisterFinish(env, "OE1FIN", await newAuthenticator(), begin.data.challenge);
+    expect(fin.status).toBe(400);
+    expect(fin.cookie).toBe("");
   });
 
   it("adding a passkey keeps the session on the call it was using", async () => {

@@ -384,7 +384,7 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     cs,
     "webauthn_reg",
     challenge,
-    JSON.stringify({ c: challenge, ...(pendingNew ? { a: accountId, e: normalEmail(email) } : {}) }),
+    JSON.stringify({ c: challenge, ...(pendingNew ? { a: accountId, e: normalEmail(email) } : { h: accountId }) }),
   );
   const excl = await env.DB.prepare("SELECT id FROM credentials WHERE account_id=?")
     .bind(accountId)
@@ -417,18 +417,24 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   if (!credential?.response?.attestationObject) return json({ error: "no pending registration" }, { status: 400 });
   const stashed = await takeChallenge(env, cs, "webauthn_reg", credential.response.clientDataJSON);
   if (!stashed) return json({ error: "no pending registration" }, { status: 400 });
-  // The stash is {c: challenge, a?: provisional accountId, e?: email} — `a` present means the
-  // account does not exist yet and is created below only once the ceremony verifies.
-  let challenge: string;
-  let pending: { a?: string; e?: string | null } = {};
-  let accountId: string | null;
+  // The stash is {c: challenge, a: provisional accountId, e?: email} for a new account, created below only once
+  // the ceremony verifies, or {c: challenge, h: accountId} for another passkey of the account whose session began.
+  let pending: { c?: unknown; a?: string; e?: string | null; h?: string };
   try {
-    const j = JSON.parse(stashed) as { c: string; a?: string; e?: string | null };
-    challenge = j.c;
-    pending = j;
+    pending = JSON.parse(stashed) as typeof pending;
   } catch {
-    challenge = stashed; // a bare (non-JSON) stash is the challenge itself — an existing account
+    return json({ error: "no pending registration" }, { status: 400 });
   }
+  if (typeof pending.c !== "string" || (!pending.a && !pending.h))
+    return json({ error: "no pending registration" }, { status: 400 });
+  const challenge = pending.c;
+  let accountId: string;
+  // Another passkey binds to the account that began the ceremony, and only while that account still holds the
+  // call and its session finishes it: a call that changed hands mid-ceremony must not carry the previous holder's
+  // passkey onto the licensee's account.
+  const me = pending.h ? await sessionIdentity(req, env) : null;
+  if (pending.h && (me?.accountId !== pending.h || (await baseHolder(env, baseCall(cs))) !== pending.h))
+    return json({ error: "no pending registration" }, { status: 400 });
   try {
     const r = await verifyRegistration({
       clientDataJSON: b64urlToBytes(credential.response.clientDataJSON),
@@ -472,8 +478,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       accountId = pending.a;
       if (pending.e) confirmation = await sendEmailConfirmation(req, env, pending.e, cs);
     } else {
-      accountId = await baseHolder(env, baseCall(cs));
-      if (!accountId) return json({ error: "no pending registration" }, { status: 400 });
+      accountId = pending.h!;
       try {
         await insertCred(accountId).run();
       } catch {
@@ -481,8 +486,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       }
     }
     // a passkey added to an existing account keeps the session on the call it was using
-    const me = pending.a ? null : await sessionIdentity(req, env);
-    const sessionCall = me && me.accountId === accountId ? me.callsign : cs;
+    const sessionCall = me ? me.callsign : cs;
     return json(
       {
         ok: true,

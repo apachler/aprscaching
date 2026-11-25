@@ -75,3 +75,30 @@ describe("clientIp comes from sources the client cannot choose", () => {
     expect(clientIp(reqWith({}), {} as Env)).toBe("unknown");
   });
 });
+
+describe("an IPv6 client's /64 is one rate-limit identity", () => {
+  const reqWith = (h: Record<string, string>) => new Request("http://gw/x", { headers: h });
+  const ip = (a: string) => clientIp(reqWith({ "x-real-ip": a }), {} as Env);
+
+  it("addresses in one /64 share a key; another /64 does not", () => {
+    expect(ip("2001:db8:0:1::1")).toBe(ip("2001:db8:0:1:ffff:ffff:ffff:fffe"));
+    expect(ip("2001:db8:0:1:a:b:c:d")).toBe("2001:db8:0:1::/64");
+    expect(ip("2001:db8:0:2::1")).not.toBe(ip("2001:db8:0:1::1"));
+    expect(ip("[2001:DB8::1%eth0]")).toBe("2001:db8:0:0::/64");
+  });
+
+  it("an IPv4-mapped address is its IPv4 client; IPv4 and non-addresses pass through", () => {
+    expect(ip("::ffff:192.0.2.1")).toBe("192.0.2.1");
+    expect(ip("::ffff:c000:201")).toBe("192.0.2.1");
+    expect(ip("192.0.2.1")).toBe("192.0.2.1");
+    expect(ip("not:an:address")).toBe("not:an:address");
+  });
+
+  it("rotating through a /64 does not lift a durable limit", async () => {
+    const env = freshEnv();
+    const t = 1_000_000;
+    for (let i = 1; i <= 5; i++)
+      expect(await rateLimitedDurable(env, `apiip:${ip(`2001:db8:0:1::${i.toString(16)}`)}`, t, 5, 60_000)).toBe(false);
+    expect(await rateLimitedDurable(env, `apiip:${ip("2001:db8:0:1::99")}`, t, 5, 60_000)).toBe(true);
+  });
+});

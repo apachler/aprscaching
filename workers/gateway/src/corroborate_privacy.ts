@@ -170,6 +170,10 @@ export function stampClientIp(headers: Headers, socketAddr: string | undefined, 
  *    client-supplied value never survives to this point on the self-host runtimes.
  */
 export function clientIp(req: Request, env: Env): string {
+  return addressBucket(rawClientIp(req, env));
+}
+
+function rawClientIp(req: Request, env: Env): string {
   const cf = req.headers.get("cf-connecting-ip");
   if (cf) return cf;
   if (env.TRUST_PROXY === "1") {
@@ -177,4 +181,47 @@ export function clientIp(req: Request, env: Env): string {
     if (xff) return xff;
   }
   return req.headers.get("x-real-ip") || "unknown";
+}
+
+/**
+ * The rate-limit identity of one address. An IPv6 client is handed a /64 (or more) and can rotate
+ * through it freely, so every address in a /64 is one identity, written as its prefix (`2001:db8:0:1::/64`).
+ * An IPv4-mapped IPv6 address (`::ffff:192.0.2.1`, what a dual-stack socket reports) is the IPv4
+ * client it names. Anything that does not parse as an address is returned unchanged.
+ */
+function addressBucket(addr: string): string {
+  const a = addr
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*$/, "");
+  if (!a.includes(":")) return addr;
+  const groups = ipv6Groups(a);
+  if (!groups) return addr;
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff)
+    return `${groups[6]! >> 8}.${groups[6]! & 0xff}.${groups[7]! >> 8}.${groups[7]! & 0xff}`;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.toString(16))
+    .join(":")}::/64`;
+}
+
+/** The eight 16-bit groups of an IPv6 address, or null when it is not one. */
+function ipv6Groups(a: string): number[] | null {
+  let s = a.toLowerCase();
+  const v4 = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+  if (v4) {
+    const o = v4.slice(2).map(Number);
+    if (o.some((n) => n > 255)) return null;
+    s = `${v4[1]}${((o[0]! << 8) | o[1]!).toString(16)}:${((o[2]! << 8) | o[3]!).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const part = (h: string) => (h === "" ? [] : h.split(":"));
+  const head = part(halves[0]!);
+  const tail = halves.length === 2 ? part(halves[1]!) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const all = [...head, ...Array<string>(fill).fill("0"), ...tail];
+  if (!all.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
+  return all.map((g) => parseInt(g, 16));
 }

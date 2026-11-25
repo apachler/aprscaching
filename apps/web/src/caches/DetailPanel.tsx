@@ -383,7 +383,7 @@ export function DetailPanel(props: {
       <ShareCache
         code={c.code}
         title={c.title}
-        gpx={c.source === "native" && c.lat != null && c.lon != null}
+        gpx={c.source === "native" && c.status !== "archived" && c.lat != null && c.lon != null}
         onToast={toast}
       />
 

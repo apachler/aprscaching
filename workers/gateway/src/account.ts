@@ -11,7 +11,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./http.js";
-import { accountActionMessage, FED_BBS_CATEGORY } from "@aprscaching/shared";
+import { accountActionDigest, accountActionMessage, FED_BBS_CATEGORY, sha256Hex } from "@aprscaching/shared";
 import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { tombstoneSelect } from "./tombstones.js";
 import { finishMediaDeletes, queueMediaDeletes } from "./mediadeletions.js";
@@ -67,13 +67,24 @@ async function authorize(env: Env, req: Request, callsign: string, action: strin
   try {
     const key = await importVerifyKey(body.key);
     const msg = new TextEncoder().encode(
-      accountActionMessage({ action, callsign: cs, instance: instanceOf(env, req), at: body.at }),
+      accountActionMessage({
+        action,
+        callsign: cs,
+        instance: instanceOf(env, req),
+        at: body.at,
+        digest: await accountActionDigest(body),
+      }),
     );
     const valid = await crypto.subtle.verify("Ed25519", key, b64urlToBytes(body.sig), msg);
     if (!valid) return { ok: false, res: json({ error: "invalid signature" }, { status: 401 }) };
   } catch {
     return { ok: false, res: json({ error: "invalid key/signature" }, { status: 401 }) };
   }
+  // a signed request is accepted once: the same signature inside the freshness window is a replay, remembered for
+  // as long as the window lasts
+  const once = await sha256Hex(`${body.key}|${body.sig}`);
+  if (await rateLimitedDurable(env, `acct-once:${once}`, Date.now(), 1, 600_000))
+    return { ok: false, res: json({ error: "signature already used" }, { status: 401 }) };
   return { ok: true, body };
 }
 
@@ -802,7 +813,7 @@ function eraseAccount(
 
 // ----------------------------------------------------- portability: signed migration bundle (source)
 export async function handleAccountBundle(req: Request, env: Env, callsign: string): Promise<Response> {
-  const auth = await authorize(env, req, callsign, "migrate");
+  const auth = await authorize(env, req, callsign, "bundle");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
   const verified = !!(await verificationOf(env, cs));
@@ -823,7 +834,7 @@ export async function handleAccountBundle(req: Request, env: Env, callsign: stri
 
 // ----------------------------------------------------- portability: mark moved (source)
 export async function handleAccountMove(req: Request, env: Env, callsign: string): Promise<Response> {
-  const auth = await authorize(env, req, callsign, "migrate");
+  const auth = await authorize(env, req, callsign, "move");
   if (!auth.ok) return auth.res;
   const target = String(auth.body.target ?? "").trim();
   if (!target) return json({ error: "target instance required" }, { status: 400 });
