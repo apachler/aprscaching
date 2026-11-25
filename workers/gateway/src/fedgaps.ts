@@ -23,6 +23,8 @@
  * again, once a day per neighbour once its backoff is at the longest, until one fills it. A tombstone gap past the hop
  * limit goes after 30 days like any hop-limit gap, whether this instance holds the deletion (`hops`) or a neighbour
  * does (`upstream-hops`): only a shorter path fills it, and a neighbour's word alone must not keep rows here for good.
+ * The cost: a record that reached this instance within the hop limit, whose deletion reaches its neighbours only past
+ * it, stays here for good when no shorter path carries the deletion within those 30 days.
  */
 import type { Env } from "./env.js";
 import { json } from "./http.js";

@@ -547,7 +547,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`MIN_TRUST`",
-        "The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, takes precedence",
+        "The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, applies when it is stricter, never when it is lower",
         "`B`",
       ],
       [
@@ -1080,7 +1080,7 @@ export const SITE_GROUP_TITLES: Record<SiteGroup, string> = {
 export const SITE_TEXT: Record<SiteSettingKey, { label: string; hint?: string }> = {
   MIN_TRUST: {
     label: "Lowest verified tier",
-    hint: "The tier a find needs to count as verified, unless a cache sets its own",
+    hint: "The tier a find needs to count as verified; a cache may only ask for more",
   },
   CACHE_MOVE_LIMIT_M: { label: "Move a found cache", hint: "How far an owner may move a cache once it has a find" },
   RETENTION: { label: "Diagnostic data", hint: "How long the nightly job keeps the Shack's logs and readings" },
