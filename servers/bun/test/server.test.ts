@@ -118,6 +118,40 @@ describe("a request", () => {
     }
   });
 
+  it("signed by a box, past the 5 MB a box sends, is answered 413 and gives its body slot back", async () => {
+    const s = start();
+    await s.env.DB.prepare("INSERT INTO box_keys (box_id, public_key, enrolled_by, enrolled_at) VALUES (?,?,?,?)")
+      .bind("box1", "A".repeat(43), "OE8APR", 1)
+      .run();
+    const signed = () =>
+      new Promise<string>((resolve) => {
+        let got = "";
+        const at = Math.floor(Date.now() / 1000);
+        const sock = net.connect(Number(s.server.port), "127.0.0.1", () => {
+          sock.write(
+            `POST /api/nothing HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n` +
+              `x-box-id: box1\r\nx-box-sig: xx\r\nx-box-at: ${at}\r\nx-box-nonce: 0123456789abcdef0123\r\n\r\n`,
+          );
+          const piece = Buffer.alloc(256 * 1024, 0x61);
+          for (let i = 0; i < 24; i++)
+            (sock.write(`${piece.length.toString(16)}\r\n`), sock.write(piece), sock.write("\r\n"));
+          sock.write("0\r\n\r\n");
+        });
+        sock.on("data", (c) => {
+          got += c.toString("latin1");
+          if (got.includes("\r\n\r\n")) sock.destroy();
+        });
+        sock.on("error", () => {});
+        sock.on("close", () => resolve(got));
+        setTimeout(() => (sock.destroy(), resolve(got)), 5000);
+      });
+    for (let i = 0; i < BODY_SLOTS_PER_CLIENT + 1; i++) {
+      expect(await signed()).toMatch(/^HTTP\/1\.1 413 /);
+      await Bun.sleep(100);
+      expect(sharedBodyGate.inUse).toBe(0);
+    }
+  });
+
   it("that fails inside the gateway answers a generic JSON 500", async () => {
     const logged = spyOn(console, "error").mockImplementation(() => {});
     const s = start();

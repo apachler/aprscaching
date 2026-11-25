@@ -6,11 +6,12 @@
  *
  * - past {@link BODY_MAX_BYTES} the stream fails with {@link BodyTooLarge}, answered 413;
  * - a body past {@link BODY_FREE_BYTES} — larger than any JSON form the app sends — takes one of a fixed number of
- *   slots, overall and per client address, held until the body ends or is abandoned. Without a free slot the
+ *   slots, overall and per client address, held until the body ends or the request is answered. Without a free slot the
  *   stream fails with {@link BodyBusy}, answered 503 with Retry-After.
  *
  * The slots bound what bodies in flight can pin to {@link BODY_SLOTS} × BODY_MAX_BYTES plus the small ones; a
- * client that opens many connections from one address holds at most {@link BODY_SLOTS_PER_CLIENT} of them.
+ * client that opens many connections from one address holds at most {@link BODY_SLOTS_PER_CLIENT} of them. A client
+ * that sends its body slowly holds its slot for as long as it keeps sending.
  */
 import { BODY_MAX_BYTES } from "./host.js";
 
@@ -77,6 +78,11 @@ export interface MeteredBody {
   failure(): BodyTooLarge | BodyBusy | null;
   /** Whether the source was read to its end. */
   complete(): boolean;
+  /**
+   * The request is answered: give the slot back and stop reading. A handler may leave a body half-read — a copy of
+   * it read to a cap, the original never — so the end of the request, not of the body, is what frees the slot.
+   */
+  finish(): void;
 }
 
 /**
@@ -94,18 +100,28 @@ export function meterBody(
   let slot = false;
   let ended = false;
   let failed: BodyTooLarge | BodyBusy | null = null;
+  let finished = false;
   const release = () => {
     if (slot) gate.release(client);
     slot = false;
   };
   const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
     async pull(controller) {
+      if (finished) {
+        controller.error(new Error("the request was already answered"));
+        return;
+      }
       let next: IteratorResult<Uint8Array>;
       try {
         next = await source.next();
       } catch (e) {
         release();
         controller.error(e);
+        return;
+      }
+      // answered while this read waited: take no slot for what arrived
+      if (finished) {
+        controller.error(new Error("the request was already answered"));
         return;
       }
       if (next.done) {
@@ -128,7 +144,15 @@ export function meterBody(
       release();
     },
   });
-  return { stream, failure: () => failed, complete: () => ended };
+  return {
+    stream,
+    failure: () => failed,
+    complete: () => ended,
+    finish: () => {
+      finished = true;
+      release();
+    },
+  };
 }
 
 /** The answer to a body the meter stopped: 413 or 503, closing the connection, never the handler's own. */

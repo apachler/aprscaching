@@ -2,6 +2,7 @@
 // The CoT feed's limits: /api/cot and /api/cot/stream count against the read API's per-address budget, and the
 // streams one holder (a client address, or an API key) and the whole instance hold open at once are capped.
 import { afterEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { COT_STREAM_MAX_OPEN } from "@aprscaching/gateway/cot";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 
@@ -29,6 +30,26 @@ describe("the CoT stream", () => {
     expect((await stream(s, "192.0.2.2")).status).toBe(200);
     await first[0]!.body!.cancel();
     expect((await stream(s, "192.0.2.1")).status).toBe(200);
+  });
+
+  it(`is capped at ${COT_STREAM_MAX_OPEN.keyed} open per API key, whatever address it comes from`, async () => {
+    const env = instanceEnv("gw.test", null);
+    const key = "acs_test_cot_stream_key_0123456789";
+    await env.DB.prepare(
+      "INSERT INTO api_keys (key_hash, prefix, account_id, name, created_at) VALUES (?, ?, 'acct-1', 'tak', 1)",
+    )
+      .bind(createHash("sha256").update(key).digest("hex"), key.slice(0, 12))
+      .run();
+    const s = serve(env);
+    const keyed = (ip: string) =>
+      s(new Request("https://gw.test/api/cot/stream", { headers: { "x-real-ip": ip, "x-api-key": key } })).then((r) => {
+        opened.push(r);
+        return r;
+      });
+    for (let i = 0; i < COT_STREAM_MAX_OPEN.keyed; i++) expect((await keyed(`192.0.2.${10 + i}`)).status).toBe(200);
+    expect((await keyed("192.0.2.99")).status).toBe(429);
+    // the address without the key has its own places
+    expect((await stream(s, "192.0.2.99")).status).toBe(200);
   });
 
   it(`is capped at ${COT_STREAM_MAX_OPEN.total} open over every address`, async () => {

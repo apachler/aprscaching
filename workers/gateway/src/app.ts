@@ -492,7 +492,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const p = url.pathname,
     m = req.method;
   // A box's signed request is verified here, once, before any handler reads the credential (boxkeys.ts).
-  await authenticateBox(req, env);
+  const refused = await authenticateBox(req, env);
+  if (refused) return refused;
 
   if (p === "/health") return handleHealth(req, env);
 

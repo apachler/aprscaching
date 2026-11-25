@@ -51,6 +51,8 @@ export interface ListenerOptions {
  * otherwise hold it in the server for as long as it keeps the socket open.
  */
 export const WRITE_STALL_MS = 30_000;
+/** How long a connection closed under an unread body waits, after its answer, before it is reset. */
+const LINGER_MS = 2_000;
 /** Response bodies are written in slices of this size, so a slow but reading client shows progress per slice. */
 const WRITE_SLICE = 64 * 1024;
 
@@ -222,6 +224,11 @@ async function serveRequest(
         clientIp(new Request(url, { headers }), env),
         opts.bodyGate ?? sharedBodyGate,
       );
+    // the slot goes back when the answer is done or the connection goes, whatever the handler read
+    if (body) {
+      nres.once("finish", body.finish);
+      nres.once("close", body.finish);
+    }
     const request = new Request(url, {
       method,
       headers,
@@ -234,10 +241,16 @@ async function serveRequest(
 
     nres.statusCode = response.status;
     response.headers.forEach((value, key) => nres.setHeader(key, value));
-    // a body the handler left unread is not drained: the connection closes under its rest
+    // A body the handler left unread is not drained: the connection closes under its rest. The server sends its
+    // end first and resets only a moment later, so the client still reads the answer: a reset that meets the
+    // client while it is sending discards what it had received.
     if (!nreq.complete) {
       nres.setHeader("connection", "close");
-      nres.once("finish", () => nreq.socket.destroy());
+      nres.once("finish", () => {
+        const sock = nreq.socket;
+        sock.end();
+        setTimeout(() => sock.destroy(), LINGER_MS).unref();
+      });
     }
     const type = response.headers.get("content-type") ?? "";
     if (response.body && (type.includes("text/event-stream") || response.headers.has("content-length"))) {

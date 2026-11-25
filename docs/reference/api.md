@@ -6,9 +6,15 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 
 A request body stops at 20 MB on both the Node and the Bun server (`413` past it), and a route with a smaller
 cap of its own reads no further than that cap. A body is read only once its route takes it, so an unknown path or a
-refused caller is answered without it. A body larger than 64 KB takes one of 8 upload places on the server while
-it is read, at most 2 per client address; without a free place the request is answered `503` with `Retry-After`.
-The Node server drops a client that takes no bytes of an answer for 30 seconds. A failure inside the gateway answers `500` with the JSON body
+refused caller is answered without it. The one exception is a request signed by a box (`x-box-sig`): its body is
+read up to 5 MB to check the signature before routing, and a larger one is answered `413`. A body larger than 64 KB
+takes one of 8 upload places on the server until the request is answered, at most 2 per client address; without a
+free place the request is answered `503` with `Retry-After`. A client that sends its body slowly keeps its place for
+as long as it keeps sending. The Node server drops a client that takes no bytes of an answer for 30 seconds; the
+wait counts per write, so a client that takes a little every 30 seconds stays connected. Behind a proxy, "client
+address" is the address the server takes as the client's (`TRUST_PROXY`, `TRUST_CF`).
+
+A failure inside the gateway answers `500` with the JSON body
 `{"error":"internal error"}` and nothing else; the error itself goes to the server's log.
 
 ## Authentication

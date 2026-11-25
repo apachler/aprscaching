@@ -163,6 +163,45 @@ describe("a request body", () => {
   });
 });
 
+describe("a box-signed request", () => {
+  /** A chunked POST of `mb` MiB signed as box `box1`; resolves with what came back once the server closes. */
+  function signedPost(port: number, mb: number): Promise<string> {
+    return new Promise((resolve) => {
+      let got = "";
+      const at = Math.floor(Date.now() / 1000);
+      const sock = net.connect(port, "127.0.0.1", () => {
+        sock.write(
+          `POST /api/nothing HTTP/1.1\r\nHost: gw.test\r\nTransfer-Encoding: chunked\r\n` +
+            `x-box-id: box1\r\nx-box-sig: xx\r\nx-box-at: ${at}\r\nx-box-nonce: 0123456789abcdef0123\r\n\r\n`,
+        );
+        const piece = Buffer.alloc(256 * 1024, 0x61);
+        for (let i = 0; i < mb * 4; i++)
+          (sock.write(`${piece.length.toString(16)}\r\n`), sock.write(piece), sock.write("\r\n"));
+        sock.write("0\r\n\r\n");
+      });
+      sockets.push(sock);
+      sock.on("data", (c) => (got += c.toString("latin1")));
+      sock.on("error", () => {});
+      sock.on("close", () => resolve(got));
+      setTimeout(() => resolve(got), 5000);
+    });
+  }
+
+  it("past the 5 MB a box sends is answered 413, and gives its body slot back", async () => {
+    const env = instanceEnv("gw.test", null);
+    await env.DB.prepare("INSERT INTO box_keys (box_id, public_key, enrolled_by, enrolled_at) VALUES (?,?,?,?)")
+      .bind("box1", "A".repeat(43), "OE8APR", 1)
+      .run();
+    const gate = new BodyGate(8, BODY_SLOTS_PER_CLIENT);
+    const { port } = await listen(env, { bodyGate: gate });
+    for (let i = 0; i < BODY_SLOTS_PER_CLIENT + 1; i++) {
+      expect(await signedPost(port, 6)).toMatch(/^HTTP\/1\.1 413 /);
+      await sleep(100);
+      expect(gate.inUse).toBe(0);
+    }
+  }, 30_000);
+});
+
 describe("the body gate", () => {
   it("counts slots per client and overall, and a release frees exactly one", () => {
     const g = new BodyGate(3, 2);

@@ -34,39 +34,64 @@ export async function handleOfflineTiles(_req: Request, env: Env): Promise<Respo
 
 /** GET|HEAD /tiles/offline.pmtiles — the archive by byte range (one range per request). */
 export async function handleTileArchive(req: Request, env: Env): Promise<Response> {
-  const st = await env.TILES?.stat();
-  if (!env.TILES || !st) return new Response("no offline map on this instance", { status: 404 });
-  const etag = `"${st.etag}"`;
-  const base = {
+  const none = () => new Response("no offline map on this instance", { status: 404 });
+  const headers = (etag: string) => ({
     ...tileHeaders,
-    etag,
+    etag: `"${etag}"`,
     "content-type": "application/vnd.pmtiles",
     "cache-control": "public, max-age=3600",
+  });
+  if (req.method === "HEAD") {
+    const st = await env.TILES?.stat();
+    if (!st) return none();
+    return new Response(null, { headers: { ...headers(st.etag), "content-length": String(st.size) } });
+  }
+  // one open copy answers the whole request: its tag, its size and every byte read
+  const archive = await env.TILES?.open();
+  if (!archive) return none();
+  const base = headers(archive.etag);
+  const refuse = (r: Response) => {
+    void archive.close().catch(() => {});
+    return r;
   };
-  if (req.method === "HEAD") return new Response(null, { headers: { ...base, "content-length": String(st.size) } });
   const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get("range") ?? "");
   if (!m)
-    return new Response("ask for a byte range", {
-      status: 416,
-      headers: { ...base, "content-range": `bytes */${st.size}` },
-    });
+    return refuse(
+      new Response("ask for a byte range", {
+        status: 416,
+        headers: { ...base, "content-range": `bytes */${archive.size}` },
+      }),
+    );
   const start = Number(m[1]);
-  const end = Math.min(m[2] ? Number(m[2]) : st.size - 1, st.size - 1, start + MAX_RANGE - 1);
-  if (start >= st.size || end < start)
-    return new Response(null, { status: 416, headers: { ...base, "content-range": `bytes */${st.size}` } });
+  const end = Math.min(m[2] ? Number(m[2]) : archive.size - 1, archive.size - 1, start + MAX_RANGE - 1);
+  if (start >= archive.size || end < start)
+    return refuse(
+      new Response(null, { status: 416, headers: { ...base, "content-range": `bytes */${archive.size}` } }),
+    );
   const length = end - start + 1;
-  const tiles = env.TILES;
   let at = 0;
+  const close = () => void archive.close().catch(() => {});
   // read lazily: a client that stops reading holds one piece in the server, never the whole range
   const body = new ReadableStream<Uint8Array>(
     {
       async pull(controller) {
-        const piece = await tiles.read(start + at, Math.min(READ_CHUNK, length - at));
+        let piece: Uint8Array;
+        try {
+          piece = await archive.read(start + at, Math.min(READ_CHUNK, length - at));
+        } catch (e) {
+          close();
+          controller.error(e);
+          return;
+        }
         at += piece.length;
         if (piece.length) controller.enqueue(piece);
-        // a file cut short since its stat ends the answer early; the client sees fewer bytes than it was told
-        if (!piece.length || at >= length) controller.close();
+        // an archive cut short in place ends the answer early; the client sees fewer bytes than it was told
+        if (!piece.length || at >= length) {
+          close();
+          controller.close();
+        }
       },
+      cancel: close,
     },
     { highWaterMark: 0 },
   );
@@ -74,7 +99,7 @@ export async function handleTileArchive(req: Request, env: Env): Promise<Respons
     status: 206,
     headers: {
       ...base,
-      "content-range": `bytes ${start}-${end}/${st.size}`,
+      "content-range": `bytes ${start}-${end}/${archive.size}`,
       "content-length": String(length),
     },
   });

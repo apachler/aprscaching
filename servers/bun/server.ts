@@ -169,9 +169,15 @@ export function createServer(opts: BunServerOptions): BunServer {
         signal: req.signal,
         ...(body ? { body: body.stream, duplex: "half" } : {}),
       } as RequestInit);
-      let res = await handle(forwarded, env, {
-        waitUntil: (p) => void Promise.resolve(p).catch(() => {}),
-      });
+      let res: Response;
+      try {
+        res = await handle(forwarded, env, {
+          waitUntil: (p) => void Promise.resolve(p).catch(() => {}),
+        });
+      } finally {
+        // answered: nothing reads the body any more, whatever the handler left of it, so its slot goes back
+        body?.finish();
+      }
       const failure = body?.failure();
       if (failure) res = bodyFailureResponse(failure);
       // an event stream (the CoT feed, the heard stream) is quiet between keep-alives: Bun's idle timeout
