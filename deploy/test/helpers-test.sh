@@ -374,7 +374,7 @@ fi
 # ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
 # deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
 FIX="$TMP/relfix"
-mkdir -p "$FIX/rel" "$FIX/rel-moved"
+mkdir -p "$FIX/rel" "$FIX/rel-moved" "$FIX/rel-notag"
 (
   g() { git -c user.name=t -c user.email=t@example.org -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
   cd "$FIX" && git init --quiet -b main src && cd src
@@ -382,11 +382,13 @@ mkdir -p "$FIX/rel" "$FIX/rel-moved"
   g commit --quiet --allow-empty -m two && g tag -a -m v1.1.0 v1.1.0
   git clone --quiet --bare . "$FIX/origin.git"
   git bundle create --quiet "$FIX/rel/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+  # a bundle published under v1.1.0's name that holds another tag
+  git bundle create --quiet "$FIX/rel-notag/aprscaching-v1.1.0.bundle" refs/tags/v1.0.0
   # the same tag name at another commit: what a tag pushed outside the release workflow looks like
   g checkout --quiet v1.0.0 && g commit --quiet --allow-empty -m other && g tag -f -a -m v1.1.0 v1.1.0 >/dev/null
   git bundle create --quiet "$FIX/rel-moved/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
 ) >/dev/null 2>&1
-for d in rel rel-moved; do (cd "$FIX/$d" && sha256sum aprscaching-v1.1.0.bundle >SHA256SUMS); done
+for d in rel rel-moved rel-notag; do (cd "$FIX/$d" && sha256sum aprscaching-v1.1.0.bundle >SHA256SUMS); done
 RELEASE="$(git -C "$FIX/origin.git" rev-parse 'v1.1.0^{commit}')"
 OTHER="$(git -C "$FIX/src" rev-parse 'v1.1.0^{commit}')"
 N=0
@@ -400,7 +402,7 @@ rc_case() {
   RC=0
   bash "$DEPLOY/test/release-case.sh" "$c" "$m" "$W" "$FIX" "$@" >"$TMP/rc.out" 2>"$TMP/rc.err" </dev/null || RC=$?
 }
-stopped() { [ "$RC" != 0 ] && [ ! -e "$W/applied" ] && [ -z "$(ls -A "$W/tmp")" ]; }
+stopped() { [ "$RC" != 0 ] && [ ! -e "$W/applied" ] && [ -z "$(ls -A "$W/tmp")" ] && ! grep -q useradd "$TMP/rc.out"; }
 for caller in init update; do
   if [ "$caller" = init ]; then args=(--ref v1.1.0); else args=(); fi
   rc_case "$caller" good "${args[@]+"${args[@]}"}"
@@ -410,6 +412,18 @@ for caller in init update; do
   rc_case "$caller" tampered "${args[@]+"${args[@]}"}"
   check "$caller: a bundle that does not match its checksum stops before any change" stopped
   check "  … naming the checksum" grep -q "does not match its checksum" "$TMP/rc.err"
+  rc_case "$caller" notag "${args[@]+"${args[@]}"}"
+  check "$caller: a verified bundle that holds no tag v1.1.0 stops before any step" stopped
+  check "  … naming the tag" grep -q "the release bundle holds no tag v1.1.0" "$TMP/rc.err"
+  rc_case "$caller" unattested "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle with no attestation stops before any step" stopped
+  check "  … as a refusal, quoting gh" bash -c "grep -q 'signed provenance does not verify' '$TMP/rc.err' && grep -q 'HTTP 404' '$TMP/rc.err'"
+  rc_case "$caller" otherflow "${args[@]+"${args[@]}"}"
+  check "$caller: an attestation by another workflow than the release workflow stops" stopped
+  check "  … naming the release workflow" grep -q "no attestation by apachler/aprscaching/.github/workflows/release-verify.yml covers it" "$TMP/rc.err"
+  rc_case "$caller" sigstore "${args[@]+"${args[@]}"}"
+  check "$caller: a check that could not run stops" stopped
+  check "  … saying it could not run, with gh's exit and message, not that it failed" bash -c "grep -q 'could not be checked: gh attestation verify exited 1' '$TMP/rc.err' && grep -q 'no valid Sigstore verifiers' '$TMP/rc.err' && ! grep -q 'does not verify' '$TMP/rc.err'"
   rc_case "$caller" error "${args[@]+"${args[@]}"}"
   check "$caller: a failed download stops, not taken for a missing bundle" stopped
   check "  … naming the server's answer" grep -q "HTTP 500" "$TMP/rc.err"

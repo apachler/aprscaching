@@ -32,12 +32,40 @@ rel_download() {
   return 2
 }
 
-# A release's git bundle, verified: its checksum in the release's SHA256SUMS and its signed provenance.
-# Prints the bundle's path, in a directory of its own that the caller removes. Returns 1 when the release
-# has no bundle (the caller treats the target as unverified) and 2 when it cannot be verified (the caller
-# stops): it runs in a command substitution, where a die would end only the subshell.
+# The release workflow, the one signer whose provenance counts: it is the workflow that builds the bundle,
+# called by release-please for a new release tag. Another workflow of the repository could attest a file too.
+REL_SIGNER_WORKFLOW=.github/workflows/release-verify.yml
+
+# Check FILE's signed provenance with gh: an attestation of REPO's release workflow must cover it. Returns 0
+# when it does, and 1 with the reason on stderr when not, telling a refusal (no attestation for the file, or
+# one by another signer) from a check that could not run (Sigstore or the API unreachable, gh not signed in):
+# both stop the caller, but only the first is an answer about the file.
+rel_attest() {
+  local file="$1" repo="$2" out rc=0
+  out="$(gh attestation verify "$file" --repo "$repo" --signer-workflow "$repo/$REL_SIGNER_WORKFLOW" 2>&1)" || rc=$?
+  [ "$rc" != 0 ] || return 0
+  out="$(printf '%s' "$out" | sed '/^$/d' | tr '\n' ' ')"
+  case "$out" in
+    *"HTTP 404"* | *"verifying with issuer"*)
+      printf "\nERROR: the release bundle's signed provenance does not verify: no attestation by %s covers it.\n" \
+        "$repo/$REL_SIGNER_WORKFLOW" >&2
+      printf '       gh attestation verify: %s\n' "$out" >&2
+      ;;
+    *)
+      printf "\nERROR: the release bundle's signed provenance could not be checked: gh attestation verify exited %s.\n" "$rc" >&2
+      printf '       gh said: %s\n' "${out:-nothing}" >&2
+      ;;
+  esac
+  return 1
+}
+
+# A release's git bundle, verified: its checksum in the release's SHA256SUMS, its signed provenance from the
+# release workflow, and the tag itself inside it. Prints "<commit> <path>": the commit the bundle's tag names,
+# which is what the caller installs, and the bundle, in a directory of its own that the caller removes.
+# Returns 1 when the release has no bundle (the caller treats the target as unverified) and 2 when it cannot be
+# verified (the caller stops): it runs in a command substitution, where a die would end only the subshell.
 rel_verified_bundle() {
-  local gh_repo tag="$2" dir base rc=0
+  local gh_repo tag="$2" dir base rc=0 commit
   gh_repo="$(rel_github_repo "$1")"
   [ -n "$gh_repo" ] || return 1
   have curl || { printf '\nERROR: curl is needed to download the release for its check.\n' >&2; return 2; }
@@ -56,8 +84,7 @@ rel_verified_bundle() {
     return 2
   fi
   if have gh; then
-    if ! gh attestation verify "$dir/aprscaching-$tag.bundle" --repo "$gh_repo" >&2; then
-      printf "\nERROR: the release bundle's signed provenance does not verify.\n" >&2
+    if ! rel_attest "$dir/aprscaching-$tag.bundle" "$gh_repo"; then
       rm -rf "$dir"
       return 2
     fi
@@ -69,8 +96,17 @@ rel_verified_bundle() {
   else
     warn "only the checksum was checked (--checksum-only): it proves the file intact, not who made it"
   fi
+  # The tag must be in the bundle under its own name: a verified file is checked only for what it holds.
+  if ! git init --quiet --bare "$dir/peel" >&2 ||
+    ! git -C "$dir/peel" fetch --quiet "$dir/aprscaching-$tag.bundle" "refs/tags/$tag:refs/tags/$tag" >&2 ||
+    ! commit="$(git -C "$dir/peel" rev-parse --verify --quiet "refs/tags/$tag^{commit}")"; then
+    printf '\nERROR: the release bundle holds no tag %s.\n' "$tag" >&2
+    rm -rf "$dir"
+    return 2
+  fi
+  rm -rf "$dir/peel"
   chmod 644 "$dir/aprscaching-$tag.bundle"
-  printf '%s' "$dir/aprscaching-$tag.bundle"
+  printf '%s %s' "$commit" "$dir/aprscaching-$tag.bundle"
 }
 
 # Say that TARGET (KIND: tag, branch or commit) is unverified and ask QUESTION. --yes does not answer it:

@@ -71,9 +71,11 @@ the same check `init baremetal` makes:
 
 1. It downloads the release's git bundle and `SHA256SUMS` from the repository's GitHub releases.
 2. The bundle must match its line in `SHA256SUMS`.
-3. `gh attestation verify` must confirm the bundle's signed provenance: the release workflow of the repository
-   built it.
-4. The checkout moves to the commit inside the bundle. When the tag on `origin` names any other commit, the
+3. `gh attestation verify` must confirm the bundle's signed provenance: an attestation signed by the
+   repository's release workflow, `release-verify.yml`, and no other workflow. A check that cannot run, such as
+   Sigstore out of reach, stops the update too, and says so apart from a refusal.
+4. The bundle must hold the release's tag.
+5. The checkout moves to the commit the bundle's tag names. When the tag on `origin` names any other commit, the
    helper stops and names both commits: a tag alone proves nothing, since anyone who can push a tag can make one.
 
 Any failed step stops the update before the backup and the rebuild, and nothing changes. A download that fails

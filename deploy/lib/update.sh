@@ -68,25 +68,23 @@ update_target() {
 }
 
 # Verify the target before anything changes (deploy/lib/release.sh). A tag is taken only as its release's
-# verified bundle names it: the commit inside the bundle is the target, and a tag on origin at any other
+# verified bundle names it: the commit the bundle's tag names is the target, and a tag on origin at any other
 # commit is refused, since the tag alone says nothing about who made it. Sets UPD_VERIFIED=1 when it
 # verified; what no release verifies is left for run_update to confirm explicitly.
 update_verify() {
-  local repo bundle rc=1 verified
+  local repo out rc=1 verified bundle
   if [ "$UPD_KIND" = tag ]; then
     repo="$(shape_git remote get-url origin)"
-    bundle="$(rel_verified_bundle "$repo" "$UPD_NAME")" && rc=0 || rc=$?
+    out="$(rel_verified_bundle "$repo" "$UPD_NAME")" && rc=0 || rc=$?
   fi
   [ "$rc" != 2 ] || die "The release $UPD_NAME did not verify." "Nothing was changed."
   [ "$rc" = 0 ] || return 0
-  if ! shape_git fetch --quiet "$bundle" "refs/tags/$UPD_NAME" ||
-    ! verified="$(shape_git rev-parse --verify --quiet 'FETCH_HEAD^{commit}')"; then
-    rm -rf "$(dirname "$bundle")"
-    die "The verified bundle of $UPD_NAME has no tag $UPD_NAME." "Nothing was changed."
-  fi
+  read -r verified bundle <<<"$out"
+  # origin's fetch holds the commit's objects, so the checkout needs nothing from the bundle
   rm -rf "$(dirname "$bundle")"
   [ "$verified" = "$UPD_TARGET" ] ||
-    die "The tag $UPD_NAME on origin is commit $UPD_TARGET, but the verified release $UPD_NAME is commit $verified."       "Nothing was changed: a tag that is not the release's is not installed."
+    die "The tag $UPD_NAME on origin is commit $UPD_TARGET, but the verified release $UPD_NAME is commit $verified." \
+      "Nothing was changed: a tag that is not the release's is not installed."
   info "the release $UPD_NAME is verified: its checksum and its signed provenance"
   UPD_VERIFIED=1
 }

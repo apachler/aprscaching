@@ -139,14 +139,16 @@ shape_init() {
   info "  3. install $BM_UNITS into $BM_UNIT_DIR"
   [ "$start" = 0 ] || info "  4. systemctl daemon-reload, and enable and start both units"
   # verified in a dry run too, so it shows what the install would do; the check changes nothing
-  local rc=1
+  local rc=1 out commit=""
   if [ "$kind" = tag ]; then
-    bundle="$(rel_verified_bundle "$repo" "$ref")" && rc=0 || rc=$?
+    out="$(rel_verified_bundle "$repo" "$ref")" && rc=0 || rc=$?
   fi
   [ "$rc" != 2 ] || die "The release $ref did not verify." "Nothing was installed."
   if [ "$rc" = 0 ]; then
+    read -r commit bundle <<<"$out"
+    rm_on_exit "$(dirname "$bundle")"
     info "the release $ref is verified: its checksum and its signed provenance"
-    confirm "Install $ref?" || { rm -rf "$(dirname "$bundle")"; die "Nothing was installed." "Pass --yes to install without asking."; }
+    confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
   else
     rel_confirm_unverified "$ref" "$kind" "Install $ref without verification?" ||
       die "Nothing was installed." "Pass --unverified to install it without asking; --yes alone does not."
@@ -169,8 +171,8 @@ shape_init() {
       bm_user git clone --quiet "$bundle" "$BM_DIR"
       bm_user git -C "$BM_DIR" remote set-url origin "$repo"
     fi
-    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$ref"
-    rm -rf "$(dirname "$bundle")"
+    # the commit the verified bundle's tag names, whatever a tag of that name in the checkout says
+    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$commit"
   elif [ -d "$BM_DIR/.git" ]; then
     bm_user git -C "$BM_DIR" fetch --quiet --tags origin
     bm_user git -C "$BM_DIR" checkout --quiet "$ref"

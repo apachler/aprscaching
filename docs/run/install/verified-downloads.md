@@ -17,7 +17,9 @@ Every release carries, beside the OCI stack (`aprscaching-oci-stack.zip`) and th
 - `SHA256SUMS`: the checksum of every asset.
 
 Each asset also has a signed build-provenance attestation. It is keyless (Sigstore), and it shows that this
-repository's release workflow built the file. A checksum alone shows only that the file arrived intact.
+repository's release workflow, `release-verify.yml`, built the file. A checksum alone shows only that the file
+arrived intact. `--signer-workflow` pins the check to that workflow: without it, `gh` accepts an attestation from
+any workflow of the repository, so a file attested by another workflow would pass.
 
 ## Before you start
 
@@ -41,7 +43,8 @@ installation from the release bundle:
 
     ```bash
     sha256sum -c --ignore-missing SHA256SUMS
-    gh attestation verify aprscaching-$VER.bundle --repo apachler/aprscaching
+    gh attestation verify aprscaching-$VER.bundle --repo apachler/aprscaching \
+      --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml
     ```
 
 3. Clone from the bundle and point the checkout at the repository for later updates:
@@ -57,7 +60,7 @@ installation from the release bundle:
 ## Check that it worked
 
 `sha256sum` prints `OK` for the file, and `gh attestation verify` reports a verified attestation from
-`apachler/aprscaching`. Stop if either fails.
+`apachler/aprscaching`'s release workflow. Stop if either fails.
 
 ## Other downloads
 
@@ -67,9 +70,11 @@ installation from the release bundle:
   other commit. It then sets up through `init selfhost`, like any Self-host install
   (`deploy/oci/README-stack.md`).
 - **Bare metal:** `deploy/aprscaching init baremetal` does all of this itself for a release tag. It downloads
-  the bundle and `SHA256SUMS`, checks both, and clones from the bundle; it stops when either check fails.
-  Without the GitHub CLI it stops too, unless `--checksum-only` accepts the checksum alone. A branch, or a
-  release without a bundle, installs from git, and the helper says the checkout is unverified.
+  the bundle and `SHA256SUMS`, checks the checksum and the release workflow's attestation, and clones from the
+  bundle at the commit its tag names; it stops when a check fails or cannot run. Without the GitHub CLI it stops
+  too, unless `--checksum-only` accepts the checksum alone. A branch, or a release without a bundle, installs
+  from git: the helper says the checkout is unverified and asks, even with `--yes`. Only `--unverified`
+  installs it without asking.
 - **Updates:** `deploy/aprscaching update` on Self-host, bare metal and an ingest box checks each new release
   the same way before it changes anything ([Updates](../day-to-day/updates.md#what-update-verifies)).
 - **Pocket:** check `pocket.sh` the same way before you run it ([Install Pocket](pocket.md#install)).
@@ -78,7 +83,8 @@ installation from the release bundle:
     ```bash
     curl -fsSLO https://github.com/apachler/aprscaching/releases/download/$VER/aprscaching-$VER.cdx.json
     sha256sum -c --ignore-missing SHA256SUMS
-    gh attestation verify aprscaching-$VER.cdx.json --repo apachler/aprscaching
+    gh attestation verify aprscaching-$VER.cdx.json --repo apachler/aprscaching \
+      --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml
     ```
 
 ## Next
