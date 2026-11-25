@@ -86,8 +86,10 @@ What an instance that pulls the hub does with them:
   records past what it already holds of that home, from any path
   ([How records travel through the mesh](how-it-works.md#how-records-travel-through-the-mesh)).
 - **It checks every record against its home instance's key.** The hub signs none of them. It hands on the key it
-  holds for each home in its summary, and the receiving instance pins that key the first time it sees it, in a
-  peer row `transit:<instance>`: `unvetted` and never pulled. **Instance admin → Federation** lists it; compare
+  holds for each home in its summary. A receiving instance that **trusts the hub** pins that key the first time it
+  sees it, in a peer row `transit:<instance>`: `unvetted` and never pulled. A hub you have not trusted hands on no
+  key, so it brings only its own records and those of homes whose key you hold another way: trust the hub to have
+  it introduce new homes. **Instance admin → Federation** lists it; compare
   its fingerprint with the home's sysop before you trust it, as for any peer. A registry binding wins over any
   hub's word, and once you follow the home directly its own key replaces the one the hub handed on.
 - **It applies its own trust in the home, never the hub's.** A home you have not vetted stays hidden until a
@@ -180,8 +182,8 @@ How the registry behaves:
   is unreachable, with **Sync now**. On Pocket, `sync.sh --status` shows the same.
 - On the hub, the same page lists each spoke's last submission. A spoke shows as stale after
   `FED_SPOKE_STALE_HOURS` (24) without one.
-- On a spoke that pulls the hub, the other spokes' caches show *mirrored from* their home instance once you
-  include unvetted peers or trust their homes, and **Instance admin → Federation** lists each home as a
+- On a spoke that pulls a hub it trusts, the other spokes' caches show *mirrored from* their home instance once
+  you include unvetted peers or trust their homes, and **Instance admin → Federation** lists each home as a
   `transit:` peer.
 
 ## Next

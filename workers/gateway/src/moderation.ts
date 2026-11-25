@@ -485,16 +485,21 @@ async function removeItem(
         tombstones: [],
         mediaKeys: [],
       };
-    case "profile":
+    case "profile": {
+      const pic = await env.DB.prepare("SELECT avatar_key FROM accounts WHERE account_id=?")
+        .bind(loc.accountId)
+        .first<{ avatar_key: string | null }>();
       return {
         stmts: [
           env.DB.prepare(
-            "UPDATE accounts SET display_name=NULL, bio=NULL, avatar_url=NULL, links=NULL, public_contact=NULL WHERE account_id=?",
+            `UPDATE accounts SET display_name=NULL, bio=NULL, avatar_key=NULL, avatar_bytes=NULL, links=NULL,
+                                 public_contact=NULL WHERE account_id=?`,
           ).bind(loc.accountId),
         ],
         tombstones: [],
-        mediaKeys: [],
+        mediaKeys: pic?.avatar_key ? [pic.avatar_key] : [],
       };
+    }
   }
 }
 

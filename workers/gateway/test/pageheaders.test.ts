@@ -19,6 +19,11 @@ describe("withPageHeaders", () => {
     expect(await res.text()).toBe("<!doctype html>");
   });
 
+  it("holds every frame the page holds to its own origin, so the tool frame cannot navigate itself to another host", () => {
+    const csp = PAGE_HEADERS["content-security-policy"]!.split(";").map((d) => d.trim());
+    expect(csp).toContain("frame-src 'self'");
+  });
+
   it("keeps a page's own policy, and adds no X-Frame-Options beside it", () => {
     const res = page({ "content-security-policy": "frame-ancestors *", "referrer-policy": "no-referrer" });
     expect(res.headers.get("content-security-policy")).toBe("frame-ancestors *");

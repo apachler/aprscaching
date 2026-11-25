@@ -137,3 +137,44 @@ describe("Delivery", () => {
     expect(maxInFlight).toBe(1);
   });
 });
+
+describe("Delivery after a burst", () => {
+  // past ~125k packets in one call a spread append overflows the call stack; 300k is well past it
+  const BURST = 300_000;
+
+  it("queues a burst of any size, keeping the newest maxQueue", async () => {
+    const gw = gateway();
+    const d = new Delivery({ post: gw.post, maxQueue: 5000, log: () => {} });
+    d.add(many(BURST));
+    expect(d.size).toBe(5000);
+    expect(d.dropped).toBe(BURST - 5000);
+    await d.flush();
+    expect(gw.batches.flat().map((p) => p.ts)).toEqual(ids(many(5000, BURST - 5000)));
+  });
+
+  it("keeps delivering what is heard after a burst between two commits", async () => {
+    const gw = gateway();
+    const d = new Delivery({ post: gw.post, maxQueue: 5000, log: () => {} });
+    for (const p of many(BURST)) d.hear(p);
+    d.commit();
+    await d.flush();
+    for (let tick = 0; tick < 3; tick++) {
+      d.hear(pkt(BURST + tick));
+      d.commit();
+      await d.flush();
+    }
+    const got = gw.batches.flat().map((p) => p.ts);
+    expect(got).toHaveLength(5003);
+    expect(got.slice(-3)).toEqual([BURST, BURST + 1, BURST + 2]);
+    expect(d.size).toBe(0);
+  });
+
+  it("holds at most twice maxQueue between two commits", () => {
+    const d = new Delivery({ post: async () => ({ ok: true, status: 200 }), maxQueue: 10, log: () => {} });
+    for (const p of many(1000)) d.hear(p);
+    expect(d.dropped).toBeGreaterThan(970);
+    d.commit();
+    expect(ids(d.queued())).toEqual(ids(many(10, 990)));
+    expect(d.dropped).toBe(990);
+  });
+});

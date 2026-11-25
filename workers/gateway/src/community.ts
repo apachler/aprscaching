@@ -14,6 +14,7 @@ import { actor } from "./caches.js";
 import { baseSql, OF_BASE, VERIFIED_LOGGER, ofPersonSql, personBinds } from "./findrules.js";
 import { baseCall } from "@aprscaching/aprs";
 import { RateRequest } from "@aprscaching/shared";
+import { avatarUrl } from "./avatar.js";
 
 const DAY = 86400;
 
@@ -144,7 +145,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
       .all<{ badge: string; earnedAt: number }>()
   ).results;
   const acct = await env.DB.prepare(
-    `SELECT tier, display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl,
+    `SELECT tier, display_name AS displayName, home_grid AS homeGrid, avatar_key AS avatarKey,
             bio, links, public_contact AS publicContact, profile_public AS profilePublic
        FROM accounts WHERE callsign=?`,
   )
@@ -153,7 +154,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
       tier: string | null;
       displayName: string | null;
       homeGrid: string | null;
-      avatarUrl: string | null;
+      avatarKey: string | null;
       bio: string | null;
       links: string | null;
       publicContact: string | null;
@@ -167,7 +168,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     const p: Record<string, unknown> = {};
     if (acct.displayName) p.displayName = acct.displayName;
     if (acct.homeGrid) p.homeGrid = acct.homeGrid;
-    if (acct.avatarUrl) p.avatarUrl = acct.avatarUrl;
+    if (acct.avatarKey) p.avatarUrl = avatarUrl(acct.avatarKey);
     if (acct.bio) p.bio = acct.bio;
     if (links.length) p.links = links;
     if (acct.publicContact) p.publicContact = acct.publicContact;

@@ -8,6 +8,10 @@
  * - The frame policy keeps another site from framing the app over the signed-in user's view. Same-origin
  *   framing stays allowed: the UI kit demo frames the app itself. The embed widget (`/embed`) sets its own
  *   policy, `frame-ancestors *`, and a page that sets a policy of its own keeps it.
+ * - `frame-src 'self'` holds every frame the page holds to this origin, wherever the frame sends itself: a frame's
+ *   own policy has no navigation directive, so the tool sandbox's srcdoc frame could otherwise reach any host
+ *   through a meta refresh or `location`, with data in the address. The browser checks the embedding page's
+ *   `frame-src` on each of those navigations; the srcdoc frame and the UI kit demo's frame of the app pass it.
  * - `base-uri` and `object-src` close two injection routes a script-source policy would not; the script and
  *   connect sources stay open, because the app's inline head scripts, MapLibre's blob workers, the
  *   WebAssembly modem and the tool sandbox's srcdoc frame (which inherits the policy) all need allowances.
@@ -17,7 +21,7 @@
  * The module imports nothing, so a host's launcher loads it on its own.
  */
 export const PAGE_HEADERS: Readonly<Record<string, string>> = {
-  "content-security-policy": "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+  "content-security-policy": "frame-ancestors 'self'; frame-src 'self'; base-uri 'self'; object-src 'none'",
   "x-frame-options": "SAMEORIGIN",
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",

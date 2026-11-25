@@ -29,6 +29,8 @@ export interface DeliveryOpts {
 
 export class Delivery {
   private queue: Packet[] = [];
+  /** Packets heard since the last commit. */
+  private pending: Packet[] = [];
   private running: Promise<void> | null = null;
   private loggedAt = -Infinity;
   private lastError = "";
@@ -48,6 +50,28 @@ export class Delivery {
   }
 
   /**
+   * One packet heard, held until the next commit. The hold is bounded like the queue: a burst between two
+   * commits keeps only the newest maxQueue, which is all the queue could keep of it.
+   */
+  hear(p: Packet): void {
+    this.pending.push(p);
+    if (this.pending.length < 2 * this.o.maxQueue) return;
+    const over = this.pending.length - this.o.maxQueue;
+    this.pending.splice(0, over);
+    this.dropped += over;
+  }
+
+  /**
+   * Queue what was heard since the last commit. The held packets are taken before they are handed on, so a
+   * throw on the way cannot leave them held to be retried, and growing, on every later commit.
+   */
+  commit(): void {
+    const heard = this.pending;
+    this.pending = [];
+    this.add(heard);
+  }
+
+  /**
    * Queue packets for the next flush. A packet the gateway's schema refuses (a field past its length
    * ceiling) is dropped here, so it never costs a refused POST and a split.
    */
@@ -58,7 +82,11 @@ export class Delivery {
       this.log(`dropped ${packets.length - ok.length} packet(s) with a field past its length ceiling`);
     }
     if (!ok.length) return;
-    this.queue.push(...ok);
+    // only the newest maxQueue can stay, and appending one by one keeps a burst of any size off the call
+    // stack: a spread passes every packet as an argument, which throws past ~125k
+    const keep = ok.length > this.o.maxQueue ? ok.slice(-this.o.maxQueue) : ok;
+    this.dropped += ok.length - keep.length;
+    for (const p of keep) this.queue.push(p);
     this.cap();
   }
 
@@ -115,7 +143,7 @@ export class Delivery {
 
   /** Put undelivered packets back at the head of the queue, ahead of what arrived meanwhile. */
   private requeue(packets: Packet[]): void {
-    this.queue.unshift(...packets);
+    this.queue = packets.concat(this.queue);
     this.cap();
     const now = (this.o.now ?? Date.now)();
     if (now - this.loggedAt > 30_000) {

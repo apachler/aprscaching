@@ -88,6 +88,10 @@ a message says so with the reason, and the log moves to **Needs attention**. The
 comment, or discard it. A log goes only to the instance it was made on; signed in to another, it waits and
 says so.
 
+**Your logs stay yours on a shared phone.** A waiting log or stage unlock goes only while you are signed in.
+Sign out and let someone else sign in: they do not see your waiting logs, and the app does not send them. Your
+logs sync the next time you sign in on that phone.
+
 A cache archived or disabled while your find waited refuses it when it syncs: the find lands under **Needs
 attention**, with the reason.
 

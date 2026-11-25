@@ -12,7 +12,7 @@ import {
   passkeyLogin,
   passkeyRegister,
 } from "./helpers/authflow.js";
-import { freshDb } from "./helpers/fedpeer.js";
+import { freshDb, gid } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const CS = "DL1GDP";
@@ -293,5 +293,90 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
       (await env.DB.prepare("SELECT COUNT(*) AS n FROM aprs_outbox WHERE src_call='DL1GDP-15'").first<{ n: number }>())
         ?.n,
     ).toBe(1);
+  });
+
+  it("erasure clears the person's station from their living cache, here and in what federation serves", async () => {
+    const { env, cookie } = await seeded();
+    const own = await env.DB.prepare("SELECT id, code FROM caches WHERE title='gdpr cache'").first<{
+      id: number;
+      code: string;
+    }>();
+    await env.DB.prepare("UPDATE caches SET type='aprs_living', station_call='DL1GDP-9' WHERE id=?")
+      .bind(own!.id)
+      .run();
+    expect((await call(env, "GET", `/api/v1/caches/${own!.code}`)).data.cache.stationCall).toBe("DL1GDP-9");
+
+    expect((await call(env, "POST", `/api/account/${CS}/delete`, {}, { cookie })).status).toBe(200);
+
+    expect((await call(env, "GET", `/api/v1/caches/${own!.code}`)).data.cache.stationCall).toBeNull();
+    const feed = await call(env, "GET", "/federation/caches?since=0");
+    expect(feed.status).toBe(200);
+    const cacheGid = await gid(env, "cache", own!.id);
+    const item = feed.data.items.find((i: { id: string }) => i.id === cacheGid);
+    expect(item, "the archived cache is served to peers again").toBeTruthy();
+    expect(item.data.status).toBe("archived");
+    expect(item.data.stationCall).toBeNull();
+    expect(JSON.stringify(feed.data)).not.toContain("DL1GDP");
+  });
+});
+
+describe("sign-in token rows belong to the account that asked for them", () => {
+  it("export and erasure reach only the account's own rows, not another's through a shared pending address", async () => {
+    const env = authEnv({}, freshDb().DB);
+    const victim = await emailSignup(env, "victim@example.test", "DL1VIC");
+    const other = await emailSignup(env, "other@example.test", "DL1OTH");
+    expect(victim.status).toBe(200);
+    expect(other.status).toBe(200);
+    // both ask to move to the same address; neither has confirmed it
+    for (const who of [victim, other])
+      expect(
+        (await call(env, "POST", "/auth/email/change", { email: "shared@example.test" }, { cookie: who.cookie }))
+          .status,
+      ).toBe(200);
+    const shared = "SELECT callsign FROM email_tokens WHERE email='shared@example.test' ORDER BY callsign";
+    expect((await env.DB.prepare(shared).all<{ callsign: string }>()).results.map((r) => r.callsign)).toEqual([
+      "DL1OTH",
+      "DL1VIC",
+    ]);
+
+    const exp = await call(env, "POST", "/api/account/DL1OTH/export", {}, { cookie: other.cookie });
+    expect(exp.status).toBe(200);
+    const tokens = exp.data.emailTokens as Array<{ email: string; callsign: string | null }>;
+    expect(tokens.some((t) => t.email === "shared@example.test" && t.callsign === "DL1OTH")).toBe(true);
+    expect(JSON.stringify(tokens)).not.toContain("DL1VIC");
+
+    expect((await call(env, "POST", "/api/account/DL1OTH/delete", {}, { cookie: other.cookie })).status).toBe(200);
+    // the victim's confirmation link survives the other account's erasure; the other's own rows do not
+    expect((await env.DB.prepare(shared).all<{ callsign: string }>()).results.map((r) => r.callsign)).toEqual([
+      "DL1VIC",
+    ]);
+    const mine = await call(env, "POST", "/api/account/DL1VIC/export", {}, { cookie: victim.cookie });
+    expect((mine.data.emailTokens as Array<{ email: string }>).map((t) => t.email).sort()).toEqual([
+      "shared@example.test",
+      "victim@example.test",
+    ]);
+  });
+
+  it("export and erasure reach an unopened register link on the account's confirmed address", async () => {
+    const env = authEnv({}, freshDb().DB);
+    // a register link for the address that was never opened, then the address signs up under another call
+    expect(
+      (await call(env, "POST", "/auth/email/start", { email: "first@example.test", callsign: "DL1BBB" })).status,
+    ).toBe(200);
+    const me = await emailSignup(env, "first@example.test", "DL1AAA");
+    expect(me.status).toBe(200);
+    const left = "SELECT callsign FROM email_tokens WHERE email='first@example.test' ORDER BY callsign";
+    expect((await env.DB.prepare(left).all<{ callsign: string }>()).results.map((r) => r.callsign)).toEqual([
+      "DL1AAA",
+      "DL1BBB",
+    ]);
+
+    const exp = await call(env, "POST", "/api/account/DL1AAA/export", {}, { cookie: me.cookie });
+    expect((exp.data.emailTokens as Array<{ callsign: string }>).map((t) => t.callsign).sort()).toEqual([
+      "DL1AAA",
+      "DL1BBB",
+    ]);
+    expect((await call(env, "POST", "/api/account/DL1AAA/delete", {}, { cookie: me.cookie })).status).toBe(200);
+    expect((await env.DB.prepare(left).all()).results).toEqual([]);
   });
 });

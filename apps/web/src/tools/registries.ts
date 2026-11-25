@@ -95,7 +95,10 @@ export async function loadRegistry(
   }
   if (res.status === 404 && reg.builtin) return { kind: "none" };
   if (!res.ok) {
-    const why = (await res.json().catch(() => null)) as { error?: string } | null;
+    const why = (await res.json().catch(() => null)) as { error?: string; authority?: unknown } | null;
+    // the carrier relays no registry file the pinned key did not sign; it names the key that file is signed by
+    if (res.status === 409 && typeof why?.authority === "string")
+      return { kind: "key-changed", authority: why.authority, fingerprint: await authorityFingerprint(why.authority) };
     return { kind: "failed", error: why?.error ?? `the registry answered ${res.status}` };
   }
   let doc: unknown;

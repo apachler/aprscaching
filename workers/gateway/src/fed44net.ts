@@ -41,7 +41,14 @@ import { MAX_DESCRIPTOR_BYTES } from "./fedtransport.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
-import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
+import {
+  activeFedKeys,
+  isInstanceId,
+  loadRegistry,
+  registryKeyAllowed,
+  type FedPublicKey,
+  type RegistryEntry,
+} from "./federation.js";
 import { absorbDiscovered, auditPeer, blockedAt } from "./fedpeers.js";
 import { resolveTxt, acsFields, amprNames } from "./doh.js";
 import { net44Host, parseEndpoints } from "@aprscaching/shared";
@@ -278,7 +285,8 @@ async function descriptorMatches(
  * the host's federation TXT (409 with `candidates` when it is ambiguous) and cross-checks the descriptor: at a
  * `web=` origin it must answer and match, over 44Net a reachable one must match. Admits the peer as
  * `unvetted` when the binding is DNSSEC-validated OR the operator confirms; otherwise returns the resolved
- * binding for a one-click confirm. A blocked instance is refused under any address.
+ * binding for a one-click confirm. A blocked instance is refused under any address, and a key the federation
+ * registry does not bind to the named instance id is refused before any confirm, as an add by address is.
  */
 export async function handleFed44netAdd(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true }); // same gate as the peer-trust surface
@@ -294,6 +302,23 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
     if (e instanceof AmbiguousBinding) return json({ error: e.message, candidates: e.candidates }, { status: 409 });
     return json({ error: (e as Error).message }, { status: 400 });
   }
+
+  // The binding is checked before anything is fetched or a confirm is offered: an invalid id, or a key the
+  // registry does not bind to that id, is refused as an add by address refuses it — a callsign zone's TXT may
+  // name any instance id, and neither DNSSEC nor a sysop's confirm ties that id to the zone.
+  if (!isInstanceId(resolved.instance))
+    return json({ error: "the DNS binding names an invalid instance id", resolved }, { status: 409 });
+  let registry: Map<string, RegistryEntry>;
+  try {
+    registry = await loadRegistry(env);
+  } catch {
+    return json({ error: "the federation registry is misconfigured on this instance" }, { status: 503 });
+  }
+  if (!registryKeyAllowed(registry.get(resolved.instance), resolved.publicKey))
+    return json(
+      { error: `${resolved.instance} signs with a key the registry does not bind to it`, resolved },
+      { status: 409 },
+    );
 
   // An https origin must answer with a matching descriptor: it is the one path the DNS key is checked over
   // before the pin. Over 44Net (plain http on an amateur-space name; authenticity is in signatures) the
@@ -321,8 +346,6 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
   }
 
   // the instance id binds to one live peer row: never rename a known row, never share an id
-  if (!isInstanceId(resolved.instance))
-    return json({ error: "the DNS binding names an invalid instance id", resolved }, { status: 409 });
   const url = resolved.web ?? `http://${resolved.host}`;
   // a block covers the instance under any address, this one included
   const blocked = await blockedAt(env, resolved.instance);

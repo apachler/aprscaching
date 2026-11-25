@@ -5,7 +5,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { sealStage, type PackCache } from "@aprscaching/shared";
-import { getStages, queuedLogs, unlockStage, offlineReady } from "../src/api.js";
+import { getStages, queuedLogs, setQueueOwner, unlockStage, offlineReady } from "../src/api.js";
 
 const SERIAL = "04:A2:5F:1B:3C:80:90";
 
@@ -48,6 +48,7 @@ async function seed() {
 describe("stages without a connection", () => {
   it("shows the start, opens an NFC stage with its code, and queues the unlock for the instance", async () => {
     await seed();
+    await setQueueOwner("OE8FND");
     const before = (await getStages(77, "OE8FND")).stages;
     expect(before.map((s) => [s.stageNo, s.unlocked, s.offline])).toEqual([
       [0, true, false],
@@ -71,7 +72,13 @@ describe("stages without a connection", () => {
       kind: "unlock",
       stageNo: 1,
       body: { loggerCall: "OE8FND", code: SERIAL.toLowerCase() },
+      owner: "OE8FND",
     });
+    // another player signed in on this device does not see it
+    await setQueueOwner("OE8BBB");
+    expect((await queuedLogs()).some((q) => q.cacheId === 77)).toBe(false);
+    await setQueueOwner(null);
+    expect(await queuedLogs()).toEqual([]);
   });
 
   it("says a geo stage needs a connection", async () => {

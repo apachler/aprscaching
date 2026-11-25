@@ -419,7 +419,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TOOL_REGISTRIES_PROXY`",
-        "The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. The browser still checks every signature. The gateway fetches over https on every redirect hop and never from a loopback, private or LAN address, whatever `FED_ALLOW_PRIVATE`, `FED_PEERS` or mDNS discovery allow federation. `0` lets browsers fetch registries directly",
+        "The gateway fetches each added tool registry, and the manifests and scripts it lists, and serves them from this instance: players' addresses never reach the registry's host, and the last good copy keeps working offline. It keeps and relays only what the registry's signers vouch for: the registry file signed by its pinned key, the manifests it lists signed by the keys it lists, and the scripts whose SHA-256 those manifests sign; the browser checks every signature again. The copies of one player's registries hold at most 4 MB together, and every player's copies at most 256 MB on the instance. The gateway fetches over https on every redirect hop and never from a loopback, private or LAN address, whatever `FED_ALLOW_PRIVATE`, `FED_PEERS` or mDNS discovery allow federation. `0` lets browsers fetch registries directly",
         "on",
       ],
       [

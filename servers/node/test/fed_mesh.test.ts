@@ -803,10 +803,24 @@ describe("a Pocket station carries records", GATEWAYS, () => {
     expect((await caches(c.env)).length).toBe(1);
   });
 
-  it("from a station C does not trust: the records apply, and its word moves no mark", async () => {
+  it("from a station C does not trust: its key for A pins nothing, so A's records wait for a key C holds", async () => {
     const [a, m, c] = await Promise.all([node("a"), node("m"), node("c")]);
     await follow(m, a);
     await follow(c, m, "unvetted");
+    await addCache(a.env, now() - 60);
+    network([a, m]);
+    await syncAllPeers(m.env);
+    network([m, c]);
+    await syncAllPeers(c.env);
+    expect(await one(c.env, "SELECT url FROM fed_peers WHERE instance = 'a.example'")).toBeNull();
+    expect(await caches(c.env)).toEqual([]);
+  });
+
+  it("from a station C does not trust, with A's key held here: the records apply, and its word moves no mark", async () => {
+    const [a, m, c] = await Promise.all([node("a"), node("m"), node("c")]);
+    await follow(m, a);
+    await follow(c, m, "unvetted");
+    await follow(c, a, "unvetted");
     await addCache(a.env, now() - 60);
     network([a, m]);
     await syncAllPeers(m.env);

@@ -592,8 +592,8 @@ const MAX_LEARNED_PER_PULL = 50;
 const MAX_KEY_ENTRIES_PER_PULL = 1000;
 
 /**
- * Pin the keys a neighbour's summary hands on for origins this instance does not know yet, and follow the
- * rotations of those it learned that way. An origin known any other way (pulled, added, submitted, 44Net, the
+ * Pin the keys a trusted neighbour's summary hands on for origins this instance does not know yet, and follow
+ * the rotations of those it learned that way. The caller passes only a neighbour this instance trusts. An origin known any other way (pulled, added, submitted, 44Net, the
  * registry's peer list) keeps its own binding, and a blocked one stays blocked: no neighbour can move either.
  * One pull learns at most MAX_LEARNED_PER_PULL new origins, and the table's cap is checked before any key is
  * resolved, so a long summary costs a bounded amount of work.
