@@ -15,6 +15,7 @@ import {
   encodePage,
   decodePage,
 } from "./fedwire-mini.mjs";
+import { enrollTrustedBox, signIn, verifyOnAir } from "./boxsign.mjs";
 
 const PUB = process.env.PUB ?? "http://127.0.0.1:8801";
 const SUB = process.env.SUB ?? "http://127.0.0.1:8802";
@@ -46,6 +47,41 @@ async function call(base, method, path, body, headers = {}) {
   } catch {}
   return { status: res.status, data };
 }
+// Players hide and log with their own sessions, on the instance they play on: the ingest and operator secrets
+// act as no player. A hider, and a logger whose find should reach Tier A, is control-verified there on the
+// air, its VERIFY heard at VERIFY_SITE by a box the operator enrolls on that instance and trusts for the site.
+// VERIFY_SITE is not OE8XXX, the publisher's attested IGate, so verifying a call corroborates no find.
+const VERIFY_SITE = "OE8VFY";
+const verifyBoxes = new Map();
+const sessions = new Map();
+async function verifyBox(base) {
+  if (!verifyBoxes.has(base)) {
+    const r = await enrollTrustedBox(base, OPERATOR_SECRET, `fed-rx-${now()}`, [VERIFY_SITE]);
+    if (r.error) {
+      console.error(`✗ no receiving box on ${base} (needs OPERATOR_SECRET): ${r.error}`);
+      process.exit(1);
+    }
+    verifyBoxes.set(base, r.key);
+  }
+  return verifyBoxes.get(base);
+}
+/** A signed-in session for `cs` on `base`, signed up on first use and control-verified when `verified`. */
+async function player(base, cs, { verified = false } = {}) {
+  const k = `${base} ${cs}`;
+  if (!sessions.has(k)) sessions.set(k, { cookie: await signIn(base, cs), verified: false });
+  const s = sessions.get(k);
+  if (verified && !s.verified) {
+    s.verified = await verifyOnAir(base, await verifyBox(base), s.cookie, cs, VERIFY_SITE);
+    if (!s.verified) {
+      console.error(`✗ ${cs} could not be verified on ${base}`);
+      process.exit(1);
+    }
+  }
+  return s.cookie;
+}
+/** The headers of a request a player's own session sends: no ingest or operator secret beside it. */
+const as = (cookie) => ({ cookie, "x-ingest-secret": "", "x-operator-secret": "" });
+
 async function waitHealthy(base) {
   for (let i = 0; i < 60; i++) {
     try {
@@ -96,18 +132,16 @@ await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OP
 
 // seed the publisher: a cache + a find
 const TITLE = "Federated Schlossberg " + now();
-const created = await call(PUB, "POST", "/api/caches", {
-  title: TITLE,
-  type: "traditional",
-  lat: 47.0735,
-  lon: 15.4378,
-  difficulty: 2,
-  terrain: 2,
-  ownerCall: "OE8APR",
-});
+const created = await call(
+  PUB,
+  "POST",
+  "/api/caches",
+  { title: TITLE, type: "traditional", lat: 47.0735, lon: 15.4378, difficulty: 2, terrain: 2 },
+  as(await player(PUB, "OE8APR", { verified: true })),
+);
 ok("publisher created a cache", created.status === 201, JSON.stringify(created.data));
 const pid = created.data?.cache?.id;
-await call(PUB, "POST", `/api/caches/${pid}/logs`, { loggerCall: "DL1ABC", logType: "found" });
+await call(PUB, "POST", `/api/caches/${pid}/logs`, { logType: "found" }, as(await player(PUB, "DL1ABC")));
 
 // trigger a pull-sync on the subscriber
 const sync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
@@ -195,18 +229,20 @@ await call(
   { "x-ingest-secret": SECRET },
 );
 
-const sCache = await call(SUB, "POST", "/api/caches", {
-  title: "Peer-Verified Summit " + t,
-  type: "traditional",
-  lat: LAT,
-  lon: LON,
-  ownerCall: "OE8SUB",
-});
+const SUB_OWNER = await player(SUB, "OE8SUB", { verified: true });
+const sCache = await call(
+  SUB,
+  "POST",
+  "/api/caches",
+  { title: "Peer-Verified Summit " + t, type: "traditional", lat: LAT, lon: LON },
+  as(SUB_OWNER),
+);
 const sid = sCache.data?.cache?.id;
 ok("subscriber created its own cache", sCache.status === 201, JSON.stringify(sCache.data));
 
 // no appGeo, no local RF on the subscriber -> only peer corroboration can grant Tier A
-const peerLog = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "LO3RF", logType: "found" });
+const LO3RF = await player(SUB, "LO3RF", { verified: true });
+const peerLog = await call(SUB, "POST", `/api/caches/${sid}/logs`, { logType: "found" }, as(LO3RF));
 ok(
   "subscriber reaches Tier A via peer corroboration",
   peerLog.data?.verified === true && peerLog.data?.tier === "A" && peerLog.data?.method === "aprs_rf_peer",
@@ -219,7 +255,13 @@ ok(
 );
 
 // a logger nobody heard stays unverified (no false corroboration)
-const ghost = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "GHOST9", logType: "found" });
+const ghost = await call(
+  SUB,
+  "POST",
+  `/api/caches/${sid}/logs`,
+  { logType: "found" },
+  as(await player(SUB, "GHOST9", { verified: true })),
+);
 ok("an un-heard logger does NOT reach Tier A", ghost.data?.tier !== "A", JSON.stringify(ghost.data));
 
 // ---- per-callsign signing ----
@@ -249,35 +291,25 @@ const signWith = async (priv, msg) => b64u(await crypto.subtle.sign("Ed25519", p
 const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
 
-// a device key binds only through the holder's own session (email sign-in with a dev token)
-async function signUp(base, cs) {
-  const st = await call(base, "POST", "/auth/email/start", {
-    email: `${cs.toLowerCase()}+${now()}@example.test`,
-    callsign: cs,
-  });
-  const vr = await fetch(base + "/auth/email/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: st.data?.devToken }),
-  });
-  return (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
-}
+// a device key binds only through the holder's own session
+const OE8APR = await player(PUB, "OE8APR");
 const reg = await call(
   PUB,
   "POST",
   "/keys/register",
   { callsign: "OE8APR", publicKey: pubRaw, label: "device" },
-  { cookie: await signUp(PUB, "OE8APR") },
+  { cookie: OE8APR },
 );
 ok("key registration accepted", reg.data?.ok === true && reg.data?.publicKey === pubRaw, JSON.stringify(reg.data));
 
-const sc = await call(PUB, "POST", "/api/caches", {
-  title: "Signed Find " + now(),
-  type: "traditional",
-  lat: 47.08,
-  lon: 15.41,
-  ownerCall: "OE8SFO", // not the finder: an owner does not find their own cache
-});
+// hidden by OE8SFO, not the finder: an owner does not find their own cache
+const sc = await call(
+  PUB,
+  "POST",
+  "/api/caches",
+  { title: "Signed Find " + now(), type: "traditional", lat: 47.08, lon: 15.41 },
+  as(await player(PUB, "OE8SFO", { verified: true })),
+);
 const scCode = sc.data?.cache?.code,
   scId = sc.data?.cache?.id;
 const at = now();
@@ -285,11 +317,13 @@ const sig = await signWith(
   kp.privateKey,
   authMsg({ cache: scCode, instance: pubInstance, logger: "OE8APR", logType: "found", at }),
 );
-const signedLog = await call(PUB, "POST", `/api/caches/${scId}/logs`, {
-  loggerCall: "OE8APR",
-  logType: "found",
-  author: { authorKey: pubRaw, authorSig: sig, signedAt: at },
-});
+const signedLog = await call(
+  PUB,
+  "POST",
+  `/api/caches/${scId}/logs`,
+  { logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } },
+  as(OE8APR),
+);
 ok(
   "signed find accepted; signerKey echoed",
   signedLog.data?.logged === true && signedLog.data?.signerKey === pubRaw,
@@ -298,11 +332,13 @@ ok(
 
 // flip the first (fully-significant) base64url char so the signature is guaranteed to differ
 const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
-const bad = await call(PUB, "POST", `/api/caches/${scId}/logs`, {
-  loggerCall: "OE8APR",
-  logType: "found",
-  author: { authorKey: pubRaw, authorSig: badSig, signedAt: at },
-});
+const bad = await call(
+  PUB,
+  "POST",
+  `/api/caches/${scId}/logs`,
+  { logType: "found", author: { authorKey: pubRaw, authorSig: badSig, signedAt: at } },
+  as(OE8APR),
+);
 ok("tampered author signature -> 400", bad.status === 400, `status=${bad.status}`);
 
 const kp2 = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
@@ -312,11 +348,13 @@ const sig2 = await signWith(
   kp2.privateKey,
   authMsg({ cache: scCode, instance: pubInstance, logger: "OE8APR", logType: "found", at: at2 }),
 );
-const unreg = await call(PUB, "POST", `/api/caches/${scId}/logs`, {
-  loggerCall: "OE8APR",
-  logType: "found",
-  author: { authorKey: pub2, authorSig: sig2, signedAt: at2 },
-});
+const unreg = await call(
+  PUB,
+  "POST",
+  `/api/caches/${scId}/logs`,
+  { logType: "found", author: { authorKey: pub2, authorSig: sig2, signedAt: at2 } },
+  as(OE8APR),
+);
 ok("unregistered key -> 400", unreg.status === 400, `status=${unreg.status}`);
 
 // verify the author signature straight from the federation feed, as any consumer would
@@ -402,17 +440,20 @@ const blk = await call(
   { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("operator blocked the peer", blk.data?.ok === true && blk.data?.trust === "blocked", JSON.stringify(blk.data));
-const bCache = await call(SUB, "POST", "/api/caches", {
-  title: "Blocked-Peer Summit " + now(),
-  type: "traditional",
-  lat: LAT,
-  lon: LON,
-  ownerCall: "OE8SUB",
-});
-const blockedLog = await call(SUB, "POST", `/api/caches/${bCache.data?.cache?.id}/logs`, {
-  loggerCall: "LO3RF",
-  logType: "found",
-});
+const bCache = await call(
+  SUB,
+  "POST",
+  "/api/caches",
+  { title: "Blocked-Peer Summit " + now(), type: "traditional", lat: LAT, lon: LON },
+  as(SUB_OWNER),
+);
+const blockedLog = await call(
+  SUB,
+  "POST",
+  `/api/caches/${bCache.data?.cache?.id}/logs`,
+  { logType: "found" },
+  as(LO3RF),
+);
 ok("a blocked peer cannot grant Tier A", blockedLog.data?.tier !== "A", JSON.stringify(blockedLog.data));
 const blkSync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok(
@@ -442,17 +483,14 @@ ok(
   prom.data?.ok === true && prom.data?.trust === "trusted",
   JSON.stringify(prom.data),
 );
-const rCache = await call(SUB, "POST", "/api/caches", {
-  title: "Re-trusted Summit " + now(),
-  type: "traditional",
-  lat: LAT,
-  lon: LON,
-  ownerCall: "OE8SUB",
-});
-const reLog = await call(SUB, "POST", `/api/caches/${rCache.data?.cache?.id}/logs`, {
-  loggerCall: "LO3RF",
-  logType: "found",
-});
+const rCache = await call(
+  SUB,
+  "POST",
+  "/api/caches",
+  { title: "Re-trusted Summit " + now(), type: "traditional", lat: LAT, lon: LON },
+  as(SUB_OWNER),
+);
+const reLog = await call(SUB, "POST", `/api/caches/${rCache.data?.cache?.id}/logs`, { logType: "found" }, as(LO3RF));
 ok(
   "a re-trusted peer grants Tier A again",
   reLog.data?.tier === "A" && reLog.data?.method === "aprs_rf_peer",
@@ -478,30 +516,33 @@ await call(
   "POST",
   "/keys/register",
   { callsign: "TOMB1", publicKey: tpub, label: "device" },
-  { cookie: await signUp(PUB, "TOMB1") },
+  { cookie: await player(PUB, "TOMB1", { verified: true }) },
 );
 
 // TOMB1 owns a cache and logs a find on the publisher
 const T_TITLE = "Tombstone Cache " + now();
-const tCache = await call(PUB, "POST", "/api/caches", {
-  title: T_TITLE,
-  type: "traditional",
-  lat: 48.21,
-  lon: 16.37,
-  ownerCall: "TOMB1",
-});
+const tCache = await call(
+  PUB,
+  "POST",
+  "/api/caches",
+  { title: T_TITLE, type: "traditional", lat: 48.21, lon: 16.37 },
+  as(await player(PUB, "TOMB1")),
+);
 // TOMB1's find goes on another owner's cache: an owner does not find their own
-const tFound = await call(PUB, "POST", "/api/caches", {
-  title: "Tombstone Find " + now(),
-  type: "traditional",
-  lat: 48.22,
-  lon: 16.38,
-  ownerCall: "OE8TFO",
-});
-const tLog = await call(PUB, "POST", `/api/caches/${tFound.data?.cache?.id}/logs`, {
-  loggerCall: "TOMB1",
-  logType: "found",
-});
+const tFound = await call(
+  PUB,
+  "POST",
+  "/api/caches",
+  { title: "Tombstone Find " + now(), type: "traditional", lat: 48.22, lon: 16.38 },
+  as(await player(PUB, "OE8TFO", { verified: true })),
+);
+const tLog = await call(
+  PUB,
+  "POST",
+  `/api/caches/${tFound.data?.cache?.id}/logs`,
+  { logType: "found" },
+  as(await player(PUB, "TOMB1")),
+);
 ok(
   "publisher created a TOMB1-owned cache + a TOMB1 find",
   tCache.status === 201 && tLog.status === 200,
@@ -581,13 +622,7 @@ ok(
 // ---- gossip ping (push-to-pull) ----
 // publish a fresh cache on PUB, then ping SUB directly — it must pull immediately (no manual /sync)
 const G_TITLE = "Gossip Cache " + now();
-await call(PUB, "POST", "/api/caches", {
-  title: G_TITLE,
-  type: "traditional",
-  lat: 47.09,
-  lon: 15.44,
-  ownerCall: "OE8APR",
-});
+await call(PUB, "POST", "/api/caches", { title: G_TITLE, type: "traditional", lat: 47.09, lon: 15.44 }, as(OE8APR));
 const notif = await call(SUB, "POST", "/federation/notify", { instance: pubInstance });
 ok(
   "gossip notify is accepted (202, triggers a pull)",
@@ -831,16 +866,21 @@ ok(
 // ---- owner-controlled field redaction (hint never federates; unlisted hides description; local-only never) ----
 const HINT = "under the third rock from the bench";
 const mkScoped = (title, fedScope) =>
-  call(PUB, "POST", "/api/caches", {
-    title,
-    type: "traditional",
-    lat: 47.31,
-    lon: 15.31,
-    ownerCall: "OE8APR",
-    hint: HINT,
-    description: "full description of " + title,
-    fedScope,
-  });
+  call(
+    PUB,
+    "POST",
+    "/api/caches",
+    {
+      title,
+      type: "traditional",
+      lat: 47.31,
+      lon: 15.31,
+      hint: HINT,
+      description: "full description of " + title,
+      fedScope,
+    },
+    as(OE8APR),
+  );
 const cPub = await mkScoped("Scope Public " + now(), "public");
 const cUnl = await mkScoped("Scope Unlisted " + now(), "unlisted");
 const cLoc = await mkScoped("Scope Local " + now(), "local-only");
@@ -937,7 +977,7 @@ await call(
   "POST",
   "/keys/register",
   { callsign: "OE7MOV", publicKey: mpub, label: "dev" },
-  { cookie: await signUp(SUB, "OE7MOV") },
+  { cookie: await player(SUB, "OE7MOV") },
 );
 const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));

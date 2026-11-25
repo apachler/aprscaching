@@ -25,7 +25,7 @@ settings go in `deploy/.env` ([Connect a radio: quick starts](quick-starts.md)).
   helper the box needs no Node.js: enrollment runs inside the ingest image.
 - **The gateway's address**, for example `https://aprs.example.net`.
 - **A one-time enrollment code** from the gateway's sysop ([Enrolling boxes on the gateway](#enrolling-boxes-on-the-gateway)),
-  or the gateway's `INGEST_SECRET` if the sysop prefers the shared secret.
+  or the gateway's `INGEST_SECRET` for a box that only delivers packets.
 - **What the box connects to**: an APRS-IS filter, a KISS TNC, a MeshCom node. Each link is in
   [Connect a radio: quick starts](quick-starts.md). With a sound card between box and radio, the box is the
   modem itself: [Soundcard port](soundcard.md).
@@ -38,13 +38,14 @@ A box proves itself to its gateway in one of two ways:
 | Credential | Settings on the box | Revoke one box | Who uses it |
 |---|---|---|---|
 | **Its own key** (enrolled) | `BOX_ID` and `BOX_KEY` | Yes, alone | Any box on another machine; the recommended way |
-| **The shared secret** | `INGEST_SECRET`, the same as the gateway's | No: changing it cuts off every box on it | A single-operator setup whose box verifies no callsigns |
+| **The shared secret** | `INGEST_SECRET`, the same as the gateway's | No: changing it cuts off every box on it | A box that only delivers packets: it verifies no callsign, pairs with no account and takes no remote commands |
 
 Boxes on the shared secret keep working beside enrolled ones. Neither credential is an attestation: what a
 box hears counts for Tier A only once the gateway's sysop trusts its receiving site
 ([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)).
 
-**Only an enrolled box verifies callsigns on the air.** A `VERIFY <code>` message counts only when a box
+**Only an enrolled box verifies callsigns on the air, pairs with an account and takes remote commands.** A
+`VERIFY <code>` message counts only when a box
 enrolled with its own key delivers it, heard at a site trusted under that box. The shared secret never
 verifies a callsign: whoever holds it can post any frame, and a proof from it would let a leaked secret take
 over calls, the operator's included. For members to verify their calls on the air, enroll the box that hears
@@ -100,12 +101,13 @@ A box's frames attest only the sites trusted under that box: `FIRST_PARTY_SITES`
 call count only for frames sent with the shared secret, and no other box can claim a box's site. Your own box
 on a key therefore needs **Trust this station's hearings** with its site call, and **Runs this instance's
 services** when it runs the packet BBS, FBB forwarding, the node mirror or the outbox. On the shared secret it
-needs neither, and verifies finds but no callsign.
+needs neither: it verifies finds, but no callsign, and takes no remote commands.
 
-Once a box is enrolled, its id answers only to its own key: its pairing code, its command polling and
-acknowledgements, its queue and its log take only its signature, or `OPERATOR_SECRET` as your override. The
-shared secret is refused for it, so whoever holds that secret cannot re-pair the box to their own account or
-take its commands. A box with no key is paired and polled on the shared secret.
+A box's id answers only to its own key: its pairing code, its command polling and acknowledgements, its queue
+and its log take only its signature, or `OPERATOR_SECRET` as your override. The shared secret acts for no box,
+so whoever holds that secret cannot pair a box to their own account, read its log or take its commands. A box
+on the shared secret with `BOX_ID` set logs at start that remote control is off; enroll it to pair it and
+control it from **Shack → Remote box**.
 
 ## Enrolling the box
 

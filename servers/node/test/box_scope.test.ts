@@ -2,14 +2,14 @@
 // What an enrolled box's key may do. It delivers what the box hears and drives the box's own command queue.
 // Only once the sysop marks it "Runs this instance's services" does it also run them (the outbox, the packet
 // BBS mailbox, FBB forwarding, the NET/ROM node mirror) and queue transmissions; trusting its hearings grants
-// none of that. It never acts as the shared secret does: it logs no find, acts for no cache owner and creates
-// or imports no cache. A box's frames attest only that box's own trusted sites, and FIRST_PARTY_SITES only the
+// none of that. It logs no find, acts for no cache owner and creates or imports no cache: those take a
+// signed-in session. A box's frames attest only that box's own trusted sites, and FIRST_PARTY_SITES only the
 // shared secret's frames, for a find's Tier A and for an RF callsign verification alike. These drive the real
 // gateway over a migrated SQLite with the ingest box's own signing code (apps/ingest gatewayauth.ts).
 import { describe, it, expect } from "vitest";
 import { createPrivateKey } from "node:crypto";
 import type { Env } from "@aprscaching/gateway/env";
-import { authEnv, call, emailSignup, ORIGIN } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, markCallVerified, ORIGIN, sessionCookie } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps/ingest/src/gatewayauth.js";
 
@@ -90,10 +90,12 @@ async function cacheHere(env: Env): Promise<number> {
   return Number(r.meta.last_row_id);
 }
 
-/** `logger`'s found log, posted by the instance's own ingest plane; its tier. */
+/** `logger`'s found log, posted from the logger's own session with the call control-verified; its tier. */
 async function findTier(env: Env, logger: string): Promise<string> {
   const id = await cacheHere(env);
-  const res = await call(env, "POST", `/api/caches/${id}/logs`, { loggerCall: logger, logType: "found" }, INGEST);
+  await markCallVerified(env, logger);
+  const cookie = await sessionCookie(env, logger);
+  const res = await call(env, "POST", `/api/caches/${id}/logs`, { logType: "found" }, { cookie });
   expect(res.status, JSON.stringify(res.data)).toBeLessThan(300);
   return res.data.tier as string;
 }

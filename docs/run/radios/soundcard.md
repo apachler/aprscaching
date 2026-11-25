@@ -313,8 +313,8 @@ instance operator (`ADMIN_CALLSIGNS`) holds it. A box enrolled for a callsign be
 now; any other enrolled box belongs to the sysop who created its code, or to the account it was paired with
 since; a revoked box belongs to nobody. A receiving site's call is no exception: a trusted station or a
 `FIRST_PARTY_SITES` entry vouches for what it hears, not for this box's transmitter, so a site call passes only
-when the box's operator holds it. The shared secret names its box (`?box=`) only for a box paired on the secret;
-a box with its own key speaks only through its signature. A verified call of someone else's never opens this
+when the box's operator holds it. A box with its own key speaks through its signature; the shared secret names no
+box, and passes only the instance operator's calls. A verified call of someone else's never opens this
 box's transmitter, and nothing passes while the call or the box's owner is suspended.
 
 With the shared secret the answer carries a MAC over the box's nonce. It stops an attacker who can change the

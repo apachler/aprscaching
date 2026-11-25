@@ -21,10 +21,15 @@ function ok(name, cond, detail = "") {
   if (!pass) failures++;
 }
 
-async function call(base, method, path, body) {
+async function call(base, method, path, body, headers = {}) {
   const res = await fetch(base + path, {
     method,
-    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, "x-operator-secret": OPERATOR_SECRET },
+    headers: {
+      "content-type": "application/json",
+      "x-ingest-secret": SECRET,
+      "x-operator-secret": OPERATOR_SECRET,
+      ...headers,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -37,6 +42,25 @@ async function call(base, method, path, body) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * A session for `cs`, the ADMIN_CALLSIGNS call of the gateway at `base`, opened with the operator's sign-in
+ * link and verified with the operator secret, the way `pnpm dev:admin` does. Returns the cookie, or "".
+ * A cache is hidden by a signed-in, control-verified call: the ingest secret hides none.
+ */
+async function operatorSession(base, cs) {
+  const link = await call(base, "POST", "/auth/operator-link", { callsign: cs });
+  const token = link.data?.link ? new URL(link.data.link).searchParams.get("token") : null;
+  if (!token) return "";
+  const vr = await fetch(base + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const cookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  const verified = await call(base, "POST", "/verify/operator", { callsign: cs });
+  return verified.status === 200 ? cookie : "";
+}
 
 /** Poll until `check` returns truthy or the deadline passes; returns the last value. */
 async function until(label, deadlineMs, check) {
@@ -181,15 +205,15 @@ ok(
 );
 
 const CACHE_TITLE = `Packet circuit ${Date.now()}`;
-const made = await call(B, "POST", "/api/caches", {
-  title: CACHE_TITLE,
-  type: "traditional",
-  lat: 48.2082,
-  lon: 16.3738,
-  difficulty: 2,
-  terrain: 2,
-  ownerCall: "OE1BBB",
-});
+const ownerB = await operatorSession(B, "OE1BBB");
+ok("B: its sysop OE1BBB signs in and is verified", !!ownerB);
+const made = await call(
+  B,
+  "POST",
+  "/api/caches",
+  { title: CACHE_TITLE, type: "traditional", lat: 48.2082, lon: 16.3738, difficulty: 2, terrain: 2 },
+  { cookie: ownerB, "x-ingest-secret": "", "x-operator-secret": "" },
+);
 ok("B: created a cache", made.status === 201, JSON.stringify(made.data));
 const mirrored = await until("B's cache appears on A", 180000, async () => {
   const r = await call(A, "GET", "/api/caches?bbox=16,48,16.6,48.5");

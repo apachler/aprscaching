@@ -39,8 +39,10 @@ ADMIN_ENV=""; [ "${TEASER_ADMIN:-0}" = "1" ] && ADMIN_ENV="ADMIN_CALLSIGNS=OE8AP
 export INGEST_SECRET="teaser-$(head -c 12 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
 # the seed enrolls its receiving box with the operator secret: a callsign proof counts only from an enrolled box
 export OPERATOR_SECRET="teaser-op-$(head -c 12 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
-# The SPA is served from another origin (vite preview), and it sends credentials: allow that origin.
-setsid bash -c "DB_PATH='$DB' PORT=$PORT_API INSTANCE=oe.teaser INGEST_SECRET='$INGEST_SECRET' OPERATOR_SECRET='$OPERATOR_SECRET' CORS_ORIGINS='http://127.0.0.1:$PORT_WEB' FED_PRIVATE_KEY='' FIRST_PARTY_SITES=OE8XXX $ADMIN_ENV exec pnpm --filter @aprscaching/node-gateway start" >"$OUT/api.log" 2>&1 &
+# The SPA is served from another origin (vite preview), and it sends credentials: allow that origin. The
+# seed's players and the tour sign in by email, and this gateway has no mail provider: ALLOW_DEV_TOKENS hands
+# the sign-in token back.
+setsid bash -c "DB_PATH='$DB' PORT=$PORT_API INSTANCE=oe.teaser INGEST_SECRET='$INGEST_SECRET' OPERATOR_SECRET='$OPERATOR_SECRET' CORS_ORIGINS='http://127.0.0.1:$PORT_WEB' FED_PRIVATE_KEY='' FIRST_PARTY_SITES=OE8XXX ALLOW_DEV_TOKENS=1 $ADMIN_ENV exec pnpm --filter @aprscaching/node-gateway start" >"$OUT/api.log" 2>&1 &
 API_PID=$!
 wait_url "http://127.0.0.1:$PORT_API/health" || { echo "gateway did not start"; tail "$OUT/api.log"; exit 1; }
 

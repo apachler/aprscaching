@@ -6,7 +6,7 @@
 //   BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
 
 import { cborDecode as miniDecode, frameParts, signingBytes, decodePage } from "./fedwire-mini.mjs";
-import { boxFetch, enrollTrustedBox } from "./boxsign.mjs";
+import { boxFetch, enrollBox, enrollTrustedBox } from "./boxsign.mjs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
@@ -17,6 +17,8 @@ const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 /** The smoke's receiving box, once enrolled ({@link rxBox}). */
 let rx = null;
+/** The smoke's signed-in players, by call ({@link player}). */
+const players = new Map();
 
 /** True when `u` is an absolute URL on github.com itself (a host match, not a substring match). */
 function isGithubUrl(u) {
@@ -34,10 +36,9 @@ function ok(name, cond, detail = "") {
 }
 
 async function call(method, path, body, headers = {}) {
-  // The smoke acts as the ingest box (it holds INGEST_SECRET), so writes that attribute an arbitrary
-  // RF/heard callsign go through the ingest-authorised path, and as the operator's scripts (it holds
-  // OPERATOR_SECRET). Explicit headers still win (e.g. the bad-secret rejection tests). Web session
-  // gating is checked separately below.
+  // The smoke posts packets as an ingest box (it holds INGEST_SECRET) and acts as the operator's scripts (it
+  // holds OPERATOR_SECRET). Neither acts as a player: every hide, log, favourite, rating and unlock goes with
+  // the player's own session ({@link as}). Explicit headers still win (e.g. the bad-secret rejection tests).
   const res = await fetch(BASE + path, {
     method,
     headers: {
@@ -99,17 +100,22 @@ ok("health", await waitHealthy());
   ok("auth: session -> signed-in callsign", sess.data?.callsign === callsign, JSON.stringify(sess.data));
 }
 
-// hide a cache
-const created = await call("POST", "/api/caches", {
-  title: "Smoke Cache",
-  type: "traditional",
-  lat: 47.0735,
-  lon: 15.4378,
-  difficulty: 1.5,
-  terrain: 2,
-  ownerCall: "OE8APR",
-  hint: "behind the clock",
-});
+// hide a cache, as its owner's session: hiding takes a control-verified call
+const OWNER = await player("OE8APR", { verified: true });
+const created = await call(
+  "POST",
+  "/api/caches",
+  {
+    title: "Smoke Cache",
+    type: "traditional",
+    lat: 47.0735,
+    lon: 15.4378,
+    difficulty: 1.5,
+    terrain: 2,
+    hint: "behind the clock",
+  },
+  as(OWNER),
+);
 ok(
   "create -> 201 + AC code",
   created.status === 201 && /^AC-\d+/.test(created.data?.cache?.code ?? ""),
@@ -118,26 +124,28 @@ ok(
 const id = created.data?.cache?.id;
 // A request with neither a session nor the ingest secret: what a stranger's browser sends.
 const ANON = { "x-ingest-secret": "" };
-const mintedCode = await call("POST", "/api/caches", {
-  title: "Minted squat",
+const secretHide = await call("POST", "/api/caches", {
+  title: "Named owner",
   type: "traditional",
   lat: 47,
   lon: 15,
   difficulty: 1,
   terrain: 1,
   ownerCall: "OE8APR",
-  code: "AC-9999",
 });
-ok("an explicit AC- code is refused, even for the instance", mintedCode.status === 400, `status=${mintedCode.status}`);
+ok(
+  "the shared ingest secret hides no cache under a named owner (401)",
+  secretHide.status === 401,
+  `status=${secretHide.status}`,
+);
 
 // the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
-const vCache = await call("POST", "/api/caches", {
-  title: "Virtual Landmark",
-  type: "virtual",
-  lat: 47.08,
-  lon: 15.44,
-  ownerCall: "OE8APR",
-});
+const vCache = await call(
+  "POST",
+  "/api/caches",
+  { title: "Virtual Landmark", type: "virtual", lat: 47.08, lon: 15.44 },
+  as(OWNER),
+);
 ok(
   "create accepts the virtual cache type",
   vCache.status === 201 && vCache.data?.cache?.type === "virtual",
@@ -145,16 +153,20 @@ ok(
 );
 
 // drive-in flag + country + tags (deduped/lowercased), round-tripped through create + detail
-const metaCache = await call("POST", "/api/caches", {
-  title: "Drive-In Lookout",
-  type: "traditional",
-  lat: 47.09,
-  lon: 15.45,
-  ownerCall: "OE8APR",
-  driveIn: true,
-  country: "OE",
-  tags: ["Scenic", "scenic", "QRP"],
-});
+const metaCache = await call(
+  "POST",
+  "/api/caches",
+  {
+    title: "Drive-In Lookout",
+    type: "traditional",
+    lat: 47.09,
+    lon: 15.45,
+    driveIn: true,
+    country: "OE",
+    tags: ["Scenic", "scenic", "QRP"],
+  },
+  as(OWNER),
+);
 ok(
   "create stores drive-in + country + deduped tags",
   metaCache.status === 201 &&
@@ -178,14 +190,13 @@ ok(
   (list.data?.caches ?? []).some((c) => c.id === id),
 );
 
-// Tier B — in-app geolocation near the cache, from the player's own session (the ingest plane has no in-app
-// reading, so a geolocation it sends counts for nothing)
-const dl1abcCookie = await signUp("DL1ABC");
+// Tier B — in-app geolocation near the cache, from the player's own session
+const dl1abcCookie = await player("DL1ABC");
 const tb = await call(
   "POST",
   `/api/caches/${id}/logs`,
-  { loggerCall: "DL1ABC", logType: "found", appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts: now() } },
-  { cookie: dl1abcCookie },
+  { logType: "found", appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts: now() } },
+  as(dl1abcCookie),
 );
 ok("Tier B verified (app_geo)", tb.data?.verified === true && tb.data?.tier === "B", JSON.stringify(tb.data));
 
@@ -226,10 +237,12 @@ const isQar = await call(
   },
   { "x-ingest-secret": SECRET },
 );
-const isQarLog = await call("POST", `/api/caches/${vCache.data?.cache?.id}/logs`, {
-  loggerCall: "OE3IS",
-  logType: "found",
-});
+const isQarLog = await call(
+  "POST",
+  `/api/caches/${vCache.data?.cache?.id}/logs`,
+  { logType: "found" },
+  as(await player("OE3IS", { verified: true })),
+);
 ok(
   "an APRS-IS qAR line naming the attested site does not reach Tier A",
   isQar.data?.stored === 1 && isQarLog.data?.logged === true && isQarLog.data?.tier !== "A",
@@ -237,6 +250,8 @@ ok(
 );
 
 // Tier A — heard directly by the attested site's own TNC (the ingest stamps the site call), then a found log
+// by the heard station's own session; Tier A takes a control-verified call
+const oe3rf = await player("OE3RF", { verified: true });
 const ing = await call(
   "POST",
   "/ingest",
@@ -258,17 +273,17 @@ const ing = await call(
   { "x-ingest-secret": SECRET },
 );
 ok("ingest stores 1 position", ing.data?.ok === true && ing.data?.stored === 1, JSON.stringify(ing.data));
-const ta = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE3RF", logType: "found" });
+const ta = await call("POST", `/api/caches/${id}/logs`, { logType: "found" }, as(oe3rf));
 ok("Tier A verified (aprs_rf)", ta.data?.verified === true && ta.data?.tier === "A", JSON.stringify(ta.data));
 
 // owner-gated rating — default policy 'finders' lets a verified finder rate, blocks a non-finder
-const rateFinder = await call("POST", `/api/caches/${id}/rate`, { callsign: "DL1ABC", stars: 4 });
+const rateFinder = await call("POST", `/api/caches/${id}/rate`, { stars: 4 }, as(dl1abcCookie));
 ok(
   "a verified finder can rate (1–5)",
   rateFinder.status === 200 && rateFinder.data?.rating?.mine === 4 && rateFinder.data?.rating?.count >= 1,
   JSON.stringify(rateFinder.data),
 );
-const rateNon = await call("POST", `/api/caches/${id}/rate`, { callsign: "NOFIND", stars: 5 });
+const rateNon = await call("POST", `/api/caches/${id}/rate`, { stars: 5 }, as(await player("OE5XYZ")));
 ok("a non-finder is blocked under the 'finders' policy (403)", rateNon.status === 403, JSON.stringify(rateNon.data));
 const ratedDetail = await call("GET", `/api/caches/${id}`);
 ok(
@@ -278,10 +293,10 @@ ok(
 );
 
 // DNF — recorded, never verified
-const dnf = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ", logType: "dnf" });
+const dnf = await call("POST", `/api/caches/${id}/logs`, { logType: "dnf" }, as(await player("OE5XYZ")));
 ok("DNF logged, unverified", dnf.data?.logged === true && dnf.data?.verified === false, JSON.stringify(dnf.data));
 
-// --- web logging/hiding is gated behind a session (the over-APRS path stays open via secret) ---
+// --- logging and hiding are gated behind a session, with or without the shared ingest secret ---
 const anonLogRes = await fetch(`${BASE}/api/caches/${id}/logs`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -291,9 +306,15 @@ ok("web log without a session is rejected (401)", anonLogRes.status === 401, `st
 const anonHideRes = await fetch(`${BASE}/api/caches`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ title: "x", type: "traditional", lat: 47, lon: 15, ownerCall: "NOSESS" }),
+  body: JSON.stringify({ title: "x", type: "traditional", lat: 47, lon: 15 }),
 });
 ok("web hide without a session is rejected (401)", anonHideRes.status === 401, `status=${anonHideRes.status}`);
+const secretLog = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ", logType: "found" });
+ok(
+  "the shared ingest secret logs no find in a named call (401)",
+  secretLog.status === 401,
+  `status=${secretLog.status}`,
+);
 // the genuine web path: register via email magic-link -> session cookie -> log attributed to it
 // (on its own cache, so the find count of the shared `id` cache is left untouched)
 const SESSCALL = "OE9SESS";
@@ -313,13 +334,12 @@ const eVer = await fetch(`${BASE}/auth/email/verify`, {
   body: JSON.stringify({ token: eStart.data.devToken }),
 });
 const cookie = (eVer.headers.get("set-cookie") ?? "").split(";")[0];
-const sCache = await call("POST", "/api/caches", {
-  title: "Session Find " + now(),
-  type: "traditional",
-  lat: 47.2,
-  lon: 15.6,
-  ownerCall: "OE8APR",
-});
+const sCache = await call(
+  "POST",
+  "/api/caches",
+  { title: "Session Find " + now(), type: "traditional", lat: 47.2, lon: 15.6 },
+  as(OWNER),
+);
 const sCacheId = sCache.data?.cache?.id;
 const sessLog = await fetch(`${BASE}/api/caches/${sCacheId}/logs`, {
   method: "POST",
@@ -400,10 +420,10 @@ const sessFav = await call(
   { callsign: "DL1ABC", on: true },
   { ...ANON, cookie },
 );
-const favOf = async (cs) => (await call("GET", `/api/caches/${sCacheId}?callsign=${cs}`)).data?.cache?.favorited;
+const favOf = async (c) => (await call("GET", `/api/caches/${sCacheId}`, undefined, as(c))).data?.cache?.favorited;
 ok(
   "a favourite is the signed-in caller's, whatever the body names",
-  sessFav.status === 200 && (await favOf(SESSCALL)) === true && (await favOf("DL1ABC")) === false,
+  sessFav.status === 200 && (await favOf(cookie)) === true && (await favOf(dl1abcCookie)) === false,
   `status=${sessFav.status}`,
 );
 
@@ -528,8 +548,14 @@ const switchOther = await fetch(`${BASE}/auth/callsign`, {
 ok("switching to a call held by another account -> 409", switchOther.status === 409, `status=${switchOther.status}`);
 
 // owner gating + auth guards
-const wrongOwner = await call("PATCH", `/api/caches/${id}`, { ownerCall: "DL9NO", difficulty: 5 });
+const wrongOwner = await call("PATCH", `/api/caches/${id}`, { difficulty: 5 }, as(dl1abcCookie));
 ok("non-owner edit -> 403", wrongOwner.status === 403, `status=${wrongOwner.status}`);
+const secretEdit = await call("PATCH", `/api/caches/${id}`, { ownerCall: "OE8APR", title: "pwned" });
+ok(
+  "the shared ingest secret edits no cache as its owner (403)",
+  secretEdit.status === 403 && (await call("GET", `/api/caches/${id}`)).data?.cache?.title === "Smoke Cache",
+  `status=${secretEdit.status}`,
+);
 const badSecret = await call("POST", "/ingest", { packets: [] }, { "x-ingest-secret": "wrong" });
 ok("bad ingest secret -> 401", badSecret.status === 401, `status=${badSecret.status}`);
 const missing = await call("GET", "/api/caches/999999");
@@ -644,15 +670,12 @@ ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data))
 // A found is idempotent per (cache, logger). DL1ABC already found `id` above, so the
 // signed-find + tamper checks below run against their OWN fresh cache (a duplicate would short-circuit
 // before echoing signerKey; a tampered *replay* is still rejected by the signature check, tested here).
-const sfCache = await call("POST", "/api/caches", {
-  title: "Signed Find Cache",
-  type: "traditional",
-  lat: 47.074,
-  lon: 15.438,
-  difficulty: 1,
-  terrain: 1,
-  ownerCall: "OE8APR",
-});
+const sfCache = await call(
+  "POST",
+  "/api/caches",
+  { title: "Signed Find Cache", type: "traditional", lat: 47.074, lon: 15.438, difficulty: 1, terrain: 1 },
+  as(OWNER),
+);
 const sfId = sfCache.data?.cache?.id;
 const at = now();
 const amsg = stableStringify({
@@ -664,11 +687,12 @@ const amsg = stableStringify({
   at,
 });
 const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(amsg)));
-const signed = await call("POST", `/api/caches/${sfId}/logs`, {
-  loggerCall: "DL1ABC",
-  logType: "found",
-  author: { authorKey: pubRaw, authorSig: sig, signedAt: at },
-});
+const signed = await call(
+  "POST",
+  `/api/caches/${sfId}/logs`,
+  { logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } },
+  as(dl1abcCookie),
+);
 ok(
   "signed find accepted; signerKey echoed",
   signed.data?.logged === true && signed.data?.signerKey === pubRaw,
@@ -728,11 +752,12 @@ ok(
 );
 // flip the first (fully-significant) base64url char so the signature is guaranteed to differ
 const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
-const tampered = await call("POST", `/api/caches/${sfId}/logs`, {
-  loggerCall: "DL1ABC",
-  logType: "found",
-  author: { authorKey: pubRaw, authorSig: badSig, signedAt: at },
-});
+const tampered = await call(
+  "POST",
+  `/api/caches/${sfId}/logs`,
+  { logType: "found", author: { authorKey: pubRaw, authorSig: badSig, signedAt: at } },
+  as(dl1abcCookie),
+);
 ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
 
 // ---- community / gamification ----
@@ -743,9 +768,8 @@ ok(
   !(lbPre.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC"),
   JSON.stringify(lbPre.data),
 );
-// Control-verify a call the real way: the holder's session starts a challenge (nothing is sent), and the
-// holder's `VERIFY <code>` message counts only as heard on the TNC of the site OE8XXX, delivered by the
-// enrolled box the sysop trusts for it. The shared ingest secret never verifies a call.
+// One address may start 20 sign-ups in ten minutes, and the whole smoke signs up from loopback: a player plays
+// more than one part of the run where it can.
 async function signUp(cs) {
   const st = await call("POST", "/auth/email/start", {
     email: `${cs.toLowerCase()}+${now()}@example.test`,
@@ -757,6 +781,20 @@ async function signUp(cs) {
     body: JSON.stringify({ token: st.data?.devToken }),
   });
   return (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+}
+/** A signed-in session for `cs`, signed up on first use and control-verified on the air when `verified`. */
+async function player(cs, { verified = false } = {}) {
+  let c = players.get(cs);
+  if (!c) players.set(cs, (c = await signUp(cs)));
+  if (verified && !(await isVerified(cs)) && !(await verifyCallsign(cs, c))) {
+    console.error(`✗ ${cs} could not be verified on the air`);
+    process.exit(1);
+  }
+  return c;
+}
+/** The headers of a request a player's own session sends: no ingest or operator secret beside it. */
+function as(cookie) {
+  return { cookie, "x-ingest-secret": "", "x-operator-secret": "" };
 }
 /** The receiving box "smoke-rx", enrolled with its own key and trusted for OE8XXX on first use. */
 async function rxBox() {
@@ -793,6 +831,9 @@ function verifyMessage(cs, start, onAir, shared = false) {
 async function isVerified(cs) {
   return (await call("GET", `/verify/aprs/status?callsign=${cs}`)).data?.verified === true;
 }
+// Control-verify a call the real way: the holder's session starts a challenge (nothing is sent), and the
+// holder's `VERIFY <code>` message counts only as heard on the TNC of the site OE8XXX, delivered by the
+// enrolled box the sysop trusts for it. The shared ingest secret never verifies a call.
 async function verifyCallsign(cs, cookie) {
   await rxBox();
   const start = await call("POST", "/verify/aprs/start", { callsign: cs }, { cookie });
@@ -877,16 +918,18 @@ ok(
   (prof.data?.badges ?? []).some((b) => b.badge === "first-find"),
   JSON.stringify(prof.data?.badges),
 );
-const favOn = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: true });
+const favOn = await call("POST", `/api/caches/${id}/favorite`, { on: true }, as(dl1abcCookie));
 ok("favorite toggled on", favOn.data?.on === true && (favOn.data?.count ?? 0) >= 1, JSON.stringify(favOn.data));
 const favAnon = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: false }, ANON);
 const watchAnon = await call("POST", `/api/caches/${id}/watch`, { callsign: "DL1ABC", on: true }, ANON);
+const favSecret = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: false });
+const watchSecret = await call("POST", `/api/caches/${id}/watch`, { callsign: "DL1ABC", on: true });
 ok(
-  "favourite and watch need a session or the ingest secret -> 401",
-  favAnon.status === 401 && watchAnon.status === 401,
-  `fav=${favAnon.status} watch=${watchAnon.status}`,
+  "favourite and watch need a session, with or without the ingest secret -> 401",
+  favAnon.status === 401 && watchAnon.status === 401 && favSecret.status === 401 && watchSecret.status === 401,
+  `fav=${favAnon.status} watch=${watchAnon.status} secret fav=${favSecret.status} watch=${watchSecret.status}`,
 );
-const det = await call("GET", `/api/caches/${id}?callsign=DL1ABC`);
+const det = await call("GET", `/api/caches/${id}`, undefined, as(dl1abcCookie));
 ok(
   "detail carries favorite + health fields",
   det.data?.cache?.favorited === true && typeof det.data?.cache?.needsMaintenance === "boolean",
@@ -1051,32 +1094,40 @@ ok(
 );
 
 // ---- audio-cache: staged multi-cache + media ----
-const multi = await call("POST", "/api/caches", {
-  title: "Staged Hunt",
-  type: "multi",
-  lat: 47.1,
-  lon: 15.5,
-  difficulty: 3,
-  terrain: 3,
-  ownerCall: "OE8APR",
-});
+// a second hider: each account hides at most five caches a day, and OE8APR has hidden five above
+const HIDER = await player("OE3RF", { verified: true });
+const multi = await call(
+  "POST",
+  "/api/caches",
+  { title: "Staged Hunt", type: "multi", lat: 47.1, lon: 15.5, difficulty: 3, terrain: 3 },
+  as(HIDER),
+);
 const mid = multi.data?.cache?.id;
-const setStages = await call("POST", `/api/caches/${mid}/stages`, {
-  ownerCall: "OE8APR",
-  stages: [
-    { stageNo: 0, lat: 47.1, lon: 15.5, radiusM: 60 },
-    { stageNo: 1, unlock: "geo", clue: "listen to the clue, then walk north", lat: 47.11, lon: 15.51, radiusM: 60 },
-    { stageNo: 2, unlock: "open", clue: "the final cache", lat: 47.12, lon: 15.52 },
-  ],
-});
+const setStages = await call(
+  "POST",
+  `/api/caches/${mid}/stages`,
+  {
+    stages: [
+      { stageNo: 0, lat: 47.1, lon: 15.5, radiusM: 60 },
+      { stageNo: 1, unlock: "geo", clue: "listen to the clue, then walk north", lat: 47.11, lon: 15.51, radiusM: 60 },
+      { stageNo: 2, unlock: "open", clue: "the final cache", lat: 47.12, lon: 15.52 },
+    ],
+  },
+  as(HIDER),
+);
 ok("owner sets stages", setStages.data?.ok === true && setStages.data?.stages === 3, JSON.stringify(setStages.data));
-const notOwner = await call("POST", `/api/caches/${mid}/stages`, { ownerCall: "DL9NO", stages: [] });
-ok("non-owner cannot set stages -> 403", notOwner.status === 403, `status=${notOwner.status}`);
+const notOwner = await call("POST", `/api/caches/${mid}/stages`, { stages: [] }, as(dl1abcCookie));
+const secretStages = await call("POST", `/api/caches/${mid}/stages`, { ownerCall: "OE8APR", stages: [] });
+ok(
+  "neither a non-owner nor the shared ingest secret sets stages -> 403",
+  notOwner.status === 403 && secretStages.status === 403,
+  `non-owner=${notOwner.status} secret=${secretStages.status}`,
+);
 
 // upload an audio clue to stage 1 (raw audio body)
 const upRes = await fetch(`${BASE}/api/caches/${mid}/stages/1/media`, {
   method: "PUT",
-  headers: { "content-type": "audio/mpeg", "x-owner-call": "OE8APR", "x-ingest-secret": SECRET },
+  headers: { "content-type": "audio/mpeg", cookie: HIDER },
   body: new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]),
 });
 const upJson = await upRes.json().catch(() => ({}));
@@ -1086,7 +1137,7 @@ const lockedClip = await fetch(`${BASE}/api/media/${upJson.mediaKey}`);
 ok("a locked location stage's clip stays hidden", lockedClip.status === 404, `status=${lockedClip.status}`);
 
 // a finder sees stage 0 coords + the clue, but stage 1/2 coords are hidden
-const stagesView = await call("GET", `/api/caches/${mid}/stages?callsign=DL1ABC`);
+const stagesView = await call("GET", `/api/caches/${mid}/stages`, undefined, as(dl1abcCookie));
 const sv = stagesView.data?.stages ?? [];
 ok(
   "stage 0 visible, later stages hidden until unlocked",
@@ -1095,35 +1146,42 @@ ok(
 );
 
 // unlock stage 1: too far -> 403, then within the stage-0 radius -> revealed
-const tooFar = await call("POST", `/api/caches/${mid}/stages/1/unlock`, {
-  callsign: "DL1ABC",
-  appGeo: { lat: 47.3, lon: 15.5 },
-});
+const tooFar = await call(
+  "POST",
+  `/api/caches/${mid}/stages/1/unlock`,
+  { appGeo: { lat: 47.3, lon: 15.5 } },
+  as(dl1abcCookie),
+);
 ok(
   "unlock rejected when too far",
   tooFar.status === 403 && tooFar.data?.reason === "too_far",
   JSON.stringify(tooFar.data),
 );
-const unlock1 = await call("POST", `/api/caches/${mid}/stages/1/unlock`, {
-  callsign: "DL1ABC",
-  appGeo: { lat: 47.1001, lon: 15.5001 },
-});
+const unlock1 = await call(
+  "POST",
+  `/api/caches/${mid}/stages/1/unlock`,
+  { appGeo: { lat: 47.1001, lon: 15.5001 } },
+  as(dl1abcCookie),
+);
 ok(
   "unlock at the previous stage reveals coords",
   unlock1.data?.unlocked === true && Math.abs((unlock1.data?.lat ?? 0) - 47.11) < 0.001,
   JSON.stringify(unlock1.data),
 );
-const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}?callsign=DL1ABC`, {
-  headers: { "x-ingest-secret": SECRET },
-});
+const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}`, { headers: { cookie: dl1abcCookie } });
 ok(
   "the clip is served as audio once its stage is unlocked",
   mediaRes.status === 200 && (mediaRes.headers.get("content-type") || "").includes("audio/"),
   `status=${mediaRes.status}`,
 );
 const unlockAnon = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" }, ANON);
-ok("unlock for a named callsign without a session -> 401", unlockAnon.status === 401, `status=${unlockAnon.status}`);
-const unlock2 = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" });
+const unlockSecret = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" });
+ok(
+  "unlock for a named callsign without a session -> 401, with or without the ingest secret",
+  unlockAnon.status === 401 && unlockSecret.status === 401,
+  `anon=${unlockAnon.status} secret=${unlockSecret.status}`,
+);
+const unlock2 = await call("POST", `/api/caches/${mid}/stages/2/unlock`, {}, as(dl1abcCookie));
 ok(
   "open final stage unlocks after reaching stage 1",
   unlock2.data?.unlocked === true && Math.abs((unlock2.data?.lat ?? 0) - 47.12) < 0.001,
@@ -1145,7 +1203,7 @@ const pngBytes = new Uint8Array([
 ]);
 const addMedia = await fetch(`${BASE}/api/caches/${mid}/media?title=Hint%20photo`, {
   method: "POST",
-  headers: { "content-type": "image/png", "x-owner-call": "OE8APR", "x-ingest-secret": SECRET },
+  headers: { "content-type": "image/png", cookie: HIDER },
   body: pngBytes,
 });
 const addJson = await addMedia.json().catch(() => ({}));
@@ -1172,44 +1230,48 @@ ok(
 );
 const delNonOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, {
   method: "DELETE",
-  headers: { "x-owner-call": "DL9NO", "x-ingest-secret": SECRET },
+  headers: { cookie: dl1abcCookie },
 });
-ok("non-owner cannot delete cache media -> 403", delNonOwner.status === 403, `status=${delNonOwner.status}`);
-const delOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, {
+const delSecret = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, {
   method: "DELETE",
   headers: { "x-owner-call": "OE8APR", "x-ingest-secret": SECRET },
 });
+ok(
+  "neither a non-owner nor the shared ingest secret deletes cache media -> 403",
+  delNonOwner.status === 403 && delSecret.status === 403,
+  `non-owner=${delNonOwner.status} secret=${delSecret.status}`,
+);
+const delOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, {
+  method: "DELETE",
+  headers: { cookie: HIDER },
+});
 ok("owner deletes cache media", delOwner.status === 200, `status=${delOwner.status}`);
 
-// living-cache rendezvous — two opted-in living caches co-located + both beaconing log each other
-const lcA = await call("POST", "/api/caches", {
-  title: "Living A",
-  type: "aprs_living",
-  lat: 47.5,
-  lon: 15.7,
-  ownerCall: "OE7RVA",
-  stationCall: "OE7RVA-9",
-  rendezvous: true,
-});
-const lcB = await call("POST", "/api/caches", {
-  title: "Living B",
-  type: "aprs_living",
-  lat: 47.5,
-  lon: 15.7,
-  ownerCall: "OE7RVB",
-  stationCall: "OE7RVB-9",
-  rendezvous: true,
-});
+// living-cache rendezvous — two opted-in living caches co-located + both beaconing log each other. A living
+// cache follows one of its hider's own stations (My stations).
+async function livingCache(cs, title) {
+  const c = await player(cs, { verified: true });
+  const st = await call("POST", "/api/my/stations", { callsign: `${cs}-9`, lat: 47.5, lon: 15.7 }, as(c));
+  if (st.status >= 300) return st;
+  return call(
+    "POST",
+    "/api/caches",
+    { title, type: "aprs_living", lat: 47.5, lon: 15.7, stationCall: `${cs}-9`, rendezvous: true },
+    as(c),
+  );
+}
+const lcA = await livingCache("OE3RF", "Living A");
+const lcB = await livingCache("OE3IS", "Living B");
 ok(
   "two rendezvous living caches created",
   lcA.status === 201 && lcB.status === 201,
-  JSON.stringify({ a: lcA.status, b: lcB.status }),
+  JSON.stringify({ a: [lcA.status, lcA.data], b: [lcB.status, lcB.data] }),
 );
 // beacon B first (so it's in the registry), then A co-located → A's ingest detects the meeting
 await call("POST", "/ingest", {
   packets: [
     {
-      src: "OE7RVB-9",
+      src: "OE3IS-9",
       dst: "APRS",
       path: ["TCPIP*", "qAC", "T2"],
       payload: "!4730.00N/01542.00E>",
@@ -1223,7 +1285,7 @@ await call("POST", "/ingest", {
 await call("POST", "/ingest", {
   packets: [
     {
-      src: "OE7RVA-9",
+      src: "OE3RF-9",
       dst: "APRS",
       path: ["TCPIP*", "qAC", "T2"],
       payload: "!4730.00N/01542.00E>",
@@ -1237,51 +1299,54 @@ await call("POST", "/ingest", {
 const rdvA = await call("GET", `/api/caches/${lcA.data?.cache?.id}`);
 ok(
   "rendezvous recorded on the beaconing living cache",
-  (rdvA.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE7RVB-9"),
+  (rdvA.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE3IS-9"),
   JSON.stringify(rdvA.data?.cache?.rendezvous),
 );
 const rdvB = await call("GET", `/api/caches/${lcB.data?.cache?.id}`);
 ok(
   "rendezvous is mutual (shows on the other living cache)",
-  (rdvB.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE7RVA-9"),
+  (rdvB.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE3RF-9"),
   JSON.stringify(rdvB.data?.cache?.rendezvous),
 );
 
 // NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
-const nfcCache = await call("POST", "/api/caches", {
-  title: "Tag Hunt",
-  type: "multi",
-  lat: 47.2,
-  lon: 15.6,
-  ownerCall: "OE8APR",
-});
+const nfcCache = await call(
+  "POST",
+  "/api/caches",
+  { title: "Tag Hunt", type: "multi", lat: 47.2, lon: 15.6 },
+  as(HIDER),
+);
 const nid = nfcCache.data?.cache?.id;
-await call("POST", `/api/caches/${nid}/stages`, {
-  ownerCall: "OE8APR",
-  stages: [
-    { stageNo: 0, lat: 47.2, lon: 15.6, radiusM: 60 },
-    { stageNo: 1, unlock: "nfc", secret: "TAG-7F3A", clue: "tap the tag at the trailhead", lat: 47.21, lon: 15.61 },
-  ],
-});
-const nfcView = await call("GET", `/api/caches/${nid}/stages?callsign=DL1ABC`);
+await call(
+  "POST",
+  `/api/caches/${nid}/stages`,
+  {
+    stages: [
+      { stageNo: 0, lat: 47.2, lon: 15.6, radiusM: 60 },
+      { stageNo: 1, unlock: "nfc", secret: "TAG-7F3A", clue: "tap the tag at the trailhead", lat: 47.21, lon: 15.61 },
+    ],
+  },
+  as(HIDER),
+);
+const nfcView = await call("GET", `/api/caches/${nid}/stages`, undefined, as(dl1abcCookie));
 ok(
   "nfc stage never exposes its secret",
   (nfcView.data?.stages ?? []).every((s) => !("unlockSecret" in s) && !("secret" in s)),
   JSON.stringify(nfcView.data?.stages?.[1]),
 );
-const nfcNoCode = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC" });
+const nfcNoCode = await call("POST", `/api/caches/${nid}/stages/1/unlock`, {}, as(dl1abcCookie));
 ok(
   "nfc unlock without a code -> 403",
   nfcNoCode.status === 403 && nfcNoCode.data?.reason === "no_code",
   JSON.stringify(nfcNoCode.data),
 );
-const nfcBad = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC", code: "WRONG" });
+const nfcBad = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { code: "WRONG" }, as(dl1abcCookie));
 ok(
   "nfc unlock with the wrong code -> 403 bad_code",
   nfcBad.status === 403 && nfcBad.data?.reason === "bad_code",
   JSON.stringify(nfcBad.data),
 );
-const nfcOk = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC", code: "tag-7f3a" });
+const nfcOk = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { code: "tag-7f3a" }, as(dl1abcCookie));
 ok(
   "nfc unlock with the right code (case-insensitive) reveals coords",
   nfcOk.data?.unlocked === true && Math.abs((nfcOk.data?.lat ?? 0) - 47.21) < 0.001,
@@ -1294,8 +1359,9 @@ ok(
   JSON.stringify(peek.data?.stages?.[1]),
 );
 let guess;
+const guesser = await player("OE5XYZ");
 for (let i = 0; i < 11; i++)
-  guess = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL7RL", code: `WRONG${i}` });
+  guess = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { code: `WRONG${i}` }, as(guesser));
 ok(
   "NFC code guessing stops after 10 tries an hour -> 429",
   guess.status === 429 && guess.data?.reason === "limited",
@@ -1718,45 +1784,57 @@ ok(
   `${qr.status} ${qr.ct}`,
 );
 
-// remote station control: the box command channel
-const boxRx = await call("POST", "/api/box/smoke-box/command", { kind: "status" });
+// remote station control: the box command channel. The box speaks through its own key; the operator secret
+// is the operator's override, and the shared ingest secret acts for no box.
+const OPS = { "x-ingest-secret": "", "x-operator-secret": OPERATOR_SECRET };
+const enrolledBox = await enrollBox(BASE, OPERATOR_SECRET, "smoke-box");
+if (enrolledBox.error) {
+  console.error(`✗ the smoke's remote box could not be enrolled: ${enrolledBox.error}`);
+  process.exit(1);
+}
+const smokeBox = enrolledBox.key;
+const boxRx = await call("POST", "/api/box/smoke-box/command", { kind: "status" }, OPS);
 ok(
   "POST /api/box/:id/command enqueues a read command",
   boxRx.status === 201 && boxRx.data?.status === "queued",
   JSON.stringify(boxRx.data),
 );
-const boxTxUnver = await call("POST", "/api/box/smoke-box/command", {
-  kind: "beacon",
-  callsign: "OE5XYZ",
-  payload: { comment: "smoke" },
-});
+const boxTxUnver = await call(
+  "POST",
+  "/api/box/smoke-box/command",
+  { kind: "beacon", callsign: "OE5XYZ", payload: { comment: "smoke" } },
+  OPS,
+);
 ok("a TX command for an unverified callsign is blocked (403)", boxTxUnver.status === 403, String(boxTxUnver.status));
 await verifyCallsign("OE7BOX", await signUp("OE7BOX")); // control-verify a fresh call (DL1ABC was GDPR-erased earlier)
-const boxTx = await call("POST", "/api/box/smoke-box/command", {
-  kind: "message",
-  callsign: "OE7BOX",
-  payload: { to: "OE3ABC", text: "hi" },
-});
+const boxTx = await call(
+  "POST",
+  "/api/box/smoke-box/command",
+  { kind: "message", callsign: "OE7BOX", payload: { to: "OE3ABC", text: "hi" } },
+  OPS,
+);
 ok(
   "a TX command for a verified callsign is queued (control-verified)",
   boxTx.status === 201 && boxTx.data?.tx === true,
   JSON.stringify(boxTx.data),
 );
-const boxPoll = await call("GET", "/api/box/smoke-box/commands");
+const boxPoll = await boxFetch(BASE, smokeBox, "GET", "/api/box/smoke-box/commands");
 ok(
-  "the box leases its queued commands (secret)",
+  "the box leases its queued commands with its own key",
   boxPoll.status === 200 && (boxPoll.data?.commands ?? []).length >= 2,
   JSON.stringify((boxPoll.data?.commands ?? []).map((c) => c.kind)),
 );
-const boxPoll2 = await call("GET", "/api/box/smoke-box/commands");
+const boxPoll2 = await boxFetch(BASE, smokeBox, "GET", "/api/box/smoke-box/commands");
 ok(
   "leased commands are not re-delivered",
   (boxPoll2.data?.commands ?? []).length === 0,
   JSON.stringify(boxPoll2.data?.commands?.length),
 );
 const boxNoSecret = await fetch(`${BASE}/api/box/smoke-box/commands`);
-ok("box poll without the secret is rejected (401)", boxNoSecret.status === 401, String(boxNoSecret.status));
-const boxAck = await call("POST", "/api/box/smoke-box/commands/ack", {
+ok("box poll without a credential is rejected (401)", boxNoSecret.status === 401, String(boxNoSecret.status));
+const boxShared = await call("GET", "/api/box/smoke-box/commands", undefined, { "x-operator-secret": "" });
+ok("box poll with the shared ingest secret is refused (403)", boxShared.status === 403, String(boxShared.status));
+const boxAck = await boxFetch(BASE, smokeBox, "POST", "/api/box/smoke-box/commands/ack", {
   id: (boxPoll.data?.commands ?? [])[0]?.id,
   status: "done",
   result: "ok",
@@ -1766,7 +1844,11 @@ ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, 
   // a message the box sent shows in the Messages list as sent, once however often the box reports it
   const msgCmd = (boxPoll.data?.commands ?? []).find((c) => c.kind === "message");
   for (let i = 0; i < 2; i++)
-    await call("POST", "/api/box/smoke-box/commands/ack", { id: msgCmd?.id, status: "done", result: "ok" });
+    await boxFetch(BASE, smokeBox, "POST", "/api/box/smoke-box/commands/ack", {
+      id: msgCmd?.id,
+      status: "done",
+      result: "ok",
+    });
   const sentRows = ((await call("GET", "/api/messages")).data?.messages ?? []).filter(
     (m) => m.fromCall === "OE7BOX" && m.toCall === "OE3ABC" && m.body === "hi",
   );
@@ -1776,7 +1858,7 @@ ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, 
     JSON.stringify(sentRows),
   );
 }
-const boxLog = await call("GET", "/api/box/smoke-box/log");
+const boxLog = await call("GET", "/api/box/smoke-box/log", undefined, OPS);
 // a signed-in operator controls a box only after pairing it with the code the box obtained
 {
   const pc = await signUp("OE7PAIR");
@@ -1791,9 +1873,9 @@ const boxLog = await call("GET", "/api/box/smoke-box/log");
     squat.status === 403,
     String(squat.status),
   );
-  const minted = await call("POST", "/api/box/smoke-box/pair", {});
+  const minted = await boxFetch(BASE, smokeBox, "POST", "/api/box/smoke-box/pair", {});
   ok(
-    "the box obtains a pairing code with its secret",
+    "the box obtains a pairing code with its own key",
     /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(minted.data?.code ?? ""),
     JSON.stringify(minted.data),
   );
@@ -2312,13 +2394,7 @@ ok(
 // ---- logging finds by radio message: FOUND / DNF to the service call ----
 {
   const rc = "OE7RAD";
-  const st = await call("POST", "/auth/email/start", { email: `radio+${now()}@example.test`, callsign: rc });
-  const vr = await fetch(BASE + "/auth/email/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: st.data?.devToken }),
-  });
-  const rcookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  const rcookie = await player(rc);
   ok("radio: the sender's callsign verifies by an on-air VERIFY", await verifyCallsign(rc, rcookie));
   const code = created.data?.cache?.code;
   const msg = (text, extra) => ({

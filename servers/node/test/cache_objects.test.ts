@@ -5,6 +5,7 @@
 // a cache object heard back is never stored as its sender's position.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import type { Env } from "@aprscaching/gateway/env";
 import { loadSiteSettings } from "@aprscaching/gateway/siteconfig";
 import { runCacheObjects } from "@aprscaching/gateway/cacheobjects";
@@ -39,14 +40,18 @@ async function addCache(env: Env, code: string, at: { lat: number; lon: number }
     .run();
 }
 
-/** The box polls, reporting that it transmits on RF and where it stands; returns what it leased. */
+/** The box, enrolled with its own key and running this instance's services, polls, reporting that it transmits
+ *  on RF and where it stands; returns what it leased. */
 async function poll(env: Env, box = "home") {
-  const r = await call(
+  const r = await boxCall(
     env,
+    box,
     "GET",
     `/api/box/${box}/commands?tx=1&rf=1&lat=${BOX.lat}&lon=${BOX.lon}`,
     undefined,
-    SECRET,
+    {
+      services: true,
+    },
   );
   expect(r.status).toBe(200);
   return r.data.commands as { kind: string; callsign: string; payload: Record<string, unknown> }[];
@@ -92,7 +97,7 @@ describe("cache objects on air", () => {
     await poll(w.env);
     expect(await runCacheObjects(w.env)).toEqual({ skipped: "off" });
     await turnOn(w);
-    await call(w.env, "GET", "/api/box/home/commands?tx=0&rf=1", undefined, SECRET);
+    await boxCall(w.env, "home", "GET", "/api/box/home/commands?tx=0&rf=1", undefined, { services: true });
     expect(await runCacheObjects(w.env)).toMatchObject({ skipped: expect.stringMatching(/cannot transmit/) });
     const n = await w.env.DB.prepare("SELECT COUNT(*) AS n FROM box_commands").first<{ n: number }>();
     expect(n?.n).toBe(0);

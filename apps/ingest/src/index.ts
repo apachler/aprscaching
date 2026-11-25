@@ -167,7 +167,7 @@ try {
   process.exit(1);
 }
 const callGate = new CallVerifier(
-  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
+  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY }),
   { log: (m) => console.error(m), graceMs: txGateGrace },
 );
 /** The box's station calls; the gateway's service call joins them once the gateway names it. */
@@ -815,10 +815,15 @@ if (env.FED_LINK_PULL === "1") {
 }
 
 // ---- Remote control: lease commands the operator queued in the web app and execute them.
-// Opt-in with BOX_ID; remote transmit additionally needs BOX_TX=1 and a command callsign that is this
-// box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon names the box's own
-// position (BOX_LAT, BOX_LON), never one the command carries.
-if (env.BOX_ID) {
+// Opt-in with BOX_ID on a box enrolled with its own key (BOX_KEY): the gateway pairs and polls a box only by
+// its signature, never by the shared INGEST_SECRET. Remote transmit additionally needs BOX_TX=1 and a command
+// callsign that is this box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon
+// names the box's own position (BOX_LAT, BOX_LON), never one the command carries.
+if (env.BOX_ID && !env.BOX_KEY) {
+  console.warn(
+    "[box] remote control is off: BOX_ID is set, but the box has no key of its own (BOX_KEY). The gateway pairs and polls only an enrolled box: enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box)",
+  );
+} else if (env.BOX_ID) {
   const { BoxPoller, parseBoxPath, parseBoxPosition } = await import("./boxpoll.js");
   const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
   let boxPosition: ReturnType<typeof parseBoxPosition>;

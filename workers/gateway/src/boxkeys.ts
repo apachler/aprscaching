@@ -39,7 +39,7 @@ import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
 import { baseHolder, ingestSecretOk, operatorSecretOk, sessionIdentity } from "./auth.js";
-import { boxHasKey, forgetBoxes } from "./boxowner.js";
+import { forgetBoxes } from "./boxowner.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
@@ -435,19 +435,16 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
 }
 
 /**
- * Why this request may not act as box `id` on an endpoint that names a box, or null when it may. A box signs
- * only for itself. A box with a key of its own (live or revoked) speaks only through its signature, with the
- * operator secret as the operator's override: the shared INGEST_SECRET sits on every box that runs on it, so
- * letting it pair, poll or ack a keyed box would hand that box's queue and its owner to whoever holds the
- * secret. The shared secret acts for the boxes that have no key, and a session is checked by each handler.
+ * Why this request may not act as box `id` on an endpoint that names a box, or null when it may. A box speaks
+ * through its own key and only for itself, with the operator secret as the operator's override; a session is
+ * checked by each handler. The shared INGEST_SECRET acts for no box: it sits on every box that runs on it, so
+ * letting it pair, poll, ack or read one would hand that box's queue and its owner to whoever holds the secret.
  */
-export async function boxActorRefusal(req: Request, env: Env, id: string): Promise<string | null> {
+export function boxActorRefusal(req: Request, env: Env, id: string): string | null {
   const p = boxPrincipal(req);
   if (p) return p.box === id ? null : "this box's key does not act for another box";
   if (operatorSecretOk(req, env) || !ingestSecretOk(req, env)) return null;
-  return (await boxHasKey(env, id))
-    ? "this box signs with its own key: the shared ingest secret does not act for it"
-    : null;
+  return "the shared ingest secret does not act for a box: enroll the box with its own key";
 }
 
 /**

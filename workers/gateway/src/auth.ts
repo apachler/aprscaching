@@ -642,20 +642,14 @@ export async function accountDataSession(
 /**
  * May this request act as the owner of something owned by `ownerCall` (a cache, its stages and media, a
  * saved view)? Ownership follows the licence, not the call string: a signed-in session acts as owner
- * when its account holds the owner call's base call, whichever of its calls it is operating. Without a
- * session only the ingest plane acts, for the exact owner call it names (`claimed`) — the over-APRS path.
- * An erased owner's withdrawn marker has no owner.
+ * when its account holds the owner call's base call, whichever of its calls it is operating. Nothing else
+ * does: the shared INGEST_SECRET sits on every ingest box, so letting it name an owner would hand every cache
+ * to whoever holds a box. An erased owner's withdrawn marker has no owner.
  */
-export async function mayActAsOwner(
-  req: Request,
-  env: Env,
-  ownerCall: string,
-  claimed?: string | null,
-): Promise<boolean> {
+export async function mayActAsOwner(req: Request, env: Env, ownerCall: string): Promise<boolean> {
   if (!ownerCall || isWithdrawnCall(ownerCall)) return false;
   const me = await sessionIdentity(req, env);
-  if (me) return accountHoldsCall(env, me.accountId, ownerCall);
-  return ingestSecretOk(req, env) && !!claimed && claimed.trim().toUpperCase() === ownerCall.toUpperCase();
+  return !!me && accountHoldsCall(env, me.accountId, ownerCall);
 }
 
 /**

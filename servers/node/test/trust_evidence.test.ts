@@ -8,8 +8,10 @@ import { describe, it, expect } from "vitest";
 import { scoreFind } from "@aprscaching/gateway/caches";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup, markCallVerified } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
+const OPS = { "x-operator-secret": "test-operator-secret" };
 const SITE = "OE8XXX-10";
 // the spot every test position sits at: !4704.20N/01525.20E>
 const LAT = 47 + 4.2 / 60;
@@ -131,9 +133,10 @@ describe("a living cache is where an attested site or its owner's own bridge hea
 describe("a beacon this instance asked a box to send", () => {
   async function boxBeacon(env: Env, callsign: string) {
     await markCallVerified(env, callsign);
-    const q = await call(env, "POST", "/api/box/pi-home/command", { kind: "beacon", callsign }, INGEST);
+    // the operator queues the beacon; the box, with its own key, leases it
+    const q = await call(env, "POST", "/api/box/pi-home/command", { kind: "beacon", callsign }, OPS);
     expect(q.status, JSON.stringify(q.data)).toBe(201);
-    const leased = await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=1", undefined, INGEST);
+    const leased = await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands?tx=1&rf=1");
     expect(leased.data.commands).toHaveLength(1);
     return q.data.id as number;
   }
@@ -172,13 +175,12 @@ describe("a beacon this instance asked a box to send", () => {
   it("once the box reports the call it sent a base-call beacon as, tags only that call's hearings", async () => {
     const env = world();
     const id = await boxBeacon(env, "OE8BOX");
-    const ack = await call(
-      env,
-      "POST",
-      "/api/box/pi-home/commands/ack",
-      { id, status: "done", result: "beacon sent as OE8BOX-10", sentAs: "OE8BOX-10" },
-      INGEST,
-    );
+    const ack = await boxCall(env, "pi-home", "POST", "/api/box/pi-home/commands/ack", {
+      id,
+      status: "done",
+      result: "beacon sent as OE8BOX-10",
+      sentAs: "OE8BOX-10",
+    });
     expect(ack.status).toBe(200);
     await heard(env, "OE8BOX-10");
     await heard(env, "OE8BOX-7"); // the operator's handheld, out caching
@@ -198,13 +200,12 @@ describe("a beacon this instance asked a box to send", () => {
     const env = world();
     const trad = await cache(env, { type: "traditional" });
     const id = await boxBeacon(env, "OE8BOX-10");
-    const ack = await call(
-      env,
-      "POST",
-      "/api/box/pi-home/commands/ack",
-      { id, status: "done", result: "beacon sent", position: { lat: 48.2, lon: 16.37 } },
-      INGEST,
-    );
+    const ack = await boxCall(env, "pi-home", "POST", "/api/box/pi-home/commands/ack", {
+      id,
+      status: "done",
+      result: "beacon sent",
+      position: { lat: 48.2, lon: 16.37 },
+    });
     expect(ack.status).toBe(200);
     await heard(env, "OE8LOG-9");
     await heard(env, "OE8BOX-10"); // the box's call, but at the spot, not where the box beaconed
@@ -229,7 +230,7 @@ describe("a beacon this instance asked a box to send", () => {
       "POST",
       "/api/box/pi-home/command",
       { kind: "beacon", callsign: "OE8LOG-9", payload: { lat: LAT, lon: LON } },
-      INGEST,
+      OPS,
     );
     expect(q.status).toBe(400);
     expect(q.data.error).toMatch(/configured position/);

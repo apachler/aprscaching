@@ -93,3 +93,33 @@ export async function siteBox(env: Env): Promise<BoxKey> {
   if (!k) siteBoxes.set(env, (k = await trustedBox(env, "site-rx", ["OE8XXX"])));
   return k;
 }
+
+const keyedBoxes = new WeakMap<Env, Map<string, BoxKey>>();
+
+/** Box `box` of `env`, enrolled with its own key on first use and running this instance's services when
+ *  `services` is set: the box a test polls, acks and queues through, as only a box's own key may. */
+export async function keyedBox(env: Env, box: string, opts: { services?: boolean } = {}): Promise<BoxKey> {
+  let boxes = keyedBoxes.get(env);
+  if (!boxes) keyedBoxes.set(env, (boxes = new Map()));
+  let k = boxes.get(box);
+  if (!k) {
+    boxes.set(box, (k = await enrollBox(env, box)));
+    if (opts.services) {
+      const s = await call(env, "POST", `/api/admin/boxes/${box}/services`, { services: true }, OPS);
+      if (s.status !== 200) throw new Error(`services for ${box} refused: ${JSON.stringify(s.data)}`);
+    }
+  }
+  return k;
+}
+
+/** One JSON request signed by box `box`, enrolled on first use (keyedBox). */
+export async function boxCall(
+  env: Env,
+  box: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  opts: { services?: boolean } = {},
+): Promise<Res> {
+  return signedCall(env, await keyedBox(env, box, opts), method, path, body);
+}

@@ -441,19 +441,8 @@ describe("suspension", () => {
     expect(signIn.data.error).toMatch(/suspended.*repeated spam/);
     expect(signIn.cookie).toBe("");
 
-    // the ingest plane cannot log or post in the suspended call's name either
+    // the ingest plane cannot post in the suspended call's name either
     const ingest = { "x-ingest-secret": "test-ingest-secret" };
-    const owner2 = await user(w, "DL1OTH");
-    const other = await hide(w, owner2, "elsewhere");
-    const radioFind = await call(
-      w.env,
-      "POST",
-      `/api/caches/${other.id}/logs`,
-      { logType: "note", loggerCall: "DL1BAD", comment: "hi" },
-      ingest,
-    );
-    expect(radioFind.status).toBe(409);
-    expect(radioFind.data.error).toMatch(/suspended/);
     const bbs = await call(
       w.env,
       "POST",

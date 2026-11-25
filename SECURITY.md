@@ -60,16 +60,21 @@ network layer (that's the operator's edge/CDN concern).
 
 ## Hardening & running securely
 
-- **Three secrets, three planes.** `INGEST_SECRET` (the ingest box) authorises only ingest-plane writes;
-  it never registers a device key, verifies a callsign, acts for a box enrolled with its own key, reaches
-  operator configuration or signs a session. An on-air `VERIFY` proves control of a call only when an ingest
-  box enrolled with its own key delivers it, heard at a site the sysop trusts through that box. `OPERATOR_SECRET` (the operator's scripts, `x-operator-secret`) reaches instance-wide
-  configuration and is closed while unset. `SESSION_SECRET` alone signs sessions. A leaked ingest secret
-  therefore lets an attacker post packets as your ingest box — it does not hand over accounts or the
-  instance, and a finding that it does is in scope.
+- **Three secrets, three planes.** `INGEST_SECRET` (the ingest box) posts packets and nothing more: it
+  never registers a device key, verifies a callsign, pairs, polls or reads a remote box, acts as a player
+  or cache owner, reaches operator configuration or signs a session. An on-air `VERIFY` proves control of a
+  call only when an ingest box enrolled with its own key delivers it, heard at a site the sysop trusts
+  through that box, and only an enrolled box is paired and remote-controlled. `OPERATOR_SECRET` (the
+  operator's scripts, `x-operator-secret`) reaches instance-wide configuration and is closed while unset.
+  `SESSION_SECRET` alone signs sessions. A leaked ingest secret therefore lets an attacker post packets as
+  your ingest box — it does not hand over accounts, boxes, caches or the instance, and a finding that it
+  does is in scope.
+- **Enroll your receiver.** A box on the shared secret delivers packets only. To verify callsigns on the air,
+  pair the box with your account or control it remotely, enroll it with its own key
+  ([How the box signs in](docs/run/radios/ingest-box.md#how-the-box-signs-in)).
 - The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, or an
   `OPERATOR_SECRET`/`SESSION_SECRET` equal to it. Without `SESSION_SECRET` they generate one beside the
-  database. Give an ingest box only `INGEST_SECRET`.
+  database. Give an ingest box only `INGEST_SECRET`, or better its own enrolled key.
 - **Sessions are bound to the account.** A cookie names the account and its session generation and is
   honoured only while that account exists at that generation and holds the call. Erasure, a callsign
   change and **Sign out everywhere** (`POST /auth/logout-all`) end every session of the account;

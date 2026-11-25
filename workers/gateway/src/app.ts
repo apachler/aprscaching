@@ -572,7 +572,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log|pair|claim)$/.exec(p);
   if (box) {
     const [boxId, op] = [box[1]!, box[2]!];
-    const refused = await boxActorRefusal(req, env, boxId);
+    const refused = boxActorRefusal(req, env, boxId);
     if (refused) return json({ error: refused }, { status: 403 });
     if (op === "command" && m === "POST") return handleBoxEnqueue(req, env, boxId);
     if (op === "commands" && m === "GET") return handleBoxPoll(req, env, boxId);

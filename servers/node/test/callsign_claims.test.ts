@@ -16,6 +16,7 @@ import {
   call,
   emailSignup,
   hiderSignup,
+  markCallVerified,
   newAuthenticator,
   operatorSignup,
   operatorVerify,
@@ -24,8 +25,24 @@ import {
 } from "./helpers/authflow.js";
 import { signedCall, siteBox } from "./helpers/box.js";
 
-const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const now = () => Math.floor(Date.now() / 1000);
+
+/**
+ * The cache "elm" OE8APR's holder hid from `cookie`'s session while the call was verified, a verification since
+ * taken back: hiding takes a verified call, and the claim it faces is on a call nobody has verified.
+ */
+async function hideUnverified(env: Env, cookie: string): Promise<Res> {
+  await markCallVerified(env, "OE8APR");
+  const hid = await call(
+    env,
+    "POST",
+    "/api/caches",
+    { title: "elm", type: "traditional", lat: 46, lon: 14 },
+    { cookie },
+  );
+  await env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign = 'OE8APR'").run();
+  return hid;
+}
 
 // ---- the LoTW proof (synthetic certificates, workers/gateway/test/fixtures/lotw/gen.sh)
 const FX = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../workers/gateway/test/fixtures/lotw");
@@ -268,14 +285,7 @@ describe("the previous holder's content", () => {
         cookie: finder.cookie,
       },
     );
-    const mine = await call(
-      env,
-      "POST",
-      "/api/caches",
-      { title: "elm", type: "traditional", lat: 46, lon: 14, ownerCall: "OE8APR" },
-      // an unverified holder hides nothing from the web; the cache came in over the air, owned by the call
-      INGEST,
-    );
+    const mine = await hideUnverified(env, cookie);
     expect(mine.status).toBe(201);
     const log = await call(
       env,
@@ -409,14 +419,7 @@ describe("federation", () => {
         cookie: finder.cookie,
       },
     );
-    const mine = await call(
-      env,
-      "POST",
-      "/api/caches",
-      { title: "elm", type: "traditional", lat: 46, lon: 14, ownerCall: "OE8APR" },
-      // an unverified holder hides nothing from the web; the cache came in over the air, owned by the call
-      INGEST,
-    );
+    const mine = await hideUnverified(env, squat.cookie);
     await call(
       env,
       "POST",

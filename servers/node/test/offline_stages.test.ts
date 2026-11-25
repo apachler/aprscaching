@@ -6,8 +6,8 @@ import { describe, it, expect } from "vitest";
 import { openSealedStage, type PackResponse } from "@aprscaching/shared";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { sessionCookie } from "./helpers/authflow.js";
 
-const OWNER = { "x-ingest-secret": "test-ingest-secret", "x-owner-call": "OE8OWN" };
 const SERIAL = "04:A2:5F:1B:3C:80:90";
 
 async function setup() {
@@ -24,11 +24,13 @@ async function setup() {
   ).run();
   return { env, id: Number(r.meta.last_row_id) };
 }
-const post = (env: Env, path: string, body: unknown) =>
+/** The owner OE8OWN's session, or the finder's: owning and unlocking take a signed-in caller. */
+const as = async (env: Env, callsign = "OE8OWN") => ({ cookie: await sessionCookie(env, callsign) });
+const post = async (env: Env, path: string, body: unknown, callsign?: string) =>
   serve(env)(
     new Request(`https://stages.example${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...OWNER },
+      headers: { "content-type": "application/json", ...(await as(env, callsign)) },
       body: JSON.stringify(body),
     }),
   );
@@ -42,7 +44,7 @@ const STAGES = [
 describe("sealing NFC stages for offline packs", () => {
   it("tells the owner which stages unlock offline, and why the others do not", async () => {
     const { env, id } = await setup();
-    const r = (await (await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: STAGES })).json()) as {
+    const r = (await (await post(env, `/api/caches/${id}/stages`, { stages: STAGES })).json()) as {
       offline: { stageNo: number; offline: boolean; reason?: string }[];
     };
     expect(r.offline.map((o) => [o.stageNo, o.offline])).toEqual([
@@ -57,7 +59,7 @@ describe("sealing NFC stages for offline packs", () => {
 
   it("puts the start in the clear and only the sealed blob of a strong NFC stage in the pack", async () => {
     const { env, id } = await setup();
-    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: STAGES });
+    await post(env, `/api/caches/${id}/stages`, { stages: STAGES });
     const pack = (await (
       await serve(env)(new Request("https://stages.example/api/offline/pack?grid=JN77"))
     ).json()) as PackResponse;
@@ -79,11 +81,11 @@ describe("sealing NFC stages for offline packs", () => {
 
   it("reseals a stage when its audio clue changes, and the unlock online still checks the code", async () => {
     const { env, id } = await setup();
-    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: STAGES });
+    await post(env, `/api/caches/${id}/stages`, { stages: STAGES });
     const up = await serve(env)(
       new Request(`https://stages.example/api/caches/${id}/stages/1/media`, {
         method: "PUT",
-        headers: { "content-type": "audio/mpeg", ...OWNER },
+        headers: { "content-type": "audio/mpeg", ...(await as(env)) },
         body: new Uint8Array(100),
       }),
     );
@@ -93,17 +95,17 @@ describe("sealing NFC stages for offline packs", () => {
     ).json()) as PackResponse;
     const opened = await openSealedStage(SERIAL, pack.caches[0]!.stages[1]!.sealed!);
     expect(opened?.mediaUrl).toMatch(/^\/api\/media\/cache\/\d+\/stage\/1\/clue-[0-9a-f]+\./);
-    const wrong = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: "nope" });
+    const wrong = await post(env, `/api/caches/${id}/stages/1/unlock`, { code: "nope" }, "OE8FND");
     expect(wrong.status).toBe(403);
     // a refusal names its reason and says it in words, for a client that only shows the message
     expect(await wrong.json()).toMatchObject({ unlocked: false, reason: "bad_code", error: expect.any(String) });
-    const right = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: SERIAL });
+    const right = await post(env, `/api/caches/${id}/stages/1/unlock`, { code: SERIAL }, "OE8FND");
     expect(((await right.json()) as { unlocked: boolean }).unlocked).toBe(true);
   });
 
   it("a stage edit changes the pack's generation, so a refresh carries the new start and seal", async () => {
     const { env, id } = await setup();
-    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: STAGES });
+    await post(env, `/api/caches/${id}/stages`, { stages: STAGES });
     const pack = () => serve(env)(new Request("https://stages.example/api/offline/pack?grid=JN77"));
     const first = await pack();
     const etag = first.headers.get("etag")!;
@@ -113,7 +115,7 @@ describe("sealing NFC stages for offline packs", () => {
       { ...STAGES[1]!, secret: "04:B7:00:11:22:33:44" },
       ...STAGES.slice(2),
     ];
-    await post(env, `/api/caches/${id}/stages`, { ownerCall: "OE8OWN", stages: moved });
+    await post(env, `/api/caches/${id}/stages`, { stages: moved });
     const res = await serve(env)(
       new Request("https://stages.example/api/offline/pack?grid=JN77", { headers: { "if-none-match": etag } }),
     );

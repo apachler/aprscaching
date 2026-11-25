@@ -162,9 +162,29 @@ describe("White Pages learning", () => {
 });
 
 describe("cache create", () => {
-  const create = (code?: string) =>
+  /** The sysop OE8APR's session: an explicit cache code is the sysop's to choose. */
+  async function sysop(): Promise<string> {
+    env.ADMIN_CALLSIGNS = "OE8APR";
+    sqlite
+      .prepare("INSERT OR IGNORE INTO accounts (account_id, callsign, created_at) VALUES ('acct-op','OE8APR',1)")
+      .run();
+    sqlite
+      .prepare("INSERT OR IGNORE INTO account_callsigns (account_id, callsign, added_at) VALUES ('acct-op','OE8APR',1)")
+      .run();
+    sqlite
+      .prepare(
+        "INSERT OR IGNORE INTO callsign_verifications (callsign, method, status, verified_at) VALUES ('OE8APR','operator','verified',1)",
+      )
+      .run();
+    return (await issueSessionCookie(new Request("http://gw.test/"), env, "acct-op", "OE8APR")).split(";")[0]!;
+  }
+  const create = async (code?: string) =>
     handleCreateCache(
-      ingest("/api/caches", { title: "Hut", lat: 47, lon: 15, ownerCall: "OE8APR", ...(code && { code }) }),
+      new Request("http://gw.test/api/caches", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: await sysop() },
+        body: JSON.stringify({ title: "Hut", lat: 47, lon: 15, ...(code && { code }) }),
+      }),
       env,
     );
   const count = () => (sqlite.prepare("SELECT COUNT(*) AS n FROM caches").get() as { n: number }).n;
