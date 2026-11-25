@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The Bun server holds the Node server's limits: a request body stops at BODY_MAX_BYTES, a failure answers a
-// generic JSON 500 (never Bun's error page), the https listener settings it has no listener for stop the boot,
+// generic JSON 500 (never Bun's error page), a body is read only once its handler pulls it and a large one takes one
+// of the body slots, the https listener settings it has no listener for stop the boot,
 // tool-registry fetches get their own guard, and an event stream reaches its client. Run with `bun test servers/bun/test` (the CI Bun conformance).
 import { afterAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
@@ -10,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { createServer, type BunServer } from "../server.ts";
 import { migrationsFromDir } from "../../node/src/migrate.ts";
 import { BODY_MAX_BYTES } from "../../node/src/host.ts";
+import { BODY_FREE_BYTES, BODY_SLOTS_PER_CLIENT, sharedBodyGate } from "../../node/src/bodygate.ts";
+import net from "node:net";
 import { LIVE_MESSAGE_MAX_BYTES, LIVE_SOCKETS_PER_CLIENT } from "@aprscaching/gateway/rooms-core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -71,6 +74,48 @@ describe("a request", () => {
       body: new Uint8Array(BODY_MAX_BYTES + 1024 * 1024),
     });
     expect(res.status).toBe(413);
+  });
+
+  /** A raw connection that sends `head` and `body`, then nothing more. */
+  const rawClient = (s: BunServer, head: string, body: Buffer) => {
+    let got = "";
+    const sock = net.connect(Number(s.server.port), "127.0.0.1", () => {
+      sock.write(head);
+      sock.write(body);
+    });
+    sock.on("data", (c) => (got += c.toString("latin1")));
+    sock.on("error", () => {});
+    return { sock, received: () => got };
+  };
+
+  it("on an unknown path is answered while its 20 MiB body is still coming", async () => {
+    const s = start();
+    const c = rawClient(
+      s,
+      `POST /api/nothing HTTP/1.1\r\nHost: a\r\nContent-Type: application/json\r\nContent-Length: ${20 * 1024 * 1024}\r\n\r\n`,
+      Buffer.alloc(1024, 0x61),
+    );
+    await Bun.sleep(500);
+    c.sock.destroy();
+    expect(c.received()).toMatch(/^HTTP\/1\.1 404 /);
+  });
+
+  it(`past ${BODY_FREE_BYTES / 1024} KiB holds a body slot: a client gets ${BODY_SLOTS_PER_CLIENT} at once, then 503`, async () => {
+    const s = start();
+    const head = `POST /auth/claim HTTP/1.1\r\nHost: a\r\nContent-Type: application/json\r\nContent-Length: ${10 * 1024 * 1024}\r\n\r\n`;
+    const held = Array.from({ length: BODY_SLOTS_PER_CLIENT }, () =>
+      rawClient(s, head, Buffer.alloc(BODY_FREE_BYTES * 2, 0x20)),
+    );
+    await Bun.sleep(400);
+    const refused = rawClient(s, head, Buffer.alloc(BODY_FREE_BYTES * 2, 0x20));
+    await Bun.sleep(400);
+    try {
+      expect(sharedBodyGate.inUse).toBe(BODY_SLOTS_PER_CLIENT);
+      expect(refused.received()).toMatch(/^HTTP\/1\.1 503 /);
+      for (const h of held) expect(h.received()).toBe("");
+    } finally {
+      for (const c of [...held, refused]) c.sock.destroy();
+    }
   });
 
   it("that fails inside the gateway answers a generic JSON 500", async () => {

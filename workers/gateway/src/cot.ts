@@ -9,6 +9,9 @@ import { nowS } from "./util/time.js";
 import { xmlEscape } from "./util/html.js";
 import type { Env } from "./env.js";
 import { lastSeenLagS } from "./downsample.js";
+import { json } from "./http.js";
+import { readGate } from "./readapi.js";
+import { clientIp } from "./corroborate_privacy.js";
 
 interface CotStation {
   callsign: string;
@@ -124,6 +127,8 @@ async function cotStations(
 }
 
 export async function handleCot(req: Request, env: Env, now: number): Promise<Response> {
+  const gate = await readGate(req, env);
+  if (gate instanceof Response) return gate;
   const u = new URL(req.url);
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 86400);
   const rows = await cotStations(env, "last_seen >= ?", now - maxAge - lastSeenLagS(env), parseBbox(u), "DESC", 2000);
@@ -138,16 +143,52 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const COT_STREAM_INTERVAL_MS = 15_000;
 /** How long one CoT stream connection lives before the client reconnects. */
 const COT_STREAM_MAX_MS = 5 * 60_000;
+/**
+ * CoT streams open at once per holder (an API key or a client address), and over every holder. Each stream
+ * renders a snapshot of up to 2000 stations and polls the database, so without a cap one client opening hundreds
+ * stalls the event loop for every API, socket and ingest.
+ */
+export const COT_STREAM_MAX_OPEN = { anonymous: 2, keyed: 10, total: 64 } as const;
+const cotOpen = new Map<string, number>();
+let cotOpenTotal = 0;
+
+/** Take a stream place for `holder`, or null when it or the instance has none left; the release is idempotent. */
+function openCotStream(holder: string, keyed: boolean): (() => void) | null {
+  const held = cotOpen.get(holder) ?? 0;
+  if (held >= (keyed ? COT_STREAM_MAX_OPEN.keyed : COT_STREAM_MAX_OPEN.anonymous)) return null;
+  if (cotOpenTotal >= COT_STREAM_MAX_OPEN.total) return null;
+  cotOpen.set(holder, held + 1);
+  cotOpenTotal++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    cotOpenTotal--;
+    const n = (cotOpen.get(holder) ?? 1) - 1;
+    if (n > 0) cotOpen.set(holder, n);
+    else cotOpen.delete(holder);
+  };
+}
 
 /**
  * GET /api/cot/stream — a Server-Sent Events CoT feed so TAK clients (ATAK/WinTAK) get PUSH updates,
  * not just the /api/cot bbox snapshot. On connect we emit the current snapshot as `event: cot`
  * frames, then poll for stations heard since a monotonic cursor and push each as it arrives, with a
  * `: ping` heartbeat every cycle. The stream ends after five minutes (the client reconnects) or when the
- * client disconnects (req.signal abort / stream cancel). Runtime-neutral: the response is a
+ * client disconnects (req.signal abort / stream cancel). Opening one counts against the read API's per-address
+ * budget, and {@link COT_STREAM_MAX_OPEN} bounds the streams open at once. Runtime-neutral: the response is a
  * ReadableStream — Bun streams it natively; the Node shell pipes text/event-stream bodies.
  */
-export function handleCotStream(req: Request, env: Env, now: number): Response {
+export async function handleCotStream(req: Request, env: Env, now: number): Promise<Response> {
+  const gate = await readGate(req, env);
+  if (gate instanceof Response) return gate;
+  const keyed = gate.tier === "keyed";
+  const release = openCotStream(gate.key ? `apikey:${gate.key}` : `apiip:${clientIp(req, env)}`, keyed);
+  if (!release)
+    return json(
+      { error: "too many CoT streams open at once; close one, or use a free key for more" },
+      { status: 429, headers: { "retry-after": "60" } },
+    );
   const u = new URL(req.url);
   const bbox = parseBbox(u);
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 86400);
@@ -156,6 +197,7 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
   let closed = false;
   const stop = () => {
     closed = true;
+    release();
   };
   req.signal?.addEventListener("abort", stop);
 
@@ -169,27 +211,33 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
         }
       };
       void (async () => {
-        const startedMs = Date.now();
-        // snapshot of currently-active stations
-        const snap = await cotStations(env, "last_seen >= ?", now - maxAge - lastSeenLagS(env), bbox, "DESC", 2000);
-        for (const r of snap) send(`event: cot\ndata: ${stationToCotEvent(r, now, stale)}\n\n`);
-        send(`: snapshot ${snap.length}\n\n`);
-        let cursor = now; // deltas = stations heard strictly after connect
-        while (!closed && Date.now() - startedMs < COT_STREAM_MAX_MS) {
-          await sleep(COT_STREAM_INTERVAL_MS);
-          if (closed) break;
-          const tick = nowS();
-          const rows = await cotStations(env, "last_seen > ?", cursor, bbox, "ASC", 500);
-          for (const r of rows) {
-            send(`event: cot\ndata: ${stationToCotEvent(r, tick, stale)}\n\n`);
-            if (r.lastSeen > cursor) cursor = r.lastSeen;
-          }
-          send(`: ping ${tick}\n\n`);
-        }
         try {
-          controller.close();
+          const startedMs = Date.now();
+          // snapshot of currently-active stations
+          const snap = await cotStations(env, "last_seen >= ?", now - maxAge - lastSeenLagS(env), bbox, "DESC", 2000);
+          for (const r of snap) send(`event: cot\ndata: ${stationToCotEvent(r, now, stale)}\n\n`);
+          send(`: snapshot ${snap.length}\n\n`);
+          let cursor = now; // deltas = stations heard strictly after connect
+          while (!closed && Date.now() - startedMs < COT_STREAM_MAX_MS) {
+            await sleep(COT_STREAM_INTERVAL_MS);
+            if (closed) break;
+            const tick = nowS();
+            const rows = await cotStations(env, "last_seen > ?", cursor, bbox, "ASC", 500);
+            for (const r of rows) {
+              send(`event: cot\ndata: ${stationToCotEvent(r, tick, stale)}\n\n`);
+              if (r.lastSeen > cursor) cursor = r.lastSeen;
+            }
+            send(`: ping ${tick}\n\n`);
+          }
         } catch {
-          /* already closed */
+          /* a failed query ends the stream; the client reconnects */
+        } finally {
+          stop();
+          try {
+            controller.close();
+          } catch {
+            /* already closed */
+          }
         }
       })();
     },

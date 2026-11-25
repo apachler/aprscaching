@@ -13,6 +13,8 @@ import { json } from "./http.js";
 export const TILES_PATH = "/tiles/offline.pmtiles";
 /** The largest range one request may read: a PMTiles directory or a run of tiles, never the whole file. */
 const MAX_RANGE = 16 * 1024 * 1024;
+/** A range is read from the archive in pieces of this size, each as the client takes the one before. */
+const READ_CHUNK = 256 * 1024;
 
 const tileHeaders = {
   "access-control-allow-origin": "*",
@@ -52,13 +54,28 @@ export async function handleTileArchive(req: Request, env: Env): Promise<Respons
   const end = Math.min(m[2] ? Number(m[2]) : st.size - 1, st.size - 1, start + MAX_RANGE - 1);
   if (start >= st.size || end < start)
     return new Response(null, { status: 416, headers: { ...base, "content-range": `bytes */${st.size}` } });
-  const bytes = await env.TILES.read(start, end - start + 1);
-  return new Response(bytes, {
+  const length = end - start + 1;
+  const tiles = env.TILES;
+  let at = 0;
+  // read lazily: a client that stops reading holds one piece in the server, never the whole range
+  const body = new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        const piece = await tiles.read(start + at, Math.min(READ_CHUNK, length - at));
+        at += piece.length;
+        if (piece.length) controller.enqueue(piece);
+        // a file cut short since its stat ends the answer early; the client sees fewer bytes than it was told
+        if (!piece.length || at >= length) controller.close();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return new Response(body, {
     status: 206,
     headers: {
       ...base,
-      "content-range": `bytes ${start}-${start + bytes.length - 1}/${st.size}`,
-      "content-length": String(bytes.length),
+      "content-range": `bytes ${start}-${end}/${st.size}`,
+      "content-length": String(length),
     },
   });
 }

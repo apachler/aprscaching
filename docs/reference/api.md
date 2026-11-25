@@ -5,7 +5,10 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 [the read API](#public-read-api)); the other routes power the web app and federation.
 
 A request body stops at 20 MB on both the Node and the Bun server (`413` past it), and a route with a smaller
-cap of its own reads no further than that cap. A failure inside the gateway answers `500` with the JSON body
+cap of its own reads no further than that cap. A body is read only once its route takes it, so an unknown path or a
+refused caller is answered without it. A body larger than 64 KB takes one of 8 upload places on the server while
+it is read, at most 2 per client address; without a free place the request is answered `503` with `Retry-After`.
+The Node server drops a client that takes no bytes of an answer for 30 seconds. A failure inside the gateway answers `500` with the JSON body
 `{"error":"internal error"}` and nothing else; the error itself goes to the server's log.
 
 ## Authentication
@@ -214,8 +217,8 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | ------ | ----------------- | ---------------------------------------------------------------------------- | ------ |
 | GET    | `/ws?region=`     | Upgrade to the live room (positions/finds); `region` is `global` or absent, anything else is `400`. One client address (the rate-limit identity, see `TRUST_PROXY` and `TRUST_CF`) holds at most 16 live sockets at once (`429` past it), and a client frame larger than 4 KiB closes the socket | public |
 | GET    | `/api/spots`      | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED`              | public |
-| GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`)                                   | public |
-| GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates | public |
+| GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`); counts against the [read API's](#public-read-api) limit | rate-limited |
+| GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates. Opening one counts against the read API's limit; 2 streams open at once per IP without a key, 10 per key, 64 on the instance (`429` past it) | rate-limited |
 
 ## Federation
 

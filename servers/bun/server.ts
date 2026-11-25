@@ -28,6 +28,7 @@ import { makeFsMedia } from "../node/src/media.ts";
 import { fileTiles } from "../node/src/tiles.ts";
 import { migrationsFromDir } from "../node/src/migrate.ts";
 import { resolveServerSecrets, type ServerSecrets } from "../node/src/secrets.ts";
+import { bodyFailureResponse, meterBody, sharedBodyGate } from "../node/src/bodygate.ts";
 import {
   BODY_MAX_BYTES,
   fedSyncInterval,
@@ -94,7 +95,8 @@ const internalErrorResponse = () =>
  * live WebSocket rooms, start the scheduled jobs, and stop cleanly (WAL checkpointed) on SIGINT/SIGTERM.
  * Refuses a malformed setting and a federation registry whose authority key is not pinned, as the Node
  * server does, and the https listener settings only the Node server reads (bunTlsRefusal). A request body
- * stops at the Node server's BODY_MAX_BYTES, and a failure answers a generic JSON 500, never Bun's error page.
+ * is read only as the handler pulls it, stops at the Node server's BODY_MAX_BYTES and takes the same body slots
+ * (bodygate.ts); a failure answers a generic JSON 500, never Bun's error page.
  */
 export function createServer(opts: BunServerOptions): BunServer {
   const configProblems = validateConfig(opts.environment, ["gateway", "server"]);
@@ -156,9 +158,22 @@ export function createServer(opts: BunServerOptions): BunServer {
       }
       if (opts.spa && !isGatewayPath(url.pathname)) return opts.spa(url.pathname, req);
       const headers = stamped();
-      const res = await handle(new Request(req, { headers }), env, {
+      // the body stays unread until the handler pulls it, metered against the Node server's body slots
+      const reader = req.body?.getReader();
+      const body = reader
+        ? meterBody({ next: () => reader.read() }, clientIp(new Request(url, { headers }), env), sharedBodyGate)
+        : undefined;
+      const forwarded = new Request(req.url, {
+        method: req.method,
+        headers,
+        signal: req.signal,
+        ...(body ? { body: body.stream, duplex: "half" } : {}),
+      } as RequestInit);
+      let res = await handle(forwarded, env, {
         waitUntil: (p) => void Promise.resolve(p).catch(() => {}),
       });
+      const failure = body?.failure();
+      if (failure) res = bodyFailureResponse(failure);
       // an event stream (the CoT feed, the heard stream) is quiet between keep-alives: Bun's idle timeout
       // would cut it, so it has none
       if ((res.headers.get("content-type") ?? "").includes("text/event-stream")) srv.timeout(req, 0);

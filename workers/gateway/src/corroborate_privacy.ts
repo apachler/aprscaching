@@ -75,14 +75,19 @@ interface RlWindow {
 const rlBuckets = new Map<string, RlWindow>();
 export const RL_MAX = 60; // probes per key per window
 const RL_WINDOW_MS = 60_000;
+/** Windows the in-memory limiter keeps: past it the oldest window is dropped, so unique keys cannot grow it. */
+export const RL_BUCKETS_MAX = 10_000;
 
 /** Fixed-window rate limit. Returns true when `key` is OVER budget. `nowMs` is injected for testing. */
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
   const w = rlBuckets.get(key);
   if (!w || nowMs >= w.resetAt) {
-    // sweep expired windows once the map grows — long-lived Node/Bun processes
-    // otherwise accumulate one entry per key forever.
-    if (rlBuckets.size > 5000) for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
+    // a new window goes to the end of the map, so the map's order is the windows' age
+    rlBuckets.delete(key);
+    if (rlBuckets.size >= RL_BUCKETS_MAX / 2)
+      for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
+    // every window may still run (a burst of unique keys, the database down): drop the oldest
+    while (rlBuckets.size >= RL_BUCKETS_MAX) rlBuckets.delete(rlBuckets.keys().next().value!);
     rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs });
     return false;
   }
