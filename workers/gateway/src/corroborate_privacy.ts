@@ -189,7 +189,7 @@ function rawClientIp(req: Request, env: Env): string {
  * pass every declared proxy (a client that reached an inner one directly): only its rightmost entry, written
  * by the nearest proxy, is certain not to be client-written, so that one keys.
  */
-export function forwardedClient(header: string, hops: number): string {
+function forwardedClient(header: string, hops: number): string {
   const chain = header
     .split(",")
     .map((e) => e.trim())

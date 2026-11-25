@@ -70,6 +70,18 @@ fake_ip6 "1: lo    inet6 ::1/128 scope host" "30: wlan0    inet6 fd12:3456::1/64
 check "IPv6: a unique local address is not exposed" "$(yes_no exposed_ipv6)" no
 fake_ip6 "1: lo    inet6 ::1/128 scope host"
 check "IPv6: none without a global address" "$(yes_no exposed_ipv6)" no
+# status.sh itself, against the same stand-in `ip`: the warning reaches the operator.
+mkdir -p "$WORK/v6data"
+status_v6() { bash "$ROOT/deploy/pocket/status.sh" --data-dir "$WORK/v6data" 2>&1 || true; }
+fake_ip6 "1: lo    inet6 ::1/128 scope host" \
+  "12: rmnet_data0    inet6 2a02:8388:e5c0:1a00::5/64 scope global dynamic"
+printf 'PORT=1\n' >"$WORK/v6data/.env" # nothing listens on port 1, so the health probes fail at once
+check "status.sh warns of the exposed IPv6 address" \
+  "$(status_v6 | grep -c 'WARNING: the phone holds the global IPv6 address 2a02:8388:e5c0:1a00::5 (rmnet_data0)')" 1
+printf 'PORT=1\nHOST=0.0.0.0\n' >"$WORK/v6data/.env"
+out="$(status_v6)"
+check "status.sh: no IPv6 warning with HOST=0.0.0.0" "$(grep -c 'global IPv6 address' <<<"$out" || true)" 0
+check "  … and it ran, naming the address it listens on" "$(grep -c 'the gateway listens on 0.0.0.0, port 1' <<<"$out")" 1
 
 # ---- the HAMNET endpoint: what FED_ENDPOINTS declares, never inferred from an address ------------------
 ENV_FILE="$WORK/hamnet.env"

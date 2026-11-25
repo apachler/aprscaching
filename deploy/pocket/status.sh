@@ -6,7 +6,7 @@
 #
 #   bash ~/aprscaching/deploy/pocket/status.sh
 #
-# The gateway listens on every interface of the phone. The addresses are read at run time (ip, else
+# The gateway listens on every interface of the phone unless HOST names one. The addresses are read at run time (ip, else
 # ifconfig), since the hotspot's subnet differs between phones and Android versions. The Wi-Fi and
 # battery lines need the Termux:API app and package (pkg install termux-api); without them they are
 # skipped.
@@ -39,6 +39,7 @@ PORT="$(gateway_port)"
 BASE="$(gateway_base)"
 HTTPS="$(tls_port)"
 NOW="$(date +%s)"
+HOST_BIND="$(env_get HOST)"
 
 human_bytes() { awk -v b="${1:-0}" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;while(b>=1024&&i<5){b/=1024;i++};printf (i==1?"%d %s":"%.1f %s"),b,u[i]}'; }
 file_bytes() { if [ -f "$1" ]; then wc -c <"$1" | tr -d ' '; else echo 0; fi; }
@@ -85,7 +86,7 @@ fi
 
 # ---- networks ----------------------------------------------------------------------------------------
 wifi_detect
-step "Networks (the gateway listens on every interface, port $PORT)"
+step "Networks (the gateway listens on ${HOST_BIND:-every interface}, port $PORT)"
 row() { info "$(printf '%-12s %-19s %-30s %s' "$@")"; }
 row "this phone" "127.0.0.1" "http://localhost:$PORT" "a browser on the phone"
 wlan_seen=0
@@ -179,7 +180,8 @@ step "44Net"
 if n44="$(net44_address)"; then
   read -r n44_if n44_ip <<<"$n44"
   info "up: $n44_ip on $n44_if"
-  # The gateway listens on every interface, the tunnel included, and 44Net Connect filters nothing.
+  # Unless HOST names one address, the gateway listens on every interface, the tunnel included, and 44Net
+  # Connect filters nothing.
   warn "the station answers on $n44_ip wherever the tunnel routes from (with a full tunnel, the whole" \
     "internet): http port $PORT${HTTPS:+ and https $HTTPS}. Anything else listening in Termux (sshd on" \
     "8022) is reachable there too."

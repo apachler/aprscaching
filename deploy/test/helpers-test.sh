@@ -441,6 +441,25 @@ check "  … a HOST and TRUST_PROXY the operator set stay" eq "$(env_file_get "$
 printf '%s\n' "APP_URL=http://192.168.1.10:8080" >"$TMP/bm-proxy.env"
 check "bare metal on plain http runs the proxy step" proxy_bind "$TMP/bm-proxy.env"
 check "bare metal on plain http is the gateway itself, on every interface" bash -c "! grep -qE '^(HOST|TRUST_PROXY)=' '$TMP/bm-proxy.env'"
+# The .env is the service user's alone. A stand-in bm_user plays that user: it alone may read the file, so an
+# installer that reads it itself sees nothing and writes nothing.
+proxy_bind_as_service() { # proxy_bind_as_service FILE
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
+    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")'
+    bm_user() { chmod 600 '$1'; \"\$@\"; local rc=\$?; chmod 000 '$1'; return \$rc; }
+    bm_proxy_bind '$1'"
+}
+printf '%s\n' "APP_URL=https://aprs.example.net" >"$TMP/bm-proxy.env"
+chmod 000 "$TMP/bm-proxy.env"
+check "bare metal reads the .env as the service user when the installer cannot" proxy_bind_as_service "$TMP/bm-proxy.env"
+chmod 600 "$TMP/bm-proxy.env"
+check "  … and sets HOST and TRUST_PROXY there" eq "$(env_file_get "$TMP/bm-proxy.env" HOST) $(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" "127.0.0.1 1"
+if [ "$(id -u)" != 0 ]; then # root reads a mode-000 file
+  chmod 000 "$TMP/bm-proxy.env"
+  refused() { ! proxy_bind "$1" 2>/dev/null; }
+  check "a .env the service user cannot read fails, never passes for an unset APP_URL" refused "$TMP/bm-proxy.env"
+  chmod 600 "$TMP/bm-proxy.env"
+fi
 
 # ---- doctor ------------------------------------------------------------------------------------------------
 # A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket
