@@ -212,7 +212,9 @@ describe("POST /auth/passkey/register/finish with a crafted attestationObject", 
     const db = {
       prepare: (sql: string) => ({
         bind: () => ({
-          first: async () => (sql.includes("auth_challenges") ? { value: CHALLENGE } : null),
+          // the stash register/begin leaves for a new account's ceremony: the challenge and its provisional account
+          first: async () =>
+            sql.includes("auth_challenges") ? { value: JSON.stringify({ c: CHALLENGE, a: "acct-new" }) } : null,
           run: async () => ({}),
           all: async () => ({ results: [] }),
         }),
@@ -246,6 +248,7 @@ describe("POST /auth/passkey/register/finish with a crafted attestationObject", 
     expect(m.status).toBe(400);
     expect(a.status).toBe(400);
     expect(await m.json()).toMatchObject({ error: expect.stringMatching(/cbor: truncated/) });
+    expect(await a.json()).toMatchObject({ error: expect.stringMatching(/cbor: truncated/) });
     expect(health.status).toBe(200);
   });
 });
