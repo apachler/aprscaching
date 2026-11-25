@@ -23,9 +23,13 @@ afterEach(async () => {
   }
 });
 
-async function start(): Promise<{ port: number; rooms: RoomsCore }> {
+async function start(extra: Record<string, unknown> = {}): Promise<{ port: number; rooms: RoomsCore }> {
   const rooms = new RoomsCore({ heartbeatMs: 0 });
-  const env = instanceEnv("localhost", null, { APP_URL: "http://localhost:8787", ROOMS: roomNamespace(rooms) });
+  const env = instanceEnv("localhost", null, {
+    APP_URL: "http://localhost:8787",
+    ROOMS: roomNamespace(rooms),
+    ...extra,
+  });
   const server = createGatewayServer({ env, rooms });
   servers.push(server);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -33,8 +37,8 @@ async function start(): Promise<{ port: number; rooms: RoomsCore }> {
 }
 
 /** Open a live socket; resolves once it is open, rejects with the HTTP status of a refused upgrade. */
-function openWs(port: number): Promise<WebSocket> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?region=global`);
+function openWs(port: number, headers: Record<string, string> = {}): Promise<WebSocket> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?region=global`, { headers });
   sockets.push(ws);
   return new Promise((resolve, reject) => {
     ws.once("open", () => resolve(ws));
@@ -73,6 +77,17 @@ describe("the live socket", () => {
     await new Promise((r) => first.once("close", r));
     await new Promise((r) => setTimeout(r, 50));
     await openWs(port);
+  });
+
+  it("counts every address of one IPv6 /64 as one client", async () => {
+    // behind a declared proxy the forwarded address is the client's; an IPv6 client rotates freely through its /64
+    const { port, rooms } = await start({ TRUST_PROXY: "1" });
+    const from = (i: number) => ({ "x-forwarded-for": `2001:db8:0:1::${(i + 1).toString(16)}` });
+    for (let i = 0; i < LIVE_SOCKETS_PER_CLIENT; i++) await openWs(port, from(i));
+    await expect(openWs(port, from(LIVE_SOCKETS_PER_CLIENT))).rejects.toThrow(/HTTP 429/);
+    expect(rooms.count("global")).toBe(LIVE_SOCKETS_PER_CLIENT);
+    // another /64 is another client
+    await openWs(port, { "x-forwarded-for": "2001:db8:0:2::1" });
   });
 
   it("routes an upgrade by its path alone, whatever its Host header holds", async () => {

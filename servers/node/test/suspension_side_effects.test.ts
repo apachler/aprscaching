@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { runScheduled } from "@aprscaching/gateway/app";
 import { authEnv, call, emailSignup, markCallVerified, operatorVerify, type Res } from "./helpers/authflow.js";
 import { newFedKey } from "./helpers/fedpeer.js";
-import { accountActionMessage } from "@aprscaching/shared";
+import { accountActionDigest, accountActionMessage } from "@aprscaching/shared";
 import type { Env } from "@aprscaching/gateway/env";
 
 const SECRET = "test-ingest-secret";
@@ -67,7 +67,13 @@ async function signedErase(env: Env, cs: string) {
     .run();
   const at = nowS();
   const msg = new TextEncoder().encode(
-    accountActionMessage({ action: "delete", callsign: cs, instance: "gw.test", at }),
+    accountActionMessage({
+      action: "delete",
+      callsign: cs,
+      instance: "gw.test",
+      at,
+      digest: await accountActionDigest({}),
+    }),
   );
   const sig = Buffer.from(await crypto.subtle.sign("Ed25519", dev.priv, msg)).toString("base64url");
   return call(env, "POST", `/api/account/${cs}/delete`, { key: dev.pub, sig, at });
@@ -274,7 +280,13 @@ describe("the account export", () => {
       .run();
     const at = nowS();
     const msg = new TextEncoder().encode(
-      accountActionMessage({ action: "export", callsign: "DL1EXP", instance: "gw.test", at }),
+      accountActionMessage({
+        action: "export",
+        callsign: "DL1EXP",
+        instance: "gw.test",
+        at,
+        digest: await accountActionDigest({}),
+      }),
     );
     const sig = Buffer.from(await crypto.subtle.sign("Ed25519", dev.priv, msg)).toString("base64url");
     const exp = await call(w.env, "POST", "/api/account/DL1EXP/export", { key: dev.pub, sig, at });

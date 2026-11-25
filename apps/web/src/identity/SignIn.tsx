@@ -96,7 +96,7 @@ export function SignIn(props: {
       setSent(
         r.devLink
           ? { text: "This instance sends no mail.", devLink: r.devLink }
-          : { text: `Check ${email} for the link to your data.` },
+          : { text: `Check ${email}: we sent the link to your data, or why there is none.` },
       );
     } catch (e) {
       setErr(errorText(e));
@@ -116,7 +116,7 @@ export function SignIn(props: {
       setSent(
         r.devLink
           ? { text: "This instance sends no mail.", devLink: r.devLink }
-          : { text: `Check ${email} for your sign-in link.` },
+          : { text: `Check ${email}: we sent your sign-in link, or why there is none.` },
       );
     } catch (e) {
       // An email with no account opens a new one for the call, so a held call refuses it: for a returning
