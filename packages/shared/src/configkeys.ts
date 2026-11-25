@@ -379,6 +379,8 @@ export const CONFIG_KEYS = {
   NETROM_BROADCAST_MS: { type: "int", units: ["ingest"], default: "3600000" },
   NETROM_PATH_QUALITY: { type: "int", units: ["ingest"], default: "192" },
   NETROM_INP3: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
+  NETROM_TX_BURST: { type: "int", units: ["ingest"], default: "20" },
+  NETROM_TX_REFILL_SEC: { type: "number", units: ["ingest"], default: "3" },
   NODE_PERSONALITY: { type: "string", units: ["ingest"], default: "netrom" },
   BBS_NODE_CALL: { type: "call", units: ["ingest"] },
   BBS_FORWARD: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },

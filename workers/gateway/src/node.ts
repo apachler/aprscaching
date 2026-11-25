@@ -36,14 +36,36 @@ export async function recordMheard(env: Env, calls: { src: string; port: string 
   );
 }
 
-type NodeRoute = { dest?: string; alias?: string; neighbor?: string; quality?: number; port?: string };
+type NodeRoute = { dest?: unknown; alias?: unknown; neighbor?: unknown; quality?: unknown; port?: unknown };
+type ValidRoute = { dest: string; alias: string; neighbor: string; quality: number; port: string | null };
 
-/** The most routes one POST may carry: the ingest's whole NODES table. */
+/** The most routes one POST may carry: the ingest's whole NODES table. Both hosts run a batch as one SQLite
+ *  transaction of single-row statements, so the size is bounded by this cap, not by the driver. */
 const MAX_NODE_ROUTES = 500;
+
+/** One route as stored, or why it is refused. NET/ROM allows a node without an alias, so a blank alias is kept. */
+function validRoute(r: NodeRoute): ValidRoute | string {
+  if (!r || typeof r !== "object") return "a route is an object";
+  if (typeof r.dest !== "string" || !r.dest.trim() || typeof r.neighbor !== "string" || !r.neighbor.trim())
+    return "dest + neighbor required";
+  if (r.alias != null && typeof r.alias !== "string") return "alias must be text";
+  const quality = r.quality ?? 100;
+  if (typeof quality !== "number" || !Number.isInteger(quality) || quality < 0 || quality > 255)
+    return "quality is 0-255";
+  if (r.port != null && typeof r.port !== "string") return "port must be text";
+  return {
+    dest: r.dest.trim().toUpperCase(),
+    alias: (r.alias ?? "").trim().toUpperCase(),
+    neighbor: r.neighbor.trim().toUpperCase(),
+    quality,
+    port: r.port ?? null,
+  };
+}
 
 /** GET /api/node/nodes (public read — operational NODES table) · POST (add node routes; operator or the
  *  operator-local ingest mirroring learned routes). A POST carries one route, or `{ nodes: [...] }` with up to
- *  500, which the ingest uses to mirror every route that changed in one request. */
+ *  500, which the ingest uses to mirror every route that changed in one request; a batch stores the valid
+ *  routes and names each refused one, so one bad record never costs the others. */
 export async function handleNodeNodes(req: Request, env: Env): Promise<Response> {
   if (req.method === "GET") {
     const rows = (
@@ -56,15 +78,22 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
   const gate = await requireIngestOrOperator(req, env);
   if (gate) return gate; // the ingest box mirroring learned routes, or the operator
   const b = (await req.json().catch(() => ({}))) as NodeRoute & { nodes?: unknown };
-  const batch = Array.isArray(b.nodes);
+  const batch = Array.isArray(b?.nodes);
   const routes = (batch ? b.nodes : [b]) as NodeRoute[];
   if (routes.length > MAX_NODE_ROUTES)
     return json({ error: `at most ${MAX_NODE_ROUTES} routes per request` }, { status: 413 });
-  if (routes.some((r) => !r || typeof r !== "object" || !r.dest || !r.alias || !r.neighbor))
-    return json({ error: "dest + alias + neighbor required" }, { status: 400 });
+  const valid: ValidRoute[] = [];
+  const refused: { index: number; dest: string | null; error: string }[] = [];
+  routes.forEach((r, index) => {
+    const v = validRoute(r);
+    if (typeof v === "string")
+      refused.push({ index, dest: typeof r?.dest === "string" ? r.dest.toUpperCase() : null, error: v });
+    else valid.push(v);
+  });
+  if (!batch && refused.length) return json({ error: refused[0]!.error }, { status: 400 });
   // a route to a station excluded on its licensee's objection (exclusions.ts) is not kept
   const excluded = await excludedCalls(env);
-  const kept = routes.filter((r) => !isExcludedCall(excluded, r.dest!));
+  const kept = valid.filter((r) => !isExcludedCall(excluded, r.dest));
   const ts = nowS();
   if (kept.length)
     await env.DB.batch(
@@ -72,19 +101,12 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
         env.DB.prepare(
           `INSERT INTO netrom_nodes (dest, alias, neighbor, quality, port, heard_at) VALUES (?,?,?,?,?,?)
      ON CONFLICT(dest) DO UPDATE SET alias=excluded.alias, neighbor=excluded.neighbor, quality=excluded.quality, port=excluded.port, heard_at=excluded.heard_at`,
-        ).bind(
-          String(r.dest).toUpperCase(),
-          String(r.alias).toUpperCase(),
-          String(r.neighbor).toUpperCase(),
-          r.quality ?? 100,
-          r.port ?? null,
-          ts,
-        ),
+        ).bind(r.dest, r.alias, r.neighbor, r.quality, r.port, ts),
       ),
     );
-  if (batch) return json({ ok: true, stored: kept.length }, { status: 201 });
+  if (batch) return json({ ok: true, stored: kept.length, refused }, { status: 201 });
   if (!kept.length) return json({ ok: true, excluded: true });
-  return json({ ok: true, dest: b.dest!.toUpperCase() }, { status: 201 });
+  return json({ ok: true, dest: valid[0]!.dest }, { status: 201 });
 }
 
 /** GET /api/node/mheard — recently heard stations, newest first. */

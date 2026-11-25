@@ -75,8 +75,8 @@ export interface NetromNodeOpts {
   secret?: string; // mirror learned nodes + mheard to the gateway
   inp3?: boolean; // also speak INP3 (RIF learning, L3RTT probing, triggered updates) alongside NODES
   /** Paces what the node transmits on its own account in answer to what it hears: INP3 RIFs and L3RTT
-   *  probes and echoes, and transit forwards. Defaults to the `netrom` path's bucket. */
-  txBucket?: TokenBucket;
+   *  probes and echoes, and transit forwards. Defaults to the `netrom` path's settings. */
+  txLimit?: { burst: number; refillSec: number };
   mirrorMs?: number;
 }
 
@@ -98,6 +98,7 @@ export class NetromNodeRunner {
   private l3rttSeq = 0;
   private l3rttPending = new Map<number, { at: number; to: string }>(); // our outstanding probes by seq
   private tx: TokenBucket;
+  private strangerTx: TokenBucket; // the share of `tx` open to stations that are not measured neighbours
   private held = 0; // frames the bucket dropped since the last log line
   private heldLoggedAt = 0;
   private mirrored = new Map<string, string>(); // dest → the record last mirrored to the gateway
@@ -111,12 +112,23 @@ export class NetromNodeRunner {
     this.node = new NetromNode({ call: this.me, alias: o.alias }, { pathQuality: o.pathQuality });
     this.port = o.port ?? "kiss-tnc";
     if (o.inp3) this.inp3 = new Inp3Table();
-    this.tx = o.txBucket ?? new TokenBucket({ burst: TX_LIMITS.netrom.burst, refillSec: TX_LIMITS.netrom.refillSec });
+    const lim = o.txLimit ?? { burst: TX_LIMITS.netrom.burst, refillSec: TX_LIMITS.netrom.refillSec };
+    this.tx = new TokenBucket(lim);
+    // Half the burst and half the rate: a flood of forged sources spends only this share, and the rest of
+    // the bucket stays for the neighbours whose round trip we measured.
+    this.strangerTx = new TokenBucket({ burst: Math.max(1, Math.floor(lim.burst / 2)), refillSec: lim.refillSec * 2 });
   }
 
-  /** Transmit a frame the node sends in answer to what it heard, when the bucket allows; dropped otherwise. */
-  private sendPaced(frame: Ax25Frame): boolean {
-    if (this.tx.take()) {
+  /** Whether a station is an INP3 neighbour that has answered our probe. */
+  private isMeasured(call: string): boolean {
+    return this.neighbors.get(call)?.srtt != null;
+  }
+
+  /** Transmit a frame the node sends in answer to what it heard, when the bucket allows; dropped otherwise.
+   *  `on` is the station the frame is sent on account of: unless it is a measured neighbour, the frame also
+   *  draws from the strangers' share. */
+  private sendPaced(frame: Ax25Frame, on: Ax25Address): boolean {
+    if ((this.isMeasured(addrStr(on)) || this.strangerTx.take()) && this.tx.take()) {
       this.kiss.sendFrame(frame);
       return true;
     }
@@ -367,15 +379,18 @@ export class NetromNodeRunner {
       return;
     }
     // foreign probe — echo it straight back to the neighbour we heard it from
-    this.sendPaced({
-      dst: from,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeL3rttFrame(probe.origin, probe.rtt),
-    });
+    this.sendPaced(
+      {
+        dst: from,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeL3rttFrame(probe.origin, probe.rtt),
+      },
+      from,
+    );
   }
 
   /** Send a triggered update: advertise the changed routes to every neighbour, applying split horizon
@@ -399,15 +414,18 @@ export class NetromNodeRunner {
 
   /** Send a RIF (routing information frame) carrying `rips` to one neighbour. */
   private sendRif(to: Ax25Address, rips: Rip[]): void {
-    this.sendPaced({
-      dst: to,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeRif(rips),
-    });
+    this.sendPaced(
+      {
+        dst: to,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeRif(rips),
+      },
+      to,
+    );
   }
 
   /** Probe every known neighbour's round-trip time with an L3RTT frame (INP3 metric maintenance). */
@@ -427,15 +445,18 @@ export class NetromNodeRunner {
   private probeNeighbor(to: Ax25Address): void {
     if (!this.inp3) return;
     const seq = ++this.l3rttSeq;
-    const sent = this.sendPaced({
-      dst: to,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeL3rttFrame(this.me, { origin: this.o.mycall, seq, alias: this.o.alias }),
-    });
+    const sent = this.sendPaced(
+      {
+        dst: to,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeL3rttFrame(this.me, { origin: this.o.mycall, seq, alias: this.o.alias }),
+      },
+      to,
+    );
     if (sent) this.l3rttPending.set(seq, { at: Date.now(), to: addrStr(to) });
   }
 
@@ -521,15 +542,18 @@ export class NetromNodeRunner {
           c.onPacket(pkt.tp, pkt.info); // demux to the owning circuit
         else if (pkt.tp.opcode === NrOp.ConnReq && this.inboundApp) this.acceptOrReack(pkt, f.src); // L4 inbound session
       } else if (decision.action === "forward") {
-        this.sendPaced({
-          dst: decision.neighbor,
-          src: this.me,
-          command: true,
-          type: "UI",
-          pf: false,
-          pid: PID_NETROM,
-          info: encodeNetrom(decision.packet),
-        });
+        this.sendPaced(
+          {
+            dst: decision.neighbor,
+            src: this.me,
+            command: true,
+            type: "UI",
+            pf: false,
+            pid: PID_NETROM,
+            info: encodeNetrom(decision.packet),
+          },
+          f.src,
+        );
       } else if (decision.reason !== "no-route") {
         console.log("[netrom] dropped transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
       }
@@ -589,15 +613,18 @@ export class NetromNodeRunner {
       if (c) c.onPacket(pkt.tp, pkt.info);
       else if (pkt.tp.opcode === NrOp.ConnReq && this.inboundApp) this.acceptOrReack(pkt, neighbor, reply);
     } else if (decision.action === "forward") {
-      this.sendPaced({
-        dst: decision.neighbor,
-        src: this.me,
-        command: true,
-        type: "UI",
-        pf: false,
-        pid: PID_NETROM,
-        info: encodeNetrom(decision.packet),
-      });
+      this.sendPaced(
+        {
+          dst: decision.neighbor,
+          src: this.me,
+          command: true,
+          type: "UI",
+          pf: false,
+          pid: PID_NETROM,
+          info: encodeNetrom(decision.packet),
+        },
+        neighbor,
+      );
     } else if (decision.reason !== "no-route") {
       console.log("[netrom] dropped link transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
     }
@@ -629,7 +656,8 @@ export class NetromNodeRunner {
   }
 
   /** Mirror the learned NODES routes that changed since the last mirror to the gateway node surface, in
-   *  one request (best-effort; a failed one is retried at the next interval). INP3 routes are not mirrored
+   *  one request (best-effort; a failed request is retried at the next interval, a route the gateway refuses
+   *  is logged and not resent until it changes). INP3 routes are not mirrored
    *  here (the gateway table keys on dest, which NODES already owns) — they surface in the node CLI's
    *  merged table via nodeStore(). */
   private async mirror(): Promise<void> {
@@ -649,17 +677,29 @@ export class NetromNodeRunner {
     }
     if (!changed.length) return;
     this.mirroring = true;
-    const ok = await gatewayFetch(`${this.o.gatewayBase}/api/node/nodes`, {
+    const answer = await gatewayFetch(`${this.o.gatewayBase}/api/node/nodes`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-ingest-secret": this.o.secret! },
       body: JSON.stringify({ nodes: changed }),
     }).then(
-      (res) => res.ok,
-      () => false,
+      async (res) =>
+        res.ok ? ((await res.json().catch(() => ({}))) as { refused?: { dest?: string; error?: string }[] }) : null,
+      () => null,
     );
     this.mirroring = false;
-    if (ok) for (const rec of changed) this.mirrored.set(rec.dest, JSON.stringify(rec));
-    else this.scheduleMirror();
+    if (!answer) return this.scheduleMirror();
+    // a refused route counts as mirrored too, so it is not resent until it changes; the rest are stored
+    for (const rec of changed) this.mirrored.set(rec.dest, JSON.stringify(rec));
+    const refused = Array.isArray(answer.refused) ? answer.refused : [];
+    if (refused.length)
+      console.log(
+        "[netrom] gateway refused %s route(s): %s",
+        refused.length,
+        refused
+          .slice(0, 5)
+          .map((r) => `${r.dest ?? "?"} (${r.error ?? "?"})`)
+          .join(", "),
+      );
   }
 }
 

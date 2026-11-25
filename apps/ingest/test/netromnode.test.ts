@@ -110,12 +110,14 @@ const forged = (prefix: string, i: number) => prefix + i.toString(36).toUpperCas
 
 describe("NetromNodeRunner mirrors the routing table once per change", () => {
   let posts: { nodes?: unknown[] }[] = [];
+  let reply: () => Response;
   beforeEach(() => {
     posts = [];
+    reply = () => new Response("{}", { status: 201 });
     vi.useFakeTimers();
     vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
       posts.push(JSON.parse(String(init.body)) as { nodes?: unknown[] });
-      return new Response("{}", { status: 201 });
+      return reply();
     });
   });
   afterEach(() => {
@@ -156,6 +158,28 @@ describe("NetromNodeRunner mirrors the routing table once per change", () => {
     expect(posts.length).toBe(1);
   });
 
+  it("retries a failed mirror at the next interval, and stops once it is stored", async () => {
+    const node = mirroring();
+    reply = () => new Response("down", { status: 503 });
+    node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
+    await vi.advanceTimersByTimeAsync(30_000);
+    reply = () => new Response("{}", { status: 201 });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(posts.map((p) => p.nodes!.length)).toEqual([1, 1]);
+  });
+
+  it("does not resend a route the gateway refused until it changes", async () => {
+    const node = mirroring();
+    reply = () =>
+      new Response(JSON.stringify({ ok: true, stored: 0, refused: [{ index: 0, dest: "OE9NOS-1", error: "x" }] }), {
+        status: 201,
+      });
+    node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(posts.length).toBe(1);
+  });
+
   it("sends only the routes a later broadcast changed", async () => {
     const node = mirroring();
     node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
@@ -179,7 +203,7 @@ describe("NetromNodeRunner bounds the INP3 neighbour set", () => {
     for (let i = 0; i < 2000; i++) node.onRaw(ui(forged("F", i) + "-1", "NODES", nodesInfo("FAKE")));
     const nb = (node as unknown as { neighbors: Map<string, unknown> }).neighbors;
     expect(nb.size).toBeLessThanOrEqual(16);
-    expect(sent.length).toBeLessThanOrEqual(21); // the bucket's burst of 20, and one answering NODES broadcast
+    expect(sent.length).toBeLessThanOrEqual(11); // the strangers' share (half the burst of 20), one NODES answer
     sent.length = 0;
     (node as unknown as { probeNeighbors(): void }).probeNeighbors(); // one 60 s round, bucket empty
     expect(sent.length).toBe(0);
@@ -233,6 +257,62 @@ describe("NetromNodeRunner bounds the INP3 neighbour set", () => {
     expect(measured(b)).toEqual(["OE1AAA-7"]);
   });
 
+  /** A runner with OE9NOS-1 as a measured neighbour: heard, probed, and its echo answered. */
+  const withNeighbour = (opts: Record<string, unknown> = {}) => {
+    const sent: Ax25Frame[] = [];
+    const link = { sendFrame: (f: Ax25Frame) => void sent.push(f), onRaw: () => {} };
+    const node = new NetromNodeRunner(link as never, { mycall: "OE1ACS-7", alias: "ACS", inp3: true, ...opts });
+    node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
+    const probe = sent.find((f) => f.dst.call === "OE9NOS" && decodeL3rttFrame(f.info!))!;
+    node.onRaw(ui("OE9NOS-1", "OE1ACS-7", probe.info!));
+    return { node, sent };
+  };
+  const neighbours = (node: NetromNodeRunner) => [
+    ...(node as unknown as { neighbors: Map<string, unknown> }).neighbors.keys(),
+  ];
+
+  it("keeps sending to a measured neighbour while forged sources flood the node", () => {
+    const { node, sent } = withNeighbour();
+    for (let i = 0; i < 2000; i++) node.onRaw(ui(forged("F", i) + "-1", "NODES", nodesInfo("FAKE")));
+    sent.length = 0;
+    (node as unknown as { advertiseAll(): void }).advertiseAll();
+    expect(sent.some((f) => f.dst.call === "OE9NOS" && f.info?.[0] === INP_RIF)).toBe(true);
+  });
+
+  describe("on a clock", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("drops a candidate that has not answered a probe within 180 s", () => {
+      const { node } = inp3();
+      node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
+      const probe = () => (node as unknown as { probeNeighbors(): void }).probeNeighbors();
+      vi.advanceTimersByTime(179_000);
+      probe();
+      expect(neighbours(node)).toEqual(["OE9NOS-1"]);
+      vi.advanceTimersByTime(2_000);
+      probe();
+      expect(neighbours(node)).toEqual([]);
+    });
+
+    it("drops a neighbour not heard within the stale window, with its routes", () => {
+      const { node } = withNeighbour({ broadcastMs: 60_000 });
+      node.onRaw(ui("OE9NOS-1", "OE1ACS-7", encodeRif([{ dest: parseAddr("OE5FAR"), hops: 1, tt: 10, alias: "FAR" }])));
+      node.start();
+      const far = () =>
+        node
+          .nodeStore(() => [])
+          .nodes()
+          .some((r) => r.call === "OE5FAR");
+      expect(far()).toBe(true);
+      vi.advanceTimersByTime(180_000); // three broadcast intervals, the stale window, not yet past it
+      expect(neighbours(node)).toEqual(["OE9NOS-1"]);
+      vi.advanceTimersByTime(60_000);
+      expect(neighbours(node)).toEqual([]);
+      expect(far()).toBe(false);
+    });
+  });
+
   it("ignores a RIF sent to another station", () => {
     const { node, sent } = inp3();
     node.onRaw(ui("OE9NOS-1", "OE7OTH", encodeRif([{ dest: parseAddr("OE5FAR"), hops: 1, tt: 10, alias: "FAR" }])));
@@ -261,11 +341,11 @@ describe("NetromNodeRunner switches only frames sent to it", () => {
     expect(transits(sent)).toBe(0);
   });
 
-  it("forwards one sent to it, paced by the transmit bucket", () => {
+  it("forwards one sent to it, paced by the strangers' share of the transmit bucket", () => {
     const { node, sent } = runner();
     node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS")));
     for (let i = 0; i < 100; i++) node.onRaw(datagram("OE1ACS-7"));
-    expect(transits(sent)).toBe(20);
+    expect(transits(sent)).toBe(10);
   });
 
   it("keeps the MHeard list to its cap however many sources are heard", () => {
@@ -314,6 +394,26 @@ describe("NetromNodeRunner ties a circuit to the node at its far end", () => {
     expect(acks(sent, "OE5BBB")).toBe(0);
     node.onRaw(info("OE5AAA", idx, id));
     expect(acks(sent, "OE5AAA")).toBe(1);
+  });
+
+  it("closes the relay of a connect-through dialled past a full circuit table", async () => {
+    const { node, sent } = runner();
+    node.serveInbound(() => app as never);
+    node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS"))); // a route to dial
+    for (let i = 0; i < 64; i++) node.onRaw(connReq(forged("C", i), i + 1));
+    sent.length = 0;
+    const said: string[] = [];
+    const relay = {
+      toUser: (b: Uint8Array) => void said.push(new TextDecoder().decode(b)),
+      attach: vi.fn(),
+      detach: vi.fn(),
+      disconnectUser: vi.fn(),
+    };
+    node.connectThrough()("OE9NOS-1", relay);
+    await Promise.resolve();
+    expect(sent.some((f) => decodeNetrom(f.info!)?.tp.opcode === NrOp.ConnReq)).toBe(false);
+    expect(relay.detach).toHaveBeenCalled();
+    expect(said.at(-1)).toMatch(/^Disconnected from OE9NOS-1/);
   });
 
   it("caps the circuits open at once", () => {

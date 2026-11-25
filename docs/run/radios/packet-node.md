@@ -49,7 +49,8 @@ a two-way AXUDP port. The node:
   each to the node at its far end, and closes one idle for 15 minutes or sending a message over 8 KiB;
 - answers with the command surface set by `NODE_PERSONALITY`: `netrom`, `flexnet`, `tnn` or `baycom`;
 - mirrors its learned NODES table and its MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`):
-  the routes that changed, in one request at most every 30 seconds.
+  the routes that changed, in one request at most every 30 seconds. A route the gateway refuses is logged
+  and not sent again until it changes.
 
 **Check that it worked.** The box logs `[netrom] node <ALIAS>:<CALL> active on <port>` and, once it answers
 connects, `[netrom] node CLI answering inbound connects on <CALL>`. Learned routes log as
@@ -71,7 +72,8 @@ latency. The node:
   round trip;
 - withdraws a route (`tt = 60000`) when its neighbour does, or when it ages out;
 - sends its RIFs, probes and probe echoes through the node's
-  [transmit bucket](../compliance/on-air-stations.md#transmit-pacing);
+  [transmit bucket](../compliance/on-air-stations.md#transmit-pacing), where stations that are not yet
+  neighbours share at most half;
 - shows INP3 routes in the same node table, with their `tt` mapped to a NET/ROM-style quality for display
   only; routing stays on `tt`.
 

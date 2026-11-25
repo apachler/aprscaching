@@ -209,6 +209,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   NETROM_BROADCAST_MS: "Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)",
   NETROM_PATH_QUALITY: "Link quality (0-255) assumed for a directly heard neighbour",
   NETROM_INP3: "1 also speaks INP3 alongside NODES",
+  NETROM_TX_BURST: "NET/ROM node answers allowed at once before pacing applies",
+  NETROM_TX_REFILL_SEC: "Seconds to regain one NET/ROM node answer",
   NODE_PERSONALITY: "Command surface of the node: netrom, flexnet, tnn or baycom",
   BBS_NODE_CALL: "Callsign the BBS answers inbound connects on",
   BBS_FORWARD: "1 enables FBB forwarding to partner BBSes",
@@ -895,7 +897,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "NET/ROM node",
-        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
+        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NETROM_TX_BURST` (`20`) / `NETROM_TX_REFILL_SEC` (`3`) — the node's answers to what it hears ([transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
       ],
       [
         "BBS (inbound + forwarding)",
