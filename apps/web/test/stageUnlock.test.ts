@@ -4,7 +4,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { sealStage, type PackCache } from "@aprscaching/shared";
-import { attentionLogs, flushLogQueue, offlineReady, unlockStage } from "../src/api.js";
+import { attentionLogs, flushLogQueue, offlineReady, setQueueOwner, unlockStage } from "../src/api.js";
 import { stageRefusalText } from "../src/log/stageUnlock.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -69,6 +69,7 @@ describe("a refused stage unlock", () => {
       },
       [cache],
     );
+    await setQueueOwner("OE8FND");
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
     expect(await unlockStage(88, 1, "OE8FND", undefined, SERIAL)).toMatchObject({ unlocked: true, offline: true });
     vi.stubGlobal("fetch", answer(403, { unlocked: false, reason: "bad_code" }));

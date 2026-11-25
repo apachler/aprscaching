@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, getSession, logout, logoutAll, type Session } from "../api.js";
+import { ApiError, getSession, logout, logoutAll, setQueueOwner, type Session } from "../api.js";
 import { forgetSession, recallSession, rememberSession, type SessionStore } from "./sessionMemory.js";
 import type { EndedReason } from "./accountNotices.js";
 import { disablePush } from "../push.js";
+
+/** The offline queue sends only this call's entries (api.ts `setQueueOwner`); unreadable storage holds none. */
+const ownQueue = (callsign: string | null | undefined) => setQueueOwner(callsign ?? null).catch(() => {});
 
 const store: SessionStore = {
   get: (k) => localStorage.getItem(k),
@@ -26,11 +29,13 @@ export function useSession() {
     try {
       const fresh = await getSession();
       rememberSession(store, fresh);
+      await ownQueue(fresh.callsign);
       setS(fresh);
       setOffline(false);
     } catch (e) {
       // the server answered (an error status): that is no session; no answer at all: the remembered one
       const remembered = e instanceof ApiError ? null : recallSession(store);
+      await ownQueue(remembered?.callsign);
       setS(remembered ?? { callsign: null });
       setOffline(remembered != null);
     } finally {
@@ -49,6 +54,7 @@ export function useSession() {
     await disablePush().catch(() => {});
     await logout().catch(() => {});
     forgetSession(store);
+    await ownQueue(null);
     setS({ callsign: null });
   }, []);
   /**
@@ -70,6 +76,7 @@ export function useSession() {
     await disablePush().catch(() => {});
     await logoutAll();
     forgetSession(store);
+    await ownQueue(null);
     setS({ callsign: null });
   }, []);
   return {

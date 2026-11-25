@@ -111,8 +111,9 @@ async function onDemand(req, pathname) {
 // ---- Background Sync: the offline log queue -------------------------------------------------------------
 /* With a connection back, the browser wakes the worker (tag "acs-logqueue", Chromium) even with the app
    closed. The worker sends the queued logs the way the app does (src/log/logQueue.ts): each to the instance
-   it was signed for, a server error backed off, a refusal moved to needs-attention, never dropped. It takes
-   the same lock as the app, so the two never send a log at once, and tells open pages the queue changed. */
+   it was signed for and only under its owner's session (the signed-in call the app stores as acs.sync.owner;
+   none signed in, none goes), a server error backed off, a refusal moved to needs-attention, never dropped.
+   It takes the same lock as the app, so the two never send a log at once, and tells open pages the queue changed. */
 const OFFLINE_DB = "acs-offline";
 
 function openOfflineDb() {
@@ -150,15 +151,17 @@ async function flushQueue() {
   }
   const apiBase = await kvGet(db, "acs.sync.apiBase");
   const instance = await kvGet(db, "acs.sync.instance");
+  const owner = String((await kvGet(db, "acs.sync.owner")) || "").toUpperCase();
   const queue = JSON.parse((await kvGet(db, "acs.logqueue")) || "[]");
-  if (!apiBase || !queue.length) return;
+  if (!apiBase || !owner || !queue.length) return;
   const keep = [];
   const refused = [];
   const now = Date.now();
   let offline = false;
   for (const item of queue) {
     const elsewhere = instance && item.instance && item.instance !== instance;
-    if (offline || elsewhere || (item.nextAt != null && item.nextAt > now)) {
+    const others = String(item.owner || "").toUpperCase() !== owner;
+    if (offline || elsewhere || others || (item.nextAt != null && item.nextAt > now)) {
       keep.push(item);
       continue;
     }

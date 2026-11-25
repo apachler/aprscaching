@@ -7,6 +7,7 @@ import {
   flush,
   loadAttention,
   loadQueue,
+  ownedBy,
   removeQueued,
   retryAttention,
   type QueueStore,
@@ -20,15 +21,16 @@ const memStore = (): QueueStore => {
   return { get: async (k) => m.get(k) ?? null, set: async (k, v) => void m.set(k, v) };
 };
 const T0 = 1_700_000_000_000;
+const ME = "OE8ME";
 const body = (comment?: string) => ({ logType: "found", comment });
 const fails = (f: SendFailure) => () => Promise.reject(f);
 
 describe("the offline log queue", () => {
   it("keeps every log while there is no connection", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
-    await enqueue(s, { cacheId: 2, body: body() }, T0);
-    const r = await flush(s, fails({ kind: "offline" }), T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, owner: ME, body: body() }, T0);
+    const r = await flush(s, fails({ kind: "offline" }), T0, undefined, ME);
     expect(r).toEqual({ sent: 0, refused: 0 });
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([1, 2]);
     expect(await loadAttention(s)).toEqual([]);
@@ -36,19 +38,27 @@ describe("the offline log queue", () => {
 
   it("sends what it can and keeps the rest", async () => {
     const s = memStore();
-    for (const id of [1, 2, 3]) await enqueue(s, { cacheId: id, body: body() }, T0);
-    const r = await flush(s, (it) => (it.cacheId === 2 ? Promise.reject({ kind: "retry" }) : Promise.resolve()), T0);
+    for (const id of [1, 2, 3]) await enqueue(s, { cacheId: id, owner: ME, body: body() }, T0);
+    const r = await flush(
+      s,
+      (it) => (it.cacheId === 2 ? Promise.reject({ kind: "retry" }) : Promise.resolve()),
+      T0,
+      undefined,
+      ME,
+    );
     expect(r.sent).toBe(2);
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 
   it("moves a refused log to needs-attention with the server's reason, never away", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 7, body: body("hello"), label: "AC-7" }, T0);
+    await enqueue(s, { cacheId: 7, owner: ME, body: body("hello"), label: "AC-7" }, T0);
     const r = await flush(
       s,
       fails({ kind: "refused", status: 400, reason: "author key not registered to callsign" }),
       T0,
+      undefined,
+      ME,
     );
     expect(r.refused).toBe(1);
     expect(await loadQueue(s)).toEqual([]);
@@ -59,17 +69,17 @@ describe("the offline log queue", () => {
 
   it("retries a server error with backoff, and not before it is due", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
-    const first = await flush(s, fails({ kind: "retry" }), T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
+    const first = await flush(s, fails({ kind: "retry" }), T0, undefined, ME);
     expect(first.nextAt).toBe(T0 + backoffMs(1));
     let tried = 0;
     const counting = () => {
       tried++;
       return Promise.reject<void>({ kind: "retry" });
     };
-    await flush(s, counting, T0 + backoffMs(1) - 1);
+    await flush(s, counting, T0 + backoffMs(1) - 1, undefined, ME);
     expect(tried).toBe(0);
-    const second = await flush(s, counting, T0 + backoffMs(1));
+    const second = await flush(s, counting, T0 + backoffMs(1), undefined, ME);
     expect(tried).toBe(1);
     expect(second.nextAt).toBe(T0 + backoffMs(1) + backoffMs(2));
     expect((await loadQueue(s))[0]?.attempts).toBe(2);
@@ -82,9 +92,9 @@ describe("the offline log queue", () => {
 
   it("puts a refused log back with an edited comment, or discards it on request", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body("old") }, T0);
-    await enqueue(s, { cacheId: 2, body: body() }, T0);
-    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body("old") }, T0);
+    await enqueue(s, { cacheId: 2, owner: ME, body: body() }, T0);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0, undefined, ME);
     expect(await loadAttention(s)).toHaveLength(2);
     await retryAttention(s, { cacheId: 1, queuedAt: T0 }, T0 + 1, "new");
     expect(await loadQueue(s)).toMatchObject([{ cacheId: 1, body: { comment: "new" }, queuedAt: T0 + 1 }]);
@@ -95,14 +105,14 @@ describe("the offline log queue", () => {
 
   it("discards the refused log the user picked, even when the list moved under the confirm dialog", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
-    await enqueue(s, { cacheId: 2, body: body() }, T0);
-    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, owner: ME, body: body() }, T0);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0, undefined, ME);
     // the user taps Discard on cache 2 (second in the list) and, while the dialog is open, retries cache 1,
     // which the instance refuses again: the list is now [2, 1]
     const picked = (await loadAttention(s))[1]!;
     await retryAttention(s, { cacheId: 1, queuedAt: T0 }, T0 + 1);
-    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0 + 1);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0 + 1, undefined, ME);
     expect((await loadAttention(s)).map((a) => a.cacheId)).toEqual([2, 1]);
     await discardAttention(s, { cacheId: picked.cacheId, queuedAt: picked.queuedAt });
     expect((await loadAttention(s)).map((a) => a.cacheId)).toEqual([1]);
@@ -110,8 +120,8 @@ describe("the offline log queue", () => {
 
   it("changes nothing for a refused log that is no longer in the list", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
-    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
+    await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0, undefined, ME);
     await discardAttention(s, { cacheId: 1, queuedAt: T0 + 99 });
     await retryAttention(s, { cacheId: 9, queuedAt: T0 }, T0 + 1);
     expect(await loadAttention(s)).toHaveLength(1);
@@ -120,32 +130,61 @@ describe("the offline log queue", () => {
 
   it("keeps a log queued while a flush is still sending", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
     await flush(
       s,
       async () => {
-        await enqueue(s, { cacheId: 2, body: body() }, T0 + 5); // logged offline during the sync
+        await enqueue(s, { cacheId: 2, owner: ME, body: body() }, T0 + 5); // logged offline during the sync
       },
       T0,
+      undefined,
+      ME,
     );
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 
   it("sends a log only to the instance it was signed for", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body(), instance: "here.example" }, T0);
-    await enqueue(s, { cacheId: 2, body: body(), instance: "there.example" }, T0);
-    await enqueue(s, { cacheId: 3, body: body() }, T0); // queued before its instance was known
+    await enqueue(s, { cacheId: 1, owner: ME, body: body(), instance: "here.example" }, T0);
+    await enqueue(s, { cacheId: 2, owner: ME, body: body(), instance: "there.example" }, T0);
+    await enqueue(s, { cacheId: 3, owner: ME, body: body() }, T0); // queued before its instance was known
     const sent: number[] = [];
-    await flush(s, async (it) => void sent.push(it.cacheId), T0, "here.example");
+    await flush(s, async (it) => void sent.push(it.cacheId), T0, "here.example", ME);
     expect(sent).toEqual([1, 3]);
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 
+  // A shared device: player A queues an unlock offline, signs out, and B signs in. The send carries whichever
+  // session cookie is current, so an entry that went out now would count for B.
+  it("sends only the signed-in owner's entries; another player's wait for them", async () => {
+    const s = memStore();
+    const unlock = { logType: "unlock", loggerCall: "OE8AAA", code: "S3CRET" };
+    await enqueue(s, { cacheId: 7, instance: "x.net", kind: "unlock", owner: "OE8AAA", stageNo: 2, body: unlock }, 1);
+    const sent: number[] = [];
+    const asB = await flush(s, async (it) => void sent.push(it.cacheId), 10, "x.net", "OE8BBB");
+    expect(asB).toEqual({ sent: 0, refused: 0 });
+    expect(sent).toEqual([]);
+    const signedOut = await flush(s, async (it) => void sent.push(it.cacheId), 10, "x.net", null);
+    expect(signedOut).toEqual({ sent: 0, refused: 0 });
+    expect((await loadQueue(s)).map((q) => q.owner)).toEqual(["OE8AAA"]);
+    const asA = await flush(s, async (it) => void sent.push(it.cacheId), 10, "x.net", "oe8aaa");
+    expect(asA).toEqual({ sent: 1, refused: 0 });
+    expect(sent).toEqual([7]);
+    expect(await loadQueue(s)).toEqual([]);
+  });
+
+  it("lists only the signed-in owner's entries", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body(), owner: "OE8AAA" }, T0);
+    await enqueue(s, { cacheId: 2, body: body(), owner: "OE8BBB" }, T0);
+    expect(ownedBy(await loadQueue(s), "OE8BBB").map((q) => q.cacheId)).toEqual([2]);
+    expect(ownedBy(await loadQueue(s), null)).toEqual([]);
+  });
+
   it("takes out a waiting log the user sent another way", async () => {
     const s = memStore();
-    await enqueue(s, { cacheId: 1, body: body() }, T0);
-    await enqueue(s, { cacheId: 2, body: body() }, T0 + 1);
+    await enqueue(s, { cacheId: 1, owner: ME, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, owner: ME, body: body() }, T0 + 1);
     await removeQueued(s, 1, T0);
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
