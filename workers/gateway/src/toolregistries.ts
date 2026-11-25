@@ -591,7 +591,7 @@ async function fetchUpstream(
 }
 
 /** The registry's file names a key other than the pinned one; the person who pinned it confirms the new one. */
-export interface KeyChanged {
+interface KeyChanged {
   error: string;
   authority: string;
 }
@@ -620,8 +620,14 @@ async function unsigned(
     switch (await checkPinnedRegistry(doc, reg.authority)) {
       case "ok":
         return null;
-      case "key-changed":
-        return keyChanged(String((doc as SignedRegistry).authority));
+      case "key-changed": {
+        // named only when the file is intact under the key it names: an unchecked authority string is the file's
+        // own claim, and would carry whatever it holds through this instance
+        const seen = await previewRegistry(doc);
+        return seen.ok
+          ? keyChanged(seen.preview.authority)
+          : { error: "the registry is signed by another key than the one pinned, and does not verify under it" };
+      }
       case "format":
         return { error: registryFormatProblem(doc) ?? "the registry's format is not one this app reads" };
       default:

@@ -422,6 +422,31 @@ describe("the carrier", () => {
     }
   });
 
+  it("names no other key a registry file does not verify under: its claim is relayed nowhere", async () => {
+    const w = await world();
+    upstream();
+    const id = (await addInstance(w)).data.registry.id as string;
+    const good = files[REG]!;
+    try {
+      const payload = "<script>alert(1)</script>".repeat(4000);
+      for (const authority of [stranger.pub, payload]) {
+        files[REG] = JSON.stringify({ ...JSON.parse(good), authority, sig: "x" });
+        await w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id=?").bind(id).run();
+        const r = await file(w.env, id, REG);
+        expect(r.status).toBe(502);
+        expect(r.text).not.toContain(authority);
+        expect(r.text).not.toContain("<script>");
+        const held = await w.env.DB.prepare("SELECT body, error FROM tool_registry_files WHERE registry_id=?")
+          .bind(id)
+          .first<{ body: string | null; error: string }>();
+        expect(held?.body).toBeNull();
+        expect(held?.error).not.toContain(authority);
+      }
+    } finally {
+      files[REG] = good;
+    }
+  });
+
   it("answers a registry file signed by another key with that key, relays none of it, and refetches once it is confirmed", async () => {
     const w = await world();
     upstream();

@@ -9,6 +9,14 @@ import { ToolsPanel } from "../src/tools/ToolsPanel.js";
 import { claimTools } from "../src/tools/toolOwner.js";
 import { keyFingerprint, toolSigner } from "../src/tools/toolKeys.js";
 import { click, render } from "./support/dom.js";
+import type { InstalledView } from "../src/tools/installed.js";
+
+// jsdom runs no sandbox, so a row's loaded manifest comes from here rather than from a started tool
+const views = vi.hoisted(() => ({ current: null as InstalledView[] | null }));
+vi.mock("../src/tools/installed.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/tools/installed.js")>();
+  return { ...real, useInstalled: () => views.current ?? real.useInstalled() };
+});
 
 const MANIFEST_URL = "https://tools.example/imposter/tool.json";
 
@@ -35,6 +43,7 @@ const settle = () =>
   });
 
 afterEach(() => {
+  views.current = null;
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   localStorage.clear();
@@ -71,5 +80,53 @@ describe("a tool's signer", () => {
     expect(dialog?.textContent).toContain(`signed by key ${keyFingerprint(pub)}`);
     expect(dialog?.textContent).not.toContain("OE8APR");
     view.unmount();
+  });
+
+  it("is the key's fingerprint in the row of an installed self-signed tool, and the author for a registry's", async () => {
+    const pub = "uibFUCjcBnxAe8mRQ1v2neJd0fPV_7Vs0Y59K5vH5Oc";
+    const manifest = {
+      name: "imposter",
+      title: "Imposter",
+      author: "OE8APR",
+      version: "1.0.0",
+      api: "1.0",
+      permissions: [],
+      surfaces: ["web"],
+      pubkey: pub,
+    } as unknown as ToolManifest;
+    const view = (via?: { id: string; account: boolean }): InstalledView =>
+      ({
+        record: {
+          name: "imposter",
+          title: "Imposter",
+          url: MANIFEST_URL,
+          pubkey: pub,
+          grants: [],
+          connect: [],
+          remote: false,
+          on: false,
+          ...(via ? { via } : {}),
+        },
+        tool: { manifest, sandbox: { commands: [] } },
+        on: false,
+        starting: false,
+      }) as unknown as InstalledView;
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 404 }));
+    claimTools("N0CALL");
+    const meta = () => document.querySelector('[data-tool="imposter"] .tool-meta')?.textContent ?? "";
+
+    views.current = [view()];
+    const self = render(<ToolsPanel callsign="N0CALL" verified={false} />);
+    await settle();
+    expect(meta()).toContain(`key ${keyFingerprint(pub)}`);
+    expect(meta()).not.toContain("OE8APR");
+    self.unmount();
+
+    views.current = [view({ id: "r1", account: false })];
+    const listed = render(<ToolsPanel callsign="N0CALL" verified={false} />);
+    await settle();
+    expect(meta()).toContain("OE8APR");
+    expect(meta()).not.toContain("key ");
+    listed.unmount();
   });
 });
