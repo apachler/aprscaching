@@ -34,7 +34,7 @@ import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCal
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
-import { loggerTrack } from "./track.js";
+import { fixesOf, loggerTrack } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -1017,12 +1017,9 @@ export async function scoreFind(
 
   let cacheStationPositions: PositionRow[] | undefined;
   if (cache.type === "aprs_living" && cache.station_call) {
-    const cs = await env.DB.prepare(
-      "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-    )
-      .bind(cache.station_call, since, at + 60)
-      .all<PositionRow>();
-    cacheStationPositions = cs.results;
+    // every attested station fix, uncapped: a flood of fixes under the station's call cannot push one out of the
+    // read and leave an owner-signed fix with nothing to be judged against
+    cacheStationPositions = await fixesOf(env, cache.station_call, since, at + 60);
   }
 
   // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify

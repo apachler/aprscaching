@@ -32,7 +32,7 @@ Every find carries exactly one tier, graded by the evidence behind it:
   at an attested site, and the ones their own browser bridge signed. An APRS-IS or tunnelled fix under the
   call, which anyone with a public passcode can inject, never takes Tier A away, as it never grants it.
 - The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
-  not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
+  however many, not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
   at the cache, can add a contradiction but never hide one.
 - The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
   judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before

@@ -75,6 +75,34 @@ async function position(
     .run();
 }
 
+/**
+ * `n` fixes of `call` at the spot 130–179 s back, one statement: a window filled under the call, newer than the far
+ * fix (200 s back) and older than the match (60 s back).
+ */
+async function flood(
+  env: Env,
+  call: string,
+  n: number,
+  o: { via: string; igate?: string; transport: string; source: string },
+) {
+  const rows = Array.from({ length: n }, (_, i) => [
+    call,
+    now() - 130 - (i % 50),
+    LAT,
+    LON,
+    o.via,
+    o.igate ?? null,
+    o.source,
+    o.transport,
+  ]);
+  await env.DB.prepare(
+    `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport)
+     VALUES ${rows.map(() => "(?,?,?,?,?,?, 'WIDE1-1', ?, ?)").join(",")}`,
+  )
+    .bind(...rows.flat())
+    .run();
+}
+
 /** The trusted ingest posts one frame its own TNC heard at the spot, named for the attested site. */
 async function heard(env: Env, src: string, payload = AT_SPOT) {
   const res = await call(
@@ -192,6 +220,54 @@ describe("the logger's track is every SSID of their base call", () => {
       ago: 120,
     });
     expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+  });
+});
+
+describe("no flood of fixes under the call hides an attested contradiction", () => {
+  // the attested far fix: 1° of latitude north (~111 km), 200 s back
+  const FAR_LAT = LAT + 1;
+  const APRS_IS = { via: "aprs_is", igate: "T2TEST", transport: "aprs-is", source: "firehose" };
+  const SIGNED = { via: "rf", transport: "browser-rf", source: "browser-rf" };
+
+  // [what floods, the far fix's call, the flood's call, the flood's kind]
+  for (const [name, farCall, floodCall, kind] of [
+    ["APRS-IS fixes under another SSID", "OE8LOG-7", "OE8LOG-15", APRS_IS],
+    ["the logger's own signed browser-RF fixes under another SSID", "OE8LOG-7", "OE8LOG-15", SIGNED],
+    ["APRS-IS fixes under the logged call", "OE8LOG-9", "OE8LOG-9", APRS_IS],
+    ["the logger's own signed browser-RF fixes under the logged call", "OE8LOG-9", "OE8LOG-9", SIGNED],
+  ] as const) {
+    it(`600 ${name} at the spot`, async () => {
+      const env = world();
+      const trad = await cache(env, { type: "traditional" });
+      await position(env, {
+        call: farCall,
+        igate: SITE,
+        transport: "tnc",
+        source: "firehose",
+        lat: FAR_LAT,
+        ago: 200,
+      });
+      await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+      await flood(env, floodCall, 600, kind);
+      expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+    });
+  }
+
+  it("600 owner-signed fixes of a living cache's station at the spot are each held to the attested one", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 200,
+    });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    await flood(env, "OE8OWN-9", 600, SIGNED);
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result.tier).not.toBe("A");
   });
 });
 
