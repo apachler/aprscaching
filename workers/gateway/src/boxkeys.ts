@@ -18,10 +18,10 @@
  * body's SHA-256. It is fresh for five minutes and accepted once. route() verifies it before any handler
  * runs. A request it verifies may deliver what the box hears (/ingest, /ingest/check) and use the box's own
  * /api/box/:id endpoints (auth.ts ingestOrBoxOk). Only once the sysop marks the box "Runs this instance's
- * services" may it also run them: the outbox, the packet BBS mailbox, FBB forwarding, the NET/ROM node mirror,
- * White Pages, federation pages and transmit commands (ingestOrServiceBoxOk). That flag is for a box the sysop
- * runs; trusting a box's hearings grants none of it. A box key never acts as the shared secret does: it logs
- * no find, acts for no cache owner, creates and imports no cache.
+ * services" may it also run them: the outbox, the NET/ROM node mirror, federation pages and transmit commands
+ * (ingestOrServiceBoxOk), and the packet BBS mailbox, FBB forwarding and White Pages, which the shared secret
+ * never runs (bbsBoxOk). That flag is for a box the sysop runs; trusting a box's hearings grants none of it. A
+ * box key acts for no cache owner, and creates and imports no cache.
  *
  * Enrolling grants no trust: an enrolled box is an ingest credential, never an attestation. What it hears
  * counts for Tier A only once the sysop switches on "Trust this station's hearings" for it in Instance admin

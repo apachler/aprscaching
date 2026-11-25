@@ -17,6 +17,8 @@ const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 /** The smoke's receiving box, once enrolled ({@link rxBox}). */
 let rx = null;
+/** The smoke's packet BBS box, once enrolled ({@link bbsCall}). */
+let bbsKey = null;
 /** The smoke's signed-in players, by call ({@link player}). */
 const players = new Map();
 
@@ -137,6 +139,17 @@ ok(
   "the shared ingest secret hides no cache under a named owner (401)",
   secretHide.status === 401,
   `status=${secretHide.status}`,
+);
+const mintedCode = await call(
+  "POST",
+  "/api/caches",
+  { title: "Minted squat", type: "traditional", lat: 47, lon: 15, difficulty: 1, terrain: 1, code: "AC-9999" },
+  as(OWNER),
+);
+ok(
+  "an explicit AC- code is refused: a player chooses no cache code (403)",
+  mintedCode.status === 403 && /only the sysop/.test(mintedCode.data?.error ?? ""),
+  `status=${mintedCode.status} ${JSON.stringify(mintedCode.data)}`,
 );
 
 // the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
@@ -808,6 +821,20 @@ async function rxBox() {
   }
   return rx;
 }
+/** The packet BBS "smoke-bbs": a box enrolled with its own key that the sysop lets run this instance's
+ *  services. It alone carries every station's mail; the shared ingest secret runs no BBS. */
+async function bbsCall(method, path, body) {
+  if (!bbsKey) {
+    const r = await enrollBox(BASE, OPERATOR_SECRET, "smoke-bbs");
+    const s = r.error ? null : await call("POST", "/api/admin/boxes/smoke-bbs/services", { services: true });
+    if (r.error || s.status !== 200) {
+      console.error(`✗ the smoke's packet BBS box could not be enrolled: ${r.error ?? JSON.stringify(s.data)}`);
+      process.exit(1);
+    }
+    bbsKey = r.key;
+  }
+  return boxFetch(BASE, bbsKey, method, path, body);
+}
 /** Post `packets` as the box smoke-rx delivering them, or with the shared secret when `shared`. */
 async function rxIngest(packets, shared = false) {
   return shared
@@ -1463,7 +1490,7 @@ const goneProf = await call("GET", "/api/profile/DL1ABC");
 ok("erased account finds are anonymised away", (goneProf.data?.finds ?? 0) === 0, JSON.stringify(goneProf.data?.finds));
 
 // ---- BBS: personal mail, bulletins and NTS traffic, moved the F6FBB way only ----
-const bbsP = await call("POST", "/api/bbs/messages", {
+const bbsP = await bbsCall("POST", "/api/bbs/messages", {
   fromCall: "OE8APR",
   toCall: "OE7BBS",
   body: "meet at the summit cache",
@@ -1474,12 +1501,30 @@ ok(
   JSON.stringify(bbsP.data),
 );
 const msgId = bbsP.data?.id;
-const bbsB = await call("POST", "/api/bbs/messages", {
+const bbsB = await bbsCall("POST", "/api/bbs/messages", {
   fromCall: "OE8APR",
   toCall: "ALL",
   body: "net tonight 8pm local",
 });
 ok("BBS accepts a bulletin", bbsB.data?.type === "B", JSON.stringify(bbsB.data));
+const secretMail = await call("GET", "/api/bbs/messages?to=OE7BBS", undefined, { "x-operator-secret": "" });
+const secretPost = await call(
+  "POST",
+  "/api/bbs/messages",
+  { fromCall: "OE7BBS", toCall: "OE8APR", body: "forged" },
+  { "x-operator-secret": "" },
+);
+ok(
+  "the shared ingest secret reads no mailbox and posts in no station's name (401)",
+  secretMail.status === 401 && secretPost.status === 401,
+  `read=${secretMail.status} post=${secretPost.status}`,
+);
+const secretPool = await call("GET", "/api/bbs/forward/pool?partner=rf-oe", undefined, { "x-operator-secret": "" });
+ok(
+  "the shared ingest secret reads no FBB forwarding queue (401)",
+  secretPool.status === 401,
+  `status=${secretPool.status}`,
+);
 
 // FBB thread tree + typing + SR (reply chains into a thread; T traffic typing)
 ok(
@@ -1487,7 +1532,7 @@ ok(
   bbsP.data?.threadId === msgId,
   JSON.stringify({ threadId: bbsP.data?.threadId, msgId }),
 );
-const bbsReply = await call("POST", "/api/bbs/messages", {
+const bbsReply = await bbsCall("POST", "/api/bbs/messages", {
   fromCall: "OE7BBS",
   toCall: "OE8APR",
   subject: "Re: meet",
@@ -1499,7 +1544,7 @@ ok(
   bbsReply.data?.replyTo === msgId && bbsReply.data?.threadId === msgId,
   JSON.stringify(bbsReply.data),
 );
-const thread = await call("GET", `/api/bbs/thread/${msgId}`);
+const thread = await bbsCall("GET", `/api/bbs/thread/${msgId}`);
 ok(
   "thread view returns root + reply oldest-first",
   thread.data?.threadId === msgId &&
@@ -1508,7 +1553,7 @@ ok(
     thread.data.messages.some((m) => m.replyTo === msgId),
   JSON.stringify(thread.data?.messages?.map((m) => ({ id: m.id, replyTo: m.replyTo }))),
 );
-const bbsT = await call("POST", "/api/bbs/messages", {
+const bbsT = await bbsCall("POST", "/api/bbs/messages", {
   fromCall: "OE8APR",
   toCall: "OE3XYZ",
   type: "T",
@@ -1570,17 +1615,17 @@ ok(
   JSON.stringify(nodes.data?.nodes),
 );
 
-const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
+const list1 = await bbsCall("GET", "/api/bbs/messages?to=OE7BBS");
 ok(
   "personal mail waits in the BBS, unread",
   (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.readAt == null),
   JSON.stringify(list1.data?.messages?.[0]),
 );
 
-const senderRead = await call("POST", `/api/bbs/messages/${msgId}/read`, { call: "OE8APR" });
-const afterSenderRead = await call("GET", "/api/bbs/messages?to=OE7BBS");
+const senderRead = await bbsCall("POST", `/api/bbs/messages/${msgId}/read`, { call: "OE8APR" });
+const afterSenderRead = await bbsCall("GET", "/api/bbs/messages?to=OE7BBS");
 ok(
-  "the ingest box cannot mark mail read for a station other than its addressee",
+  "the packet BBS box cannot mark mail read for a station other than its addressee",
   senderRead.status === 403 &&
     (afterSenderRead.data?.messages ?? []).some((mm) => mm.id === msgId && mm.readAt == null),
   JSON.stringify({ status: senderRead.status, msg: afterSenderRead.data?.messages?.find((mm) => mm.id === msgId) }),

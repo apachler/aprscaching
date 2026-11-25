@@ -3,11 +3,13 @@
 // type any frame, so a VERIFY it delivers is dropped, and only a box enrolled with its own key, heard at a site
 // trusted through that box, proves control of a call. It acts for no box: a box's pairing, polling, acks, queue
 // and log take only its own signature, with the operator secret as the operator's override. And it acts as no
-// player or cache owner: editing a cache, logging, favourites, watches and ratings take a signed-in session.
+// player or cache owner: editing a cache, logging, favourites, watches and ratings take a signed-in session. Nor
+// does it run the BBS: mail is read and written by its holder's session, or by the packet BBS, a box enrolled
+// with its own key that the sysop lets run this instance's services, which alone runs FBB forwarding too.
 import { describe, it, expect } from "vitest";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup, hiderSignup } from "./helpers/authflow.js";
-import { enrollBox, signedCall, trustedBox } from "./helpers/box.js";
+import { boxCall, enrollBox, signedCall, trustedBox } from "./helpers/box.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const OPS = { "x-operator-secret": "test-operator-secret" };
@@ -229,5 +231,89 @@ describe("the shared secret acts as no player or cache owner", () => {
     const named = await call(env, "GET", `/api/caches/${id}?callsign=DL2FAV`, undefined, INGEST);
     expect(named.data?.cache?.favorites).toBe(1);
     expect(named.data?.cache?.favorited).toBe(false);
+  });
+});
+
+describe("the shared secret runs no BBS", () => {
+  /** DL1ABC's private mail to DL1OWN, sent from DL1ABC's session. */
+  async function mail() {
+    const env = authEnv();
+    await emailSignup(env, "dl1own@example.test", "DL1OWN");
+    const sender = await emailSignup(env, "dl1abc@example.test", "DL1ABC");
+    const m = await call(
+      env,
+      "POST",
+      "/api/bbs/messages",
+      { fromCall: "DL1ABC", toCall: "DL1OWN", body: "private" },
+      { cookie: sender.cookie },
+    );
+    expect(m.status).toBe(201);
+    return { env, id: m.data.id as number };
+  }
+  const stored = async (env: Env, id: number) =>
+    !!(await env.DB.prepare("SELECT 1 AS x FROM bbs_messages WHERE id = ?").bind(id).first());
+
+  it("does not read a station's mail", async () => {
+    const { env, id } = await mail();
+    expect((await call(env, "GET", "/api/bbs/messages?to=DL1OWN", undefined, INGEST)).status).toBe(401);
+    expect((await call(env, "GET", "/api/bbs/sent?from=DL1ABC", undefined, INGEST)).status).toBe(401);
+    expect((await call(env, "GET", "/api/bbs/session?call=DL1OWN", undefined, INGEST)).status).toBe(401);
+    expect((await call(env, "GET", `/api/bbs/thread/${id}`, undefined, INGEST)).data.messages).toEqual([]);
+  });
+
+  it("does not post in a station's name, mark its mail read or kill it", async () => {
+    const { env, id } = await mail();
+    const post = { fromCall: "DL1OWN", toCall: "DL1ABC", body: "forged" };
+    expect((await call(env, "POST", "/api/bbs/messages", post, INGEST)).status).toBe(401);
+    const forged = await env.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages WHERE from_call = 'DL1OWN'").first<{
+      n: number;
+    }>();
+    expect(forged?.n).toBe(0);
+    expect((await call(env, "POST", `/api/bbs/messages/${id}/read`, { call: "DL1OWN" }, INGEST)).status).toBe(401);
+    expect((await call(env, "POST", "/api/bbs/kill", { id, call: "DL1OWN" }, INGEST)).status).toBe(401);
+    expect(await stored(env, id)).toBe(true);
+  });
+
+  it("does not run FBB forwarding: the queue, the partner list or the White Pages", async () => {
+    const { env } = await mail();
+    const partner = { call: "OE1BBB-1", ha: "OE1BBB.AUT.EU", connectScript: "pass hunter2" };
+    expect((await call(env, "POST", "/api/bbs/partners", partner, OPS)).status).toBe(201);
+    expect((await call(env, "POST", "/api/bbs/forward", { partner: "OE1BBB-1", route: "*" }, OPS)).status).toBe(201);
+    const queued = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1", undefined, INGEST);
+    expect(queued.status).toBe(401);
+    expect(queued.data?.messages).toBeUndefined();
+    const partners = await call(env, "GET", "/api/bbs/partners", undefined, INGEST);
+    expect(partners.status).toBe(401);
+    expect(JSON.stringify(partners.data)).not.toContain("hunter2");
+    const inbound = { message: { bid: "1_OE1BBB", type: "P", from: "OE1BBB", to: "DL1OWN", title: "t", body: "x" } };
+    expect((await call(env, "POST", "/api/bbs/forward/inbound", inbound, INGEST)).status).toBe(401);
+    expect(
+      (await call(env, "POST", "/api/bbs/forward/sent", { partner: "OE1BBB-1", bids: ["1_X"] }, INGEST)).status,
+    ).toBe(401);
+    const wp = { callsign: "DL1OWN", homeBbs: "DB0EVL.#BAY.DEU.EU" };
+    expect((await call(env, "POST", "/api/bbs/wp", wp, INGEST)).status).toBe(401);
+    expect((await call(env, "GET", "/api/bbs/wp?call=DL1OWN")).data.homeBbs).toBeNull();
+    const forwarded = await env.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages WHERE bid = '1_OE1BBB'").first<{
+      n: number;
+    }>();
+    expect(forwarded?.n).toBe(0);
+  });
+
+  it("the packet BBS box carries the station's mail", async () => {
+    const { env, id } = await mail();
+    const bbs = (method: string, path: string, body?: unknown) =>
+      boxCall(env, "bbs", method, path, body, { services: true });
+    const session = await bbs("GET", "/api/bbs/session?call=DL1OWN");
+    expect(session.status).toBe(200);
+    expect(session.data.messages.map((m: { id: number }) => m.id)).toContain(id);
+    expect((await bbs("POST", "/api/bbs/messages", { fromCall: "DL1OWN", toCall: "DL1ABC", body: "re" })).status).toBe(
+      201,
+    );
+    expect((await bbs("POST", "/api/bbs/kill", { id, call: "DL1OWN" })).data.killed).toBe(true);
+    expect(await stored(env, id)).toBe(false);
+    expect((await bbs("GET", "/api/bbs/partners")).status).toBe(200);
+    expect((await bbs("GET", "/api/bbs/forward/pool?partner=OE1BBB-1")).status).toBe(200);
+    const inbound = { message: { bid: "2_OE1BBB", type: "P", from: "OE1BBB", to: "DL1OWN", title: "t", body: "x" } };
+    expect((await bbs("POST", "/api/bbs/forward/inbound", inbound)).data).toMatchObject({ stored: 1 });
   });
 });

@@ -11,6 +11,7 @@ import { createPrivateKey } from "node:crypto";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup, markCallVerified, ORIGIN, sessionCookie } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
+import { boxCall } from "./helpers/box.js";
 import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps/ingest/src/gatewayauth.js";
 
 const OPS = { "x-operator-secret": "test-operator-secret" };
@@ -297,13 +298,24 @@ describe("FBB forwarding", () => {
       .bind(now())
       .run();
     const post = (fromCall: string) =>
-      call(env, "POST", "/api/bbs/messages", { fromCall, toCall: "OE1XYZ @ OE1BBB.OE.EU", body: "hi" }, INGEST);
+      boxCall(
+        env,
+        "bbs",
+        "POST",
+        "/api/bbs/messages",
+        { fromCall, toCall: "OE1XYZ @ OE1BBB.OE.EU", body: "hi" },
+        {
+          services: true,
+        },
+      );
     const fromVerified = await post("OE8VER-7");
     const fromUnverified = await post("DL9NOV");
     expect(fromVerified.status).toBe(201);
     expect(fromUnverified.status).toBe(201);
 
-    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1BBB", undefined, INGEST);
+    const pool = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=OE1BBB", undefined, {
+      services: true,
+    });
     expect(pool.status).toBe(200);
     const bids = (pool.data.messages as { bid: string }[]).map((m) => m.bid);
     expect(bids).toContain(fromVerified.data.bid);
@@ -325,12 +337,16 @@ describe("FBB forwarding", () => {
     await env.DB.prepare(
       "INSERT INTO bbs_partners (call, ha, federation) VALUES ('OE1FED-1', 'OE1FED.AUT.EU', 1)",
     ).run();
-    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1FED-1", undefined, INGEST);
+    const pool = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=OE1FED-1", undefined, {
+      services: true,
+    });
     expect(pool.data.messages).toContainEqual(
       expect.objectContaining({ bid: "FEDBID1", type: "P", to: "ACSFED", at: "OE1FED.AUT.EU" }),
     );
     // the catch-all route never carries it
-    const fallback = await call(env, "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, INGEST);
+    const fallback = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, {
+      services: true,
+    });
     expect((fallback.data.messages as { bid: string }[]).map((m) => m.bid)).not.toContain("FEDBID1");
   });
 });

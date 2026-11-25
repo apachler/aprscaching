@@ -86,7 +86,7 @@ each, are the enrollment's audit trail.
 
 A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.
 
-A box's key writes less than the shared `INGEST_SECRET`, because a box may be a receiver a ham lends you:
+A box's key starts with less than your own box needs, because a box may be a receiver a ham lends you:
 
 | An enrolled box | Can | Cannot |
 |---|---|---|
@@ -101,7 +101,8 @@ A box's frames attest only the sites trusted under that box: `FIRST_PARTY_SITES`
 call count only for frames sent with the shared secret, and no other box can claim a box's site. Your own box
 on a key therefore needs **Trust this station's hearings** with its site call, and **Runs this instance's
 services** when it runs the packet BBS, FBB forwarding, the node mirror or the outbox. On the shared secret it
-needs neither: it verifies finds, but no callsign, and takes no remote commands.
+needs neither: it verifies finds, but no callsign, takes no remote commands, and runs no packet BBS or FBB
+forwarding, since those carry every station's personal mail.
 
 A box's id answers only to its own key: its pairing code, its command polling and acknowledgements, its queue
 and its log take only its signature, or `OPERATOR_SECRET` as your override. The shared secret acts for no box,

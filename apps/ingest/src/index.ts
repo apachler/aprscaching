@@ -756,6 +756,12 @@ console.log("[ingest] started -> %s", INGEST_URL);
 // configured in the gateway (Instance admin); this box runs the sessions (ingest-locality).
 // The BBS forwards under its own call unless another is set: one packet BBS, one call.
 const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
+// The packet BBS and FBB forwarding carry every station's personal mail, so the gateway serves them only to a
+// box enrolled with its own key that the sysop marks "Runs this instance's services", never to the shared secret.
+if ((env.BBS_NODE_CALL || env.BBS_FORWARD === "1") && !env.BOX_KEY)
+  console.warn(
+    "[bbs] the packet BBS and FBB forwarding answer no mail: the box has no key of its own (BOX_KEY), and the gateway serves mail only to an enrolled box that runs this instance's services. Enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box), then switch on Runs this instance's services",
+  );
 if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({

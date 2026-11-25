@@ -62,15 +62,17 @@ network layer (that's the operator's edge/CDN concern).
 
 - **Three secrets, three planes.** `INGEST_SECRET` (the ingest box) posts packets and nothing more: it
   never registers a device key, verifies a callsign, pairs, polls or reads a remote box, acts as a player
-  or cache owner, reaches operator configuration or signs a session. An on-air `VERIFY` proves control of a
+  or cache owner, reads or writes BBS mail, runs FBB forwarding, reaches operator configuration or signs a
+  session. An on-air `VERIFY` proves control of a
   call only when an ingest box enrolled with its own key delivers it, heard at a site the sysop trusts
   through that box, and only an enrolled box is paired and remote-controlled. `OPERATOR_SECRET` (the
   operator's scripts, `x-operator-secret`) reaches instance-wide configuration and is closed while unset.
   `SESSION_SECRET` alone signs sessions. A leaked ingest secret therefore lets an attacker post packets as
-  your ingest box — it does not hand over accounts, boxes, caches or the instance, and a finding that it
-  does is in scope.
+  your ingest box — it does not hand over accounts, boxes, caches, mail or the instance, and a finding that
+  it does is in scope.
 - **Enroll your receiver.** A box on the shared secret delivers packets only. To verify callsigns on the air,
-  pair the box with your account or control it remotely, enroll it with its own key
+  pair the box with your account or control it remotely, enroll it with its own key; to run the packet BBS
+  and FBB forwarding, also switch on **Runs this instance's services** for it
   ([How the box signs in](docs/run/radios/ingest-box.md#how-the-box-signs-in)).
 - The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, or an
   `OPERATOR_SECRET`/`SESSION_SECRET` equal to it. Without `SESSION_SECRET` they generate one beside the

@@ -321,7 +321,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`INGEST_SECRET`",
-        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror and heard federation frames. Its authority is packets only. It never verifies a callsign: an on-air `VERIFY` counts only from a box enrolled with its own key. It acts for no remote box: pairing, polling and a box's queue take the box's own key. It acts as no player or cache owner: hiding or editing a cache, logs, favourites, watches and ratings take a signed-in session. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
+        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, the NET/ROM node mirror and heard federation frames. Its authority is packets only. It never verifies a callsign: an on-air `VERIFY` counts only from a box enrolled with its own key. It acts for no remote box: pairing, polling and a box's queue take the box's own key. It acts as no player or cache owner: hiding or editing a cache, logs, favourites, watches and ratings take a signed-in session. It runs no BBS: the packet BBS mailbox, FBB forwarding, the partner list and White Pages take a box enrolled with its own key that runs this instance's services. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
         "*(required)*",
       ],
       [
@@ -903,7 +903,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "BBS (inbound + forwarding)",
-        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing). Both run only on a box enrolled with its own key that runs this instance's services ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway))",
       ],
       [
         "Federation over packet circuits",

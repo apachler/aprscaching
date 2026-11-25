@@ -1003,13 +1003,22 @@ export function ingestOrBoxOk(req: Request, env: Env): boolean {
 }
 
 /**
- * This instance's services an ingest box runs (the APRS-IS outbox, the packet BBS mailbox, FBB forwarding, the
- * NET/ROM node mirror, White Pages, federation pages and beacons): the shared INGEST_SECRET, or an enrolled box
+ * This instance's services an ingest box runs (the APRS-IS outbox, the NET/ROM node mirror, federation pages and
+ * beacons): the shared INGEST_SECRET, or an enrolled box
  * the sysop marks "Runs this instance's services" (box_keys.services, off by default). Trusting a box's
  * hearings grants none of these: a lent receiver vouches for what it hears, not for this instance's mail.
  */
 export function ingestOrServiceBoxOk(req: Request, env: Env): boolean {
   return ingestSecretOk(req, env) || !!boxPrincipal(req)?.services;
+}
+
+/**
+ * The packet BBS and its FBB forwarding: an enrolled box the sysop marks "Runs this instance's services", and
+ * never the shared INGEST_SECRET. The BBS carries every station's personal mail, so whoever acts for it reads
+ * any operator's mail and posts in their name; the shared secret posts packets and nothing more.
+ */
+export function bbsBoxOk(req: Request): boolean {
+  return !!boxPrincipal(req)?.services;
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */
