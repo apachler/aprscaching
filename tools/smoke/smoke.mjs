@@ -373,13 +373,13 @@ ok(
 );
 // a log or unlock naming another player's call (the offline queue sending it under the next player's session on a
 // shared device) is refused and credits nobody, so the client keeps it for its own player
-const oCache = await call("POST", "/api/caches", {
-  title: "Other Call " + now(),
-  type: "traditional",
-  lat: 47.21,
-  lon: 15.61,
-  ownerCall: "OE8APR",
-});
+// its own hider, since OWNER's hides already fill the daily limit
+const oCache = await call(
+  "POST",
+  "/api/caches",
+  { title: "Other Call " + now(), type: "traditional", lat: 47.21, lon: 15.61 },
+  as(await player("OE6OHD", { verified: true })),
+);
 const oCacheId = oCache.data?.cache?.id;
 const otherLog = await fetch(`${BASE}/api/caches/${oCacheId}/logs`, {
   method: "POST",

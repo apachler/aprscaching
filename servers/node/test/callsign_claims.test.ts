@@ -807,15 +807,9 @@ describe("what beacons under the call", () => {
   });
 
   it("takes the previous holder's living cache off the call's beacon, here and in what federation serves", async () => {
-    const env = claimEnv();
-    await emailSignup(env, "squat@example.test", "OE8APR");
-    const hidden = await call(
-      env,
-      "POST",
-      "/api/caches",
-      { title: "rover", type: "traditional", lat: 47, lon: 15, ownerCall: "OE8APR" },
-      INGEST,
-    );
+    const env = await claimEnv();
+    const squat = await emailSignup(env, "squat@example.test", "OE8APR");
+    const hidden = await hideUnverified(env, squat.cookie);
     expect(hidden.status).toBe(201);
     const cacheId = hidden.data.cache.id as number;
     await env.DB.prepare("UPDATE caches SET type = 'aprs_living', station_call = 'OE8APR-9' WHERE id = ?")
