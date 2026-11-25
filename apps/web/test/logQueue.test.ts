@@ -173,6 +173,32 @@ describe("the offline log queue", () => {
     expect(await loadQueue(s)).toEqual([]);
   });
 
+  // The stored owner can lag the session cookie (a session that ended, another tab's sign-in): the instance refuses
+  // an entry naming a call the session does not hold, and the entry stays queued for its owner.
+  it("keeps an entry the instance refuses as another player's, with the rest behind it", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body(), owner: "OE8AAA" }, T0);
+    await enqueue(s, { cacheId: 2, body: body(), owner: "OE8AAA" }, T0 + 1);
+    const tried: number[] = [];
+    const r = await flush(
+      s,
+      async (it) => {
+        tried.push(it.cacheId);
+        throw { kind: "held" } satisfies SendFailure;
+      },
+      T0,
+      undefined,
+      "OE8AAA",
+    );
+    expect(r).toEqual({ sent: 0, refused: 0 });
+    expect(tried).toEqual([1]);
+    expect((await loadQueue(s)).map((q) => [q.cacheId, q.attempts])).toEqual([
+      [1, undefined],
+      [2, undefined],
+    ]);
+    expect(await loadAttention(s)).toEqual([]);
+  });
+
   it("lists only the signed-in owner's entries", async () => {
     const s = memStore();
     await enqueue(s, { cacheId: 1, body: body(), owner: "OE8AAA" }, T0);

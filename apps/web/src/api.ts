@@ -2188,6 +2188,9 @@ async function flushUnlocked(): Promise<FlushResult> {
       } catch (e) {
         if (isOffline(e)) throw { kind: "offline" } satisfies SendFailure;
         const status = e instanceof ApiError ? e.status : 0;
+        // the session is no longer the owner's (it ended or another player signed in elsewhere): keep it for them
+        if (e instanceof ApiError && (e.data as { reason?: unknown } | null)?.reason === "other_call")
+          throw { kind: "held" } satisfies SendFailure;
         if (status === 0 || status >= 500 || status === 408 || status === 429)
           throw { kind: "retry" } satisfies SendFailure;
         const refusal = it.kind === "unlock" ? stageRefusal(e) : null;

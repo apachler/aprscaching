@@ -335,6 +335,44 @@ ok(
   (sessDetail.data?.cache?.logs ?? []).some((l) => l.loggerCall === SESSCALL),
   JSON.stringify((sessDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)),
 );
+// a log or unlock naming another player's call (the offline queue sending it under the next player's session on a
+// shared device) is refused and credits nobody, so the client keeps it for its own player
+const oCache = await call("POST", "/api/caches", {
+  title: "Other Call " + now(),
+  type: "traditional",
+  lat: 47.21,
+  lon: 15.61,
+  ownerCall: "OE8APR",
+});
+const oCacheId = oCache.data?.cache?.id;
+const otherLog = await fetch(`${BASE}/api/caches/${oCacheId}/logs`, {
+  method: "POST",
+  headers: { "content-type": "application/json", cookie },
+  body: JSON.stringify({ logType: "found", loggerCall: "OE8AAA", offline: true }),
+});
+const otherLogBody = await otherLog.json().catch(() => ({}));
+ok(
+  "a session log naming another call -> 403 other_call",
+  otherLog.status === 403 && otherLogBody.reason === "other_call",
+  `status=${otherLog.status} ${JSON.stringify(otherLogBody)}`,
+);
+const otherUnlock = await fetch(`${BASE}/api/caches/${oCacheId}/stages/1/unlock`, {
+  method: "POST",
+  headers: { "content-type": "application/json", cookie },
+  body: JSON.stringify({ callsign: "OE8AAA", code: "S3CRET" }),
+});
+const otherUnlockBody = await otherUnlock.json().catch(() => ({}));
+ok(
+  "a session unlock naming another call -> 403 other_call",
+  otherUnlock.status === 403 && otherUnlockBody.reason === "other_call",
+  `status=${otherUnlock.status} ${JSON.stringify(otherUnlockBody)}`,
+);
+const otherDetail = await call("GET", `/api/caches/${oCacheId}`);
+ok(
+  "the refused log credits nobody",
+  otherDetail.status === 200 && (otherDetail.data?.cache?.logs ?? []).length === 0,
+  JSON.stringify((otherDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)),
+);
 const playerCode = await call(
   "POST",
   "/api/caches",

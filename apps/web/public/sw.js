@@ -158,10 +158,12 @@ async function flushQueue() {
   const refused = [];
   const now = Date.now();
   let offline = false;
+  // a session that is not the owner's: the rest wait for their player, and the sync itself succeeded
+  let held = false;
   for (const item of queue) {
     const elsewhere = instance && item.instance && item.instance !== instance;
     const others = String(item.owner || "").toUpperCase() !== owner;
-    if (offline || elsewhere || others || (item.nextAt != null && item.nextAt > now)) {
+    if (offline || held || elsewhere || others || (item.nextAt != null && item.nextAt > now)) {
       keep.push(item);
       continue;
     }
@@ -188,11 +190,17 @@ async function flushQueue() {
       continue;
     }
     if (res.ok) continue;
+    const body = res.status < 500 ? await res.json().catch(() => ({})) : {};
+    // the session is not the owner's (it ended, or another player signed in): kept for its own player
+    if (body.reason === "other_call") {
+      held = true;
+      keep.push(item);
+      continue;
+    }
     if (res.status >= 500 || res.status === 408 || res.status === 429) {
       const attempts = (item.attempts ?? 0) + 1;
       keep.push({ ...item, attempts, nextAt: now + backoffMs(attempts) });
     } else {
-      const body = await res.json().catch(() => ({}));
       const { nextAt: _n, attempts: _a, ...rest } = item;
       refused.push({ ...rest, reason: body.error || `${res.status}`, status: res.status, refusedAt: now });
     }

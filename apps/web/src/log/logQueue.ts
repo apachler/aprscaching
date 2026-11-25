@@ -5,6 +5,8 @@
  *
  * - no connection: it stays queued and goes with the next flush;
  * - a server or rate-limit error (5xx, 408, 429): it stays queued and is retried with backoff;
+ * - sent under another player's session (the instance answers that the session is not the entry's call): it
+ *   stays queued for its own player, and the rest wait with it;
  * - a refusal (any other 4xx — a key no longer registered, an archived cache): it moves to the
  *   needs-attention list with the server's reason, where the user retries it, edits its comment
  *   (the signature does not cover the comment) or discards it.
@@ -60,8 +62,9 @@ export interface QueueStore {
   set(key: string, value: string): Promise<void>;
 }
 
-/** What a failed send was: the network, a server error to retry, or a refusal. */
-export type SendFailure = { kind: "offline" } | { kind: "retry" } | { kind: "refused"; status: number; reason: string };
+/** What a failed send was: the network, a server error to retry, another player's session, or a refusal. */
+export type SendFailure =
+  { kind: "offline" } | { kind: "retry" } | { kind: "held" } | { kind: "refused"; status: number; reason: string };
 
 const QUEUE_KEY = "acs.logqueue";
 const ATTENTION_KEY = "acs.logqueue.attention";
@@ -127,10 +130,11 @@ export async function flush<B extends QueuedBody>(
   const keep: QueuedLog<B>[] = [];
   const refused: AttentionLog<B>[] = [];
   let sent = 0;
-  let offline = false;
+  // no connection, or a session that is not the owner's: the rest wait for the next flush
+  let stop = false;
   for (const item of queue) {
     const elsewhere = instance != null && item.instance != null && item.instance !== instance;
-    if (offline || elsewhere || !sameCall(item.owner, owner) || (item.nextAt != null && item.nextAt > now)) {
+    if (stop || elsewhere || !sameCall(item.owner, owner) || (item.nextAt != null && item.nextAt > now)) {
       keep.push(item);
       continue;
     }
@@ -146,7 +150,7 @@ export async function flush<B extends QueuedBody>(
         const attempts = (item.attempts ?? 0) + 1;
         keep.push({ ...item, attempts, nextAt: now + backoffMs(attempts) });
       } else {
-        offline = true;
+        stop = true;
         keep.push(item);
       }
     }

@@ -312,6 +312,21 @@ describe("Background Sync of the offline log queue", () => {
     expect(posted).toHaveLength(1);
   });
 
+  it("keeps an entry the instance refuses as another player's: the stored owner lagged the session", async () => {
+    const st = await seed([item(1, "here.example"), item(2, "here.example")]);
+    const posted: string[] = [];
+    const w = load({
+      net: (url) => {
+        posted.push(url);
+        return Response.json({ error: "signed in as OE8BBB, not OE8FND", reason: "other_call" }, { status: 403 });
+      },
+    });
+    await w.fire("sync", { tag: "acs-logqueue" });
+    expect(posted).toEqual([`${API}/api/caches/1/logs`]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toMatchObject([{ cacheId: 1 }, { cacheId: 2 }]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue.attention"))!)).toEqual([]);
+  });
+
   it("ignores other sync tags", async () => {
     await seed([item(6, "here.example")]);
     const w = load();

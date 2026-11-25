@@ -208,6 +208,25 @@ function ingestOk(req: Request, env: Env): boolean {
  * web request with neither is rejected (null → 401). This is what gates web logging behind sign-in
  * without breaking the over-APRS logging path.
  */
+/**
+ * A request under a session that names a call of another base call is refused, never credited to the session: a
+ * log or unlock made by one player and sent later (the web app's offline queue) carries whichever session cookie
+ * is current then, and on a shared device that is the next player's. `reason: "other_call"` tells the client to
+ * keep it for its own player.
+ */
+export function otherCallRefusal(sessionCall: string | null | undefined, named: string | null | undefined) {
+  if (!sessionCall || !named?.trim()) return null;
+  const call = named.trim().toUpperCase();
+  if (baseCall(call) === baseCall(sessionCall.toUpperCase())) return null;
+  return json(
+    {
+      error: `signed in as ${sessionCall.toUpperCase()}, not ${call} — sign in as ${call} to send it`,
+      reason: "other_call",
+    },
+    { status: 403 },
+  );
+}
+
 export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
   const s = (await sessionIdentity(req, env))?.callsign;
   // the withdrawn marker names an erased identity, never someone acting now
@@ -797,9 +816,10 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   const sessionCall = (await sessionIdentity(req, env))?.callsign ?? null;
   let loggerCall: string;
   if (sessionCall) {
-    loggerCall = sessionCall.toUpperCase();
-    const claimed = parsed.data.loggerCall?.toUpperCase();
-    if (claimed && baseCall(claimed) === baseCall(loggerCall)) loggerCall = claimed; // operate as an SSID of your own call
+    const other = otherCallRefusal(sessionCall, parsed.data.loggerCall);
+    if (other) return other;
+    // operate as an SSID of your own call
+    loggerCall = parsed.data.loggerCall?.toUpperCase() || sessionCall.toUpperCase();
   } else if (ingestOk(req, env) && parsed.data.loggerCall) {
     loggerCall = parsed.data.loggerCall.toUpperCase();
   } else {
