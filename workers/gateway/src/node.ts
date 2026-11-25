@@ -36,8 +36,14 @@ export async function recordMheard(env: Env, calls: { src: string; port: string 
   );
 }
 
-/** GET /api/node/nodes (public read — operational NODES table) · POST (add a node route; operator or the
- *  operator-local ingest mirroring learned routes). */
+type NodeRoute = { dest?: string; alias?: string; neighbor?: string; quality?: number; port?: string };
+
+/** The most routes one POST may carry: the ingest's whole NODES table. */
+const MAX_NODE_ROUTES = 500;
+
+/** GET /api/node/nodes (public read — operational NODES table) · POST (add node routes; operator or the
+ *  operator-local ingest mirroring learned routes). A POST carries one route, or `{ nodes: [...] }` with up to
+ *  500, which the ingest uses to mirror every route that changed in one request. */
 export async function handleNodeNodes(req: Request, env: Env): Promise<Response> {
   if (req.method === "GET") {
     const rows = (
@@ -49,30 +55,36 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
   }
   const gate = await requireIngestOrOperator(req, env);
   if (gate) return gate; // the ingest box mirroring learned routes, or the operator
-  const b = (await req.json().catch(() => ({}))) as {
-    dest?: string;
-    alias?: string;
-    neighbor?: string;
-    quality?: number;
-    port?: string;
-  };
-  if (!b.dest || !b.alias || !b.neighbor) return json({ error: "dest + alias + neighbor required" }, { status: 400 });
+  const b = (await req.json().catch(() => ({}))) as NodeRoute & { nodes?: unknown };
+  const batch = Array.isArray(b.nodes);
+  const routes = (batch ? b.nodes : [b]) as NodeRoute[];
+  if (routes.length > MAX_NODE_ROUTES)
+    return json({ error: `at most ${MAX_NODE_ROUTES} routes per request` }, { status: 413 });
+  if (routes.some((r) => !r || typeof r !== "object" || !r.dest || !r.alias || !r.neighbor))
+    return json({ error: "dest + alias + neighbor required" }, { status: 400 });
   // a route to a station excluded on its licensee's objection (exclusions.ts) is not kept
-  if (isExcludedCall(await excludedCalls(env), b.dest)) return json({ ok: true, excluded: true });
-  await env.DB.prepare(
-    `INSERT INTO netrom_nodes (dest, alias, neighbor, quality, port, heard_at) VALUES (?,?,?,?,?,?)
+  const excluded = await excludedCalls(env);
+  const kept = routes.filter((r) => !isExcludedCall(excluded, r.dest!));
+  const ts = nowS();
+  if (kept.length)
+    await env.DB.batch(
+      kept.map((r) =>
+        env.DB.prepare(
+          `INSERT INTO netrom_nodes (dest, alias, neighbor, quality, port, heard_at) VALUES (?,?,?,?,?,?)
      ON CONFLICT(dest) DO UPDATE SET alias=excluded.alias, neighbor=excluded.neighbor, quality=excluded.quality, port=excluded.port, heard_at=excluded.heard_at`,
-  )
-    .bind(
-      b.dest.toUpperCase(),
-      b.alias.toUpperCase(),
-      b.neighbor.toUpperCase(),
-      b.quality ?? 100,
-      b.port ?? null,
-      nowS(),
-    )
-    .run();
-  return json({ ok: true, dest: b.dest.toUpperCase() }, { status: 201 });
+        ).bind(
+          String(r.dest).toUpperCase(),
+          String(r.alias).toUpperCase(),
+          String(r.neighbor).toUpperCase(),
+          r.quality ?? 100,
+          r.port ?? null,
+          ts,
+        ),
+      ),
+    );
+  if (batch) return json({ ok: true, stored: kept.length }, { status: 201 });
+  if (!kept.length) return json({ ok: true, excluded: true });
+  return json({ ok: true, dest: b.dest!.toUpperCase() }, { status: 201 });
 }
 
 /** GET /api/node/mheard — recently heard stations, newest first. */

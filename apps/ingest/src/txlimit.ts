@@ -57,7 +57,7 @@ export class TokenBucket {
   }
 }
 
-export type TxPath = "box" | "beacon" | "meshcom" | "igate" | "bbs" | "hub";
+export type TxPath = "box" | "beacon" | "meshcom" | "igate" | "bbs" | "hub" | "netrom";
 
 interface TxLimitSpec {
   burstEnv: string;
@@ -69,7 +69,8 @@ interface TxLimitSpec {
   minRefillSec: number;
 }
 
-/** Defaults and ceilings per path. Frames are capped at ten per minute; FBB sessions at one a minute. */
+/** Defaults and ceilings per path. Frames are capped at ten per minute, NET/ROM control frames at sixty; FBB
+ *  sessions at one a minute. */
 export const TX_LIMITS: Record<TxPath, TxLimitSpec> = {
   box: {
     burstEnv: "BOX_TX_BURST",
@@ -118,6 +119,16 @@ export const TX_LIMITS: Record<TxPath, TxLimitSpec> = {
     refillSec: 10,
     maxBurst: 10,
     minRefillSec: 6,
+  },
+  // the NET/ROM node's answers to what it hears (INP3 RIFs, L3RTT probes and echoes, transit forwards): a
+  // probe and an advertisement per neighbour each round, so a full neighbour set needs more than ten a minute
+  netrom: {
+    burstEnv: "NETROM_TX_BURST",
+    refillEnv: "NETROM_TX_REFILL_SEC",
+    burst: 20,
+    refillSec: 3,
+    maxBurst: 40,
+    minRefillSec: 1,
   },
 };
 

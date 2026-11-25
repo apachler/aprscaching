@@ -11,6 +11,7 @@ import { SessionServer, type LineApp, type Service } from "@aprscaching/packet";
 import { parseAddr } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { numEnv } from "./config.js";
+import { TokenBucket, txLimitFromEnv } from "./txlimit.js";
 
 export interface ConnectedStackOpts {
   link: FrameLink;
@@ -61,6 +62,7 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
       alias: env.NETROM_ALIAS,
       ...netromSettings(env),
       inp3: env.NETROM_INP3 === "1",
+      txBucket: new TokenBucket(txLimitFromEnv("netrom")),
       gatewayBase: gwBase,
       secret,
     });

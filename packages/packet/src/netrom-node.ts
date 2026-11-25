@@ -34,6 +34,9 @@ const DEFAULT_MIN_OBS_BROADCAST = 5; // only re-advertise routes at/above this o
 const DEFAULT_MAX_ROUTES = 500; // table cap so a forged-broadcast flood can't grow it unbounded
 const DEFAULT_MAX_LEARNS_PER_WINDOW = 200; // per-neighbour learn budget (routes/window)
 const DEFAULT_LEARN_WINDOW_MS = 60_000;
+/** Neighbours whose learn window is tracked at once. A sender rotating its call gets a fresh entry each time,
+ *  so expired windows are pruned and, past the cap, the oldest entry goes. */
+const MAX_LEARN_BUDGETS = 256;
 
 export interface NetromNodeConfig {
   pathQuality?: number;
@@ -70,12 +73,25 @@ export class NetromNode {
     const k = this.key(neighbor);
     const b = this.learnBudget.get(k);
     if (!b || now >= b.resetAt) {
+      this.learnBudget.delete(k);
+      if (this.learnBudget.size >= MAX_LEARN_BUDGETS) this.pruneBudgets(now);
       this.learnBudget.set(k, { count: 1, resetAt: now + win });
       return true;
     }
     if (b.count >= max) return false;
     b.count++;
     return true;
+  }
+
+  private pruneBudgets(now: number): void {
+    for (const [k, b] of this.learnBudget) if (now >= b.resetAt) this.learnBudget.delete(k);
+    // entries are kept in the order their windows opened, so the first is the oldest
+    while (this.learnBudget.size >= MAX_LEARN_BUDGETS) this.learnBudget.delete(this.learnBudget.keys().next().value!);
+  }
+
+  /** Neighbours with a learn window tracked (bounded by the cap). */
+  get budgetCount(): number {
+    return this.learnBudget.size;
   }
 
   /** Learn/refresh a route, keeping the higher-quality one and refreshing obsolescence. */

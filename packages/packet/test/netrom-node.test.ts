@@ -101,3 +101,12 @@ describe("NET/ROM node routing engine", () => {
     expect(node.best("OE6D")).toBeNull();
   });
 });
+
+describe("NetromNode learn budgets", () => {
+  it("tracks a bounded number of neighbours however many calls a sender rotates through", () => {
+    const n = new NetromNode(ME);
+    for (let i = 0; i < 3000; i++)
+      n.consume(bcastFrom("X", []), A("Q" + i.toString(36).toUpperCase().padStart(5, "0")));
+    expect(n.budgetCount).toBeLessThanOrEqual(256);
+  });
+});

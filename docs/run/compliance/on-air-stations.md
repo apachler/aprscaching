@@ -43,13 +43,15 @@ turns an unattended station into a channel hog.
 | TX-IGate (APRS-IS to RF) | message | `IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
 | FBB forwarding | session | `BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC` | 4, then 1 per 300 s | 10, then 1 per 60 s |
 | [KISS server](../radios/kiss-server.md) clients, all together | frame | `KISS_SERVER_TX_BURST`, `KISS_SERVER_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
+| [NET/ROM node](../radios/packet-node.md) answers (INP3 routing and probes, transit forwards) | frame | `NETROM_TX_BURST`, `NETROM_TX_REFILL_SEC` | 20, then 1 per 3 s | 40, then 1 per 1 s |
 
 A refused transmit is always logged:
 
 - a refused remote-box command fails with the wait time;
 - a refused repeat of a message or an automatic beacon waits for the next try, a few seconds later;
 - a refused IGate message is not gated, and the sender's own retry carries it once a token is back;
-- a refused FBB session waits for the next scheduler poll.
+- a refused FBB session waits for the next scheduler poll;
+- a refused NET/ROM frame is dropped, and the node logs how many it dropped at most once a minute.
 
 Forwarding is paced per session, never per frame: throttling frames inside an open AX.25 link would stall it into
 retries.
