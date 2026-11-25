@@ -38,6 +38,7 @@ import {
   handlePasskeyLoginFinish,
 } from "./auth.js";
 import {
+  crossSiteSignInPage,
   handleEmailChange,
   handleEmailResend,
   handleEmailStart,
@@ -271,7 +272,12 @@ async function handleRequest(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
   applyDerivedDefaults(env);
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   if (crossOriginWrite(req, env))
-    return withCors(json({ error: "cross-origin write refused" }, { status: 403 }), req, env);
+    return withCors(
+      (new URL(req.url).pathname.startsWith("/auth/") ? crossSiteSignInPage(req, env) : null) ??
+        json({ error: "cross-origin write refused" }, { status: 403 }),
+      req,
+      env,
+    );
   await loadSiteSettings(env);
   const res = await route(req, env, ctx);
   const path = new URL(req.url).pathname;

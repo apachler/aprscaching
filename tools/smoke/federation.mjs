@@ -460,8 +460,17 @@ ok(
 );
 
 // ---- signed tombstones (GDPR delete propagation) ----
-const accMsg = (action, cs, at) =>
-  stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: pubInstance, at });
+// an account route signs the digest of its other parameters (`digest`); an import's proof signs none
+const accMsg = (action, cs, at, digest) =>
+  stableStringify({
+    v: 1,
+    action,
+    callsign: cs.toUpperCase(),
+    instance: pubInstance,
+    at,
+    ...(digest === undefined ? {} : { digest }),
+  });
+const emptyDigest = createHash("sha256").update("{}").digest("hex");
 const tkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const tpub = b64u(await crypto.subtle.exportKey("raw", tkp.publicKey));
 await call(
@@ -512,7 +521,11 @@ ok(
 // erase TOMB1's account on the publisher (signed) → emits PII-free find tombstone(s), archives the cache
 const dAt = now();
 const dSig = b64u(
-  await crypto.subtle.sign("Ed25519", tkp.privateKey, new TextEncoder().encode(accMsg("delete", "TOMB1", dAt))),
+  await crypto.subtle.sign(
+    "Ed25519",
+    tkp.privateKey,
+    new TextEncoder().encode(accMsg("delete", "TOMB1", dAt, emptyDigest)),
+  ),
 );
 const tdel = await call(PUB, "POST", "/api/account/TOMB1/delete", { key: tpub, sig: dSig, at: dAt });
 ok(

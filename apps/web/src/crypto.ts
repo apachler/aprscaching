@@ -5,6 +5,7 @@
 // and the find is simply logged unsigned.
 import {
   authorshipMessage,
+  accountActionDigest,
   accountActionMessage,
   ingestMessage,
   sha256Hex,
@@ -141,19 +142,22 @@ export async function signIngest(callsign: string, packets: unknown[]): Promise<
   }
 }
 
-/** Sign a sensitive account action (export/delete/migrate) with the device key. */
+/** Sign a sensitive account action (export/delete/bundle/move) with the device key, bound to the request's
+ *  `params` (the body sent beside the signature). */
 export async function signAccountAction(
   action: string,
   callsign: string,
   instance: string,
+  params: Record<string, unknown> = {},
 ): Promise<{ key: string; sig: string; at: number } | undefined> {
   try {
     const { publicKey, priv } = await deviceKey();
     const at = Math.floor(Date.now() / 1000);
+    const digest = await accountActionDigest(params);
     const sig = await crypto.subtle.sign(
       "Ed25519",
       priv,
-      new TextEncoder().encode(accountActionMessage({ action, callsign, instance, at })),
+      new TextEncoder().encode(accountActionMessage({ action, callsign, instance, at, digest })),
     );
     return { key: publicKey, sig: toB64u(sig), at };
   } catch {
