@@ -84,13 +84,9 @@ const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
       .all()
   ).results;
 
-/** The account behind a callsign — its active-call anchor, else the holder of its base call — its
- *  addresses (the confirmed one, and one still waiting for confirmation) and every base call that account
- *  holds (the callsign's own base first). */
-async function accountScope(
-  env: Env,
-  cs: string,
-): Promise<{ accountId: string | null; email: string | null; emails: string[]; calls: string[] }> {
+/** The account behind a callsign — its active-call anchor, else the holder of its base call — and every
+ *  base call that account holds (the callsign's own base first). */
+async function accountScope(env: Env, cs: string): Promise<{ accountId: string | null; calls: string[] }> {
   const base = baseCall(cs);
   const anchor = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
     .bind(cs)
@@ -103,13 +99,6 @@ async function accountScope(
         .first<{ account_id: string }>()
     )?.account_id ??
     null;
-  const addr = accountId
-    ? await env.DB.prepare("SELECT email, pending_email FROM accounts WHERE account_id=?")
-        .bind(accountId)
-        .first<{ email: string | null; pending_email: string | null }>()
-    : null;
-  const email = addr?.email ?? null;
-  const emails = [...new Set([email, addr?.pending_email ?? null].filter((e): e is string => !!e))];
   const held = accountId
     ? (
         await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id=?")
@@ -117,7 +106,7 @@ async function accountScope(
           .all<{ callsign: string }>()
       ).results.map((r) => r.callsign.toUpperCase())
     : [];
-  return { accountId, email, emails, calls: [...new Set([base, ...held])] };
+  return { accountId, calls: [...new Set([base, ...held])] };
 }
 
 /**
@@ -298,7 +287,7 @@ async function heldCallsExport(env: Env, accountId: string): Promise<Record<stri
  *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
 async function accountExport(
   env: Env,
-  { accountId, emails, calls }: Awaited<ReturnType<typeof accountScope>>,
+  { accountId, calls }: Awaited<ReturnType<typeof accountScope>>,
 ): Promise<Record<string, unknown>> {
   const acct = accountId ?? "";
   const by = (col: string) => personalCall(env, col, calls);
@@ -331,13 +320,12 @@ async function accountExport(
       acct,
       acct,
     ),
-    emailTokens: emails.length
-      ? await rows(
-          env,
-          `SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE email IN (${emails.map(() => "?").join(",")})`,
-          ...emails,
-        )
-      : [],
+    // the links the account asked for or opened; another account may be waiting on the same address
+    emailTokens: await rows(
+      env,
+      "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE account_id=?",
+      acct,
+    ),
     watchCalls: await rows(env, "SELECT callsign, added_at FROM watch_calls WHERE account_id=?", acct),
     verificationChallenges: await rows(
       env,
@@ -470,7 +458,7 @@ export async function handleAccountDelete(req: Request, env: Env, named: string)
     mediaKeys.push(...erased.mediaKeys);
   }
   const suspended = scope.accountId ? await suspensionOf(env, scope.accountId) : null;
-  const account = eraseAccount(env, instance, scope.accountId, scope.emails, calls);
+  const account = eraseAccount(env, instance, scope.accountId, calls);
   for (const t of account.tombstones) tombstoneStmts.add(t);
   stmts.push(...account.tombstones, ...account.stmts);
   // the person's boxes go with every row of theirs (a box enrolled for another ham stays that ham's), and no box
@@ -591,6 +579,12 @@ async function eraseCall(
     env.DB.prepare(
       `UPDATE cache_stages SET media_key=NULL, media_bytes=NULL WHERE cache_id IN (SELECT id FROM caches WHERE ${mine("owner_call")})`,
     ).bind(...b),
+    // A living cache follows one of the person's stations, so its station call names them: it goes, and the
+    // bumped updated_at re-serves the cache to peers without it.
+    env.DB.prepare(`UPDATE caches SET station_call=NULL, updated_at=? WHERE ${mine("upper(station_call)")}`).bind(
+      nowS(),
+      ...b,
+    ),
     // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
     env.DB.prepare(`UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE ${mine("owner_call")}`).bind(
@@ -679,7 +673,6 @@ function eraseAccount(
   env: Env,
   instance: string,
   accountId: string | null,
-  emails: string[],
   calls: string[],
 ): { tombstones: SqlStatement[]; stmts: SqlStatement[] } {
   const service = serviceCall(env);
@@ -757,9 +750,10 @@ function eraseAccount(
       ).bind(service, `de ${c}:%`, `de ${c}-%`),
     ]),
   ];
-  for (const e of emails) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(e));
   if (accountId)
     stmts.push(
+      // the account's links, by the account and never by address: another account may wait on the same one
+      env.DB.prepare("DELETE FROM email_tokens WHERE account_id=?").bind(accountId),
       // the challenges of the person's claims go with the claims, below
       env.DB.prepare(
         "DELETE FROM callsign_challenges WHERE account_id IN (SELECT 'claim:' || id FROM callsign_claims WHERE account_id=?)",
