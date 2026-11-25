@@ -54,7 +54,7 @@ export type {
   Spot,
 };
 import { photoForUpload, thumbnailOf } from "./media/resize.js";
-import { openSealedStage, type StagePayload, type ToolRegistryEntry } from "@aprscaching/shared";
+import { MEDIA_LIMITS, mediaMB, openSealedStage, type StagePayload, type ToolRegistryEntry } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, packSearch, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
@@ -269,7 +269,6 @@ export function getCorroborators(
 export interface ProfileEdit {
   displayName?: string;
   homeGrid?: string;
-  avatarUrl?: string;
   bio?: string;
   links?: { label: string; url: string }[];
   publicContact?: string;
@@ -277,6 +276,27 @@ export interface ProfileEdit {
 }
 export function updateProfile(p: ProfileEdit): Promise<{ ok: boolean }> {
   return call(`/auth/profile`, { method: "POST", body: JSON.stringify(p) });
+}
+/**
+ * Upload a profile picture: the browser re-encodes it as a small JPEG, which also drops what the camera wrote, and
+ * the instance stores and serves it. The new picture's address, served from this instance.
+ */
+export async function uploadAvatar(file: File): Promise<string> {
+  const pic = (await thumbnailOf(file)) ?? file;
+  if (!/^image\/(jpeg|png|webp)$/.test(pic.type)) throw new Error("A picture is a photo (JPEG, PNG or WebP).");
+  if (pic.size > MEDIA_LIMITS.avatar) throw new Error(`A picture is at most ${mediaMB(MEDIA_LIMITS.avatar)}.`);
+  const res = await reach(`${API_BASE}/api/my/avatar`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "content-type": pic.type },
+    body: pic,
+  });
+  const body = (await res.json().catch(() => ({}))) as { avatarUrl?: string; error?: string };
+  if (!res.ok || !body.avatarUrl) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+  return body.avatarUrl;
+}
+export function removeAvatar(): Promise<{ ok: boolean }> {
+  return call(`/api/my/avatar`, { method: "DELETE" });
 }
 /** The signed-in account's own profile: every field, also while hidden, and the show/hide switch. */
 export function getMyProfile(): Promise<{

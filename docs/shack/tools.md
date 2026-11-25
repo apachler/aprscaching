@@ -150,16 +150,20 @@ through the packet terminal's TNC, under that terminal's consent.
 | Label | Meaning | What to do |
 |---|---|---|
 | **Signed · registry-listed author key** | The registry lists this tool at this address, and the author key it lists signed the manifest. | Install if the permissions fit the job. |
-| **Signed · matches the key you trusted before** | You accepted this author's key before, from another tool or an earlier install. | Install if the permissions fit the job. |
-| **Signed · unknown author key (trust-on-first-use)** | Signed, but nobody vouches for the key. Approving remembers it for this author. | Install only if you trust where the address came from. |
+| **Signed · the key you trusted at this address before** | You accepted this key for the manifest at this address before. | Install if the permissions fit the job. |
+| **Signed · unknown author key (trust-on-first-use)** | Signed, but nobody vouches for the key. The prompt names the tool by its key's fingerprint, not by the author its manifest claims. Approving remembers the key for this address. | Install only if you trust where the address came from. |
 | **Unsigned — refused** | No signature. | Blocked. Ask the author for a signed release. |
-| **Author key CHANGED since you last trusted it — refused** | The author's key is not the one you accepted, or not the one the registry lists. | Blocked. Ask the author, through a channel you trust, whether they changed their key. |
+| **Signing key CHANGED since you last trusted it — refused** | The manifest at this address is signed by another key than the one you accepted, or than the one the registry lists. | Blocked. Ask the author, through a channel you trust, whether they changed their key. |
 | **Signature INVALID — refused** | The manifest was changed after it was signed. | Blocked. Do not look for another copy; tell the author. |
 
 A signature covers the manifest, and through its `entrySha256` the exact bytes of the script. A label vouches for
 who signed the tool, not for what the script does; the permissions are what limit it.
 
-After a key-change warning, the app keeps refusing that author's new key. If the author confirms the change,
+A manifest names its author itself, so the app shows that callsign only for a tool a registry lists; any other tool
+shows the fingerprint of its key. Remembered keys belong to the account that approved them, and leave with its
+installed tools when you sign out or another account signs in on this browser.
+
+After a key-change warning, the app keeps refusing the new key at that address. If the author confirms the change,
 remove the old key: clear this site's data in your browser's settings. That also clears your pins, settings
 and offline areas on this device.
 

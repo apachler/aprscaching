@@ -16,7 +16,8 @@
  * name and the scripts those name through this instance, so a player's address never reaches the registry's
  * host, and the last good copy keeps serving while the internet is down. The gateway fetches without
  * credentials, over https on every hop and never to a private or LAN address whatever the federation settings
- * allow (fetchguard.ts toolFetch), keeps each file for an hour, caps each file and each registry's total, and
+ * allow (fetchguard.ts toolFetch), keeps each file for an hour, caps each file, each registry's total, each
+ * player's total over all their registries and every player's total on the instance, and
  * fetches only files the registry itself leads to. It decides no trust: the browser verifies every signature
  * against the pinned key.
  *
@@ -61,6 +62,13 @@ const RETRY_AFTER_FAIL_S = 300;
 export const REGISTRY_FILE_CAP = { registry: 256 * 1024, manifest: 64 * 1024, script: 512 * 1024 } as const;
 /** The most bytes one registry's copies may take together. */
 const REGISTRY_TOTAL_CAP = 4 * 1024 * 1024;
+/**
+ * The most bytes the copies of one player's registries may take together, however many registries the player
+ * adds: the instance's disk grows with what a player stores, not with how many registries they split it over.
+ */
+export const PLAYER_COPIES_CAP = 4 * 1024 * 1024;
+/** The most bytes the copies of every player's registries may take on the instance together. */
+export const PLAYER_COPIES_INSTANCE_CAP = 256 * 1024 * 1024;
 /** The most entries of one registry whose files are fetched. */
 const REGISTRY_ENTRIES_MAX = 200;
 /** Upstream fetches one player's registries may cause in an hour. */
@@ -511,6 +519,7 @@ async function fetchUpstream(
   reg: ToolRegistryEntry,
   url: string,
   kind: FileKind,
+  accountId: string | null,
 ): Promise<{ text: string } | { error: string }> {
   let res: Response;
   try {
@@ -533,6 +542,21 @@ async function fetchUpstream(
     .first<{ n: number }>();
   if ((others?.n ?? 0) + bytes.byteLength > REGISTRY_TOTAL_CAP)
     return { error: `the registry's files pass ${REGISTRY_TOTAL_CAP / 1024 / 1024} MB together` };
+  if (accountId) {
+    // every player's copies, and this player's, without the copy this fetch replaces
+    const held = await env.DB.prepare(
+      `SELECT COALESCE(SUM(f.bytes), 0) AS everyone,
+              COALESCE(SUM(CASE WHEN r.account_id = ? THEN f.bytes ELSE 0 END), 0) AS mine
+         FROM tool_registry_files f JOIN tool_registries r ON r.id = f.registry_id
+        WHERE r.account_id IS NOT NULL AND NOT (f.registry_id = ? AND f.url = ?)`,
+    )
+      .bind(accountId, reg.id, url)
+      .first<{ everyone: number; mine: number }>();
+    if ((held?.mine ?? 0) + bytes.byteLength > PLAYER_COPIES_CAP)
+      return { error: `your registries' files pass ${PLAYER_COPIES_CAP / 1024 / 1024} MB together` };
+    if ((held?.everyone ?? 0) + bytes.byteLength > PLAYER_COPIES_INSTANCE_CAP)
+      return { error: "this instance holds as many players' registry files as it keeps" };
+  }
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -583,7 +607,7 @@ async function handleFile(req: Request, env: Env, id: string): Promise<Response>
   )
     return hasCopy ? serveCopy(row, kind, reg, true) : unavailable("too many registry fetches; try again later", 429);
 
-  const got = await fetchUpstream(env, reg, target, kind);
+  const got = await fetchUpstream(env, reg, target, kind, accountId);
   if ("error" in got) {
     await env.DB.prepare(
       `INSERT INTO tool_registry_files (registry_id, url, bytes, tried_at, error) VALUES (?,?,0,?,?)
@@ -651,7 +675,7 @@ async function handlePreview(req: Request, env: Env): Promise<Response> {
     url: where.url,
     enabled: true,
   };
-  const got = await fetchUpstream(env, probe, where.url, "registry");
+  const got = await fetchUpstream(env, probe, where.url, "registry", null);
   if ("error" in got) return unavailable(`couldn't fetch the registry: ${got.error}`);
   return new Response(got.text, {
     headers: {

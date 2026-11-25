@@ -108,3 +108,14 @@ describe("another tab's change to the stored installs", () => {
     expect(storageAction("acs.pins", "[]")).toBeNull();
   });
 });
+
+describe("the tool key pins and the identity that made them", () => {
+  it("leave with the installs when another identity claims the browser", async () => {
+    const { pinKey, pinnedKey } = await import("../src/tools/toolKeys.js");
+    claimTools("OE8APR");
+    pinKey("https://tools.example/a/tool.json", manifest.pubkey!);
+    expect(pinnedKey("https://tools.example/a/tool.json")).toBe(manifest.pubkey);
+    claimTools("DL1ABC");
+    expect(pinnedKey("https://tools.example/a/tool.json")).toBeUndefined();
+  });
+});

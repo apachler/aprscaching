@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { badgeUrl, getProfile, getLicence, exportPath, type Licence, type Profile } from "../api.js";
+import { badgeUrl, getProfile, getLicence, exportPath, mediaUrl, type Licence, type Profile } from "../api.js";
 import { ExportButton } from "../exports/ExportButton.js";
 import { useFmt } from "../format.js";
 import {
@@ -75,7 +75,9 @@ export function ProfilePanel(props: {
         <>
           {profile?.profile && (
             <div className="profile-card">
-              {profile.profile.avatarUrl && <img className="profile-avatar" src={profile.profile.avatarUrl} alt="" />}
+              {profile.profile.avatarUrl && (
+                <img className="profile-avatar" src={mediaUrl(profile.profile.avatarUrl)} alt="" />
+              )}
               <div className="profile-card-body">
                 {profile.profile.displayName && <div className="profile-name">{profile.profile.displayName}</div>}
                 {profile.profile.homeGrid && <span className="muted mono">{profile.profile.homeGrid}</span>}

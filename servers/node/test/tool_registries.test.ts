@@ -12,6 +12,8 @@ import { createFetchGuard } from "@aprscaching/gateway/fetchguard";
 import { rateLimited, rateLimitedDurable } from "@aprscaching/gateway/corroborate_privacy";
 import {
   FILE_REQUESTS_PER_MIN,
+  PLAYER_COPIES_CAP,
+  PLAYER_COPIES_INSTANCE_CAP,
   PLAYER_FETCHES_PER_HOUR,
   REGISTRY_COPY_TTL_S,
   REGISTRY_FILE_CAP,
@@ -377,6 +379,53 @@ describe("the carrier", () => {
     expect((await file(w.env, id, manifest, w.player.cookie)).status).toBe(429);
     expect(net.hits.length).toBe(before);
     // the copy it already holds still serves
+    expect((await file(w.env, id, REG, w.player.cookie)).status).toBe(200);
+  });
+
+  it("caps a player's copies over all their registries, and every player's copies on the instance", async () => {
+    const w = await world();
+    upstream();
+    const id = (await call(w.env, "POST", "/api/my/tool-registries", { spec: REG, authority: KEY_A }, as(w.player)))
+      .data.registry.id as string;
+    const acct = (await w.env.DB.prepare("SELECT account_id FROM accounts WHERE callsign='DL1ABC'").first<{
+      account_id: string;
+    }>())!.account_id;
+    // copies the player already holds under another registry of theirs, each well under the per-registry cap
+    const hold = async (owner: string | null, regId: string, bytes: number) => {
+      await w.env.DB.prepare(
+        `INSERT INTO tool_registries (id, account_id, spec, url, authority, label, created_at, confirmed_at, added_by)
+         VALUES (?, ?, 'x', 'https://x.example/registry.json', ?, 'x', 0, 0, 'X')`,
+      )
+        .bind(regId, owner, KEY_A)
+        .run();
+      await w.env.DB.prepare(
+        "INSERT INTO tool_registry_files (registry_id, url, body, bytes, fetched_at, tried_at) VALUES (?, 'https://x.example/a', '', ?, 0, 0)",
+      )
+        .bind(regId, bytes)
+        .run();
+    };
+    await hold(acct, "other-of-mine", PLAYER_COPIES_CAP - 10);
+    const r = await file(w.env, id, REG, w.player.cookie);
+    expect(r.status).toBe(502);
+    expect(JSON.parse(r.text).error).toMatch(/your registries' files pass 4 MB together/);
+
+    // freed, the player's own budget fits, but every player's copies together are at the instance's ceiling
+    // a failed fetch waits before the next attempt: forget it, so the next request fetches again
+    const retry = () => w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id=?").bind(id).run();
+    await retry();
+    await w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id='other-of-mine'").run();
+    const other = await emailSignup(w.env, "q@example.test", "DL2XYZ", nextIp());
+    const otherAcct = (await w.env.DB.prepare("SELECT account_id FROM accounts WHERE callsign='DL2XYZ'").first<{
+      account_id: string;
+    }>())!.account_id;
+    expect(other.status).toBe(200);
+    await hold(otherAcct, "someone-elses", PLAYER_COPIES_INSTANCE_CAP - 10);
+    const full = await file(w.env, id, REG, w.player.cookie);
+    expect(full.status).toBe(502);
+    expect(JSON.parse(full.text).error).toMatch(/holds as many players' registry files as it keeps/);
+
+    await retry();
+    await w.env.DB.prepare("DELETE FROM tool_registry_files WHERE registry_id='someone-elses'").run();
     expect((await file(w.env, id, REG, w.player.cookie)).status).toBe(200);
   });
 

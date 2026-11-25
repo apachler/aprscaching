@@ -36,6 +36,26 @@ describe("the tool frame's CSP", () => {
     expect(csp).toContain("connect-src 'none'");
     expect(csp).toContain("worker-src blob:");
   });
+  // The CSP is the only network boundary (the worker's globals are the browser's own), so no directive of a
+  // no-network tool's frame may name anything a request could reach: no scheme, host, wildcard or 'self'.
+  it("admits no network source in any directive for a tool without the network grant", () => {
+    const local = new Set(["'none'", "'unsafe-inline'", "'unsafe-eval'", "blob:"]);
+    const csp = frameCsp(connectSources(["command", "monitor"], ["https://a.example", "wss://b.example"], []));
+    const directives = csp.split(";").map((d) => d.trim().split(/\s+/));
+    expect(directives.map((d) => d[0])).toEqual(expect.arrayContaining(["default-src", "script-src", "connect-src"]));
+    for (const [name, ...sources] of directives) {
+      for (const s of sources) expect(local.has(s), `${name} ${s}`).toBe(true);
+    }
+  });
+  it("adds no network source beyond connect-src for a tool with the network grant", () => {
+    const csp = frameCsp(connectSources(["network"], ["https://a.example"], []));
+    for (const d of csp.split(";").map((x) => x.trim())) {
+      if (!d.startsWith("connect-src")) expect(d, d).not.toMatch(/https?:|wss?:|\*|'self'|data:/);
+    }
+  });
+  it("leaves the worker's network globals alone: shadowing them is no boundary", () => {
+    expect(workerSource()).not.toMatch(/self\[g\]\s*=\s*undefined|"importScripts"/);
+  });
   it("lists exactly the origins the tool may reach", () => {
     expect(frameCsp(["https://a.example", "wss://b.example"])).toContain(
       "connect-src https://a.example wss://b.example",
@@ -77,7 +97,7 @@ describe("the worker's register()", () => {
     };
     new Function("self", workerSource())(self);
     const ipc = permissions.includes("ipc");
-    self.onmessage!({ data: { type: "load", script, network: false, ipc, permissions, api: {}, features: [] } });
+    self.onmessage!({ data: { type: "load", script, ipc, permissions, api: {}, features: [] } });
     // the load's outcome, past any message the tool posted while it ran (a subscription, a log line)
     return out.findLast((m) => m.type === "loaded" || m.type === "error")!;
   }

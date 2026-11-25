@@ -16,6 +16,7 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { CACHE_POINT, moveRefusal, placePins } from "./cacheplace.js";
 import { removedCacheResponse } from "./moderation.js";
 import { unlockedStages } from "./findrules.js";
+import { AVATAR_KEY, avatarSeenBy } from "./avatar.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import {
   MEDIA_LIMITS,
@@ -294,6 +295,10 @@ const SERVED_MEDIA_KEY =
 
 export async function handleGetMedia(req: Request, env: Env, key: string): Promise<Response> {
   if (!env.MEDIA) return new Response("media not configured", { status: 501 });
+  if (AVATAR_KEY.test(key)) {
+    const seen = await avatarSeenBy(req, env, key);
+    return seen ? serveMedia(env, key, seen === "public" ? "public, max-age=86400" : "private, no-store") : NOT_FOUND();
+  }
   if (!SERVED_MEDIA_KEY.test(key)) return new Response("not found", { status: 404 });
   let cacheControl = "public, max-age=86400";
   // a removed cache's media answers its owner and the sysop only, and never from a shared cache
@@ -321,8 +326,15 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
       cacheControl = "private, no-store"; // the clip is the finder's once unlocked, never a shared cache's
     }
   }
-  const obj = await env.MEDIA.get(key);
-  if (!obj) return new Response("not found", { status: 404 });
+  return serveMedia(env, key, cacheControl);
+}
+
+const NOT_FOUND = () => new Response("not found", { status: 404 });
+
+/** One stored object, as the media route serves it. */
+async function serveMedia(env: Env, key: string, cacheControl: string): Promise<Response> {
+  const obj = await env.MEDIA!.get(key);
+  if (!obj) return NOT_FOUND();
   // Served inert whatever it holds: no sniffing, no script, no frame, and anything not a photo or a sound only
   // as a download.
   const ct = mediaType(obj.contentType);
@@ -499,7 +511,18 @@ async function mediaRefusal(
   const held = calls.length ? calls : [base];
   if ((await sum(`${ownerBase} IN (${held.map(() => "?").join(",")})`, ...held)) + delta > MEDIA_LIMITS.account)
     return `your caches hold at most ${mediaMB(MEDIA_LIMITS.account)} of media together`;
-  if ((await sum("1 = 1")) + delta > quotaBytes(env)) return "this instance's media storage is full: ask the sysop";
+  return instanceMediaRefusal(env, delta, await sum("1 = 1"));
+}
+
+/**
+ * Why `delta` more bytes of media do not fit the instance's own ceiling, or null when they do. Counts every cache's
+ * media (`cacheBytes`, when the caller summed it already) and every profile picture.
+ */
+export async function instanceMediaRefusal(env: Env, delta: number, cacheBytes?: number): Promise<string | null> {
+  const caches = cacheBytes ?? (await env.DB.prepare(mediaBytesSql("1 = 1")).first<{ n: number }>())?.n ?? 0;
+  const avatars =
+    (await env.DB.prepare("SELECT COALESCE(SUM(avatar_bytes), 0) AS n FROM accounts").first<{ n: number }>())?.n ?? 0;
+  if (caches + avatars + delta > quotaBytes(env)) return "this instance's media storage is full: ask the sysop";
   return null;
 }
 
@@ -522,9 +545,9 @@ const AUDIO_TYPES = new Set([
   "audio/x-m4a",
   "audio/webm",
 ]);
-const unreadablePhoto = (ct: string) =>
+export const unreadablePhoto = (ct: string) =>
   `this file does not read as ${ct.slice("image/".length).toUpperCase()}: save the photo again and upload that`;
-const mediaType = (ct: string | null) => (ct ?? "").split(";")[0]!.trim().toLowerCase();
+export const mediaType = (ct: string | null) => (ct ?? "").split(";")[0]!.trim().toLowerCase();
 function mediaKind(ct: string): "image" | "audio" | null {
   if (IMAGE_TYPES.has(ct)) return "image";
   if (AUDIO_TYPES.has(ct)) return "audio";
