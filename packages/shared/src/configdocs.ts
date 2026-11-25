@@ -195,7 +195,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MESHCOM_KISS_PASS: "The node's KISS password: answers then go out from the service call through KISS",
   MESHCOM_KISS_PORT: "The node's KISS TCP port",
   AXUDP_PORT: "UDP port for AX.25-over-UDP; set it to enable AXUDP",
-  AXUDP_BIND: "Local address the AXUDP socket binds",
+  AXUDP_BIND: "Local address the AXUDP socket binds; unset, loopback without peers",
   AXUDP_PEERS: "AXUDP peers as host:port, comma-separated",
   AXIP_ENABLE: "Set to enable the AXIP listener (IP protocol 93, needs raw-socket rights)",
   AXIP_PEERS: "AXIP peer hosts, comma-separated; set it to enable AXIP",

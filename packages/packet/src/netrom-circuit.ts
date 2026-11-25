@@ -327,6 +327,8 @@ export class NetromCircuit {
   /** Decode a ConnReq info field into the originating user/node calls (for a node accepting a circuit). */
   static originOf(info: Uint8Array): { window: number; user: Ax25Address; node: Ax25Address } | null {
     if (info.length < 15) return null;
-    return { window: info[0]!, user: decodeAddress(info, 1).addr, node: decodeAddress(info, 8).addr };
+    const user = decodeAddress(info, 1)?.addr,
+      node = decodeAddress(info, 8)?.addr;
+    return user && node ? { window: info[0]!, user, node } : null;
   }
 }

@@ -230,6 +230,24 @@ describe("MeshCom listener — dedup", () => {
       expect.stringMatching(/node OE8APR-12 has Via off$/),
     ]);
   });
+  it("tracks the Via setting per configured node, so forged node echoes from new calls add no entries or lines", () => {
+    const { l, logs } = make();
+    for (let i = 0; i < 500; i++)
+      l.receive(
+        msg({
+          src_type: "node",
+          src: `OE${i % 10}X${String.fromCharCode(65 + ((i / 10) % 26))}-${i % 16}`,
+          dst: `OE1KBC-24,${CALL}`,
+          msg_id: `F${i}`,
+        }),
+        NODE,
+        i * 100,
+      );
+    expect((l as unknown as { ownVia: Map<string, string> }).ownVia.size).toBe(1);
+    expect(logs.filter((m) => m.includes("has Via"))).toEqual([
+      expect.stringMatching(/node OE8APR-12 has Via on: .*OE1KBC-24$/),
+    ]);
+  });
   it("counts telemetry without forwarding it", () => {
     const { l, out } = make();
     l.receive(enc({ src_type: "node", type: "tele", src: CALL, temp1: 12 }), NODE);

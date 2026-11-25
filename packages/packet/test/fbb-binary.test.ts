@@ -73,6 +73,20 @@ describe("FBB binary block framing", () => {
     expect(t!.data.length).toBe(256);
     expect(t!.checksumOk).toBe(true);
   });
+
+  it("holds a transfer in progress as bytes, not as an array of numbers", () => {
+    const n = 1024 * 1024 - 1;
+    const whole = encodeBinaryTransfer(new Uint8Array(0), new Uint8Array(n).fill(0x55));
+    const open = whole.subarray(0, whole.length - 2); // every block, no EOT: the decoder holds it all
+    const dec = new BinaryTransferDecoder();
+    const before = process.memoryUsage().arrayBuffers;
+    dec.push(open);
+    // the data sits in a byte buffer (counted as array buffers), not in a number[] of 8n bytes on the heap
+    expect(process.memoryUsage().arrayBuffers - before).toBeGreaterThanOrEqual(n);
+    const [t] = dec.push(whole.subarray(whole.length - 2));
+    expect(t!.data.length).toBe(n);
+    expect(t!.checksumOk).toBe(true);
+  });
 });
 
 describe("FBB compressed message (LZHUF-B1 + framing)", () => {

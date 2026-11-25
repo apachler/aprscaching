@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The MQTT subscriber's session liveness: a broker that never answers CONNECT, goes silent, or refuses
-// the subscription is dropped and re-dialled with backoff; one keepalive timer runs per session.
+// the subscription is dropped and re-dialled with backoff; one keepalive timer runs per session; packets are
+// reassembled once each, and one that trickles past its deadline drops the session.
 import { describe, it, expect, afterEach } from "vitest";
 import net from "node:net";
-import { MqttSubscriber } from "../src/mqtt.js";
+import { MQTT_MAX_PACKET, MqttSubscriber, encodeRemainingLength } from "../src/mqtt.js";
 
 const CONNACK = [0x20, 0x02, 0x00, 0x00];
 const suback = (code: number) => [0x90, 0x03, 0x00, 0x01, code];
@@ -82,5 +83,84 @@ describe("MqttSubscriber session liveness", () => {
     expect(pings).toBeGreaterThanOrEqual(1);
     expect(pings).toBeLessThanOrEqual(3); // one 500 ms timer; a leaked second one would double this
     expect(b.connections()).toBe(1);
+  });
+});
+
+/** A PUBLISH at QoS 0 carrying `n` payload bytes on topic "t". */
+function publish(n: number): Uint8Array {
+  const body = [0x00, 0x01, 0x74];
+  const head = [0x30, ...encodeRemainingLength(body.length + n)];
+  const out = new Uint8Array(head.length + body.length + n);
+  out.set([...head, ...body]);
+  out.fill(0x41, head.length + body.length);
+  return out;
+}
+
+describe("MqttSubscriber packet reassembly", () => {
+  it("reads a cap-sized packet delivered a byte at a time without re-copying it per byte", () => {
+    const got: number[] = [];
+    const m = new MqttSubscriber({ url: "mqtt://127.0.0.1:1", topics: ["t"], name: "test" }, (_t, p) =>
+      got.push(p.length),
+    );
+    const sub = m as unknown as { sock: unknown; receive(c: Uint8Array, k: number): void };
+    sub.sock = { write() {}, destroy() {} };
+    const pkt = publish(MQTT_MAX_PACKET - 8);
+    const t0 = performance.now();
+    for (let i = 0; i < pkt.length; i++) sub.receive(pkt.subarray(i, i + 1), 0);
+    const ms = performance.now() - t0;
+    m.stop();
+    expect(got).toEqual([MQTT_MAX_PACKET - 8]);
+    expect(ms).toBeLessThan(1500); // linear: tens of ms; a copy per byte is ~34 GB moved
+  });
+
+  it("splits packets that share a chunk and packets that straddle chunks", () => {
+    const got: number[] = [];
+    const m = new MqttSubscriber({ url: "mqtt://127.0.0.1:1", topics: ["t"], name: "test" }, (_t, p) =>
+      got.push(p.length),
+    );
+    const sub = m as unknown as { sock: unknown; receive(c: Uint8Array, k: number): void };
+    sub.sock = { write() {}, destroy() {} };
+    const a = publish(3),
+      b = publish(200),
+      c = publish(0);
+    const all = new Uint8Array(a.length + b.length + c.length);
+    all.set(a);
+    all.set(b, a.length);
+    all.set(c, a.length + b.length);
+    for (const [s, e] of [
+      [0, 1],
+      [1, a.length + 2],
+      [a.length + 2, a.length + 50],
+      [a.length + 50, all.length],
+    ] as const)
+      sub.receive(all.subarray(s, e), 0);
+    m.stop();
+    expect(got).toEqual([3, 200, 0]);
+  });
+
+  it("drops a broker whose packet does not complete within the packet deadline, however it trickles", async () => {
+    let connections = 0;
+    const server = net.createServer((sock) => {
+      connections++;
+      let trickle: ReturnType<typeof setInterval> | undefined;
+      sock.on("error", () => {});
+      sock.on("close", () => clearInterval(trickle));
+      sock.on("data", (d) => {
+        if (d[0]! >> 4 === 1) sock.write(Uint8Array.from(CONNACK));
+        if (d[0]! >> 4 === 8) {
+          sock.write(Uint8Array.from(suback(0)));
+          const pkt = publish(4096);
+          let i = 0;
+          trickle = setInterval(() => i < pkt.length && sock.write(pkt.subarray(i, ++i)), 30);
+        }
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const url = `mqtt://127.0.0.1:${(server.address() as net.AddressInfo).port}`;
+    const m = subscriber(url, { keepAliveSec: 60, packetTimeoutMs: 300 });
+    cleanups.push(() => (m.stop(), server.close()));
+    m.start();
+    await until(() => connections >= 2);
+    expect(connections).toBeGreaterThanOrEqual(2);
   });
 });

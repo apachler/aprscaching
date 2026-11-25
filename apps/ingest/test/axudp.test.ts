@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import dgram from "node:dgram";
 import { encodeFrame, decodeFrame, parseAddr, type Ax25Frame } from "@aprscaching/ax25";
 import {
+  AxudpListener,
   AxudpPort,
   axudpToPacket,
   parseAxudpPeers,
@@ -114,6 +115,33 @@ describe("AXIP/AXUDP CRC trailer (RFC 1226 / BPQAXIP / ax25ipd)", () => {
 // The socket seam NET/ROM + the FBB forwarder ride: TX datagrams carry the trailer on the wire,
 // RX hands STRIPPED bare frames to the connected-mode consumers — for a trailered peer (BPQAXIP,
 // ax25ipd) and a bare-frame peer alike.
+describe("AxudpListener bind", () => {
+  /** Start a listener on an ephemeral port and resolve the address its socket bound. */
+  async function boundTo(bind: string | undefined): Promise<{ address: string; warned: boolean }> {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const l = new AxudpListener({ port: 0, ...(bind !== undefined ? { bind } : {}) }, () => {});
+    l.start();
+    const sock = (l as unknown as { sock: dgram.Socket }).sock;
+    await new Promise((r) => sock.once("listening", r));
+    const address = sock.address().address;
+    const warned = warn.mock.calls.length > 0;
+    l.stop();
+    warn.mockRestore();
+    log.mockRestore();
+    return { address, warned };
+  }
+
+  it("binds loopback when no address is set, since it takes frames from any host that reaches it", async () => {
+    expect(await boundTo(undefined)).toEqual({ address: "127.0.0.1", warned: false });
+    expect(await boundTo("")).toEqual({ address: "127.0.0.1", warned: false });
+  });
+
+  it("binds all addresses only when AXUDP_BIND says 0.0.0.0, and warns that it is open", async () => {
+    expect(await boundTo("0.0.0.0")).toEqual({ address: "0.0.0.0", warned: true });
+  });
+});
+
 describe("AxudpPort over a real UDP socket", () => {
   const uiFrame = (info: string): Ax25Frame => ({
     dst: parseAddr("NODES"),

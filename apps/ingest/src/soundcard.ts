@@ -50,6 +50,7 @@ import {
   type SoundcardFec,
   type SoundcardModem,
 } from "./soundcardmodem.js";
+import { eachFrame } from "./each-frame.js";
 
 /** The ingest port every soundcard port's frames carry: a local RF transport, like `kiss-tnc`. */
 export const SOUNDCARD_PORT = "soundcard";
@@ -306,7 +307,11 @@ export class SoundcardPort {
     this.lastPcmAt = this.now();
     this.captureUp = true;
     if (!this.modem) return;
-    for (const f of this.modem.push(samples)) this.onRxFrame(f);
+    eachFrame(
+      this.modem.push(samples),
+      (f) => this.onRxFrame(f),
+      (m) => this.error(`${this.tag} ${m}`),
+    );
   }
 
   private enqueue(frame: Uint8Array, addrs: readonly string[]): boolean {

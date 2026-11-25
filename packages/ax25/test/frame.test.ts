@@ -133,4 +133,24 @@ describe("ax25 frame codec", () => {
     // …while SABME (a U frame) stays a single control octet in extended mode.
     expect(encodeFrame({ dst: B, src: A, command: true, type: "SABME", pf: true }, true).length).toBe(15); // 14 addr + 1 ctrl (U-frame stays 1 octet)
   });
+
+  it("refuses a call octet that is not a shifted A–Z, 0–9 or space", () => {
+    const ok = encodeFrame({ dst: B, src: A, command: true, type: "UI", pf: false, info: Uint8Array.of(0x41) });
+    expect(decodeFrame(ok)).not.toBeNull();
+    for (const c of [0x0a, 0x1b, 0x3a, 0x3e, 0x61, 0x7f]) {
+      const bad = ok.slice();
+      bad[9] = c << 1; // the source call's third character
+      expect(decodeFrame(bad), `0x${c.toString(16)}`).toBeNull();
+    }
+    const low = ok.slice();
+    low[2] |= 1; // the destination call's third octet with its low (end-of-address) bit set
+    expect(decodeFrame(low)).toBeNull();
+  });
+
+  it("encodes an info field past the argument limit of a spread", () => {
+    const info = new Uint8Array(300_000).fill(0x41);
+    const d = roundtrip({ dst: B, src: A, command: true, type: "I", pf: false, ns: 1, nr: 2, info });
+    expect(d.info!.length).toBe(300_000);
+    expect(d.pid).toBe(0xf0);
+  });
 });
