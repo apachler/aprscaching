@@ -107,26 +107,35 @@ export function makeLineDriver(
   // reply that settles after the link went down — it must not leak into a later session.
   let busy = false;
   let gen = 0;
+  // A reply that disconnects is the session's last: the lines still buffered behind it are never answered.
+  let closing = false;
+  const close = () => {
+    closing = true;
+    buf = "";
+    io.disconnect();
+  };
   const apply = (r: LineReply) => {
     push(r.lines);
     if (r.connect && io.onConnect) io.onConnect(r.connect, relay);
-    if (r.disconnect) io.disconnect();
+    if (r.disconnect) close();
   };
   const held = () => (io.backlog?.() ?? 0) > PAUSE_BACKLOG;
   // A reply's send can drain the link at once and call `onDrain` from inside `apply`; the outer pump carries
-  // on after `apply` returns, so a nested one would answer the next line before this reply's disconnect.
+  // on after `apply` returns, so a nested one would answer the next line before this reply's disconnect. An
+  // async reply settles outside any pump, so it is applied under the same guard.
   let pumping = false;
-  const pump = () => {
+  const pump = (first?: () => void) => {
     if (pumping) return;
     pumping = true;
     try {
+      first?.();
       drain();
     } finally {
       pumping = false;
     }
   };
   const drain = () => {
-    while (!busy && !held()) {
+    while (!busy && !closing && !held()) {
       const i = buf.search(/[\r\n]/);
       if (i < 0) return;
       const line = buf.slice(0, i);
@@ -138,14 +147,11 @@ export function makeLineDriver(
         r.then(
           (rr) => {
             busy = false;
-            if (g === gen) {
-              apply(rr);
-              pump();
-            }
+            if (g === gen) pump(() => apply(rr));
           },
           () => {
             busy = false;
-            if (g === gen) io.disconnect(); // an app that throws mid-command is not recoverable
+            if (g === gen) close(); // an app that throws mid-command is not recoverable
           },
         );
         return;
@@ -159,15 +165,15 @@ export function makeLineDriver(
         relaySink(info);
         return;
       } // transparent relay (connect-through) — no line-splitting
+      if (closing) return;
       buf += decoder.decode(info, { stream: true });
       pump();
       // Whole lines are handled first, however many one read carries; what is left is the unterminated
       // tail, plus the lines still queued behind an async `handle`.
       const tail = buf.length - 1 - Math.max(buf.lastIndexOf("\r"), buf.lastIndexOf("\n"));
       if (tail > MAX_LINE_BUF || buf.length > MAX_PENDING_BUF) {
-        buf = "";
         // no line terminator in 8 KiB, or lines far faster than an async app answers: tear down
-        io.disconnect();
+        close();
       }
     },
     onUp() {
@@ -182,6 +188,7 @@ export function makeLineDriver(
       decoder = new TextDecoder();
       relaySink = null;
       busy = false;
+      closing = false;
       gen++;
     },
     onDrain() {

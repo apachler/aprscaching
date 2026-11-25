@@ -282,7 +282,13 @@ describe("KISS server slots", () => {
       await settle();
       return c;
     };
-    return { log, join, advance: (s: number) => (clock += s * 1000) };
+    /** Make every client accepted from now on appear to come from `addr` (the test cannot connect from off-box). */
+    let fromAddr: string | null = null;
+    (server as unknown as { servers: net.Server[] }).servers[0]!.prependListener("connection", (sock: net.Socket) => {
+      if (fromAddr) Object.defineProperty(sock, "remoteAddress", { value: fromAddr });
+    });
+    const from = (addr: string) => (fromAddr = addr);
+    return { log, join, from, advance: (s: number) => (clock += s * 1000) };
   }
 
   it("gives the slot of a client silent past the idle time to a newcomer, never that of one that spoke", async () => {
@@ -298,6 +304,17 @@ describe("KISS server slots", () => {
     expect(silent.closed).toBe(true);
     expect(talking.closed).toBe(false);
     expect(b.log.some((l) => /sent nothing for 60 s/.test(l))).toBe(true);
+  });
+
+  it("refuses a client past the per-address cap off loopback, and admits one from another address", async () => {
+    const b = await slots({ maxClients: 8, maxPerAddr: 2 });
+    b.from("192.0.2.7");
+    expect((await b.join()).closed).toBe(false);
+    expect((await b.join()).closed).toBe(false);
+    expect((await b.join()).closed).toBe(true);
+    expect(b.log.some((l) => /192\.0\.2\.7.*KISS_SERVER_MAX_PER_ADDR/.test(l))).toBe(true);
+    b.from("192.0.2.8");
+    expect((await b.join()).closed).toBe(false);
   });
 
   it("lets any number of loopback clients in under a per-address cap of one", async () => {

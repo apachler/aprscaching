@@ -161,10 +161,67 @@ describe("FBB responder bounds", () => {
     expect(verdicts.split("").filter((v) => v === "+").length).toBeLessThanOrEqual(16);
   });
 
+  it("accepts at most 100 messages in one session and defers the rest", async () => {
+    const block = (b: number) => [
+      ...Array.from({ length: 5 }, (_, i) => `FB P A B C BID${b}_${i} 1`),
+      "F>",
+      ...Array.from({ length: 5 }, () => ["t", "x", "\x1a"]).flat(),
+    ];
+    const lines = ["[EVIL-1.0-F$]", ...Array.from({ length: 21 }, (_, b) => block(b)).flat()];
+    const { out } = await drive(true, lines);
+    const verdicts = [...out.matchAll(/FS ([+\-=]+)/g)].map((m) => m[1]).join("");
+    expect(verdicts).toBe("+".repeat(100) + "=".repeat(5));
+  });
+
+  it("answers no line a non-partner buffered behind its SID", async () => {
+    const handled: string[] = [];
+    const menu: LineApp = { greeting: () => [], handle: (l) => (handled.push(l), { lines: ["menu: " + l] }) };
+    const gate = new FbbGatedBbs(menu, { isPartner: async () => false, makeStore: () => new SessionStore([], []) });
+    const out: string[] = [];
+    let disc = 0;
+    const drv = makeLineDriver(gate, {
+      send: (b) => out.push(new TextDecoder().decode(b)),
+      disconnect: () => {
+        disc++;
+      },
+    });
+    drv.onUp();
+    drv.onData(enc("[EVIL-1.0-F$]\rH\rL\r"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(out.join("")).toContain("Not a forwarding partner");
+    expect(handled).toEqual([]);
+    expect(disc).toBe(1);
+  });
+
   it("disconnects a caller that answers with a SID but is no forwarding partner", async () => {
     const { gate, disc, out } = await drive(false, ["[EVIL-1.0-F$]", "FB P A B C X1 1", "F>"]);
     expect(disc).toBe(1);
     expect(out).toContain("Not a forwarding partner");
     expect((gate as unknown as { fbb: unknown }).fbb).toBeNull();
+  });
+});
+
+describe("line driver", () => {
+  it("answers no line buffered behind an async reply that disconnects, on the air or off it", async () => {
+    const handled: string[] = [];
+    const app: LineApp = {
+      greeting: () => [],
+      handle: (l) => {
+        handled.push(l);
+        if (l === "A") return Promise.resolve({ lines: ["bye"], disconnect: true });
+        return { lines: ["reply to " + l] };
+      },
+    };
+    const sent: Ax25Frame[] = [];
+    const link = serveApp(local, remote, app, { send: (f) => sent.push(f), clock: () => 0 });
+    const rx = (f: Partial<Ax25Frame>) => link.onReceive({ dst: local, src: remote, ...f } as Ax25Frame);
+    rx({ command: true, type: "SABM", pf: true });
+    rx({ command: true, type: "I", pf: false, ns: 0, nr: 0, pid: 0xf0, info: enc("A\rB\rC\r") });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(handled).toEqual(["A"]);
+    const text = sent.map((f) => (f.info ? new TextDecoder().decode(f.info) : "")).join("");
+    expect(text).toContain("bye");
+    expect(text).not.toContain("reply to");
+    expect(sent.at(-1)?.type).toBe("DISC");
   });
 });
