@@ -100,6 +100,11 @@ describe("NET/ROM L4 circuit", () => {
     const origin = NetromCircuit.originOf(captured!.info)!;
     expect(origin.user).toEqual({ call: "OE3ABC", ssid: 7 });
     expect(origin.node).toEqual({ call: "OE8NOD", ssid: 1 });
+    for (const at of [1, 8]) {
+      const bad = captured!.info.slice();
+      bad[at] = 0x1b << 1; // an escape byte in the user's, then the node's, call
+      expect(NetromCircuit.originOf(bad), `offset ${at}`).toBeNull();
+    }
   });
 });
 

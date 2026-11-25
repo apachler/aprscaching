@@ -143,7 +143,7 @@ describe("ax25 frame codec", () => {
       expect(decodeFrame(bad), `0x${c.toString(16)}`).toBeNull();
     }
     const low = ok.slice();
-    low[2] |= 1; // the destination call's third octet with its low (end-of-address) bit set
+    low[2] = low[2]! | 1; // the destination call's third octet with its low (end-of-address) bit set
     expect(decodeFrame(low)).toBeNull();
   });
 

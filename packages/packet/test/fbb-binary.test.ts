@@ -79,10 +79,11 @@ describe("FBB binary block framing", () => {
     const whole = encodeBinaryTransfer(new Uint8Array(0), new Uint8Array(n).fill(0x55));
     const open = whole.subarray(0, whole.length - 2); // every block, no EOT: the decoder holds it all
     const dec = new BinaryTransferDecoder();
-    const before = process.memoryUsage().arrayBuffers;
     dec.push(open);
-    // the data sits in a byte buffer (counted as array buffers), not in a number[] of 8n bytes on the heap
-    expect(process.memoryUsage().arrayBuffers - before).toBeGreaterThanOrEqual(n);
+    // the transfer in progress sits in a byte buffer, not in a number[] at eight bytes an entry
+    const held = (dec as unknown as { data: { mem?: unknown; length: number } }).data;
+    expect(held.mem).toBeInstanceOf(Uint8Array);
+    expect(held.length).toBe(n);
     const [t] = dec.push(whole.subarray(whole.length - 2));
     expect(t!.data.length).toBe(n);
     expect(t!.checksumOk).toBe(true);
