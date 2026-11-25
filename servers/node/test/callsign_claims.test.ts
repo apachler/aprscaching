@@ -830,6 +830,30 @@ describe("what beacons under the call", () => {
     expect(await env.DB.prepare("SELECT 1 AS x FROM wx_keys WHERE callsign = 'OE8APR'").first()).toBeNull();
   });
 
+  it("takes the previous holder's living cache off the call's beacon, here and in what federation serves", async () => {
+    const env = claimEnv();
+    await emailSignup(env, "squat@example.test", "OE8APR");
+    const hidden = await call(
+      env,
+      "POST",
+      "/api/caches",
+      { title: "rover", type: "traditional", lat: 47, lon: 15, ownerCall: "OE8APR" },
+      INGEST,
+    );
+    expect(hidden.status).toBe(201);
+    const cacheId = hidden.data.cache.id as number;
+    await env.DB.prepare("UPDATE caches SET type = 'aprs_living', station_call = 'OE8APR-9' WHERE id = ?")
+      .bind(cacheId)
+      .run();
+    const opened = await openClaim(env, "OE8APR");
+    await proveOnAir(env, "OE8APR", opened.data.claim);
+    expect((await status(env, opened.data.claim)).data.status).toBe("done");
+    expect((await call(env, "GET", `/api/caches/${cacheId}`)).data.cache.stationCall).toBeNull();
+    const feed = await call(env, "GET", "/federation/caches?since=0");
+    const gidC = await gid(env, "cache", cacheId);
+    expect(feed.data.items.find((i: { id: string }) => i.id === gidC).data.stationCall).toBeNull();
+  });
+
   it("leaves nothing the previous holder queued for APRS-IS to go on the air", async () => {
     const env = claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");

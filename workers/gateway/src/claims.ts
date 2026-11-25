@@ -449,6 +449,12 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
     env.DB.prepare(
       `UPDATE caches SET owner_call = ?, updated_at = ? WHERE ${ofCall("owner_call")} AND created_at >= ?`,
     ).bind(shownAs, now, cs, like, since),
+    // a living cache stops following the call's beacon, which is the licensee's from now on; peers are re-served it
+    env.DB.prepare(`UPDATE caches SET station_call = NULL, updated_at = ? WHERE ${ofCall("upper(station_call)")}`).bind(
+      now,
+      cs,
+      like,
+    ),
     ...moveRows("cache_ratings", "callsign"),
     ...moveRows("favorites", "callsign"),
     ...moveRows("watches", "callsign"),

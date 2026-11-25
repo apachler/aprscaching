@@ -3,11 +3,12 @@
  * toolOwner.ts — whose installed tools this browser holds. Installed tools carry their approvals (transmit
  * included) and follow an account, so they belong to one identity: the signed-in callsign, or the guest (""). When
  * the identity changes (a sign-out, another account on a shared computer), every running tool stops, its beacon
- * ends, and the stored installs are cleared before the next identity's own come in; nothing installed under one
+ * ends, and the stored installs and their key pins are cleared before the next identity's own come in; nothing installed under one
  * identity ever reaches another, nor seeds another account's settings. Kept small: the platform imports it at
  * start-up, and the sandbox code loads only when there are tools to run.
  */
 import { INSTALLED_KEY } from "./installedRecords.js";
+import { TOOL_KEYS_KEY } from "./toolKeys.js";
 
 export const OWNER_KEY = "acs.tools.owner";
 
@@ -39,6 +40,7 @@ export function claimTools(callsign: string): boolean {
   for (const fn of stoppers) fn();
   try {
     localStorage.removeItem(INSTALLED_KEY);
+    localStorage.removeItem(TOOL_KEYS_KEY);
     localStorage.setItem(OWNER_KEY, who);
   } catch {
     /* storage blocked */

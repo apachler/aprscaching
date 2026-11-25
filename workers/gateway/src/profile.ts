@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * profile.ts — the thin, opt-in ham profile. Self-curated fields (display name, locator,
- * avatar, bio, links, public contact) with a master show/hide. Server-side sanitizes bio + links and
+ * picture, bio, links, public contact) with a master show/hide. The picture is uploaded to this instance and
+ * set on its own route (avatar.ts), so this form never names one. Server-side sanitizes bio + links and
  * validates the grid; everything is account-owned and inside the GDPR export/erase.
  *
  *   GET  /api/my/profile  read your own profile, every field and the show/hide switch (session-gated)
@@ -13,6 +14,7 @@ import { json, asStr } from "./http.js";
 import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
 import { stripTags } from "./util/html.js";
+import { avatarUrl } from "./avatar.js";
 
 const httpUrl = (u: unknown): string | null => {
   const s = asStr(u).trim();
@@ -63,7 +65,7 @@ export async function handleMyProfile(req: Request, env: Env): Promise<Response>
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to edit your profile" }, { status: 401 });
   const r = await env.DB.prepare(
-    `SELECT display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl, bio, links,
+    `SELECT display_name AS displayName, home_grid AS homeGrid, avatar_key AS avatarKey, bio, links,
             public_contact AS publicContact, profile_public AS profilePublic
        FROM accounts WHERE account_id=?`,
   )
@@ -71,7 +73,7 @@ export async function handleMyProfile(req: Request, env: Env): Promise<Response>
     .first<{
       displayName: string | null;
       homeGrid: string | null;
-      avatarUrl: string | null;
+      avatarKey: string | null;
       bio: string | null;
       links: string | null;
       publicContact: string | null;
@@ -88,7 +90,7 @@ export async function handleMyProfile(req: Request, env: Env): Promise<Response>
     profile: {
       displayName: r.displayName,
       homeGrid: r.homeGrid,
-      avatarUrl: r.avatarUrl,
+      avatarUrl: avatarUrl(r.avatarKey),
       bio: r.bio,
       links: Array.isArray(links) ? links : [],
       publicContact: r.publicContact,
@@ -107,8 +109,6 @@ export async function handleProfileUpdate(req: Request, env: Env): Promise<Respo
   const gridRaw = asStr(b.homeGrid).trim();
   if (gridRaw && !gridToLatLon(gridRaw)) return json({ error: "invalid Maidenhead locator" }, { status: 400 });
   const homeGrid = gridRaw ? gridRaw.toUpperCase() : null;
-  const avatarUrl = asStr(b.avatarUrl).trim() ? httpUrl(b.avatarUrl) : null;
-  if (asStr(b.avatarUrl).trim() && !avatarUrl) return json({ error: "avatar must be an http(s) URL" }, { status: 400 });
   const bio = sanitizeBio(b.bio);
   const links = JSON.stringify(sanitizeLinks(b.links));
   const publicContact = asStr(b.publicContact).trim() ? emailish(b.publicContact) : null;
@@ -117,17 +117,20 @@ export async function handleProfileUpdate(req: Request, env: Env): Promise<Respo
   const profilePublic = b.profilePublic === true ? 1 : 0;
 
   await env.DB.prepare(
-    `UPDATE accounts SET display_name=?, home_grid=?, avatar_url=?, bio=?, links=?, public_contact=?, profile_public=? WHERE account_id=?`,
+    `UPDATE accounts SET display_name=?, home_grid=?, bio=?, links=?, public_contact=?, profile_public=? WHERE account_id=?`,
   )
-    .bind(displayName, homeGrid, avatarUrl, bio, links, publicContact, profilePublic, me.accountId)
+    .bind(displayName, homeGrid, bio, links, publicContact, profilePublic, me.accountId)
     .run();
+  const pic = await env.DB.prepare("SELECT avatar_key FROM accounts WHERE account_id=?")
+    .bind(me.accountId)
+    .first<{ avatar_key: string | null }>();
 
   return json({
     ok: true,
     profile: {
       displayName,
       homeGrid,
-      avatarUrl,
+      avatarUrl: avatarUrl(pic?.avatar_key ?? null),
       bio,
       links: JSON.parse(links),
       publicContact,

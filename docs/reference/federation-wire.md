@@ -149,8 +149,9 @@ neither take a new record for one they hold nor suppress it with a deletion of a
   at the hop limit, and is left out where the instance read the origin's caches under a region the asker's does not
   lie inside: it passes those caches on but promises nothing beyond them.
 - Each other origin carries the key the instance holds for it: its pin (`publicKey`), its accept set
-  (`publicKeys`, each `{x, until?}`) and its rotation records. A receiver that has no key for the origin pins
-  this one in a `transit:<instance>` row ([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
+  (`publicKeys`, each `{x, until?}`) and its rotation records. A receiver that has no key for the origin and
+  trusts the instance pins this one in a `transit:<instance>` row; one that does not trust it pins nothing
+  ([Records passed on through hubs](federation-trust.md#records-passed-on-through-hubs)).
   A pull takes at most 50 new origins from one summary and looks at no more than 1000 entries.
 - `asker` is how far the instance holds the asker's own records, per kind, and how far it read the asker's keys
   (`key`). An asker that trusts the instance raises its own
@@ -177,7 +178,8 @@ answers a CBOR page of the origin's records of that kind after sequence N, order
   ask for 120 summaries and 1200 origin pages a minute; past that the answer is 429, and the consumer leaves the
   rest to its next pass.
 
-**The pull.** A consumer reads the neighbour's summary, pins the keys it hands on, and works origin by origin,
+**The pull.** A consumer reads the neighbour's summary, pins the keys it hands on when it trusts the neighbour, and
+works origin by origin,
 kind by kind: deletes first, from every origin, then the neighbour's keys, then account moves, caches and finds.
 Every frame verifies under its origin's keys. It keeps two positions per origin and kind:
 
@@ -330,8 +332,8 @@ A reader takes an entry only from a peer it trusts, with `FED_DISCOVER` on, at m
 reads at most 512 KiB and 200 entries. It needs a valid instance id, a fingerprint and an address off a LAN, and
 it skips itself, the listing peer and any instance it blocked. The entry becomes a sighting on that instance's
 one peer row (`fed_peers.discovered`, JSON `[{via, fp, at}]`): a new instance gets an unfollowed
-`discovered:<instance>` row, `unvetted`, `enabled = 0`, never pulled. A sighting never sets a key. An origin a hub
-later hands a key for turns that row into its `transit:<instance>` row.
+`discovered:<instance>` row, `unvetted`, `enabled = 0`, never pulled. A sighting never sets a key. An origin a trusted
+hub later hands a key for turns that row into its `transit:<instance>` row.
 
 ## mDNS announcement
 

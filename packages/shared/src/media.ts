@@ -15,6 +15,8 @@ export const MEDIA_LIMITS = {
   cache: 10_000_000,
   /** across every cache of one account, in bytes */
   account: 50_000_000,
+  /** one profile picture, in bytes: the browser sends a small JPEG of it */
+  avatar: 256_000,
 } as const;
 
 /** A byte limit as people read it ("3 MB"). */

@@ -1362,23 +1362,17 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
     gapPage !== null && spokeFrames(gapPage).every((f) => !Buffer.from(f).equals(Buffer.from(spokeFrame))),
     JSON.stringify({ n: gapPage?.frames?.length }),
   );
-  await call(PUB, "POST", "/federation/sync", undefined, OPH);
-  const learned = (await call(PUB, "GET", "/federation/peers", undefined, OPH)).data?.peers?.find(
-    (p) => p.instance === "oe.spoke",
-  );
-  ok(
-    "the third instance learns the spoke's key through the hub, unvetted",
-    learned?.url === "transit:oe.spoke" && learned?.trust === "unvetted" && learned?.added_via === "transit",
-    JSON.stringify(learned),
-  );
   const box = "/api/caches?bbox=15.5,47,16.5,48";
-  const pubDefault = await call(PUB, "GET", box);
-  const pubAll = await call(PUB, "GET", `${box}&includeUnvetted=1`);
+  const spokeRowAtPub = async () =>
+    (await call(PUB, "GET", "/federation/peers", undefined, OPH)).data?.peers?.find((p) => p.instance === "oe.spoke");
+  // a hub this instance has not trusted hands on no key: the spoke stays unknown here, and so do its records
+  await call(PUB, "POST", "/federation/sync", undefined, OPH);
+  const unlearned = await spokeRowAtPub();
+  const pubBefore = await call(PUB, "GET", `${box}&includeUnvetted=1`);
   ok(
-    "the spoke's cache reaches the third instance under the spoke's own trust there (hidden until included)",
-    !(pubDefault.data?.caches ?? []).some((c) => c.origin === "oe.spoke") &&
-      (pubAll.data?.caches ?? []).some((c) => c.origin === "oe.spoke" && c.originTrust === "unvetted"),
-    JSON.stringify((pubAll.data?.caches ?? []).map((c) => [c.origin, c.originTrust])),
+    "an unvetted hub pins no key for the spoke at the third instance, and brings none of its caches",
+    unlearned === undefined && !(pubBefore.data?.caches ?? []).some((c) => c.origin === "oe.spoke"),
+    JSON.stringify({ unlearned, caches: (pubBefore.data?.caches ?? []).map((c) => c.origin) }),
   );
   const raised = await call(
     PUB,
@@ -1391,6 +1385,21 @@ ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
     "trusting it is a separate step, with the compared fingerprint",
     raised.data?.trust === "trusted",
     JSON.stringify(raised.data),
+  );
+  await call(PUB, "POST", "/federation/sync", undefined, OPH);
+  const learned = await spokeRowAtPub();
+  ok(
+    "the third instance learns the spoke's key through the trusted hub, unvetted",
+    learned?.url === "transit:oe.spoke" && learned?.trust === "unvetted" && learned?.added_via === "transit",
+    JSON.stringify(learned),
+  );
+  const pubDefault = await call(PUB, "GET", box);
+  const pubAll = await call(PUB, "GET", `${box}&includeUnvetted=1`);
+  ok(
+    "the spoke's cache reaches the third instance under the spoke's own trust there (hidden until included)",
+    !(pubDefault.data?.caches ?? []).some((c) => c.origin === "oe.spoke") &&
+      (pubAll.data?.caches ?? []).some((c) => c.origin === "oe.spoke" && c.originTrust === "unvetted"),
+    JSON.stringify((pubAll.data?.caches ?? []).map((c) => [c.origin, c.originTrust])),
   );
   const removed = await call(PUB, "DELETE", `/federation/peers?url=${encodeURIComponent(SUB)}`, undefined, OPH);
   const after = await call(PUB, "GET", "/federation/peers", undefined, OPH);

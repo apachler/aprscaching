@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The LoRa APRS port: it reads the prefixed TNC2 line, an iGate's AX.25 rendering and a bare line; it stamps the
 // receiving site only on a direct hearing, like a TNC port; it drops lines that came from APRS-IS and a MeshCom
-// node's frames; and it reads an iGate's TNC server over a real socket in both of its forms.
+// node's frames, and leaves a frame to APRSMC unstamped; and it reads an iGate's TNC server over a real socket in both of its forms.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import net from "node:net";
 import { encodeAx25, kissWrap, rfText } from "@aprscaching/aprs";
@@ -199,10 +199,37 @@ describe("LoraAprsPort", () => {
     expect(invalid).toBe(1);
   });
 
-  it("never takes a MeshCom node's frames for its own hearings", () => {
+  // a MeshCom tracker's beacon, or a node's rendering of a relay: the same frame, with an empty path
+  const TO_APRSMC = "OE8APR-12>APRSMC:!4703.33N/01525.56E>MeshCom";
+  it.each([
+    ["the LoRa APRS line, over KISS", (p: LoraAprsPort) => p.onKiss({ port: 0, command: 0, frame: lora(TO_APRSMC) })],
+    [
+      "an AX.25 rendering, over KISS",
+      (p: LoraAprsPort) =>
+        p.onKiss({
+          port: 0,
+          command: 0,
+          frame: encodeAx25({ src: "OE8APR-12", dst: "APRSMC", payload: "!4703.33N/01525.56E>MeshCom" }),
+        }),
+    ],
+    [
+      "a bare line, over KISS",
+      (p: LoraAprsPort) => p.onKiss({ port: 0, command: 0, frame: new TextEncoder().encode(TO_APRSMC) }),
+    ],
+    ["the LoRa APRS line, over the text protocol", (p: LoraAprsPort) => p.onBytes(lora(TO_APRSMC))],
+  ])("delivers a frame to APRSMC as %s unstamped, and keeps forwarding the rest", (_form, hear) => {
     const { p, got } = port();
-    const mc = encodeAx25({ src: "OE8APR-12", dst: "APRSMC", payload: ">relayed" });
-    p.onKiss({ port: 0, command: 0, frame: mc });
+    p.onKiss({ port: 0, command: 0, frame: lora(POS) });
+    hear(p);
+    for (let i = 0; i < 100; i++) p.onKiss({ port: 0, command: 0, frame: lora(`${POS} ${i}`) });
+    expect(got).toHaveLength(102);
+    expect(got.map((x) => x.igateCall)).toEqual(got.map((x) => (x.dst === "APRSMC" ? undefined : "OE8APR-10")));
+    expect(got[1]).toMatchObject({ src: "OE8APR-12", dst: "APRSMC", port: "lora-aprs" });
+  });
+
+  it("ignores everything from a MeshCom node, known by its port-15 TX result", () => {
+    const { p, got } = port();
+    p.onKiss({ port: 15, command: 0, frame: Uint8Array.of(1) });
     p.onKiss({ port: 0, command: 0, frame: lora(POS) });
     expect(got).toHaveLength(0);
   });

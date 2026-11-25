@@ -46,6 +46,7 @@ import {
   handleOperatorLink,
 } from "./email.js";
 import { handleMyProfile, handleProfileUpdate } from "./profile.js";
+import { handleDeleteAvatar, handlePutAvatar } from "./avatar.js";
 import { handleWxSubmit, handleWxTx } from "./wx.js";
 import {
   handleMyStations,
@@ -750,6 +751,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
   if (p === "/api/my/profile" && m === "GET") return handleMyProfile(req, env);
+  if (p === "/api/my/avatar" && m === "PUT") return handlePutAvatar(req, env);
+  if (p === "/api/my/avatar" && m === "DELETE") return handleDeleteAvatar(req, env);
   if (p === "/api/my/logged" && m === "GET") return handleMyLogged(req, env);
   if (p === "/api/my/hides" && m === "GET") return handleMyHides(req, env);
   // weather user-origination — PWS push (Ecowitt / WU) with a weather station's own key

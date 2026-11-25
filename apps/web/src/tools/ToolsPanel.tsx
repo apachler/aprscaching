@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   checkManifestSignature,
-  resolveTrust,
   toolApiProblem,
   TOOL_API_VERSION,
   type Capability,
@@ -27,27 +26,9 @@ import { carrierFor, DIRECT, listingFor, viaFor, type Carrier, type Listing, typ
 import { MyRegistries, RegistryGroups, useReconfirm, useToolRegistries } from "./RegistryViews.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { toolIcon } from "./toolIcons.js";
+import { pinKey, toolSigner, toolTrust } from "./toolKeys.js";
 import { toolPin, unpin, usePins } from "../shack/apps.js";
 import { Button, Badge, EmptyState, Icon, Switch, useConfirm, useToast, useModalDialog } from "../ui/index.js";
-
-// ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
-const TOFU_KEY = "acs.tool.keys";
-function tofuMap(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(TOFU_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-function tofuPin(author: string, pubkey: string): void {
-  try {
-    const m = tofuMap();
-    m[author.toUpperCase()] = pubkey;
-    localStorage.setItem(TOFU_KEY, JSON.stringify(m));
-  } catch {
-    /* ignore */
-  }
-}
 
 /** A short, human trust line + whether the install may proceed. `invalid`/`key-changed` are hard-refused. */
 function trustInfo(t: ToolTrust): { label: string; kind: "found" | "warn" | "dnf"; blocked: boolean } {
@@ -55,13 +36,13 @@ function trustInfo(t: ToolTrust): { label: string; kind: "found" | "warn" | "dnf
     case "verified":
       return { label: "Signed · registry-listed author key", kind: "found", blocked: false };
     case "known":
-      return { label: "Signed · matches the key you trusted before", kind: "found", blocked: false };
+      return { label: "Signed · the key you trusted at this address before", kind: "found", blocked: false };
     case "self-signed":
       return { label: "Signed · unknown author key (trust-on-first-use)", kind: "warn", blocked: false };
     case "unsigned":
       return { label: "Unsigned — refused", kind: "dnf", blocked: true };
     case "key-changed":
-      return { label: "Author key CHANGED since you last trusted it — refused", kind: "dnf", blocked: true };
+      return { label: "Signing key CHANGED since you last trusted it — refused", kind: "dnf", blocked: true };
     case "invalid":
       return { label: "Signature INVALID — refused", kind: "dnf", blocked: true };
   }
@@ -77,9 +58,14 @@ const FILTER_FROM = 7;
  * it up on whatever surface(s) its manifest declares (packet terminal, BBS, node, the map or this console). The
  * installs, their switches and their rail pins follow the player (installed.ts, prefs.ts). TX-capable tools need a
  * verified callsign and this tab's transmit consent. `tool` names the one to open with (a pin or a
- * `?view=tools&tool=` link): it is switched on, scrolled to, and its decoder is selected; a tool not installed yet
- * is looked up in the registry.
+ * `?view=tools&tool=` link): it is scrolled to and its decoder is selected; one the player switched off stays off,
+ * with focus on its switch, since a link never turns on what the player turned off. A tool not installed yet is
+ * looked up in the registry.
  */
+/** A tool's signer as the panel names it: the callsign a registry vouches for, or the key's fingerprint. */
+const signerLabel = (s: ReturnType<typeof toolSigner>) =>
+  "author" in s ? <span className="mono">{s.author}</span> : <span className="mono">key {s.key}</span>;
+
 export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: string }) {
   const host = useToolHost();
   const toast = useToast();
@@ -117,6 +103,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
 
   const running = installed.filter((v) => v.on && v.tool);
   const installedNames = new Set(installed.map((v) => v.record.name));
+  const promptSigner =
+    prompt && toolSigner(prompt.trust === "verified", prompt.manifest.author, prompt.manifest.pubkey);
 
   function toggle(v: InstalledView, on: boolean) {
     setInstalledOn(v.record.name, on);
@@ -143,8 +131,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
     });
   };
 
-  // Open the named tool: switch it on, bring its row into view, and select the decoder it contributes. A tool not
-  // installed yet is looked up in the registry.
+  // Open the named tool: bring its row into view and select the decoder it contributes. A tool not installed yet is
+  // looked up in the registry. A tool the user switched off stays off: the address comes from whoever wrote the link,
+  // and switching on runs the tool with every grant it holds, so it takes the user's own tap on the switch focused.
   const toolInstalled = !!props.tool && installedNames.has(props.tool);
   const toolLoaded = !!props.tool && !!installed.find((v) => v.record.name === props.tool)?.tool;
   useEffect(() => {
@@ -159,8 +148,12 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
     const v = installed.find((x) => x.record.name === name);
     if (!v) return;
     if (!v.on) {
-      toggle(v, true); // it loads; this runs again once it is
-      return;
+      const raf = requestAnimationFrame(() => {
+        const row = rootRef.current?.querySelector<HTMLElement>(`[data-tool="${CSS.escape(name)}"]`);
+        row?.scrollIntoView({ block: "nearest" });
+        (row?.querySelector<HTMLElement>('[role="switch"]') ?? row)?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
     }
     if (!v.tool) return; // still starting: this runs again once it is loaded
     const dec = v.tool.sandbox.decoders[0]?.id;
@@ -254,11 +247,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
     const sig = await checkManifestSignature(r.raw);
     // Registry-listed only when fetched from the entry's own URL: the script resolves against that URL.
     const listed = listingFor(registries.loaded, r.manifest.name, r.base, location.href);
-    const trust = resolveTrust(sig, {
-      registryPubkey: listed?.entry.pubkey,
-      pinnedPubkey: tofuMap()[r.manifest.author.toUpperCase()],
-      pubkey: r.manifest.pubkey,
-    });
+    const trust = toolTrust(sig, r.base, r.manifest, listed?.entry.pubkey);
     if (trustInfo(trust).blocked) {
       setImportError(`Refused: ${trustInfo(trust).label}`);
       return;
@@ -284,7 +273,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
       return;
     }
     if ((trust === "self-signed" || trust === "known" || trust === "verified") && manifest.pubkey)
-      tofuPin(manifest.author, manifest.pubkey); // pin on trust
+      pinKey(base, manifest.pubkey); // pin on trust
     setPrompt(null);
     try {
       const why = await installTool({ manifest, base, carrier, via });
@@ -321,7 +310,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
           <strong>{title}</strong>{" "}
           {m && (
             <span className="muted fine">
-              v{m.version} · {m.author}
+              v{m.version} · {signerLabel(toolSigner(!!v.record.via, m.author, v.record.pubkey))}
             </span>
           )}
           {m?.description && <div className="muted fine">{m.description}</div>}
@@ -575,7 +564,12 @@ export function ToolsPanel(props: { callsign: string; verified: boolean; tool?: 
                 onClick={(e) => e.stopPropagation()}
               >
                 <p>
-                  <strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span>{" "}
+                  <strong>{prompt.manifest.title}</strong>{" "}
+                  {promptSigner && (
+                    <>
+                      {"author" in promptSigner ? "by" : "signed by"} {signerLabel(promptSigner)}
+                    </>
+                  )}{" "}
                   requests:
                 </p>
                 <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>

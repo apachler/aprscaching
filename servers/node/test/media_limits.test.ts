@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Media is bounded at every level, so it cannot fill the instance's disk: per item, per cache, per account across
-// its caches, and the instance's own MEDIA_QUOTA_MB.
+// its caches, and the instance's own MEDIA_QUOTA_MB, which profile pictures count against too.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, hiderSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
@@ -106,5 +106,29 @@ describe("media limits", () => {
     const res = await o.upload(id, "image/jpeg", 600_000);
     expect(res.status).toBe(413);
     expect(((await res.json()) as { error: string }).error).toMatch(/storage is full/);
+  });
+
+  it("count profile pictures in the instance's MEDIA_QUOTA_MB, both ways", async () => {
+    const o = await owner({ MEDIA_QUOTA_MB: "1" });
+    const id = await o.hide();
+    const picture = (bytes: number | null) =>
+      o.env.DB.prepare(
+        "UPDATE accounts SET avatar_key=?, avatar_bytes=? WHERE account_id=(SELECT account_id FROM account_callsigns WHERE callsign='OE8LIM')",
+      )
+        .bind(bytes === null ? null : `avatar/${crypto.randomUUID()}.jpeg`, bytes)
+        .run();
+    // pictures fill the quota: a cache's photo no longer fits
+    await picture(900_000);
+    const photo = await o.upload(id, "image/jpeg", 200_000);
+    expect(photo.status).toBe(413);
+    expect(((await photo.json()) as { error: string }).error).toMatch(/storage is full/);
+    // caches' media fill it: a picture no longer fits
+    await picture(null);
+    await stored(o.env, id, 900_000);
+    const pic = await o.upload(id, "image/jpeg", 200_000, "/api/my/avatar", "PUT");
+    expect(pic.status).toBe(413);
+    expect(((await pic.json()) as { error: string }).error).toMatch(/storage is full/);
+    // and a picture that fits is taken
+    expect((await o.upload(id, "image/jpeg", 50_000, "/api/my/avatar", "PUT")).status).toBe(200);
   });
 });

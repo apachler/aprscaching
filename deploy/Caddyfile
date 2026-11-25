@@ -23,7 +23,7 @@
 	handle {
 		root * /srv/web
 		header {
-			Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+			Content-Security-Policy "frame-ancestors 'self'; frame-src 'self'; base-uri 'self'; object-src 'none'"
 			X-Frame-Options SAMEORIGIN
 			X-Content-Type-Options nosniff
 			Referrer-Policy strict-origin-when-cross-origin

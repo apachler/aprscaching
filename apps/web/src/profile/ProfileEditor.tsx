@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { getMyProfile, updateProfile, type ProfileEdit } from "../api.js";
+import { getMyProfile, mediaUrl, removeAvatar, updateProfile, uploadAvatar, type ProfileEdit } from "../api.js";
 import { Button, ErrorState, Row, Switch, useLoad, useToast } from "../ui/index.js";
 
 /**
@@ -17,6 +17,9 @@ export function ProfileEditor(props: { callsign: string }) {
   );
   const [p, setP] = useState<ProfileEdit | null>(null);
   const [busy, setBusy] = useState(false);
+  // the picture is stored on its own route as soon as it is picked, apart from the form's Save
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [picBusy, setPicBusy] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -24,13 +27,39 @@ export function ProfileEditor(props: { callsign: string }) {
     setP({
       displayName: c.displayName ?? "",
       homeGrid: c.homeGrid ?? "",
-      avatarUrl: c.avatarUrl ?? "",
       bio: c.bio ?? "",
       publicContact: c.publicContact ?? "",
       links: c.links ?? [],
       profilePublic: c.profilePublic,
     });
+    setAvatar(c.avatarUrl);
   }, [data]);
+
+  async function changePicture(file: File | undefined, input: HTMLInputElement) {
+    if (!file) return;
+    setPicBusy(true);
+    try {
+      setAvatar(await uploadAvatar(file));
+      toast("Picture saved");
+    } catch (e) {
+      toast((e as Error).message, { kind: "error" });
+    } finally {
+      input.value = "";
+      setPicBusy(false);
+    }
+  }
+  async function dropPicture() {
+    setPicBusy(true);
+    try {
+      await removeAvatar();
+      setAvatar(null);
+      toast("Picture removed");
+    } catch (e) {
+      toast((e as Error).message, { kind: "error" });
+    } finally {
+      setPicBusy(false);
+    }
+  }
 
   /** Edit the loaded form; nothing to edit before it has loaded. */
   const edit = (f: (s: ProfileEdit) => ProfileEdit) => setP((s) => (s ? f(s) : s));
@@ -102,14 +131,23 @@ export function ProfileEditor(props: { callsign: string }) {
               onChange={(e) => edit((s) => ({ ...s, homeGrid: e.target.value }))}
             />
           </label>
-          <label>
-            Avatar URL{" "}
-            <input
-              value={p.avatarUrl ?? ""}
-              placeholder="https://…/me.png"
-              onChange={(e) => edit((s) => ({ ...s, avatarUrl: e.target.value }))}
-            />
-          </label>
+          <div className="row gap-2">
+            {avatar && <img className="profile-avatar" src={mediaUrl(avatar)} alt="Your picture" />}
+            <label>
+              Picture <span className="muted">(stored on this instance)</span>{" "}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={picBusy}
+                onChange={(e) => void changePicture(e.target.files?.[0], e.currentTarget)}
+              />
+            </label>
+            {avatar && (
+              <Button variant="quiet" onClick={() => void dropPicture()} disabled={picBusy}>
+                Remove picture
+              </Button>
+            )}
+          </div>
           <label>
             Bio{" "}
             <textarea

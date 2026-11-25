@@ -293,8 +293,7 @@ export class LoraAprsPort {
   /** One KISS data frame. */
   onKiss(k: KissFrame, meta?: LoraRxMeta): void {
     if (this.meshcomNode) return;
-    const ax = decodeAx25(k.frame);
-    if (isMeshcomNode(k, ax?.dst)) {
+    if (isMeshcomNode(k)) {
       // a MeshCom node's frames are not this box's hearings: its relays arrive as if heard directly
       this.meshcomNode = true;
       this.log.error(
