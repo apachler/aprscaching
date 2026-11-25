@@ -55,7 +55,6 @@ const aprs = new AprsIs({
   filter: env.APRSIS_FILTER ?? "r/47.07/15.42/300",
 });
 
-let batch: Packet[] = [];
 // Each port's health (frames heard, decoded, invalid, packets per second), reported with the batches.
 const health = new PortHealthCounter();
 // Frames this box received over a radio it can also transmit on carry its BOX_ID, so the gateway can
@@ -65,7 +64,7 @@ const RX_ANSWER_PORTS = new Set(["soundcard", "meshcom"]);
 const enqueue = (p: Packet) => {
   if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
   health.packet(p);
-  batch.push(p);
+  delivery.hear(p);
 };
 /** When the gateway last took a health report. */
 let healthAt = Date.now();
@@ -101,14 +100,19 @@ async function shutdown(signal: string): Promise<void> {
   const stopped = Promise.allSettled(onShutdown.map(async (stop) => stop()));
   await Promise.race([stopped, new Promise<void>((r) => setTimeout(r, 5000).unref())]);
   console.log("[ingest] %s — flushing pending packets…", signal);
-  delivery.add(batch);
-  batch = [];
-  // A flush joins one already running; the deadline keeps a dead gateway from holding up the stop.
-  const deadline = new Promise<void>((r) => setTimeout(r, 5000).unref());
-  await Promise.race([delivery.flush(), deadline]);
-  if (delivery.size) console.error("[ingest] flush incomplete — dropping %s packet(s)", delivery.size);
-  else console.log("[ingest] pending packets flushed");
-  process.exit(0);
+  // the exit runs whatever the flush does: a stop signal must stop the process
+  try {
+    delivery.commit();
+    // A flush joins one already running; the deadline keeps a dead gateway from holding up the stop.
+    const deadline = new Promise<void>((r) => setTimeout(r, 5000).unref());
+    await Promise.race([delivery.flush(), deadline]);
+    if (delivery.size) console.error("[ingest] flush incomplete — dropping %s packet(s)", delivery.size);
+    else console.log("[ingest] pending packets flushed");
+  } catch (e) {
+    console.error("[ingest] flush failed: %s", (e as Error).message);
+  } finally {
+    process.exit(0);
+  }
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
@@ -673,14 +677,13 @@ aprs.on("line", (line: string) => {
     raw: f.raw,
   };
   health.packet(pkt);
-  batch.push(pkt);
+  delivery.hear(pkt);
   for (const s of heardSubs) s(f.src, f.payload);
 });
 
 setInterval(() => {
   if (shuttingDown) return;
-  delivery.add(batch);
-  batch = [];
+  delivery.commit();
   // nothing to deliver: a health report on its own, so the gateway still hears from a quiet port or one whose
   // frames all fail
   if (!delivery.size && health.size && Date.now() - healthAt >= HEALTH_EVERY_MS) {

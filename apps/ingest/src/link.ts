@@ -55,9 +55,19 @@ export function directSiteCall(path: string[], siteCall: string | undefined): st
   return relayed ? undefined : siteCall.trim().toUpperCase();
 }
 
-/** The ingest packet for a frame a local TNC heard on the air, stamped with the site when heard directly. */
+/**
+ * A frame to the MeshCom tocall `APRSMC`. A MeshCom node renders every frame it passes on this way, its relays
+ * from the MeshCom server included, with an empty path, so such a frame cannot be told from a direct hearing.
+ */
+export const isMeshcomFrame = (dst: string): boolean => /^APRSMC(-\d+)?$/i.test(dst.trim());
+
+/**
+ * The ingest packet for a frame a local TNC heard on the air, stamped with the site when heard directly. A frame
+ * to `APRSMC` is delivered unstamped, as a digipeated frame is: it may be a MeshCom relay, never proof of a
+ * direct hearing, and it is delivered rather than dropped so a MeshCom tracker's beacon still arrives.
+ */
 export function tncPacket(f: ParsedFrame, port: string, siteCall: string | undefined, ts: number): Packet {
-  const site = directSiteCall(f.path, siteCall);
+  const site = isMeshcomFrame(f.dst) ? undefined : directSiteCall(f.path, siteCall);
   return {
     src: f.src,
     dst: f.dst,
