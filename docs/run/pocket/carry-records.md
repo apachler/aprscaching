@@ -55,8 +55,9 @@ sequenceDiagram
 
 ## At the other instance
 
-1. **Add the phone as a peer.** In the other instance's `.env`, add the phone's address with its key fingerprint
-   to `FED_PEERS`, then restart its gateway:
+1. **Add the phone as a trusted peer.** In the other instance's `.env`, add the phone's address with its key
+   fingerprint to `FED_PEERS`, then restart its gateway. The fingerprint makes the phone trusted there, which is
+   what lets it introduce your home instance's key:
 
     ```bash
     FED_PEERS=http://192.168.43.1:8787#<the phone's fingerprint>
@@ -69,7 +70,9 @@ sequenceDiagram
    the ones it carries.
 3. **Bring the club's records home.** Add the other instance to the phone's `FED_PEERS` the same way, with its
    fingerprint, and run `sync-now.sh` on the phone. At home, your home instance pulls the phone at its next sync,
-   provided the phone is in its `FED_PEERS` or added as a peer there.
+   provided it trusts the phone: the phone is in its `FED_PEERS` with its fingerprint, or added as a peer and set
+   to trusted there. An instance that has not trusted the phone takes only the phone's own records and those of
+   instances whose key it holds another way; it learns no new instance's key from the phone.
 
 ## What to expect
 

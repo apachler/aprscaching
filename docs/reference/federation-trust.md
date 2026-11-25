@@ -80,7 +80,10 @@ record that `FED_REGISTRY_DNS` names. A DNS-located registry is cached for five 
   record must not choose the key that signs the registry.
 - A registry setting without `FED_REGISTRY_KEY` is a configuration error: the Node and Bun servers refuse to
   start.
-- An instance refuses to mirror a peer whose **current** key is not the key its registry entry binds.
+- An instance refuses to mirror a peer whose **current** key is not the key its registry entry binds, and refuses
+  to add one under such a key on every path: by address, by following a discovered instance, and over 44Net,
+  where the check runs before the sysop is asked to confirm. A 44Net record may name any instance id, and
+  neither DNSSEC nor a confirm ties that id to the callsign's zone.
 - A document older than the newest one already accepted is refused as a replay. When the registry cannot be
   fetched, the last good document keeps binding the instances it registered, so an outage never reopens them
   to impersonation.
@@ -126,9 +129,12 @@ hub, a second hub and a Pocket station that carries records are the same thing h
 - **Verified against the home's key.** Each frame verifies under its origin's keys: the peer row the receiver
   holds for that origin, the key the signed registry binds to it, or the key a hub handed on. A hub hands on the
   key, accept set and rotation records it holds for each origin it passes on, in its summary.
-- **Pinned on first sight.** The first hub to name an origin the receiver does not know pins that origin's key
-  in a peer row `transit:<instance>`: `unvetted`, never pulled, its fingerprint shown in Instance admin like any
-  peer's. Later the pin moves only along verified rotation records. No hub moves the key of an origin known any
+- **Pinned on first sight, from a trusted hub.** The first hub the receiver trusts to name an origin it does not
+  know pins that origin's key in a peer row `transit:<instance>`: `unvetted`, never pulled, its fingerprint shown
+  in Instance admin like any peer's. Later the pin moves only along verified rotation records. A hub the receiver
+  has not trusted hands on no key: what it passes on applies only for origins whose key the receiver holds another
+  way, so an unvetted peer can neither plant a key that the origin's genuine records then fail under nor fill the
+  table of handed-on origins. No hub moves the key of an origin known any
   other way, a blocked one included, and a registry binding wins over every hub's word.
 - **The direct key wins.** When the receiver follows the origin itself, by address or in `FED_PEERS`, the
   origin's own key replaces the one a hub handed on, and every record that only the hub's key vouched for is
