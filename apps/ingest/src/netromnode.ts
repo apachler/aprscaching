@@ -98,7 +98,7 @@ export class NetromNodeRunner {
   private l3rttSeq = 0;
   private l3rttPending = new Map<number, { at: number; to: string }>(); // our outstanding probes by seq
   private tx: TokenBucket;
-  private strangerTx: TokenBucket; // the share of `tx` open to stations that are not measured neighbours
+  private strangerTx: TokenBucket; // the share of `tx` open to stations that are not neighbours
   private held = 0; // frames the bucket dropped since the last log line
   private heldLoggedAt = 0;
   private mirrored = new Map<string, string>(); // dest → the record last mirrored to the gateway
@@ -115,20 +115,26 @@ export class NetromNodeRunner {
     const lim = o.txLimit ?? { burst: TX_LIMITS.netrom.burst, refillSec: TX_LIMITS.netrom.refillSec };
     this.tx = new TokenBucket(lim);
     // Half the burst and half the rate: a flood of forged sources spends only this share, and the rest of
-    // the bucket stays for the neighbours whose round trip we measured.
+    // the bucket stays for the node's neighbours.
     this.strangerTx = new TokenBucket({ burst: Math.max(1, Math.floor(lim.burst / 2)), refillSec: lim.refillSec * 2 });
   }
 
+  /** Whether a station is one of the node's neighbours: the next hop of a route in the NODES table (INP3 on
+   *  or off), or an INP3 neighbour that has answered our probe. */
+  private isNeighbor(on: Ax25Address): boolean {
+    return this.node.isNeighbor(on) || this.isMeasured(on);
+  }
+
   /** Whether a station is an INP3 neighbour that has answered our probe. */
-  private isMeasured(call: string): boolean {
-    return this.neighbors.get(call)?.srtt != null;
+  private isMeasured(on: Ax25Address): boolean {
+    return this.neighbors.get(addrStr(on))?.srtt != null;
   }
 
   /** Transmit a frame the node sends in answer to what it heard, when the bucket allows; dropped otherwise.
-   *  `on` is the station the frame is sent on account of: unless it is a measured neighbour, the frame also
-   *  draws from the strangers' share. */
-  private sendPaced(frame: Ax25Frame, on: Ax25Address): boolean {
-    if ((this.isMeasured(addrStr(on)) || this.strangerTx.take()) && this.tx.take()) {
+   *  Unless the frame is sent on account of a neighbour (`neighbour`), it also draws from the strangers'
+   *  share. */
+  private sendPaced(frame: Ax25Frame, neighbour: boolean): boolean {
+    if ((neighbour || this.strangerTx.take()) && this.tx.take()) {
       this.kiss.sendFrame(frame);
       return true;
     }
@@ -389,7 +395,7 @@ export class NetromNodeRunner {
         pid: PID_NETROM,
         info: encodeL3rttFrame(probe.origin, probe.rtt),
       },
-      from,
+      this.isNeighbor(from),
     );
   }
 
@@ -424,7 +430,7 @@ export class NetromNodeRunner {
         pid: PID_NETROM,
         info: encodeRif(rips),
       },
-      to,
+      this.isMeasured(to),
     );
   }
 
@@ -455,7 +461,7 @@ export class NetromNodeRunner {
         pid: PID_NETROM,
         info: encodeL3rttFrame(this.me, { origin: this.o.mycall, seq, alias: this.o.alias }),
       },
-      to,
+      this.isMeasured(to),
     );
     if (sent) this.l3rttPending.set(seq, { at: Date.now(), to: addrStr(to) });
   }
@@ -552,7 +558,7 @@ export class NetromNodeRunner {
             pid: PID_NETROM,
             info: encodeNetrom(decision.packet),
           },
-          f.src,
+          this.isNeighbor(f.src),
         );
       } else if (decision.reason !== "no-route") {
         console.log("[netrom] dropped transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
@@ -623,7 +629,7 @@ export class NetromNodeRunner {
           pid: PID_NETROM,
           info: encodeNetrom(decision.packet),
         },
-        neighbor,
+        this.isNeighbor(neighbor),
       );
     } else if (decision.reason !== "no-route") {
       console.log("[netrom] dropped link transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);

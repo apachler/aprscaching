@@ -156,6 +156,13 @@ export class NetromNode {
     return byAlias[0] ?? null;
   }
 
+  /** Whether `a` is the next hop of any route in the table. */
+  isNeighbor(a: Ax25Address): boolean {
+    const k = this.key(a);
+    for (const r of this.routes.values()) if (this.key(r.neighbor) === k) return true;
+    return false;
+  }
+
   list(): LearnedRoute[] {
     return [...this.routes.values()].sort((a, b) => b.quality - a.quality);
   }

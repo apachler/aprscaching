@@ -348,6 +348,26 @@ describe("NetromNodeRunner switches only frames sent to it", () => {
     expect(transits(sent)).toBe(10);
   });
 
+  it.each([false, true])(
+    "keeps forwarding a NODES-table neighbour's traffic while strangers flood the node (INP3 %s)",
+    (inp3) => {
+      const sent: Ax25Frame[] = [];
+      const link = { sendFrame: (f: Ax25Frame) => void sent.push(f), onRaw: () => {} };
+      const node = new NetromNodeRunner(link as never, { mycall: "OE1ACS-7", alias: "ACS", inp3 });
+      node.onRaw(ui("OE9NOS-1", "NODES", nodesInfo("NOS"))); // a route to OE9NOS-1
+      node.onRaw(ui("OE9TWO-1", "NODES", nodesInfo("TWO"))); // OE9TWO-1 is a neighbour too, never probed
+      for (let i = 0; i < 200; i++) node.onRaw(datagram("OE1ACS-7")); // a stranger's flood
+      const before = transits(sent);
+      const fromNeighbour = encodeNetrom({
+        net: { origin: parseAddr("OE9TWO-1"), dest: parseAddr("OE9NOS-1"), ttl: 10 },
+        tp: { opcode: NrOp.Info, flags: 0, circuitIndex: 1, circuitId: 1, txSeq: 0, rxSeq: 0 },
+        info: enc.encode("hi"),
+      });
+      node.onRaw(ui("OE9TWO-1", "OE1ACS-7", fromNeighbour));
+      expect(transits(sent) - before).toBe(1);
+    },
+  );
+
   it("keeps the MHeard list to its cap however many sources are heard", () => {
     const { node } = runner();
     for (let i = 0; i < 3000; i++) node.onRaw(ui(forged("H", i), "NODES", nodesInfo("H")));

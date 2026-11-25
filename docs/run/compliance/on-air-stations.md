@@ -52,8 +52,9 @@ A refused transmit is always logged:
 - a refused IGate message is not gated, and the sender's own retry carries it once a token is back;
 - a refused FBB session waits for the next scheduler poll;
 - a refused NET/ROM frame is dropped, and the node logs how many it dropped at most once a minute. Frames sent on
-  account of a station that is not a measured INP3 neighbour get at most half the burst and half the rate, so a
-  flood of strangers leaves the rest for the node's neighbours.
+  account of a station that is not one of the node's neighbours (the next hop of a route it learned, or a measured
+  INP3 neighbour) get at most half the burst and half the rate, and so does an INP3 probe to a station not yet
+  measured; a flood of strangers leaves the rest for the node's neighbours.
 
 Forwarding is paced per session, never per frame: throttling frames inside an open AX.25 link would stall it into
 retries.
