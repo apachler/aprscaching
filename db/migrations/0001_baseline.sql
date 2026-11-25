@@ -114,8 +114,13 @@ CREATE TABLE email_tokens (
   callsign   TEXT,                                 -- the desired callsign of a new-account register
   purpose    TEXT NOT NULL,                        -- register | login
   created_at INTEGER NOT NULL,
-  used       INTEGER NOT NULL DEFAULT 0
+  used       INTEGER NOT NULL DEFAULT 0,
+  -- The account the link was asked for, or the one it opened: a register link (and an operator link for a new
+  -- call) names it once confirmed. Export and erasure reach a token by this, never by its address, which
+  -- another account may also be waiting to confirm.
+  account_id TEXT
 );
+CREATE INDEX idx_email_tokens_account ON email_tokens(account_id);
 
 -- Device-independent UI preferences (theme, units, locale, pinned shack apps, basemap): one validated,
 -- size-capped JSON blob per account. Guests keep the same settings in localStorage only.

@@ -476,7 +476,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
         return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
       }
       accountId = pending.a;
-      if (pending.e) confirmation = await sendEmailConfirmation(req, env, pending.e, cs);
+      if (pending.e) confirmation = await sendEmailConfirmation(req, env, pending.e, cs, pending.a);
     } else {
       accountId = pending.h!;
       try {

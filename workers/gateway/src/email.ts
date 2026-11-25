@@ -157,9 +157,9 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
 
   const token = newToken();
   await env.DB.prepare(
-    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, ?, ?, ?, 0)",
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, ?, ?, ?, 0, ?)",
   )
-    .bind(token, e, cs, purpose, nowS())
+    .bind(token, e, cs, purpose, nowS(), acct?.account_id ?? null)
     .run();
 
   // The link opens this gateway's confirm page on the address the sign-in started on (origins.ts), so a member
@@ -240,9 +240,9 @@ async function startAccountData(
     );
   const token = newToken();
   await env.DB.prepare(
-    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, NULL, ?, ?, 0)",
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, NULL, ?, ?, 0, ?)",
   )
-    .bind(token, e, ACCOUNT_DATA_PURPOSE, nowS())
+    .bind(token, e, ACCOUNT_DATA_PURPOSE, nowS(), acct.account_id)
     .run();
   const link = verifyLink(req, env, token);
   const sent = await sendEmail(
@@ -309,12 +309,13 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
       { status: 403 },
     );
 
-  const existing = (await baseHolder(env, base)) !== null;
+  const holder = await baseHolder(env, base);
+  const existing = holder !== null;
   const token = newToken();
   await env.DB.prepare(
-    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, '', ?, ?, ?, 0)",
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, '', ?, ?, ?, 0, ?)",
   )
-    .bind(token, cs, OPERATOR_PURPOSE, nowS())
+    .bind(token, cs, OPERATOR_PURPOSE, nowS(), holder)
     .run();
   // A script on the box reaches the gateway over loopback, which no other device can open: the link then
   // names the app origin. Reached on another address of this instance, it names that address.
@@ -519,6 +520,10 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
           ? await accountDataAccount(env, row.email)
           : await emailAccount(env, row.email, row.callsign, now);
   if (isProblem(acct)) return answerProblem(acct, asPage, app);
+  // a register link, and an operator link for a new call, had no account to name until now
+  await env.DB.prepare("UPDATE email_tokens SET account_id = ? WHERE token = ? AND account_id IS NULL")
+    .bind(acct.account_id, token)
+    .run();
 
   let cookie: string;
   try {
@@ -604,7 +609,8 @@ async function confirmedAccount(env: Env, email: string, callsign: string): Prom
 }
 
 /**
- * Mail a confirmation link for an address given at passkey registration. The address stays pending — it
+ * Mail a confirmation link for an address given at passkey registration or by an address change, recorded for the
+ * account that asked: another account may be waiting on the same address. The address stays pending — it
  * signs nobody in, receives no mail and recovers nothing — until its owner opens the link. Without a mail
  * transport the token comes back in-band only on an instance that opts into dev tokens.
  */
@@ -613,12 +619,13 @@ export async function sendEmailConfirmation(
   env: Env,
   email: string,
   callsign: string,
+  accountId: string,
 ): Promise<{ sent: boolean; devToken?: string; devLink?: string }> {
   const token = newToken();
   await env.DB.prepare(
-    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, ?, ?, ?, 0)",
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, ?, ?, ?, 0, ?)",
   )
-    .bind(token, email, callsign, CONFIRM_PURPOSE, nowS())
+    .bind(token, email, callsign, CONFIRM_PURPOSE, nowS(), accountId)
     .run();
   const link = verifyLink(req, env, token);
   const sent = await sendEmail(
@@ -682,7 +689,7 @@ export async function handleEmailChange(req: Request, env: Env): Promise<Respons
   const limited = await authThrottled(env, req, "email-confirm", me.accountId, CONFIRM_LIMITS);
   if (limited) return limited;
   await env.DB.prepare("UPDATE accounts SET pending_email = ? WHERE account_id = ?").bind(e, me.accountId).run();
-  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign));
+  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign, me.accountId));
 }
 
 /** POST /auth/email/resend — mail the confirmation link for the address the account is waiting on again. */
@@ -698,7 +705,7 @@ export async function handleEmailResend(req: Request, env: Env): Promise<Respons
     return json({ error: "that address already belongs to another account" }, { status: 409 });
   const limited = await authThrottled(env, req, "email-confirm", me.accountId, CONFIRM_LIMITS);
   if (limited) return limited;
-  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign));
+  return confirmationSent(e, await sendEmailConfirmation(req, env, e, me.callsign, me.accountId));
 }
 
 /** The account an operator link signs in: the holder of the call's base call, or a new one for the call. */
