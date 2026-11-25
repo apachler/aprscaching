@@ -376,6 +376,40 @@ describe("evidence", () => {
     });
 });
 
+describe("a peer hit proves the logger within the cache radius", () => {
+  // the cache at (LAT, LON) lies ~22 m south of its 0.0006° cell's centre; a peer measures from that centre and
+  // rounds up to 100 m, so a hit counts only when that distance plus the 22 m is within 150 m
+  const M = 1 / 111_320; // degrees of latitude per metre
+
+  async function ask(p1: { env: Env; key: FedKey }) {
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    stubFetch({ "https://p1.example": serve(p1.env) });
+    return queryPeerCorroboration(hub.env, query());
+  }
+
+  it("counts a hearing 120 m from the cache towards the cell centre", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT + 120 * M });
+    expect((await ask(p1))?.instance).toBe("p1.example");
+  });
+
+  it("does not count a hearing 130 m from the cache away from the cell centre, which the peer sees ~152 m out", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT - 130 * M });
+    expect(await ask(p1)).toBeNull();
+  });
+
+  it("is answered with the peer's closest hearing in the window, not its latest", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT - 130 * M }); // the latest, too far to prove anything
+    await p1.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, ?, ?, 'rf', ?, 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(LOGGER, now() - 900, LAT, LON, SITE)
+      .run();
+    const ev = await ask(p1);
+    expect(ev?.distanceM).toBe(100);
+  });
+});
+
 describe("the answerer is not a location or time oracle", () => {
   async function ask(p1: { env: Env; key: FedKey }, q: Partial<CorroborationQuery>) {
     const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
@@ -386,7 +420,20 @@ describe("the answerer is not a location or time oracle", () => {
 
   it("widens a 1 m radius to the minimum, so it cannot pinpoint", async () => {
     const p1 = await answerer("p1.example", { lat: LAT + 0.001 }); // ~110 m north
-    expect((await ask(p1, { radiusM: 1 }))?.instance).toBe("p1.example");
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    const answers: boolean[] = [];
+    const real = serve(p1.env);
+    stubFetch({
+      "https://p1.example": async (req) => {
+        const r = await real(req);
+        answers.push(decodeFedFrame(new Uint8Array(await r.clone().arrayBuffer())).record.body.corroborated === true);
+        return r;
+      },
+    });
+    // the peer says yes; the asker, holding a 1 m radius, cannot count a 100 m step as within it
+    expect(await queryPeerCorroboration(hub.env, query({ radiusM: 1 }))).toBeNull();
+    expect(answers).toEqual([true]);
   });
 
   it("refuses a window that ended long ago", async () => {

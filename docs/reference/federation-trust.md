@@ -193,9 +193,16 @@ calls and stations travel with the question as exclusions.
   reached from at a plausible speed keeps the find below Tier A. Only a fix heard at an attested site, or one
   the logger's own browser bridge signed, counts; an APRS-IS fix never does. A living cache is asked about where its
   station last was.
+- **Within the cache radius.** A question names the centre of the 0.0006° grid cell the cache lies in (about
+  67 × 46 m at 47° N), and a peer answers with its closest hearing, its distance from that centre rounded up to
+  100 m. The asker counts the answer only when that distance plus the cache's own offset from the centre is
+  within the cache's radius (150 m), so a peer's yes proves the logger within the find zone. A genuine hearing
+  near the edge of the radius may be too far to prove; the find then rests on the other tiers.
 - **No location oracle.** The answerer snaps and bounds every question (radius 150–1000 m, a bucketed window
-  of at most an hour, no older than seven days) and coarsens every answer. The exact IGate is revealed only if
-  both peers opt in (`FED_REVEAL_IGATE`).
+  of at most an hour, no older than seven days) and coarsens every answer: a distance in 100 m steps and a time
+  in 10-minute steps, never a position or a second. The cell is about the size of a find zone, so a peer that
+  also holds the public cache list learns which cache the logger claims to stand at, and when, to the
+  10 minutes. The exact IGate is revealed only if both peers opt in (`FED_REVEAL_IGATE`).
 - **Who is answered.** The shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted `https` peers,
   and an answerer that sets it answers only the peers holding it. `FED_CORROBORATION_REQUIRE_KNOWN=1` answers
   only peers whose key is known, `unvetted` ones included.

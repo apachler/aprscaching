@@ -151,6 +151,8 @@ export function pickLocalEvidence(
   if (a.shared.size === 0 && a.byBox.size === 0) return null;
   const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
   const callBase = baseCall(q.callsign);
+  // the closest hearing, not the latest: the asker counts a hit only as near as the bucketed distance proves
+  let best: Omit<Evidence, "instance"> | null = null;
   for (const r of rows) {
     if (!provenanceOf(r, sitesFor(a, r.ingest_box)).firstPartyAttested) continue; // not heard by a site this instance attests
     if (r.ingest_box && selfBoxes.has(r.ingest_box)) continue; // the logger's own receiver
@@ -158,9 +160,9 @@ export function pickLocalEvidence(
     const igBase = baseCall(ig);
     if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
     const d = haversineMeters(r.lat, r.lon, q.lat, q.lon);
-    if (d <= radius) return { igateCall: ig, distanceM: d, ts: r.ts };
+    if (d <= radius && (!best || d < best.distanceM)) best = { igateCall: ig, distanceM: d, ts: r.ts };
   }
-  return null;
+  return best;
 }
 
 /**
@@ -489,11 +491,22 @@ async function debitContradiction(env: Env, urls: string[]): Promise<void> {
 }
 
 /**
+ * Whether a peer's hit proves the logger within the cache's radius: the peer measured from the cell
+ * centre and rounded up, so its distance plus the cache's offset from that centre bounds the logger's
+ * distance from the cache.
+ */
+function withinCache(d: number, cell: CorroborationQuery, cache: Pick<CorroborationQuery, "lat" | "lon" | "radiusM">) {
+  const offset = haversineMeters(cache.lat, cache.lon, cell.lat, cell.lon);
+  return d + offset <= (cache.radiusM || DEFAULT_POLICY.radiusM);
+}
+
+/**
  * Check a peer's signed reply against the question it answers (pure apart from the signature check):
  * the frame verifies under the peer's key set, names the peer as origin and signer, is fresh, and
  * echoes our nonce and question hash. Evidence is rebuilt from whitelisted, range-checked fields —
  * the instance is the verified peer, the IGate is kept only when this instance opted into
- * FED_REVEAL_IGATE and it is not one of the logger's own. A relayed answer was signed when the spoke
+ * FED_REVEAL_IGATE and it is not one of the logger's own, and a hit counts only when it lies within the cache's
+ * radius ({@link withinCache}). A relayed answer was signed when the spoke
  * collected the question, so it must fall between the time the question was asked (`askedAt`) and now.
  * Returns the evidence, `"no"` for a verified denial, or null for anything that does not verify.
  */
@@ -506,8 +519,9 @@ async function acceptAnswer(
     nonce: string;
     queryHash: string;
     question: CorroborationQuery;
+    /** The question before coarsening: the cache's own position and radius. */
+    cache: Pick<CorroborationQuery, "lat" | "lon" | "radiusM">;
     revealIgate: boolean;
-    distBucketM: number;
     timeBucketSec: number;
     nowS: number;
     askedAt?: number;
@@ -528,7 +542,7 @@ async function acceptAnswer(
   const d = Number(b.distanceM);
   const ts = Number(b.ts);
   const q = ctx.question;
-  if (!Number.isFinite(d) || d < 0 || d > q.radiusM + ctx.distBucketM) return null;
+  if (!Number.isFinite(d) || d < 0 || !withinCache(d, q, ctx.cache)) return null;
   if (!Number.isInteger(ts) || ts < q.since - ctx.timeBucketSec || ts > q.until + 60) return null;
   const ev: Evidence = { instance: ctx.instance, identity: ctx.identity, distanceM: d, ts };
   const ig = typeof b.igateCall === "string" ? b.igateCall.toUpperCase() : "";
@@ -857,8 +871,8 @@ export async function askPeers(
           nonce,
           queryHash,
           question: cq,
+          cache: q,
           revealIgate: flagOn(env.FED_REVEAL_IGATE),
-          distBucketM: cfg.distBucketM,
           timeBucketSec: cfg.timeBucketSec,
           nowS: nowS(),
         });
@@ -971,8 +985,8 @@ export async function collectRelayed(
         nonce: ask.nonce,
         queryHash: ask.queryHash,
         question: cq,
+        cache: q,
         revealIgate: flagOn(env.FED_REVEAL_IGATE),
-        distBucketM: COARSEN.distBucketM,
         timeBucketSec: COARSEN.timeBucketSec,
         nowS: now,
         askedAt: ask.askedAt,

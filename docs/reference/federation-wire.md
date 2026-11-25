@@ -239,13 +239,14 @@ igateCall?}`, where `queryHash` is the hex SHA-256 of the question's payload byt
   peer, and otherwise as an anonymous key (refused under `FED_CORROBORATION_REQUIRE_KNOWN=1`); a
   blocked asker is refused. `at` must be within ±120 s. It bounds the question — centre snapped to the
   grid, radius clamped to 150–1000 m, window bucketed and capped at one hour, and a window that ended
-  more than seven days ago refused — and coarsens the answer to a distance bucket and a bucketed time.
+  more than seven days ago refused — and answers with its closest hearing, coarsened to a distance bucket
+  and a bucketed time.
   Rate limits apply per host, per asker, and per asker and callsign; a "no" is memoised per asker,
   question, radius and exclusion set.
 - **The asker** counts an answer only if it verifies under the peer's accept set, names the peer as
   origin and signer, is within ±120 s, and echoes its nonce and question hash. Evidence is rebuilt from
-  range-checked fields: the instance is the verified peer, the distance must lie within the asked
-  radius and the time within the asked window, and an `igateCall` is kept only when the asker also sets
+  range-checked fields: the instance is the verified peer, the distance plus the cache's offset from
+  the asked cell centre must lie within the cache's radius, the time within the asked window, and an `igateCall` is kept only when the asker also sets
   `FED_REVEAL_IGATE` and it is not one of the logger's own calls. The quorum counts distinct identities:
   the registry operator when there is one, else the signing key.
 

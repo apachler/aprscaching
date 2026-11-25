@@ -74,8 +74,11 @@ hear this callsign on RF near here, at a receiving site that is not ours?*
   sites, never an APRS-IS copy. A peer vouches no more widely than its own Tier A reaches.
 - A peer that denies a corroboration another peer confirmed feeds a **contradiction signal**. It lowers that
   peer's reputation and blocks automatic promotion.
-- Questions and answers are coarsened (grid-snapped, time-bucketed, distance-bucketed), so corroboration is
-  never a location oracle.
+- A peer's yes counts only when it proves the logger within the cache's radius: its distance, rounded up to
+  100 m from the centre of the cache's grid cell, plus the cache's offset from that centre.
+- Questions and answers are coarsened (snapped to a grid cell of about 67 × 46 m, time-bucketed,
+  distance-bucketed), so corroboration is never a location oracle: a peer learns which cache the logger
+  claims to stand at and the 10 minutes, never an exact position or second.
 
 The wire mechanics (signed questions, retries, the logger's own-track check) are under
 [Cross-instance corroboration](federation-trust.md#cross-instance-corroboration).

@@ -28,11 +28,14 @@ interface CoarsenConfig {
   distBucketM: number; // response distance bucket
 }
 /**
- * The coarsening every instance applies to corroboration questions and answers: ~550 m grid, 10-min
- * buckets, 100 m distance steps. Asker and answerer must bucket alike for an answer to match its
- * question, so these are fixed network-wide rather than per instance.
+ * The coarsening every instance applies to corroboration questions and answers: a 0.0006° grid (~67 m of
+ * latitude), 10-min buckets, 100 m distance steps. Asker and answerer must bucket alike for an answer to
+ * match its question, so these are fixed network-wide rather than per instance. The grid is the coarsest
+ * at which the asker can still prove a hit within the 150 m find radius for every cache position: a hit
+ * counts only when its bucketed distance plus the cache's offset from the cell centre is within the
+ * radius, and with 100 m steps that needs an offset of at most 50 m, so a half-diagonal under 50 m.
  */
-export const COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
+export const COARSEN: CoarsenConfig = { gridDeg: 0.0006, timeBucketSec: 600, distBucketM: 100 };
 
 const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 
