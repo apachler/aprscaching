@@ -38,8 +38,8 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
-import { baseHolder, sessionIdentity } from "./auth.js";
-import { forgetBoxes } from "./boxowner.js";
+import { baseHolder, ingestSecretOk, operatorSecretOk, sessionIdentity } from "./auth.js";
+import { boxHasKey, forgetBoxes } from "./boxowner.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
@@ -435,12 +435,19 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
 }
 
 /**
- * Whether the signer of this request may act as box `id` on an endpoint that names a box: a box signs only
- * for itself; the shared secret and the operator act for any box.
+ * Why this request may not act as box `id` on an endpoint that names a box, or null when it may. A box signs
+ * only for itself. A box with a key of its own (live or revoked) speaks only through its signature, with the
+ * operator secret as the operator's override: the shared INGEST_SECRET sits on every box that runs on it, so
+ * letting it pair, poll or ack a keyed box would hand that box's queue and its owner to whoever holds the
+ * secret. The shared secret acts for the boxes that have no key, and a session is checked by each handler.
  */
-export function boxMayActAs(req: Request, id: string): boolean {
+export async function boxActorRefusal(req: Request, env: Env, id: string): Promise<string | null> {
   const p = boxPrincipal(req);
-  return !p || p.box === id;
+  if (p) return p.box === id ? null : "this box's key does not act for another box";
+  if (operatorSecretOk(req, env) || !ingestSecretOk(req, env)) return null;
+  return (await boxHasKey(env, id))
+    ? "this box signs with its own key: the shared ingest secret does not act for it"
+    : null;
 }
 
 /**

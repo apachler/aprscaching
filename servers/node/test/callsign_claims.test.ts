@@ -22,6 +22,7 @@ import {
   passkeyRegister,
   type Res,
 } from "./helpers/authflow.js";
+import { signedCall, siteBox } from "./helpers/box.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const now = () => Math.floor(Date.now() / 1000);
@@ -60,8 +61,12 @@ function stubAmpr(value: string) {
   }) as typeof fetch;
 }
 
-const claimEnv = (extra: Record<string, unknown> = {}) =>
-  authEnv({ FIRST_PARTY_SITES: "OE8XXX", LOTW_CA_PEM: pem("root.pem"), DOH_URL: DOH, ...extra });
+/** An instance whose enrolled box hears on-air proofs at OE8XXX (siteBox), with LoTW and ampr.org proofs set up. */
+async function claimEnv(extra: Record<string, unknown> = {}): Promise<Env> {
+  const env = authEnv({ FIRST_PARTY_SITES: "OE8XXX", LOTW_CA_PEM: pem("root.pem"), DOH_URL: DOH, ...extra });
+  await siteBox(env);
+  return env;
+}
 
 const session = async (env: Env, cookie: string) =>
   (await call(env, "GET", "/auth/session", undefined, { cookie })).data;
@@ -83,31 +88,25 @@ async function openClaim(env: Env, cs: string, cookie?: string): Promise<Res> {
   return call(env, "POST", "/auth/claims", { callsign: cs }, cookie ? { cookie } : {});
 }
 
-/** Complete a claim by an on-air `VERIFY` heard at the attested site OE8XXX. */
+/** Complete a claim by an on-air `VERIFY` an enrolled box heard at the site OE8XXX it is trusted for. */
 async function proveOnAir(env: Env, cs: string, claim: string) {
   const s = await call(env, "POST", "/verify/aprs/start", { callsign: cs, claim });
   expect(s.status, JSON.stringify(s.data)).toBe(200);
-  await call(
-    env,
-    "POST",
-    "/ingest",
-    {
-      packets: [
-        {
-          src: `${cs}-7`,
-          dst: "APRS",
-          path: ["WIDE1-1", "qAR", "OE8XXX"],
-          payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
-          kind: "message",
-          heardVia: "rf",
-          igateCall: "OE8XXX",
-          port: "kiss-tnc",
-          ts: now(),
-        },
-      ],
-    },
-    INGEST,
-  );
+  await signedCall(env, await siteBox(env), "POST", "/ingest", {
+    packets: [
+      {
+        src: `${cs}-7`,
+        dst: "APRS",
+        path: ["WIDE1-1", "qAR", "OE8XXX"],
+        payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
+        kind: "message",
+        heardVia: "rf",
+        igateCall: "OE8XXX",
+        port: "kiss-tnc",
+        ts: now(),
+      },
+    ],
+  });
 }
 
 /** Complete a claim on OE8APR with its (synthetic) LoTW certificate. */
@@ -134,7 +133,7 @@ const status = (env: Env, claim: string) => call(env, "POST", "/auth/claims/stat
 
 describe("the sign-in probe and sign-up", () => {
   it("say that an unproven holder's call can be taken over, instead of only 'sign in'", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const probe = await call(env, "POST", "/auth/claim", { callsign: "OE8APR" });
     expect(probe.data).toMatchObject({ exists: true, claimable: true, operatorCall: false });
@@ -152,7 +151,7 @@ describe("a claim by proof of control", () => {
     ["through ampr.org DNS", "ampr"],
     ["with a LoTW certificate", "lotw"],
   ])("moves an unproven holder's call to a new account %s", async (_label, method) => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const squat = await emailSignup(env, "squat@example.test", "OE8APR");
     const squatAcct = await accountOf(env, squat.cookie);
 
@@ -186,7 +185,7 @@ describe("a claim by proof of control", () => {
   });
 
   it("adds the call, verified, to a signed-in claimant's account and keeps their active call", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const lic = await emailSignup(env, "lic@example.test", "DL2LIC");
     const opened = await openClaim(env, "OE8APR", lic.cookie);
@@ -201,7 +200,7 @@ describe("a claim by proof of control", () => {
   });
 
   it("never displaces a holder that has proven control", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const holder = await emailSignup(env, "holder@example.test", "OE8APR");
     const s = await call(env, "POST", "/verify/lotw/start", { callsign: "OE8APR" }, { cookie: holder.cookie });
     await call(
@@ -219,7 +218,7 @@ describe("a claim by proof of control", () => {
   });
 
   it("refuses a proof that lands after the holder proved control themselves", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const holder = await emailSignup(env, "holder@example.test", "OE8APR");
     const opened = await openClaim(env, "OE8APR");
     // the holder proves control first
@@ -238,7 +237,7 @@ describe("a claim by proof of control", () => {
   });
 
   it("needs an open claim's token on the call it names, and no claim on a call nobody holds", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     expect((await call(env, "POST", "/verify/lotw/start", { callsign: "OE8APR", claim: "x".repeat(32) })).status).toBe(
       409,
@@ -296,7 +295,7 @@ describe("the previous holder's content", () => {
   }
 
   it("stays on their account under FORMER when they hold no other call, and follows them to a new call", async () => {
-    const env = claimEnv({ INSTANCE: "gw.test" });
+    const env = await claimEnv({ INSTANCE: "gw.test" });
     const { squatAcct, cacheId, cookie: squatCookie } = await squatted(env);
     const opened = await openClaim(env, "OE8APR");
     await proveLotw(env, opened.data.claim);
@@ -363,7 +362,7 @@ describe("the previous holder's content", () => {
   });
 
   it("shows under the account's remaining call when it holds another", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const { squatAcct, cacheId } = await squatted(env, { otherCall: "DL1SQU" });
     const opened = await openClaim(env, "OE8APR");
     await proveAmpr(env, "OE8APR", opened.data.claim);
@@ -390,7 +389,7 @@ describe("the previous holder's content", () => {
 describe("federation", () => {
   it("peers drop the previous holder's key and finds on the call, re-mirror their cache, and see the new holder's key verified", async () => {
     const key = await newFedKey();
-    const env = claimEnv({ INSTANCE: "a.example", FED_PRIVATE_KEY: key.env });
+    const env = await claimEnv({ INSTANCE: "a.example", FED_PRIVATE_KEY: key.env });
     const hub = authEnv({ INSTANCE: "hub.example", FED_PRIVATE_KEY: (await newFedKey()).env });
     await hub.DB.prepare(
       "INSERT INTO fed_peers (url, instance, public_key, trust, added_via) VALUES ('https://a.example', 'a.example', ?, 'trusted', 'manual')",
@@ -456,7 +455,7 @@ describe("federation", () => {
 
 describe("ADMIN_CALLSIGNS", () => {
   it("is registered only through the operator's link or a proof of control", async () => {
-    const env = claimEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const env = await claimEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     expect(
       (await call(env, "POST", "/auth/email/start", { email: "x@example.test", callsign: "OE8APR" })).data.reason,
     ).toBe("operator_call");
@@ -480,7 +479,7 @@ describe("ADMIN_CALLSIGNS", () => {
 
   it("opens to the operator's link on an off-grid instance, and a held operator call cannot be claimed", async () => {
     // off-grid: no https APP_URL, no email — the operator's link is the way in (docs/run/first-hour.md)
-    const env = claimEnv({ ADMIN_CALLSIGNS: "OE8APR", APP_URL: "http://192.168.1.20:8080", RP_ID: undefined });
+    const env = await claimEnv({ ADMIN_CALLSIGNS: "OE8APR", APP_URL: "http://192.168.1.20:8080", RP_ID: undefined });
     const op = await operatorSignup(env, "OE8APR");
     expect(op.status).toBe(200);
     expect((await session(env, op.cookie)).callsign).toBe("OE8APR");
@@ -494,7 +493,7 @@ describe("ADMIN_CALLSIGNS", () => {
 
 describe("the sysop", () => {
   async function sysopWorld() {
-    const env = claimEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
+    const env = await claimEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
     const sysop = await operatorSignup(env, "OE8SYS");
     await operatorVerify(env, "OE8SYS");
     const user = await emailSignup(env, "user@example.test", "DL1USR");
@@ -585,7 +584,7 @@ describe("the sysop", () => {
 
 describe("the person's data", () => {
   it("export lists the claims and the calls gained or lost; erasure drops them from the trail", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const lic = await emailSignup(env, "lic@example.test", "DL2LIC");
     const opened = await openClaim(env, "OE8APR", lic.cookie);
@@ -613,7 +612,7 @@ describe("the person's data", () => {
   });
 
   it("an account left with no call exports and erases its data through an email link that opens nothing else", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const squat = await emailSignup(env, "squat@example.test", "OE8APR");
     const squatAcct = await accountOf(env, squat.cookie);
     const opened = await openClaim(env, "OE8APR");
@@ -671,7 +670,7 @@ describe("the person's data", () => {
   });
 
   it("a data link stops working once the account takes a call on again", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const opened = await openClaim(env, "OE8APR");
     await proveOnAir(env, "OE8APR", opened.data.claim);
@@ -696,7 +695,7 @@ describe("a suspended holder", () => {
       .run();
 
   it("keeps the call against every claim, its own included, until the sysop releases it", async () => {
-    const env = claimEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
+    const env = await claimEnv({ ADMIN_CALLSIGNS: "OE8SYS" });
     const sysop = await operatorSignup(env, "OE8SYS");
     await operatorVerify(env, "OE8SYS");
     const held = await emailSignup(env, "held@example.test", "OE8APR");
@@ -715,27 +714,21 @@ describe("a suspended holder", () => {
     await suspend(env, heldAcct);
     const s = await call(env, "POST", "/verify/aprs/start", { callsign: "OE8APR", claim: early.data.claim });
     expect(s.status).toBe(200);
-    await call(
-      env,
-      "POST",
-      "/ingest",
-      {
-        packets: [
-          {
-            src: "OE8APR-7",
-            dst: "APRS",
-            path: ["WIDE1-1", "qAR", "OE8XXX"],
-            payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
-            kind: "message",
-            heardVia: "rf",
-            igateCall: "OE8XXX",
-            port: "kiss-tnc",
-            ts: now(),
-          },
-        ],
-      },
-      INGEST,
-    );
+    await signedCall(env, await siteBox(env), "POST", "/ingest", {
+      packets: [
+        {
+          src: "OE8APR-7",
+          dst: "APRS",
+          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
+          kind: "message",
+          heardVia: "rf",
+          igateCall: "OE8XXX",
+          port: "kiss-tnc",
+          ts: now(),
+        },
+      ],
+    });
     expect((await status(env, early.data.claim)).data.status).toBe("refused");
     expect(await holderOf(env, "OE8APR")).toBe(heldAcct);
 
@@ -751,7 +744,7 @@ describe("a suspended holder", () => {
   });
 
   it("collects no session from a claim while suspended, and collects it once the suspension is lifted", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const opened = await openClaim(env, "OE8APR");
     await proveOnAir(env, "OE8APR", opened.data.claim);
@@ -767,7 +760,7 @@ describe("a suspended holder", () => {
   });
 
   it("takes no call on through an email link while its account holds none", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     const squat = await emailSignup(env, "squat@example.test", "OE8APR");
     const squatAcct = await accountOf(env, squat.cookie);
     const opened = await openClaim(env, "OE8APR");
@@ -785,7 +778,7 @@ describe("a suspended holder", () => {
 
 describe("what beacons under the call", () => {
   it("goes with a takeover, whichever account lists it", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const club = await emailSignup(env, "club@example.test", "DL1CLB");
     const clubAcct = await accountOf(env, club.cookie);
@@ -835,7 +828,7 @@ describe("what beacons under the call", () => {
   });
 
   it("leaves nothing the previous holder queued for APRS-IS to go on the air", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const service = serviceCall(env);
     const t = now();
@@ -861,7 +854,7 @@ describe("what beacons under the call", () => {
 
 describe("the on-air proof of a claim", () => {
   it("is bounded per claim and per client address, so no claimant uses up another's", async () => {
-    const env = claimEnv();
+    const env = await claimEnv();
     await emailSignup(env, "squat@example.test", "OE8APR");
     const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
     const b = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.2");
@@ -884,7 +877,7 @@ describe("the on-air proof of a claim", () => {
 describe("the internet proofs of a claim", () => {
   for (const method of ["ampr", "lotw"] as const)
     it(`bound ${method} starts per claim and per client address, so no claimant uses up another's`, async () => {
-      const env = claimEnv();
+      const env = await claimEnv();
       await emailSignup(env, "squat@example.test", "OE8APR");
       const a = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.1");
       const b = await call(env, "POST", "/auth/claims", { callsign: "OE8APR" }, {}, "198.51.100.2");
@@ -905,7 +898,7 @@ describe("the internet proofs of a claim", () => {
 
   for (const method of ["ampr", "lotw"] as const)
     it(`keep the holder's own ${method} starts on a budget of the call's, apart from every claim's`, async () => {
-      const env = claimEnv();
+      const env = await claimEnv();
       const holder = await emailSignup(env, "squat@example.test", "OE8APR");
       const own = (ip: string) =>
         call(env, "POST", `/verify/${method}/start`, { callsign: "OE8APR" }, { cookie: holder.cookie }, ip);

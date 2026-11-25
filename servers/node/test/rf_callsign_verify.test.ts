@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Callsign control-verification by an RF transmission: the holder asks for a code, transmits
-// `VERIFY <code>` to the service call, and the call is verified only when a receiving site this instance
-// attests heard it on its own radio. APRS-IS is public, so nothing that travels over it — the code, or a
-// copy of the message — proves control of the licence. The operator bootstraps their own call with the
-// operator secret, and a sysop may verify a call by hand, on the record.
+// `VERIFY <code>` to the service call, and the call is verified only when an enrolled ingest box heard it on
+// its own radio at a site the sysop trusts through that box, and delivered it signed with its own key. APRS-IS
+// is public, so nothing that travels over it — the code, or a copy of the message — proves control of the
+// licence, and the shared ingest secret proves nothing either (ingest_secret_authority.test.ts). The operator
+// bootstraps their own call with the operator secret, and a sysop may verify a call by hand, on the record.
 import { describe, it, expect } from "vitest";
 import { handleRadioMessage, type RadioMessage } from "@aprscaching/gateway/radiolog";
 import type { Env } from "@aprscaching/gateway/env";
-import { authEnv, call, emailSignup, operatorVerify, rfVerify } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { rfVerify, signedCall, trustedBox } from "./helpers/box.js";
 
 const SECRET = { "x-ingest-secret": "test-ingest-secret" };
 const OPERATOR = { "x-operator-secret": "test-operator-secret" };
 
-const rfEnv = (extra: Record<string, unknown> = {}) => authEnv({ FIRST_PARTY_SITES: "OE8XXX", ...extra });
+const BOX = "shack-rx";
+/** An instance whose enrolled box BOX the sysop trusts for the site OE8XXX; the env and the box's key. */
+async function rfWorld(extra: Record<string, unknown> = {}) {
+  const env = authEnv(extra);
+  return { env, box: await trustedBox(env, BOX, ["OE8XXX"]) };
+}
+const rfEnv = async (extra: Record<string, unknown> = {}) => (await rfWorld(extra)).env;
 
 const verified = async (env: Env, cs: string) =>
   (await call(env, "GET", `/verify/aprs/status?callsign=${cs}`)).data?.verified === true;
@@ -20,7 +28,7 @@ const verified = async (env: Env, cs: string) =>
 const outboxCount = async (env: Env) =>
   (await env.DB.prepare("SELECT COUNT(*) AS n FROM aprs_outbox").first<{ n: number }>())!.n;
 
-/** `VERIFY <code>` from `src` to the service call, heard by the attested site OE8XXX on its TNC. */
+/** `VERIFY <code>` from `src` to the service call, heard by the trusted site OE8XXX on BOX's TNC. */
 const heard = (src: string, text: string, o: Partial<RadioMessage> = {}): RadioMessage => ({
   src,
   text,
@@ -31,6 +39,7 @@ const heard = (src: string, text: string, o: Partial<RadioMessage> = {}): RadioM
   igateCall: "OE8XXX",
   path: ["WIDE1-1", "qAR", "OE8XXX"],
   signed: false,
+  deliveredBy: BOX,
   ...o,
 });
 
@@ -53,7 +62,7 @@ async function held(env: Env, cs: string): Promise<{ verified: number; method: s
 
 describe("starting an RF verification", () => {
   it("returns the code, the service call and the exact text to send, and queues nothing", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { s } = await started(env);
     expect(s.status).toBe(200);
     expect(s.data.code).toMatch(/^\d{6}$/);
@@ -65,13 +74,13 @@ describe("starting an RF verification", () => {
   });
 
   it("names the configured service call", async () => {
-    const env = rfEnv({ SERVICE_CALL: "OE8BBS" });
+    const env = await rfEnv({ SERVICE_CALL: "OE8BBS" });
     const { s } = await started(env);
     expect(s.data.to).toBe("OE8BBS");
   });
 
   it("needs a session whose account holds the call", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     await emailSignup(env, "owner@example.test", "OE8APR");
     const other = await emailSignup(env, "other@example.test", "DL1AAA");
     expect(
@@ -83,7 +92,7 @@ describe("starting an RF verification", () => {
   });
 
   it("the browser cannot confirm by typing the code back", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { me, s } = await started(env);
     const r = await call(
       env,
@@ -99,29 +108,23 @@ describe("starting an RF verification", () => {
 
 describe("a VERIFY message heard at an attested site", () => {
   it("verifies the call through the real ingest, from any SSID, and acks the message", async () => {
-    const env = rfEnv();
+    const { env, box } = await rfWorld();
     const { s } = await started(env);
-    const r = await call(
-      env,
-      "POST",
-      "/ingest",
-      {
-        packets: [
-          {
-            src: "OE8APR-7",
-            dst: "APRS",
-            path: ["WIDE1-1", "qAR", "OE8XXX"],
-            payload: `:APRSCG   :verify ${s.data.code}{5`,
-            kind: "message",
-            heardVia: "rf",
-            igateCall: "OE8XXX",
-            port: "kiss-tnc",
-            ts: Math.floor(Date.now() / 1000),
-          },
-        ],
-      },
-      SECRET,
-    );
+    const r = await signedCall(env, box, "POST", "/ingest", {
+      packets: [
+        {
+          src: "OE8APR-7",
+          dst: "APRS",
+          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          payload: `:APRSCG   :verify ${s.data.code}{5`,
+          kind: "message",
+          heardVia: "rf",
+          igateCall: "OE8XXX",
+          port: "kiss-tnc",
+          ts: Math.floor(Date.now() / 1000),
+        },
+      ],
+    });
     expect(r.status).toBe(200);
     expect(await verified(env, "OE8APR")).toBe(true);
     expect(await row(env, "OE8APR")).toMatchObject({ status: "verified", method: "rf_heard", challenge: null });
@@ -138,8 +141,9 @@ describe("a VERIFY message heard at an attested site", () => {
     ["in a signed browser batch", { signed: true }],
     ["from a different base call", { src: "OE8APX-7" }],
     ["over an internet tunnel", { port: "axudp" }],
+    ["from the shared ingest secret", { deliveredBy: undefined }],
   ])("does not verify when it arrives %s", async (_label, o) => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { s } = await started(env);
     await handleRadioMessage(env, heard("OE8APR-7", `VERIFY ${s.data.code}`, o as Partial<RadioMessage>));
     expect(await verified(env, "OE8APR")).toBe(false);
@@ -149,15 +153,15 @@ describe("a VERIFY message heard at an attested site", () => {
     expect(await verified(env, "OE8APR")).toBe(true);
   });
 
-  it("with no attested site configured nothing verifies", async () => {
-    const env = authEnv();
+  it("with no site trusted through a box nothing verifies, whatever FIRST_PARTY_SITES names", async () => {
+    const env = authEnv({ FIRST_PARTY_SITES: "OE8XXX" });
     const { s } = await started(env);
     await handleRadioMessage(env, heard("OE8APR-7", `VERIFY ${s.data.code}`));
     expect(await verified(env, "OE8APR")).toBe(false);
   });
 
   it("a wrong code counts an attempt and locks the challenge at the cap", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { s } = await started(env);
     const wrong = s.data.code === "000000" ? "111111" : "000000";
     await handleRadioMessage(env, heard("OE8APR-7", `VERIFY ${wrong}`, { msgNo: "1" }));
@@ -169,14 +173,14 @@ describe("a VERIFY message heard at an attested site", () => {
   });
 
   it("a wrong code that did not reach the site costs no attempt", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     await started(env);
     await handleRadioMessage(env, heard("OE8APR-7", "VERIFY 000001", { port: "aprs-is", heardVia: "aprs_is" }));
     expect((await row(env, "OE8APR"))!.attempts).toBe(0);
   });
 
   it("a wrong code never downgrades an already-verified call", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { me, s } = await started(env);
     await handleRadioMessage(env, heard("OE8APR-7", `VERIFY ${s.data.code}`));
     expect(await verified(env, "OE8APR")).toBe(true);
@@ -188,13 +192,13 @@ describe("a VERIFY message heard at an attested site", () => {
   });
 
   it("an expired challenge does not verify, and a used code does not replay", async () => {
-    const env = rfEnv();
+    const env = await rfEnv();
     const { s } = await started(env);
     await env.DB.prepare("UPDATE callsign_verifications SET created_at = created_at - 7200").run();
     await handleRadioMessage(env, heard("OE8APR-7", `VERIFY ${s.data.code}`));
     expect(await verified(env, "OE8APR")).toBe(false);
 
-    const env2 = rfEnv();
+    const env2 = await rfEnv();
     const b = await started(env2);
     await handleRadioMessage(env2, heard("OE8APR-7", `VERIFY ${b.s.data.code}`));
     await env2.DB.prepare("UPDATE callsign_verifications SET status='pending'").run();
@@ -203,18 +207,21 @@ describe("a VERIFY message heard at an attested site", () => {
   });
 
   it("the rf helper verifies end to end", async () => {
-    const env = rfEnv();
+    const { env, box } = await rfWorld();
     const me = await emailSignup(env, "owner@example.test", "OE8APR");
-    await rfVerify(env, me.cookie, "OE8APR");
+    await rfVerify(env, box, me.cookie, "OE8APR");
     expect(await verified(env, "OE8APR")).toBe(true);
   });
 });
 
 describe("a VERIFY message sent from a MeshCom node", () => {
   // The packets the ingest's MeshCom listener emits (apps/ingest/test/meshcom.test.ts) for a direct
-  // message to the service call, heard by the operator's node OE8XXX-12 — an attested site here.
+  // message to the service call, heard by the operator's node OE8XXX-12 — a site trusted through BOX here.
   const NODE = "OE8XXX-12";
-  const meshEnv = () => authEnv({ FIRST_PARTY_SITES: NODE });
+  const meshWorld = async () => {
+    const env = authEnv();
+    return { env, box: await trustedBox(env, BOX, [NODE]) };
+  };
   const meshcom = (code: string, o: Record<string, unknown> = {}) => ({
     src: "OE8APR-1",
     dst: "APRS",
@@ -228,13 +235,14 @@ describe("a VERIFY message sent from a MeshCom node", () => {
     ts: Math.floor(Date.now() / 1000),
     ...o,
   });
-  const ingest = (env: Env, packet: Record<string, unknown>) =>
-    call(env, "POST", "/ingest", { packets: [packet] }, SECRET);
+  const ingest = (w: Awaited<ReturnType<typeof meshWorld>>, packet: Record<string, unknown>) =>
+    signedCall(w.env, w.box, "POST", "/ingest", { packets: [packet] });
 
   it("verifies when the attested node heard it directly over LoRa", async () => {
-    const env = meshEnv();
+    const w = await meshWorld();
+    const { env } = w;
     const { s } = await started(env);
-    expect((await ingest(env, meshcom(s.data.code))).status).toBe(200);
+    expect((await ingest(w, meshcom(s.data.code))).status).toBe(200);
     expect(await verified(env, "OE8APR")).toBe(true);
     expect(await row(env, "OE8APR")).toMatchObject({ method: "rf_heard", verified_by: NODE });
   });
@@ -244,19 +252,20 @@ describe("a VERIFY message sent from a MeshCom node", () => {
     ["from the MeshCom server", { heardVia: "aprs_is", igateCall: undefined }],
     ["heard by a node that is not attested", { igateCall: "OE9ZZZ-12", rxCall: "OE9ZZZ-12" }],
   ])("does not verify when it arrives %s, and costs no attempt", async (_label, o) => {
-    const env = meshEnv();
+    const w = await meshWorld();
+    const { env } = w;
     const { s } = await started(env);
-    await ingest(env, meshcom(s.data.code, o));
+    await ingest(w, meshcom(s.data.code, o));
     expect(await verified(env, "OE8APR")).toBe(false);
     expect((await row(env, "OE8APR"))!.attempts).toBe(0);
-    await ingest(env, meshcom(s.data.code, { ts: Math.floor(Date.now() / 1000) + 1 }));
+    await ingest(w, meshcom(s.data.code, { ts: Math.floor(Date.now() / 1000) + 1 }));
     expect(await verified(env, "OE8APR")).toBe(true);
   });
 });
 
 describe("operator bootstrap", () => {
   it("needs the operator secret and an ADMIN_CALLSIGNS call", async () => {
-    const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const env = await rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     const s = await emailSignup(env, "op@example.test", "OE8APR");
     expect((await call(env, "POST", "/verify/operator", { callsign: "OE8APR" })).status).toBe(401);
     expect(
@@ -278,7 +287,7 @@ describe("operator bootstrap", () => {
   });
 
   it("verifies the call even before any account holds it", async () => {
-    const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const env = await rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     await operatorVerify(env, "OE8APR");
     expect(await verified(env, "OE8APR")).toBe(true);
   });
@@ -286,7 +295,7 @@ describe("operator bootstrap", () => {
 
 describe("whoami pending hint", () => {
   it("tells only the unverified holder of an ADMIN_CALLSIGNS call to verify", async () => {
-    const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const env = await rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     const op = await emailSignup(env, "op@example.test", "OE8APR");
     const who = await call(env, "GET", "/api/admin/whoami", undefined, { cookie: op.cookie });
     expect(who.data).toMatchObject({ sysop: false, pending: "verify" });
@@ -303,7 +312,7 @@ describe("whoami pending hint", () => {
 
 describe("sysop manual verification", () => {
   async function sysopEnv() {
-    const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
+    const env = await rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     const op = await emailSignup(env, "op@example.test", "OE8APR");
     await operatorVerify(env, "OE8APR");
     const user = await emailSignup(env, "far@example.test", "VK2FAR");

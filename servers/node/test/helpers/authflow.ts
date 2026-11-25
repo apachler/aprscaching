@@ -266,35 +266,3 @@ export async function operatorVerify(env: Env, callsign: string): Promise<void> 
   const r = await call(env, "POST", "/verify/operator", { callsign }, { "x-operator-secret": "test-operator-secret" });
   if (r.data?.verified !== true) throw new Error(`operator-verify ${callsign} failed: ${JSON.stringify(r.data)}`);
 }
-
-/**
- * Verify a held call over RF: start a challenge for the signed-in account, then ingest the `VERIFY <code>`
- * message as heard on the TNC of the attested site OE8XXX (the env must name it in FIRST_PARTY_SITES).
- */
-export async function rfVerify(env: Env, cookie: string, callsign: string): Promise<void> {
-  const s = await call(env, "POST", "/verify/aprs/start", { callsign }, { cookie });
-  if (s.status !== 200) throw new Error(`verify start ${callsign} failed: ${JSON.stringify(s.data)}`);
-  await call(
-    env,
-    "POST",
-    "/ingest",
-    {
-      packets: [
-        {
-          src: `${callsign}-7`,
-          dst: "APRS",
-          path: ["WIDE1-1", "qAR", "OE8XXX"],
-          payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
-          kind: "message",
-          heardVia: "rf",
-          igateCall: "OE8XXX",
-          port: "kiss-tnc",
-          ts: Math.floor(Date.now() / 1000),
-        },
-      ],
-    },
-    { "x-ingest-secret": "test-ingest-secret" },
-  );
-  const st = await call(env, "GET", `/verify/aprs/status?callsign=${callsign}`);
-  if (st.data?.verified !== true) throw new Error(`rf-verify ${callsign} failed`);
-}

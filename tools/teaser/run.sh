@@ -10,6 +10,8 @@ PORT_API="${PORT_API:-8787}"
 PORT_WEB="${PORT_WEB:-4173}"
 # the ingest secret the throwaway gateway and the seed script share
 export INGEST_SECRET="${INGEST_SECRET:-teaser-ingest-secret-0123456789}"
+# the operator secret the seed enrolls its receiving box with: a callsign proof counts only from an enrolled box
+export OPERATOR_SECRET="${OPERATOR_SECRET:-teaser-operator-secret-0123456789}"
 # In this sandbox Chromium lives at /opt/pw-browsers; elsewhere `npx playwright install chromium`
 # and leave PW_CHROMIUM unset so Playwright resolves its own download.
 export PW_CHROMIUM="${PW_CHROMIUM:-/opt/pw-browsers/chromium}"

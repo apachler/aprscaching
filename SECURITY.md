@@ -61,8 +61,9 @@ network layer (that's the operator's edge/CDN concern).
 ## Hardening & running securely
 
 - **Three secrets, three planes.** `INGEST_SECRET` (the ingest box) authorises only ingest-plane writes;
-  it never registers a device key, verifies a callsign, reaches operator configuration or signs a
-  session. `OPERATOR_SECRET` (the operator's scripts, `x-operator-secret`) reaches instance-wide
+  it never registers a device key, verifies a callsign, acts for a box enrolled with its own key, reaches
+  operator configuration or signs a session. An on-air `VERIFY` proves control of a call only when an ingest
+  box enrolled with its own key delivers it, heard at a site the sysop trusts through that box. `OPERATOR_SECRET` (the operator's scripts, `x-operator-secret`) reaches instance-wide
   configuration and is closed while unset. `SESSION_SECRET` alone signs sessions. A leaked ingest secret
   therefore lets an attacker post packets as your ingest box — it does not hand over accounts or the
   instance, and a finding that it does is in scope.
@@ -84,7 +85,9 @@ network layer (that's the operator's edge/CDN concern).
 - **Credentialed CORS is allowlisted.** Only `APP_URL` and `CORS_ORIGINS` may send a session cookie
   cross-origin; with neither set, no origin can.
 - **A remote box belongs to the account that pairs it** with the one-time code the box prints; no
-  account can claim a box id by touching it first.
+  account can claim a box id by touching it first. A box enrolled with its own key is paired, polled and
+  acknowledged only through its signature, with `OPERATOR_SECRET` as the operator's override; the shared
+  secret acts only for boxes that have no key.
 - The desktop app listens on `127.0.0.1` unless `HOST` says otherwise, and generates its secrets on first
   run.
 - `LOTW_CA_PEM` decides whose certificates prove a callsign: put only the ARRL LoTW CA certificates in

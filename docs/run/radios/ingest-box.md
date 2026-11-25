@@ -38,11 +38,17 @@ A box proves itself to its gateway in one of two ways:
 | Credential | Settings on the box | Revoke one box | Who uses it |
 |---|---|---|---|
 | **Its own key** (enrolled) | `BOX_ID` and `BOX_KEY` | Yes, alone | Any box on another machine; the recommended way |
-| **The shared secret** | `INGEST_SECRET`, the same as the gateway's | No: changing it cuts off every box on it | A single-operator setup |
+| **The shared secret** | `INGEST_SECRET`, the same as the gateway's | No: changing it cuts off every box on it | A single-operator setup whose box verifies no callsigns |
 
 Boxes on the shared secret keep working beside enrolled ones. Neither credential is an attestation: what a
 box hears counts for Tier A only once the gateway's sysop trusts its receiving site
-([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)). Never put the gateway's
+([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)).
+
+**Only an enrolled box verifies callsigns on the air.** A `VERIFY <code>` message counts only when a box
+enrolled with its own key delivers it, heard at a site trusted under that box. The shared secret never
+verifies a callsign: whoever holds it can post any frame, and a proof from it would let a leaked secret take
+over calls, the operator's included. For members to verify their calls on the air, enroll the box that hears
+them, your own included, and switch on **Trust this station's hearings** with its site call. Never put the gateway's
 `OPERATOR_SECRET` or `SESSION_SECRET` on a box.
 
 ## Enrolling boxes on the gateway
@@ -79,7 +85,7 @@ each, are the enrollment's audit trail.
 
 A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.
 
-A box's key is narrower than the shared `INGEST_SECRET`, because a box may be a receiver a ham lends you:
+A box's key writes less than the shared `INGEST_SECRET`, because a box may be a receiver a ham lends you:
 
 | An enrolled box | Can | Cannot |
 |---|---|---|
@@ -94,7 +100,12 @@ A box's frames attest only the sites trusted under that box: `FIRST_PARTY_SITES`
 call count only for frames sent with the shared secret, and no other box can claim a box's site. Your own box
 on a key therefore needs **Trust this station's hearings** with its site call, and **Runs this instance's
 services** when it runs the packet BBS, FBB forwarding, the node mirror or the outbox. On the shared secret it
-needs neither.
+needs neither, and verifies finds but no callsign.
+
+Once a box is enrolled, its id answers only to its own key: its pairing code, its command polling and
+acknowledgements, its queue and its log take only its signature, or `OPERATOR_SECRET` as your override. The
+shared secret is refused for it, so whoever holds that secret cannot re-pair the box to their own account or
+take its commands. A box with no key is paired and polled on the shared secret.
 
 ## Enrolling the box
 

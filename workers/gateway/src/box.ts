@@ -4,16 +4,18 @@
  * commands; the box pulls them over its existing outbound connection (no inbound ports), executes,
  * and acks. The ECHOCAT pattern with the gateway as the rendezvous.
  *
- *   POST /api/box/:id/command         enqueue (session or box secret; TX kinds are control-verified)
- *   GET  /api/box/:id/commands        the box leases queued commands (x-ingest-secret) → marks them sent;
+ *   POST /api/box/:id/command         enqueue (session or the box's credential; TX kinds are control-verified)
+ *   GET  /api/box/:id/commands        the box leases queued commands (its credential) → marks them sent;
  *                                     `?tx=1&rf=1&meshcom=CALL,…` reports what it can transmit (box_status)
- *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
- *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
- *   POST /api/box/:id/pair            the box obtains a one-time pairing code (x-ingest-secret) and shows it
+ *   POST /api/box/:id/commands/ack    the box reports done/failed (its credential)
+ *   GET  /api/box/:id/log             operator view of recent commands + status (session or the box's credential)
+ *   POST /api/box/:id/pair            the box obtains a one-time pairing code (its credential) and shows it
  *   POST /api/box/:id/claim {code}    a signed-in operator links the box to their account with that code
  *
- * A box belongs to the account that presented a pairing code the box itself obtained — proof of
- * possession of the box (its ingest secret) — so no account can take a box id by touching it first.
+ * The box's credential is its own signature when it is enrolled with a key, and the shared INGEST_SECRET
+ * only when it is not; OPERATOR_SECRET overrides either (boxkeys.ts boxActorRefusal). A box belongs to the
+ * account that presented a pairing code the box itself obtained — proof of possession of the box — so no
+ * account can take a box id by touching it first, and no holder of the shared secret can re-pair a keyed box.
  *
  * Gating (non-negotiable): every TX-capable command requires a callsign gated on control-verification;
  * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
@@ -25,7 +27,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
-import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, operatorSecretOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
 import { baseCall, isValidLatLon } from "@aprscaching/aprs";
@@ -44,7 +46,12 @@ const ALL_KINDS = new Set([...TX_KINDS, "status"]);
  */
 const SYSTEM_TX_KINDS = new Set(["object"]);
 const leasedTx = (kind: string) => TX_KINDS.has(kind) || SYSTEM_TX_KINDS.has(kind);
-const boxAuth = ingestOrBoxOk;
+/**
+ * The box's own credential, or the operator's override: the shared secret (for a box with no key of its own),
+ * the box's signature, or OPERATOR_SECRET. route() has already refused the shared secret for a keyed box
+ * (boxkeys.ts boxActorRefusal).
+ */
+const boxAuth = (req: Request, env: Env) => ingestOrBoxOk(req, env) || operatorSecretOk(req, env);
 
 /** Does `accountId` own `boxId` (boxowner.ts)? A box with no owner takes no session commands. */
 async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
@@ -71,7 +78,7 @@ async function codeHash(boxId: string, code: string): Promise<string> {
 }
 
 /**
- * POST /api/box/:id/pair — the box asks for a pairing code with its ingest secret and prints it for its
+ * POST /api/box/:id/pair — the box asks for a pairing code with its credential and prints it for its
  * operator. A new code replaces any earlier one. Only a hash is stored.
  */
 export async function handleBoxPair(req: Request, env: Env, boxId: string): Promise<Response> {

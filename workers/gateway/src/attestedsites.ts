@@ -11,7 +11,8 @@
  * trusted_sites count only for frames the shared INGEST_SECRET delivered: the instance's own ingest. A frame an
  * enrolled box delivered claims only the sites trusted through that box, so a box vouches for its own hearings
  * and for no other receiver, and no other box, nor the shared secret, can claim its site. An operator whose own
- * box signs with its key trusts that box's site under the box.
+ * box signs with its key trusts that box's site under the box. Only a box's sites hear a callsign proof
+ * ({@link boxSites}).
  *
  * The trusted rows are read once and kept for a short while per database binding: a batch of radio messages,
  * a find and a peer's corroboration question each cost at most one small read. A change made here drops the
@@ -87,11 +88,20 @@ export function sitesFor(a: Attestation, box?: string | null): Set<string> {
 }
 
 /**
- * Every site this instance attests through any credential: where a `VERIFY` message can be heard, and the
- * list the admin reads. Not for deciding one frame's attestation; that is {@link sitesFor}.
+ * Every site this instance attests through any credential: the list the admin reads. Not for deciding one
+ * frame's attestation; that is {@link sitesFor}.
  */
 export async function attestedSites(env: Env): Promise<Set<string>> {
   return everySite(await attestation(env));
+}
+
+/**
+ * The sites trusted through an enrolled box: where a `VERIFY` message can be heard. A callsign proof counts
+ * only from a box's own key (radiolog.ts), so FIRST_PARTY_SITES and the stations added by call, which the
+ * shared secret's frames claim, hear none.
+ */
+export async function boxSites(env: Env): Promise<Set<string>> {
+  return everySite({ shared: new Set(), byBox: (await attestation(env)).byBox });
 }
 
 /** Every site an {@link Attestation} names, whoever may claim it. */

@@ -93,8 +93,9 @@ scored separately and exactly as for an app log, at the time the message was sen
   verification window before the message.
 - **Tier C** otherwise. A radio message carries no in-app device reading, so it never reaches Tier B.
 
-`VERIFY <code>` is stricter: it proves control of the licence, so only a copy heard directly at an attested
-site counts. A signed browser batch does not — the browser bridge runs on the sender's own computer — and
+`VERIFY <code>` is stricter: it proves control of the licence, so only a copy heard directly at a site
+trusted through an enrolled box, and delivered with that box's own key, counts; the shared ingest secret's copies
+never do. A signed browser batch does not — the browser bridge runs on the sender's own computer — and
 neither does anything from APRS-IS or a tunnel. Those copies are dropped unanswered and cost no attempt, so
 nobody off the air can lock the sender's challenge. A heard copy is acked; a completed challenge is answered
 with `<CALL> verified`. It is handled before the other commands, needs no verified call (it is how one

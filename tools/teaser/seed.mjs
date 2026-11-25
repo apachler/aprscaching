@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Seed a realistic demo dataset (Graz/Styria) for the teaser crawl.
 // Idempotent-ish: skips caches whose title already exists.
+import { boxFetch, enrollTrustedBox } from "../smoke/boxsign.mjs";
+
 const API = process.env.API_BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
 const now = () => Math.floor(Date.now() / 1000);
@@ -285,9 +287,10 @@ console.log("seeded", logged, "extra cache logs");
 
 // Verify OE8APR so the teaser chrome shows an ACTIVATED operator (the green check, not "unverified").
 // Dev-only, HTTP-only: register the account via the email dev token (no mail provider → the token is
-// returned), start a verification challenge in its session, and ingest the `VERIFY <code>` message as
-// heard on the TNC of the attested site OE8XXX (the teaser gateway sets FIRST_PARTY_SITES=OE8XXX) —
-// no real RF/TX. The tour signs in to this same account → verified=1.
+// returned), start a verification challenge in its session, and deliver the `VERIFY <code>` message as heard
+// on the TNC of the site OE8XXX by a receiving box the seed enrolls with its own key and trusts for that site
+// (a callsign proof counts only from such a box, so this needs OPERATOR_SECRET) — no real RF/TX. The tour
+// signs in to this same account → verified=1.
 //
 // Where OE8APR is the instance's ADMIN_CALLSIGNS call (the dev stack), email opens no account for it: with
 // OPERATOR_SECRET the seed opens it with the operator's sign-in link and verifies it with the operator secret,
@@ -326,9 +329,13 @@ async function seedOperator(call) {
     body: JSON.stringify({ token: start.data?.devToken }),
   });
   const cookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
-  const ch = await j("POST", "/verify/aprs/start", { callsign: CALL }, { cookie });
-  if (ch.ok) {
-    await j("POST", "/ingest", {
+  const rx = OPERATOR_SECRET
+    ? await enrollTrustedBox(API, OPERATOR_SECRET, `seed-rx-${now()}`, ["OE8XXX"])
+    : { error: "OPERATOR_SECRET is not set" };
+  const ch = rx.key ? await j("POST", "/verify/aprs/start", { callsign: CALL }, { cookie }) : null;
+  if (rx.error) console.log(`no receiving box to hear ${CALL}'s VERIFY (${rx.error}) — ${CALL} stays unverified`);
+  else if (ch.ok) {
+    await boxFetch(API, rx.key, "POST", "/ingest", {
       packets: [
         {
           src: `${CALL}-7`,

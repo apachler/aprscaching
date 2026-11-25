@@ -6,6 +6,7 @@
 //   BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
 
 import { cborDecode as miniDecode, frameParts, signingBytes, decodePage } from "./fedwire-mini.mjs";
+import { boxFetch, enrollTrustedBox } from "./boxsign.mjs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
@@ -14,6 +15,8 @@ const SECRET = process.env.INGEST_SECRET ?? "change-me";
 const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
+/** The smoke's receiving box, once enrolled ({@link rxBox}). */
+let rx = null;
 
 /** True when `u` is an absolute URL on github.com itself (a host match, not a substring match). */
 function isGithubUrl(u) {
@@ -741,7 +744,8 @@ ok(
   JSON.stringify(lbPre.data),
 );
 // Control-verify a call the real way: the holder's session starts a challenge (nothing is sent), and the
-// holder's `VERIFY <code>` message counts only as heard on the TNC of the attested site OE8XXX.
+// holder's `VERIFY <code>` message counts only as heard on the TNC of the site OE8XXX, delivered by the
+// enrolled box the sysop trusts for it. The shared ingest secret never verifies a call.
 async function signUp(cs) {
   const st = await call("POST", "/auth/email/start", {
     email: `${cs.toLowerCase()}+${now()}@example.test`,
@@ -754,7 +758,25 @@ async function signUp(cs) {
   });
   return (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
 }
-function verifyMessage(cs, start, onAir) {
+/** The receiving box "smoke-rx", enrolled with its own key and trusted for OE8XXX on first use. */
+async function rxBox() {
+  if (!rx) {
+    const r = await enrollTrustedBox(BASE, OPERATOR_SECRET, "smoke-rx", ["OE8XXX"]);
+    if (r.error) {
+      console.error(`✗ the smoke's receiving box could not be enrolled (needs OPERATOR_SECRET): ${r.error}`);
+      process.exit(1);
+    }
+    rx = r.key;
+  }
+  return rx;
+}
+/** Post `packets` as the box smoke-rx delivering them, or with the shared secret when `shared`. */
+async function rxIngest(packets, shared = false) {
+  return shared
+    ? call("POST", "/ingest", { packets }, { "x-ingest-secret": SECRET })
+    : boxFetch(BASE, await rxBox(), "POST", "/ingest", { packets });
+}
+function verifyMessage(cs, start, onAir, shared = false) {
   const stamp = onAir
     ? { path: ["WIDE1-1", "qAR", "OE8XXX"], heardVia: "rf", igateCall: "OE8XXX", port: "kiss-tnc" }
     : { path: ["TCPIP*", "qAR", "OE8XXX"], heardVia: "aprs_is", igateCall: "OE8XXX", port: "aprs-is" };
@@ -766,12 +788,13 @@ function verifyMessage(cs, start, onAir) {
     ts: now(),
     ...stamp,
   };
-  return call("POST", "/ingest", { packets: [packet] }, { "x-ingest-secret": SECRET });
+  return rxIngest([packet], shared);
 }
 async function isVerified(cs) {
   return (await call("GET", `/verify/aprs/status?callsign=${cs}`)).data?.verified === true;
 }
 async function verifyCallsign(cs, cookie) {
+  await rxBox();
   const start = await call("POST", "/verify/aprs/start", { callsign: cs }, { cookie });
   if (start.status !== 200) return false;
   await verifyMessage(cs, start.data, true);
@@ -792,6 +815,8 @@ async function verifyCallsign(cs, cookie) {
   );
   await verifyMessage("DL1ABC", start.data, false);
   ok("a VERIFY message over APRS-IS does not verify the callsign", !(await isVerified("DL1ABC")));
+  await verifyMessage("DL1ABC", start.data, true, true);
+  ok("a VERIFY message the shared ingest secret delivers does not verify the callsign", !(await isVerified("DL1ABC")));
   await verifyMessage("DL1ABC", start.data, true);
   ok("a VERIFY message heard on the TNC at the attested site verifies the callsign", await isVerified("DL1ABC"));
 }
@@ -801,27 +826,20 @@ async function verifyCallsign(cs, cookie) {
   const cookie = await signUp("OE9MSH");
   const start = await call("POST", "/verify/aprs/start", { callsign: "OE9MSH" }, { cookie });
   const mesh = (extra) =>
-    call(
-      "POST",
-      "/ingest",
+    rxIngest([
       {
-        packets: [
-          {
-            src: "OE9MSH-1",
-            dst: "APRS",
-            path: [],
-            payload: `:${String(start.data?.to).padEnd(9)}:${start.data?.text}{012`,
-            kind: "message",
-            heardVia: "rf",
-            port: "meshcom",
-            rxCall: "OE8XXX",
-            ts: now(),
-            ...extra,
-          },
-        ],
+        src: "OE9MSH-1",
+        dst: "APRS",
+        path: [],
+        payload: `:${String(start.data?.to).padEnd(9)}:${start.data?.text}{012`,
+        kind: "message",
+        heardVia: "rf",
+        port: "meshcom",
+        rxCall: "OE8XXX",
+        ts: now(),
+        ...extra,
       },
-      { "x-ingest-secret": SECRET },
-    );
+    ]);
   await mesh({ path: ["OE1XYZ-12"] });
   ok("a MeshCom VERIFY relayed across the mesh does not verify the callsign", !(await isVerified("OE9MSH")));
   await mesh({ igateCall: "OE8XXX" });
@@ -1766,7 +1784,7 @@ const boxLog = await call("GET", "/api/box/smoke-box/log");
     "POST",
     "/api/box/smoke-box/command",
     { kind: "status" },
-    { cookie: pc, "x-ingest-secret": "" },
+    { cookie: pc, "x-ingest-secret": "", "x-operator-secret": "" },
   );
   ok(
     "an unpaired box refuses a session's command (no first-touch squatting)",
@@ -1783,16 +1801,32 @@ const boxLog = await call("GET", "/api/box/smoke-box/log");
     "POST",
     "/api/box/smoke-box/claim",
     { code: minted.data?.code },
-    { cookie: pc, "x-ingest-secret": "" },
+    { cookie: pc, "x-ingest-secret": "", "x-operator-secret": "" },
   );
   ok("the pairing code links the box to the account", claimed.status === 200, JSON.stringify(claimed.data));
   const own = await call(
     "POST",
     "/api/box/smoke-box/command",
     { kind: "status" },
-    { cookie: pc, "x-ingest-secret": "" },
+    { cookie: pc, "x-ingest-secret": "", "x-operator-secret": "" },
   );
   ok("the paired owner's session commands the box", own.status === 201, JSON.stringify(own.data));
+}
+{
+  // a box enrolled with its own key speaks only through its signature: the shared secret cannot re-pair it
+  const k = await rxBox();
+  const viaSecret = await call("POST", "/api/box/smoke-rx/pair", {}, { "x-operator-secret": "" });
+  ok(
+    "the shared secret cannot pair a box enrolled with its own key (403)",
+    viaSecret.status === 403,
+    String(viaSecret.status),
+  );
+  const signedPair = await boxFetch(BASE, k, "POST", "/api/box/smoke-rx/pair", {});
+  ok(
+    "a box enrolled with its own key obtains a pairing code with its signature",
+    /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(signedPair.data?.code ?? ""),
+    JSON.stringify(signedPair.data),
+  );
 }
 ok(
   "the operator sees the box command log",
