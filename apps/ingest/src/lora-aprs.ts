@@ -26,7 +26,7 @@
  */
 import { decodeAx25, parseTNC2, type KissFrame, type ParsedFrame } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
-import { isMeshcomNode, KissLink, TcpLink } from "./kiss.js";
+import { isMeshcomFrame, isMeshcomNode, KissLink, TcpLink } from "./kiss.js";
 import { tncPacket } from "./link.js";
 import { LineBuffer } from "./lines.js";
 import { numEnv } from "./config.js";
@@ -294,7 +294,7 @@ export class LoraAprsPort {
   onKiss(k: KissFrame, meta?: LoraRxMeta): void {
     if (this.meshcomNode) return;
     const ax = decodeAx25(k.frame);
-    if (isMeshcomNode(k, ax?.dst)) {
+    if (isMeshcomNode(k)) {
       // a MeshCom node's frames are not this box's hearings: its relays arrive as if heard directly
       this.meshcomNode = true;
       this.log.error(
@@ -304,6 +304,7 @@ export class LoraAprsPort {
       );
       return;
     }
+    if (isMeshcomFrame(ax?.dst)) return;
     this.onBytes(k.frame, meta);
   }
 

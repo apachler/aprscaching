@@ -199,10 +199,19 @@ describe("LoraAprsPort", () => {
     expect(invalid).toBe(1);
   });
 
-  it("never takes a MeshCom node's frames for its own hearings", () => {
+  it("never takes a frame to APRSMC for its own hearing, and keeps forwarding the rest", () => {
     const { p, got } = port();
     const mc = encodeAx25({ src: "OE8APR-12", dst: "APRSMC", payload: ">relayed" });
+    p.onKiss({ port: 0, command: 0, frame: lora(POS) });
     p.onKiss({ port: 0, command: 0, frame: mc });
+    for (let i = 0; i < 100; i++) p.onKiss({ port: 0, command: 0, frame: lora(`${POS} ${i}`) });
+    expect(got).toHaveLength(101);
+    expect(got.some((x) => x.dst === "APRSMC")).toBe(false);
+  });
+
+  it("ignores everything from a MeshCom node, known by its port-15 TX result", () => {
+    const { p, got } = port();
+    p.onKiss({ port: 15, command: 0, frame: Uint8Array.of(1) });
     p.onKiss({ port: 0, command: 0, frame: lora(POS) });
     expect(got).toHaveLength(0);
   });

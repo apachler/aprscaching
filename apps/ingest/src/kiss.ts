@@ -88,9 +88,18 @@ const KISS_RX_MAX_BYTES = 64 * 1024;
  * A MeshCom node's KISS port: the node renders LoRa frames as AX.25 to its tocall `APRSMC`, and answers each
  * frame it is sent with a result on KISS port 15. Its frames are not this box's RF hearings: a frame the
  * MeshCom server relayed, or the node's own, arrives with an empty path and would read as heard directly.
+ *
+ * The device is recognised only by what it emits on the link itself, the port-15 result: the KISS port number
+ * is set by the device, an AX.25 destination by whoever keys a transmitter on the channel.
  */
-export const isMeshcomNode = (k: { port: number; frame: Uint8Array }, dst: string | undefined) =>
-  k.port === 15 || (dst !== undefined && /^APRSMC(-\d+)?$/i.test(dst));
+export const isMeshcomNode = (k: { port: number }) => k.port === 15;
+
+/**
+ * A frame to the MeshCom tocall. Such a frame may be a MeshCom node's rendering of a relay and is never taken
+ * as this box's hearing; it is dropped alone, since anyone on the channel can send one and the port must keep
+ * forwarding everything else.
+ */
+export const isMeshcomFrame = (dst: string | undefined) => dst !== undefined && /^APRSMC(-\d+)?$/i.test(dst);
 /** What a KISS TNC heard, each with the channel it came in on; a packet names that channel's port. */
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
@@ -313,7 +322,7 @@ export class KissTnc {
   private onData(k: KissFrame): void {
     const raw = k.frame;
     const f = decodeAx25(raw);
-    if (!this.meshcomNode && isMeshcomNode(k, f?.dst)) {
+    if (!this.meshcomNode && isMeshcomNode(k)) {
       this.meshcomNode = true;
       console.error(
         "[kiss] %s:%s is a MeshCom node, not a TNC: its frames are ignored and nothing is sent through it. Listen to the node with MESHCOM_NODE instead.",
@@ -321,7 +330,7 @@ export class KissTnc {
         this.o.port,
       );
     }
-    if (this.meshcomNode) return;
+    if (this.meshcomNode || isMeshcomFrame(f?.dst)) return;
     const ch = k.port;
     if (!this.channels.has(ch)) {
       if (!this.ignored.has(ch)) {
