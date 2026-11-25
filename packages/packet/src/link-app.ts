@@ -49,20 +49,28 @@ const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 /** A single un-terminated "line" must not grow the receive buffer without bound. A real
  *  command line is a handful of bytes; 8 KiB with no CR/LF is a hostile/broken peer → drop the link. */
 const MAX_LINE_BUF = 8 * 1024;
-/** Terminated lines queue while an async `handle` runs; a peer that outpaces it by this much is dropped. */
+/** Terminated lines queue while an async `handle` runs or replies wait to go out; a peer that outpaces them by
+ *  this much is dropped. */
 const MAX_PENDING_BUF = 64 * 1024;
+/** Reply bytes still queued on the link above which the driver reads no further command lines: the peer, not
+ *  the box, decides how fast replies drain, so a caller that never takes them cannot make the box queue more. */
+export const PAUSE_BACKLOG = 4 * 1024;
 
 /** The transport-agnostic side of a line session: feed bytes/up/down, it drives the app. */
 export interface LineDriver {
   onData(info: Uint8Array): void;
   onUp(): void;
   onDown(): void;
+  /** The transport sent queued bytes: resume reading lines once its backlog is back under `PAUSE_BACKLOG`. */
+  onDrain(): void;
 }
 
 /**
  * The transport-neutral core that binds a `LineApp` to a byte duplex: buffers received bytes into CR/LF
  * lines, hands each to `app.handle`, sends replies back, greets on connect, and supports connect-through
- * relay. `io.send` writes bytes to the peer; `io.disconnect` tears the session down. Reused by `serveApp`
+ * relay. `io.send` writes bytes to the peer; `io.disconnect` tears the session down; `io.backlog` reports the
+ * bytes written and not yet sent, and the driver handles no further line while it is over `PAUSE_BACKLOG`
+ * (the transport calls `onDrain` as it sends). Reused by `serveApp`
  * (over an AX.25 `ConnectedLink`) and `serveNetromApp` (over a NET/ROM `NetromCircuit`).
  */
 export function makeLineDriver(
@@ -71,6 +79,7 @@ export function makeLineDriver(
     send: (bytes: Uint8Array) => void;
     disconnect: () => void;
     onConnect?: (dest: string, relay: RelayController) => void;
+    backlog?: () => number;
   },
 ): LineDriver {
   let buf = "";
@@ -103,8 +112,21 @@ export function makeLineDriver(
     if (r.connect && io.onConnect) io.onConnect(r.connect, relay);
     if (r.disconnect) io.disconnect();
   };
+  const held = () => (io.backlog?.() ?? 0) > PAUSE_BACKLOG;
+  // A reply's send can drain the link at once and call `onDrain` from inside `apply`; the outer pump carries
+  // on after `apply` returns, so a nested one would answer the next line before this reply's disconnect.
+  let pumping = false;
   const pump = () => {
-    while (!busy) {
+    if (pumping) return;
+    pumping = true;
+    try {
+      drain();
+    } finally {
+      pumping = false;
+    }
+  };
+  const drain = () => {
+    while (!busy && !held()) {
       const i = buf.search(/[\r\n]/);
       if (i < 0) return;
       const line = buf.slice(0, i);
@@ -162,6 +184,9 @@ export function makeLineDriver(
       busy = false;
       gen++;
     },
+    onDrain() {
+      if (!relaySink) pump();
+    },
   };
 }
 
@@ -189,15 +214,19 @@ export function serveApp(
 ): ConnectedLink {
   // the driver's io closes over `link`, declared below; makeLineDriver calls none of it while building
   const driver = makeLineDriver(app, {
-    send: (b) => link.send(b),
+    send: (b) => {
+      link.send(b);
+    },
     disconnect: () => link.disconnect(),
     onConnect: opts.onConnect,
+    backlog: () => link.backlog,
   });
   const link: ConnectedLink = new ConnectedLink(
     local,
     remote,
     {
       send: opts.send,
+      drained: () => driver.onDrain(),
       deliver: (info: Uint8Array, pid?: number) => {
         if (pid === PID_NETROM && opts.onNetrom) return opts.onNetrom(info);
         driver.onData(info);

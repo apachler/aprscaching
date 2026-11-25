@@ -25,8 +25,13 @@ These services run on the operator's own ingest box, over its radio (the KISS TN
 
 The node and the BBS run on the ingest box's own AX.25 stack, over its radio (the KISS TNC, else the first
 soundcard port) or an AXUDP port. Defaults:
-`t1` 3 s, `t3` 30 s, `n2` 10, window 4, modulo 8. The modulus is chosen for an outgoing connect and adopted
-from the peer on an incoming one, and SREJ is opt-in per link. How the stack works is in
+`t1` 3 s, `t3` 30 s, `n2` 10, window 4, modulo 8, paclen 256. The modulus is chosen for an outgoing connect and
+adopted from the peer on an incoming one, and SREJ is opt-in per link.
+
+The box answers at most `CONNECTED_MAX_SESSIONS` (10) connects at once, at most `CONNECTED_MAX_PER_CALL` (2) of
+them from one base call; a connect past either gets no answer, and the station tries again later. A caller that
+stops taking the replies (it holds the link busy, or never acknowledges) gets no further answers, and is
+disconnected once it sends 64 KiB of commands nobody has answered yet. How the stack works is in
 [The AX.25 stack](../../contribute/ax25-stack.md).
 
 Players' tools run in their browsers, never on the ingest box, so they take no part in the node's or the BBS's
@@ -96,7 +101,10 @@ federation, and only with `FED_BBS` on: [Federation over FBB](../federation/fbb.
 default.
 
 Partners and routing rules are set under **Instance admin → FBB forwarding**
-([Instance admin at a glance](../day-to-day/index.md)).
+([Instance admin at a glance](../day-to-day/index.md)). A station that connects to `BBS_NODE_CALL` and answers
+with a SID is taken as a forwarding peer only when an enabled partner has its exact call and SSID; any other is
+told so and disconnected. A peer may propose at most five messages a block, and one session takes at most
+100 messages and 1 MiB from it; past that the BBS defers (`=`) a proposal to the next session.
 
 **Compressed forwarding.** Set `BBS_FORWARD_COMPRESS=1` to offer FBB binary compressed forwarding (LZHUF,
 B1). The binary blocks (SOH/STX/EOT, `FA` proposals, `FS !offset` resume) travel in the same forwarding

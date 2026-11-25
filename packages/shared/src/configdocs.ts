@@ -139,6 +139,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   KISS_SERVER_PORTS: "Radio ports the KISS server exposes, as [<kiss port>=]<radio port>; default all, in order",
   KISS_SERVER_PORT_LISTENERS: "Extra KISS server TCP ports, <tcp port>=<kiss port>, each carrying that port as port 0",
   KISS_SERVER_MAX_CLIENTS: "Programs connected to the KISS server at once",
+  KISS_SERVER_MAX_PER_ADDR: "KISS server programs connected at once from one address other than the box's own",
+  KISS_SERVER_IDLE_SEC: "Seconds of silence after which a KISS server program gives up its slot to a newcomer",
   KISS_SERVER_TX: "1 lets KISS server clients transmit; without it they only receive",
   KISS_SERVER_TX_CALLS: "Base calls KISS server clients may transmit as (default: the box's station calls)",
   KISS_SERVER_TX_BURST: "KISS server client transmits allowed at once before pacing applies",
@@ -210,6 +212,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   NETROM_PATH_QUALITY: "Link quality (0-255) assumed for a directly heard neighbour",
   NETROM_INP3: "1 also speaks INP3 alongside NODES",
   NODE_PERSONALITY: "Command surface of the node: netrom, flexnet, tnn or baycom",
+  CONNECTED_MAX_SESSIONS: "Inbound AX.25 connects to the node, BBS and federation sync answered at once",
+  CONNECTED_MAX_PER_CALL: "Inbound AX.25 connects answered at once from one base call",
   BBS_NODE_CALL: "Callsign the BBS answers inbound connects on",
   BBS_FORWARD: "1 enables FBB forwarding to partner BBSes",
   BBS_FORWARD_CALL: "Callsign the box forwards FBB mail as; default BBS_NODE_CALL",
@@ -850,7 +854,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "KISS server (other packet programs share the box's radio ports)",
-        "`KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md)",
+        "`KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_MAX_PER_ADDR` (`2`, clients from one address other than the box's own), `KISS_SERVER_IDLE_SEC` (`300`, a client silent this long gives up its slot to a newcomer when the server is full), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md)",
       ],
       [
         "AGWPE",
@@ -896,6 +900,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "NET/ROM node",
         "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
+      ],
+      [
+        "Connected-mode sessions (node, BBS, federation sync)",
+        "`CONNECTED_MAX_SESSIONS` (`10`, 1–100, inbound AX.25 connects answered at once), `CONNECTED_MAX_PER_CALL` (`2`, 1–10, of them from one base call) — [Connected-mode AX.25](../run/radios/packet-node.md#connected-mode-ax25)",
       ],
       [
         "BBS (inbound + forwarding)",

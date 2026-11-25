@@ -52,6 +52,11 @@ interface Pending {
 /** A message body a peer streams (never sending /EX) must be bounded. 32 KiB is far
  *  beyond any real packet-BBS message; past it we abort the send rather than buffer without limit. */
 const MAX_BODY_BYTES = 32 * 1024;
+/** Messages one `R` reads: each id costs a store read and its body on the air. */
+const MAX_READ_IDS = 5;
+/** Body characters one `R` reply carries. The first message is always shown whole; one that would take the
+ *  reply past this is left for its own `R`, so a single short line cannot ask for an unbounded reply. */
+const MAX_READ_CHARS = 64 * 1024;
 
 const pad = (s: string, n: number) => (s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length));
 const fmtRow = (m: BbsMsgMeta) =>
@@ -98,7 +103,12 @@ export class BbsSession {
     return this.expert ? ">" : `${this.call} de ${this.bbsCall}>`;
   }
   private out(...lines: string[]): { lines: string[]; disconnect?: boolean } {
-    return { lines: [...lines, this.prompt()] };
+    return this.outAll(lines);
+  }
+  /** `out` for a reply built as an array: spreading a long one into arguments overflows the stack. */
+  private outAll(lines: string[]): { lines: string[]; disconnect?: boolean } {
+    lines.push(this.prompt());
+    return { lines };
   }
 
   /** Process one input line; returns the reply lines and an optional disconnect. */
@@ -162,20 +172,25 @@ export class BbsSession {
     const nums = ids.map(Number).filter((n) => n > 0);
     if (nums.length === 0) return this.out("Usage: R <id> [id...]");
     const lines: string[] = [];
-    for (const id of nums) {
+    if (nums.length > MAX_READ_IDS) lines.push(`Reading the first ${MAX_READ_IDS} of ${nums.length} messages.`);
+    let chars = 0;
+    for (const id of nums.slice(0, MAX_READ_IDS)) {
       const m = this.store.read(id);
       if (!m) {
         lines.push(`Message ${id} not found.`);
         continue;
       }
+      if (chars > 0 && chars + m.body.length > MAX_READ_CHARS) {
+        lines.push(`Message ${id} not shown: the reply is full. Read it with R ${id}.`);
+        continue;
+      }
+      chars += m.body.length;
       this.lastRead = id;
-      lines.push(
-        `Msg #${m.id}  ${m.type}  ${m.from} > ${m.to}  ${m.subject ?? "(no subject)"}`,
-        ...m.body.split("\n"),
-        "---",
-      );
+      lines.push(`Msg #${m.id}  ${m.type}  ${m.from} > ${m.to}  ${m.subject ?? "(no subject)"}`);
+      for (const l of m.body.split("\n")) lines.push(l);
+      lines.push("---");
     }
-    return this.out(...lines);
+    return this.outAll(lines);
   }
   private kill(id: number): { lines: string[]; disconnect?: boolean } {
     if (!id) return this.out("Usage: K <id>");
