@@ -70,6 +70,8 @@ installation from the release bundle:
   the bundle and `SHA256SUMS`, checks both, and clones from the bundle; it stops when either check fails.
   Without the GitHub CLI it stops too, unless `--checksum-only` accepts the checksum alone. A branch, or a
   release without a bundle, installs from git, and the helper says the checkout is unverified.
+- **Updates:** `deploy/aprscaching update` on Self-host, bare metal and an ingest box checks each new release
+  the same way before it changes anything ([Updates](../day-to-day/updates.md#what-update-verifies)).
 - **Pocket:** check `pocket.sh` the same way before you run it ([Install Pocket](pocket.md#install)).
 - **The SBOM** checks the same way, then goes to the scanner of your choice:
 

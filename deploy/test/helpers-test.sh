@@ -352,16 +352,16 @@ check "--no-next-steps prints no Docker steps" bash -c "! '$S' --non-interactive
 
 # ---- bare metal ------------------------------------------------------------------------------------------------
 if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
-  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --dir /srv/acs --user acs --port 8090 --call OE8APR
+  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --unverified --dir /srv/acs --user acs --port 8090 --call OE8APR
   check "  … lists the root steps first" grep -q "Steps that need root" "$TMP/out"
   check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs" "$TMP/out"
   check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
   check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
   check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
   check "  … makes data/ the service user's alone" grep -q "\[acs\] install -d -m 700 /srv/acs/data" "$TMP/out"
-  check "  … says the checkout is unverified" grep -q "without verification" "$TMP/err"
+  check "  … says the checkout is unverified" grep -q "main (branch) is not verified" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
-  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --no-start --call OE8APR
+  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --unverified --no-start --call OE8APR
   check "  … no systemctl" bash -c "! grep -q '\[root\] systemctl' '$TMP/out'"
   if run --non-interactive init baremetal --dry-run --ref main --call OE8APR; then
     bad "bare metal: an unverified install without --yes is refused"
@@ -371,33 +371,75 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
 else
   echo "skip bare metal (needs systemctl and Node.js 22+)"
 fi
-# A release download, verified: curl and gh stand in for GitHub (fixtures in $REL).
-REL="$TMP/rel"
-mkdir -p "$REL"
-printf 'a git bundle\n' >"$REL/aprscaching-v9.9.9.bundle"
-(cd "$REL" && sha256sum aprscaching-v9.9.9.bundle >SHA256SUMS)
-verify_release() { # verify_release MODE: good | tampered | missing | nogh | nogh-checksum
-  bash -c '
-    . "$1/lib/common.sh"; DEPLOY_DIR="$1"; . "$1/lib/shapes/baremetal.sh"
-    REL="$2"; MODE="$3"; BM_ALLOW_UNSIGNED=0
-    [ "$MODE" = nogh-checksum ] && BM_ALLOW_UNSIGNED=1
-    curl() { local out="" url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done
-      [ "$MODE" = missing ] && return 22
-      cp "$REL/${url##*/}" "$out"
-      if [ "$MODE" = tampered ] && [ "${url##*/}" != SHA256SUMS ]; then echo evil >>"$out"; fi; }
-    have() { [ "$1" = gh ] && [ "${MODE#nogh}" != "$MODE" ] && return 1; command -v "$1" >/dev/null; }
-    gh() { [ "$1 $2" = "attestation verify" ]; }
-    bm_verified_bundle https://github.com/apachler/aprscaching v9.9.9
-  ' _ "$DEPLOY" "$REL" "$1"
+# ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
+# deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
+FIX="$TMP/relfix"
+mkdir -p "$FIX/rel" "$FIX/rel-moved"
+(
+  g() { git -c user.name=t -c user.email=t@example.org -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+  cd "$FIX" && git init --quiet -b main src && cd src
+  g commit --quiet --allow-empty -m one && g tag v1.0.0
+  g commit --quiet --allow-empty -m two && g tag -a -m v1.1.0 v1.1.0
+  git clone --quiet --bare . "$FIX/origin.git"
+  git bundle create --quiet "$FIX/rel/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+  # the same tag name at another commit: what a tag pushed outside the release workflow looks like
+  g checkout --quiet v1.0.0 && g commit --quiet --allow-empty -m other && g tag -f -a -m v1.1.0 v1.1.0 >/dev/null
+  git bundle create --quiet "$FIX/rel-moved/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+) >/dev/null 2>&1
+for d in rel rel-moved; do (cd "$FIX/$d" && sha256sum aprscaching-v1.1.0.bundle >SHA256SUMS); done
+RELEASE="$(git -C "$FIX/origin.git" rev-parse 'v1.1.0^{commit}')"
+OTHER="$(git -C "$FIX/src" rev-parse 'v1.1.0^{commit}')"
+N=0
+# rc_case CALLER MODE [options]: run one case in $W; its output in $TMP/rc.out and $TMP/rc.err, its exit status in $RC
+rc_case() {
+  local c="$1" m="$2"
+  shift 2
+  N=$((N + 1))
+  W="$TMP/case$N"
+  mkdir -p "$W"
+  RC=0
+  bash "$DEPLOY/test/release-case.sh" "$c" "$m" "$W" "$FIX" "$@" >"$TMP/rc.out" 2>"$TMP/rc.err" </dev/null || RC=$?
 }
-check "a release whose checksum and signature verify gives its bundle" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; p=\$(verify_release good 2>/dev/null) && [ -f \"\$p\" ]"
-rc_of() { verify_release "$1" >/dev/null 2>&1 && echo 0 || echo $?; }
-check "a bundle that does not match its checksum stops the install" eq "$(rc_of tampered)" 2
-check "a release without a bundle falls back to the warned install" eq "$(rc_of missing)" 1
-check "  … quietly, for the warned install" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; [ -z \"\$(verify_release missing 2>&1)\" ]"
-check "without gh the signature cannot be checked, so it stops" eq "$(rc_of nogh)" 2
-check "  … unless --checksum-only accepts the checksum alone" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; verify_release nogh-checksum >/dev/null 2>&1"
-check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh'; [ \"\$(bm_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(bm_github_repo https://git.example.org/a/b)\" ]"
+stopped() { [ "$RC" != 0 ] && [ ! -e "$W/applied" ] && [ -z "$(ls -A "$W/tmp")" ]; }
+for caller in init update; do
+  if [ "$caller" = init ]; then args=(--ref v1.1.0); else args=(); fi
+  rc_case "$caller" good "${args[@]+"${args[@]}"}"
+  check "$caller: a release whose checksum and signature verify goes ahead with --yes" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … saying so" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+  check "  … and leaves no download behind" eq "$(ls -A "$W/tmp")" ""
+  rc_case "$caller" tampered "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle that does not match its checksum stops before any change" stopped
+  check "  … naming the checksum" grep -q "does not match its checksum" "$TMP/rc.err"
+  rc_case "$caller" error "${args[@]+"${args[@]}"}"
+  check "$caller: a failed download stops, not taken for a missing bundle" stopped
+  check "  … naming the server's answer" grep -q "HTTP 500" "$TMP/rc.err"
+  rc_case "$caller" nogh "${args[@]+"${args[@]}"}"
+  check "$caller: without gh the signature cannot be checked, so it stops" stopped
+  check "  … pointing to --checksum-only" grep -q -- "--checksum-only" "$TMP/rc.err"
+  rc_case "$caller" nogh --checksum-only "${args[@]+"${args[@]}"}"
+  check "$caller: --checksum-only accepts the checksum alone" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … with its warning" grep -q "only the checksum was checked" "$TMP/rc.err"
+  rc_case "$caller" missing "${args[@]+"${args[@]}"}"
+  check "$caller: a tag with no bundle is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  check "  … and how to take it anyway" grep -q -- "--unverified" "$TMP/rc.err"
+  rc_case "$caller" missing --unverified "${args[@]+"${args[@]}"}"
+  check "$caller: --unverified takes it, warned" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … warned" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main
+  check "$caller: a branch is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "main (branch) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main --unverified
+  check "$caller: --unverified takes a branch" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+done
+rc_case update good
+check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"
+rc_case update moved
+check "update: a tag on origin at another commit than the verified release's stops before any rebuild" stopped
+check "  … naming both commits" grep -q "on origin is commit $RELEASE, but the verified release v1.1.0 is commit $OTHER" "$TMP/rc.err"
+rc_case update good --ref v1.1.0
+check "update: --ref to a release tag is verified like the newest" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/release.sh'; [ \"\$(rel_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ \"\$(rel_github_repo git@github.com:apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(rel_github_repo https://git.example.org/a/b)\" ]"
 
 render() {
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';

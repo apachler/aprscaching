@@ -63,8 +63,9 @@ Installed under `/home`, the gateway sees `/home` read-only instead. The ingest 
 The helper installs the newest `v*` release tag, or `main` while the repository has none. For a release tag it
 downloads the release's git bundle and `SHA256SUMS`, checks both, and clones from the bundle; it stops, having
 installed nothing, when a check fails. Without the GitHub CLI it stops too, unless `--checksum-only` accepts the
-checksum alone. A branch, or a release without a bundle, is installed from git without a check, and the helper
-says so before it asks.
+checksum alone. A branch, or a release without a bundle, is installed from git without a check: the helper says so
+and asks, even with `--yes`. Only `--unverified` installs it without asking. `deploy/aprscaching update` checks
+every later release the same way ([Updates](../day-to-day/updates.md#what-update-verifies)).
 
 | Option | Default |
 |---|---|
@@ -75,8 +76,9 @@ says so before it asks.
 | `--port PORT` | `8080`; the gateway serves the web app on it |
 | `--no-start` | install the units without enabling or starting them |
 | `--checksum-only` | accept a release checked by its checksum alone, when `gh` is not installed |
+| `--unverified` | install a branch, a commit or a release without a bundle without asking |
 | `--net44-config FILE` | bring a 44Net Connect tunnel up afterwards |
-| `--dry-run` | print every step, run none |
+| `--dry-run` | print every step, run none; a release tag is still downloaded and checked |
 
 Any other option goes to `setup.sh` (`--call`, `--passcode`, `--filter`, `--domain`, `--lan-host`, `--fed-peers`,
 …). Running `init baremetal` again moves the checkout to the ref and keeps the `.env`.
