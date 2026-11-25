@@ -402,6 +402,17 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     expect(s.result.tier).not.toBe("A");
   });
 
+  it("is refused when an attested fix of another SSID of the logger's base call puts them hundreds of km away", async () => {
+    const hub = await setup();
+    await hub.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(`${LOGGER}-7`, now() - 1100)
+      .run();
+    const s = await scoreFind(hub.env, cache, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+  });
+
   it("is not refused by an APRS-IS fix hundreds of km away: anyone can inject one under the call", async () => {
     const hub = await setup();
     await hub.env.DB.prepare(

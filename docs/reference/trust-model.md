@@ -34,6 +34,11 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
   not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
   at the cache, can add a contradiction but never hide one.
+- The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
+  judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before
+  leaves nothing out. Only the logged call's own fix can match the cache. A fixed home station, digipeater or
+  tracker far away under the same base call therefore refuses Tier A for a few minutes after each of its
+  beacons; the find then rests on a phone reading (Tier B) or stays Tier C.
 - A find time the finder's own clock gives (a signed web log, or a FOUND in a signed browser batch) is taken
   only after the cache was hidden and the signing key registered; otherwise the find is timed by its arrival
   and keeps the reason (`field_time_rejected`).

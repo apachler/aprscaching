@@ -46,13 +46,32 @@ async function cache(env: Env, o: { type: string; stationCall?: string; owner?: 
 
 async function position(
   env: Env,
-  p: { call: string; via?: string; igate?: string | null; transport: string; source: string; box?: string | null },
+  p: {
+    call: string;
+    via?: string;
+    igate?: string | null;
+    transport: string;
+    source: string;
+    box?: string | null;
+    lat?: number;
+    ago?: number;
+  },
 ) {
   await env.DB.prepare(
     `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport, ingest_box)
      VALUES (?,?,?,?,?,?, 'WIDE1-1', ?, ?, ?)`,
   )
-    .bind(p.call, now() - 60, LAT, LON, p.via ?? "rf", p.igate ?? null, p.source, p.transport, p.box ?? null)
+    .bind(
+      p.call,
+      now() - (p.ago ?? 60),
+      p.lat ?? LAT,
+      LON,
+      p.via ?? "rf",
+      p.igate ?? null,
+      p.source,
+      p.transport,
+      p.box ?? null,
+    )
     .run();
 }
 
@@ -125,6 +144,91 @@ describe("a living cache is where an attested site or its owner's own bridge hea
     const club = await cache(env, { type: "aprs_living", stationCall: "OE8CLB-9" });
     await position(env, { call: "OE8CLB-9", transport: "browser-rf", source: "browser-rf" });
     expect((await scoreFind(env, club, "OE8LOG-9", now(), phoneAtSpot())).result.tier).toBe("C");
+  });
+});
+
+describe("the logger's track is every SSID of their base call", () => {
+  // 1° of latitude north of the spot: ~111 km, unreachable in two minutes
+  const FAR_LAT = LAT + 1;
+
+  it("an attested fix of another SSID far away refuses Tier A, and one at the spot does not", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+    await position(env, { call: "OE8LOG-7", igate: SITE, transport: "tnc", source: "firehose", ago: 30 });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+    await position(env, { call: "OE8LOG", igate: SITE, transport: "tnc", source: "firehose", lat: FAR_LAT, ago: 120 });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+  });
+
+  it("a fix under an SSID never heard before is judged against the base call's other SSIDs", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, {
+      call: "OE8LOG-7",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 120,
+    });
+    await position(env, { call: "OE8LOG-15", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-15", now())).result.tier).not.toBe("A");
+  });
+
+  it("another SSID's fix never matches, and a call that only shares the prefix is not the track", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, { call: "OE8LOG-7", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    await position(env, {
+      call: "OE8LOGA-7",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 120,
+    });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+  });
+});
+
+describe("an owner-signed living-station fix is held to the station's attested track", () => {
+  it("one the attested track cannot reach places the cache nowhere, for Tier A or a peer question", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    // the station heard by the attested site 111 km away two minutes back, the owner's signed fix at the finder
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: LAT + 1,
+      ago: 180,
+    });
+    await position(env, { call: "OE8OWN-9", transport: "browser-rf", source: "browser-rf" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result.tier).not.toBe("A");
+  });
+
+  it("one the attested track can reach places the cache", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: LAT + 0.01,
+      ago: 600,
+    });
+    await position(env, { call: "OE8OWN-9", transport: "browser-rf", source: "browser-rf" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
   });
 });
 

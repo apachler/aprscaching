@@ -34,6 +34,7 @@ import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCal
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
+import { loggerTrack } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -1010,12 +1011,9 @@ export async function scoreFind(
 ): Promise<FindScore> {
   const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
-  const lp = await env.DB.prepare(
-    // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-  )
-    .bind(loggerCall, since, at + 60)
-    .all<PositionRow>();
+  // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
+  const track = await loggerTrack(env, loggerCall, since, at + 60);
+  const lp = { results: track.own };
 
   let cacheStationPositions: PositionRow[] | undefined;
   if (cache.type === "aprs_living" && cache.station_call) {
@@ -1074,6 +1072,7 @@ export async function scoreFind(
     appGeo,
     {
       loggerPositions: attest(lp.results),
+      loggerTrackPositions: attest(track.others),
       cacheStationPositions: station,
       loggerOwnIgates,
       loggerOwnBoxes,
@@ -1132,7 +1131,15 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    if (ev && plausiblePresence({ ...point, ts: ev.ts }, attest(lp.results), DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+    if (
+      ev &&
+      plausiblePresence(
+        { ...point, ts: ev.ts },
+        attest([...lp.results, ...track.others]),
+        DEFAULT_POLICY,
+        COARSEN.timeBucketSec,
+      )
+    ) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
