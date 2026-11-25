@@ -80,7 +80,7 @@ The port is a TNC port, and the same rules apply ([Receiving site and Tier A](rf
 | heard the station **directly** | heard on RF, received by your box | **Yes**, when `RF_SITE_CALL` is a trusted receiving station |
 | heard it **through a digipeater** (a hop marked `*`) | heard on RF, no receiving site | No |
 | passed on an **APRS-IS** line (`aprsBridgeActive`) | dropped | No |
-| passed on a frame to **`APRSMC`** (a MeshCom node's beacon or relay) | dropped | No |
+| passed on a frame to **`APRSMC`** (a MeshCom tracker's beacon or a node's relay) | heard on RF, no receiving site | No |
 
 `RF_SITE_CALL` (default: `IGATE_CALL`) names your box as the receiving site. Trust that call on the gateway
 under **Instance admin → Trusted receiving stations**, or preset it in `FIRST_PARTY_SITES`. Point the port
@@ -92,8 +92,10 @@ on the air does, so the box drops every such line. An APRS-IS line never counts 
 names.
 
 A MeshCom node renders every frame it passes on, its relays from the MeshCom server included, as a frame to
-`APRSMC` with an empty path, so such a frame cannot be told from a direct hearing. The box drops each frame to
-`APRSMC` and keeps forwarding the rest. To receive MeshCom traffic, listen to a node with [MeshCom](meshcom.md).
+`APRSMC` with an empty path, so such a frame cannot be told from a direct hearing. The box delivers every frame
+to `APRSMC`, in each form the port reads, with no receiving site, as it does a digipeated frame: a MeshCom
+tracker's beacon arrives, and a relay never counts as your hearing. To receive MeshCom traffic, listen to a node
+with [MeshCom](meshcom.md).
 
 The IGate's own report of each packet (RSSI, SNR, frequency error) does not reach the box: neither KISS nor
 the text line carries it. Receiving never lifts trust either way.

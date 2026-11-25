@@ -94,12 +94,6 @@ const KISS_RX_MAX_BYTES = 64 * 1024;
  */
 export const isMeshcomNode = (k: { port: number }) => k.port === 15;
 
-/**
- * A frame to the MeshCom tocall. Such a frame may be a MeshCom node's rendering of a relay and is never taken
- * as this box's hearing; it is dropped alone, since anyone on the channel can send one and the port must keep
- * forwarding everything else.
- */
-export const isMeshcomFrame = (dst: string | undefined) => dst !== undefined && /^APRSMC(-\d+)?$/i.test(dst);
 /** What a KISS TNC heard, each with the channel it came in on; a packet names that channel's port. */
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
@@ -330,7 +324,7 @@ export class KissTnc {
         this.o.port,
       );
     }
-    if (this.meshcomNode || isMeshcomFrame(f?.dst)) return;
+    if (this.meshcomNode) return;
     const ch = k.port;
     if (!this.channels.has(ch)) {
       if (!this.ignored.has(ch)) {

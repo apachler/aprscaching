@@ -55,6 +55,7 @@ async function viaFakeTnc(
   bytes: Uint8Array,
   start: (port: number, onPacket: (p: Packet) => void) => { stop?: () => void },
   ms = 3000,
+  want = 2,
 ): Promise<Packet[]> {
   const got: Packet[] = [];
   const server = net.createServer((sock) => sock.write(bytes));
@@ -62,7 +63,7 @@ async function viaFakeTnc(
   const port = (server.address() as net.AddressInfo).port;
   start(port, (p) => got.push(p));
   const t0 = Date.now();
-  while (got.length < 2 && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 20));
+  while (got.length < want && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 20));
   server.close();
   return got;
 }
@@ -91,20 +92,29 @@ describe("KISS TNC", () => {
   // a frame the MeshCom server relayed reaches the node's KISS port with an empty path, as if heard directly
   const relayedByServer = { src: "OE3PLY-7", dst: "APRSMC", path: [], payload: "!4704.41N/01526.27E>via server" };
 
-  it("drops a frame to APRSMC alone: the port keeps forwarding and sending", async () => {
+  it("delivers a frame to APRSMC unstamped, and the port keeps forwarding and sending", async () => {
     let k: KissTnc | undefined;
     const bytes = Uint8Array.from([
       ...kissWrap(encodeAx25(DIRECT)),
       ...kissWrap(encodeAx25(relayedByServer)),
       ...kissWrap(encodeAx25(RELAYED)),
     ]);
-    const got = await viaFakeTnc(bytes, (port, onPacket) => {
-      k = new KissTnc({ host: "127.0.0.1", port, siteCall: "OE8APR-10" }, { onPacket });
-      k.start();
-      cleanups.push(() => (k as unknown as { sock?: net.Socket }).sock?.destroy());
-      return {};
-    });
-    expect(got.map((p) => p.payload)).toEqual([DIRECT.payload, RELAYED.payload]);
+    const got = await viaFakeTnc(
+      bytes,
+      (port, onPacket) => {
+        k = new KissTnc({ host: "127.0.0.1", port, siteCall: "OE8APR-10" }, { onPacket });
+        k.start();
+        cleanups.push(() => (k as unknown as { sock?: net.Socket }).sock?.destroy());
+        return {};
+      },
+      3000,
+      3,
+    );
+    expect(got.map((p) => [p.payload, p.igateCall])).toEqual([
+      [DIRECT.payload, "OE8APR-10"],
+      [relayedByServer.payload, undefined],
+      [RELAYED.payload, undefined],
+    ]);
     expect(k!.send({ src: "OE8APR-10", dst: "APRS", payload: ">hi" })).toBe(true);
   });
 
