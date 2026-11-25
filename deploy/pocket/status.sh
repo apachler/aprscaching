@@ -191,6 +191,13 @@ elif grep -q 44net <<<"$(env_get FED_ENDPOINTS)"; then
 else
   info "not connected (the WireGuard app with 44Net Connect gives the phone a 44.x address)"
 fi
+# A carrier's global IPv6 address with the gateway listening on every interface puts the station on the internet.
+if v6="$(exposed_ipv6)"; then
+  read -r v6_if v6_ip <<<"$v6"
+  warn "the phone holds the global IPv6 address $v6_ip ($v6_if) and the station answers on it: anyone on the" \
+    "internet may reach port $PORT${HTTPS:+ and $HTTPS} unless the carrier filters inbound traffic. HOST=0.0.0.0 in" \
+    "the .env keeps the station on IPv4 (loopback, the hotspot and the LAN); restart it after the change."
+fi
 # HAMNET is what the sysop declares (a hamnet endpoint): an address does not say it is on HAMNET.
 if hn="$(hamnet_endpoint)" && [ -n "$hn" ]; then
   info "the HAMNET endpoint: $hn, for HAMNET hosts over RF links or HAMNET VPN access, not the internet"

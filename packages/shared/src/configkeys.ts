@@ -20,9 +20,8 @@ export const CONFIG_KEYS = {
   SESSION_TTL_DAYS: { type: "int", units: ["gateway"], default: "30" },
   SESSION_EPOCH: { type: "int", units: ["gateway"], default: "0" },
   TRUST_PROXY: {
-    type: "enum",
+    type: "int",
     units: ["gateway", "server"],
-    values: ["0", "1"],
     shapes: ["selfhost", "baremetal", "pocket", "desktop"],
   },
   TRUST_CF: {
@@ -455,7 +454,7 @@ export const CONFIG_KEYS = {
   TLS_CA_CERT: { type: "string", units: ["server"], shapes: ["selfhost", "baremetal", "pocket"] },
   LICENCE_SOURCES: { type: "list", units: ["licence"] },
   BASE: { type: "url", units: ["licence"], default: "http://127.0.0.1:8787" },
-  HOST: { type: "string", units: ["desktop"], default: "127.0.0.1" },
+  HOST: { type: "string", units: ["server", "desktop"] },
   DATA_DIR: { type: "string", units: ["desktop"] },
   VITE_API_BASE: { type: "string", units: ["web"] },
   VITE_APP_URL: { type: "string", units: ["web"] },

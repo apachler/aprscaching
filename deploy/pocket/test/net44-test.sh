@@ -44,6 +44,33 @@ check "44Net: 44.192.0.0/10 is not 44Net" "$(yes_no net44_address)" no
 fake_ip "1: lo    inet 127.0.0.1/8 scope host lo" "30: wlan0    inet 10.44.0.5/24 scope global wlan0"
 check "44Net: none without a 44.x address" "$(yes_no net44_address)" no
 
+# ---- a global IPv6 address while the gateway listens on every interface, from `ip -6 -o addr show` -------
+fake_ip6() {
+  printf '%s\n' "$@" >"$WORK/ip6.out"
+  cat >"$BIN/ip" <<EOF
+#!/usr/bin/env bash
+case "\$*" in *-6*) cat "$WORK/ip6.out" ;; *) cat "$WORK/ip.out" ;; esac
+EOF
+  chmod +x "$BIN/ip"
+}
+ENV_FILE="$WORK/v6.env"
+: >"$ENV_FILE"
+fake_ip6 "1: lo    inet6 ::1/128 scope host" \
+  "12: rmnet_data0    inet6 2a02:8388:e5c0:1a00::5/64 scope global dynamic" \
+  "30: wlan0    inet6 fe80::1/64 scope link"
+check "IPv6: a carrier's global address, HOST unset, is exposed" "$(exposed_ipv6)" "rmnet_data0 2a02:8388:e5c0:1a00::5"
+printf 'HOST=::\n' >"$ENV_FILE"
+check "IPv6: HOST=:: is every interface too" "$(exposed_ipv6)" "rmnet_data0 2a02:8388:e5c0:1a00::5"
+printf 'HOST=0.0.0.0\n' >"$ENV_FILE"
+check "IPv6: HOST=0.0.0.0 listens on IPv4 alone" "$(yes_no exposed_ipv6)" no
+printf 'HOST=2a02:8388:e5c0:1a00::5\n' >"$ENV_FILE"
+check "IPv6: HOST naming the global address is exposed" "$(exposed_ipv6)" "rmnet_data0 2a02:8388:e5c0:1a00::5"
+: >"$ENV_FILE"
+fake_ip6 "1: lo    inet6 ::1/128 scope host" "30: wlan0    inet6 fd12:3456::1/64 scope global"
+check "IPv6: a unique local address is not exposed" "$(yes_no exposed_ipv6)" no
+fake_ip6 "1: lo    inet6 ::1/128 scope host"
+check "IPv6: none without a global address" "$(yes_no exposed_ipv6)" no
+
 # ---- the HAMNET endpoint: what FED_ENDPOINTS declares, never inferred from an address ------------------
 ENV_FILE="$WORK/hamnet.env"
 printf '%s\n' "FED_ENDPOINTS='[{\"transport\":\"https\",\"address\":\"https://p.example\",\"priority\":10},{\"transport\":\"hamnet\",\"address\":\"44.143.1.2:8080\",\"priority\":30}]'" >"$ENV_FILE"

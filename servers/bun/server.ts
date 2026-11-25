@@ -207,6 +207,7 @@ if (import.meta.main) {
     started = createServer({
       environment: process.env,
       port: Number(process.env.PORT) || 8787, // a blank/NaN PORT must not bind port 0
+      hostname: process.env.HOST?.trim() || undefined, // unset: every interface
       dbPath: DB_PATH,
       mediaDir: process.env.MEDIA_DIR ?? join(HERE, "data/media"),
       migrations: migrationsFromDir(process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations")),
@@ -219,5 +220,10 @@ if (import.meta.main) {
   }
   const { migrated, server } = started;
   console.log(migrated.length ? `migrations applied: ${migrated.join(", ")}` : "migrations up to date");
-  console.log("APRScaching bun-gateway listening on :%s  (db: %s)", server.port, DB_PATH);
+  console.log(
+    "APRScaching bun-gateway listening on %s:%s  (db: %s)",
+    process.env.HOST?.trim() ?? "",
+    server.port,
+    DB_PATH,
+  );
 }

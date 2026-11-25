@@ -104,7 +104,7 @@ describe("corroboration abuse limits", () => {
       clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }), {
         TRUST_PROXY: "1",
       } as never),
-    ).toBe("5.6.7.8");
+    ).toBe("9.9.9.9");
     expect(clientIp(new Request("http://x"), {} as Env)).toBe("unknown");
   });
 });

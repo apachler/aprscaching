@@ -113,13 +113,13 @@ check "a whole number passes" cfg_check KISS_TNC_PORT 8001
 check "a blank value passes" cfg_check KISS_TNC_PORT "  "
 check "a word fails as a number" eq "$(cfg_check KISS_TNC_PORT eighty || true)" "KISS_TNC_PORT: expected a whole number"
 check "a fraction passes as a number" cfg_check MESHCOM_RATE 2.5
-check "an enum value passes" cfg_check TRUST_PROXY 1
+check "an enum value passes" cfg_check TRUST_CF 1
 check "a callsign with an SSID passes" cfg_check DIGI_CALL OE8APR-10
 check "a callsign with an SSID over 15 fails" eq "$(cfg_check DIGI_CALL OE8APR-20 || true)" "DIGI_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
 check "a word without a digit fails as a callsign" eq "$(cfg_check SERVICE_CALL APRSCG || true)" "SERVICE_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
 check "a list of callsigns passes, a MeshCom SSID too" cfg_check FIRST_PARTY_SITES "OE8APR-10, OE8APR-42"
 check "a list with a non-callsign fails" eq "$(cfg_check FIRST_PARTY_SITES "OE8APR-10,nope" || true)" "FIRST_PARTY_SITES: expected callsigns such as OE8APR,OE8APR-10, separated by commas"
-check "an unknown enum value fails" eq "$(cfg_check TRUST_PROXY true || true)" "TRUST_PROXY: expected one of: 0, 1"
+check "an unknown enum value fails" eq "$(cfg_check TRUST_CF true || true)" "TRUST_CF: expected one of: 0, 1"
 check "a URL passes" cfg_check APP_URL https://aprs.example.net
 check "a bare host fails as a URL" eq "$(cfg_check APP_URL aprs.example.net || true)" "APP_URL: expected an absolute URL"
 if have node || have python3; then
@@ -424,6 +424,23 @@ HOMEUNIT="$TMP/gateway-home.unit"
 bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
   BM_DIR=/home/op/aprscaching BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'" >"$HOMEUNIT"
 check "a gateway installed under /home sees its checkout read-only" bash -c "grep -qx 'ProtectHome=read-only' '$HOMEUNIT' && ! grep -qx 'ProtectHome=yes' '$HOMEUNIT' && grep -qx 'ReadWritePaths=/home/op/aprscaching/data' '$HOMEUNIT'"
+
+# Bare metal behind a reverse proxy: the gateway listens on 127.0.0.1 and trusts the proxy's X-Forwarded-For entry.
+proxy_bind() { # proxy_bind FILE: bm_proxy_bind as the service user, who is the user running this test
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
+    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")' BM_USER='$(id -un)'; bm_proxy_bind '$1'"
+}
+printf '%s\n' "APP_URL=https://aprs.example.net" "# HOST=127.0.0.1" >"$TMP/bm-proxy.env"
+check "bare metal writes the proxy settings behind an https APP_URL" proxy_bind "$TMP/bm-proxy.env"
+check "bare metal behind a proxy listens on 127.0.0.1" eq "$(env_file_get "$TMP/bm-proxy.env" HOST)" 127.0.0.1
+check "  … and trusts one proxy's X-Forwarded-For entry" eq "$(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" 1
+check "  … the .env stays owner-only" eq "$(stat -c %a "$TMP/bm-proxy.env")" 600
+printf '%s\n' "APP_URL=https://aprs.example.net" "HOST=0.0.0.0" "TRUST_PROXY=2" >"$TMP/bm-proxy.env"
+check "  … runs over an operator's own values" proxy_bind "$TMP/bm-proxy.env"
+check "  … a HOST and TRUST_PROXY the operator set stay" eq "$(env_file_get "$TMP/bm-proxy.env" HOST) $(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" "0.0.0.0 2"
+printf '%s\n' "APP_URL=http://192.168.1.10:8080" >"$TMP/bm-proxy.env"
+check "bare metal on plain http runs the proxy step" proxy_bind "$TMP/bm-proxy.env"
+check "bare metal on plain http is the gateway itself, on every interface" bash -c "! grep -qE '^(HOST|TRUST_PROXY)=' '$TMP/bm-proxy.env'"
 
 # ---- doctor ------------------------------------------------------------------------------------------------
 # A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket

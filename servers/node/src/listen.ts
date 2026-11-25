@@ -17,7 +17,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { clientIp, stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
-import type { Env } from "@aprscaching/gateway/env";
+import { proxyHops, type Env } from "@aprscaching/gateway/env";
 import { PAGE_HEADERS } from "@aprscaching/gateway/pageheaders";
 import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
@@ -98,7 +98,7 @@ export function httpsRedirect(
   const forwarded = String(req.headers["x-forwarded-proto"] ?? "")
     .split(",")[0]
     ?.trim();
-  if (env.TRUST_PROXY === "1" && forwarded === "https") return null;
+  if (proxyHops(env) && forwarded === "https") return null;
   const host = req.headers.host;
   if (!host) return null;
   let u: URL;

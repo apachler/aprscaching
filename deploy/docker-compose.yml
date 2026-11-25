@@ -40,6 +40,9 @@ services:
       # Caddy is the only way in and sets X-Forwarded-For itself, so the gateway keys per-IP rate
       # limits on the forwarded client address rather than on Caddy's.
       TRUST_PROXY: "1"
+      # Every interface of the container: Caddy reaches the gateway over the stack's network, so a HOST in .env
+      # (bare metal's 127.0.0.1) must not reach it.
+      HOST: ""
     # The image runs as UID 10001 and the named volume takes that owner. A host directory bound here instead
     # needs `sudo chown -R 10001:10001 <dir>` once.
     volumes: ["data:/data"]
