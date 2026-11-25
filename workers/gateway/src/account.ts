@@ -84,9 +84,16 @@ const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
       .all()
   ).results;
 
-/** The account behind a callsign — its active-call anchor, else the holder of its base call — and every
- *  base call that account holds (the callsign's own base first). */
-async function accountScope(env: Env, cs: string): Promise<{ accountId: string | null; calls: string[] }> {
+/** An account's sign-in links (binds: the account, its confirmed address): those asked for or opened by it, and the
+ *  ones nobody has opened on the address only it has confirmed, such as a register link that never became an account. */
+const OWN_TOKENS = "(account_id=? OR (account_id IS NULL AND email != '' AND email=?))";
+
+/** The account behind a callsign — its active-call anchor, else the holder of its base call — its confirmed
+ *  address, and every base call that account holds (the callsign's own base first). */
+async function accountScope(
+  env: Env,
+  cs: string,
+): Promise<{ accountId: string | null; email: string | null; calls: string[] }> {
   const base = baseCall(cs);
   const anchor = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
     .bind(cs)
@@ -99,6 +106,14 @@ async function accountScope(env: Env, cs: string): Promise<{ accountId: string |
         .first<{ account_id: string }>()
     )?.account_id ??
     null;
+  // only the confirmed address: it belongs to this account alone, while a pending one may be another's too
+  const email = accountId
+    ? ((
+        await env.DB.prepare("SELECT email FROM accounts WHERE account_id=?")
+          .bind(accountId)
+          .first<{ email: string | null }>()
+      )?.email ?? null)
+    : null;
   const held = accountId
     ? (
         await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id=?")
@@ -106,7 +121,7 @@ async function accountScope(env: Env, cs: string): Promise<{ accountId: string |
           .all<{ callsign: string }>()
       ).results.map((r) => r.callsign.toUpperCase())
     : [];
-  return { accountId, calls: [...new Set([base, ...held])] };
+  return { accountId, email, calls: [...new Set([base, ...held])] };
 }
 
 /**
@@ -287,7 +302,7 @@ async function heldCallsExport(env: Env, accountId: string): Promise<Record<stri
  *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
 async function accountExport(
   env: Env,
-  { accountId, calls }: Awaited<ReturnType<typeof accountScope>>,
+  { accountId, email, calls }: Awaited<ReturnType<typeof accountScope>>,
 ): Promise<Record<string, unknown>> {
   const acct = accountId ?? "";
   const by = (col: string) => personalCall(env, col, calls);
@@ -320,11 +335,13 @@ async function accountExport(
       acct,
       acct,
     ),
-    // the links the account asked for or opened; another account may be waiting on the same address
+    // the links the account asked for or opened, and the unopened ones on its confirmed address; a pending address
+    // may be another account's too, so it reaches nothing
     emailTokens: await rows(
       env,
-      "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE account_id=?",
+      `SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE ${OWN_TOKENS}`,
       acct,
+      email ?? "",
     ),
     watchCalls: await rows(env, "SELECT callsign, added_at FROM watch_calls WHERE account_id=?", acct),
     verificationChallenges: await rows(
@@ -458,7 +475,7 @@ export async function handleAccountDelete(req: Request, env: Env, named: string)
     mediaKeys.push(...erased.mediaKeys);
   }
   const suspended = scope.accountId ? await suspensionOf(env, scope.accountId) : null;
-  const account = eraseAccount(env, instance, scope.accountId, calls);
+  const account = eraseAccount(env, instance, scope.accountId, scope.email, calls);
   for (const t of account.tombstones) tombstoneStmts.add(t);
   stmts.push(...account.tombstones, ...account.stmts);
   // the person's boxes go with every row of theirs (a box enrolled for another ham stays that ham's), and no box
@@ -673,6 +690,7 @@ function eraseAccount(
   env: Env,
   instance: string,
   accountId: string | null,
+  email: string | null,
   calls: string[],
 ): { tombstones: SqlStatement[]; stmts: SqlStatement[] } {
   const service = serviceCall(env);
@@ -752,8 +770,8 @@ function eraseAccount(
   ];
   if (accountId)
     stmts.push(
-      // the account's links, by the account and never by address: another account may wait on the same one
-      env.DB.prepare("DELETE FROM email_tokens WHERE account_id=?").bind(accountId),
+      // the account's links, and the unopened ones on its confirmed address, never a pending address's
+      env.DB.prepare(`DELETE FROM email_tokens WHERE ${OWN_TOKENS}`).bind(accountId, email ?? ""),
       // the challenges of the person's claims go with the claims, below
       env.DB.prepare(
         "DELETE FROM callsign_challenges WHERE account_id IN (SELECT 'claim:' || id FROM callsign_claims WHERE account_id=?)",

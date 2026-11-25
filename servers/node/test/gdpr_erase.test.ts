@@ -356,4 +356,27 @@ describe("sign-in token rows belong to the account that asked for them", () => {
       "victim@example.test",
     ]);
   });
+
+  it("export and erasure reach an unopened register link on the account's confirmed address", async () => {
+    const env = authEnv({}, freshDb().DB);
+    // a register link for the address that was never opened, then the address signs up under another call
+    expect(
+      (await call(env, "POST", "/auth/email/start", { email: "first@example.test", callsign: "DL1BBB" })).status,
+    ).toBe(200);
+    const me = await emailSignup(env, "first@example.test", "DL1AAA");
+    expect(me.status).toBe(200);
+    const left = "SELECT callsign FROM email_tokens WHERE email='first@example.test' ORDER BY callsign";
+    expect((await env.DB.prepare(left).all<{ callsign: string }>()).results.map((r) => r.callsign)).toEqual([
+      "DL1AAA",
+      "DL1BBB",
+    ]);
+
+    const exp = await call(env, "POST", "/api/account/DL1AAA/export", {}, { cookie: me.cookie });
+    expect((exp.data.emailTokens as Array<{ callsign: string }>).map((t) => t.callsign).sort()).toEqual([
+      "DL1AAA",
+      "DL1BBB",
+    ]);
+    expect((await call(env, "POST", "/api/account/DL1AAA/delete", {}, { cookie: me.cookie })).status).toBe(200);
+    expect((await env.DB.prepare(left).all()).results).toEqual([]);
+  });
 });

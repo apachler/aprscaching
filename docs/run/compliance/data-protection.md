@@ -67,10 +67,13 @@ Reports other people filed about the person stay out, because they would name th
 - **Withdrawn:** the text of every APRS message the person sent is deleted. The message keeps its place in the
   log under the marker with an empty body, so the other side's conversation shows a withdrawn message rather
   than a gap. The service call's traffic is the instance's, so a sysop's erasure leaves it.
-- **Archived:** owned caches are archived and their uploaded media and stage audio clues removed. A sysop can offer them for
+- **Archived:** owned caches are archived and their uploaded media and stage audio clues removed. A living cache
+  that follows one of the person's stations no longer names that station, and peers are served the cache without
+  it. A sysop can offer them for
   [adoption](../day-to-day/cache-adoption.md); the adoption trail keeps its rows with the marker in place of the
   person's call, and drops the notes on them.
-- **Deleted:** every personal row: passkeys, email links, held calls and their verifications, positions and the
+- **Deleted:** every personal row: passkeys, the email links the account asked for or opened and the unopened ones
+  on its confirmed address, held calls and their verifications, positions and the
   map's station entry under the call and every SSID of it, device keys, watches, alerts, favourites, saved views, push subscriptions, boxes, ratings, API keys,
   adoption requests, personal BBS mail in both directions, the bulletins and NTS traffic the person posted (replies
   others posted stay), Mailbox mail and the copies the service call sent of it (`de <call>: …`, in the message
