@@ -188,7 +188,9 @@ git commit -s -m "fix(packet): guard the FBB session after FQ"
 ```
 
 which appends `Signed-off-by: Your Name <you@example.com>`. The DCO check on your PR verifies every
-commit carries it. (Set `git config user.name`/`user.email` to your real identity first.)
+commit carries it, merge commits included. A merge without one passes only when it is exactly the automatic merge of
+its parents, such as GitHub's *Update branch*; a merge that resolves a conflict or adds a change needs
+`git commit -s` too. (Set `git config user.name`/`user.email` to your real identity first.)
 
 ## Writing a Shack tool
 
