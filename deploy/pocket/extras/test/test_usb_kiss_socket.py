@@ -112,6 +112,13 @@ class SocketBridgeTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(os.stat(self.run_dir).st_mode), 0o700)
         self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
 
+    def test_an_existing_run_directory_is_made_private(self):
+        os.makedirs(self.run_dir)
+        os.chmod(self.run_dir, 0o755)
+        p = self.bridge()
+        self.wait_listening(p).close()
+        self.assertEqual(stat.S_IMODE(os.stat(self.run_dir).st_mode), 0o700)
+
     def test_a_socket_left_by_a_killed_bridge_is_replaced(self):
         first = self.bridge()
         self.wait_listening(first).close()

@@ -73,9 +73,12 @@ env_set() {
 # reads the USB KISS bridge over the bridge's socket, both in the private run directory: on Android every app
 # shares loopback and may bind a free TCP port, so a secret or a KISS stream on 127.0.0.1 can reach another
 # app. install.sh runs this on a new .env and on a kept one, so an update needs no step by the operator.
+# POCKET_ENV_MOVED is 1 when it changed the .env.
 pocket_sockets_env() {
+  POCKET_ENV_MOVED=0
   if [ -z "$(env_get GATEWAY_SOCKET)" ]; then
     env_set GATEWAY_SOCKET "$RUN_DIR/gateway.sock"
+    POCKET_ENV_MOVED=1
     info "GATEWAY_SOCKET=$RUN_DIR/gateway.sock: the scripts and the ingest reach the gateway there"
   fi
   [ -n "$(env_get USB_KISS_DEVICE)" ] || return 0
@@ -83,9 +86,53 @@ pocket_sockets_env() {
     127.0.0.1 | localhost | ::1)
       env_set KISS_TNC_HOST "$RUN_DIR/kiss.sock"
       env_unset KISS_TNC_PORT
+      POCKET_ENV_MOVED=1
       info "KISS_TNC_HOST=$RUN_DIR/kiss.sock: the ingest reads the USB KISS TNC there"
       ;;
   esac
+}
+
+# The windows start.sh runs a helper script in. Each runs the loop of the script it started with, and the lib.sh
+# that script read then; respawned, it runs its command again, which loads the scripts on disk and the .env.
+POCKET_HELPERS=(tls notify usb-kiss alerts battery)
+restart_helpers() {
+  session_exists || return 0
+  local w
+  for w in $(tmux list-windows -t "=$SESSION" -F '#{window_name}' 2>/dev/null); do
+    case " ${POCKET_HELPERS[*]} " in
+      *" $w "*)
+        tmux respawn-window -k -t "=$SESSION:$w"
+        info "$w: restarted"
+        ;;
+    esac
+  done
+}
+
+# Move a running station onto the sockets pocket_sockets_env wrote, while the update that wrote them runs: the
+# gateway and the ingest restart and load the .env; once the gateway answers on its socket, the helper windows
+# are respawned, so no loop of an earlier lib.sh goes on sending OPERATOR_SECRET to 127.0.0.1, an earlier
+# usb-kiss loop does not start the bridge on a TCP port it no longer has, and the bridge's transmit check
+# (station_status) finds the gateway. The update scripts of an earlier release restart only the gateway and the
+# ingest, and start.sh leaves a window that exists, so this runs from install.sh, the one script of this release
+# every update runs.
+pocket_restart_on_sockets() {
+  session_exists || return 0
+  local sock gw i
+  sock="$(env_get GATEWAY_SOCKET)"
+  if restart_station; then
+    gw="$(state_get gateway supervisor)"
+    for i in $(seq 1 "${APRSCACHING_START_WAIT:-120}"); do
+      curl -fsS -o /dev/null --max-time 2 --unix-socket "$sock" http://localhost/health 2>/dev/null && break
+      if ! is_ours "$gw" supervise.sh; then
+        warn "the gateway's supervisor is gone; see $LOG_DIR/gateway.log"
+        break
+      fi
+      [ "$i" -lt "${APRSCACHING_START_WAIT:-120}" ] || warn "the gateway does not answer on $sock yet:" \
+        "$(tail -n 5 "$LOG_DIR/gateway.log" 2>/dev/null)"
+      sleep 1
+    done
+  fi
+  restart_helpers
 }
 
 gateway_port() {

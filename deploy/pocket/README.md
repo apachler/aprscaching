@@ -36,6 +36,7 @@ stops background apps, and battery and heat are real limits.
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 | `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`, the home instance; CI runs it |
 | `test/operator-socket-test.sh` | holds the gateway's TCP port with a stand-in for another app and checks that every script call carrying `OPERATOR_SECRET` goes through the gateway's socket instead; CI runs it |
+| `test/upgrade-socket-test.sh` | an update of a running station from an earlier `.env`: after `install.sh`'s move no helper window goes on sending `OPERATOR_SECRET` to the TCP port, and each reaches the gateway's socket; with a stand-in tmux and supervisor; CI runs it |
 | `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
 | `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the monthly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 

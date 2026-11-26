@@ -396,6 +396,8 @@ else
     # shellcheck source=deploy/pocket/lib.sh
     . "$DIR/deploy/pocket/lib.sh"
     pocket_sockets_env
+    # A station running on the .env it had restarts onto the sockets now, helper windows too.
+    [ "$POCKET_ENV_MOVED" -eq 0 ] || pocket_restart_on_sockets
   )
 fi
 

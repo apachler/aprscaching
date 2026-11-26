@@ -96,19 +96,8 @@ if ! restart_station; then
   info "the station is not running; start it with: bash $DIR/deploy/pocket/start.sh"
   exit 0
 fi
-# The helper windows run the loop of the script they started with, and the lib.sh it read then: respawned,
-# each loads its new script, lib.sh and the .env install.sh may have moved, so the operator's secret goes to the
-# gateway's socket and the USB KISS bridge serves its own.
-if session_exists; then
-  for w in $(tmux list-windows -t "=$SESSION" -F '#W' 2>/dev/null); do
-    case "$w" in
-      tls | notify | usb-kiss | alerts | battery)
-        tmux respawn-window -k -t "=$SESSION:$w"
-        info "$w: restarted"
-        ;;
-    esac
-  done
-fi
+# The helper windows load their new scripts, lib.sh and .env (lib.sh, restart_helpers).
+restart_helpers
 BASE="$(gateway_base)"
 sleep 2
 for _ in $(seq 1 "${APRSCACHING_START_WAIT:-120}"); do

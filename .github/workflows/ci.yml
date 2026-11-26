@@ -107,6 +107,7 @@ jobs:
       - run: bash deploy/pocket/test/net44-test.sh
       - run: bash deploy/pocket/test/backup-test.sh
       - run: bash deploy/pocket/test/operator-socket-test.sh
+      - run: bash deploy/pocket/test/upgrade-socket-test.sh
 
   helpers:
     name: Deploy helpers (shellcheck, tests)
