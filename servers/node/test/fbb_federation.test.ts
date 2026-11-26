@@ -2,7 +2,7 @@
 // Federation over FBB on a real instance: off unless FED_BBS is on, carried only to and from the forwarding
 // partners the sysop marks for it, as personal mail the forward rules never route, and deduped by its BID.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { encodeFedBbsBatch } from "@aprscaching/shared";
+import { decodeFedBbsBatch, encodeFedBbsBatch } from "@aprscaching/shared";
 // the app first: it loads the gateway's modules in the order the server does
 import { newFedKey, instanceEnv, addCache, serve } from "./helpers/fedpeer.js";
 import { boxCall } from "./helpers/box.js";
@@ -255,6 +255,31 @@ describe("receiving", () => {
       .bind(batch.bid)
       .first<{ type: string; expires_at: number | null }>();
     expect(row).toMatchObject({ type: "P", expires_at: expect.any(Number) });
+  });
+
+  it("a receiver's unchanged decoder accepts the batch an unchanged snapshot queued under, and applies it", async () => {
+    const key = await newFedKey();
+    const pub = instanceEnv("pub.example", key, { ADMIN_CALLSIGNS: "OE8APR", FED_BBS: "1" });
+    await addCache(pub, 1000);
+    const first = await call(pub, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 1000);
+      const second = await call(pub, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+      expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
+    } finally {
+      vi.useRealTimers();
+    }
+    const queued = await pub.DB.prepare("SELECT bid, body FROM bbs_messages WHERE to_call = 'ACSFED'").all<{
+      bid: string;
+      body: string;
+    }>();
+    expect(queued.results.map((r) => r.bid)).toEqual([first.data.bid]);
+    const { bid, body } = queued.results[0]!;
+    expect(decodeFedBbsBatch(body)?.bid).toBe(bid);
+    const env = await receiver(key, { FED_BBS: "1" });
+    const got = await deliver(env, bid, body, "rf-fbb:OE1FED-1");
+    expect(got.data).toMatchObject({ stored: 1, federation: { applied: first.data.frames } });
   });
 
   it("applies nothing while FED_BBS is off, even from the marked partner", async () => {

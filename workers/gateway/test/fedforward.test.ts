@@ -187,7 +187,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
       OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     expect((await handleFedBbsEnqueue(post("http://gw/x", { types: ["cache"] }), env)).status).toBe(200);
-    expect(sqls.find((q) => q.includes("INSERT OR IGNORE INTO bbs_messages"))).toContain("VALUES (?, 'P',");
+    expect(sqls.find((q) => q.includes("INSERT OR IGNORE INTO bbs_messages"))).toContain("SELECT ?, 'P',");
   });
 
   it("an already-enqueued bulletin (bid UNIQUE hit) reports deduped instead of double-posting", async () => {
