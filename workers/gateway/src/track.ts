@@ -84,7 +84,7 @@ function havSql(a: SqlPoint, b: SqlPoint): string {
  * True in SQL when no ground speed of `maxMps` gets from `a` to `b`, verify.ts `reachable` negated: the time gap
  * widened by `slackSec` and at least 1 s, and haversine distance / gap > maxMps, compared as h > sin²(maxMps·gap/2R).
  */
-function outrunsSql(a: SqlPoint, b: SqlPoint, maxMps: number, slackSec: number): string {
+export function outrunsSql(a: SqlPoint, b: SqlPoint, maxMps: number, slackSec: number): string {
   const y = `(${num(maxMps / (2 * R))} * MAX(1, ABS((${a.ts}) - (${b.ts})) + ${num(slackSec)}))`;
   return `(${y} < ${num(Math.PI / 2)} AND ${havSql(a, b)} > ${sq(sinSql(y))})`;
 }
@@ -248,18 +248,29 @@ export async function stationFixes(
 ): Promise<{ fixes: PositionRow[]; placed: Set<number> }> {
   const c = attestedSql(a, "c");
   const s = attestedSql(a, "s");
-  // The station's attested fixes are read once, into `attested`, and each signed fix is judged against those alone:
-  // a subquery over the station's fixes would read every one of them again for every signed fix, so a flood of
-  // signed fixes that none qualify would cost the square of the flood.
+  // A signed fix is refused when an attested fix in the window could not have reached it. Attested fixes at one
+  // position lie at the same distance from it, and the speed test refuses more readily the shorter the time gap, so
+  // of each position's fixes only the nearest in time on either side of the signed fix can refuse it. `spots` holds
+  // each attested position's distinct times, each with the times before and after it at that position: a signed fix
+  // timed strictly between those two has that spot as a nearest fix. Each signed fix is compared by time with the
+  // spots, newest first, until one refuses it, and only its nearest spots, at most two per position, reach the speed
+  // test. A find therefore runs at most two speed tests per signed fix and attested position: for a fixed station
+  // that stays two per signed fix however many beacons it sends, and for a station moving between N positions it
+  // grows with N. The time comparisons, far cheaper, number at most the signed fixes times the attested times.
+  const spotsCte = `WITH spots AS MATERIALIZED (
+      SELECT lat, lon, ts, LAG(ts) OVER w AS prev_ts, LEAD(ts) OVER w AS next_ts FROM (
+        SELECT DISTINCT s.lat, s.lon, s.ts FROM positions s
+          WHERE s.callsign = ? AND s.ts >= ? AND s.ts <= ? AND s.commanded = 0 AND ${s.sql})
+      WINDOW w AS (PARTITION BY lat, lon ORDER BY ts)
+      ORDER BY ts DESC)`;
   const allowed = `(c.source = 'browser-rf' AND NOT EXISTS (
-      SELECT 1 FROM attested s WHERE ${outrunsSql({ lat: "s.lat", lon: "s.lon", ts: "s.ts" }, { lat: "c.lat", lon: "c.lon", ts: "c.ts" }, maxMps, 0)}))`;
-  const attestedCte = `WITH attested AS MATERIALIZED (
-      SELECT s.lat, s.lon, s.ts FROM positions s
-        WHERE s.callsign = ? AND s.ts >= ? AND s.ts <= ? AND s.commanded = 0 AND ${s.sql})`;
+      SELECT 1 FROM spots s
+        WHERE (s.prev_ts IS NULL OR c.ts > s.prev_ts) AND (s.next_ts IS NULL OR c.ts < s.next_ts)
+          AND ${outrunsSql({ lat: "s.lat", lon: "s.lon", ts: "s.ts" }, { lat: "c.lat", lon: "c.lon", ts: "c.ts" }, maxMps, 0)}))`;
   const [recent, placing] = await Promise.all([
     recentOf(env, call, since, until),
     env.DB.prepare(
-      `${ownerSigned ? attestedCte : ""}
+      `${ownerSigned ? spotsCte : ""}
       SELECT c.*, ${ownerSigned ? allowed : "0"} AS placed_by_owner FROM positions c
         WHERE c.callsign = ? AND c.ts >= ? AND c.ts <= ? AND c.commanded = 0
           AND (${c.sql} OR ${ownerSigned ? allowed : "0"})
