@@ -354,11 +354,27 @@ check "--no-next-steps prints no Docker steps" bash -c "! '$S' --non-interactive
 if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
   check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --unverified --dir /srv/acs --user acs --port 8090 --call OE8APR
   check "  … lists the root steps first" grep -q "Steps that need root" "$TMP/out"
-  check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs" "$TMP/out"
-  check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
-  check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
+  check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs$" "$TMP/out"
+  check "  … and the build user" grep -q "\[root\] useradd --system .* acs-build$" "$TMP/out"
+  check "  … creates the install directory root's" grep -qx "    \[root\] install -d -o root -g root -m 755 /srv/acs" "$TMP/out"
+  check "  … clones as root" grep -q "\[root\] git clone" "$TMP/out"
+  check "  … writes the .env as root, through setup.sh on its port" grep -q "\[root\] bash /srv/acs/deploy/setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
   check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
-  check "  … makes data/ the service user's alone" grep -q "\[acs\] install -d -m 700 /srv/acs/data" "$TMP/out"
+  check "  … makes data/ the service user's alone" grep -qx "    \[root\] install -d -o acs -g acs -m 700 /srv/acs/data" "$TMP/out"
+  check "  … builds as the build user, with its own store" grep -qF "[acs-build] bash -c umask 022 && cd '/srv/acs' && corepack pnpm install --frozen-lockfile --store-dir \"\$HOME/.local/share/pnpm/store\" &&" "$TMP/out"
+  check "  … the web app too" grep -qx "    corepack pnpm --filter @aprscaching/web build" "$TMP/out"
+  # The service user writes nothing in the checkout but data/: every directory it is given is data/, and every
+  # step it runs is the one that fetches pnpm into its own home.
+  check "  … gives the service user data/ alone" bash -c "! grep -E -- '-o acs ' '$TMP/out' | grep -v ' /srv/acs/data\$'"
+  check "  … and runs nothing as it in the checkout" bash -c "! grep -F '[acs] ' '$TMP/out' | grep -vF \"[acs] bash -c cd '/srv/acs' && corepack pnpm --version >/dev/null\""
+  # The build user may write the build's outputs alone, each workspace package's node_modules and the web build.
+  check "  … gives the build user the build's outputs alone" bash -c "! grep -E -- '-o acs-build ' '$TMP/out' | grep -vE ' /srv/acs/(node_modules|[a-z]+/[a-z0-9_-]+/node_modules|apps/web/dist)\$'"
+  check "  … the web build's output among them" grep -qx "    \[root\] install -d -o acs-build -g acs-build -m 755 /srv/acs/apps/web/dist" "$TMP/out"
+  for pkg in "$DEPLOY"/../packages/*/package.json "$DEPLOY"/../apps/*/package.json; do
+    pkg="$(basename "$(dirname "$(dirname "$pkg")")")/$(basename "$(dirname "$pkg")")"
+    grep -qx "    \[root\] install -d -o acs-build -g acs-build -m 755 /srv/acs/$pkg/node_modules" "$TMP/out" ||
+      bad "  … $pkg/node_modules for the build user"
+  done
   check "  … says the checkout is unverified" grep -q "main (branch) is not verified" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
   check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --unverified --no-start --call OE8APR
@@ -371,6 +387,50 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
 else
   echo "skip bare metal (needs systemctl and Node.js 22+)"
 fi
+# The build's outputs follow pnpm-workspace.yaml: a package added there gets its node_modules.
+BP="$TMP/bp"
+mkdir -p "$BP/libs/a" "$BP/libs/b" "$BP/apps/web" "$BP/libs/notapkg"
+printf '{}' >"$BP/libs/a/package.json"
+printf '{}' >"$BP/libs/b/package.json"
+printf '{}' >"$BP/apps/web/package.json"
+printf 'packages:\n  - "libs/*"\n  - apps/*\n\n# a note\nonlyBuiltDependencies:\n  - esbuild\n' >"$BP/pnpm-workspace.yaml"
+check "the build's outputs are read from the workspace's packages" eq \
+  "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; bm_build_paths '$BP'" | tr '\n' ' ')" \
+  "node_modules libs/a/node_modules libs/b/node_modules apps/web/node_modules apps/web/dist "
+
+# update on a checkout the service user owns hands it to root before the build: the build outputs it wrote
+# are removed, everything but data/ becomes root's; one root already owns is built as it is. root, the
+# service user and the build user are stand-ins that log what they would run.
+bm_update_case() { # bm_update_case OWNER: shape_update_apply with the checkout's owner OWNER
+  local d="$TMP/bmup/$1"
+  mkdir -p "$d/deploy" "$d/.git" "$d/data" "$d/apps/web" "$d/units"
+  printf 'packages:\n  - "apps/*"\n' >"$d/pnpm-workspace.yaml"
+  printf '{}' >"$d/apps/web/package.json"
+  printf 'X=1\n' >"$d/deploy/.env"
+  printf '[Service]\nUser=acs\n' >"$d/units/aprscaching-gateway.service"
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'
+    SHAPE_ENV='$d/deploy/.env' BM_UNIT_DIR='$d/units'
+    bm_checkout_is_service_users() { [ '$1' != root ]; }
+    bm_owner() { echo '$1'; }
+    bm_root() { echo \"[root] \$*\"; }
+    bm_user() { echo \"[\$BM_USER] \$*\"; }
+    bm_build() { echo \"[\$BM_BUILDER] \$*\"; }
+    shape_update_apply" >"$TMP/bmup.out" 2>&1
+}
+bm_update_case acs
+check "update hands a checkout the service user owns to root" grep -qx "\[root\] chown root:root $TMP/bmup/acs" "$TMP/bmup.out"
+check "  … everything in it but data/" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -maxdepth 1 ! -name data -exec chown -hR root:root {} +" "$TMP/bmup.out"
+check "  … and takes the write bits a mode or an ACL left to others" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -maxdepth 1 ! -name data -exec chmod -R go-w {} +" "$TMP/bmup.out"
+check "  … removes the build outputs the service user wrote" bash -c "grep -qx '\[root\] rm -rf $TMP/bmup/acs/node_modules' '$TMP/bmup.out' && grep -qx '\[root\] rm -rf $TMP/bmup/acs/apps/web/dist' '$TMP/bmup.out'"
+check "  … before it builds, as the build user the unit's user names" bash -c "grep -n '' '$TMP/bmup.out' | awk -F: '/chown root:root/ { c = \$1 } /\[acs-build\] bash -c umask 022/ { b = \$1 } END { exit !(c && b && c < b) }'"
+check "  … and runs git as root from then on" bash -c "SHAPE_ENV='$TMP/bmup/acs/deploy/.env'; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'
+  BM_UNIT_DIR='$TMP/bmup/acs/units'; bm_owner() { echo root; }; bm_root() { echo \"[root] \$*\"; }; shape_git status | grep -q '^\[root\] sh -c .* git -C $TMP/bmup/acs status'"
+check "update runs git as the service user in a checkout not yet handed over" bash -c "SHAPE_ENV='$TMP/bmup/acs/deploy/.env'; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'
+  BM_UNIT_DIR='$TMP/bmup/acs/units'; bm_owner() { echo acs; }; bm_user() { echo \"[\$BM_USER] \$*\"; }; shape_git status | grep -qx '\[acs\] git -C $TMP/bmup/acs status'"
+bm_update_case root
+check "update leaves a checkout root owns where it is" bash -c "! grep -qE 'chown|rm -rf' '$TMP/bmup.out'"
+check "  … and builds as the build user" grep -q "^\[acs-build\] bash -c umask 022" "$TMP/bmup.out"
+
 # ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
 # deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
 FIX="$TMP/relfix"
@@ -446,6 +506,31 @@ for caller in init update; do
   rc_case "$caller" good --ref main --unverified
   check "$caller: --unverified takes a branch" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
 done
+# update at the target: a shape whose installation still needs its own version's layout (shape_update_pending)
+# gets shape_update_apply; one that does not is left alone.
+at_target() { # at_target PENDING(0|1): run_update in a checkout already at the newest tag; the marker in $TMP/at.applied
+  rm -rf "$TMP/at" "$TMP/at.applied"
+  git clone --quiet "$FIX/origin.git" "$TMP/at"
+  git -C "$TMP/at" -c advice.detachedHead=false checkout --quiet v1.1.0
+  bash -c "APRS_INTERACTIVE=0 APRS_ASSUME_YES=1; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/update.sh'; SHAPE=baremetal
+    shape_git() { git -C '$TMP/at' \"\$@\"; }
+    shape_update_apply() { touch '$TMP/at.applied'; }
+    shape_update_pending() { [ $1 = 1 ]; }
+    shape_doctor_context() { DOC_BASE=''; }
+    run_doctor() { :; }
+    run_update" >"$TMP/at.out" 2>&1
+}
+at_target 1
+check "update at the target applies a layout the installation still needs" bash -c "[ -e '$TMP/at.applied' ] && grep -q 'already at v1.1.0' '$TMP/at.out'"
+at_target 0
+check "  … and leaves an installation that needs none alone" bash -c "[ ! -e '$TMP/at.applied' ] && grep -q 'already at v1.1.0' '$TMP/at.out'"
+check "bare metal's layout is pending while the service user owns anything outside data/" bash -c "
+  . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$TMP/at'; BM_USER=\$(id -un)
+  mkdir -p '$TMP/at/data'; bm_checkout_is_service_users"
+check "  … and not when it owns data/ alone" bash -c "
+  . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$TMP/at'; BM_USER=nobody
+  ! bm_checkout_is_service_users"
+
 rc_case update good
 check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"
 rc_case update moved
@@ -482,9 +567,9 @@ bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . 
 check "a gateway installed under /home sees its checkout read-only" bash -c "grep -qx 'ProtectHome=read-only' '$HOMEUNIT' && ! grep -qx 'ProtectHome=yes' '$HOMEUNIT' && grep -qx 'ReadWritePaths=/home/op/aprscaching/data' '$HOMEUNIT'"
 
 # Bare metal behind a reverse proxy: the gateway listens on 127.0.0.1 and trusts the proxy's X-Forwarded-For entry.
-proxy_bind() { # proxy_bind FILE: bm_proxy_bind as the service user, who is the user running this test
+proxy_bind() { # proxy_bind FILE: bm_proxy_bind with the user running this test standing in for root
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
-    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")' BM_USER='$(id -un)'; bm_proxy_bind '$1'"
+    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")'; bm_root() { \"\$@\"; }; bm_proxy_bind '$1'"
 }
 printf '%s\n' "APP_URL=https://aprs.example.net" "# HOST=127.0.0.1" >"$TMP/bm-proxy.env"
 check "bare metal writes the proxy settings behind an https APP_URL" proxy_bind "$TMP/bm-proxy.env"
@@ -497,23 +582,23 @@ check "  … a HOST and TRUST_PROXY the operator set stay" eq "$(env_file_get "$
 printf '%s\n' "APP_URL=http://192.168.1.10:8080" >"$TMP/bm-proxy.env"
 check "bare metal on plain http runs the proxy step" proxy_bind "$TMP/bm-proxy.env"
 check "bare metal on plain http is the gateway itself, on every interface" bash -c "! grep -qE '^(HOST|TRUST_PROXY)=' '$TMP/bm-proxy.env'"
-# The .env is the service user's alone. A stand-in bm_user plays that user: it alone may read the file, so an
-# installer that reads it itself sees nothing and writes nothing.
-proxy_bind_as_service() { # proxy_bind_as_service FILE
+# The .env is root's alone. A stand-in bm_root plays root: it alone may read the file, so an installer that
+# reads it itself sees nothing and writes nothing.
+proxy_bind_as_root() { # proxy_bind_as_root FILE
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
     . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")'
-    bm_user() { chmod 600 '$1'; \"\$@\"; local rc=\$?; chmod 000 '$1'; return \$rc; }
+    bm_root() { chmod 600 '$1'; \"\$@\"; local rc=\$?; chmod 000 '$1'; return \$rc; }
     bm_proxy_bind '$1'"
 }
 printf '%s\n' "APP_URL=https://aprs.example.net" >"$TMP/bm-proxy.env"
 chmod 000 "$TMP/bm-proxy.env"
-check "bare metal reads the .env as the service user when the installer cannot" proxy_bind_as_service "$TMP/bm-proxy.env"
+check "bare metal reads the .env as root when the installer cannot" proxy_bind_as_root "$TMP/bm-proxy.env"
 chmod 600 "$TMP/bm-proxy.env"
 check "  … and sets HOST and TRUST_PROXY there" eq "$(env_file_get "$TMP/bm-proxy.env" HOST) $(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" "127.0.0.1 1"
 if [ "$(id -u)" != 0 ]; then # root reads a mode-000 file
   chmod 000 "$TMP/bm-proxy.env"
   refused() { ! proxy_bind "$1" 2>/dev/null; }
-  check "a .env the service user cannot read fails, never passes for an unset APP_URL" refused "$TMP/bm-proxy.env"
+  check "a .env root cannot read fails, never passes for an unset APP_URL" refused "$TMP/bm-proxy.env"
   chmod 600 "$TMP/bm-proxy.env"
 fi
 

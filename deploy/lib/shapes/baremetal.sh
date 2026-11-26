@@ -2,14 +2,20 @@
 # deploy/systemd/, run as a dedicated system user, the gateway serving the web app itself. Its settings in
 # <dir>/deploy/.env. Sourced by deploy/aprscaching.
 #
-# Root is needed for four things only, and init lists them before it starts: creating the service user,
-# creating the install directory, installing the two units, and enabling them. Everything else (the
-# checkout, the dependencies, the build, the .env) runs as the service user.
+# Three users share the work, so none of the code root runs is writable by a user that runs third-party code:
+# - root owns the checkout (deploy/ included, which root runs: the helper, setup.sh, net44) and its .env, and
+#   runs git, setup.sh and the units' installation;
+# - the build user (<user>-build) runs pnpm install and the web build, whose dependencies' install scripts and
+#   build plugins are third-party code; it may write the build's outputs only: every workspace package's
+#   node_modules and the web app's dist;
+# - the service user runs the units and owns data/, the one place it may write.
+# init lists the root steps before it starts.
 # shellcheck shell=bash
 # shellcheck disable=SC2034 # DOC_* is the doctor context, read by deploy/lib/doctor.sh
 
 BM_DIR="${APRSCACHING_BAREMETAL_DIR:-/opt/aprscaching}"
 BM_USER="aprscaching"
+BM_BUILDER="aprscaching-build"
 BM_PORT=8080
 BM_UNITS="aprscaching-gateway aprscaching-ingest"
 BM_UNIT_DIR="${APRSCACHING_UNIT_DIR:-/etc/systemd/system}"
@@ -23,7 +29,8 @@ Installs APRScaching from a checkout under systemd: a system user, the checkout,
 web build, the .env (the Self-host questions), and the gateway and ingest units.
 
   --dir PATH       install directory                          (default /opt/aprscaching)
-  --user NAME      the system user the services run as        (default aprscaching)
+  --user NAME      the system user the services run as        (default aprscaching;
+                   the build runs as NAME-build)
   --repo URL       the repository to install from             (default the upstream repository)
   --ref REF        the tag or branch to install               (default the newest v* tag, else main)
   --port PORT      the gateway's port; it serves the web app  (default 8080)
@@ -42,16 +49,96 @@ bm_root() {
   if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi
 }
 
-# Run as the service user, from its home, without a login shell.
-bm_user() {
-  if [ "$BM_DRY" = 1 ]; then printf '    [%s] %s\n' "$BM_USER" "$*"; return 0; fi
-  if [ "$(id -un)" = "$BM_USER" ]; then
+# Run as USER, from HOME, without a login shell: bm_as USER HOME command…
+bm_as() {
+  local user="$1" home="$2"
+  shift 2
+  if [ "$BM_DRY" = 1 ]; then printf '    [%s] %s\n' "$user" "$*"; return 0; fi
+  if [ "$(id -un)" = "$user" ]; then
     "$@"
   elif [ "$(id -u)" = 0 ]; then
-    runuser -u "$BM_USER" -- env HOME="$BM_HOME" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$@"
+    runuser -u "$user" -- env HOME="$home" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$@"
   else
-    sudo -u "$BM_USER" -H -- env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$@"
+    sudo -u "$user" -H -- env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$@"
   fi
+}
+bm_user() { bm_as "$BM_USER" "$BM_HOME" "$@"; }
+bm_build() { bm_as "$BM_BUILDER" "/var/lib/$BM_BUILDER" "$@"; }
+
+# git in the checkout, as root, with the world-readable modes the service user needs to read the code: an
+# operator's umask of 077 would otherwise leave every file root's alone.
+bm_git() {
+  if [ "$BM_DRY" = 1 ]; then printf '    [root] git %s\n' "$*"; return 0; fi
+  bm_root sh -c 'umask 022 && exec git "$@"' git "$@"
+}
+
+# The owner of a path, by name.
+bm_owner() { stat -c %U "$1"; }
+
+# The build's outputs, relative to the checkout whose layout ROOT shows: node_modules at the top and in every
+# workspace package (the globs of pnpm-workspace.yaml), and the web app's dist. Read from the workspace file,
+# so a package added there gets its node_modules without a change here.
+bm_build_paths() {
+  local root="$1" glob d
+  echo node_modules
+  while IFS= read -r glob; do
+    for d in "$root"/$glob; do
+      [ -f "$d/package.json" ] && echo "${d#"$root"/}/node_modules"
+    done
+  done < <(awk '/^packages:/ { on = 1; next } on && /^[^ #-]/ { on = 0 }
+    on && /^ *- / { sub(/^ *- */, ""); gsub(/["\047]/, ""); print }' "$root/pnpm-workspace.yaml")
+  echo apps/web/dist
+}
+
+# The build's outputs exist, the build user's, before it runs: the checkout around them is root's.
+bm_build_dirs() {
+  local layout="$BM_DIR" p
+  [ "$BM_DRY" != 1 ] || layout="$DEPLOY_DIR/.."
+  while IFS= read -r p; do
+    [ -d "$BM_DIR/$p" ] || bm_root install -d -o "$BM_BUILDER" -g "$BM_BUILDER" -m 755 "$BM_DIR/$p"
+  done < <(bm_build_paths "$layout")
+}
+
+# The dependencies and the web build, as the build user. umask 022: the service user reads what it writes. The
+# store is named, in the build user's home where pnpm keeps it anyway: without one, pnpm writes a probe file into
+# the checkout's top directory to choose it, and that directory is root's.
+bm_build_run() {
+  bm_build bash -c "umask 022 && cd '$BM_DIR' && corepack pnpm install --frozen-lockfile --store-dir \"\$HOME/.local/share/pnpm/store\" &&
+    corepack pnpm --filter @aprscaching/web build"
+}
+
+# The units start pnpm through corepack when pnpm itself is not installed; corepack keeps that pnpm in the
+# service user's home, which the units see read-only, so it is fetched there now.
+bm_pnpm_for_service() {
+  have pnpm || bm_user bash -c "cd '$BM_DIR' && corepack pnpm --version >/dev/null"
+}
+
+bm_ensure_user() { # bm_ensure_user NAME
+  if id "$1" >/dev/null 2>&1; then
+    info "$1 exists"
+  else
+    bm_root useradd --system --create-home --home-dir "/var/lib/$1" --shell /usr/sbin/nologin "$1"
+  fi
+}
+
+# A checkout where the service user owns anything outside data/ is handed to root: the service user could
+# rewrite the helper root runs. The build's outputs were the service user's to write, so they are removed rather
+# than handed on, and the next build installs them afresh. data/ stays the service user's.
+bm_checkout_is_service_users() {
+  [ -e "$BM_DIR/.git" ] && [ -n "$(find "$BM_DIR" -path "$BM_DIR/data" -prune -o -user "$BM_USER" -print -quit 2>/dev/null)" ]
+}
+bm_take_checkout() {
+  bm_checkout_is_service_users || return 0
+  step "Handing the checkout to root"
+  local p
+  while IFS= read -r p; do bm_root rm -rf "${BM_DIR:?}/$p"; done < <(bm_build_paths "$BM_DIR")
+  bm_root chown root:root "$BM_DIR"
+  bm_root chmod 755 "$BM_DIR"
+  # -h and -R without -L: a symbolic link is changed itself, never followed out of the checkout. go-w too: a mode
+  # or an ACL entry the service user set would otherwise keep a root-owned file writable to it.
+  bm_root find "$BM_DIR" -mindepth 1 -maxdepth 1 ! -name data -exec chown -hR root:root {} +
+  bm_root find "$BM_DIR" -mindepth 1 -maxdepth 1 ! -name data -exec chmod -R go-w {} +
+  info "the checkout is root's, data/ stays $BM_USER's"
 }
 
 # The newest v* tag of the repository, or nothing.
@@ -119,6 +206,7 @@ shape_init() {
   case "$BM_DIR" in /*) ;; *) die "--dir must be an absolute path." ;; esac
   [[ "$BM_PORT" =~ ^[0-9]+$ ]] || die "--port must be a number."
   BM_HOME="/var/lib/$BM_USER"
+  BM_BUILDER="$BM_USER-build"
   SHAPE_ENV="$BM_DIR/deploy/.env"
   bm_preflight
 
@@ -134,10 +222,11 @@ shape_init() {
 
   step "Bare metal: $repo at $ref into $BM_DIR, run as $BM_USER on port $BM_PORT"
   info "Steps that need root:"
-  info "  1. create the system user $BM_USER (home $BM_HOME), unless it exists"
-  info "  2. create $BM_DIR, owned by $BM_USER"
-  info "  3. install $BM_UNITS into $BM_UNIT_DIR"
-  [ "$start" = 0 ] || info "  4. systemctl daemon-reload, and enable and start both units"
+  info "  1. create the system users $BM_USER (runs the services) and $BM_BUILDER (runs the build), unless they exist"
+  info "  2. create $BM_DIR and fill it with the checkout, root's; data/ for $BM_USER, the build's outputs for $BM_BUILDER"
+  info "  3. write $SHAPE_ENV (setup.sh), root's"
+  info "  4. install $BM_UNITS into $BM_UNIT_DIR"
+  [ "$start" = 0 ] || info "  5. systemctl daemon-reload, and enable and start both units"
   # verified in a dry run too, so it shows what the install would do; the check changes nothing
   local rc=1 out commit=""
   if [ "$kind" = tag ]; then
@@ -154,51 +243,51 @@ shape_init() {
       die "Nothing was installed." "Pass --unverified to install it without asking; --yes alone does not."
   fi
 
-  step "System user"
-  if id "$BM_USER" >/dev/null 2>&1; then
-    info "$BM_USER exists"
-  else
-    bm_root useradd --system --create-home --home-dir "$BM_HOME" --shell /usr/sbin/nologin "$BM_USER"
-  fi
+  step "System users"
+  bm_ensure_user "$BM_USER"
+  bm_ensure_user "$BM_BUILDER"
 
   step "Checkout"
+  bm_take_checkout
   if [ -n "$bundle" ]; then
     # from the verified bundle; origin stays the repository, for later updates
     if [ -d "$BM_DIR/.git" ]; then
-      bm_user git -C "$BM_DIR" fetch --quiet "$bundle" "refs/tags/$ref:refs/tags/$ref"
+      bm_git -C "$BM_DIR" fetch --quiet "$bundle" "refs/tags/$ref:refs/tags/$ref"
     else
-      bm_root install -d -o "$BM_USER" -g "$BM_USER" -m 755 "$BM_DIR"
-      bm_user git clone --quiet "$bundle" "$BM_DIR"
-      bm_user git -C "$BM_DIR" remote set-url origin "$repo"
+      bm_root install -d -o root -g root -m 755 "$BM_DIR"
+      bm_git clone --quiet "$bundle" "$BM_DIR"
+      bm_git -C "$BM_DIR" remote set-url origin "$repo"
     fi
     # the commit the verified bundle's tag names, whatever a tag of that name in the checkout says
-    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$commit"
+    bm_git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$commit"
   elif [ -d "$BM_DIR/.git" ]; then
-    bm_user git -C "$BM_DIR" fetch --quiet --tags origin
-    bm_user git -C "$BM_DIR" checkout --quiet "$ref"
-    [ "$kind" = tag ] || bm_user git -C "$BM_DIR" merge --quiet --ff-only "origin/$ref"
+    bm_git -C "$BM_DIR" fetch --quiet --tags origin
+    bm_git -C "$BM_DIR" checkout --quiet "$ref"
+    [ "$kind" = tag ] || bm_git -C "$BM_DIR" merge --quiet --ff-only "origin/$ref"
   else
-    bm_root install -d -o "$BM_USER" -g "$BM_USER" -m 755 "$BM_DIR"
-    bm_user git clone --quiet "$repo" "$BM_DIR"
-    bm_user git -C "$BM_DIR" checkout --quiet "$ref"
+    bm_root install -d -o root -g root -m 755 "$BM_DIR"
+    bm_git clone --quiet "$repo" "$BM_DIR"
+    bm_git -C "$BM_DIR" checkout --quiet "$ref"
   fi
   # the database and media live here (the units' DB_PATH), the service user's alone: the database holds
   # account emails and unused sign-in tokens
-  bm_user install -d -m 700 "$BM_DIR/data"
+  bm_root install -d -o "$BM_USER" -g "$BM_USER" -m 700 "$BM_DIR/data"
 
   step "Dependencies and the web build"
   # The gateway and the ingest run from source (tsx); the web app is the one thing to build.
-  bm_user bash -c "cd '$BM_DIR' && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @aprscaching/web build"
+  bm_build_dirs
+  bm_build_run
+  bm_pnpm_for_service
 
   step "Settings ($SHAPE_ENV)"
   local opts=(--env-file "$SHAPE_ENV" --app-port "$BM_PORT" --no-tunnel --no-next-steps)
   [ "$APRS_INTERACTIVE" = 1 ] || opts+=(--non-interactive)
   [ "$APRS_ASSUME_YES" = 1 ] && opts+=(--yes)
-  bm_user bash "$BM_DIR/deploy/setup.sh" "${opts[@]}" "${setup[@]+"${setup[@]}"}"
+  bm_root bash "$BM_DIR/deploy/setup.sh" "${opts[@]}" "${setup[@]+"${setup[@]}"}"
   # The ingest reaches the gateway on this host, not by the Docker stack's service name.
-  bm_user sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
-  bm_proxy_bind "$SHAPE_ENV" || die "could not read $SHAPE_ENV as $BM_USER to set HOST and TRUST_PROXY for the proxy."
-  bm_user chmod 600 "$SHAPE_ENV"
+  bm_root sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
+  bm_proxy_bind "$SHAPE_ENV" || die "could not read $SHAPE_ENV as root to set HOST and TRUST_PROXY for the proxy."
+  bm_root chmod 600 "$SHAPE_ENV"
 
   step "systemd units"
   tmp="$(mktemp -d)"
@@ -226,11 +315,11 @@ shape_init() {
 # Behind the reverse proxy an https APP_URL names, the gateway listens on 127.0.0.1 alone and keys rate limits on
 # the X-Forwarded-For entry that proxy wrote: a client that reached the port directly would choose its own. A
 # value the operator set stays. A plain-http APP_URL is the gateway itself, reached on every interface.
-# The file is the service user's alone (mode 600), so the service user reads and writes it: an installer that
-# cannot read it must not take the refusal for an unset APP_URL. Fails when the file cannot be read.
+# The file is root's alone (mode 600), so root reads and writes it: an installer that cannot read it must not
+# take the refusal for an unset APP_URL. Fails when the file cannot be read.
 bm_proxy_bind() {
-  # shellcheck disable=SC2016 # the script expands in the service user's shell
-  bm_user bash -c 'set -e
+  # shellcheck disable=SC2016 # the script expands in root's shell
+  bm_root bash -c 'set -e
     . "$1/deploy/lib/env.sh"
     [ -r "$2" ] || { echo "cannot read $2" >&2; exit 1; }
     case "$(env_file_get "$2" APP_URL)" in https://*) ;; *) exit 0 ;; esac
@@ -257,7 +346,8 @@ bm_next_steps() {
   call="$(env_file_get "$SHAPE_ENV" ADMIN_CALLSIGNS)"
   call="${call%%,*}"
   url="$(env_file_get "$SHAPE_ENV" APP_URL)"
-  run="sudo -u $BM_USER bash -c 'cd $BM_DIR && set -a && . deploy/.env && PORT=$BM_PORT node tools/admin/"
+  # root reads the .env, the service user runs the tool, which writes the database
+  run="sudo bash -c 'cd $BM_DIR && set -a && . deploy/.env && PORT=$BM_PORT runuser -u $BM_USER -- node tools/admin/"
   step "Next"
   info "1. Sign in: open ${url:-http://<this host>:$BM_PORT} and create the account for ${call:-your call}."
   case "$url" in http://*)
@@ -284,6 +374,20 @@ shape_doctor_context() {
   DOC_DB_FILE="$dir/data/aprscaching.db"
   DOC_BACKUP_SETTINGS=1
 }
+
+# doctor's ingest checks (apps/ingest/src/check.ts): root loads the .env, which is root's, and the service user
+# runs node, since the code it loads includes the dependencies the build user installed. sudo -n: doctor never
+# waits on a password prompt it hides.
+bm_ingest_check() {
+  local u
+  u="$(sed -n 's/^User=//p' "$BM_UNIT_DIR/aprscaching-gateway.service" 2>/dev/null)"
+  # shellcheck disable=SC2016 # the script expands in root's shell
+  set -- bash -c 'set -a && . "$1" && set +a && cd "$2/apps/ingest" && shift 3 &&
+    exec runuser -u "$0" -- node --import tsx src/check.ts "$@"' "${u:-$BM_USER}" "$DOC_ENV" "$(bm_dir)" _ "$@"
+  if [ "$(id -u)" = 0 ]; then "$@"; else sudo -n "$@"; fi 2>/dev/null
+}
+shape_doctor_signed_check() { bm_ingest_check; }
+shape_doctor_ingest_node() { bm_ingest_check "$@"; }
 
 shape_doctor_extra() {
   local unit state
@@ -320,8 +424,14 @@ shape_status() {
 # the service user.
 bm_dir() { dirname "$(dirname "$SHAPE_ENV")"; }
 bm_ctx() {
+  local u
   BM_DRY=0
+  BM_DIR="$(bm_dir)"
+  # the service user the installed units name, --user at init
+  u="$(sed -n 's/^User=//p' "$BM_UNIT_DIR/aprscaching-gateway.service" 2>/dev/null)"
+  BM_USER="${u:-$BM_USER}"
   BM_HOME="/var/lib/$BM_USER"
+  BM_BUILDER="$BM_USER-build"
   [ -f "$SHAPE_ENV" ] || die "$SHAPE_ENV is missing." "Run deploy/aprscaching init baremetal first."
 }
 shape_db_dump() {
@@ -362,16 +472,26 @@ shape_stop() { bm_root systemctl stop $BM_UNITS; }
 # shellcheck disable=SC2086 # two unit names
 shape_start() { bm_root systemctl start $BM_UNITS; }
 
-# ---- update (deploy/lib/update.sh): the installation's checkout as the service user, its dependencies and
-# web build, then the units restarted; the gateway applies new migrations when it starts.
+# ---- update (deploy/lib/update.sh): the installation's checkout as root, its dependencies and web build as the
+# build user, then the units restarted; the gateway applies new migrations when it starts.
+# git runs as the checkout's owner: root, or the service user in a checkout the update has yet to hand to root.
 shape_git() {
   bm_ctx
-  bm_user git -C "$(bm_dir)" "$@"
+  if [ "$(bm_owner "$BM_DIR/.git")" = root ]; then bm_git -C "$BM_DIR" "$@"; else bm_user git -C "$BM_DIR" "$@"; fi
+}
+# update at the target still hands a checkout the service user owns to root: the update that brought it there
+# ran the helper it replaced.
+shape_update_pending() {
+  bm_ctx
+  bm_checkout_is_service_users
 }
 shape_update_apply() {
   bm_ctx
-  bm_user bash -c "cd '$(bm_dir)' && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @aprscaching/web build" ||
-    return 1
+  bm_ensure_user "$BM_BUILDER" >/dev/null
+  bm_take_checkout
+  bm_build_dirs
+  bm_build_run || return 1
+  bm_pnpm_for_service || return 1
   # shellcheck disable=SC2086 # two unit names
   bm_root systemctl restart $BM_UNITS
 }

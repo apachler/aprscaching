@@ -46,7 +46,7 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     | Shape | Command |
     |---|---|
     | Self-host with Docker, from `deploy/` | `docker compose exec gateway node tools/admin/verify-call.mjs OE8APR` |
-    | Self-host without Docker | `sudo -u aprscaching bash -c 'cd /opt/aprscaching && set -a && . deploy/.env && PORT=8080 node tools/admin/verify-call.mjs OE8APR'` |
+    | Self-host without Docker | `sudo bash -c 'cd /opt/aprscaching && set -a && . deploy/.env && PORT=8080 runuser -u aprscaching -- node tools/admin/verify-call.mjs OE8APR'` |
     | Pocket | `cd ~/aprscaching && set -a && . ~/.aprscaching/.env && set +a && node tools/admin/verify-call.mjs OE8APR` |
     | Desktop, from a checkout | `BASE=<the gateway's URL> OPERATOR_SECRET=<the secret> node tools/admin/verify-call.mjs OE8APR` |
 

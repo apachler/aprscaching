@@ -6,7 +6,8 @@
 #
 # A shape module supplies shape_git (git in the instance's checkout, as the right user) and
 # shape_update_apply (build and restart on what the checkout holds); optionally shape_rollback_db <epoch>
-# (a database rollback other than restoring the backup). Sourced by deploy/aprscaching.
+# (a database rollback other than restoring the backup) and shape_update_pending (true when the installation
+# needs shape_update_apply although its checkout is at the target: a layout the running helper changes). Sourced by deploy/aprscaching.
 # shellcheck shell=bash
 
 # The ids of the checks doctor fails, one per line (it runs in a subshell, so nothing it sets leaks).
@@ -128,6 +129,13 @@ run_update() {
   target="$UPD_TARGET"
   if [ "$target" = "$cur" ]; then
     info "already at $(shape_git describe --tags --always "$cur")"
+    if declare -F shape_update_pending >/dev/null && shape_update_pending; then
+      # the update that moved the checkout here ran the helper the checkout held before, older than the target
+      confirm "Bring the installation onto its own version's layout now?" ||
+        die "Nothing was changed." "Pass --yes to do it without asking."
+      if ! shape_update_apply || ! update_wait_ready; then die "Bringing the installation onto its layout failed."; fi
+      run_doctor || true
+    fi
     return 0
   fi
   update_verify
