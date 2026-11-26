@@ -15,9 +15,10 @@ const LON = 15 + 25.2 / 60;
 const now = () => Math.floor(Date.now() / 1000);
 /** Far more fixes than any read of the window may bring out of the database. */
 const FLOOD = 4 * (2 * RECENT_LIMIT + CANDIDATE_LIMIT);
-/** The rows a find's trust read may load: the newest fixes of the logged call and the station, the attested ones
- *  that can place the logger, and one contradicting fix per match tried and for a peer's hearing. */
-const BOUND = 2 * RECENT_LIMIT + 3 * CANDIDATE_LIMIT + 1;
+/** The rows a find's trust read may load: the logged call's newest fixes and its attested ones that can place it at
+ *  the cache, one contradicting fix for each of those tried as the match and one for a peer's hearing, and a living
+ *  cache station's newest fixes and newest fixes that place it. */
+const BOUND = 2 * (RECENT_LIMIT + CANDIDATE_LIMIT) + 1 + 2 * RECENT_LIMIT;
 
 const room = { fetch: async () => new Response(null, { status: 204 }) };
 const world = () => authEnv({ FIRST_PARTY_SITES: SITE, ROOMS: { get: () => room } });
