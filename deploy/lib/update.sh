@@ -133,7 +133,10 @@ run_update() {
       # the update that moved the checkout here ran the helper the checkout held before, older than the target
       confirm "Bring the installation onto its own version's layout now?" ||
         die "Nothing was changed." "Pass --yes to do it without asking."
-      if ! shape_update_apply || ! update_wait_ready; then die "Bringing the installation onto its layout failed."; fi
+      if ! shape_update_apply || ! update_wait_ready; then
+        die "Bringing the installation onto its layout failed." \
+          "Fix the cause above, then run deploy/aprscaching update again: it finishes what is left."
+      fi
       run_doctor || true
     fi
     return 0

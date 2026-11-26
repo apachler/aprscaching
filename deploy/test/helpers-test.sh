@@ -401,8 +401,8 @@ check "the build's outputs are read from the workspace's packages" eq \
 # update on a checkout the service user owns hands it to root before the build: the build outputs it wrote
 # are removed, everything but data/ becomes root's; one root already owns is built as it is. root, the
 # service user and the build user are stand-ins that log what they would run.
-bm_update_case() { # bm_update_case OWNER: shape_update_apply with the checkout's owner OWNER
-  local d="$TMP/bmup/$1"
+bm_update_case() { # bm_update_case OWNER [BUILD_RC]: shape_update_apply with the checkout's owner OWNER
+  local d="$TMP/bmup/$1" build_rc="${2:-0}"
   mkdir -p "$d/deploy" "$d/.git" "$d/data" "$d/apps/web" "$d/units"
   printf 'packages:\n  - "apps/*"\n' >"$d/pnpm-workspace.yaml"
   printf '{}' >"$d/apps/web/package.json"
@@ -414,13 +414,14 @@ bm_update_case() { # bm_update_case OWNER: shape_update_apply with the checkout'
     bm_owner() { echo '$1'; }
     bm_root() { echo \"[root] \$*\"; }
     bm_user() { echo \"[\$BM_USER] \$*\"; }
-    bm_build() { echo \"[\$BM_BUILDER] \$*\"; }
+    bm_build() { echo \"[\$BM_BUILDER] \$*\"; return $build_rc; }
     shape_update_apply" >"$TMP/bmup.out" 2>&1
 }
 bm_update_case acs
 check "update hands a checkout the service user owns to root" grep -qx "\[root\] chown root:root $TMP/bmup/acs" "$TMP/bmup.out"
-check "  … everything in it but data/" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -maxdepth 1 ! -name data -exec chown -hR root:root {} +" "$TMP/bmup.out"
-check "  … and takes the write bits a mode or an ACL left to others" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -maxdepth 1 ! -name data -exec chmod -R go-w {} +" "$TMP/bmup.out"
+check "  … everything in it but data/" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -path $TMP/bmup/acs/data -prune -o -exec chown -h root:root {} +" "$TMP/bmup.out"
+check "  … and takes the write bits a mode or an ACL left to others" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -path $TMP/bmup/acs/data -prune -o ! -type l -exec chmod go-w {} +" "$TMP/bmup.out"
+check "  … and records the commit it built" grep -q "^\[root\] sh -c .* $TMP/bmup/acs $TMP/bmup/acs/.git/aprscaching-built\$" "$TMP/bmup.out"
 check "  … removes the build outputs the service user wrote" bash -c "grep -qx '\[root\] rm -rf $TMP/bmup/acs/node_modules' '$TMP/bmup.out' && grep -qx '\[root\] rm -rf $TMP/bmup/acs/apps/web/dist' '$TMP/bmup.out'"
 check "  … before it builds, as the build user the unit's user names" bash -c "grep -n '' '$TMP/bmup.out' | awk -F: '/chown root:root/ { c = \$1 } /\[acs-build\] bash -c umask 022/ { b = \$1 } END { exit !(c && b && c < b) }'"
 check "  … and runs git as root from then on" bash -c "SHAPE_ENV='$TMP/bmup/acs/deploy/.env'; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'
@@ -430,6 +431,30 @@ check "update runs git as the service user in a checkout not yet handed over" ba
 bm_update_case root
 check "update leaves a checkout root owns where it is" bash -c "! grep -qE 'chown|rm -rf' '$TMP/bmup.out'"
 check "  … and builds as the build user" grep -q "^\[acs-build\] bash -c umask 022" "$TMP/bmup.out"
+bm_update_case root 1 || true
+check "a failed build records no commit, so the next update owes it" bash -c "grep -q '^\[acs-build\] bash -c umask 022' '$TMP/bmup.out' && ! grep -q aprscaching-built '$TMP/bmup.out'"
+
+# The hand-over itself, on a real tree that the user running this test owns, standing in for the service user;
+# root's chown is left out, since only root may give a file away. A symbolic link at the top and one inside point
+# out of the checkout: chmod must change neither target. data/ keeps its modes.
+HO="$TMP/handover"
+mkdir -p "$HO/co/.git" "$HO/co/deploy/lib" "$HO/co/data" "$HO/outside/sub"
+printf 'packages:\n' >"$HO/co/pnpm-workspace.yaml"
+touch "$HO/co/deploy/lib/common.sh" "$HO/co/data/f"
+ln -s "$HO/outside" "$HO/co/lnk"
+ln -s "$HO/outside/sub" "$HO/co/deploy/inner"
+chmod 777 "$HO/outside" "$HO/outside/sub" "$HO/co/deploy/lib"
+chmod 666 "$HO/co/deploy/lib/common.sh" "$HO/co/data/f"
+bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DRY=0 BM_DIR='$HO/co' BM_USER=\$(id -un)
+  bm_root() { case \"\$1 \$*\" in chown*|*'-exec chown'*) return 0 ;; esac; \"\$@\"; }
+  bm_take_checkout" >"$TMP/handover.out" 2>&1
+check "the hand-over takes others' write bits in the checkout" eq "$(stat -c %a "$HO/co/deploy/lib/common.sh") $(stat -c %a "$HO/co/deploy/lib")" "644 755"
+check "  … follows no symbolic link out of it" eq "$(stat -c %a "$HO/outside") $(stat -c %a "$HO/outside/sub")" "777 777"
+check "  … and leaves data/ as it is" eq "$(stat -c %a "$HO/co/data/f")" 666
+# What counts as the service user's: anything outside data/, and nothing inside it.
+check "the service user's paths are the checkout's, not data/'s" eq \
+  "$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$HO/co' BM_USER=\$(id -un); bm_service_owned" | grep -c "^$HO/co/data") \
+$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$HO/co' BM_USER=\$(id -un); bm_service_owned" | grep -cx "$HO/co/deploy/lib/common.sh")" "0 1"
 
 # ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
 # deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
@@ -508,13 +533,13 @@ for caller in init update; do
 done
 # update at the target: a shape whose installation still needs its own version's layout (shape_update_pending)
 # gets shape_update_apply; one that does not is left alone.
-at_target() { # at_target PENDING(0|1): run_update in a checkout already at the newest tag; the marker in $TMP/at.applied
+at_target() { # at_target PENDING(0|1) [APPLY_RC]: run_update in a checkout already at the newest tag; the marker in $TMP/at.applied
   rm -rf "$TMP/at" "$TMP/at.applied"
   git clone --quiet "$FIX/origin.git" "$TMP/at"
   git -C "$TMP/at" -c advice.detachedHead=false checkout --quiet v1.1.0
   bash -c "APRS_INTERACTIVE=0 APRS_ASSUME_YES=1; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/update.sh'; SHAPE=baremetal
     shape_git() { git -C '$TMP/at' \"\$@\"; }
-    shape_update_apply() { touch '$TMP/at.applied'; }
+    shape_update_apply() { touch '$TMP/at.applied'; return ${2:-0}; }
     shape_update_pending() { [ $1 = 1 ]; }
     shape_doctor_context() { DOC_BASE=''; }
     run_doctor() { :; }
@@ -524,12 +549,26 @@ at_target 1
 check "update at the target applies a layout the installation still needs" bash -c "[ -e '$TMP/at.applied' ] && grep -q 'already at v1.1.0' '$TMP/at.out'"
 at_target 0
 check "  … and leaves an installation that needs none alone" bash -c "[ ! -e '$TMP/at.applied' ] && grep -q 'already at v1.1.0' '$TMP/at.out'"
+at_target 1 1 || true
+check "  … and says to run it again when that fails" grep -q "then run deploy/aprscaching update again: it finishes what is left" "$TMP/at.out"
 check "bare metal's layout is pending while the service user owns anything outside data/" bash -c "
   . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$TMP/at'; BM_USER=\$(id -un)
   mkdir -p '$TMP/at/data'; bm_checkout_is_service_users"
-check "  … and not when it owns data/ alone" bash -c "
-  . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$TMP/at'; BM_USER=nobody
-  ! bm_checkout_is_service_users"
+# The build is owed until the commit it was built from is the checkout's: a build that failed left none.
+pending_at() { # pending_at: shape_update_pending in $TMP/at, a root-owned checkout as far as the stand-ins tell
+  mkdir -p "$TMP/at/deploy" "$TMP/at/units"
+  : >"$TMP/at/deploy/.env"
+  printf '[Service]\nUser=nobody\n' >"$TMP/at/units/aprscaching-gateway.service"
+  bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; SHAPE_ENV='$TMP/at/deploy/.env' BM_UNIT_DIR='$TMP/at/units'
+    bm_owner() { echo root; }; bm_root() { \"\$@\"; }; bm_service_owned() { :; }; shape_update_pending"
+}
+rm -f "$TMP/at/.git/aprscaching-built"
+check "bare metal's build is owed when no build finished" pending_at
+git -C "$TMP/at" rev-parse HEAD >"$TMP/at/.git/aprscaching-built"
+not_pending_at() { ! pending_at; }
+check "  … and not once one finished at the checkout's commit" not_pending_at
+git -C "$TMP/at" rev-parse HEAD~1 >"$TMP/at/.git/aprscaching-built"
+check "  … and again when the last one finished at another commit" pending_at
 
 rc_case update good
 check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"

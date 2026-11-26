@@ -121,12 +121,17 @@ bm_ensure_user() { # bm_ensure_user NAME
   fi
 }
 
+# What the service user owns in the checkout outside data/, one path a line; data/ is its own.
+bm_service_owned() {
+  find "$BM_DIR" -path "$BM_DIR/data" -prune -o -user "$BM_USER" -print 2>/dev/null
+}
+bm_checkout_is_service_users() {
+  [ -e "$BM_DIR/.git" ] && [ -n "$(bm_service_owned | head -n 1)" ]
+}
+
 # A checkout where the service user owns anything outside data/ is handed to root: the service user could
 # rewrite the helper root runs. The build's outputs were the service user's to write, so they are removed rather
 # than handed on, and the next build installs them afresh. data/ stays the service user's.
-bm_checkout_is_service_users() {
-  [ -e "$BM_DIR/.git" ] && [ -n "$(find "$BM_DIR" -path "$BM_DIR/data" -prune -o -user "$BM_USER" -print -quit 2>/dev/null)" ]
-}
 bm_take_checkout() {
   bm_checkout_is_service_users || return 0
   step "Handing the checkout to root"
@@ -134,11 +139,23 @@ bm_take_checkout() {
   while IFS= read -r p; do bm_root rm -rf "${BM_DIR:?}/$p"; done < <(bm_build_paths "$BM_DIR")
   bm_root chown root:root "$BM_DIR"
   bm_root chmod 755 "$BM_DIR"
-  # -h and -R without -L: a symbolic link is changed itself, never followed out of the checkout. go-w too: a mode
+  # find walks the tree without following a symbolic link, and hands each path to chown -h, which changes a
+  # link itself, and to chmod only when it is no link, since chmod changes what a link points to. go-w: a mode
   # or an ACL entry the service user set would otherwise keep a root-owned file writable to it.
-  bm_root find "$BM_DIR" -mindepth 1 -maxdepth 1 ! -name data -exec chown -hR root:root {} +
-  bm_root find "$BM_DIR" -mindepth 1 -maxdepth 1 ! -name data -exec chmod -R go-w {} +
+  bm_root find "$BM_DIR" -mindepth 1 -path "$BM_DIR/data" -prune -o -exec chown -h root:root {} +
+  bm_root find "$BM_DIR" -mindepth 1 -path "$BM_DIR/data" -prune -o ! -type l -exec chmod go-w {} +
   info "the checkout is root's, data/ stays $BM_USER's"
+}
+
+# The commit the build's outputs were last built from, in a file under .git that root alone writes. An update
+# whose build failed leaves it at an older commit, or missing, so the next update knows the build is owed.
+bm_built_file() { echo "$BM_DIR/.git/aprscaching-built"; }
+bm_mark_built() {
+  # shellcheck disable=SC2016 # the script expands in root's shell
+  bm_root sh -c 'umask 022 && git -C "$1" rev-parse HEAD >"$2"' _ "$BM_DIR" "$(bm_built_file)"
+}
+bm_built_at_head() {
+  [ "$(cat "$(bm_built_file)" 2>/dev/null)" = "$(shape_git rev-parse HEAD 2>/dev/null)" ]
 }
 
 # The newest v* tag of the repository, or nothing.
@@ -278,6 +295,7 @@ shape_init() {
   bm_build_dirs
   bm_build_run
   bm_pnpm_for_service
+  bm_mark_built
 
   step "Settings ($SHAPE_ENV)"
   local opts=(--env-file "$SHAPE_ENV" --app-port "$BM_PORT" --no-tunnel --no-next-steps)
@@ -479,11 +497,11 @@ shape_git() {
   bm_ctx
   if [ "$(bm_owner "$BM_DIR/.git")" = root ]; then bm_git -C "$BM_DIR" "$@"; else bm_user git -C "$BM_DIR" "$@"; fi
 }
-# update at the target still hands a checkout the service user owns to root: the update that brought it there
-# ran the helper it replaced.
+# update at the target still owes the installation its build: the checkout is the service user's (the update
+# that brought it there ran the helper it replaced), or the last build did not finish at this commit.
 shape_update_pending() {
   bm_ctx
-  bm_checkout_is_service_users
+  bm_checkout_is_service_users || ! bm_built_at_head
 }
 shape_update_apply() {
   bm_ctx
@@ -492,6 +510,7 @@ shape_update_apply() {
   bm_build_dirs
   bm_build_run || return 1
   bm_pnpm_for_service || return 1
+  bm_mark_built || return 1
   # shellcheck disable=SC2086 # two unit names
   bm_root systemctl restart $BM_UNITS
 }

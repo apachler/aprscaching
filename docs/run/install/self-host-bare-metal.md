@@ -85,9 +85,10 @@ The helper runs as root, so no user that runs other code may write it:
 
 `deploy/aprscaching update` and `init baremetal` hand a checkout where the service user owns anything outside
 `data/` to root before they build: they make everything but `data/` root's, take away the write bits others
-have, remove the build's outputs, and build them again as `aprscaching-build`. `update` does this even when the
-checkout is already at the newest release. A checkout that was changed before that hand-over is not repaired by
-it.
+have, remove the build's outputs, and build them again as `aprscaching-build`. `update` does this, and finishes a
+build an earlier run left unfinished, even when the checkout is already at its target: the newest release, or the
+branch `--ref` names for an install that follows a branch. A checkout that was changed before that hand-over is
+not repaired by it.
 
 The units run in a systemd sandbox. The gateway may write `/opt/aprscaching/data` and nothing else: the checkout,
 its `.env` and the rest of the system are read-only to it, and it sees no `/home` and no devices. So `DB_PATH` and
