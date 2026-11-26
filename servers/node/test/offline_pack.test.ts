@@ -6,6 +6,7 @@ import { PACK_LOGS_PER_CACHE, type PackResponse } from "@aprscaching/shared";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 import { jpegOf } from "./helpers/images.js";
+import { sessionCookie } from "./helpers/authflow.js";
 
 let ip = 0;
 function setup() {
@@ -166,10 +167,11 @@ describe("image thumbnails", () => {
       },
     }) as unknown as Env;
     const id = await cache(env, "AC-PIC", 47.1, 15.1);
+    const owner = { cookie: await sessionCookie(env, "OE8OWN") };
     const up = await serve(env)(
       new Request(`https://pack.example/api/caches/${id}/media?title=view`, {
         method: "POST",
-        headers: { "content-type": "image/jpeg", "x-ingest-secret": "test-ingest-secret", "x-owner-call": "OE8OWN" },
+        headers: { "content-type": "image/jpeg", ...owner },
         body: jpegOf(5000),
       }),
     );
@@ -178,16 +180,11 @@ describe("image thumbnails", () => {
       serve(env)(
         new Request(`https://pack.example/api/caches/${id}/media/${mediaId}/thumb`, {
           method: "PUT",
-          headers: {
-            "content-type": "image/jpeg",
-            "x-ingest-secret": "test-ingest-secret",
-            "x-owner-call": "OE8OWN",
-            ...headers,
-          },
+          headers: { "content-type": "image/jpeg", ...owner, ...headers },
           body,
         }),
       );
-    return { env, id, mediaId, objects, thumb };
+    return { env, id, mediaId, objects, thumb, owner };
   }
 
   it("the owner stores one, and the gallery and the pack list it beside the image", async () => {
@@ -214,7 +211,8 @@ describe("image thumbnails", () => {
 
   it("only the owner, only a small JPEG or WebP", async () => {
     const t = await withImage();
-    expect((await t.thumb(new Uint8Array(800), { "x-owner-call": "OE1XYZ" })).status).toBe(403);
+    const stranger = await sessionCookie(t.env, "OE1XYZ");
+    expect((await t.thumb(new Uint8Array(800), { cookie: stranger })).status).toBe(403);
     expect((await t.thumb(new Uint8Array(800), { "content-type": "image/png" })).status).toBe(415);
     expect((await t.thumb(new Uint8Array(200_000))).status).toBe(413);
   });
@@ -227,7 +225,7 @@ describe("image thumbnails", () => {
     await serve(t.env)(
       new Request(`https://pack.example/api/caches/${t.id}/media/${t.mediaId}`, {
         method: "DELETE",
-        headers: { "x-ingest-secret": "test-ingest-secret", "x-owner-call": "OE8OWN" },
+        headers: t.owner,
       }),
     );
     expect(t.objects.size).toBe(0);

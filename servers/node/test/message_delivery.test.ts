@@ -3,6 +3,7 @@
 // browser for one its radio sent. The Messages list shows the tries and how the message ended.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const room = { fetch: async () => new Response(null, { status: 204 }) };
@@ -24,12 +25,12 @@ describe("message delivery reports", () => {
       .run();
     const id = Number(cmd.meta.last_row_id);
     expect(
-      (await call(env, "POST", "/api/box/box-d/commands/ack", { id, status: "done", msgNo: "123" }, SECRET)).status,
+      (await boxCall(env, "box-d", "POST", "/api/box/box-d/commands/ack", { id, status: "done", msgNo: "123" })).status,
     ).toBe(200);
     expect(await listed(env, "box repeats")).toMatchObject({ msgNo: "123", delivery: "sent" });
 
     const report = { id, delivery: { tries: 5, outcome: "expired" } };
-    expect((await call(env, "POST", "/api/box/box-d/commands/ack", report, SECRET)).status).toBe(200);
+    expect((await boxCall(env, "box-d", "POST", "/api/box/box-d/commands/ack", report)).status).toBe(200);
     expect(await listed(env, "box repeats")).toMatchObject({ delivery: "unacked", tries: 5 });
     const log = await env.DB.prepare("SELECT result FROM box_commands WHERE id = ?")
       .bind(id)
@@ -50,13 +51,10 @@ describe("message delivery reports", () => {
     expect((await call(env, "POST", "/ingest", { packets: [ack] }, SECRET)).status).toBe(200);
     expect(await listed(env, "box repeats")).toMatchObject({ delivery: "acked" });
 
-    const bad = await call(
-      env,
-      "POST",
-      "/api/box/box-d/commands/ack",
-      { id, delivery: { tries: 0, outcome: "x" } },
-      SECRET,
-    );
+    const bad = await boxCall(env, "box-d", "POST", "/api/box/box-d/commands/ack", {
+      id,
+      delivery: { tries: 0, outcome: "x" },
+    });
     expect(bad.status).toBe(400);
   });
 
@@ -69,7 +67,7 @@ describe("message delivery reports", () => {
       .run();
     const id = Number(cmd.meta.last_row_id);
     const ack = { id, status: "done", msgNo: "124", sentAs: "OE8DLV-10" };
-    expect((await call(env, "POST", "/api/box/box-d/commands/ack", ack, SECRET)).status).toBe(200);
+    expect((await boxCall(env, "box-d", "POST", "/api/box/box-d/commands/ack", ack)).status).toBe(200);
     const row = await env.DB.prepare("SELECT from_call FROM messages WHERE body = 'sent as box'").first<{
       from_call: string;
     }>();
@@ -98,7 +96,7 @@ describe("message delivery reports", () => {
       .run();
     const id = Number(cmd.meta.last_row_id);
     const ack = { id, status: "done", msgNo: "125", sentAs: "OE3XYZ-10" };
-    expect((await call(env, "POST", "/api/box/box-d/commands/ack", ack, SECRET)).status).toBe(200);
+    expect((await boxCall(env, "box-d", "POST", "/api/box/box-d/commands/ack", ack)).status).toBe(200);
     const row = await env.DB.prepare("SELECT from_call FROM messages WHERE body = 'foreign call'").first<{
       from_call: string;
     }>();

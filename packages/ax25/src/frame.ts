@@ -62,10 +62,21 @@ export function encodeAddress(a: Ax25Address, cbit: boolean, last: boolean): Uin
   return out;
 }
 
-/** Decode a 7-byte address; returns the address, its top SSID bit (C/H), and whether it's the last. */
-export function decodeAddress(b: Uint8Array, off: number): { addr: Ax25Address; cbit: boolean; last: boolean } {
+/** An address character: A–Z, 0–9 or the space that pads a short call. */
+const isAddrChar = (c: number) => c === 0x20 || (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
+
+/**
+ * Decode a 7-byte address; returns the address, its top SSID bit (C/H), and whether it's the last — or null when
+ * a call octet is not a shifted A–Z, 0–9 or space (its low bit set, or another character). The call reaches log
+ * lines and session text, so a newline, `:`, `>` or an escape byte from RF never becomes part of one.
+ */
+export function decodeAddress(b: Uint8Array, off: number): { addr: Ax25Address; cbit: boolean; last: boolean } | null {
   let call = "";
-  for (let i = 0; i < 6; i++) call += String.fromCharCode(b[off + i]! >> 1);
+  for (let i = 0; i < 6; i++) {
+    const o = b[off + i]!;
+    if (o & 1 || !isAddrChar(o >> 1)) return null;
+    call += String.fromCharCode(o >> 1);
+  }
   const ssidByte = b[off + 6]!;
   return {
     addr: { call: call.trimEnd(), ssid: (ssidByte >> 1) & 0x0f },
@@ -81,7 +92,7 @@ export function decodeAddress(b: Uint8Array, off: number): { addr: Ax25Address; 
  * unchanged. `extended` defaults to the frame's own `extended` flag so a link can tag what it emits.
  */
 export function encodeFrame(f: Ax25Frame, extended = f.extended ?? false): Uint8Array {
-  const parts: number[] = [];
+  const parts: number[] = []; // the header: addresses, control and PID — at most 74 bytes
   // dst C bit = command, src C bit = !command (AX.25 v2 convention)
   const dst = encodeAddress(f.dst, f.command, false);
   const digis = f.digis ?? [];
@@ -105,8 +116,13 @@ export function encodeFrame(f: Ax25Frame, extended = f.extended ?? false): Uint8
   }
 
   if (f.type === "I" || f.type === "UI") parts.push(f.pid ?? PID_NO_L3);
-  if (f.info && (f.type === "I" || f.type === "UI" || f.type === "FRMR" || f.type === "TEST")) parts.push(...f.info);
-  return Uint8Array.from(parts);
+  // The info field is copied in whole, never spread into push(): a spread passes each byte as an argument, and
+  // past the engine's argument limit (~125k) it throws.
+  const info = f.info && (f.type === "I" || f.type === "UI" || f.type === "FRMR" || f.type === "TEST") ? f.info : null;
+  const out = new Uint8Array(parts.length + (info?.length ?? 0));
+  out.set(parts);
+  if (info) out.set(info, parts.length);
+  return out;
 }
 
 /**
@@ -121,6 +137,7 @@ export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | nu
     // dst, src, up to 8 digis
     if (off + 7 > bytes.length) return null;
     const a = decodeAddress(bytes, off);
+    if (!a) return null;
     addrs.push(a);
     off += 7;
     if (a.last) break;

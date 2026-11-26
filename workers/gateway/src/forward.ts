@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk, ingestOrServiceBoxOk } from "./auth.js";
-import { boxPrincipal } from "./boxprincipal.js";
+import { bbsBoxOk, operatorSecretOk } from "./auth.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
  * into the pure ForwardRouter (@aprscaching/packet), resolves a destination to a partner, keeps the FBB
@@ -11,7 +10,7 @@ import { boxPrincipal } from "./boxprincipal.js";
  */
 import type { Env } from "./env.js";
 import { json, asStr } from "./http.js";
-import { requireSysop, requireIngestOrOperator } from "./admin.js";
+import { requireSysop } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
@@ -90,22 +89,22 @@ export async function handleBbsRoute(req: Request, env: Env): Promise<Response> 
   return json({ addr, parsed: parseHierAddr(addr), partner });
 }
 
-/** White Pages: GET ?call= (public lookup) · POST {callsign, homeBbs} (set; the ingest box or the operator). */
+/** White Pages: GET ?call= (public lookup) · POST {callsign, homeBbs} (set; the packet BBS box or the operator). */
 export async function handleWhitePages(req: Request, env: Env): Promise<Response> {
   if (req.method === "GET") {
     const call = new URL(req.url).searchParams.get("call");
     if (!call) return json({ error: "call required" }, { status: 400 });
     return json({ callsign: call.toUpperCase(), homeBbs: await homeBbs(env, call) });
   }
-  // A White Pages entry steers where FBB forwarding sends a callsign's mail, so only the ingest box (which
+  // A White Pages entry steers where FBB forwarding sends a callsign's mail, so only the packet BBS box (which
   // learns them from the mail it carries) and the operator set one.
-  const denied = await requireIngestOrOperator(req, env);
+  const denied = await requireBbsBoxOrOperator(req, env);
   if (denied) return denied;
   const b = (await req.json().catch(() => ({}))) as { callsign?: string; homeBbs?: string };
   if (typeof b.callsign !== "string" || typeof b.homeBbs !== "string" || !b.callsign || !b.homeBbs)
     return json({ error: "callsign + homeBbs required" }, { status: 400 });
-  // the ingest box reports what it learned from the mail it carries; the operator's entry is the operator's word
-  const learned = ingestSecretOk(req, env) || boxPrincipal(req) !== null;
+  // the packet BBS box reports what it learned from the mail it carries; the operator's entry is the operator's word
+  const learned = bbsBoxOk(req);
   await setWhitePages(env, b.callsign, b.homeBbs, learned ? "learned" : "manual");
   return json({ ok: true, callsign: b.callsign.toUpperCase(), homeBbs: b.homeBbs.toUpperCase() });
 }
@@ -216,12 +215,12 @@ const PARTNER_COLS =
   "id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, federation";
 
 /** Operator partner CRUD: GET list · POST create (upsert by call). Writes take a sysop session or the
- *  operator secret; the list read is also open to the ingest box, whose FBB scheduler dials it with its
- *  INGEST_SECRET. Never a plain user. */
+ *  operator secret; the list read is also open to the packet BBS box, whose FBB scheduler dials it. Never a
+ *  plain user, and never the shared ingest secret: a partner's connect script can hold its password. */
 export async function handleForwardPartners(req: Request, env: Env): Promise<Response> {
   const gate =
     req.method === "GET"
-      ? await requireIngestOrOperator(req, env)
+      ? await requireBbsBoxOrOperator(req, env)
       : await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   if (req.method === "GET") {
@@ -334,11 +333,28 @@ export function inboundRow(
   };
 }
 
-const ingestOk = ingestOrServiceBoxOk;
+/** The packet BBS box (auth.ts bbsBoxOk), or the operator. The shared ingest secret is refused outright. */
+async function requireBbsBoxOrOperator(req: Request, env: Env): Promise<Response | null> {
+  if (bbsBoxOk(req) || operatorSecretOk(req, env)) return null;
+  if (req.headers.get("x-ingest-secret") !== null) return SECRET_REFUSED();
+  return requireSysop(req, env, { allowOperatorSecret: true });
+}
+
+const SECRET_REFUSED = () =>
+  json({ error: "the shared ingest secret does not run the BBS: enroll the box with its own key" }, { status: 401 });
+
+/** The FBB forwarding queue is the packet BBS box's alone (auth.ts bbsBoxOk). */
+const forwardRefusal = (req: Request): Response | null =>
+  bbsBoxOk(req)
+    ? null
+    : req.headers.get("x-ingest-secret") !== null
+      ? SECRET_REFUSED()
+      : new Response("unauthorized", { status: 401 });
 
 /** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
 export async function handleForwardPool(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const refused = forwardRefusal(req);
+  if (refused) return refused;
   const u = new URL(req.url);
   const partner = (u.searchParams.get("partner") ?? "").toUpperCase();
   if (!partner) return json({ error: "partner required" }, { status: 400 });
@@ -389,7 +405,8 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
 
 /** POST /api/bbs/forward/inbound {message} — store an inbound forwarded message (BID-deduped). */
 export async function handleForwardInbound(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const refused = forwardRefusal(req);
+  if (refused) return refused;
   const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
   const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), nowS());
   if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
@@ -458,7 +475,8 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
 
 /** POST /api/bbs/forward/sent {partner, bids} — mark messages forwarded to a partner (don't re-offer). */
 export async function handleForwardSent(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const refused = forwardRefusal(req);
+  if (refused) return refused;
   const b = (await req.json().catch(() => ({}))) as { partner?: string; bids?: string[] };
   const partner = (b.partner ?? "").toUpperCase();
   if (!partner || !Array.isArray(b.bids) || !b.bids.length)

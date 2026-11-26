@@ -9,10 +9,11 @@
  * instance:
  *
  *  - `rf_heard` — the signed-in holder asks for a code ({@link startAprsChallenge}), transmits
- *    `VERIFY <code>` to the service call from the call or any SSID of it, and a receiving site this
- *    instance attests hears it on its own radio ({@link completeRfChallenge}, from radiolog.ts).
- *    A MeshCom node on the operator's ingest box counts as such a site only for a message it heard
- *    directly over LoRa; a copy relayed across the mesh or through the MeshCom server does not.
+ *    `VERIFY <code>` to the service call from the call or any SSID of it, and an enrolled ingest box hears
+ *    it on its own radio at a site the sysop trusts through that box, and delivers it signed with its own key
+ *    ({@link completeRfChallenge}, from radiolog.ts). The shared INGEST_SECRET never verifies a callsign.
+ *    A MeshCom node on the box counts as such a site only for a message it heard directly over LoRa; a copy
+ *    relayed across the mesh or through the MeshCom server does not.
  *  - `ampr_dns` — the holder publishes a code under their ARDC-delegated `<call>.ampr.org` name and the
  *    DNSSEC-validated answer carries it (verify_ampr.ts).
  *  - `lotw` — the holder signs a challenge with the key of their ARRL Logbook of The World callsign
@@ -44,7 +45,7 @@ import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
 import { dropQueuedFor } from "./outbox.js";
-import { attestedSites } from "./attestedsites.js";
+import { boxSites } from "./attestedsites.js";
 import type { SqlStatement } from "./runtime.js";
 import {
   claimByToken,
@@ -57,11 +58,12 @@ import {
 } from "./claims.js";
 
 /**
- * The receiving-site calls that can hear a `VERIFY` message: the attested sites, sorted. Site calls are
- * public (they appear in every frame the site gates), so naming them to the holder discloses nothing.
+ * The receiving-site calls that can hear a `VERIFY` message: the sites trusted through an enrolled box, sorted.
+ * Site calls are public (they appear in every frame the site gates), so naming them to the holder discloses
+ * nothing.
  */
 export async function listeningSites(env: Env): Promise<string[]> {
-  return [...(await attestedSites(env))].sort();
+  return [...(await boxSites(env))].sort();
 }
 
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
@@ -244,8 +246,8 @@ async function failRfClaims(env: Env, cs: string): Promise<boolean> {
 type RfChallengeOutcome = "verified" | "wrong" | "none";
 
 /**
- * Complete a challenge from a `VERIFY <code>` message. The caller has established that the message was
- * heard on the air at an attested site; this checks the rest: the sender's base call is the challenge's
+ * Complete a challenge from a `VERIFY <code>` message. The caller has established that an enrolled box
+ * heard the message on the air at a site trusted through it; this checks the rest: the sender's base call is the challenge's
  * call, a challenge is outstanding and within its TTL, the attempts cap is not reached, and the code
  * matches. A wrong code counts an attempt and locks a pending challenge at the cap; an already-verified
  * call keeps its status whatever is sent. A code that answers an open claim on the call completes the claim

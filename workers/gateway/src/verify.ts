@@ -19,8 +19,9 @@
  *
  * Evidence for A and B is never a fix that matched a beacon this instance asked an ingest box
  * to send (`commanded`): that says where the box is, not where its operator is. A living cache
- * is where its station was heard by an attested site or through its owner's own signed browser
- * bridge (`ownerSigned`); a find matched against an APRS-IS-only fix of the station is Tier C.
+ * is where its station was heard by an attested site, or through its owner's own signed browser
+ * bridge (`ownerSigned`) where every attested fix of the station could have reached; a find matched
+ * against an APRS-IS-only fix of the station is Tier C.
  *
  * Site policy sets the minimum tier that counts as "verified". Caches may override
  * (e.g. flagship/competition caches require A).
@@ -121,6 +122,9 @@ export interface VerifyResult {
 interface VerifyDeps {
   /** logger's stored positions within [now-window, now], newest first */
   loggerPositions: PositionRow[];
+  /** fixes of the logger's other SSIDs that belong to the same track: they can contradict a matched fix
+   *  ({@link plausibleTrack}), never match one */
+  loggerTrackPositions?: PositionRow[];
   /** for aprs_living: the cache-station's positions in the same window */
   cacheStationPositions?: PositionRow[];
   /** BASE callsigns the logger controls (own call, held account calls, registered stations) —
@@ -165,40 +169,52 @@ const trackOf = (deps: VerifyDeps): PositionRow[] => deps.loggerPositions.filter
 export const contradicts = (p: PositionRow): boolean =>
   !p.commanded && (p.firstPartyAttested === true || p.source === "browser-rf");
 
-/** The station fixes that place a living cache for Tier A or B: attested or the owner's own signed ones. */
-const stationEvidence = (deps: VerifyDeps): PositionRow[] =>
-  (deps.cacheStationPositions ?? []).filter((c) => (c.firstPartyAttested || c.ownerSigned) && !c.commanded);
+/** True when a fix at `b` can follow one at `a`, in either order, at no more than `maxMps`. `slackSec` widens the
+ *  time gap by the evidence's time resolution; sub-second gaps clamp to 1 s. */
+function reachable(
+  a: { lat: number; lon: number; ts: number },
+  b: { lat: number; lon: number; ts: number },
+  maxMps: number,
+  slackSec = 0,
+): boolean {
+  const dt = Math.max(1, Math.abs(a.ts - b.ts) + slackSec);
+  return haversineMeters(a.lat, a.lon, b.lat, b.lon) / dt <= maxMps;
+}
 
 /**
- * "plausible track": a matched Tier-A fix must be reachable from the logger's own
- * neighbouring fixes at a sane ground speed. A single forged/replayed beacon dropped at the cache
- * while the real track is elsewhere implies an impossible speed → not a real presence. Only fixes that
- * {@link contradicts} count as neighbours; with none in the window there is nothing to contradict (benign
- * single-beacon case) → allowed.
+ * The station fixes that place a living cache for Tier A or B: its attested ones, and the owner's own signed ones
+ * that every attested fix could have reached. The owner asserts a signed fix about their own station, so it can
+ * place the cache only where the attested track allows; one the attested track contradicts is the owner moving
+ * the cache to wherever a finder was heard, and places nothing.
+ */
+export function stationEvidence(station: PositionRow[], policy: VerifyPolicy = DEFAULT_POLICY): PositionRow[] {
+  const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
+  const attested = station.filter((c) => c.firstPartyAttested && !c.commanded);
+  return station.filter(
+    (c) => !c.commanded && (c.firstPartyAttested || (c.ownerSigned && attested.every((a) => reachable(a, c, maxMps)))),
+  );
+}
+
+/**
+ * "plausible track": a matched Tier-A fix must be reachable at a sane ground speed from every fix of the logger's
+ * own track in the window. A single forged/replayed beacon dropped at the cache while the real track is elsewhere
+ * implies an impossible speed → not a real presence. Every neighbour is judged, not the nearest alone: the logger
+ * controls their own signed fixes, so a fix placed beside the forged one must not hide the attested fix that
+ * contradicts it — a fix the logger asserts can add a contradiction, never remove one. Only fixes that
+ * {@link contradicts} count as neighbours, from the logged call and from `loggerTrackPositions`; with none in the
+ * window there is nothing to contradict (benign single-beacon case) → allowed.
  */
 function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPolicy): boolean {
   const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
-  let nearest: PositionRow | null = null,
-    bestDt = Infinity;
-  for (const p of deps.loggerPositions) {
-    if (!contradicts(p) || p === match || p.id === match.id) continue;
-    const dt = Math.abs(p.ts - match.ts);
-    if (dt < bestDt) {
-      bestDt = dt;
-      nearest = p;
-    }
-  }
-  if (!nearest) return true; // no track to contradict the fix
-  const dt = Math.max(1, Math.abs(nearest.ts - match.ts)); // avoid /0; sub-second gaps clamp to 1 s
-  const dist = haversineMeters(nearest.lat, nearest.lon, match.lat, match.lon);
-  return dist / dt <= maxMps; // reachable at a plausible speed
+  const track = [...deps.loggerPositions, ...(deps.loggerTrackPositions ?? [])];
+  return track.every((p) => !contradicts(p) || p === match || p.id === match.id || reachable(p, match, maxMps));
 }
 
 /**
  * "plausible presence" for evidence that did not come from the logger's own fixes (a peer's
- * corroboration): the logger's nearest local fix in time must be able to reach `point` at a sane
- * ground speed. `slackSec` widens the time gap by the evidence's time resolution (a peer's answer is
- * bucketed), so coarsening never turns a real presence into a teleport. Only local fixes that
+ * corroboration): every local fix of the logger's in the window must be able to reach `point` at a sane
+ * ground speed, as in {@link plausibleTrack}. `slackSec` widens each time gap by the evidence's time resolution
+ * (a peer's answer is bucketed), so coarsening never turns a real presence into a teleport. Only local fixes that
  * {@link contradicts} count, so a caller passes them stamped with attestation; with none there is nothing to
  * contradict → allowed.
  */
@@ -209,19 +225,7 @@ export function plausiblePresence(
   slackSec = 0,
 ): boolean {
   const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
-  let nearest: PositionRow | null = null,
-    bestDt = Infinity;
-  for (const p of loggerPositions) {
-    if (!contradicts(p)) continue;
-    const dt = Math.abs(p.ts - point.ts);
-    if (dt < bestDt) {
-      bestDt = dt;
-      nearest = p;
-    }
-  }
-  if (!nearest) return true;
-  const dist = haversineMeters(nearest.lat, nearest.lon, point.lat, point.lon);
-  return dist / Math.max(1, bestDt + slackSec) <= maxMps;
+  return loggerPositions.every((p) => !contradicts(p) || reachable(p, point, maxMps, slackSec));
 }
 
 /** Tier A: heard at a first-party-attested site, independently gated, near the target. */
@@ -241,7 +245,7 @@ function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyR
 
 /** Tier A for living caches: logger co-located with the moving cache-station. */
 function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
-  const cs = stationEvidence(deps);
+  const cs = stationEvidence(deps.cacheStationPositions ?? [], policy);
   if (!cs.length) return null;
   for (const p of trackOf(deps)) {
     if (!p.firstPartyAttested) continue; // Tier A demands an attested first-party fix
@@ -304,7 +308,7 @@ function tryApp(
   if (deps.now != null) {
     if (!Number.isFinite(appGeo.ts) || Math.abs(deps.now - appGeo.ts) > policy.appMaxAgeSec) return null;
   }
-  const at = cacheAt(cache, appGeo.ts, stationEvidence(deps), policy);
+  const at = cacheAt(cache, appGeo.ts, stationEvidence(deps.cacheStationPositions ?? [], policy), policy);
   if (!at) return null;
   const d = haversineMeters(appGeo.lat, appGeo.lon, at.lat, at.lon);
   // require the reading to be near AND not absurdly imprecise (clamp a bogus/negative accuracy)

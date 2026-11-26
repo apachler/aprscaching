@@ -21,6 +21,7 @@ import {
   instanceMinTier,
   stricterMinTier,
   plausiblePresence,
+  stationEvidence,
   type CacheRow,
   type PositionRow,
   type VerifyResult,
@@ -30,10 +31,11 @@ import { provenanceOf, routeOf } from "./provenance.js";
 import { attestation as loadAttestation, everySite, sitesFor } from "./attestedsites.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
+import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
+import { fixesOf, loggerTrack } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -198,17 +200,6 @@ function routeJson(stored: string): PacketRouteInfo | null {
   }
 }
 
-function ingestOk(req: Request, env: Env): boolean {
-  return ingestSecretOk(req, env);
-}
-
-/**
- * The AUTHORISED acting callsign for a write (hide / log): a signed-in passkey session wins;
- * otherwise the body callsign IS allowed only when the request carries the ingest secret — i.e.
- * the trusted backend / APRS-originated path (an RF-heard find attributed to its callsign). A bare
- * web request with neither is rejected (null → 401). This is what gates web logging behind sign-in
- * without breaking the over-APRS logging path.
- */
 /**
  * A request under a session that names a call of another base call is refused, never credited to the session: a
  * log or unlock made by one player and sent later (the web app's offline queue) carries whichever session cookie
@@ -228,12 +219,16 @@ export function otherCallRefusal(sessionCall: string | null | undefined, named: 
   );
 }
 
-export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
+/**
+ * The callsign a write acts as (hide, log, favourite, watch, rate, unlock): the signed-in session's, or null
+ * (401). A callsign named in the body or the query never stands in for one: the shared INGEST_SECRET sits on
+ * every ingest box, so taking a named call with it would let whoever holds a box act as any player. A find
+ * heard on the air is logged by the radio-command path (radiolog.ts), not through these routes.
+ */
+export async function actor(req: Request, env: Env): Promise<string | null> {
   const s = (await sessionIdentity(req, env))?.callsign;
   // the withdrawn marker names an erased identity, never someone acting now
-  if (s) return isWithdrawnCall(s) ? null : s.toUpperCase();
-  if (ingestOk(req, env) && fallback && !isWithdrawnCall(fallback)) return fallback.toUpperCase();
-  return null;
+  return s && !isWithdrawnCall(s) ? s.toUpperCase() : null;
 }
 
 export interface RemoteCacheRow {
@@ -443,8 +438,8 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
       .bind(id)
       .all<{ month: string; n: number }>()
   ).results.reverse();
-  // the caller's own favourite and rating: `?callsign=` names someone else only with the ingest secret
-  const who = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
+  // the signed-in caller's own favourite and rating
+  const who = await actor(req, env);
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
   const rating = await ratingInfo(env, id, (row.rating_policy ?? "finders") as "finders" | "all" | "off", who);
@@ -512,8 +507,7 @@ export async function handleCacheLogs(req: Request, env: Env, id: number): Promi
 
 /**
  * A living cache follows a station its hider operates: the station must be one of the signed-in account's own
- * (Settings → My stations), so nobody turns someone else's beacon into a cache to be chased. The ingest plane,
- * a trusted machine of the instance, is not asked.
+ * (Settings → My stations), so nobody turns someone else's beacon into a cache to be chased.
  */
 async function livingStationRefusal(
   req: Request,
@@ -524,7 +518,6 @@ async function livingStationRefusal(
   if (type !== "aprs_living") return null;
   const cs = stationCall?.trim().toUpperCase();
   if (!cs) return "a living cache follows a station: pick one of your stations";
-  if (ingestOk(req, env)) return null;
   const me = await sessionIdentity(req, env);
   if (!me) return "sign in to hide a living cache";
   const own = await env.DB.prepare("SELECT 1 AS x FROM account_stations WHERE account_id = ? AND callsign = ?")
@@ -540,7 +533,7 @@ async function livingStationRefusal(
  */
 const HERITAGE_TYPES = new Set(["sota", "pota", "wwff", "bunker", "castle"]);
 async function heritageRefusal(req: Request, env: Env, type: string): Promise<string | null> {
-  if (!HERITAGE_TYPES.has(type) || ingestOk(req, env) || !(await requireSysop(req, env))) return null;
+  if (!HERITAGE_TYPES.has(type) || !(await requireSysop(req, env))) return null;
   return "heritage places come from the sysop's import: hide a cache at one as a traditional cache";
 }
 
@@ -588,8 +581,7 @@ export async function handleMyHides(req: Request, env: Env): Promise<Response> {
  * Why a signed-in member may not hide a cache now, or null. A cache owner answers for a place in the field and
  * for every finder's log, so hiding takes a control-verified call. Each account hides at most
  * HIDE_DAILY_LIMIT new caches in 24 hours, which keeps one account from flooding the map; the sysop is
- * exempt. The instance's own backend (the ingest secret: imports, the over-APRS path) is not a member and
- * passes.
+ * exempt.
  */
 async function hideRefusal(req: Request, env: Env, accountId: string, owner: string): Promise<Response | null> {
   if (!(await isCallsignVerified(env, owner)))
@@ -613,13 +605,11 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
   const b = parsed.data;
 
-  const owner = await actor(req, env, b.ownerCall);
-  if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
   const member = await sessionIdentity(req, env);
-  if (member) {
-    const refused = await hideRefusal(req, env, member.accountId, owner);
-    if (refused) return refused;
-  }
+  const owner = await actor(req, env);
+  if (!member || !owner) return json({ error: "sign in to hide a cache" }, { status: 401 });
+  const refused = await hideRefusal(req, env, member.accountId, owner);
+  if (refused) return refused;
   const notOwn = await livingStationRefusal(req, env, b.type, b.stationCall);
   if (notOwn) return json({ error: notOwn }, { status: 403 });
   const heritage = await heritageRefusal(req, env, b.type);
@@ -627,8 +617,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   if (b.code) {
     // An explicit code is for imports by the instance itself. A player who picked one could take a code the
     // instance mints later, or one that reads like another cache's.
-    if (!ingestOk(req, env) && (await requireSysop(req, env)))
-      return json({ error: "only the sysop can choose a cache code" }, { status: 403 });
+    if (await requireSysop(req, env)) return json({ error: "only the sysop can choose a cache code" }, { status: 403 });
     if (MINTED_CODE.test(b.code)) return json({ error: "AC- codes are minted by the instance" }, { status: 400 });
   }
 
@@ -711,7 +700,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   // a cache the sysop removed stays as it is until the sysop restores it
   if (existing.removed_at != null)
     return json({ error: "the sysop removed this cache — it cannot be edited" }, { status: 403 });
-  if (!(await mayActAsOwner(req, env, existing.owner_call, b.ownerCall)))
+  if (!(await mayActAsOwner(req, env, existing.owner_call)))
     return json({ error: "only the owner may edit this cache" }, { status: 403 });
 
   // merge: undefined keeps existing
@@ -780,7 +769,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   // a status change is in the logbook, as the owner's enabled or disabled log is; archiving has no log type of
   // its own and goes in as a note
   if (m.status !== existing.status) {
-    const by = (await actor(req, env, b.ownerCall)) ?? existing.owner_call;
+    const by = (await actor(req, env)) ?? existing.owner_call;
     const [logType, comment] =
       m.status === "active"
         ? ["enabled", null]
@@ -812,24 +801,15 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   const { comment, logType } = parsed.data;
   const needsMaintenance = parsed.data.needsMaintenance === true;
 
-  // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
-  // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
-  const sessionCall = (await sessionIdentity(req, env))?.callsign ?? null;
-  let loggerCall: string;
-  if (sessionCall) {
-    const other = otherCallRefusal(sessionCall, parsed.data.loggerCall);
-    if (other) return other;
-    // operate as an SSID of your own call
-    loggerCall = parsed.data.loggerCall?.toUpperCase() || sessionCall.toUpperCase();
-  } else if (ingestOk(req, env) && parsed.data.loggerCall) {
-    loggerCall = parsed.data.loggerCall.toUpperCase();
-  } else {
-    return json({ error: "sign in to log a find" }, { status: 401 });
-  }
-  const accountVerified = sessionCall != null; // session => passkey-bound account
-  // Tier B rests on the player's own phone reading the cache's place; a find the ingest plane logs for a
-  // heard callsign has no in-app reading, so a geolocation it sends is ignored.
-  const appGeo = sessionCall ? parsed.data.appGeo : undefined;
+  // A log is the signed-in player's (actor()); a find heard on the air is logged by radiolog.ts.
+  const me = await sessionIdentity(req, env);
+  if (!me || isWithdrawnCall(me.callsign)) return json({ error: "sign in to log a find" }, { status: 401 });
+  const other = otherCallRefusal(me.callsign, parsed.data.loggerCall);
+  if (other) return other;
+  // operate as an SSID of your own call
+  const loggerCall = parsed.data.loggerCall?.trim().toUpperCase() || me.callsign.toUpperCase();
+  const accountVerified = true; // a session is a passkey- or email-bound account
+  const appGeo = parsed.data.appGeo;
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(cacheId).first<
     CacheRow & {
@@ -848,7 +828,7 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     return (await removedCacheResponse(req, env, cacheId))
       ? json({ error: "no such cache" }, { status: 404 })
       : json({ error: "the sysop removed this cache — it takes no logs" }, { status: 409 });
-  const sessionAccount = sessionCall ? ((await sessionIdentity(req, env))?.accountId ?? null) : null;
+  const sessionAccount = me.accountId;
   // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
   const refused = await logRefusal(env, cache, loggerCall, logType, sessionAccount);
   if (refused) return json({ error: refused }, { status: 409 });
@@ -949,12 +929,11 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     });
   }
 
-  // Tier A says the logger was heard on the air, so a signed-in player's call must be control-verified for it;
-  // the ingest plane attributes a heard callsign as the trusted backend.
-  const controlVerified = sessionCall ? await isCallsignVerified(env, loggerCall) : true;
+  // Tier A says the logger was heard on the air, so the player's call must be control-verified for it
+  const controlVerified = await isCallsignVerified(env, loggerCall);
   const scored = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
-  // a later lift holds the signed-in player's call to the same control-verification
-  const score = scored.retry && sessionCall ? { ...scored, retry: { ...scored.retry, requireVerified: true } } : scored;
+  // a later lift holds the player's call to the same control-verification
+  const score = scored.retry ? { ...scored, retry: { ...scored.retry, requireVerified: true } } : scored;
   const committed = await commitFind(env, cache, loggerCall, foundAt, comment ?? null, score, {
     signerKey,
     authorSig,
@@ -1032,21 +1011,15 @@ export async function scoreFind(
 ): Promise<FindScore> {
   const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
-  const lp = await env.DB.prepare(
-    // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-  )
-    .bind(loggerCall, since, at + 60)
-    .all<PositionRow>();
+  // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
+  const track = await loggerTrack(env, loggerCall, since, at + 60);
+  const lp = { results: track.own };
 
   let cacheStationPositions: PositionRow[] | undefined;
   if (cache.type === "aprs_living" && cache.station_call) {
-    const cs = await env.DB.prepare(
-      "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-    )
-      .bind(cache.station_call, since, at + 60)
-      .all<PositionRow>();
-    cacheStationPositions = cs.results;
+    // every attested station fix, uncapped: a flood of fixes under the station's call cannot push one out of the
+    // read and leave an owner-signed fix with nothing to be judged against
+    cacheStationPositions = await fixesOf(env, cache.station_call, since, at + 60);
   }
 
   // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
@@ -1083,8 +1056,9 @@ export async function scoreFind(
   const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
 
   // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
-  // browser bridge signed: a signed batch carries only its signer's base call, so a `browser-rf` fix under a base
-  // call the owner's account holds is the owner's own.
+  // browser bridge signed and the attested ones could have reached (verify.ts stationEvidence): a signed batch
+  // carries only its signer's base call, so a `browser-rf` fix under a base call the owner's account holds is the
+  // owner's own.
   const ownerSigned = cacheStationPositions?.length ? await ownerSignsFor(env, cache.id, cache.station_call) : false;
   const station = cacheStationPositions
     ? attest(cacheStationPositions).map((p) => ({ ...p, ownerSigned: ownerSigned && p.source === "browser-rf" }))
@@ -1095,6 +1069,7 @@ export async function scoreFind(
     appGeo,
     {
       loggerPositions: attest(lp.results),
+      loggerTrackPositions: attest(track.others),
       cacheStationPositions: station,
       loggerOwnIgates,
       loggerOwnBoxes,
@@ -1125,7 +1100,7 @@ export async function scoreFind(
   let route: PacketRouteInfo | null = matched
     ? routeOf(matched, sitesFor(attested, matched.ingest_box), everySite(attested))
     : null;
-  const lastStation = station?.find((p) => p.ts <= at + 60 && (p.firstPartyAttested || p.ownerSigned) && !p.commanded);
+  const lastStation = station && stationEvidence(station).find((p) => p.ts <= at + 60);
   const point =
     cache.type === "aprs_living"
       ? lastStation
@@ -1153,7 +1128,15 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    if (ev && plausiblePresence({ ...point, ts: ev.ts }, attest(lp.results), DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+    if (
+      ev &&
+      plausiblePresence(
+        { ...point, ts: ev.ts },
+        attest([...lp.results, ...track.others]),
+        DEFAULT_POLICY,
+        COARSEN.timeBucketSec,
+      )
+    ) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";

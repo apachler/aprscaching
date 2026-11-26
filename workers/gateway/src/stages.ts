@@ -109,7 +109,6 @@ export async function resealStage(env: Env, cacheId: number, stageNo: number): P
 // ---- owner: set the stage list (replaces existing) ----
 export async function handleSetStages(req: Request, env: Env, cacheId: number): Promise<Response> {
   const b = (await req.json().catch(() => ({}))) as {
-    ownerCall?: string;
     stages?: Array<{
       stageNo: number;
       /** The number this stage had before the edit, when the owner moved it; its clip follows it. */
@@ -124,8 +123,7 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   };
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  if (!(await mayActAsOwner(req, env, owner, b.ownerCall)))
-    return json({ error: "only the owner may set stages" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner))) return json({ error: "only the owner may set stages" }, { status: 403 });
   if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
@@ -249,7 +247,7 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+  if (!(await mayActAsOwner(req, env, owner)))
     return json({ error: "only the owner may upload media" }, { status: 403 });
   if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
 
@@ -317,8 +315,8 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
     if (!st) return new Response("not found", { status: 404 });
     if (!clueShownLocked(st)) {
       const owner = await ownerOf(env, cacheId);
-      // the caller's own unlocks: `?callsign=` names someone else only with the ingest secret
-      const cs = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
+      // the signed-in caller's own unlocks
+      const cs = await actor(req, env);
       const allowed =
         (!!owner && (await mayActAsOwner(req, env, owner))) ||
         (!!cs && (await unlockedStages(env, cacheId, cs)).has(st.stage_no));
@@ -354,8 +352,8 @@ async function serveMedia(env: Env, key: string, cacheControl: string): Promise<
 export async function handleGetStages(req: Request, env: Env, cacheId: number): Promise<Response> {
   const hidden = await removedCacheResponse(req, env, cacheId);
   if (hidden) return hidden;
-  // the caller's own unlocks only: `?callsign=` names someone else only with the ingest secret
-  const callsign = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
+  // the signed-in caller's own unlocks only
+  const callsign = await actor(req, env);
   const rows = (
     await env.DB.prepare(
       "SELECT stage_no, unlock, clue, media_key, lat, lon, radius_m, unlock_secret FROM cache_stages WHERE cache_id=? ORDER BY stage_no",
@@ -394,7 +392,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   const b = parsed.data;
   const other = otherCallRefusal((await sessionIdentity(req, env))?.callsign, b.callsign);
   if (other) return other;
-  const cs = await actor(req, env, b.callsign);
+  const cs = await actor(req, env);
   if (!cs) return json({ error: "sign in to unlock a stage" }, { status: 401 });
   if (stageNo <= 0) return json({ error: "stage 0 is the public start" }, { status: 400 });
   if (await isRemoved(env, cacheId)) return json({ error: "no such cache" }, { status: 404 });
@@ -596,8 +594,7 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
-    return json({ error: "only the owner may add media" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner))) return json({ error: "only the owner may add media" }, { status: 403 });
   if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
 
   const ct = mediaType(req.headers.get("content-type"));
@@ -658,8 +655,7 @@ export async function handlePutMediaThumb(req: Request, env: Env, cacheId: numbe
   if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
-    return json({ error: "only the owner may add media" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner))) return json({ error: "only the owner may add media" }, { status: 403 });
   if (await isRemoved(env, cacheId)) return REMOVED_REFUSAL();
   const row = await env.DB.prepare("SELECT kind, thumb_key FROM cache_media WHERE id=? AND cache_id=?")
     .bind(mediaId, cacheId)
@@ -691,7 +687,7 @@ export async function handleDeleteCacheMedia(
 ): Promise<Response> {
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+  if (!(await mayActAsOwner(req, env, owner)))
     return json({ error: "only the owner may delete media" }, { status: 403 });
   const row = await env.DB.prepare("SELECT media_key, thumb_key FROM cache_media WHERE id=? AND cache_id=?")
     .bind(mediaId, cacheId)

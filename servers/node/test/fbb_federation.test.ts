@@ -5,11 +5,11 @@ import { describe, it, expect } from "vitest";
 import { encodeFedBbsBatch } from "@aprscaching/shared";
 // the app first: it loads the gateway's modules in the order the server does
 import { newFedKey, instanceEnv, addCache, serve } from "./helpers/fedpeer.js";
+import { boxCall } from "./helpers/box.js";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import type { Env } from "@aprscaching/gateway/env";
 
 const OPERATOR = { "x-operator-secret": "test-operator-secret" };
-const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 
 async function call(env: Env, method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
   const res = await serve(env)(
@@ -32,7 +32,8 @@ async function station(extra: Record<string, unknown> = {}) {
   return env;
 }
 const pool = async (env: Env, partner: string) =>
-  ((await call(env, "GET", `/api/bbs/forward/pool?partner=${partner}`, undefined, INGEST)).data.messages ?? []) as {
+  ((await boxCall(env, "bbs", "GET", `/api/bbs/forward/pool?partner=${partner}`, undefined, { services: true })).data
+    .messages ?? []) as {
     bid: string;
     type: string;
     to: string;
@@ -148,12 +149,13 @@ describe("partners only, never flooded", () => {
 
   it("refuses a person's post to ACSFED", async () => {
     const env = await station({ FED_BBS: "1" });
-    const r = await call(
+    const r = await boxCall(
       env,
+      "bbs",
       "POST",
       "/api/bbs/messages",
       { fromCall: "OE8APR", toCall: "ACSFED", type: "B", body: "hello" },
-      INGEST,
+      { services: true },
     );
     expect(r.status).toBe(400);
   });
@@ -186,12 +188,13 @@ describe("receiving", () => {
     return env;
   }
   const deliver = (env: Env, bid: string, body: string, origin: string) =>
-    call(
+    boxCall(
       env,
+      "bbs",
       "POST",
       "/api/bbs/forward/inbound",
       { message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body }, origin },
-      INGEST,
+      { services: true },
     );
   const keys = (env: Env) =>
     env.DB.prepare("SELECT COUNT(*) AS n FROM remote_keys")

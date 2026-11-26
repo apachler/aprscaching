@@ -8,8 +8,10 @@ import { describe, it, expect } from "vitest";
 import { scoreFind } from "@aprscaching/gateway/caches";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup, markCallVerified } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
+const OPS = { "x-operator-secret": "test-operator-secret" };
 const SITE = "OE8XXX-10";
 // the spot every test position sits at: !4704.20N/01525.20E>
 const LAT = 47 + 4.2 / 60;
@@ -46,13 +48,60 @@ async function cache(env: Env, o: { type: string; stationCall?: string; owner?: 
 
 async function position(
   env: Env,
-  p: { call: string; via?: string; igate?: string | null; transport: string; source: string; box?: string | null },
+  p: {
+    call: string;
+    via?: string;
+    igate?: string | null;
+    transport: string;
+    source: string;
+    box?: string | null;
+    lat?: number;
+    ago?: number;
+  },
 ) {
   await env.DB.prepare(
     `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport, ingest_box)
      VALUES (?,?,?,?,?,?, 'WIDE1-1', ?, ?, ?)`,
   )
-    .bind(p.call, now() - 60, LAT, LON, p.via ?? "rf", p.igate ?? null, p.source, p.transport, p.box ?? null)
+    .bind(
+      p.call,
+      now() - (p.ago ?? 60),
+      p.lat ?? LAT,
+      LON,
+      p.via ?? "rf",
+      p.igate ?? null,
+      p.source,
+      p.transport,
+      p.box ?? null,
+    )
+    .run();
+}
+
+/**
+ * `n` fixes of `call` at the spot 130–179 s back, one statement: a window filled under the call, newer than the far
+ * fix (200 s back) and older than the match (60 s back).
+ */
+async function flood(
+  env: Env,
+  call: string,
+  n: number,
+  o: { via: string; igate?: string; transport: string; source: string },
+) {
+  const rows = Array.from({ length: n }, (_, i) => [
+    call,
+    now() - 130 - (i % 50),
+    LAT,
+    LON,
+    o.via,
+    o.igate ?? null,
+    o.source,
+    o.transport,
+  ]);
+  await env.DB.prepare(
+    `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport)
+     VALUES ${rows.map(() => "(?,?,?,?,?,?, 'WIDE1-1', ?, ?)").join(",")}`,
+  )
+    .bind(...rows.flat())
     .run();
 }
 
@@ -128,12 +177,146 @@ describe("a living cache is where an attested site or its owner's own bridge hea
   });
 });
 
+describe("the logger's track is every SSID of their base call", () => {
+  // 1° of latitude north of the spot: ~111 km, unreachable in two minutes
+  const FAR_LAT = LAT + 1;
+
+  it("an attested fix of another SSID far away refuses Tier A, and one at the spot does not", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+    await position(env, { call: "OE8LOG-7", igate: SITE, transport: "tnc", source: "firehose", ago: 30 });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+    await position(env, { call: "OE8LOG", igate: SITE, transport: "tnc", source: "firehose", lat: FAR_LAT, ago: 120 });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+  });
+
+  it("a fix under an SSID never heard before is judged against the base call's other SSIDs", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, {
+      call: "OE8LOG-7",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 120,
+    });
+    await position(env, { call: "OE8LOG-15", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-15", now())).result.tier).not.toBe("A");
+  });
+
+  it("another SSID's fix never matches, and a call that only shares the prefix is not the track", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await position(env, { call: "OE8LOG-7", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    await position(env, {
+      call: "OE8LOGA-7",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 120,
+    });
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+  });
+});
+
+describe("no flood of fixes under the call hides an attested contradiction", () => {
+  // the attested far fix: 1° of latitude north (~111 km), 200 s back
+  const FAR_LAT = LAT + 1;
+  const APRS_IS = { via: "aprs_is", igate: "T2TEST", transport: "aprs-is", source: "firehose" };
+  const SIGNED = { via: "rf", transport: "browser-rf", source: "browser-rf" };
+
+  // [what floods, the far fix's call, the flood's call, the flood's kind]
+  for (const [name, farCall, floodCall, kind] of [
+    ["APRS-IS fixes under another SSID", "OE8LOG-7", "OE8LOG-15", APRS_IS],
+    ["the logger's own signed browser-RF fixes under another SSID", "OE8LOG-7", "OE8LOG-15", SIGNED],
+    ["APRS-IS fixes under the logged call", "OE8LOG-9", "OE8LOG-9", APRS_IS],
+    ["the logger's own signed browser-RF fixes under the logged call", "OE8LOG-9", "OE8LOG-9", SIGNED],
+  ] as const) {
+    it(`600 ${name} at the spot`, async () => {
+      const env = world();
+      const trad = await cache(env, { type: "traditional" });
+      await position(env, {
+        call: farCall,
+        igate: SITE,
+        transport: "tnc",
+        source: "firehose",
+        lat: FAR_LAT,
+        ago: 200,
+      });
+      await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+      await flood(env, floodCall, 600, kind);
+      expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+    });
+  }
+
+  it("600 owner-signed fixes of a living cache's station at the spot are each held to the attested one", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: FAR_LAT,
+      ago: 200,
+    });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    await flood(env, "OE8OWN-9", 600, SIGNED);
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result.tier).not.toBe("A");
+  });
+});
+
+describe("an owner-signed living-station fix is held to the station's attested track", () => {
+  it("one the attested track cannot reach places the cache nowhere, for Tier A or a peer question", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    // the station heard by the attested site 111 km away two minutes back, the owner's signed fix at the finder
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: LAT + 1,
+      ago: 180,
+    });
+    await position(env, { call: "OE8OWN-9", transport: "browser-rf", source: "browser-rf" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result.tier).not.toBe("A");
+  });
+
+  it("one the attested track can reach places the cache", async () => {
+    const env = world();
+    await account(env, "acct-own", "OE8OWN");
+    const living = await cache(env, { type: "aprs_living", stationCall: "OE8OWN-9" });
+    await position(env, {
+      call: "OE8OWN-9",
+      igate: SITE,
+      transport: "tnc",
+      source: "firehose",
+      lat: LAT + 0.01,
+      ago: 600,
+    });
+    await position(env, { call: "OE8OWN-9", transport: "browser-rf", source: "browser-rf" });
+    await position(env, { call: "OE8LOG-9", igate: SITE, transport: "tnc", source: "firehose" });
+    expect((await scoreFind(env, living, "OE8LOG-9", now())).result).toMatchObject({ tier: "A", verified: true });
+  });
+});
+
 describe("a beacon this instance asked a box to send", () => {
   async function boxBeacon(env: Env, callsign: string) {
     await markCallVerified(env, callsign);
-    const q = await call(env, "POST", "/api/box/pi-home/command", { kind: "beacon", callsign }, INGEST);
+    // the operator queues the beacon; the box, with its own key, leases it
+    const q = await call(env, "POST", "/api/box/pi-home/command", { kind: "beacon", callsign }, OPS);
     expect(q.status, JSON.stringify(q.data)).toBe(201);
-    const leased = await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=1", undefined, INGEST);
+    const leased = await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands?tx=1&rf=1");
     expect(leased.data.commands).toHaveLength(1);
     return q.data.id as number;
   }
@@ -172,13 +355,12 @@ describe("a beacon this instance asked a box to send", () => {
   it("once the box reports the call it sent a base-call beacon as, tags only that call's hearings", async () => {
     const env = world();
     const id = await boxBeacon(env, "OE8BOX");
-    const ack = await call(
-      env,
-      "POST",
-      "/api/box/pi-home/commands/ack",
-      { id, status: "done", result: "beacon sent as OE8BOX-10", sentAs: "OE8BOX-10" },
-      INGEST,
-    );
+    const ack = await boxCall(env, "pi-home", "POST", "/api/box/pi-home/commands/ack", {
+      id,
+      status: "done",
+      result: "beacon sent as OE8BOX-10",
+      sentAs: "OE8BOX-10",
+    });
     expect(ack.status).toBe(200);
     await heard(env, "OE8BOX-10");
     await heard(env, "OE8BOX-7"); // the operator's handheld, out caching
@@ -198,13 +380,12 @@ describe("a beacon this instance asked a box to send", () => {
     const env = world();
     const trad = await cache(env, { type: "traditional" });
     const id = await boxBeacon(env, "OE8BOX-10");
-    const ack = await call(
-      env,
-      "POST",
-      "/api/box/pi-home/commands/ack",
-      { id, status: "done", result: "beacon sent", position: { lat: 48.2, lon: 16.37 } },
-      INGEST,
-    );
+    const ack = await boxCall(env, "pi-home", "POST", "/api/box/pi-home/commands/ack", {
+      id,
+      status: "done",
+      result: "beacon sent",
+      position: { lat: 48.2, lon: 16.37 },
+    });
     expect(ack.status).toBe(200);
     await heard(env, "OE8LOG-9");
     await heard(env, "OE8BOX-10"); // the box's call, but at the spot, not where the box beaconed
@@ -229,7 +410,7 @@ describe("a beacon this instance asked a box to send", () => {
       "POST",
       "/api/box/pi-home/command",
       { kind: "beacon", callsign: "OE8LOG-9", payload: { lat: LAT, lon: LON } },
-      INGEST,
+      OPS,
     );
     expect(q.status).toBe(400);
     expect(q.data.error).toMatch(/configured position/);

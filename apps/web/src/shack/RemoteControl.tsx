@@ -122,7 +122,10 @@ export function RemoteControl(props: { callsign: string; verified: boolean }) {
       <p className="muted">
         Operate your own ingest box — no port-forward. Commands queue here and your box pulls them.
       </p>
-      <Row label="Box ID" help="The name set as BOX_ID on your ingest box">
+      <Row
+        label="Box ID"
+        help="The BOX_ID your ingest box enrolled with: only an enrolled box pairs and takes commands"
+      >
         <input value={boxId} onChange={(e) => setBoxId(e.target.value)} placeholder="pi-home" aria-label="Box ID" />
       </Row>
       {!signedIn ? (

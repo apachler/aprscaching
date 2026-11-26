@@ -481,6 +481,17 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     expect(s.result.tier).not.toBe("A");
   });
 
+  it("is refused when an attested fix of another SSID of the logger's base call puts them hundreds of km away", async () => {
+    const hub = await setup();
+    await hub.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(`${LOGGER}-7`, now() - 1100)
+      .run();
+    const s = await scoreFind(hub.env, cache, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+  });
+
   it("is not refused by an APRS-IS fix hundreds of km away: anyone can inject one under the call", async () => {
     const hub = await setup();
     await hub.env.DB.prepare(
@@ -546,6 +557,40 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     };
     const s = await scoreFind(hub.env, living as never, LOGGER, now());
     expect(s.result.method).toBe("aprs_rf_peer");
+  });
+
+  it("never asks about a living cache where only an owner-signed fix the attested track cannot reach puts it", async () => {
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1", FIRST_PARTY_SITES: SITE });
+    const p1 = await answerer("p1.example"); // the peer heard the logger at the spot
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    stubFetch({ "https://p1.example": serve(p1.env) });
+    await hub.env.DB.prepare(
+      "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('acct-car', 'OE8CAR', 1, 0)",
+    ).run();
+    const r = await hub.env.DB.prepare(
+      `INSERT INTO caches (code, owner_call, title, type, lat, lon, station_call, created_at, updated_at)
+       VALUES ('AC-3', 'OE8CAR', 'Test', 'aprs_living', ?, ?, 'OE8CAR-9', 1, 1)`,
+    )
+      .bind(LAT, LON)
+      .run();
+    const living = await hub.env.DB.prepare("SELECT * FROM caches WHERE id = ?")
+      .bind(Number(r.meta.last_row_id))
+      .first();
+    // the hub's attested site heard the station in Vienna; 100 s later the owner's own bridge signs it at the spot,
+    // 140 km away
+    await hub.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES ('OE8CAR-9', ?, 48.2, 16.37, 'rf', ?, 'aprs', 'tnc')",
+    )
+      .bind(now() - 700, SITE)
+      .run();
+    await hub.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, source, transport) VALUES ('OE8CAR-9', ?, ?, ?, 'rf', 'browser-rf', 'browser-rf')",
+    )
+      .bind(now() - 600, LAT, LON)
+      .run();
+    const s = await scoreFind(hub.env, living as never, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).not.toBe("aprs_rf_peer");
   });
 });
 

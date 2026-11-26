@@ -582,12 +582,16 @@ async function handleNearCommand(env: Env, m: RadioMessage, src: string, trusted
 
 /**
  * `VERIFY <code>` completes the sender's callsign control-verification challenge (callsign.ts). Only a
- * copy heard on the air at an attested site counts. Any other copy — over APRS-IS, through a tunnel,
- * from the browser RF bridge or an unattested receiver — is dropped unanswered: it costs no attempt, so
- * nobody off the air can lock a challenge, and no ack tells the sender a site heard them when none did.
- * A heard copy is acked, and a completed challenge answered with a short confirmation.
+ * copy an enrolled box delivered with its own key, heard on its own radio at a site trusted through that
+ * box, counts. The shared INGEST_SECRET never verifies a callsign: whoever holds it can type any frame, and a
+ * proof of control from it would let a leaked secret take over unproven calls, or the operator call on a
+ * fresh instance. Any other copy — on the shared secret, over APRS-IS, through a tunnel, from the browser RF
+ * bridge or an unattested receiver — is dropped unanswered: it costs no attempt, so nobody off the air can
+ * lock a challenge, and no ack tells the sender a site heard them when none did. A heard copy is acked, and a
+ * completed challenge answered with a short confirmation.
  */
 async function handleVerifyMessage(env: Env, m: RadioMessage, code: string): Promise<void> {
+  if (!m.deliveredBy) return;
   if (!heardAtAttestedSite(m, sitesFor(await attestation(env), m.deliveredBy))) return;
   const base = baseCall(m.src);
   if (await rateLimitedDurable(env, `radio:${base}`, Date.now(), RADIO_COMMANDS_PER_HOUR, 3600_000)) return;

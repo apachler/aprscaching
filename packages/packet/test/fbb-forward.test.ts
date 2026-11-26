@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { FbbForwarder, FBB_MAX_LINE } from "../src/fbb-forward.js";
 import { encodeBinaryTransfer } from "../src/fbb-binary.js";
 import { fbbCrc16 } from "../src/lzhuf.js";
-import { type FbbMessage, type FbbStore } from "../src/fbb-session.js";
+import { FBB_MAX_RECV_BYTES, type FbbMessage, type FbbStore } from "../src/fbb-session.js";
 
 /** Same in-memory store as the line-level FBB test, reused at the byte level. */
 function makeStore(out: FbbMessage[]): FbbStore & { inbox: FbbMessage[]; queue: FbbMessage[] } {
@@ -208,5 +208,28 @@ describe("FBB byte-stream forwarder", () => {
     expect(B.inbox).toEqual([]);
     expect(b.done && b.aborted).toBe(true);
     expect(sentByB.at(-1)).toBe("FQ\r");
+  });
+
+  it("holds no more of a compressed transfer than twice the largest body it accepts", () => {
+    const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Hi", body: "hello" })]);
+    const B = makeStore([]);
+    const a = new FbbForwarder(A, { initiator: true, compress: true });
+    const b = new FbbForwarder(B, { initiator: false, compress: true });
+    // a peer that streams 200 KiB of blocks for one message
+    const huge = encodeBinaryTransfer(new TextEncoder().encode("Hi\x000\x00"), new Uint8Array(200 * 1024).fill(0x55));
+    const session = (a as unknown as { session: { takeBinary(): Uint8Array[] } }).session;
+    const take = session.takeBinary.bind(session);
+    session.takeBinary = () => take().map(() => huge);
+    const seen: { bytes: number; checksumOk: boolean }[] = [];
+    const rx = (b as unknown as { session: { feedBinary(t: { data: Uint8Array; checksumOk: boolean }): unknown } })
+      .session;
+    const feed = rx.feedBinary.bind(rx);
+    rx.feedBinary = (t) => {
+      seen.push({ bytes: t.data.length, checksumOk: t.checksumOk });
+      return feed(t);
+    };
+    driveBytes(a, b);
+    expect(seen).toEqual([{ bytes: 2 * FBB_MAX_RECV_BYTES, checksumOk: false }]);
+    expect(B.inbox).toEqual([]);
   });
 });

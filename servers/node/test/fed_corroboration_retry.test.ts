@@ -260,6 +260,23 @@ describe("the later attempt", () => {
     expect((await logRow(hub, logId))?.tier).not.toBe("A");
   });
 
+  it("still needs the track of every SSID of the logger's base call to allow the presence", async () => {
+    const { hub, p1, cache } = await setup(1);
+    (hub as unknown as Record<string, string>).FIRST_PARTY_SITES = "DB0XX"; // the hub's own attested site
+    await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+    stubFetch({ [P1]: down, [P2]: down });
+    const { logId, at } = await logFind(hub, cache);
+    // an attested fix of another SSID, after the find was logged, puts the logger hundreds of km away
+    await hub.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(`${LOGGER}-7`, at - 1100)
+      .run();
+    stubFetch({ [P1]: serve(p1.env) });
+    expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(0);
+    expect((await logRow(hub, logId))?.tier).not.toBe("A");
+  });
+
   it("never lifts a find while a beacon the hub asked a box to send under the call falls in the window", async () => {
     const { hub, p1, cache } = await setup(1);
     await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
@@ -274,6 +291,22 @@ describe("the later attempt", () => {
     stubFetch({ [P1]: serve(p1.env) });
     expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(0);
     expect((await logRow(hub, logId))?.tier).not.toBe("A");
+  });
+
+  it("is not held back by a far beacon the hub asked a box to send under another SSID: that is the box", async () => {
+    const { hub, p1, cache } = await setup(1);
+    (hub as unknown as Record<string, string>).FIRST_PARTY_SITES = "DB0XX"; // the hub's own attested site
+    await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+    stubFetch({ [P1]: down, [P2]: down });
+    const { logId, at } = await logFind(hub, cache);
+    await hub.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport, commanded) VALUES (?, ?, 52.52, 13.40, 'rf', 'DB0XX', 'WIDE1-1', 'aprs', 'tnc', 1)",
+    )
+      .bind(`${LOGGER}-7`, at - 1100)
+      .run();
+    stubFetch({ [P1]: serve(p1.env) });
+    expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).upgraded).toBe(1);
+    expect((await logRow(hub, logId))?.tier).toBe("A");
   });
 
   it("is not held back by an APRS-IS fix far away: anyone can inject one under the call", async () => {

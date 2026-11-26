@@ -15,7 +15,6 @@ import {
   encodeNetrom,
   decodeNetrom,
   NrOp,
-  type LearnedRoute,
   type NodeStore,
   type NodeMheard,
   type CircuitDialer,
@@ -32,12 +31,38 @@ import {
   INP_TT_DIRECT,
   type Rip,
 } from "@aprscaching/packet";
-import { decodeFrame, parseAddr, addrStr, PID_NETROM, type Ax25Address } from "@aprscaching/ax25";
+import {
+  decodeFrame,
+  parseAddr,
+  addrStr,
+  sameAddr,
+  PID_NETROM,
+  type Ax25Address,
+  type Ax25Frame,
+} from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { gatewayFetch } from "./gatewayauth.js";
 import { NETROM_BROADCAST_DEFAULT_MS } from "./connected.js";
+import { TokenBucket, TX_LIMITS } from "./txlimit.js";
 
 const NODES_DST = { call: "NODES", ssid: 0 };
+/** Routing changes are gathered for this long and then mirrored to the gateway in one request. */
+const MIRROR_MS = 30_000;
+/** Stations kept for the MHeard list; past it the least recently heard goes. */
+const MAX_HEARD = 500;
+/** Open circuits at once, inbound and dialled; a ConnReq past it is not answered. */
+const MAX_CIRCUITS = 64;
+/** INP3 neighbours, measured or still being probed; each one costs probes and RIFs every round. */
+const MAX_INP3_NEIGHBORS = 16;
+/** A candidate neighbour that has not answered a probe in this long is dropped. */
+const INP3_PROBE_TIMEOUT_MS = 180_000;
+
+interface Inp3Neighbor {
+  /** Smoothed round trip in 10 ms units; null until the neighbour answers a probe. */
+  srtt: number | null;
+  lastHeard: number; // seconds
+  since: number; // ms, when it was first heard
+}
 
 export interface NetromNodeOpts {
   mycall: string;
@@ -49,6 +74,16 @@ export interface NetromNodeOpts {
   gatewayBase?: string;
   secret?: string; // mirror learned nodes + mheard to the gateway
   inp3?: boolean; // also speak INP3 (RIF learning, L3RTT probing, triggered updates) alongside NODES
+  /** Paces what the node transmits on its own account in answer to what it hears: INP3 RIFs and L3RTT
+   *  probes and echoes, and transit forwards. Defaults to the `netrom` path's settings. */
+  txLimit?: { burst: number; refillSec: number };
+  mirrorMs?: number;
+}
+
+/** One open circuit and the node at its far end: a transport packet reaches it only from that node. */
+interface OpenCircuit {
+  c: NetromCircuit;
+  peer: Ax25Address;
 }
 
 export class NetromNodeRunner {
@@ -56,13 +91,19 @@ export class NetromNodeRunner {
   private port: string;
   private me: Ax25Address;
   private heard = new Map<string, NodeMheard>(); // callsign -> last-heard (for the node's MHeard list)
-  private circuits: NetromCircuit[] = []; // active connect-through circuits (for inbound demux)
-  private nextIdx = 1;
+  private circuits: OpenCircuit[] = []; // active circuits (for inbound demux)
   private inboundApp?: (user: Ax25Address) => LineApp; // build a session for a station connecting a circuit TO us
   private inp3?: Inp3Table; // INP3 routes (opt-in), ranked by measured round-trip time
-  private neighbors = new Map<string, { srtt: number | null; lastHeard: number }>(); // per-neighbour RTT + freshness
+  private neighbors = new Map<string, Inp3Neighbor>(); // per-neighbour RTT + freshness
   private l3rttSeq = 0;
-  private l3rttPending = new Map<number, number>(); // seq → send time (ms) for our outstanding probes
+  private l3rttPending = new Map<number, { at: number; to: string }>(); // our outstanding probes by seq
+  private tx: TokenBucket;
+  private strangerTx: TokenBucket; // the share of `tx` open to stations that are not neighbours
+  private held = 0; // frames the bucket dropped since the last log line
+  private heldLoggedAt = 0;
+  private mirrored = new Map<string, string>(); // dest → the record last mirrored to the gateway
+  private mirrorTimer?: ReturnType<typeof setTimeout>;
+  private mirroring = false;
   constructor(
     private kiss: FrameLink,
     private o: NetromNodeOpts,
@@ -71,6 +112,56 @@ export class NetromNodeRunner {
     this.node = new NetromNode({ call: this.me, alias: o.alias }, { pathQuality: o.pathQuality });
     this.port = o.port ?? "kiss-tnc";
     if (o.inp3) this.inp3 = new Inp3Table();
+    const lim = o.txLimit ?? { burst: TX_LIMITS.netrom.burst, refillSec: TX_LIMITS.netrom.refillSec };
+    this.tx = new TokenBucket(lim);
+    // Half the burst and half the rate: a flood of forged sources spends only this share, and the rest of
+    // the bucket stays for the node's neighbours.
+    this.strangerTx = new TokenBucket({ burst: Math.max(1, Math.floor(lim.burst / 2)), refillSec: lim.refillSec * 2 });
+  }
+
+  /** Whether a station is one of the node's neighbours: the next hop of a route in the NODES table (INP3 on
+   *  or off), or an INP3 neighbour that has answered our probe. */
+  private isNeighbor(on: Ax25Address): boolean {
+    return this.node.isNeighbor(on) || this.isMeasured(on);
+  }
+
+  /** Whether a station is an INP3 neighbour that has answered our probe. */
+  private isMeasured(on: Ax25Address): boolean {
+    return this.neighbors.get(addrStr(on))?.srtt != null;
+  }
+
+  /** Transmit a frame the node sends in answer to what it heard, when the bucket allows; dropped otherwise.
+   *  Unless the frame is sent on account of a neighbour (`neighbour`), it also draws from the strangers'
+   *  share. */
+  private sendPaced(frame: Ax25Frame, neighbour: boolean): boolean {
+    if ((neighbour || this.strangerTx.take()) && this.tx.take()) {
+      this.kiss.sendFrame(frame);
+      return true;
+    }
+    this.held++;
+    const now = Date.now();
+    if (now - this.heldLoggedAt >= 60_000) {
+      console.log("[netrom] %s frame(s) dropped by the transmit bucket (NETROM_TX_BURST / _REFILL_SEC)", this.held);
+      this.held = 0;
+      this.heldLoggedAt = now;
+    }
+    return false;
+  }
+
+  /** A free local circuit index and a random id, or null when the circuit table is full. The random id
+   *  keeps a station that guesses the index from reaching another user's circuit. */
+  private allocCircuit(): { index: number; id: number } | null {
+    if (this.circuits.length >= MAX_CIRCUITS) return null;
+    const used = new Set(this.circuits.map((x) => x.c.localIndex));
+    let index = 1;
+    while (used.has(index)) index++;
+    return { index, id: crypto.getRandomValues(new Uint8Array(1))[0]! };
+  }
+
+  private findCircuit(tp: { circuitIndex: number; circuitId: number }, origin: Ax25Address): NetromCircuit | undefined {
+    return this.circuits.find(
+      (x) => x.c.localIndex === tp.circuitIndex && x.c.localId === tp.circuitId && sameAddr(x.peer, origin),
+    )?.c;
   }
 
   /** Enable the L4 inbound session server: bind a station's inbound circuit to this app (the node CLI). */
@@ -91,8 +182,12 @@ export class NetromNodeRunner {
     sendPacket?: (bytes: Uint8Array) => void,
   ): void {
     const dup = this.circuits.find(
-      (x) => x.remoteIndex === pkt.tp.circuitIndex && x.remoteId === pkt.tp.circuitId && x.state === "connected",
-    );
+      (x) =>
+        x.c.remoteIndex === pkt.tp.circuitIndex &&
+        x.c.remoteId === pkt.tp.circuitId &&
+        x.c.state === "connected" &&
+        sameAddr(x.peer, pkt.net.origin),
+    )?.c;
     if (dup) return dup.onPacket(pkt.tp, pkt.info);
     this.acceptInbound(pkt, neighbor, sendPacket);
   }
@@ -110,8 +205,12 @@ export class NetromNodeRunner {
     // replies are NETWORK-layer packets: they travel node-to-node, addressed to the circuit's
     // ORIGINATING NODE (a real peer drops packets whose L3 dest is the end user's callsign)
     const originNode = pkt.net.origin;
-    const idx = this.nextIdx++ & 0xff;
-    const circ = serveNetromApp({ index: idx, id: idx }, this.inboundApp!(user), {
+    const id = this.allocCircuit();
+    if (!id) {
+      console.log("[netrom] inbound circuit from %s not answered: %s circuits open", addrStr(user), MAX_CIRCUITS);
+      return;
+    }
+    const circ = serveNetromApp(id, this.inboundApp!(user), {
       send: (p) => {
         const bytes = encodeNetrom({ net: { origin: this.me, dest: originNode, ttl: 25 }, tp: p.tp, info: p.info });
         if (sendPacket) return sendPacket(bytes);
@@ -127,17 +226,21 @@ export class NetromNodeRunner {
       },
       onConnect: this.connectThrough(), // a NET/ROM-connected user can C <dest> onward too
       onState: (s) => {
-        if (s === "disconnected") this.circuits = this.circuits.filter((c) => c !== circ);
+        if (s === "disconnected") this.circuits = this.circuits.filter((x) => x.c !== circ);
       },
     });
-    this.circuits.push(circ);
+    this.circuits.push({ c: circ, peer: originNode });
     circ.onPacket(pkt.tp, pkt.info); // feed the ConnReq → the circuit accepts + greets
     console.log("[netrom] inbound circuit from %s accepted", addrStr(user));
   }
 
   /** A CircuitDialer that opens a NET/ROM L4 circuit to a neighbour over KISS (validate-at-deploy on RF). */
   private dialer: CircuitDialer = (route, hooks) => {
-    const idx = this.nextIdx++ & 0xff;
+    const id = this.allocCircuit();
+    if (!id) {
+      queueMicrotask(hooks.onClose); // after the caller has attached the relay, so its teardown detaches it
+      return { send: () => {}, disconnect: () => {} };
+    }
     const circuit = new NetromCircuit(
       {
         send: (p) => {
@@ -156,15 +259,15 @@ export class NetromNodeRunner {
         deliver: (b) => hooks.onData(b),
         state: (s) => {
           if (s === "disconnected") {
-            this.circuits = this.circuits.filter((c) => c !== circuit);
+            this.circuits = this.circuits.filter((x) => x.c !== circuit);
             hooks.onClose();
           }
         },
       },
-      { index: idx, id: idx },
+      id,
       { user: this.me, node: route.dest },
     );
-    this.circuits.push(circuit);
+    this.circuits.push({ c: circuit, peer: route.dest });
     circuit.connect(4);
     return { send: (bytes) => circuit.send(bytes), disconnect: () => circuit.disconnect() };
   };
@@ -202,7 +305,10 @@ export class NetromNodeRunner {
     if (!rips) return;
     const nb = addrStr(from);
     this.ensureNeighbor(from);
-    const linkTt = this.neighbors.get(nb)?.srtt ?? INP_TT_DIRECT;
+    // routes are taken only from a neighbour that has answered our probe: its cost is then measured, and
+    // a station that only sends RIFs cannot fill the table
+    const linkTt = this.neighbors.get(nb)?.srtt;
+    if (linkTt == null) return;
     const mine = addrStr(this.me);
     let changed = 0;
     for (const r of rips) {
@@ -215,19 +321,40 @@ export class NetromNodeRunner {
     }
   }
 
-  /** Register a station as an INP3 neighbour on first contact and seed it with our own reachability
-   *  (a self-RIP) plus an immediate RTT probe, so two nodes converge without any static config. */
-  private ensureNeighbor(addr: Ax25Address): boolean {
-    if (!this.inp3) return false;
+  /** Take a station as a candidate INP3 neighbour on first contact and probe its round trip; it becomes a
+   *  neighbour (gets our table, may teach routes) once it answers, so two nodes converge without static
+   *  config. The set is capped: a new candidate displaces the oldest unanswered one, never a measured
+   *  neighbour, so forged sources cost at most the cap's worth of probes, paced by the bucket. */
+  private ensureNeighbor(addr: Ax25Address): void {
+    if (!this.inp3) return;
     const nb = addrStr(addr);
-    if (this.neighbors.has(nb)) {
-      this.neighbors.get(nb)!.lastHeard = Math.floor(Date.now() / 1000);
-      return false;
+    const now = Date.now();
+    const cur = this.neighbors.get(nb);
+    if (cur) {
+      cur.lastHeard = Math.floor(now / 1000);
+      return;
     }
-    this.neighbors.set(nb, { srtt: null, lastHeard: Math.floor(Date.now() / 1000) });
-    this.sendRif(addr, [this.selfRip()]);
+    if (this.neighbors.size >= MAX_INP3_NEIGHBORS) {
+      const candidate = [...this.neighbors].find(([, n]) => n.srtt == null)?.[0];
+      if (candidate == null) return; // full of measured neighbours
+      this.neighbors.delete(candidate);
+    }
+    this.neighbors.set(nb, { srtt: null, lastHeard: Math.floor(now / 1000), since: now });
     this.probeNeighbor(addr);
-    return true;
+  }
+
+  /** Our self-RIP and every route not reached through `nb` (split horizon), to one neighbour. */
+  private advertiseTo(nb: string): void {
+    const all = this.inp3!.snapshot();
+    this.sendRif(parseAddr(nb), [
+      this.selfRip(),
+      ...all.filter((r) => this.inp3!.best(addrStr(r.dest))?.neighbor !== nb),
+    ]);
+  }
+
+  /** Neighbours that have answered a probe — the ones routes are exchanged with. */
+  private measured(): string[] {
+    return [...this.neighbors].filter(([, n]) => n.srtt != null).map(([k]) => k);
   }
 
   /** Our own node as a RIP: destination = us, zero hops, tt 0 so the receiver's cost is its link tt. */
@@ -243,30 +370,33 @@ export class NetromNodeRunner {
   ): void {
     if (!this.inp3) return;
     if (probe.rtt.origin === this.o.mycall) {
+      const nb = addrStr(from);
       const sent = this.l3rttPending.get(probe.rtt.seq);
-      if (sent != null) {
-        this.l3rttPending.delete(probe.rtt.seq);
-        const rttMs = Date.now() - sent;
-        const sample = Math.max(INP_TT_DIRECT, Math.round(rttMs / 10)); // 10 ms units
-        const nb = addrStr(from);
-        const cur = this.neighbors.get(nb);
-        this.neighbors.set(nb, {
-          srtt: smoothRtt(cur?.srtt ?? null, sample),
-          lastHeard: Math.floor(Date.now() / 1000),
-        });
-      }
+      const cur = this.neighbors.get(nb);
+      // only the station we probed, answering that probe, is measured
+      if (sent == null || sent.to !== nb || !cur) return;
+      this.l3rttPending.delete(probe.rtt.seq);
+      const rttMs = Date.now() - sent.at;
+      const sample = Math.max(INP_TT_DIRECT, Math.round(rttMs / 10)); // 10 ms units
+      const first = cur.srtt == null;
+      cur.srtt = smoothRtt(cur.srtt, sample);
+      cur.lastHeard = Math.floor(Date.now() / 1000);
+      if (first) this.advertiseTo(nb); // a new neighbour gets our table straight away
       return;
     }
     // foreign probe — echo it straight back to the neighbour we heard it from
-    this.kiss.sendFrame({
-      dst: from,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeL3rttFrame(probe.origin, probe.rtt),
-    });
+    this.sendPaced(
+      {
+        dst: from,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeL3rttFrame(probe.origin, probe.rtt),
+      },
+      this.isNeighbor(from),
+    );
   }
 
   /** Send a triggered update: advertise the changed routes to every neighbour, applying split horizon
@@ -275,7 +405,7 @@ export class NetromNodeRunner {
     if (!this.inp3) return;
     const dirty = this.inp3.drainDirty();
     if (!dirty.length) return;
-    for (const nb of this.neighbors.keys()) {
+    for (const nb of this.measured()) {
       const rips = dirty.filter((r) => this.inp3!.best(addrStr(r.dest))?.neighbor !== nb);
       if (rips.length) this.sendRif(parseAddr(nb), rips);
     }
@@ -285,49 +415,55 @@ export class NetromNodeRunner {
    *  periodic refresh that keeps routes from ageing out and re-seeds a neighbour that just came up. */
   private advertiseAll(): void {
     if (!this.inp3) return;
-    const all = this.inp3.snapshot();
-    for (const nb of this.neighbors.keys()) {
-      const rips = [this.selfRip(), ...all.filter((r) => this.inp3!.best(addrStr(r.dest))?.neighbor !== nb)];
-      this.sendRif(parseAddr(nb), rips);
-    }
+    for (const nb of this.measured()) this.advertiseTo(nb);
   }
 
   /** Send a RIF (routing information frame) carrying `rips` to one neighbour. */
   private sendRif(to: Ax25Address, rips: Rip[]): void {
-    this.kiss.sendFrame({
-      dst: to,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeRif(rips),
-    });
+    this.sendPaced(
+      {
+        dst: to,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeRif(rips),
+      },
+      this.isMeasured(to),
+    );
   }
 
   /** Probe every known neighbour's round-trip time with an L3RTT frame (INP3 metric maintenance). */
   private probeNeighbors(): void {
     if (!this.inp3) return;
-    for (const nb of this.neighbors.keys()) this.probeNeighbor(parseAddr(nb));
+    const cutoff = Date.now() - INP3_PROBE_TIMEOUT_MS;
+    for (const [nb, n] of this.neighbors) {
+      if (n.srtt == null && n.since < cutoff)
+        this.neighbors.delete(nb); // never answered
+      else this.probeNeighbor(parseAddr(nb));
+    }
     // drop stale outstanding probes so the map can't grow unbounded on a lossy link
-    const cutoff = Date.now() - 180_000;
-    for (const [seq, t] of this.l3rttPending) if (t < cutoff) this.l3rttPending.delete(seq);
+    for (const [seq, p] of this.l3rttPending) if (p.at < cutoff) this.l3rttPending.delete(seq);
   }
 
   /** Send one L3RTT probe to a neighbour and remember when, so the echo measures the round trip. */
   private probeNeighbor(to: Ax25Address): void {
     if (!this.inp3) return;
     const seq = ++this.l3rttSeq;
-    this.l3rttPending.set(seq, Date.now());
-    this.kiss.sendFrame({
-      dst: to,
-      src: this.me,
-      command: true,
-      type: "UI",
-      pf: false,
-      pid: PID_NETROM,
-      info: encodeL3rttFrame(this.me, { origin: this.o.mycall, seq, alias: this.o.alias }),
-    });
+    const sent = this.sendPaced(
+      {
+        dst: to,
+        src: this.me,
+        command: true,
+        type: "UI",
+        pf: false,
+        pid: PID_NETROM,
+        info: encodeL3rttFrame(this.me, { origin: this.o.mycall, seq, alias: this.o.alias }),
+      },
+      this.isMeasured(to),
+    );
+    if (sent) this.l3rttPending.set(seq, { at: Date.now(), to: addrStr(to) });
   }
 
   start(): void {
@@ -345,12 +481,13 @@ export class NetromNodeRunner {
       const staleMs = bMs * 3;
       setInterval(() => {
         const cutoff = Math.floor(Date.now() / 1000) - staleMs / 1000;
+        for (const [nb, n] of this.neighbors) if (n.lastHeard < cutoff) this.neighbors.delete(nb);
         this.inp3!.expire((r) => (this.neighbors.get(r.neighbor)?.lastHeard ?? 0) < cutoff);
       }, bMs).unref?.();
       console.log("[inp3] enabled — RIF learning, L3RTT probing, triggered updates on %s", this.port);
     }
     setInterval(() => {
-      for (const c of this.circuits) c.poll();
+      for (const x of this.circuits) x.c.poll();
     }, 1000); // drive circuit T1 retransmit/teardown
     // evict stale MHeard entries so the map doesn't grow for the life of the process.
     const heardTtl = 24 * 3600; // seconds
@@ -365,8 +502,14 @@ export class NetromNodeRunner {
   onRaw(bytes: Uint8Array): void {
     const f = decodeFrame(bytes);
     if (!f) return;
-    this.heard.set(addrStr(f.src), { call: addrStr(f.src), port: this.port, lastHeard: Math.floor(Date.now() / 1000) });
+    const src = addrStr(f.src);
+    this.heard.delete(src); // re-inserted last, so the first entry is always the least recently heard
+    this.heard.set(src, { call: src, port: this.port, lastHeard: Math.floor(Date.now() / 1000) });
+    if (this.heard.size > MAX_HEARD) this.heard.delete(this.heard.keys().next().value!);
     if (f.type !== "UI" || f.pid !== PID_NETROM || !f.info) return;
+    // Past the NODES broadcast, a NET/ROM frame is ours only when sent to our node call: one heard between
+    // two other stations is not ours to learn from, answer or switch onward.
+    if (f.dst.call !== NODES_DST.call && !sameAddr(f.dst, this.me)) return;
 
     // INP3 (opt-in): a directed RIF (info[0] = 0xFF, sent to us, not flooded to "NODES") carries the
     // neighbour's routing table by measured round-trip time; an L3RTT frame is a latency probe.
@@ -392,7 +535,7 @@ export class NetromNodeRunner {
         const learned = this.node.consume(f.info, f.src, this.port);
         if (learned) {
           console.log("[netrom] learned %s route(s) from %s (directed)", learned, addrStr(f.src));
-          void this.mirror();
+          this.scheduleMirror();
         }
         return;
       }
@@ -400,20 +543,23 @@ export class NetromNodeRunner {
       if (!pkt) return;
       const decision = routeNetrom(pkt, this.node, this.me);
       if (decision.action === "local") {
-        const c = this.circuits.find((x) => x.localIndex === pkt.tp.circuitIndex && x.localId === pkt.tp.circuitId);
+        const c = this.findCircuit(pkt.tp, pkt.net.origin);
         if (c)
           c.onPacket(pkt.tp, pkt.info); // demux to the owning circuit
         else if (pkt.tp.opcode === NrOp.ConnReq && this.inboundApp) this.acceptOrReack(pkt, f.src); // L4 inbound session
       } else if (decision.action === "forward") {
-        this.kiss.sendFrame({
-          dst: decision.neighbor,
-          src: this.me,
-          command: true,
-          type: "UI",
-          pf: false,
-          pid: PID_NETROM,
-          info: encodeNetrom(decision.packet),
-        });
+        this.sendPaced(
+          {
+            dst: decision.neighbor,
+            src: this.me,
+            command: true,
+            type: "UI",
+            pf: false,
+            pid: PID_NETROM,
+            info: encodeNetrom(decision.packet),
+          },
+          this.isNeighbor(f.src),
+        );
       } else if (decision.reason !== "no-route") {
         console.log("[netrom] dropped transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
       }
@@ -422,7 +568,7 @@ export class NetromNodeRunner {
     const learned = this.node.consume(f.info, f.src, this.port);
     if (learned) {
       console.log("[netrom] learned %s route(s) from %s", learned, addrStr(f.src));
-      void this.mirror();
+      this.scheduleMirror();
     }
     this.answerNewNode(f.src);
     // A NODES broadcaster is a node on our channel — adopt it as an INP3 neighbour (measure its RTT,
@@ -461,7 +607,7 @@ export class NetromNodeRunner {
       const learned = this.node.consume(packet, neighbor, this.port);
       if (learned) {
         console.log("[netrom] learned %s route(s) from %s (link)", learned, addrStr(neighbor));
-        void this.mirror();
+        this.scheduleMirror();
       }
       return;
     }
@@ -469,19 +615,22 @@ export class NetromNodeRunner {
     if (!pkt) return;
     const decision = routeNetrom(pkt, this.node, this.me);
     if (decision.action === "local") {
-      const c = this.circuits.find((x) => x.localIndex === pkt.tp.circuitIndex && x.localId === pkt.tp.circuitId);
+      const c = this.findCircuit(pkt.tp, pkt.net.origin);
       if (c) c.onPacket(pkt.tp, pkt.info);
       else if (pkt.tp.opcode === NrOp.ConnReq && this.inboundApp) this.acceptOrReack(pkt, neighbor, reply);
     } else if (decision.action === "forward") {
-      this.kiss.sendFrame({
-        dst: decision.neighbor,
-        src: this.me,
-        command: true,
-        type: "UI",
-        pf: false,
-        pid: PID_NETROM,
-        info: encodeNetrom(decision.packet),
-      });
+      this.sendPaced(
+        {
+          dst: decision.neighbor,
+          src: this.me,
+          command: true,
+          type: "UI",
+          pf: false,
+          pid: PID_NETROM,
+          info: encodeNetrom(decision.packet),
+        },
+        this.isNeighbor(neighbor),
+      );
     } else if (decision.reason !== "no-route") {
       console.log("[netrom] dropped link transit to %s (%s)", addrStr(pkt.net.dest), decision.reason);
     }
@@ -501,27 +650,62 @@ export class NetromNodeRunner {
       });
   }
 
-  /** Mirror the learned NODES table + MHeard to the gateway node surface (best-effort). INP3 routes are
-   *  not mirrored here (the gateway table keys on dest, which NODES already owns) — they surface in the
-   *  node CLI's merged table via nodeStore(). */
-  private async mirror(): Promise<void> {
-    if (!this.o.gatewayBase || !this.o.secret) return;
-    const post = (path: string, body: unknown) =>
-      gatewayFetch(`${this.o.gatewayBase}${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-ingest-secret": this.o.secret! },
-        body: JSON.stringify(body),
-      }).catch(() => {});
-    for (const r of this.node.list()) await this.postNode(post, r);
+  /** Mirror the routing table to the gateway once the changes of the next `mirrorMs` have gathered: one
+   *  request per interval however many broadcasts arrive, never two at once. */
+  private scheduleMirror(): void {
+    if (!this.o.gatewayBase || !this.o.secret || this.mirrorTimer) return;
+    this.mirrorTimer = setTimeout(() => {
+      this.mirrorTimer = undefined;
+      void this.mirror();
+    }, this.o.mirrorMs ?? MIRROR_MS);
+    this.mirrorTimer.unref?.();
   }
-  private postNode(post: (p: string, b: unknown) => Promise<unknown>, r: LearnedRoute): Promise<unknown> {
-    return post("/api/node/nodes", {
-      dest: addrStr(r.dest),
-      alias: r.alias,
-      neighbor: addrStr(r.neighbor),
-      quality: r.quality,
-      port: r.port ?? this.port,
-    });
+
+  /** Mirror the learned NODES routes that changed since the last mirror to the gateway node surface, in
+   *  one request (best-effort; a failed request is retried at the next interval, a route the gateway refuses
+   *  is logged and not resent until it changes). INP3 routes are not mirrored
+   *  here (the gateway table keys on dest, which NODES already owns) — they surface in the node CLI's
+   *  merged table via nodeStore(). */
+  private async mirror(): Promise<void> {
+    if (this.mirroring) return this.scheduleMirror();
+    const table = new Map(this.node.list().map((r) => [addrStr(r.dest), r]));
+    for (const k of this.mirrored.keys()) if (!table.has(k)) this.mirrored.delete(k); // re-sent if re-learned
+    const changed: { dest: string; alias: string; neighbor: string; quality: number; port: string }[] = [];
+    for (const [dest, r] of table) {
+      const rec = {
+        dest,
+        alias: r.alias,
+        neighbor: addrStr(r.neighbor),
+        quality: r.quality,
+        port: r.port ?? this.port,
+      };
+      if (this.mirrored.get(dest) !== JSON.stringify(rec)) changed.push(rec);
+    }
+    if (!changed.length) return;
+    this.mirroring = true;
+    const answer = await gatewayFetch(`${this.o.gatewayBase}/api/node/nodes`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ingest-secret": this.o.secret! },
+      body: JSON.stringify({ nodes: changed }),
+    }).then(
+      async (res) =>
+        res.ok ? ((await res.json().catch(() => ({}))) as { refused?: { dest?: string; error?: string }[] }) : null,
+      () => null,
+    );
+    this.mirroring = false;
+    if (!answer) return this.scheduleMirror();
+    // a refused route counts as mirrored too, so it is not resent until it changes; the rest are stored
+    for (const rec of changed) this.mirrored.set(rec.dest, JSON.stringify(rec));
+    const refused = Array.isArray(answer.refused) ? answer.refused : [];
+    if (refused.length)
+      console.log(
+        "[netrom] gateway refused %s route(s): %s",
+        refused.length,
+        refused
+          .slice(0, 5)
+          .map((r) => `${r.dest ?? "?"} (${r.error ?? "?"})`)
+          .join(", "),
+      );
   }
 }
 

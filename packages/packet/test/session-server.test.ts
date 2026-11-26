@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { SessionServer } from "../src/session-server.js";
+import { SessionServer, MAX_SESSIONS_DEFAULT, MAX_PER_CALL_DEFAULT } from "../src/session-server.js";
 import { CachedBbsStore, type CachedBbsBackend } from "../src/cached-bbs-store.js";
 import { BbsSession, type MessageStore, type BbsMsgFull, type BbsMsgMeta } from "../src/bbs.js";
 import { NodeSession, type NodeStore } from "../src/netrom.js";
@@ -288,5 +288,20 @@ describe("connected-mode session server", () => {
     server.onFrame({ dst: A("OE8BBS"), src: A("OE2BBB"), command: true, type: "SABM", pf: true });
     expect(server.count()).toBe(1);
     expect(refused).toEqual(["OE2BBB"]);
+  });
+
+  it("caps sessions when no cap is given, and one call's share of them", () => {
+    let factory = 0;
+    const server = new SessionServer({
+      send: () => {},
+      services: [{ addr: A("OE8BBS"), app: (r) => (factory++, new BbsSession(r.call, memStore())) }],
+    });
+    for (let ssid = 0; ssid < 4; ssid++)
+      server.onFrame({ dst: A("OE8BBS"), src: A("OE1AAA", ssid), command: true, type: "SABM", pf: true });
+    expect(server.count()).toBe(MAX_PER_CALL_DEFAULT);
+    for (let i = 0; i < 500; i++)
+      server.onFrame({ dst: A("OE8BBS"), src: A(`S${i}`), command: true, type: "SABM", pf: true });
+    expect(server.count()).toBe(MAX_SESSIONS_DEFAULT);
+    expect(factory).toBe(MAX_SESSIONS_DEFAULT);
   });
 });

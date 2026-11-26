@@ -2,7 +2,7 @@
 // Ownership follows the account, never the call string: a cache (its stages, media gallery, edits) and a
 // saved view belong to whichever account holds the owner call's licence (base call). The holder acts as
 // owner while operating any call it holds; another account never does, whatever call string it presents;
-// and a machine acts for an owner only over the ingest plane, naming that exact owner call.
+// and no machine does: the shared ingest secret acts for no owner, even naming the exact owner call.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, hiderSignup, type Res } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
@@ -65,18 +65,16 @@ describe("cache ownership is account-bound", () => {
     expect(theirs.status).toBe(403);
   });
 
-  it("stages over the ingest plane need the exact owner call", async () => {
+  it("the ingest secret sets no stages, even naming the exact owner call", async () => {
     const w = await world();
-    const ok = await call(w.env, "POST", `/api/caches/${w.cacheId}/stages`, { ...STAGES, ownerCall: "OE8OWN" }, INGEST);
-    expect(ok.status).toBe(200);
-    const other = await call(
+    const named = await call(
       w.env,
       "POST",
       `/api/caches/${w.cacheId}/stages`,
-      { ...STAGES, ownerCall: "DL1OTH" },
+      { ...STAGES, ownerCall: "OE8OWN" },
       INGEST,
     );
-    expect(other.status).toBe(403);
+    expect(named.status).toBe(403);
     const bare = await call(w.env, "POST", `/api/caches/${w.cacheId}/stages`, { ...STAGES, ownerCall: "OE8OWN" });
     expect(bare.status).toBe(403);
   });
@@ -94,21 +92,19 @@ describe("cache ownership is account-bound", () => {
     expect((await del(cookie(w.ownerOther))).status).toBe(200);
   });
 
-  it("gallery media over the ingest plane need the exact owner call", async () => {
+  it("the ingest secret adds no gallery media, even naming the exact owner call", async () => {
     const w = await world();
-    expect((await upload(w.env, w.cacheId, { ...INGEST, "x-owner-call": "OE8OWN" })).status).toBe(201);
-    expect((await upload(w.env, w.cacheId, { ...INGEST, "x-owner-call": "DL1OTH" })).status).toBe(403);
+    expect((await upload(w.env, w.cacheId, { ...INGEST, "x-owner-call": "OE8OWN" })).status).toBe(403);
     expect((await upload(w.env, w.cacheId, { "x-owner-call": "OE8OWN" })).status).toBe(403);
   });
 
-  it("the holder edits the cache from any held call; a stranger cannot", async () => {
+  it("the holder edits the cache from any held call; a stranger and the ingest secret cannot", async () => {
     const w = await world();
     const edit = (h: Record<string, string>, body: Record<string, unknown> = {}) =>
       call(w.env, "PATCH", `/api/caches/${w.cacheId}`, { title: "renamed", ...body }, h);
     expect((await edit({ cookie: w.ownerOther.cookie })).status).toBe(200);
     expect((await edit({ cookie: w.stranger.cookie }, { ownerCall: "OE8OWN" })).status).toBe(403);
-    expect((await edit(INGEST, { ownerCall: "OE8OWN" })).status).toBe(200);
-    expect((await edit(INGEST, { ownerCall: "DL1OTH" })).status).toBe(403);
+    expect((await edit(INGEST, { ownerCall: "OE8OWN" })).status).toBe(403);
   });
 });
 

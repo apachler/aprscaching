@@ -310,14 +310,15 @@ describe("answers go back the way the message came", () => {
         payload: string;
       }[]
     ).map((r) => ({ box: r.box_id, kind: r.kind, ...JSON.parse(r.payload) }));
+  // the poll goes straight to the handler, past route()'s signature check, so it carries the operator's override
   const poll = (query: string) =>
     handleBoxPoll(
-      new Request(`http://gw/api/box/pi-home/commands?${query}`, { headers: { "x-ingest-secret": "s" } }),
+      new Request(`http://gw/api/box/pi-home/commands?${query}`, { headers: { "x-operator-secret": "o" } }),
       env,
       "pi-home",
     );
 
-  beforeEach(() => freshEnv({ INGEST_SECRET: "s" }));
+  beforeEach(() => freshEnv({ INGEST_SECRET: "s", OPERATOR_SECRET: "o" }));
 
   it("a message heard on the box's own radio is acked by that box on RF, not over APRS-IS", async () => {
     await poll("tx=1&rf=1&meshcom=");

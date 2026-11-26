@@ -34,12 +34,22 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The plausible track is judged only against fixes as hard to fake as the evidence: the finder's fixes heard
   at an attested site, and the ones their own browser bridge signed. An APRS-IS or tunnelled fix under the
   call, which anyone with a public passcode can inject, never takes Tier A away, as it never grants it.
+- The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
+  however many, not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
+  at the cache, can add a contradiction but never hide one.
+- The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
+  judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before
+  leaves nothing out. Only the logged call's own fix can match the cache. A fixed home station, digipeater or
+  tracker far away under the same base call therefore refuses Tier A for a few minutes after each of its
+  beacons; the find then rests on a phone reading (Tier B) or stays Tier C.
 - A find time the finder's own clock gives (a signed web log, or a FOUND in a signed browser batch) is taken
   only after the cache was hidden and the signing key registered; otherwise the find is timed by its arrival
   and keeps the reason (`field_time_rejected`).
 - A living cache is wherever its station was heard. Only a station fix that is first-party attested, or that
   the cache owner's own browser bridge signed (a `browser-rf` batch under a base call the owner's account
-  holds), places it for Tier A or B. A match against a station fix that only came over APRS-IS stays Tier C,
+  holds), places it for Tier A or B. An owner-signed fix places it only where every attested fix of the station
+  in the window could have reached at 300 km/h or less: the owner asserts it, so it cannot move the cache to
+  wherever a finder was heard. A match against a station fix that only came over APRS-IS stays Tier C,
   whatever placed the finder.
 - The app shows the names everywhere a find's trust appears, with the letter as a secondary label.
 
@@ -106,6 +116,9 @@ enrolled box counts only for the frames that box delivers itself, and a box's fr
 - **The path vouches for the hearing.** The ingest box's writes need the ingest secret or its enrolled key.
 - **Tier A is default-deny.** Until a site is attested, no find reaches Tier A locally and no member can
   verify a callsign on the air, because nothing the instance hears counts as heard by its own radio.
+- **A callsign proof needs an enrolled box.** An on-air `VERIFY` counts only from a site trusted through an
+  enrolled box, delivered with that box's own key. `FIRST_PARTY_SITES`, the stations added by call and the
+  shared ingest secret attest finds but verify no callsign: whoever holds the shared secret can post any frame.
 
 An APRS-IS line is never attested, even one whose q-construct names an attested site (`qAR,OE8XBM-10`):
 APRS-IS passcodes are public, so anyone can inject that line. A standalone IGate visible only on APRS-IS
@@ -147,7 +160,7 @@ the tiers that grade a find. Every verification records its method and who vouch
 
 | Method | Counts when |
 |---|---|
-| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an attested receiving site hears it on its own radio: a TNC, a soundcard port, or a MeshCom node that heard it directly over LoRa |
+| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an ingest box enrolled with its own key hears it on its own radio at a site trusted under that box: a TNC, a soundcard port, or a MeshCom node that heard it directly over LoRa |
 | ampr.org DNS | The holder publishes the code under their ARDC-delegated `<call>.ampr.org` name, confirmed by a DNSSEC-validated answer or by several independent public resolvers returning the same record |
 | LoTW certificate | The holder signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the browser |
 | Operator CLI | The instance's operator confirms their own call listed in `ADMIN_CALLSIGNS` |

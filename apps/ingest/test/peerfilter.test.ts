@@ -109,9 +109,9 @@ describe("AxudpPort enforces its peers on receive", () => {
     expect(port.dropped).toBe(1);
   });
 
-  it("a receive-only listener warns once that it accepts from any host", () => {
+  it("a receive-only listener bound beyond loopback warns once that it accepts from any host", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const l = new AxudpListener({ port: 0, bind: "127.0.0.1" }, () => {});
+    const l = new AxudpListener({ port: 0, bind: "0.0.0.0" }, () => {});
     l.start();
     l.stop();
     const hits = warn.mock.calls.filter((c) =>
