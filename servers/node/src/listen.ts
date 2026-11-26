@@ -22,7 +22,7 @@ import { PAGE_HEADERS } from "@aprscaching/gateway/pageheaders";
 import { LIVE_MESSAGE_MAX_BYTES, type RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { SPA_NOT_FOUND_HEADERS, spaFile } from "./spa.js";
-import { BODY_MAX_BYTES } from "./host.js";
+import { type BodyGate, bodyFailureResponse, meterBody, type MeteredBody, sharedBodyGate } from "./bodygate.js";
 import { compressed, negotiate } from "./compress.js";
 
 /** The one path TLS_CA_CERT is served at. No other path ever reads a file named by configuration. */
@@ -39,7 +39,22 @@ export interface ListenerOptions {
   httpsPort?: number;
   /** The certificate and key: present, the server speaks https. */
   tls?: TlsPair;
+  /** The slots large request bodies take (bodygate.ts); every listener of the process shares one by default. */
+  bodyGate?: BodyGate;
+  /** How long a response write may wait for the client to take bytes before the connection is dropped. */
+  writeStallMs?: number;
 }
+
+/**
+ * A response write that waits this long for the client to take any bytes drops the connection. Node's idle
+ * timeout never fires while a write is pending, so a client that requests a large answer and never reads would
+ * otherwise hold it in the server for as long as it keeps the socket open.
+ */
+export const WRITE_STALL_MS = 30_000;
+/** How long a connection closed under an unread body waits, after its answer, before it is reset. */
+const LINGER_MS = 2_000;
+/** Response bodies are written in slices of this size, so a slow but reading client shows progress per slice. */
+const WRITE_SLICE = 64 * 1024;
 
 export interface TlsFiles {
   cert: string;
@@ -172,6 +187,7 @@ async function serveRequest(
   nres: http.ServerResponse,
 ): Promise<void> {
   const { env } = opts;
+  let body: MeteredBody | undefined;
   try {
     const url = `${scheme}://${nreq.headers.host ?? "localhost"}${nreq.url ?? "/"}`;
     const method = nreq.method ?? "GET";
@@ -199,45 +215,106 @@ async function serveRequest(
     }
     const headers = clientHeaders(nreq, env);
     const hasBody = method !== "GET" && method !== "HEAD";
-    // readBody returns raw bytes — the gateway speaks JSON on most routes but BINARY on the
-    // federation wire (CBOR sync pages, beacon datagrams); a utf8 round-trip would corrupt those.
-    const request = new Request(url, { method, headers, body: hasBody ? await readBody(nreq) : undefined });
-    const response = await handle(request, env, { waitUntil: (p) => void p.catch(() => {}) });
+    // The body goes to the gateway unread: the handler pulls it after routing and its own checks, metered
+    // against the body slots (bodygate.ts). Raw bytes — the federation wire is binary (CBOR sync pages, beacon
+    // datagrams), so nothing here decodes it.
+    if (hasBody)
+      body = meterBody(
+        nreq.iterator({ destroyOnReturn: false }),
+        clientIp(new Request(url, { headers }), env),
+        opts.bodyGate ?? sharedBodyGate,
+      );
+    // the slot goes back when the answer is done or the connection goes, whatever the handler read
+    if (body) {
+      nres.once("finish", body.finish);
+      nres.once("close", body.finish);
+    }
+    const request = new Request(url, {
+      method,
+      headers,
+      ...(body ? { body: body.stream, duplex: "half" } : {}),
+    } as RequestInit);
+    let response = await handle(request, env, { waitUntil: (p) => void p.catch(() => {}) });
+    const failure = body?.failure();
+    if (failure) response = bodyFailureResponse(failure);
+    const stall = opts.writeStallMs ?? WRITE_STALL_MS;
 
     nres.statusCode = response.status;
     response.headers.forEach((value, key) => nres.setHeader(key, value));
-    // Server-Sent Events (the CoT push feed) are long-lived — pipe the body chunk-by-chunk instead
-    // of buffering to completion (which would hold every event until the stream closed, defeating SSE).
-    if (response.body && (response.headers.get("content-type") ?? "").includes("text/event-stream")) {
-      nreq.socket.setTimeout(0); // no idle timeout on a streaming connection
+    // A body the handler left unread is not drained: the connection closes under its rest. The server sends its
+    // end first and resets only a moment later, so the client still reads the answer: a reset that meets the
+    // client while it is sending discards what it had received.
+    if (!nreq.complete) {
+      nres.setHeader("connection", "close");
+      nres.once("finish", () => {
+        const sock = nreq.socket;
+        sock.end();
+        setTimeout(() => sock.destroy(), LINGER_MS).unref();
+      });
+    }
+    const type = response.headers.get("content-type") ?? "";
+    if (response.body && (type.includes("text/event-stream") || response.headers.has("content-length"))) {
+      // An event stream (the CoT push feed) is long-lived, and a body of a declared length (a tile range) may be
+      // read lazily by its handler: both are piped chunk by chunk, as the client takes them.
+      if (type.includes("text/event-stream")) nreq.socket.setTimeout(0); // no idle timeout on a streaming connection
       const reader = response.body.getReader();
       nres.on("close", () => void reader.cancel().catch(() => {}));
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (!nres.write(Buffer.from(value))) await new Promise((r) => nres.once("drain", r));
+        if (!(await writeSlices(nres, value, stall))) return;
       }
       nres.end();
     } else {
-      nres.end(Buffer.from(await response.arrayBuffer()));
+      const buf = Buffer.from(await response.arrayBuffer());
+      if (buf.length <= WRITE_SLICE) nres.end(buf);
+      else {
+        nres.setHeader("content-length", buf.length);
+        if (await writeSlices(nres, buf, stall)) nres.end();
+      }
     }
   } catch (e) {
-    // handle() answers its own failures; this catches the bridge's (an oversized or broken body, a client gone
-    // mid-stream). The client learns the size limit and nothing else.
-    if (!(e instanceof BodyTooLarge)) console.error("%s %s:", nreq.method ?? "?", nreq.url ?? "?", e);
+    // handle() answers its own failures; this catches the bridge's (a client gone mid-stream). Nothing about
+    // the failure reaches the client.
+    console.error("%s %s:", nreq.method ?? "?", nreq.url ?? "?", e);
     if (nres.headersSent) {
       nres.destroy();
       return;
     }
-    nres.statusCode = e instanceof BodyTooLarge ? 413 : 500;
+    nres.statusCode = 500;
     nres.setHeader("content-type", "application/json");
-    if (e instanceof BodyTooLarge) {
-      // the rest of the body is never read: answer, then close the connection under it
-      nres.setHeader("connection", "close");
-      nres.once("finish", () => nreq.socket.destroy());
-    }
-    nres.end(JSON.stringify({ error: e instanceof BodyTooLarge ? e.message : "internal error" }));
+    nres.end(JSON.stringify({ error: "internal error" }));
   }
+}
+
+/**
+ * Write `bytes` in slices, waiting after each one the socket does not take at once for it to drain. A wait
+ * longer than `stallMs` destroys the connection — the client stopped reading — and answers false, as does a
+ * connection that closed meanwhile.
+ */
+async function writeSlices(nres: http.ServerResponse, bytes: Uint8Array, stallMs: number): Promise<boolean> {
+  for (let at = 0; at < bytes.length; at += WRITE_SLICE) {
+    if (nres.destroyed) return false;
+    if (nres.write(bytes.subarray(at, at + WRITE_SLICE))) continue;
+    const drained = await new Promise<boolean>((resolve) => {
+      const done = (ok: boolean) => {
+        clearTimeout(timer);
+        nres.off("drain", onDrain);
+        nres.off("close", onClose);
+        resolve(ok);
+      };
+      const onDrain = () => done(true);
+      const onClose = () => done(false);
+      const timer = setTimeout(() => done(false), stallMs);
+      nres.once("drain", onDrain);
+      nres.once("close", onClose);
+    });
+    if (!drained) {
+      nres.destroy();
+      return false;
+    }
+  }
+  return true;
 }
 
 /** The station's CA certificate, read on each request so a re-created CA is served without a restart. */
@@ -304,30 +381,4 @@ async function sendSpa(
   fs.createReadStream(f.file)
     .on("error", () => nres.destroy())
     .pipe(nres);
-}
-
-/** The bridge buffers the whole body BEFORE routing/auth, so it stops at BODY_MAX_BYTES (host.ts): past it
- *  reading stops, the request is answered 413 and the connection closed. */
-class BodyTooLarge extends Error {
-  constructor() {
-    super("request body too large");
-  }
-}
-function readBody(req: http.IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let total = 0;
-    req.on("data", (c) => {
-      total += (c as Buffer).length;
-      if (total > BODY_MAX_BYTES) {
-        req.removeAllListeners("data");
-        req.pause();
-        reject(new BodyTooLarge());
-        return;
-      }
-      chunks.push(c as Buffer);
-    });
-    req.on("end", () => resolve(Uint8Array.from(Buffer.concat(chunks))));
-    req.on("error", reject);
-  });
 }

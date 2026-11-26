@@ -35,8 +35,20 @@ export interface ExecCtx {
 export interface TileArchive {
   /** The archive's size and a tag that changes with its content; null when there is no archive. */
   stat(): Promise<{ size: number; etag: string } | null>;
+  /**
+   * The archive as it is now, held open for one answer: its size, tag and reads all come from the same copy, so
+   * an archive replaced while an answer is read never mixes two versions under one tag. Null when there is none.
+   */
+  open(): Promise<TileReader | null>;
+}
+
+/** One open copy of the archive. */
+export interface TileReader {
+  size: number;
+  etag: string;
   /** `length` bytes from `offset` (fewer at the end of the archive). */
   read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>>;
+  close(): Promise<void>;
 }
 
 /** Media blob store (audio clues etc.) — implemented on the filesystem (servers/node/src/media.ts). */

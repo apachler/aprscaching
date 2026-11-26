@@ -7,6 +7,7 @@ import {
   distanceBucketM,
   bucketTs,
   rateLimited,
+  RL_BUCKETS_MAX,
   negCached,
   negStore,
   corroborationAuthorized,
@@ -68,6 +69,17 @@ describe("corroboration abuse limits", () => {
     for (let i = 0; i < 60; i++) expect(rateLimited(key, t0, 60, 60_000)).toBe(false); // 60 allowed
     expect(rateLimited(key, t0, 60, 60_000)).toBe(true); // 61st over budget
     expect(rateLimited(key, t0 + 60_000, 60, 60_000)).toBe(false); // new window resets
+  });
+
+  it("rateLimited keeps at most RL_BUCKETS_MAX windows, dropping the oldest, while every window still runs", () => {
+    const t0 = 3_000_000;
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(false);
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(true); // over budget while its window is kept
+    for (let i = 0; i < RL_BUCKETS_MAX; i++) rateLimited(`cap:${i}`, t0, 1, 60_000);
+    // the first window was the oldest: it is gone, so the key starts a fresh one
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(false);
+    // the newest windows are kept
+    expect(rateLimited(`cap:${RL_BUCKETS_MAX - 1}`, t0, 1, 60_000)).toBe(true);
   });
 
   it("negative memoization caches within the TTL and expires after it", () => {

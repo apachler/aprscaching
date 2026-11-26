@@ -252,7 +252,8 @@ export async function readCappedBody(
     if (done) break;
     size += value.byteLength;
     if (size > max) {
-      await reader.cancel().catch(() => {});
+      // not awaited: cancelling one branch of a cloned body settles only once the other branch is cancelled too
+      void reader.cancel().catch(() => {});
       return null;
     }
     chunks.push(value);

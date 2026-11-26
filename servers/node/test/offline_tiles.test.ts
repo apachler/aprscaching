@@ -72,3 +72,53 @@ describe("the archive by byte range", () => {
     expect(isGatewayPath("/tiles/offline.pmtiles")).toBe(true);
   });
 });
+
+describe("one range answer", () => {
+  const MB = 1024 * 1024;
+
+  it("reads the archive as the client takes it, never the whole range ahead", async () => {
+    const file = archive(8 * MB);
+    const tiles = fileTiles(file)!;
+    let read = 0;
+    const counted = {
+      stat: tiles.stat,
+      open: async () => {
+        const r = (await tiles.open())!;
+        return { ...r, read: (offset: number, length: number) => ((read += length), r.read(offset, length)) };
+      },
+    };
+    const res = await get(env(undefined, { TILES: counted }), "/tiles/offline.pmtiles", { range: "bytes=0-" });
+    expect(res.headers.get("content-length")).toBe(String(8 * MB));
+    const reader = res.body!.getReader();
+    await reader.read();
+    await new Promise((r) => setTimeout(r, 50));
+    // one piece taken, at most one more read ahead: not the 8 MiB the answer holds
+    expect(read).toBeLessThanOrEqual(512 * 1024);
+    await reader.cancel();
+  });
+
+  it("comes from the archive it opened, under its tag, when the file is replaced meanwhile", async () => {
+    const file = archive(2 * MB);
+    const e = env(file);
+    const res = await get(e, "/tiles/offline.pmtiles", { range: "bytes=0-" });
+    const reader = res.body!.getReader();
+    const first = (await reader.read()).value!;
+    // the operator drops a new archive in place, as an install does: written beside, renamed over
+    const next = `${file}.new`;
+    fs.writeFileSync(next, Buffer.alloc(2 * MB + 1, 0xff)); // another size, so another tag whatever the clock
+    fs.renameSync(next, file);
+    const bytes = [first];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes.push(value);
+    }
+    const body = Buffer.concat(bytes);
+    expect(body.length).toBe(2 * MB);
+    expect(body.equals(Buffer.from(Array.from({ length: 2 * MB }, (_, i) => i % 251)))).toBe(true);
+    // the next answer is the new archive, under a new tag
+    const after = await get(e, "/tiles/offline.pmtiles", { range: "bytes=0-0" });
+    expect(after.headers.get("etag")).not.toBe(res.headers.get("etag"));
+    expect([...new Uint8Array(await after.arrayBuffer())]).toEqual([0xff]);
+  });
+});
