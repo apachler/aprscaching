@@ -7,9 +7,10 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { scoreFind, commitFind } from "@aprscaching/gateway/caches";
 import { retryCorroborations, RETRY_AFTER_S } from "@aprscaching/gateway/corroborate_retry";
 import { newFedKey, instanceEnv, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
-import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, markCallVerified } from "./helpers/authflow.js";
 import { addCache } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { decoyFix, decoying } from "./helpers/decoy.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -243,6 +244,22 @@ describe("the later attempt", () => {
     expect(await retryRow(hub, logId)).toBeNull();
   });
 
+  it("refuses the lift when the search for a contradicting fix stays unresolved", async () => {
+    const lifted: number[] = [];
+    for (const decoyed of [false, true]) {
+      const { hub, p1, p2, cache } = await setup(1);
+      await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+      stubFetch({ [P1]: down, [P2]: serve(p2.env) });
+      const { at } = await logFind(hub, cache);
+      const decoy = await decoyFix(hub, `${LOGGER}-7`, at - 1100, 52.52, 13.4);
+      stubFetch({ [P1]: serve(p1.env), [P2]: serve(p2.env) });
+      // decoyed: answered only with fixes the engine sets aside, until the budget is spent
+      const env = decoyed ? decoying(hub, decoy, Infinity) : hub;
+      lifted.push((await retryCorroborations(env, at + RETRY_AFTER_S[0]!)).upgraded);
+    }
+    expect(lifted).toEqual([1, 0]);
+  });
+
   it("still needs the logger's own track to allow the presence", async () => {
     const { hub, p1, cache } = await setup(1);
     (hub as unknown as Record<string, string>).FIRST_PARTY_SITES = "DB0XX"; // the hub's own attested site
@@ -332,6 +349,60 @@ describe("the later attempt", () => {
     await hub.DB.prepare("DELETE FROM cache_logs WHERE id = ?").bind(logId).run();
     expect(await retryRow(hub, logId)).toBeNull(); // the foreign key removes it with the log
     expect((await retryCorroborations(hub, at + RETRY_AFTER_S[0]!)).asked).toBe(0);
+  });
+});
+
+describe("the logger's standing at the lift", () => {
+  /** A signed-in, control-verified player logs a find while the only trusted peer is down. */
+  async function signedInFind() {
+    const key = await newFedKey();
+    const hub = authEnv({ INSTANCE: "hub.example", FED_PRIVATE_KEY: key.env, FED_CORROBORATION_QUORUM: "1" });
+    const p1 = await answerer("p1.example");
+    await addPeer(hub, P1, "p1.example", p1.key);
+    const r = await hub.DB.prepare(
+      "INSERT INTO caches (code, owner_call, title, type, lat, lon, created_at, updated_at) VALUES ('AC-SL', 'OE8OWN', 'Standing', 'traditional', ?, ?, 1, 1)",
+    )
+      .bind(LAT, LON)
+      .run();
+    const s = await emailSignup(hub, "log@example.test", LOGGER);
+    await markCallVerified(hub, LOGGER);
+    stubFetch({ [P1]: down });
+    const res = await call(
+      hub,
+      "POST",
+      `/api/caches/${r.meta.last_row_id}/logs`,
+      { logType: "found" },
+      { cookie: s.cookie },
+    );
+    expect(res.status).toBe(200);
+    const log = await hub.DB.prepare("SELECT id, ts FROM cache_logs WHERE logger_call = ?")
+      .bind(LOGGER)
+      .first<{ id: number; ts: number }>();
+    expect(await retryRow(hub, log!.id)).toMatchObject({ require_verified: 1 });
+    stubFetch({ [P1]: serve(p1.env) });
+    return { hub, logId: log!.id, due: log!.ts + RETRY_AFTER_S[0]! };
+  }
+
+  it("lifts the find while the call keeps its standing", async () => {
+    const { hub, logId, due } = await signedInFind();
+    expect(await retryCorroborations(hub, due)).toMatchObject({ upgraded: 1 });
+    expect((await logRow(hub, logId))?.tier).toBe("A");
+  });
+
+  it("gives no Tier A once a sysop revoked the call's control-verification", async () => {
+    const { hub, logId, due } = await signedInFind();
+    await hub.DB.prepare("DELETE FROM callsign_verifications WHERE callsign = ?").bind(LOGGER).run();
+    expect(await retryCorroborations(hub, due)).toMatchObject({ upgraded: 0 });
+    expect((await logRow(hub, logId))?.tier).not.toBe("A");
+  });
+
+  it("gives no Tier A once the call was suspended", async () => {
+    const { hub, logId, due } = await signedInFind();
+    await hub.DB.prepare("INSERT INTO callsign_suspensions (callsign, category, until, at) VALUES (?, 'spam', NULL, ?)")
+      .bind(LOGGER, now())
+      .run();
+    expect(await retryCorroborations(hub, due)).toMatchObject({ upgraded: 0 });
+    expect((await logRow(hub, logId))?.tier).not.toBe("A");
   });
 });
 

@@ -519,14 +519,17 @@ describe("hardening", () => {
     expect(logs()[0]).toMatchObject({ logger_call: expect.stringMatching(/^WITHDRAWN#/), comment: null });
   });
 
-  it("erase succeeds when the base call and an SSID both hold a found for the same cache", async () => {
+  it("erase withdraws the call's one found per cache, which no SSID of the call can double", async () => {
     freshEnv({ INGEST_SECRET: "a-strong-test-secret", SESSION_SECRET: "a-strong-session-secret", INSTANCE: "gw.test" });
     sqlite.prepare("INSERT INTO accounts (account_id, callsign, created_at) VALUES ('acct-apr','OE8APR',?)").run(t);
-    sqlite
-      .prepare(
-        "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier) VALUES (1,'OE8APR',?,'found',0,'C'), (1,'OE8APR-7',?,'found',0,'C')",
-      )
-      .run(t - 10, t);
+    const found = (call: string) =>
+      sqlite
+        .prepare(
+          "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier) VALUES (1,?,?,'found',0,'C')",
+        )
+        .run(call, t);
+    found("OE8APR");
+    expect(() => found("OE8APR-7")).toThrow(/UNIQUE/);
     const cookie = (await issueSessionCookie(new Request("http://gw.test/"), env, "acct-apr", "OE8APR")).split(";")[0]!;
     const res = await handleAccountDelete(
       new Request("http://gw.test/x", { method: "POST", headers: { cookie } }),

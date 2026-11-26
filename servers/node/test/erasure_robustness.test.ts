@@ -464,7 +464,7 @@ async function packEtag(env: Env): Promise<string> {
 }
 
 describe("federation keeps deletions and bounds its working tables", () => {
-  it("never gives up a missing tombstone, and gives up other records as before", async () => {
+  it("never gives up a missing tombstone a neighbour can fill, and lets hop-limit gaps go", async () => {
     const env = authEnv();
     const old = nowS() - 40 * 86400;
     for (const [kind, reason] of [
@@ -488,10 +488,7 @@ describe("federation keeps deletions and bounds its working tables", () => {
         reason: string;
       }>()
     ).results;
-    expect(left).toEqual([
-      { kind: "tombstone", reason: "unsettled" },
-      { kind: "tombstone", reason: "upstream-hops" },
-    ]);
+    expect(left).toEqual([{ kind: "tombstone", reason: "unsettled" }]);
     expect(await n(env, "SELECT COUNT(*) AS n FROM fed_gaps_given_up WHERE kind='find'")).toBe(1);
   });
 

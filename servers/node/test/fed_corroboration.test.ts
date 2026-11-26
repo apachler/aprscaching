@@ -8,8 +8,9 @@ import { decodeFedFrame } from "@aprscaching/shared";
 import { queryPeerCorroboration, type CorroborationQuery } from "@aprscaching/gateway/corroborate";
 import { scoreFind } from "@aprscaching/gateway/caches";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
-import { newFedKey, instanceEnv, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
+import { newFedKey, instanceEnv, peerRow, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { decoyFix, decoying } from "./helpers/decoy.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -213,6 +214,38 @@ describe("quorum", () => {
   });
 });
 
+describe("quorum — auto-promoted peers", () => {
+  it("count only beside an operator-vetted peer, however many earned promotion", async () => {
+    const hub = await asker({ FED_AUTO_PROMOTE: "2" });
+    const [v1, v2, a1, a2] = await Promise.all([
+      answerer("v1.example"),
+      answerer("v2.example"),
+      answerer("a1.example"),
+      answerer("a2.example"),
+    ]);
+    await addPeer(hub.env, "https://v1.example", "v1.example", v1.key);
+    await addPeer(hub.env, "https://v2.example", "v2.example", v2.key);
+    await addPeer(hub.env, "https://a1.example", "a1.example", a1.key, "unvetted");
+    await addPeer(hub.env, "https://a2.example", "a2.example", a2.key, "unvetted");
+    stubFetch(Object.fromEntries([v1, v2, a1, a2].map((p) => [`https://${p.instance}`, serve(p.env)])));
+    // two finds the vetted peers confirm credit the unvetted peers' matching answers, which promotes them
+    for (let i = 0; i < 2; i++) expect((await queryPeerCorroboration(hub.env, query()))?.corroborators).toBe(2);
+    for (const url of ["https://a1.example", "https://a2.example"]) {
+      const row = await peerRow(hub.env, url);
+      expect(row?.trust).toBe("trusted");
+      expect(row?.auto_promoted_at).not.toBeNull();
+    }
+    // the vetted peers leave: the two promoted peers alone are two distinct keys, and no Tier A
+    await hub.env.DB.prepare(
+      "UPDATE fed_peers SET trust = 'blocked' WHERE url IN ('https://v1.example', 'https://v2.example')",
+    ).run();
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+    // one operator-vetted peer beside them is enough
+    await hub.env.DB.prepare("UPDATE fed_peers SET trust = 'trusted' WHERE url = 'https://v1.example'").run();
+    expect((await queryPeerCorroboration(hub.env, query()))?.corroborators).toBe(3);
+  });
+});
+
 describe("quorum — 44net peers of one callsign", () => {
   it("counts two instances ARDC verified under one callsign once", async () => {
     const hub = await asker();
@@ -344,6 +377,40 @@ describe("evidence", () => {
     });
 });
 
+describe("a peer hit proves the logger within the cache radius", () => {
+  // the cache at (LAT, LON) lies ~22 m south of its 0.0006° cell's centre; a peer measures from that centre and
+  // rounds up to 100 m, so a hit counts only when that distance plus the 22 m is within 150 m
+  const M = 1 / 111_320; // degrees of latitude per metre
+
+  async function ask(p1: { env: Env; key: FedKey }) {
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    stubFetch({ "https://p1.example": serve(p1.env) });
+    return queryPeerCorroboration(hub.env, query());
+  }
+
+  it("counts a hearing 120 m from the cache towards the cell centre", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT + 120 * M });
+    expect((await ask(p1))?.instance).toBe("p1.example");
+  });
+
+  it("does not count a hearing 130 m from the cache away from the cell centre, which the peer sees ~152 m out", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT - 130 * M });
+    expect(await ask(p1)).toBeNull();
+  });
+
+  it("is answered with the peer's closest hearing in the window, not its latest", async () => {
+    const p1 = await answerer("p1.example", { lat: LAT - 130 * M }); // the latest, too far to prove anything
+    await p1.env.DB.prepare(
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, ?, ?, 'rf', ?, 'WIDE1-1', 'aprs', 'tnc')",
+    )
+      .bind(LOGGER, now() - 900, LAT, LON, SITE)
+      .run();
+    const ev = await ask(p1);
+    expect(ev?.distanceM).toBe(100);
+  });
+});
+
 describe("the answerer is not a location or time oracle", () => {
   async function ask(p1: { env: Env; key: FedKey }, q: Partial<CorroborationQuery>) {
     const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
@@ -354,7 +421,20 @@ describe("the answerer is not a location or time oracle", () => {
 
   it("widens a 1 m radius to the minimum, so it cannot pinpoint", async () => {
     const p1 = await answerer("p1.example", { lat: LAT + 0.001 }); // ~110 m north
-    expect((await ask(p1, { radiusM: 1 }))?.instance).toBe("p1.example");
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    const answers: boolean[] = [];
+    const real = serve(p1.env);
+    stubFetch({
+      "https://p1.example": async (req) => {
+        const r = await real(req);
+        answers.push(decodeFedFrame(new Uint8Array(await r.clone().arrayBuffer())).record.body.corroborated === true);
+        return r;
+      },
+    });
+    // the peer says yes; the asker, holding a 1 m radius, cannot count a 100 m step as within it
+    expect(await queryPeerCorroboration(hub.env, query({ radiusM: 1 }))).toBeNull();
+    expect(answers).toEqual([true]);
   });
 
   it("refuses a window that ended long ago", async () => {
@@ -411,6 +491,17 @@ describe("peer-corroborated finds still need a plausible local track", () => {
       .run();
     const s = await scoreFind(hub.env, cache, LOGGER, now());
     expect(s.result.tier).not.toBe("A");
+  });
+
+  it("is refused when the search for a contradicting fix stays unresolved", async () => {
+    const hub = await setup();
+    // answered truly, the search finds nothing and the peer's hearing lifts the find
+    const decoy = await decoyFix(hub.env, `${LOGGER}-7`, now() - 1100, 52.52, 13.4);
+    expect((await scoreFind(hub.env, cache, LOGGER, now())).result.method).toBe("aprs_rf_peer");
+    // answered only with fixes the engine sets aside, until the budget is spent
+    const s = await scoreFind(decoying(hub.env, decoy, Infinity), cache, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).not.toBe("aprs_rf_peer");
   });
 
   it("is not refused by an APRS-IS fix hundreds of km away: anyone can inject one under the call", async () => {

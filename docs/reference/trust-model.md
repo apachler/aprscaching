@@ -20,9 +20,12 @@ Every find carries exactly one tier, graded by the evidence behind it:
 
 - A bare internet packet never reaches Tier B on its own: Tier B requires the independent app reading, and
   Tier A requires independent RF evidence.
-- A find counts as verified from the instance's minimum up: **Tier B** by default, **Tier A** with
-  `MIN_TRUST=A`. A cache's own `min_trust`, set by its hider (**Radio-verified finds only**), takes
-  precedence; clearing it returns the cache to the instance's minimum.
+- A find counts as verified from the stricter of two minimums up: the instance's (**Tier B** by default,
+  **Tier A** with `MIN_TRUST=A`) and the cache's own `min_trust`, set by its hider (**Radio-verified finds
+  only**). A hider can ask more of their finders than the instance does, never less; clearing it returns the
+  cache to the instance's minimum.
+- One person logs one find per cache, under any SSID of their call: the database refuses a second, even when
+  two logs under two SSIDs arrive at once.
 - A radio message carries no device reading, so a find logged by radio reaches Tier A or C, never B.
 - Tier A rests on the finder's callsign being heard, so a find logged in the app reaches it only once the
   account has control-verified that call ([Identity](#identity)). Until then the call's RF fixes lift no
@@ -34,6 +37,12 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
   however many, not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
   at the cache, can add a contradiction but never hide one.
+- The database runs that check, so a window flooded with fixes is judged without loading them all. The match is
+  sought among the newest 100 attested fixes within the cache radius, and a living cache's station among its newest
+  500 fixes that place it.
+- The verify engine checks each fix the database returns as contradicting. One it does not take as contradicting is
+  set aside, and the database is asked again. Once more than 8 fixes were set aside for one find, the find is refused
+  Tier A, whether locally, through peers or in a later attempt.
 - The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
   judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before
   leaves nothing out. Only the logged call's own fix can match the cache. A fixed home station, digipeater or
@@ -81,8 +90,11 @@ hear this callsign on RF near here, at a receiving site that is not ours?*
   sites, never an APRS-IS copy. A peer vouches no more widely than its own Tier A reaches.
 - A peer that denies a corroboration another peer confirmed feeds a **contradiction signal**. It lowers that
   peer's reputation and blocks automatic promotion.
-- Questions and answers are coarsened (grid-snapped, time-bucketed, distance-bucketed), so corroboration is
-  never a location oracle.
+- A peer's yes counts only when it proves the logger within the cache's radius: its distance, rounded up to
+  100 m from the centre of the cache's grid cell, plus the cache's offset from that centre.
+- Questions and answers are coarsened (snapped to a grid cell of about 67 × 46 m, time-bucketed,
+  distance-bucketed), so corroboration is never a location oracle: a peer learns which cache the logger
+  claims to stand at and the 10 minutes, never an exact position or second.
 
 The wire mechanics (signed questions, retries, the logger's own-track check) are under
 [Cross-instance corroboration](federation-trust.md#cross-instance-corroboration).
