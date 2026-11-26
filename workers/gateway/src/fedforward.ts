@@ -59,13 +59,13 @@ async function batchKey(frames: Uint8Array[]): Promise<string> {
  * never rides the HTTP bulletin feed, and expires after the bulletin lifetime. Throws while `FED_BBS` is off.
  *
  * A batch of the same records as one still queued (unexpired) is not stored again, and the answer names the
- * queued batch's BID. The BID itself cannot carry that: it hashes the frame bytes, which hold each record's
+ * queued batch's BID and its row (`queued`), which a sysop removes to send the same records again. The BID itself cannot carry that: it hashes the frame bytes, which hold each record's
  * signing time, and receivers re-derive it from those bytes, so its formula stays as it is on the air.
  */
 export async function enqueueAcsfedBulletin(
   env: Env,
   frames: Uint8Array[],
-): Promise<{ bid: string; enqueued: number }> {
+): Promise<{ bid: string; enqueued: number; queued?: number }> {
   if (!fedBbsOn(env)) throw new Error(FED_BBS_OFF);
   const bull = encodeFedBbsBatch(frames);
   const key = await batchKey(frames);
@@ -83,12 +83,12 @@ export async function enqueueAcsfedBulletin(
     .run();
   if (res.meta.changes) return { bid: bull.bid, enqueued: 1 };
   const queued = await env.DB.prepare(
-    `SELECT bid FROM bbs_messages WHERE fed_key = ? AND origin = 'local' AND (expires_at IS NULL OR expires_at > ?)
+    `SELECT id, bid FROM bbs_messages WHERE fed_key = ? AND origin = 'local' AND (expires_at IS NULL OR expires_at > ?)
      ORDER BY posted_at DESC LIMIT 1`,
   )
     .bind(key, now)
-    .first<{ bid: string }>();
-  return { bid: queued?.bid ?? bull.bid, enqueued: 0 };
+    .first<{ id: number; bid: string }>();
+  return queued ? { bid: queued.bid, enqueued: 0, queued: queued.id } : { bid: bull.bid, enqueued: 0 };
 }
 
 /** Where one feed resumes: its cursor and, in a feed whose cursor can repeat, the id of the last row sent. */
@@ -149,6 +149,7 @@ export async function handleFedBbsEnqueue(req: Request, env: Env): Promise<Respo
     frames: frames.length,
     enqueued: bull.enqueued,
     deduped: !bull.enqueued,
+    ...(bull.queued !== undefined && { queued: bull.queued }),
     cursors,
   });
 }

@@ -140,6 +140,30 @@ describe("partners only, never flooded", () => {
       expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
     });
 
+    it("names the queued entry it skipped for, and queues again once a sysop removed that entry", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      const skipped = await enqueue(env);
+      const row = await env.DB.prepare("SELECT id FROM bbs_messages WHERE bid = ?")
+        .bind(first.data.bid)
+        .first<{ id: number }>();
+      expect(skipped.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true, queued: row!.id });
+      const removed = await call(
+        env,
+        "POST",
+        "/api/admin/moderation/remove",
+        { kind: "bbs", id: skipped.data.queued, reason: "resend the snapshot" },
+        OPERATOR,
+      );
+      expect(removed.status).toBe(200);
+      stepSecond();
+      const again = await enqueue(env);
+      expect(again.data).toMatchObject({ enqueued: 1, deduped: false });
+      expect(again.data.queued).toBeUndefined();
+      expect(again.data.bid).not.toBe(first.data.bid);
+    });
+
     it("a new or an edited record queues under a new bulletin ID", async () => {
       const env = await station({ FED_BBS: "1" });
       const first = await enqueue(env);
