@@ -32,12 +32,14 @@ import {
   type RelayedAsk,
 } from "./corroborate.js";
 import { COARSEN } from "./corroborate_privacy.js";
-import { DEFAULT_POLICY, plausiblePresence } from "./verify.js";
+import { DEFAULT_POLICY, plausiblePresence, type PositionRow } from "./verify.js";
 import { awardFindBadges } from "./community.js";
 import { attestation, sitesFor } from "./attestedsites.js";
 import { provenanceOf } from "./provenance.js";
+import { callSuspended } from "./moderation.js";
+import { isCallsignVerified } from "./callsign.js";
 import { beaconCommandedIn } from "./beacontag.js";
-import { loggerTrack } from "./track.js";
+import { commandedIn, contradictionOf } from "./track.js";
 
 /** When each attempt is due, after the find; their count is the attempt limit. */
 export const RETRY_AFTER_S = [3600, 6 * 3600, 24 * 3600];
@@ -55,12 +57,14 @@ export interface RetryPlan {
   hits: PeerHit[];
   /** Questions waiting in a hub's relay queue for peers nobody can dial. */
   relayed: RelayedAsk[];
+  /** A signed-in player logged the find: a lift needs the call still control-verified. */
+  requireVerified?: boolean;
 }
 
 /** Queue a later attempt for a found log. */
 export async function scheduleRetry(env: Env, logId: number, loggedAt: number, plan: RetryPlan): Promise<void> {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO corroboration_retries (log_id, query, peers, hits, relayed, logged_at, attempts, next_at) VALUES (?,?,?,?,?,?,0,?)",
+    "INSERT OR IGNORE INTO corroboration_retries (log_id, query, peers, hits, relayed, logged_at, attempts, next_at, require_verified) VALUES (?,?,?,?,?,?,0,?,?)",
   )
     .bind(
       logId,
@@ -70,6 +74,7 @@ export async function scheduleRetry(env: Env, logId: number, loggedAt: number, p
       JSON.stringify(plan.relayed),
       loggedAt,
       loggedAt + RETRY_AFTER_S[0]!,
+      plan.requireVerified ? 1 : 0,
     )
     .run();
 }
@@ -83,6 +88,7 @@ interface RetryRow {
   logged_at: number;
   attempts: number;
   next_at: number;
+  require_verified: number;
   tier: string | null;
   logger_call: string | null;
   log_ts: number | null;
@@ -116,7 +122,9 @@ const removeRow = (env: Env, id: number) =>
 /**
  * Lift a found log to Tier A on a later quorum, when the logger's own local track allows the corroborated
  * presence, as when the find was logged, and no beacon this instance asked a box to send under the call falls
- * in the window (a peer cannot tell that hearing from the station's own). True when the log was lifted.
+ * in the window (a peer cannot tell that hearing from the station's own). The logger's standing is judged at
+ * the lift, not at the log: a call suspended since, or one whose control-verification a sysop revoked since
+ * a signed-in player logged the find, gets no Tier A. True when the log was lifted.
  */
 async function liftLater(
   env: Env,
@@ -125,21 +133,36 @@ async function liftLater(
   winner: Evidence,
   now: number,
 ): Promise<boolean> {
+  const call = r.logger_call as string;
+  if (await callSuspended(env, call)) return false;
+  if (r.require_verified && !(await isCallsignVerified(env, call))) return false;
   const until = (r.log_ts ?? 0) + 60;
-  const fixes = await loggerTrack(env, r.logger_call as string, q.since, until);
-  const lp = { results: fixes.own };
-  if (lp.results.some((p) => !!p.commanded) || (await beaconCommandedIn(env, r.logger_call as string, q.since, until)))
+  if ((await commandedIn(env, call, q.since, until)) || (await beaconCommandedIn(env, call, q.since, until)))
     return false;
-  // the track the presence is judged against — every SSID of the base call, as at log time — carries its
-  // attestation (verify.ts contradicts)
+  // the track the presence is judged against — every SSID of the base call, as at log time: the database finds a
+  // fix of it that contradicts the presence (track.ts contradictionOf), the engine judging it stamped with its
+  // attestation (verify.ts contradicts); an answer that stays unresolved refuses the lift
   const attested = await attestation(env);
-  const track = [...lp.results, ...fixes.others].map((p) => ({
+  const at = { lat: q.lat, lon: q.lon, ts: winner.ts };
+  const maxMps = (DEFAULT_POLICY.maxSpeedKmh * 1000) / 3600;
+  const slack = COARSEN.timeBucketSec;
+  const stamp = (p: PositionRow) => ({
     ...p,
-    commanded: !!p.commanded, // a commanded beacon of another SSID is the box, not the logger
+    commanded: !!p.commanded,
     firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
-  }));
-  if (!plausiblePresence({ lat: q.lat, lon: q.lon, ts: winner.ts }, track, DEFAULT_POLICY, COARSEN.timeBucketSec))
-    return false;
+  });
+  const outrun = await contradictionOf(
+    env,
+    call,
+    q.since,
+    until,
+    attested,
+    at,
+    { maxMps, slackSec: slack },
+    (w) => !plausiblePresence(at, [stamp(w)], DEFAULT_POLICY, slack),
+    { rejected: 0 },
+  );
+  if (outrun.fix || outrun.unresolved) return false;
   const igate = corroboratorIgate({
     method: "aprs_rf_peer",
     peerIgate: winner.igateCall ?? null,

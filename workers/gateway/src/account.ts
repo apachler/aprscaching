@@ -584,14 +584,6 @@ async function eraseCall(
     env.DB.prepare(
       `DELETE FROM corroboration_retries WHERE log_id IN (SELECT id FROM cache_logs WHERE ${mine("logger_call")})`,
     ).bind(...b),
-    // One found per cache survives anonymisation: a find counts once per person, and two of the
-    // person's founds (base call and an SSID) would collide on the one-found-per-logger index once
-    // both carry the same marker. The dropped copies are tombstoned with the rest.
-    env.DB.prepare(
-      `DELETE FROM cache_logs WHERE log_type='found' AND ${mine("logger_call")}
-         AND id NOT IN (SELECT MIN(id) FROM cache_logs WHERE log_type='found' AND ${mine("logger_call")}
-                        GROUP BY cache_id)`,
-    ).bind(...b, ...b),
     env.DB.prepare(
       `UPDATE cache_logs SET logger_call=?, comment=NULL, signer_key=NULL, author_sig=NULL, route=NULL WHERE ${mine("logger_call")}`,
     ).bind(marker, ...b),

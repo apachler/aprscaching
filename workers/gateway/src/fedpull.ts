@@ -699,10 +699,11 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
       if (advances && pg.held !== undefined) {
         let upTo = Math.min(pg.held, next);
         // what did not settle here, and what the peer lacks, is asked for on its own; the mark moves on
+        const said = lacks(pg, own);
         const lacking = [
           ...unsettled.map((v) => ({ v, reason: "unsettled" as const })),
-          ...(pg.gaps ?? []).map((v) => ({ v, reason: "upstream" as const })),
-          ...(pg.hopGaps ?? []).map((v) => ({ v, reason: "upstream-hops" as const })),
+          ...said.gaps.map((v) => ({ v, reason: "upstream" as const })),
+          ...said.hopGaps.map((v) => ({ v, reason: "upstream-hops" as const })),
         ].sort((x, y) => x.v - y.v);
         for (const g of lacking) {
           if (g.v <= cursor || g.v > upTo) continue;
@@ -721,6 +722,15 @@ async function pullOrigin(ctx: PullContext, e: SummaryEntry, kind: OriginKind): 
   }
   await retryGaps(ctx, e, kind, gate, advances, counts);
   return counts.applied;
+}
+
+/**
+ * The records a page says its server lacks, or keeps past the hop limit. An origin serving its own records lacks
+ * none of them and keeps each at hop zero, so its own page names none: what it lists there could only plant gaps
+ * this instance would keep asking for.
+ */
+function lacks(pg: { gaps?: number[]; hopGaps?: number[] }, own: boolean): { gaps: number[]; hopGaps: number[] } {
+  return own ? { gaps: [], hopGaps: [] } : { gaps: pg.gaps ?? [], hopGaps: pg.hopGaps ?? [] };
 }
 
 /** Whether the record of `origin` and `kind` at `v` is kept here, within the hop limit. */
@@ -755,12 +765,13 @@ async function retryGaps(
       if (frameIds(fb)?.v !== v) continue;
       filled = (await admitOriginFrame(ctx, e, kind, gate, fb, pg.hops?.[i], counts)) === null;
     }
+    const said = lacks(pg, e.origin === ctx.neighbour);
     const absent =
       advances &&
       pg.held !== undefined &&
       pg.held >= v &&
-      !(pg.gaps ?? []).includes(v) &&
-      !(pg.hopGaps ?? []).includes(v) &&
+      !said.gaps.includes(v) &&
+      !said.hopGaps.includes(v) &&
       !pg.frames.some((fb) => frameIds(fb)?.v === v);
     if (!filled && absent) await removeGap(env, e.origin, kind, v);
     // a record kept within the hop limit closed the gap in noteSettled; one still at the limit backs off like a miss
