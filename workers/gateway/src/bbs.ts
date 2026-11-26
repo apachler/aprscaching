@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk, ingestOrServiceBoxOk, sessionIdentity, accountHoldsCall } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, bbsBoxOk as bbsBox } from "./auth.js";
 /**
  * bbs.ts — the BBS message base: personal mail, bulletins and NTS traffic, moved the F6FBB way only. A
  * station reads and writes it over a connected-mode session (the packet BBS on the ingest box), partner BBSes
@@ -53,15 +53,18 @@ export function isOwnBid(env: Env, bid: string): boolean {
 const mailboxCall = (addr: string): string => (addr.split("@")[0] ?? "").trim().toUpperCase();
 
 /**
- * May the caller act for `call`'s mailbox? The ingest box may, on the shared secret or as an enrolled box the
- * sysop lets run this instance's services (it carries mail for every station it hears
- * and forwards, and its FBB scheduler delivers inbound mail); a signed-in session may when its account holds
- * the call's base call. Anyone else reading or writing a callsign's personal mail would be reading another
- * operator's mail or posting in their name. Returns the response to send, or null to proceed.
+ * May the caller act for `call`'s mailbox? The packet BBS box may (auth.ts bbsBoxOk): it carries mail for every
+ * station that connects to it. A signed-in session may when its
+ * account holds the call's base call. Anyone else reading or writing a callsign's personal mail would be
+ * reading another operator's mail or posting in their name. Returns the response to send, or null to proceed.
  */
 async function requireMailbox(req: Request, env: Env, call: string): Promise<Response | null> {
-  if (ingestOrServiceBoxOk(req, env)) return null;
-  if (req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
+  if (bbsBox(req)) return null;
+  if (req.headers.get("x-ingest-secret") !== null)
+    return json(
+      { error: "the shared ingest secret does not act for a mailbox: enroll the box with its own key" },
+      { status: 401 },
+    );
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to use the BBS" }, { status: 401 });
   if (!(await accountHoldsCall(env, me.accountId, mailboxCall(call))))
@@ -109,8 +112,8 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   // federation partners' links in a person's name
   if (mailboxCall(to) === FED_BBS_CATEGORY)
     return json({ error: `${FED_BBS_CATEGORY} is reserved for federation traffic` }, { status: 400 });
-  // The ingest box posts for the stations it hears, so its budget is per sender; a session's is per account.
-  const me = ingestSecretOk(req, env) ? null : await sessionIdentity(req, env);
+  // The packet BBS posts for the stations that connect to it, so its budget is per sender; a session's is per account.
+  const me = bbsBox(req) ? null : await sessionIdentity(req, env);
   const rateKey = me ? `bbs-post:acct:${me.accountId}` : `bbs-post:call:${baseCall(mailboxCall(from))}`;
   if (await rateLimitedDurable(env, rateKey, Date.now(), BBS_POSTS_PER_DAY, 86_400_000))
     return json({ error: `at most ${BBS_POSTS_PER_DAY} messages a day` }, { status: 429 });
@@ -157,8 +160,9 @@ export async function handleBbsThread(req: Request, env: Env, id: number): Promi
       .bind(threadId, threadId)
       .all<{ type: string; from_call: string; to_call: string }>()
   ).results;
-  // Bulletins are public; personal mail in a thread shows only to the ingest box and to the parties.
-  const me = ingestSecretOk(req, env) ? null : await sessionIdentity(req, env);
+  // Bulletins are public; personal mail in a thread shows only to the packet BBS and to the parties.
+  const box = bbsBox(req);
+  const me = box ? null : await sessionIdentity(req, env);
   const held = new Map<string, boolean>();
   const holds = async (addr: string): Promise<boolean> => {
     const cs = mailboxCall(addr);
@@ -167,8 +171,7 @@ export async function handleBbsThread(req: Request, env: Env, id: number): Promi
   };
   const visible = [];
   for (const m of msgs)
-    if (ingestSecretOk(req, env) || m.type === "B" || (await holds(m.from_call)) || (await holds(m.to_call)))
-      visible.push(m);
+    if (box || m.type === "B" || (await holds(m.from_call)) || (await holds(m.to_call))) visible.push(m);
   return json({ threadId, messages: visible.map(row) });
 }
 
@@ -232,7 +235,7 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
   // only the addressee marks its mail read
   const denied = await requireMailbox(req, env, msg.to_call);
   if (denied) return denied;
-  // The ingest box acts for every mailbox, so it names the station reading; the sender reading its own
+  // The packet BBS acts for every mailbox, so it names the station reading; the sender reading its own
   // sent mail must not mark it read for the addressee.
   const body = (await req.json().catch(() => ({}))) as { call?: unknown };
   if (typeof body.call === "string" && mailboxCall(body.call) !== mailboxCall(msg.to_call))
@@ -242,15 +245,13 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
 }
 
 // -------------------------------------- connected-mode BBS session
-const ingestOk = ingestOrServiceBoxOk;
-
 /**
  * GET /api/bbs/session?call=CALL — the per-caller mail snapshot an inbound connected-mode BBS session
  * serves synchronously (personal to/from the caller + current bulletins, with bodies). This is also the
- * access boundary: the connected user can only read what's in their own snapshot. Ingest-secret gated.
+ * access boundary: the connected user can only read what's in their own snapshot. The packet BBS box only.
  */
 export async function handleBbsSession(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  if (!bbsBox(req)) return new Response("unauthorized", { status: 401 });
   const call = (new URL(req.url).searchParams.get("call") ?? "").toUpperCase();
   if (!call) return json({ error: "call required" }, { status: 400 });
   const rows = (
@@ -277,9 +278,9 @@ export async function handleBbsSession(req: Request, env: Env): Promise<Response
   return json({ call, messages });
 }
 
-/** POST /api/bbs/kill {id, call} — remove a message the caller authored/received. Ingest-secret gated. */
+/** POST /api/bbs/kill {id, call} — remove a message the caller authored/received. The packet BBS box only. */
 export async function handleBbsKill(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  if (!bbsBox(req)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { id?: number; call?: string };
   if (!b.id || !b.call) return json({ error: "id + call required" }, { status: 400 });
   const cs = b.call.toUpperCase();

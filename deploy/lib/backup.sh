@@ -17,12 +17,10 @@ MIGRATIONS_DIR_LOCAL="$DEPLOY_DIR/../db/migrations"
 BACKUP_HOST_KEYS=" INGEST_URL DB_PATH PORT MEDIA_DIR MIGRATIONS_DIR WEB_DIST HTTPS_PORT TLS_CERT TLS_KEY TLS_CA_CERT DOMAIN TUNNEL_TOKEN HOST DATA_DIR BOX_ID BOX_KEY TRUST_PROXY TRUST_CF "
 
 # bk_tmpdir VAR: a temporary directory, owner-only, in VAR, removed when the command exits however it exits.
-BK_TMPS=()
 bk_tmpdir() {
   local d
   d="$(umask 077 && mktemp -d)"
-  BK_TMPS+=("$d")
-  [ "${#BK_TMPS[@]}" -gt 1 ] || trap 'rm -rf "${BK_TMPS[@]}"' EXIT
+  rm_on_exit "$d"
   printf -v "$1" '%s' "$d"
 }
 

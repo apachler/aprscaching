@@ -642,20 +642,14 @@ export async function accountDataSession(
 /**
  * May this request act as the owner of something owned by `ownerCall` (a cache, its stages and media, a
  * saved view)? Ownership follows the licence, not the call string: a signed-in session acts as owner
- * when its account holds the owner call's base call, whichever of its calls it is operating. Without a
- * session only the ingest plane acts, for the exact owner call it names (`claimed`) — the over-APRS path.
- * An erased owner's withdrawn marker has no owner.
+ * when its account holds the owner call's base call, whichever of its calls it is operating. Nothing else
+ * does: the shared INGEST_SECRET sits on every ingest box, so letting it name an owner would hand every cache
+ * to whoever holds a box. An erased owner's withdrawn marker has no owner.
  */
-export async function mayActAsOwner(
-  req: Request,
-  env: Env,
-  ownerCall: string,
-  claimed?: string | null,
-): Promise<boolean> {
+export async function mayActAsOwner(req: Request, env: Env, ownerCall: string): Promise<boolean> {
   if (!ownerCall || isWithdrawnCall(ownerCall)) return false;
   const me = await sessionIdentity(req, env);
-  if (me) return accountHoldsCall(env, me.accountId, ownerCall);
-  return ingestSecretOk(req, env) && !!claimed && claimed.trim().toUpperCase() === ownerCall.toUpperCase();
+  return !!me && accountHoldsCall(env, me.accountId, ownerCall);
 }
 
 /**
@@ -1009,13 +1003,22 @@ export function ingestOrBoxOk(req: Request, env: Env): boolean {
 }
 
 /**
- * This instance's services an ingest box runs (the APRS-IS outbox, the packet BBS mailbox, FBB forwarding, the
- * NET/ROM node mirror, White Pages, federation pages and beacons): the shared INGEST_SECRET, or an enrolled box
+ * This instance's services an ingest box runs (the APRS-IS outbox, the NET/ROM node mirror, federation pages and
+ * beacons): the shared INGEST_SECRET, or an enrolled box
  * the sysop marks "Runs this instance's services" (box_keys.services, off by default). Trusting a box's
  * hearings grants none of these: a lent receiver vouches for what it hears, not for this instance's mail.
  */
 export function ingestOrServiceBoxOk(req: Request, env: Env): boolean {
   return ingestSecretOk(req, env) || !!boxPrincipal(req)?.services;
+}
+
+/**
+ * The packet BBS and its FBB forwarding: an enrolled box the sysop marks "Runs this instance's services", and
+ * never the shared INGEST_SECRET. The BBS carries every station's personal mail, so whoever acts for it reads
+ * any operator's mail and posts in their name; the shared secret posts packets and nothing more.
+ */
+export function bbsBoxOk(req: Request): boolean {
+  return !!boxPrincipal(req)?.services;
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */

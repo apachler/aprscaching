@@ -3,6 +3,7 @@
 // message from the service call, and is delivered once the station acks it. Separate from the BBS.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import { expireMailbox } from "@aprscaching/gateway/mailbox";
 import { decideRadioCommand } from "@aprscaching/gateway/radiolog";
 import type { Env } from "@aprscaching/gateway/env";
@@ -91,9 +92,7 @@ describe("the Mailbox", () => {
   it("sends to a station heard on MeshCom through the box's node, and takes only the KISS port's ack", async () => {
     const { env, leave } = await sender();
     await leave({ from: "OE1ABC", to: "OE5XYZ", text: "via the mesh" });
-    await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12&kiss=OE8APR-12", undefined, {
-      "x-ingest-secret": SECRET,
-    });
+    await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12&kiss=OE8APR-12");
     const meshcom = (payload: string, port = "meshcom") =>
       call(
         env,
@@ -139,9 +138,7 @@ describe("the Mailbox", () => {
 
     // a box without the node's KISS port: sent once under the node's call, never repeated
     await leave({ from: "OE1ABC", to: "OE5XYZ", text: "once only" });
-    await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12", undefined, {
-      "x-ingest-secret": SECRET,
-    });
+    await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12");
     await meshcom(">still here");
     const last = await env.DB.prepare("SELECT status, attempts FROM mailbox_messages WHERE body = 'once only'").first();
     expect(last).toEqual({ status: "undelivered", attempts: 5 });
@@ -254,7 +251,7 @@ describe("the Mailbox", () => {
   it("a box that reports its repeats acked delivers the message", async () => {
     const { env, leave } = await sender();
     await leave({ from: "OE1ABC", to: "OE5XYZ", text: "box acked" });
-    await call(env, "GET", "/api/box/pi-rf/commands?tx=1&rf=1", undefined, { "x-ingest-secret": SECRET });
+    await boxCall(env, "pi-rf", "GET", "/api/box/pi-rf/commands?tx=1&rf=1");
     const ingest = (payload: string) =>
       call(
         env,
@@ -282,9 +279,7 @@ describe("the Mailbox", () => {
     }>();
     expect(cmd).not.toBeNull();
     const report = { id: cmd!.id, delivery: { tries: 2, outcome: "acked" } };
-    expect((await call(env, "POST", "/api/box/pi-rf/commands/ack", report, { "x-ingest-secret": SECRET })).status).toBe(
-      200,
-    );
+    expect((await boxCall(env, "pi-rf", "POST", "/api/box/pi-rf/commands/ack", report)).status).toBe(200);
     const r = await env.DB.prepare("SELECT status, repeat_until FROM mailbox_messages").first();
     expect(r).toEqual({ status: "delivered", repeat_until: null });
   });

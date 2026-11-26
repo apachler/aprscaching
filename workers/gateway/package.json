@@ -10,6 +10,7 @@
     "./env": "./src/env.ts",
     "./runtime": "./src/runtime.ts",
     "./live": "./src/live.ts",
+    "./cot": "./src/cot.ts",
     "./rendezvous": "./src/rendezvous.ts",
     "./import": "./src/import/engine.ts",
     "./federation": "./src/federation.ts",

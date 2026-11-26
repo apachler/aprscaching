@@ -29,7 +29,8 @@ web build, the .env (the Self-host questions), and the gateway and ingest units.
   --port PORT      the gateway's port; it serves the web app  (default 8080)
   --no-start       install the units without enabling or starting them
   --checksum-only  install a release verified by its checksum alone, when gh is not installed
-  --dry-run        print every step, run none
+  --unverified     install a branch, a commit or a tag without a verified bundle without asking
+  --dry-run        print every step, run none; a release tag is still downloaded and checked
   --net44-config FILE  bring a 44Net Connect tunnel up afterwards (deploy/aprscaching net44 setup)
 Any other option goes to setup.sh (--call, --passcode, --filter, --domain, --lan-host, --fed-peers, …).
 EOF
@@ -78,45 +79,6 @@ bm_render_unit() {
     { print }' "$src"
 }
 
-# The GitHub owner/name of a repository URL, or nothing for another host.
-bm_github_repo() { printf '%s' "$1" | sed -n -E 's#^https://github\.com/([^/]+/[^/.]+)(\.git)?/?$#\1#p'; }
-
-# A release's git bundle, verified: its checksum in the release's SHA256SUMS and its signed provenance
-# (gh attestation verify). Prints the bundle's path. Returns 1 when the release has no bundle (the caller
-# installs from git, warned) and 2 when a bundle does not verify (the caller stops): it runs in a command
-# substitution, where a die would end only the subshell.
-bm_verified_bundle() {
-  local gh_repo="$1" tag="$2" dir base
-  gh_repo="$(bm_github_repo "$gh_repo")"
-  [ -n "$gh_repo" ] || return 1
-  dir="$(mktemp -d)"
-  chmod 755 "$dir" # the service user clones from here
-  base="https://github.com/$gh_repo/releases/download/$tag"
-  curl -fsSL -o "$dir/aprscaching-$tag.bundle" "$base/aprscaching-$tag.bundle" 2>/dev/null &&
-    curl -fsSL -o "$dir/SHA256SUMS" "$base/SHA256SUMS" 2>/dev/null || {
-    rm -rf "$dir"
-    return 1
-  }
-  if ! (cd "$dir" && grep " aprscaching-$tag.bundle\$" SHA256SUMS | sha256sum -c --quiet -) >&2; then
-    printf '\nERROR: the release bundle does not match its checksum.\n' >&2
-    return 2
-  fi
-  if have gh; then
-    if ! gh attestation verify "$dir/aprscaching-$tag.bundle" --repo "$gh_repo" >&2; then
-      printf "\nERROR: the release bundle's signed provenance does not verify.\n" >&2
-      return 2
-    fi
-  elif [ "$BM_ALLOW_UNSIGNED" != 1 ]; then
-    printf '\nERROR: the GitHub CLI (gh) is needed to verify the release signature.\n' >&2
-    printf '       Install it (https://cli.github.com), or pass --checksum-only to rely on the checksum alone.\n' >&2
-    return 2
-  else
-    warn "only the checksum was checked (--checksum-only): it proves the file intact, not who made it"
-  fi
-  chmod 644 "$dir/aprscaching-$tag.bundle"
-  printf '%s' "$dir/aprscaching-$tag.bundle"
-}
-
 bm_preflight() {
   local major
   [ "$(uname -s)" = Linux ] || die "Bare metal installs on Linux with systemd."
@@ -135,7 +97,8 @@ bm_preflight() {
 shape_init() {
   local repo="https://github.com/apachler/aprscaching" ref="" start=1 setup=() kind tmp unit bundle="" net44=""
   BM_DRY=0
-  BM_ALLOW_UNSIGNED=0
+  REL_ALLOW_UNSIGNED=0
+  REL_ALLOW_UNVERIFIED=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --dir) BM_DIR="$2"; shift ;;
@@ -144,7 +107,8 @@ shape_init() {
       --ref) ref="$2"; shift ;;
       --port) BM_PORT="$2"; shift ;;
       --no-start) start=0 ;;
-      --checksum-only) BM_ALLOW_UNSIGNED=1 ;;
+      --checksum-only) REL_ALLOW_UNSIGNED=1 ;;
+      --unverified) REL_ALLOW_UNVERIFIED=1 ;;
       --dry-run) BM_DRY=1 ;;
       --net44-config) net44="$2"; shift ;;
       -h | --help) bm_usage; return 0 ;;
@@ -174,17 +138,20 @@ shape_init() {
   info "  2. create $BM_DIR, owned by $BM_USER"
   info "  3. install $BM_UNITS into $BM_UNIT_DIR"
   [ "$start" = 0 ] || info "  4. systemctl daemon-reload, and enable and start both units"
-  local rc=1
-  if [ "$kind" = tag ] && [ "$BM_DRY" != 1 ]; then
-    bundle="$(bm_verified_bundle "$repo" "$ref")" && rc=0 || rc=$?
+  # verified in a dry run too, so it shows what the install would do; the check changes nothing
+  local rc=1 out commit=""
+  if [ "$kind" = tag ]; then
+    out="$(rel_verified_bundle "$repo" "$ref")" && rc=0 || rc=$?
   fi
   [ "$rc" != 2 ] || die "The release $ref did not verify." "Nothing was installed."
   if [ "$rc" = 0 ]; then
+    read -r commit bundle <<<"$out"
+    rm_on_exit "$(dirname "$bundle")"
     info "the release $ref is verified: its checksum and its signed provenance"
     confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
   else
-    warn "$ref ($kind) is installed without verification: only a release's bundle carries a checksum and a signature."
-    confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
+    rel_confirm_unverified "$ref" "$kind" "Install $ref without verification?" ||
+      die "Nothing was installed." "Pass --unverified to install it without asking; --yes alone does not."
   fi
 
   step "System user"
@@ -204,8 +171,8 @@ shape_init() {
       bm_user git clone --quiet "$bundle" "$BM_DIR"
       bm_user git -C "$BM_DIR" remote set-url origin "$repo"
     fi
-    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$ref"
-    rm -rf "$(dirname "$bundle")"
+    # the commit the verified bundle's tag names, whatever a tag of that name in the checkout says
+    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$commit"
   elif [ -d "$BM_DIR/.git" ]; then
     bm_user git -C "$BM_DIR" fetch --quiet --tags origin
     bm_user git -C "$BM_DIR" checkout --quiet "$ref"
@@ -230,6 +197,7 @@ shape_init() {
   bm_user bash "$BM_DIR/deploy/setup.sh" "${opts[@]}" "${setup[@]+"${setup[@]}"}"
   # The ingest reaches the gateway on this host, not by the Docker stack's service name.
   bm_user sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
+  bm_proxy_bind "$SHAPE_ENV" || die "could not read $SHAPE_ENV as $BM_USER to set HOST and TRUST_PROXY for the proxy."
   bm_user chmod 600 "$SHAPE_ENV"
 
   step "systemd units"
@@ -253,6 +221,21 @@ shape_init() {
   if [ "$start" = 1 ]; then bm_wait_health; fi
   n44_init_offer "$net44"
   bm_next_steps
+}
+
+# Behind the reverse proxy an https APP_URL names, the gateway listens on 127.0.0.1 alone and keys rate limits on
+# the X-Forwarded-For entry that proxy wrote: a client that reached the port directly would choose its own. A
+# value the operator set stays. A plain-http APP_URL is the gateway itself, reached on every interface.
+# The file is the service user's alone (mode 600), so the service user reads and writes it: an installer that
+# cannot read it must not take the refusal for an unset APP_URL. Fails when the file cannot be read.
+bm_proxy_bind() {
+  # shellcheck disable=SC2016 # the script expands in the service user's shell
+  bm_user bash -c 'set -e
+    . "$1/deploy/lib/env.sh"
+    [ -r "$2" ] || { echo "cannot read $2" >&2; exit 1; }
+    case "$(env_file_get "$2" APP_URL)" in https://*) ;; *) exit 0 ;; esac
+    env_file_has "$2" HOST || env_file_set "$2" HOST 127.0.0.1
+    env_file_has "$2" TRUST_PROXY || env_file_set "$2" TRUST_PROXY 1' _ "$BM_DIR" "$1"
 }
 
 # The gateway answers once it has migrated the database; wait up to a minute.

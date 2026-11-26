@@ -3,10 +3,15 @@
 // assert a "near_cache" prompt arrives — and that prompts are addressed to the right callsign.
 // Uses Node's global WebSocket (Node 22+). Works against the Node and the Bun gateway.
 //
-//   BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+//   BASE=http://127.0.0.1:8787 INGEST_SECRET=… OPERATOR_SECRET=… node tools/smoke/geofence.mjs
+//
+// The cache is hidden by a signed-in, control-verified player; the operator secret enrolls the receiving box
+// that hears the player's on-air VERIFY.
+import { enrollTrustedBox, signIn, verifyOnAir } from "./boxsign.mjs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 const now = () => Math.floor(Date.now() / 1000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
@@ -54,16 +59,23 @@ const position = (src, lat, lon) => ({
 console.log(`geofence: ${BASE}`);
 ok("healthy", await waitHealthy());
 
+// the hider: signed in and control-verified on the air
+const HIDER = "OE8GEO";
+const rx = await enrollTrustedBox(BASE, OPERATOR_SECRET, `geofence-rx-${now()}`, ["OE8XXX"]);
+ok("the receiving box enrolls (needs OPERATOR_SECRET)", !rx.error, rx.error);
+const cookie = await signIn(BASE, HIDER);
+ok("the hider signs in", !!cookie);
+ok("the hider verifies its call on the air", !!rx.key && (await verifyOnAir(BASE, rx.key, cookie, HIDER, "OE8XXX")));
+
 // a cache somewhere quiet
 const LAT = 47.5,
   LON = 15.5;
-const created = await call("POST", "/api/caches", {
-  title: "Geofence Cache " + now(),
-  type: "traditional",
-  lat: LAT,
-  lon: LON,
-  ownerCall: "OE8APR",
-});
+const created = await call(
+  "POST",
+  "/api/caches",
+  { title: "Geofence Cache " + now(), type: "traditional", lat: LAT, lon: LON },
+  { cookie, "x-ingest-secret": "" },
+);
 ok("created a cache", created.status === 201, JSON.stringify(created.data));
 const cacheId = created.data?.cache?.id;
 

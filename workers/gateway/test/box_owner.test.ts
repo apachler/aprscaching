@@ -40,21 +40,31 @@ function makeEnv(sessions: Record<string, string>): Env {
       return [];
     },
   };
-  return { DB: db, INGEST_SECRET: "box-secret", __sessions: sessions } as unknown as Env;
+  return {
+    DB: db,
+    INGEST_SECRET: "box-secret",
+    OPERATOR_SECRET: "operator-secret",
+    __sessions: sessions,
+  } as unknown as Env;
 }
 
-// We can't run the real HMAC session here, so drive ownership through the trusted-secret claim path
-// and assert cross-account rejection via a second account. This exercises ownBox() + accountHoldsCall().
+// No signed session runs here: the operator secret stands in for an authorised machine, and the anonymous and
+// shared-secret cases check what is refused.
 describe("box control is owner-bound", () => {
-  it("the trusted backend (ingest secret) may always enqueue", async () => {
+  it("the operator secret may always enqueue; the shared ingest secret alone may not", async () => {
     const env = makeEnv({});
-    const req = new Request("http://gw/api/box/b1/command", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-ingest-secret": "box-secret" },
-      body: JSON.stringify({ kind: "status" }),
-    });
-    const res = await handleBoxEnqueue(req, env, "b1");
-    expect(res.status).toBe(201);
+    const enqueue = (headers: Record<string, string>) =>
+      handleBoxEnqueue(
+        new Request("http://gw/api/box/b1/command", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify({ kind: "status" }),
+        }),
+        env,
+        "b1",
+      );
+    expect((await enqueue({ "x-operator-secret": "operator-secret" })).status).toBe(201);
+    expect((await enqueue({ "x-ingest-secret": "box-secret" })).status).toBe(401);
   });
 
   it("an anonymous caller (no session, no secret) is rejected", async () => {
@@ -69,11 +79,11 @@ describe("box control is owner-bound", () => {
 });
 
 describe("answers to radio commands are gateway-only", () => {
-  it.each(["aprs_msg", "meshcom_msg"])("the enqueue API refuses %s, even with the box secret", async (kind) => {
+  it.each(["aprs_msg", "meshcom_msg"])("the enqueue API refuses %s, even with the operator secret", async (kind) => {
     const env = makeEnv({});
     const req = new Request("http://gw/api/box/b1/command", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-ingest-secret": "box-secret" },
+      headers: { "content-type": "application/json", "x-operator-secret": "operator-secret" },
       body: JSON.stringify({ kind, payload: { from: "APRSCG", to: "OE3ABC", text: "hi" } }),
     });
     expect((await handleBoxEnqueue(req, env, "b1")).status).toBe(400);

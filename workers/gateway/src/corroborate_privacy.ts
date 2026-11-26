@@ -18,7 +18,7 @@ import { secretOk } from "./auth.js";
  * stores are per-process (they forget on restart) but zero-cost and a meaningful first defense;
  * the shared secret + coarse responses are the load-bearing guarantees.
  */
-import type { Env } from "./env.js";
+import { proxyHops, type Env } from "./env.js";
 
 const M_PER_DEG = 111_320; // metres per degree of latitude (good enough for slack sizing)
 
@@ -75,14 +75,19 @@ interface RlWindow {
 const rlBuckets = new Map<string, RlWindow>();
 export const RL_MAX = 60; // probes per key per window
 const RL_WINDOW_MS = 60_000;
+/** Windows the in-memory limiter keeps: past it the oldest window is dropped, so unique keys cannot grow it. */
+export const RL_BUCKETS_MAX = 10_000;
 
 /** Fixed-window rate limit. Returns true when `key` is OVER budget. `nowMs` is injected for testing. */
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
   const w = rlBuckets.get(key);
   if (!w || nowMs >= w.resetAt) {
-    // sweep expired windows once the map grows — long-lived Node/Bun processes
-    // otherwise accumulate one entry per key forever.
-    if (rlBuckets.size > 5000) for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
+    // a new window goes to the end of the map, so the map's order is the windows' age
+    rlBuckets.delete(key);
+    if (rlBuckets.size >= RL_BUCKETS_MAX / 2)
+      for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
+    // every window may still run (a burst of unique keys, the database down): drop the oldest
+    while (rlBuckets.size >= RL_BUCKETS_MAX) rlBuckets.delete(rlBuckets.keys().next().value!);
     rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs });
     return false;
   }
@@ -161,8 +166,8 @@ export function stampClientIp(headers: Headers, socketAddr: string | undefined, 
  * Client ip for rate-limit keying, from sources the CLIENT cannot choose.
  *  - cf-connecting-ip: stamped by Cloudflare's edge. The servers keep it only behind a declared
  *    Cloudflare edge (TRUST_CF=1, see stampClientIp).
- *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
- *    a self-host box behind Caddy or Cloudflare) — otherwise any direct client could rotate identities per request.
+ *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=<n>, see
+ *    forwardedClient) — otherwise any direct client could rotate identities per request.
  *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address (stampClientIp), so a
  *    client-supplied value never survives to this point on the self-host runtimes.
  */
@@ -173,11 +178,29 @@ export function clientIp(req: Request, env: Env): string {
 function rawClientIp(req: Request, env: Env): string {
   const cf = req.headers.get("cf-connecting-ip");
   if (cf) return cf;
-  if (env.TRUST_PROXY === "1") {
-    const xff = (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim();
+  const hops = proxyHops(env);
+  if (hops) {
+    const xff = forwardedClient(req.headers.get("x-forwarded-for") ?? "", hops);
     if (xff) return xff;
   }
   return req.headers.get("x-real-ip") || "unknown";
+}
+
+/**
+ * The x-forwarded-for entry the operator's own proxies wrote for the client: `hops` entries from the right.
+ * nginx's `$proxy_add_x_forwarded_for` and Apache's mod_proxy append the peer address to whatever the client
+ * sent, so every entry left of those is the client's own choice and never a rate-limit key. Caddy replaces the
+ * header, which leaves one entry that is both leftmost and rightmost. A header shorter than `hops` did not
+ * pass every declared proxy (a client that reached an inner one directly): only its rightmost entry, written
+ * by the nearest proxy, is certain not to be client-written, so that one keys.
+ */
+function forwardedClient(header: string, hops: number): string {
+  const chain = header
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  if (!chain.length) return "";
+  return chain.length >= hops ? chain[chain.length - hops]! : chain[chain.length - 1]!;
 }
 
 /**

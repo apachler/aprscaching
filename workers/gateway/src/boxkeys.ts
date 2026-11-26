@@ -18,10 +18,10 @@
  * body's SHA-256. It is fresh for five minutes and accepted once. route() verifies it before any handler
  * runs. A request it verifies may deliver what the box hears (/ingest, /ingest/check) and use the box's own
  * /api/box/:id endpoints (auth.ts ingestOrBoxOk). Only once the sysop marks the box "Runs this instance's
- * services" may it also run them: the outbox, the packet BBS mailbox, FBB forwarding, the NET/ROM node mirror,
- * White Pages, federation pages and transmit commands (ingestOrServiceBoxOk). That flag is for a box the sysop
- * runs; trusting a box's hearings grants none of it. A box key never acts as the shared secret does: it logs
- * no find, acts for no cache owner, creates and imports no cache.
+ * services" may it also run them: the outbox, the NET/ROM node mirror, federation pages and transmit commands
+ * (ingestOrServiceBoxOk), and the packet BBS mailbox, FBB forwarding and White Pages, which the shared secret
+ * never runs (bbsBoxOk). That flag is for a box the sysop runs; trusting a box's hearings grants none of it. A
+ * box key acts for no cache owner, and creates and imports no cache.
  *
  * Enrolling grants no trust: an enrolled box is an ingest credential, never an attestation. What it hears
  * counts for Tier A only once the sysop switches on "Trust this station's hearings" for it in Instance admin
@@ -38,7 +38,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
 import { requireSysop } from "./admin.js";
-import { baseHolder, sessionIdentity } from "./auth.js";
+import { baseHolder, ingestSecretOk, operatorSecretOk, sessionIdentity } from "./auth.js";
 import { forgetBoxes } from "./boxowner.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
@@ -382,9 +382,10 @@ export async function handleEnroll(req: Request, env: Env): Promise<Response> {
 /**
  * Verify a box's signed request and remember its principal for the handlers. A request without the
  * headers is left alone; one whose signature does not verify is left unauthenticated, so the handler
- * answers it as it would any request without a credential.
+ * answers it as it would any request without a credential. A signed body larger than any a box sends is answered
+ * 413 here, since its signature cannot be checked without reading it whole.
  */
-export async function authenticateBox(req: Request, env: Env): Promise<void> {
+export async function authenticateBox(req: Request, env: Env): Promise<Response | void> {
   const box = req.headers.get("x-box-id");
   const sig = req.headers.get("x-box-sig");
   if (!box || !sig) return;
@@ -401,7 +402,7 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
     const url = new URL(req.url);
     // read through the ingest batch's byte cap: a larger body is never one a box sends, and is not buffered
     const body = await readCappedBody(req.clone(), BODY_MAX);
-    if (!body) return;
+    if (!body) return json({ error: "request body too large" }, { status: 413 });
     // A signature is taken only in the one spelling a box writes, unpadded base64url: the decoder forgives
     // padding, whitespace, the other alphabet and the unused bits of the last character, so any other
     // spelling would name the same signature under a different text.
@@ -435,12 +436,16 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
 }
 
 /**
- * Whether the signer of this request may act as box `id` on an endpoint that names a box: a box signs only
- * for itself; the shared secret and the operator act for any box.
+ * Why this request may not act as box `id` on an endpoint that names a box, or null when it may. A box speaks
+ * through its own key and only for itself, with the operator secret as the operator's override; a session is
+ * checked by each handler. The shared INGEST_SECRET acts for no box: it sits on every box that runs on it, so
+ * letting it pair, poll, ack or read one would hand that box's queue and its owner to whoever holds the secret.
  */
-export function boxMayActAs(req: Request, id: string): boolean {
+export function boxActorRefusal(req: Request, env: Env, id: string): string | null {
   const p = boxPrincipal(req);
-  return !p || p.box === id;
+  if (p) return p.box === id ? null : "this box's key does not act for another box";
+  if (operatorSecretOk(req, env) || !ingestSecretOk(req, env)) return null;
+  return "the shared ingest secret does not act for a box: enroll the box with its own key";
 }
 
 /**

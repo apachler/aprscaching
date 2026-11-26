@@ -85,8 +85,7 @@ export async function requireSysop(
 /**
  * Guard an ingest-plane endpoint the ingest box itself calls with its INGEST_SECRET, or with its own key once
  * the sysop lets the box run this instance's services — delivering what its radios heard (the NET/ROM node mirror, heard federation
- * beacons and sync pages) or reading the forwarding partner list its FBB scheduler dials. The operator
- * reaches the same endpoints too.
+ * beacons and sync pages). The operator reaches the same endpoints too.
  */
 export async function requireIngestOrOperator(req: Request, env: Env): Promise<Response | null> {
   if (ingestOrServiceBoxOk(req, env)) return null;

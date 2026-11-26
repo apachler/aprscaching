@@ -5,8 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify, ORIGIN, tokenKey } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
-
-const INGEST = { "x-ingest-secret": "test-ingest-secret" };
+import { boxCall } from "./helpers/box.js";
 
 describe("user TX checks the account's hold on the BASE call", () => {
   it("a session on OE8APR-7 transmits when OE8APR is verified", async () => {
@@ -242,13 +241,13 @@ describe("a remote box is paired by a code only the box can obtain", () => {
     expect(await env.DB.prepare("SELECT 1 FROM boxes WHERE box_id='pi-home'").first()).toBeNull();
   });
 
-  it("the box mints a code with its secret; the owner claims with it; others cannot", async () => {
+  it("the box mints a code with its own key; the owner claims with it; others cannot", async () => {
     const env = authEnv();
     const owner = await emailSignup(env, "owner@example.test", "DL1OWN");
     const other = await emailSignup(env, "other@example.test", "DL1OTH");
-    // a session cannot mint a code — only the box (ingest secret) can
+    // a session cannot mint a code — only the box, with its own key, can
     expect((await call(env, "POST", "/api/box/pi-home/pair", {}, { cookie: owner.cookie })).status).toBe(401);
-    const minted = await call(env, "POST", "/api/box/pi-home/pair", {}, INGEST);
+    const minted = await boxCall(env, "pi-home", "POST", "/api/box/pi-home/pair", {});
     expect(minted.status).toBe(200);
     const code = minted.data.code as string;
     expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
@@ -271,7 +270,7 @@ describe("a remote box is paired by a code only the box can obtain", () => {
   it("an expired code does not claim", async () => {
     const env = authEnv();
     const s = await emailSignup(env, "late@example.test", "DL1LAT");
-    const code = (await call(env, "POST", "/api/box/pi-late/pair", {}, INGEST)).data.code as string;
+    const code = (await boxCall(env, "pi-late", "POST", "/api/box/pi-late/pair", {})).data.code as string;
     await env.DB.prepare("UPDATE box_pairings SET expires_at = 1 WHERE box_id='pi-late'").run();
     expect((await call(env, "POST", "/api/box/pi-late/claim", { code }, { cookie: s.cookie })).status).toBe(403);
   });

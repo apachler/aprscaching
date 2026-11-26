@@ -104,12 +104,8 @@ describe("ratings and favourites count one person once", () => {
       ["OE8XYZ-15", 3],
     ] as const)
       expect((await handleRate(await as(call, "http://gw.test/x", post({ stars })), env, 1)).status).toBe(200);
-    // the ingest path naming the other base call of the same account
-    const viaIngest = new Request("http://gw.test/x", {
-      ...post({ stars: 5, callsign: "OE8APR-9" }),
-      headers: { "content-type": "application/json", "x-ingest-secret": INGEST_SECRET },
-    });
-    expect((await handleRate(viaIngest, env, 1)).status).toBe(200);
+    // the same account operating its other base call
+    expect((await handleRate(await as("OE8APR-9", "http://gw.test/x", post({ stars: 5 })), env, 1)).status).toBe(200);
     const info = await ratingInfo(env, 1, "finders", "OE8XYZ-3");
     expect(info).toMatchObject({ count: 1, avg: 5, mine: 5 });
   });

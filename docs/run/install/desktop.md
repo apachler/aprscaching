@@ -30,7 +30,8 @@ always-on instance, use [Self-host](self-host-docker.md).
 
     ```bash
     sha256sum -c --ignore-missing SHA256SUMS
-    gh attestation verify aprscaching-linux-x64 --repo apachler/aprscaching
+    gh attestation verify aprscaching-linux-x64 --repo apachler/aprscaching \
+      --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml
     ```
 
     On Windows, compare `Get-FileHash aprscaching-windows-x64.exe` (PowerShell) with the file's line in

@@ -87,6 +87,14 @@ confirm() {
   case "$_ans" in [yY]*) return 0 ;; *) return 1 ;; esac
 }
 
+# rm_on_exit PATH: remove PATH when the command exits, however it exits. One EXIT trap holds every path, so
+# no caller replaces another's.
+EXIT_RMS=()
+rm_on_exit() {
+  EXIT_RMS+=("$1")
+  [ "${#EXIT_RMS[@]}" -gt 1 ] || trap 'rm -rf "${EXIT_RMS[@]}"' EXIT
+}
+
 # A fresh random secret: 24 bytes as 48 hex characters.
 gen_secret() {
   openssl rand -hex "${1:-24}" 2>/dev/null || head -c "${1:-24}" /dev/urandom | od -An -tx1 | tr -d ' \n'

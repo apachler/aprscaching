@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { authEnv, call } from "./helpers/authflow.js";
 import { addCache } from "./helpers/fedpeer.js";
-import { handleBoxPoll } from "@aprscaching/gateway/box";
+import { boxCall } from "./helpers/box.js";
 import { makeFsMedia } from "../src/media.js";
 
 const BOX_COMMAND_QUEUED_TTL_S = 3600; // the gateway's queue window for box commands
@@ -37,7 +37,7 @@ describe("the activity feed", () => {
 
 describe("a queued box command", () => {
   it("is handed out while fresh and expired once older than the queue window", async () => {
-    const env = authEnv({ INGEST_SECRET: "s" });
+    const env = authEnv();
     const now = Math.floor(Date.now() / 1000);
     for (const [kind, at] of [
       ["beacon", now - BOX_COMMAND_QUEUED_TTL_S - 60],
@@ -48,12 +48,8 @@ describe("a queued box command", () => {
       )
         .bind(kind, at)
         .run();
-    const res = await handleBoxPoll(
-      new Request("https://gw.test/api/box/pi-home/commands", { headers: { "x-ingest-secret": "s" } }),
-      env,
-      "pi-home",
-    );
-    const body = (await res.json()) as { commands: { kind: string }[] };
+    const res = await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands");
+    const body = res.data as { commands: { kind: string }[] };
     expect(body.commands.map((c) => c.kind)).toEqual(["status"]);
     const states = (
       await env.DB.prepare("SELECT kind, status FROM box_commands ORDER BY id").all<{ kind: string; status: string }>()

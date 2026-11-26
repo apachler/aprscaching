@@ -367,8 +367,6 @@ function createVia(req: Request, env: Env, body: Record<string, unknown>): Promi
   const headers = new Headers({ "content-type": "application/json" });
   const cookie = req.headers.get("cookie");
   if (cookie) headers.set("cookie", cookie);
-  const secret = req.headers.get("x-ingest-secret");
-  if (secret) headers.set("x-ingest-secret", secret);
   const r = new Request(`${new URL(req.url).origin}/api/caches`, {
     method: "POST",
     headers,
