@@ -49,6 +49,7 @@ describe("FbbGatedBbs", () => {
     const responderStore = new SessionStore([msg("B1_OE1BBB", "OE1AAA", "reverse traffic")]);
     let ended = 0;
     const gate = new FbbGatedBbs(menu, {
+      isPartner: () => true,
       makeStore: () => responderStore,
       onSessionEnd: () => {
         ended++;
@@ -63,14 +64,14 @@ describe("FbbGatedBbs", () => {
   });
 
   it("keeps a human caller on the interactive menu", async () => {
-    const gate = new FbbGatedBbs(menu, { makeStore: () => new SessionStore([]) });
+    const gate = new FbbGatedBbs(menu, { isPartner: () => true, makeStore: () => new SessionStore([]) });
     expect(gate.greeting()[0]).toMatch(/^\[.+\$\]$/); // SID banner, real-BBS style
     const r = await gate.handle("H");
     expect(r.lines.join(" ")).toContain("help");
   });
 
   it("emits its SID exactly once (greeting only) toward a forwarding peer", async () => {
-    const gate = new FbbGatedBbs(menu, { makeStore: () => new SessionStore([]) });
+    const gate = new FbbGatedBbs(menu, { isPartner: () => true, makeStore: () => new SessionStore([]) });
     const first = await gate.handle("[BPQ-6.0.24.14-B2FIHM$]");
     expect(first.lines.some((l) => /^\[.+\]$/.test(l.trim()))).toBe(false); // no second SID
     // after the SID exchange the CALLER proposes first — the responder waits silently

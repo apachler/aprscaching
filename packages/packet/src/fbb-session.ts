@@ -52,6 +52,14 @@ const MAX_BLOCK = 5;
  *  Cap the received body at the larger of the peer's own proposed `size` (with slack) and a floor,
  *  but never past this hard ceiling — beyond it the block is hostile/broken and we abort the session. */
 const MAX_RECV_BYTES = 64 * 1024;
+/** Messages one session accepts from the peer; past it a proposal is deferred (`=`) to its next session. */
+const MAX_SESSION_RX_MESSAGES = 100;
+/** Body bytes one session may receive, counted at the most each accepted proposal is allowed to send. A
+ *  proposal past it is deferred, so the inbox held until the session ends stays bounded. */
+const MAX_SESSION_RX_BYTES = 1024 * 1024;
+
+/** The most body bytes a proposal of the given size may send before its block is aborted. */
+const recvLimit = (proposed: number) => Math.min(MAX_RECV_BYTES, Math.max(proposed * 2 + 1024, 4096));
 
 type Phase = "await-sid" | "await-fs" | "recv-block" | "await-proposals" | "done";
 
@@ -70,6 +78,8 @@ export class FbbSession {
   // BIDs the peer deferred (`FS =`) this session: they stay queued for the next session, but proposing them
   // again here would loop forever against a peer that keeps deferring (F6FBB defers a BID it cannot take).
   private deferred = new Set<string>();
+  private rxMessages = 0; // proposals accepted from the peer this session
+  private rxBudget = 0; // body bytes those may send, at their receive limit
 
   constructor(
     private store: FbbStore,
@@ -161,7 +171,12 @@ export class FbbSession {
         if (m) {
           if (this.compressed)
             this.pendingBinary.push(encodeFbbCompressed({ title: m.title, body: m.body, offset: fs?.offset }));
-          else out.push(m.title, ...m.body.split("\n"), CTRLZ);
+          else {
+            // line by line: spreading a body of many short lines into push() overflows the stack
+            out.push(m.title);
+            for (const l of m.body.split("\n")) out.push(l);
+            out.push(CTRLZ);
+          }
         }
       }
       this.store.sent(p.bid); // accepted or rejected → done forwarding to this partner
@@ -249,12 +264,25 @@ export class FbbSession {
       }
       const p = parseProposal(t);
       if (p) {
+        // a block holds at most five proposals: a peer that sends more is broken or hostile
+        if (this.accepting.length >= MAX_BLOCK) {
+          this.accepting = [];
+          this.phase = "done";
+          return { out: ["FQ"], done: true };
+        }
         this.accepting.push(p);
         return { out: [] };
       } // collecting FB lines
       if (/^F>/.test(t)) {
-        // proposal block complete → answer FS, then receive
-        const verdicts = this.accepting.map((pr) => (this.store.hasBid(pr.bid) ? "-" : "+"));
+        // proposal block complete → answer FS, then receive; past the session's budget a proposal waits
+        const verdicts = this.accepting.map((pr) => {
+          if (this.store.hasBid(pr.bid)) return "-";
+          const cost = recvLimit(pr.size);
+          if (this.rxMessages >= MAX_SESSION_RX_MESSAGES || this.rxBudget + cost > MAX_SESSION_RX_BYTES) return "=";
+          this.rxMessages++;
+          this.rxBudget += cost;
+          return "+";
+        });
         this.pendingRx = this.accepting.filter((_, i) => verdicts[i] === "+");
         this.accepting = [];
         this.phase = this.pendingRx.length ? "recv-block" : "await-proposals";
@@ -304,8 +332,7 @@ export class FbbSession {
     // Enforce the peer's own proposed size (with slack), never past the hard ceiling —
     // a never-terminated body must not buffer without bound.
     this.rxBytes += raw.length + 1;
-    const proposed = this.pendingRx[0]?.size ?? 0;
-    const limit = Math.min(MAX_RECV_BYTES, Math.max(proposed * 2 + 1024, 4096));
+    const limit = recvLimit(this.pendingRx[0]?.size ?? 0);
     if (this.rxBytes > limit) {
       this.rxTitle = null;
       this.rxAcc = [];
