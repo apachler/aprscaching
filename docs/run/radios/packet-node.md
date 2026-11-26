@@ -19,6 +19,10 @@ These services run on the operator's own ingest box, over its radio (the KISS TN
   [AXUDP link](quick-starts.md#axudp-and-axip-packet-over-the-internet) (`AXUDP_PEERS`).
 - A callsign-SSID for each service, for example `OE8APR-5` for the node and `OE8APR-8` for the BBS
   ([Callsigns and SSIDs](rf-ingest.md#callsigns-and-ssids)).
+- For the BBS and FBB forwarding: the box enrolled on the gateway with its own key (`BOX_ID` and `BOX_KEY`), and
+  **Runs this instance's services** switched on for it under **Instance admin → Ingest boxes**
+  ([Enrolling the box](ingest-box.md#enrolling-the-box)). The gateway serves mail only to such a box, never to the
+  shared `INGEST_SECRET`.
 - Settings go in the box's settings file (`deploy/.env` in Docker); restart the ingest after each change.
 
 ## Connected-mode AX.25
@@ -76,6 +80,10 @@ Set `BBS_NODE_CALL`, and the box answers inbound AX.25 connects to that call wit
 (list, read, send, kill, help, …), backed by a per-caller snapshot of the gateway's mail store. The log shows
 `[bbs] BBS answering inbound connects on <CALL> (FBB forwarding gate armed)`.
 
+The BBS needs the box enrolled with its own key and its services on ([Before you start](#before-you-start)).
+Without the key the box warns at start, `[bbs] the packet BBS and FBB forwarding answer no mail`; with the key
+and the services off it gives the same warning once the gateway reports it.
+
 The gateway holds the BBS's message base: personal mail, bulletins and NTS traffic. It moves them the F6FBB way
 only: stations read and write over a connect to the packet BBS, and FBB forwarding exchanges them with partner
 BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type and BID) is MBL/FBB-compatible. A message posted here gets the BID `<number>_<call>`, the number in base 36 and the call the sysop's base call, within the 12 characters F6FBB accepts. FBB forwarding therefore needs the gateway's `ADMIN_CALLSIGNS` (or `SERVICE_CALL`) to name the BBS's call; the box warns at start when they differ. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
@@ -83,7 +91,8 @@ BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type 
 ### FBB forwarding
 
 Set `BBS_FORWARD=1` and `BBS_FORWARD_CALL` to forward mail. It needs the box's radio (the KISS TNC or a
-soundcard port) or a two-way AXUDP port.
+soundcard port) or a two-way AXUDP port, and, like the BBS, the box enrolled with its own key and its services
+on: the gateway hands the forwarding queue to no other box.
 The forwarder opens connected-mode AX.25 sessions to partner BBSes and exchanges mail with the **ASCII FBB**
 protocol. It uses hierarchical `TO@BBS.#REGION.STATE.CC.CONT` addressing, longest-prefix routing, and BID/MID
 de-duplication, and runs multi-hop connect scripts. It checks its queue every `BBS_FORWARD_POLL_MS` (default

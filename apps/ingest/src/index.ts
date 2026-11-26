@@ -13,6 +13,7 @@ import { Delivery } from "./deliver.js";
 import { PortHealthCounter } from "./porthealth.js";
 import { txLimitFromEnv } from "./txlimit.js";
 import { callWarnings } from "./callroles.js";
+import { bbsWarning, boxKeyWarning } from "./boxwarnings.js";
 import { gatewayFetch, loadBoxKey, useBoxKey } from "./gatewayauth.js";
 import type { BoxRadio, BoxState } from "./boxpoll.js";
 
@@ -705,7 +706,18 @@ async function learnServiceCall(): Promise<void> {
   try {
     const r = await gatewayFetch(`${INGEST_URL}/check`, { headers: { "x-ingest-secret": SECRET } });
     if (!r.ok) return;
-    const { serviceCall, sites } = (await r.json()) as { serviceCall?: string; sites?: string[] };
+    const { serviceCall, sites, services } = (await r.json()) as {
+      serviceCall?: string;
+      sites?: string[];
+      services?: boolean | null;
+    };
+    if (env.BOX_KEY) {
+      const w = bbsWarning(env, services);
+      if (w && !callWarned.has(w)) {
+        callWarned.add(w);
+        console.warn(w);
+      }
+    }
     if (!serviceCall) return;
     aprs.setServiceCall(serviceCall);
     // the box sends the gateway's answers from the service call: it passes the transmit gate like a station call
@@ -758,10 +770,11 @@ console.log("[ingest] started -> %s", INGEST_URL);
 const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
 // The packet BBS and FBB forwarding carry every station's personal mail, so the gateway serves them only to a
 // box enrolled with its own key that the sysop marks "Runs this instance's services", never to the shared secret.
-if ((env.BBS_NODE_CALL || env.BBS_FORWARD === "1") && !env.BOX_KEY)
-  console.warn(
-    "[bbs] the packet BBS and FBB forwarding answer no mail: the box has no key of its own (BOX_KEY), and the gateway serves mail only to an enrolled box that runs this instance's services. Enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box), then switch on Runs this instance's services",
-  );
+// An unkeyed box is told at start; a keyed one once the gateway's /ingest/check says its services are off.
+{
+  const w = bbsWarning(env);
+  if (w) console.warn(w);
+}
 if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
@@ -825,10 +838,9 @@ if (env.FED_LINK_PULL === "1") {
 // its signature, never by the shared INGEST_SECRET. Remote transmit additionally needs BOX_TX=1 and a command
 // callsign that is this box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon
 // names the box's own position (BOX_LAT, BOX_LON), never one the command carries.
-if (env.BOX_ID && !env.BOX_KEY) {
-  console.warn(
-    "[box] remote control is off: BOX_ID is set, but the box has no key of its own (BOX_KEY). The gateway pairs and polls only an enrolled box: enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box)",
-  );
+const unkeyedBox = boxKeyWarning(env);
+if (unkeyedBox) {
+  console.warn(unkeyedBox);
 } else if (env.BOX_ID) {
   const { BoxPoller, parseBoxPath, parseBoxPosition } = await import("./boxpoll.js");
   const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;

@@ -233,7 +233,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IGATE_TX_BURST: "IGate transmits allowed at once before pacing applies",
   IGATE_TX_REFILL_SEC: "Seconds to regain one IGate transmit",
   RF_SITE_CALL: "Callsign naming this box as the receiving site of what its TNCs and soundcard ports hear",
-  BOX_ID: "ID of this box, written by enrollment; pairing and remote control need its BOX_KEY too",
+  BOX_ID: "ID of this box, written by enrollment; pairing, control and radio replies need its BOX_KEY",
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
   BOX_CALL: "Callsign the box transmits remote commands as",
@@ -459,7 +459,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`RADIO_REPLIES`",
-        "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`)",
+        "`1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back on the air only through the ingest box that heard the message and delivered it signed with its own key: a box enrolled on this gateway (`BOX_ID` and `BOX_KEY`) that can transmit (`BOX_TX=1`, and a KISS TNC, a soundcard port with `SOUNDCARD_TX=1`, or `MESHCOM_TX=1`). A box on the shared `INGEST_SECRET` sends no radio replies, and a box a packet names is never used on that packet's word. Otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`), and MeshCom ones are not sent",
         "off",
       ],
       [
@@ -831,7 +831,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`BOX_ID` / `BOX_KEY`",
-        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. Only an enrolled box's hearings verify callsigns on the air, and only an enrolled box is paired and remote-controlled. `BOX_ID` also names the box for remote control (below)",
+        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. Only an enrolled box's hearings verify callsigns on the air, only an enrolled box is paired and remote-controlled, and only an enrolled box sends the answers to radio commands on the air. `BOX_ID` also names the box for remote control (below)",
         "—",
       ],
       ["`BATCH_MS`", "Batch flush interval", "`1500` (`2000` in the `.env` that `deploy/setup.sh` writes)"],
