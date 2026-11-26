@@ -92,6 +92,10 @@ says so.
 Sign out and let someone else sign in: they do not see your waiting logs, and the app does not send them. Your
 logs sync the next time you sign in on that phone.
 
+The pack from **Pack my caches** and the stages you opened offline go further: only you see them, and they leave
+the phone when you sign out or someone else signs in. Pack your caches again after you sign back in. Area packs
+hold only public caches and stay on the phone for whoever uses it next.
+
 A cache archived or disabled while your find waited refuses it when it syncs: the find lands under **Needs
 attention**, with the reason.
 
