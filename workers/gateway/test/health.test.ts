@@ -69,6 +69,7 @@ describe("/health readiness probe", () => {
       serviceCall: "APRSCG",
       sites: ["OE8ABC-10"],
       box: null,
+      services: null,
     });
     expect((await check("wrong")).status).toBe(401);
     expect((await check()).status).toBe(401);
