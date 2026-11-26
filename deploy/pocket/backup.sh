@@ -118,7 +118,11 @@ node_sqlite() { (cd "$DIR/servers/node" && node -e "$@"); }
 PRIVATE="$DATA/backups"
 
 STAGE=""
-cleanup() { if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi; }
+KEEP_DIR=""
+cleanup() {
+  if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi
+  if [ -n "$KEEP_DIR" ]; then rm -rf "$KEEP_DIR"; fi
+}
 trap cleanup EXIT
 
 # ---- restore -----------------------------------------------------------------------------------------
@@ -126,9 +130,12 @@ if [ -n "$RESTORE" ]; then
   [ -f "$RESTORE" ] || die "$RESTORE does not exist."
   step "Checking $RESTORE"
   mkdir -p "$DATA"
+  # The handed archive unpacks into a folder of its own: nothing it carries may land beside the files the restore
+  # writes itself (env.new) or among the secrets, which unpack into a separate temporary folder below.
   STAGE="$(mktemp -d "$DATA/restore.XXXXXX")"
-  tar -xzf "$RESTORE" -C "$STAGE"
-  src="$(find "$STAGE" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+  mkdir "$STAGE/archive"
+  tar -xzf "$RESTORE" -C "$STAGE/archive"
+  src="$(find "$STAGE/archive" -mindepth 1 -maxdepth 1 -type d -name 'aprscaching-pocket-*' | sort | head -n 1)"
   [ -n "$src" ] && [ -f "$src/aprscaching.db" ] || die "$RESTORE is not a Pocket backup (no aprscaching.db inside)."
   info "archive: $RESTORE, written $(date -r "$RESTORE" '+%F %T %Z' 2>/dev/null || echo "at an unknown time")"
   if [ -f "$src/MANIFEST" ]; then
@@ -141,11 +148,12 @@ if [ -n "$RESTORE" ]; then
     info "ignored in the archive: ${carried% } (secrets come only from $PRIVATE)"
   fi
   secrets="$PRIVATE/$(basename "$src")-secrets.tar.gz"
-  keep="$STAGE/private"
-  mkdir -p "$keep"
+  KEEP_DIR="$(mktemp -d "$DATA/restore-secrets.XXXXXX")"
+  chmod 700 "$KEEP_DIR"
+  keep="$KEEP_DIR/none"
   if [ -f "$secrets" ]; then
-    tar -xzf "$secrets" -C "$keep"
-    keep="$keep/$(basename "$src")"
+    tar -xzf "$secrets" -C "$KEEP_DIR"
+    keep="$KEEP_DIR/$(basename "$src")"
     info "secrets taken from $secrets"
   else
     info "no secrets for this archive in $PRIVATE: the current .env and *.secret files stay."

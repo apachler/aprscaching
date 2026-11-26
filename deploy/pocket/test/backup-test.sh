@@ -140,6 +140,25 @@ if [ "$(cat "$DATA/session.secret")" = session-6 ]; then pass "planted archive: 
 if grep -qx 'OPERATOR_SECRET=operator-6' "$DATA/.env"; then pass "planted archive: its .env not installed"; else fail "planted archive: the .env is $(cat "$DATA/.env")"; fi
 if grep -q "ignored in the archive: env session.secret" "$WORK/out"; then pass "planted archive: says what it ignored"; else fail "planted archive: no message ($(tail -n 5 "$WORK/out"))"; fi
 
+# A planted archive that carries its own private/ folder, where the restore once unpacked the private secrets, and
+# no secrets archive of its name in private storage: nothing from it is installed.
+station 6b
+plant="$WORK/plant6b"
+mkdir -p "$plant/aprscaching-pocket-20990102T000000Z" "$plant/private/aprscaching-pocket-20990102T000000Z"
+printf 'db-planted\n' >"$plant/aprscaching-pocket-20990102T000000Z/aprscaching.db"
+for d in "$plant/private" "$plant/private/aprscaching-pocket-20990102T000000Z"; do
+  printf 'session-planted\n' >"$d/session.secret"
+  printf 'OPERATOR_SECRET=planted\n' >"$d/env"
+done
+printf 'planted\n' >"$plant/env.new"
+planted="$HOME/storage/shared/Download/aprscaching-pocket-20990102T000000Z.tar.gz"
+mkdir -p "$(dirname "$planted")"
+tar -czf "$planted" -C "$plant" .
+bash "$POCKET/backup.sh" --dir "$CHECKOUT" --data-dir "$DATA" --restore "$planted" --with-env >"$WORK/out" 2>&1 \
+  || fail "planted private/: exits 0 ($(tail -n 3 "$WORK/out"))"
+if [ "$(cat "$DATA/session.secret")" = session-6b ]; then pass "planted private/: session.secret not installed"; else fail "planted private/: session.secret is $(cat "$DATA/session.secret")"; fi
+if grep -qx 'OPERATOR_SECRET=operator-6b' "$DATA/.env"; then pass "planted private/: its .env not installed"; else fail "planted private/: the .env is $(cat "$DATA/.env")"; fi
+
 # ---- 7. --with-env writes known settings only, none in a form the scripts' shell would run -----------------
 station 7
 backup

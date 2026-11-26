@@ -575,8 +575,11 @@ check "  … with the way out" grep -q "Update this installation first" "$TMP/er
 printf 'not an archive' >"$TMP/junk.tar.gz"
 if restore_dry "$TMP/junk.tar.gz" --dry-run; then bad "a file that is not an archive is refused"; else ok "a file that is not an archive is refused"; fi
 mkarchive "$TMP/escape.tar.gz" "../x"
-if restore_dry "$TMP/escape.tar.gz" --dry-run; then bad "a manifest whose schema is no migration file name is refused"; else ok "a manifest whose schema is no migration file name is refused"; fi
-check "  … naming it" grep -q "schema '../x', which is no migration file name" "$TMP/err"
+# the refusal is its own message: a schema that reaches outside db/migrations is not "newer than this checkout"
+restore_dry "$TMP/escape.tar.gz" --dry-run || true
+check "a manifest whose schema is no migration file name is refused, naming it" \
+  grep -q "schema '../x', which is no migration file name" "$TMP/err"
+check "  … before it describes the restore" bash -c "! grep -q 'Restore of a' '$TMP/out'"
 restore_dry "$TMP/a.tar.gz" --dry-run || true
 check "a restore shows the archive's time" grep -q "^    archive: a.tar.gz, written " "$TMP/out"
 check "  … and its manifest" grep -q '"createdAt": 1790000000' "$TMP/out"
