@@ -33,7 +33,7 @@ import { UNVERIFIED_CALL_REASON } from "@aprscaching/shared";
 export type TrustTier = "A" | "B" | "C";
 
 export interface VerifyPolicy {
-  minTier: TrustTier; // site default; cache.min_trust overrides
+  minTier: TrustTier; // the instance's minimum; a cache's own min_trust can only raise it
   radiusM: number; // base match radius (default 150)
   windowSec: number; // how far back to look for a matching position
   livingSkewSec: number; // max time skew when matching a moving cache-station
@@ -54,6 +54,12 @@ export const DEFAULT_POLICY: VerifyPolicy = {
 
 /** The instance's minimum tier from its `MIN_TRUST` setting: `A` when the sysop asks for Radio-verified finds, else `B`. */
 export const instanceMinTier = (minTrust: string | undefined): "A" | "B" => (minTrust === "A" ? "A" : "B");
+
+/** The minimum a find on a cache must meet: the stricter of its hider's minimum and the instance's. A hider may ask
+ *  more of their finders than the instance does, never less, so a cache cannot relax the sysop's floor. */
+export function stricterMinTier<T extends TrustTier>(cacheMin: TrustTier | null | undefined, instanceMin: T): T {
+  return (cacheMin && rank(cacheMin) > rank(instanceMin) ? cacheMin : instanceMin) as T;
+}
 
 export interface PositionRow {
   id: number;
@@ -93,7 +99,7 @@ export interface CacheRow {
   lat?: number | null;
   lon?: number | null;
   station_call?: string | null; // for aprs_living
-  min_trust?: TrustTier | null; // per-cache override
+  min_trust?: TrustTier | null; // the hider's minimum, applied when stricter than the instance's
 }
 
 export interface AppGeo {
@@ -135,7 +141,7 @@ interface VerifyDeps {
 }
 
 function effectiveMinTier(cache: CacheRow, policy: VerifyPolicy): TrustTier {
-  return cache.min_trust ?? policy.minTier;
+  return stricterMinTier(cache.min_trust, policy.minTier);
 }
 
 function rank(t: TrustTier): number {

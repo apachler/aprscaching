@@ -140,7 +140,7 @@ function recipients(env: Env): string {
   the verification tier and the comment) with peer instances, under each record's federation scope, together
   with the device public keys that sign them and the record of an account moved to another instance. Owner
   contact fields are redacted, and deletions propagate as signed tombstones. To verify a find it may ask peers
-  whether they heard your callsign near the cache, naming only a square of about 550 m and a 10-minute window.
+  whether they heard your callsign near the cache, naming only a square of about 70 m around the cache and a 10-minute window.
   Imported places are never shared.</li>`);
   if (updateCheckOn(env))
     items.push(`<li><strong>GitHub</strong> (api.github.com) — once a day this instance asks GitHub whether a newer

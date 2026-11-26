@@ -19,6 +19,7 @@ import {
   verifyFind,
   DEFAULT_POLICY,
   instanceMinTier,
+  stricterMinTier,
   plausiblePresence,
   stationEvidence,
   type CacheRow,
@@ -34,7 +35,7 @@ import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCal
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
-import { fixesOf, loggerTrack } from "./track.js";
+import { commandedIn, contradictionOf, ownFixes, stationFixes } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -453,8 +454,8 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const yourLog = who ? await personAttempt(env, id, who, null) : null;
   const detail: CacheDetail = {
     ...toSummary(row),
-    // the minimum a find meets: the cache's own, else the instance's
-    minTrust: (row.min_trust as "A" | "B" | null) ?? instanceMinTier(setting(env, "MIN_TRUST")),
+    // the minimum a find meets: the stricter of the cache's own and the instance's
+    minTrust: stricterMinTier(row.min_trust as "A" | "B" | null, instanceMinTier(setting(env, "MIN_TRUST"))),
     hint: row.hint,
     description: row.description,
     externalId: row.external_id,
@@ -930,7 +931,9 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
 
   // Tier A says the logger was heard on the air, so the player's call must be control-verified for it
   const controlVerified = await isCallsignVerified(env, loggerCall);
-  const score = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
+  const scored = await scoreFind(env, cache, loggerCall, foundAt, appGeo, controlVerified);
+  // a later lift holds the player's call to the same control-verification
+  const score = scored.retry ? { ...scored, retry: { ...scored.retry, requireVerified: true } } : scored;
   const committed = await commitFind(env, cache, loggerCall, foundAt, comment ?? null, score, {
     signerKey,
     authorSig,
@@ -1009,28 +1012,42 @@ export async function scoreFind(
   const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
   // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
-  const track = await loggerTrack(env, loggerCall, since, at + 60);
-  const lp = { results: track.own };
-
-  let cacheStationPositions: PositionRow[] | undefined;
-  if (cache.type === "aprs_living" && cache.station_call) {
-    // every attested station fix, uncapped: a flood of fixes under the station's call cannot push one out of the
-    // read and leave an owner-signed fix with nothing to be judged against
-    cacheStationPositions = await fixesOf(env, cache.station_call, since, at + 60);
-  }
-
-  // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
-  // engine branches on attestation alone, never on transport. The attested sites (FIRST_PARTY_SITES and the
-  // trusted stations of Instance admin) narrow attestation; a site trusted through a box counts only for the
-  // fixes that box delivered (ingest_box).
-  // A fix that matched a commanded box beacon (positions.commanded) is never evidence; the engine skips it.
+  const until = at + 60;
+  const maxMps = (DEFAULT_POLICY.maxSpeedKmh * 1000) / 3600;
+  // The attested sites (FIRST_PARTY_SITES and the trusted stations of Instance admin) narrow attestation; a site
+  // trusted through a box counts only for the fixes that box delivered (ingest_box).
   const attested = await loadAttestation(env);
+  // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
+  // engine branches on attestation alone, never on transport.
+  // A fix that matched a commanded box beacon (positions.commanded) is never evidence; the engine skips it.
   const attest = (rows: PositionRow[]): PositionRow[] =>
     rows.map((p) => ({
       ...p,
       commanded: !!p.commanded,
       firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
     }));
+  const fixed = cache.type !== "aprs_living" && cache.lat != null && cache.lon != null;
+  const lp = {
+    results: await ownFixes(
+      env,
+      loggerCall,
+      since,
+      until,
+      attested,
+      fixed ? { lat: cache.lat!, lon: cache.lon!, radiusM: DEFAULT_POLICY.radiusM } : undefined,
+    ),
+  };
+
+  // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
+  // browser bridge signed and the attested ones could have reached (verify.ts stationEvidence): a signed batch
+  // carries only its signer's base call, so a `browser-rf` fix under a base call the owner's account holds is the
+  // owner's own. The database judges which owner-signed fixes qualify, against every attested fix (track.ts).
+  let station: PositionRow[] | undefined;
+  if (cache.type === "aprs_living" && cache.station_call) {
+    const ownerSigned = await ownerSignsFor(env, cache.id, cache.station_call);
+    const s = await stationFixes(env, cache.station_call, since, until, attested, ownerSigned, maxMps);
+    if (s.fixes.length) station = attest(s.fixes).map((p) => ({ ...p, ownerSigned: s.placed.has(p.id) }));
+  }
 
   // Tier-A independence — every base callsign the logger controls (their own call,
   // all base calls held by their account, their registered stations). A beacon gated by any of
@@ -1052,29 +1069,60 @@ export async function scoreFind(
   }
   const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
 
-  // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
-  // browser bridge signed and the attested ones could have reached (verify.ts stationEvidence): a signed batch
-  // carries only its signer's base call, so a `browser-rf` fix under a base call the owner's account holds is the
-  // owner's own.
-  const ownerSigned = cacheStationPositions?.length ? await ownerSignsFor(env, cache.id, cache.station_call) : false;
-  const station = cacheStationPositions
-    ? attest(cacheStationPositions).map((p) => ({ ...p, ownerSigned: ownerSigned && p.source === "browser-rf" }))
-    : undefined;
-
-  const result = verifyFind(
-    cache,
-    appGeo,
-    {
-      loggerPositions: attest(lp.results),
-      loggerTrackPositions: attest(track.others),
-      cacheStationPositions: station,
-      loggerOwnIgates,
-      loggerOwnBoxes,
-      now: at, // app-reading freshness is judged against log time
-      loggerControlVerified: controlVerified,
-    },
-    { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) },
-  );
+  const policy = { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) };
+  const attestedOwn = attest(lp.results);
+  // The fixes that contradict a matched presence, found by the database one per match (track.ts contradictionOf):
+  // the engine is judged again with each until its match has none, so it decides as it would over every fix of the
+  // window. Each round adds one fix that rules out one match, or rules the match out when the database's answers
+  // stay unresolved. A ruled-out match leaves the track too, which decides nothing: it was tried only because every
+  // attested fix of the logger could reach it, and those are all the other matches. The rows stay within the read's
+  // own, plus the shared budget of rows the engine sets aside.
+  const witnesses: PositionRow[] = [];
+  const ruledOut = new Set<number>();
+  const budget = { rejected: 0 };
+  let loggerPositions = attestedOwn;
+  const judge = (verified: boolean, extra: PositionRow[] = []) =>
+    verifyFind(
+      cache,
+      appGeo,
+      {
+        loggerPositions,
+        loggerTrackPositions: [...witnesses, ...extra],
+        cacheStationPositions: station,
+        loggerOwnIgates,
+        loggerOwnBoxes,
+        now: at, // app-reading freshness is judged against log time
+        loggerControlVerified: verified,
+      },
+      policy,
+    );
+  for (;;) {
+    // as if control-verified: a heard match counts in the result's reason even when it lifts nothing
+    const heard = judge(true);
+    if (heard.method !== "aprs_rf" || heard.matchedPositionId == null) break;
+    const id = heard.matchedPositionId;
+    const m = loggerPositions.find((p) => p.id === id)!;
+    const c = await contradictionOf(
+      env,
+      loggerCall,
+      since,
+      until,
+      attested,
+      m,
+      { maxMps, except: [id] },
+      (w) => {
+        const r = judge(true, attest([w]));
+        return r.method !== "aprs_rf" || r.matchedPositionId !== id;
+      },
+      budget,
+    );
+    if (c.fix) witnesses.push(...attest([c.fix]));
+    else if (c.unresolved) {
+      ruledOut.add(id);
+      loggerPositions = attestedOwn.filter((p) => !ruledOut.has(p.id));
+    } else break;
+  }
+  const result = judge(controlVerified);
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the
   // corroborator board. A peer-corroborated find's IGate is captured below (cross-instance credit).
@@ -1107,7 +1155,7 @@ export async function scoreFind(
         ? { lat: cache.lat, lon: cache.lon }
         : null;
   const boxBeaconed = async () =>
-    lp.results.some((p) => !!p.commanded) || (await beaconCommandedIn(env, loggerCall, since, at));
+    (await commandedIn(env, loggerCall, since, until)) || (await beaconCommandedIn(env, loggerCall, since, at));
   if (result.tier !== "A" && point && controlVerified && !(await boxBeaconed())) {
     const query = {
       callsign: loggerCall,
@@ -1125,15 +1173,23 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    if (
-      ev &&
-      plausiblePresence(
-        { ...point, ts: ev.ts },
-        attest([...lp.results, ...track.others]),
-        DEFAULT_POLICY,
-        COARSEN.timeBucketSec,
-      )
-    ) {
+    const heardAt = ev && { ...point, ts: ev.ts };
+    const slack = COARSEN.timeBucketSec;
+    const outrun =
+      heardAt &&
+      plausiblePresence(heardAt, attestedOwn, DEFAULT_POLICY, slack) &&
+      (await contradictionOf(
+        env,
+        loggerCall,
+        since,
+        until,
+        attested,
+        heardAt,
+        { maxMps, slackSec: slack },
+        (w) => !plausiblePresence(heardAt, attest([w]), DEFAULT_POLICY, slack),
+        budget,
+      ));
+    if (heardAt && outrun && !outrun.fix && !outrun.unresolved) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
