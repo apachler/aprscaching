@@ -2123,10 +2123,11 @@ const QUEUE_OWNER = OWNER_KEY;
 export async function setQueueOwner(callsign: string | null, opts: { forget?: boolean } = {}): Promise<void> {
   const st = await offlineReady();
   const next = callsign?.trim().toUpperCase() ?? "";
+  // the owner first: what is shown and sent follows it, so a delete that fails after it leaves the data hidden
+  const changed = ((await st.kvGet(QUEUE_OWNER)) ?? "") !== next;
+  if (changed) await st.kvSet(QUEUE_OWNER, next);
   if (next || opts.forget) await forgetPrivateData(st, next || null);
-  if (((await st.kvGet(QUEUE_OWNER)) ?? "") === next) return;
-  await st.kvSet(QUEUE_OWNER, next);
-  queueChanged();
+  if (changed) queueChanged();
 }
 const queueOwner = async (): Promise<string | null> => (await queueStore.get(QUEUE_OWNER)) || null;
 

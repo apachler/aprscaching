@@ -116,6 +116,9 @@ export async function storePack(
 ): Promise<PackMeta> {
   const owner = isPrivatePack(meta) ? await storedOwner(store) : null;
   if (isPrivatePack(meta) && !owner) throw new Error("sign in again to pack your caches");
+  // a refresh of a pack stored for another player is not theirs to refill
+  const storedFor = (meta as Partial<PackMeta>).owner;
+  if (owner && storedFor && storedFor.toUpperCase() !== owner) throw new Error("sign in again to pack your caches");
   const wanted = data.caches.flatMap((c) => imagesFor(c, meta.images));
   const have = new Set(await store.blobKeys(meta.id));
   const todo = wanted.filter((i) => !have.has(imageKey(i, meta.images)));
@@ -174,7 +177,14 @@ export async function storePack(
     cacheCount: data.caches.length,
     sizeBytes: bytes,
   };
-  await store.putPack(full, data.caches);
+  // the player may have signed out, and their private data been deleted, while the images downloaded: the owner
+  // is read again around the write, and a pack whose owner left goes with its images
+  const ownerLeft = async () => owner != null && (await storedOwner(store)) !== owner;
+  if (!(await ownerLeft())) await store.putPack(full, data.caches);
+  if (await ownerLeft()) {
+    await store.deletePack(meta.id);
+    throw new Error("signed out while packing your caches; nothing was kept");
+  }
   // the service call the instance takes radio logs on, for the queue's "send by radio" text offline
   if (data.serviceCall) await store.kvSet("acs.serviceCall", data.serviceCall);
   return full;

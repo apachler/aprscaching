@@ -20,11 +20,16 @@ vi.mock("../src/api.js", async (orig) => ({
   logoutAll: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("../src/push.js", () => ({ disablePush: vi.fn(async () => {}) }));
+vi.mock("../src/platform/PlatformContext.js", () => ({
+  usePlatform: () => ({ callsign: "OE8AAA", verified: false, map: null, session: { callsign: "OE8AAA" } }),
+}));
 
-const { ApiError, getStages, offlineReady, unlockStage } = await import("../src/api.js");
+const { ApiError, getStages, offlineReady, queuedLogs, setQueueOwner, unlockStage } = await import("../src/api.js");
 const { useSession } = await import("../src/identity/useSession.js");
 const { packCache, packCachesInBox, packSearch, userPacks } = await import("../src/offline/packs.js");
 const { storePack } = await import("../src/offline/download.js");
+const { shownPackCaches } = await import("../src/offline/owner.js");
+const { OfflinePanel } = await import("../src/offline/OfflinePanel.js");
 
 const SERIAL = "04:A2:5F:1B:3C:80:90";
 const REVEALS = "acs.stages.unlocked";
@@ -89,7 +94,9 @@ async function seedAreaPack() {
 }
 
 /** The signed-in owner's maintenance pack, stored the way the Offline panel stores it, with one unlisted cache. */
-async function seedOwnerPack() {
+async function seedOwnerPack(
+  fetcher: (url: string) => Promise<Response> = async () => new Response(new Blob(["img"])),
+) {
   const st = await offlineReady();
   const data: PackResponse = {
     instance: "x",
@@ -99,6 +106,7 @@ async function seedOwnerPack() {
       cache(501, {
         fedScope: "unlisted",
         title: "My unlisted cache",
+        attention: ["disabled"],
         images: [
           {
             id: 9,
@@ -115,7 +123,7 @@ async function seedOwnerPack() {
   };
   await storePack(
     st,
-    async () => new Response(new Blob(["img"])),
+    fetcher,
     "",
     {
       id: "mine-a",
@@ -179,6 +187,7 @@ beforeEach(async () => {
   await st.kvSet(REVEALS, "");
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
@@ -254,5 +263,115 @@ describe("public area packs stay for the next player", () => {
     expect(view.source?.name).toBe("JN77");
     // B opens the stage A revealed: locked for B, from the area pack
     expect((await getStages(77)).stages.map((s) => s.unlocked)).toEqual([true, false]);
+  });
+});
+
+describe("the owner moves before anything is deleted", () => {
+  it("shows B nothing of A's when deleting A's data fails", async () => {
+    await signInAsAWithPrivateData();
+    const st = await offlineReady();
+    vi.spyOn(st, "deletePack").mockRejectedValue(new Error("quota"));
+    answers.session = { callsign: "OE8BBB" };
+    await act(() => hook.refresh());
+    expect(await st.kvGet("acs.sync.owner")).toBe("OE8BBB");
+    expect(await aShown()).toEqual(HIDDEN);
+    expect(await queuedLogs()).toEqual([]);
+  });
+
+  it("signs out to nobody when deleting fails", async () => {
+    await signInAsAWithPrivateData();
+    const st = await offlineReady();
+    vi.spyOn(st, "deletePack").mockRejectedValue(new Error("quota"));
+    await act(() => hook.signOut());
+    expect(await st.kvGet("acs.sync.owner")).toBe("");
+    expect(await aShown()).toEqual(HIDDEN);
+    expect(await queuedLogs()).toEqual([]);
+  });
+});
+
+describe("a pack being downloaded when its owner signs out", () => {
+  it("is not kept, nor its images", async () => {
+    answers.session = { callsign: "OE8AAA" };
+    render(<Probe />);
+    await settle();
+    let signedOut = false;
+    const fetcher = async () => {
+      if (!signedOut) {
+        signedOut = true;
+        await hook.signOut();
+      }
+      return new Response(new Blob(["img"]));
+    };
+    await act(() => expect(seedOwnerPack(fetcher)).rejects.toThrow(/signed out/));
+    expect(signedOut).toBe(true);
+    expect(await aLeftOnDevice()).toEqual(NOTHING);
+  });
+});
+
+describe("an owner pack stored without an owner", () => {
+  /** An owner pack as stored before packs carried their owner. */
+  async function seedUntagged() {
+    await seedAreaPack();
+    const st = await offlineReady();
+    await st.putPack(
+      {
+        id: "mine-a",
+        name: "My caches",
+        area: { mine: true },
+        filters: { types: [] },
+        images: "none",
+        instance: "x",
+        createdAt: 2,
+        refreshedAt: 2,
+        generation: "g",
+        cacheCount: 1,
+        sizeBytes: 1,
+      },
+      [cache(501, { title: "My unlisted cache", fedScope: "unlisted" } as Partial<PackCache>)],
+    );
+    return st;
+  }
+
+  it("is shown to nobody, with or without an owner known", async () => {
+    const st = await seedUntagged();
+    const hidden = { ownerPackCache: false, listed: false, found: 0, onMap: false };
+    expect(await aShown()).toMatchObject(hidden);
+    await st.kvSet("acs.sync.owner", "OE8AAA");
+    expect(await aShown()).toMatchObject(hidden);
+  });
+
+  it("is deleted once a player is known", async () => {
+    const st = await seedUntagged();
+    await setQueueOwner("OE8AAA");
+    expect((await st.packs()).map((p) => p.id)).not.toContain("mine-a");
+  });
+});
+
+describe("the Offline panel", () => {
+  const text = () => document.body.textContent ?? "";
+  async function until(ok: () => boolean) {
+    for (let i = 0; i < 200 && !ok(); i++) await act(() => new Promise((r) => setTimeout(r, 10)));
+  }
+
+  it("drops the last player's pack and its caches when another player signs in", async () => {
+    await signInAsAWithPrivateData();
+    render(<OfflinePanel onClose={() => {}} />);
+    await until(() => text().includes("1 cache needs a visit"));
+    expect(text()).toContain("My caches");
+    answers.session = { callsign: "OE8BBB" };
+    await act(() => hook.refresh());
+    await until(() => !text().includes("My caches"));
+    expect(text()).not.toContain("My caches");
+    expect(text()).not.toContain("needs a visit");
+  });
+
+  it("reads no caches of a pack another player's session hides", async () => {
+    await signInAsAWithPrivateData();
+    const st = await offlineReady();
+    expect((await shownPackCaches(st, "mine-a")).map((c) => c.id)).toEqual([501]);
+    // another tab recorded B: this tab's list still names A's pack, its caches are not read
+    await st.kvSet("acs.sync.owner", "OE8BBB");
+    expect(await shownPackCaches(st, "mine-a")).toEqual([]);
+    expect((await shownPackCaches(st, "p-area")).map((c) => c.id)).toEqual([77]);
   });
 });

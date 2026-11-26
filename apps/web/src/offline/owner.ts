@@ -6,7 +6,7 @@
  * the stored owner, and deleted when the player signs out or another player signs in. Area packs hold only public
  * caches and stay for whoever uses the device next.
  */
-import type { StagePayload } from "@aprscaching/shared";
+import type { PackCache, StagePayload } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
 
 /** The signed-in call the queue and the private data belong to; the service worker reads the same key. */
@@ -27,6 +27,11 @@ export const isPrivatePack = (p: Pick<PackMeta, "area">) => !!p.area && "mine" i
 export async function shownPacks(store: OfflineStore): Promise<PackMeta[]> {
   const owner = await storedOwner(store);
   return (await store.packs()).filter((p) => !isPrivatePack(p) || (owner != null && norm(p.owner) === owner));
+}
+
+/** A pack's caches, read only when the pack is shown now: a list held since another player signed in reads none. */
+export async function shownPackCaches(store: OfflineStore, packId: string): Promise<PackCache[]> {
+  return (await shownPacks(store)).some((p) => p.id === packId) ? store.packCaches(packId) : [];
 }
 
 /** Stage reveals opened offline, keyed `cacheId:stageNo`, with the call they were opened under. */

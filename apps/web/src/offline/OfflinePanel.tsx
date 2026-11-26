@@ -38,6 +38,7 @@ import {
   type SaveProgress,
 } from "./download.js";
 import { userPacks } from "./packs.js";
+import { shownPackCaches } from "./owner.js";
 import { invalidatePackTiles } from "./packTiles.js";
 import { planTiles, tileBudget, type ArchiveInfo, type TileReader, type TilesConfig } from "./tiles.js";
 import { PMTiles } from "pmtiles";
@@ -79,6 +80,10 @@ export function OfflinePanel(props: { onClose: () => void }) {
   const reload = async () => setPacks(await userPacks(await offlineReady()));
   useEffect(() => {
     void reload();
+    // a change of player (api.ts setQueueOwner) re-reads the list, so another player's pack leaves it
+    const changed = () => void reload();
+    window.addEventListener("acs-queued", changed);
+    return () => window.removeEventListener("acs-queued", changed);
   }, []);
   const online = typeof navigator === "undefined" || navigator.onLine;
   return (
@@ -177,7 +182,7 @@ function OwnerAttention(props: { packId: string }) {
   const [due, setDue] = useState<{ code: string; title: string; why: string[] }[] | null>(null);
   useEffect(() => {
     void (async () => {
-      const caches = await (await offlineReady()).packCaches(props.packId);
+      const caches = await shownPackCaches(await offlineReady(), props.packId);
       setDue(
         caches.filter((c) => c.attention?.length).map((c) => ({ code: c.code, title: c.title, why: c.attention! })),
       );
