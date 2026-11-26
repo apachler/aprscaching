@@ -117,8 +117,9 @@ fi
 if grep -nE '^[^#]*BASE=' "$POCKET/signin-link.sh" >/dev/null; then fail "signin-link.sh sets BASE, which sends the secret to that URL"; else pass "signin-link.sh sets no BASE"; fi
 
 # ---- an existing install moves on update -------------------------------------------------------------
-# install.sh (which update.sh runs) calls pocket_sockets_env on the kept .env: the gateway's socket is added,
-# and a USB TNC's KISS on loopback moves to the bridge's socket. A TNC elsewhere on the LAN stays as it is.
+# install.sh (which update.sh runs) calls pocket_sockets_env, through pocket_move_onto_sockets, on the kept .env:
+# the gateway's socket is added, and a USB TNC's KISS on loopback moves to the bridge's socket. A TNC elsewhere on
+# the LAN stays as it is.
 migrate() {
   local data="$WORK/m-$1"
   mkdir -p "$data"
@@ -136,10 +137,10 @@ if [ "$got" = "$want" ]; then pass "  … a TNC on the LAN keeps its host and po
 got="$(migrate set GATEWAY_SOCKET=/x/gw.sock)"
 if [ "$got" = "GATEWAY_SOCKET=/x/gw.sock " ]; then pass "  … and a GATEWAY_SOCKET already set is kept"; else fail "a set GATEWAY_SOCKET became: $got"; fi
 # install.sh runs the move before the gateway's first start, after the .env is written or kept.
-if awk '/^# ---- 10\./{exit} /^step "Writing \$ENV_FILE"/{w=1} w && /^[[:space:]]+pocket_sockets_env$/{found=1} END{exit !found}' \
+if awk '/^# ---- 10\./{exit} /^step "Writing \$ENV_FILE"/{w=1} w && /^[[:space:]]+pocket_move_onto_sockets$/{found=1} END{exit !found}' \
   "$POCKET/install.sh"; then
   pass "install.sh moves the .env to the sockets before the gateway's first start"
-else fail "install.sh does not run pocket_sockets_env before the gateway's first start"; fi
+else fail "install.sh does not run pocket_move_onto_sockets before the gateway's first start"; fi
 
 if [ "$FAILS" -gt 0 ]; then
   echo "$FAILS check(s) failed" >&2
