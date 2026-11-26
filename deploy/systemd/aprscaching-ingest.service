@@ -16,15 +16,30 @@ TimeoutStopSec=20
 Restart=always
 RestartSec=5
 User=aprscaching
-# The sandbox: the file system is read-only to the ingest except data/, where a MeshCom transmit audit
-# (MESHCOM_TX_AUDIT) goes, and its own files are the service user's alone. Devices, /sys and the address
-# families stay open: serial and USB TNCs, soundcards, GPIO and USB PTT, Bluetooth and the network ports are
-# what it runs on.
+# The sandbox: the ingest parses hostile RF and APRS-IS input, so a process that is taken over must not gain
+# capabilities, kernel interfaces or other users' files. The file system is read-only to it except data/, where a
+# MeshCom transmit audit (MESHCOM_TX_AUDIT) goes, /home is hidden, other processes are invisible, and its own files
+# are the service user's alone. The devices and the address families stay open: serial and USB TNCs, soundcards,
+# GPIO and USB PTT (character devices), Bluetooth and the network ports are what it runs on. /sys stays readable
+# (sound and serial devices are found there); nothing it does writes to it.
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/opt/aprscaching/data
-ProtectHome=read-only
+ProtectHome=yes
 PrivateTmp=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
 [Install]
 WantedBy=multi-user.target
