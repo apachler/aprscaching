@@ -39,7 +39,7 @@ import { provenanceOf } from "./provenance.js";
 import { callSuspended } from "./moderation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { beaconCommandedIn } from "./beacontag.js";
-import { loggerTrack } from "./track.js";
+import { commandedIn, outrunBy } from "./track.js";
 
 /** When each attempt is due, after the find; their count is the attempt limit. */
 export const RETRY_AFTER_S = [3600, 6 * 3600, 24 * 3600];
@@ -137,20 +137,20 @@ async function liftLater(
   if (await callSuspended(env, call)) return false;
   if (r.require_verified && !(await isCallsignVerified(env, call))) return false;
   const until = (r.log_ts ?? 0) + 60;
-  const fixes = await loggerTrack(env, r.logger_call as string, q.since, until);
-  const lp = { results: fixes.own };
-  if (lp.results.some((p) => !!p.commanded) || (await beaconCommandedIn(env, r.logger_call as string, q.since, until)))
+  if ((await commandedIn(env, call, q.since, until)) || (await beaconCommandedIn(env, call, q.since, until)))
     return false;
-  // the track the presence is judged against — every SSID of the base call, as at log time — carries its
-  // attestation (verify.ts contradicts)
+  // the track the presence is judged against — every SSID of the base call, as at log time: the database finds a
+  // fix of it that contradicts the presence (track.ts outrunBy), stamped with its attestation (verify.ts contradicts)
   const attested = await attestation(env);
-  const track = [...lp.results, ...fixes.others].map((p) => ({
+  const at = { lat: q.lat, lon: q.lon, ts: winner.ts };
+  const maxMps = (DEFAULT_POLICY.maxSpeedKmh * 1000) / 3600;
+  const outrun = await outrunBy(env, call, q.since, until, attested, at, { maxMps, slackSec: COARSEN.timeBucketSec });
+  const track = (outrun ? [outrun] : []).map((p) => ({
     ...p,
-    commanded: !!p.commanded, // a commanded beacon of another SSID is the box, not the logger
+    commanded: !!p.commanded,
     firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
   }));
-  if (!plausiblePresence({ lat: q.lat, lon: q.lon, ts: winner.ts }, track, DEFAULT_POLICY, COARSEN.timeBucketSec))
-    return false;
+  if (!plausiblePresence(at, track, DEFAULT_POLICY, COARSEN.timeBucketSec)) return false;
   const igate = corroboratorIgate({
     method: "aprs_rf_peer",
     peerIgate: winner.igateCall ?? null,

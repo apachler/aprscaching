@@ -37,6 +37,9 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The matched fix must be reachable at 300 km/h or less from every one of those fixes in the 30-minute window,
   however many, not only the nearest. A fix the finder asserts, such as one their browser bridge signed beside a beacon heard
   at the cache, can add a contradiction but never hide one.
+- The database runs that check, so a window flooded with fixes is judged without loading them all. The match is
+  sought among the newest 100 attested fixes within the cache radius, and a living cache's station among its newest
+  500 fixes that place it.
 - The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
   judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before
   leaves nothing out. Only the logged call's own fix can match the cache. A fixed home station, digipeater or

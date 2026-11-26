@@ -131,6 +131,35 @@ export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Pro
 }
 
 /**
+ * {@link provenanceOf}'s `firstPartyAttested` for a `positions` row, as a SQL condition on table alias `t`, with
+ * the sites each row may claim (attestedsites.ts `sitesFor`): `shared` for a row no box delivered, the box's own
+ * for one it did. The trust reads judge evidence in the database so a flood of rows never has to be loaded to
+ * find the one that decides (track.ts), and a query cannot call {@link provenanceOf}; the two are held equal by
+ * the node suite's `track_sql` test. The first q-construct token decides, as in {@link qConstructOf}.
+ */
+export function attestedSql(
+  a: { shared: Set<string>; byBox: Map<string, Set<string>> },
+  t: string,
+): { sql: string; binds: string[] } {
+  const pairs: string[] = [];
+  for (const [box, sites] of a.byBox) for (const s of sites) pairs.push(`${box}\u001f${s}`);
+  const firstQ = `(WITH RECURSIVE s(tok, rest) AS (
+      SELECT NULL, COALESCE(${t}.path, '') || ','
+      UNION ALL
+      SELECT trim(substr(rest, 1, instr(rest, ',') - 1), char(32, 9, 10, 11, 12, 13)), substr(rest, instr(rest, ',') + 1)
+        FROM s WHERE rest <> '')
+    SELECT tok FROM s WHERE tok GLOB 'q[A-Z][A-Z]' LIMIT 1)`;
+  return {
+    sql: `(${t}.heard_via = 'rf' AND ${t}.transport IN ('tnc', 'meshcom') AND COALESCE(${t}.igate_call, '') <> ''
+      AND ((COALESCE(${t}.ingest_box, '') = '' AND UPPER(${t}.igate_call) IN (SELECT value FROM json_each(?)))
+        OR (COALESCE(${t}.ingest_box, '') <> ''
+          AND ${t}.ingest_box || char(31) || UPPER(${t}.igate_call) IN (SELECT value FROM json_each(?))))
+      AND COALESCE(${firstQ} IN ('qAR', 'qAO'), 1))`,
+    binds: [JSON.stringify([...a.shared]), JSON.stringify(pairs)],
+  };
+}
+
+/**
  * The route of a stored position, for display: its path, how it arrived, and whether the receiving site it names
  * attested it. `sites` are the sites this position may claim ({@link provenanceOf}); `everySite` all the instance
  * attests, so a reader can tell an APRS-IS copy that names an attested site (`qAR,<site>`, still Tier C) from
