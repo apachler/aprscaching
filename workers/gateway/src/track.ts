@@ -237,6 +237,6 @@ export async function stationFixes(
       .all<PositionRow & { placed_by_owner: number }>(),
   ]);
   const placed = new Set(placing.results.filter((p) => p.placed_by_owner).map((p) => p.id));
-  const rows = placing.results.map(({ placed_by_owner: _, ...p }) => p as PositionRow);
+  const rows = placing.results.map(({ placed_by_owner: _, ...p }) => p);
   return { fixes: merged(recent, rows), placed };
 }
