@@ -105,12 +105,33 @@ describe("MqttSubscriber packet reassembly", () => {
     const sub = m as unknown as { sock: unknown; receive(c: Uint8Array, k: number): void };
     sub.sock = { write() {}, destroy() {} };
     const pkt = publish(MQTT_MAX_PACKET - 8);
-    const t0 = performance.now();
-    for (let i = 0; i < pkt.length; i++) sub.receive(pkt.subarray(i, i + 1), 0);
-    const ms = performance.now() - t0;
-    m.stop();
+    // The verdict is the bytes copied, not the time taken, so a loaded machine cannot fail it. The reader copies
+    // through Uint8Array's set and slice; counting them while the packet trickles in needs no seam in the reader.
+    // Joining once copies the packet once; a copy of the buffer per chunk moves ~n²/2 bytes, so the feed stops
+    // as soon as the budget is spent rather than running the quadratic case to its end.
+    const budget = 2 * pkt.length;
+    let copied = 0;
+    const proto = Uint8Array.prototype;
+    const { set, slice } = proto;
+    proto.set = function (this: Uint8Array, src: ArrayLike<number>, offset?: number) {
+      copied += src.length;
+      return set.call(this, src, offset);
+    };
+    proto.slice = function (this: Uint8Array, start?: number, end?: number) {
+      const out = slice.call(this, start, end);
+      copied += out.length;
+      return out;
+    } as typeof slice;
+    try {
+      for (let i = 0; i < pkt.length && copied <= budget; i++) sub.receive(pkt.subarray(i, i + 1), 0);
+    } finally {
+      proto.set = set;
+      proto.slice = slice;
+      m.stop();
+    }
+    expect(copied).toBeGreaterThanOrEqual(pkt.length); // the one join is seen, so the count observes the reader
+    expect(copied).toBeLessThanOrEqual(budget);
     expect(got).toEqual([MQTT_MAX_PACKET - 8]);
-    expect(ms).toBeLessThan(1500); // linear: tens of ms; a copy per byte is ~34 GB moved
   });
 
   it("splits packets that share a chunk and packets that straddle chunks", () => {
