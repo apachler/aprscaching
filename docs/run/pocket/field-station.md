@@ -193,7 +193,7 @@ network*, switched off until you follow it. To be found by the others, set `FED_
 
 ## Backup
 
-`backup.sh` writes an archive to the phone's shared storage, and `extras/setup.sh --scheduled-backup` runs it
+`backup.sh` writes an archive to Termux's private folder, and `extras/setup.sh --scheduled-backup` runs it
 daily while the phone charges. [Backups: Pocket](../day-to-day/backups.md#pocket) has the commands and the
 restore.
 
@@ -205,7 +205,7 @@ restore.
 | `termux-*` commands hang | The Termux:API app does not answer, for the same reasons. The scripts give up after 8 seconds. |
 | No status notification | Android 13 and later ask for the notification permission: grant it to Termux:API in Android's app settings. |
 | The shortcuts do not show | Install Termux:Widget from the same source, put its widget on the home screen, then run `extras/setup.sh --shortcuts` again. |
-| The scheduled backup never runs | It runs only while charging with the battery above 50 %, and needs `termux-setup-storage` once. `status.sh` shows the last backup. |
+| The scheduled backup never runs | It runs only while charging with the battery above 50 %. `status.sh` shows the last backup. |
 | No spoken alerts | Set `POCKET_ALERTS=1` and `POCKET_ALERTS_SPEAK=1` in the `.env`, restart, and install a text-to-speech engine in Android. Only messages to the calls in `ADMIN_CALLSIGNS` alert. |
 | The battery saver never switches | `POCKET_BATTERY_LOW` is 0, or Termux:API does not answer. `status.sh` shows the saver state. |
 | `usb-kiss.sh --list` shows nothing | Check the OTG adapter, and that the TNC has power. A TNC on an FTDI, CP210x, CH340 or PL2303 chip is refused by name: only CDC-ACM devices work. |

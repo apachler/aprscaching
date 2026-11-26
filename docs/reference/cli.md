@@ -39,7 +39,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
 | `status`, `doctor` | none |
 | `backup` | `--dest`, `--with-media`, `--no-settings` |
-| `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
+| `restore <archive>` | `--dry-run`, `--no-settings`; the archive is a file or one named object, `oci://<bucket>/<object>` |
 | `update` | `--ref`, `--rollback-window` |
 | `rotate-secret <name>` | `--yes`; the name is one of `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_SUBMIT_SECRET`, `FED_RELAY_SECRET`, `FED_CORROBORATION_SECRET` |
 | `net44 setup <connect.conf>` | `--name`, `--https` (serve the name over https too: [One instance, several addresses](../run/networks/several-addresses.md)), `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |

@@ -1,36 +1,40 @@
 #!/usr/bin/env bash
-# Back up the Pocket station to the phone's shared storage: a consistent snapshot of the SQLite database
-# (taken while the gateway runs), the .env with the secrets beside the database, and the uploaded media,
-# packed as aprscaching-pocket-<UTC time>.tar.gz. Keeps the newest N archives. With --restore, puts an
-# archive back in place.
+# Back up the Pocket station: a consistent snapshot of the SQLite database (taken while the gateway runs) and
+# the uploaded media, packed as aprscaching-pocket-<UTC time>.tar.gz in Termux's private ~/.aprscaching/backups/.
+# Keeps the newest N archives. With --restore, puts an archive back in place.
 #
-#   termux-setup-storage                         # once: lets Termux write to shared storage
 #   bash ~/aprscaching/deploy/pocket/backup.sh
 #   bash ~/aprscaching/deploy/pocket/backup.sh --no-env --keep 14
-#   bash ~/aprscaching/deploy/pocket/backup.sh --restore ~/storage/shared/aprscaching-backups/aprscaching-pocket-20260930T120000Z.tar.gz
+#   bash ~/aprscaching/deploy/pocket/backup.sh --dest ~/storage/shared/aprscaching-backups   # a copy off Termux
+#   bash ~/aprscaching/deploy/pocket/backup.sh --restore ~/.aprscaching/backups/aprscaching-pocket-20260930T120000Z.tar.gz
 #
 # The snapshot uses SQLite's online backup API through better-sqlite3, which the gateway already needs,
 # so no sqlite3 package is required; the copy is checked (quick_check) before it is packed.
 #
-# Shared storage has no per-app permissions: any app allowed to read storage, and any app that syncs the
-# folder to a cloud, can read the archive. The .env holds INGEST_SECRET and OPERATOR_SECRET and
-# session.secret signs the sessions, so an archive on shared storage never holds them: they go into a second
-# archive, aprscaching-pocket-<UTC time>-secrets.tar.gz, in Termux's private ~/.aprscaching/backups/ (owner
-# only), and --restore takes them from there. An archive written anywhere else holds them itself.
+# The database holds every account's email address and the caches' NFC unlock secrets. Shared storage has no
+# per-app permissions: any app allowed to read storage, and any app that syncs the folder to a cloud, reads what
+# lies there, so an archive goes there only when the operator names it with --dest (termux-setup-storage first).
+# Termux's private folder goes when Termux is uninstalled or its data cleared: copy an archive elsewhere to keep it
+# past that.
+#
+# The .env holds INGEST_SECRET and OPERATOR_SECRET and session.secret signs the sessions: they always go into a
+# second archive, aprscaching-pocket-<UTC time>-secrets.tar.gz, in ~/.aprscaching/backups/ (owner only), and
+# --restore takes them from there and never from the archive it is handed, which another app may have written.
 #
 # Options:
-#   --dest DIR           where the archives go          (APRSCACHING_BACKUP_DIR,
-#                                                        default ~/storage/shared/aprscaching-backups)
+#   --dest DIR           where the archives go          (APRSCACHING_BACKUP_DIR, default ~/.aprscaching/backups)
 #   --keep N             archives to keep in DIR        (default 7)
 #   --no-env             leave out the .env and the *.secret files
-#   --with-secrets       put the .env and the *.secret files in the archive, even on shared storage
+#   --with-secrets       also put the .env and the *.secret files in the archive itself, for a copy that leaves
+#                        the phone; --restore does not take them from it
 #   --media              include the media directory whatever its size
 #   --no-media           leave the media directory out
 #                        (default: included while it is at most APRSCACHING_BACKUP_MEDIA_MAX_MB, 50 MiB)
 #   --restore FILE       stop the station, move the current database (and media, secrets) aside to
 #                        ~/.aprscaching/before-restore-<time>/, put the archive's in place and start the
-#                        station again if it was running; the .env is restored only with --with-env
-#   --with-env           with --restore: restore the archive's .env too
+#                        station again if it was running; the secrets come from its -secrets.tar.gz in
+#                        ~/.aprscaching/backups/, the .env only with --with-env
+#   --with-env           with --restore: restore the .env too, its known settings only
 #   --dir PATH           checkout                       (APRSCACHING_DIR, default ~/aprscaching)
 #   --data-dir PATH      .env, database, logs           (APRSCACHING_DATA, default ~/.aprscaching)
 #   -h, --help
@@ -39,11 +43,14 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=deploy/pocket/lib.sh
 . "$HERE/lib.sh"
+# shellcheck source=deploy/lib/env.sh
+. "$HERE/../lib/env.sh"
+# shellcheck source=deploy/lib/config.sh
+. "$HERE/../lib/config.sh"
 
 DEST="${APRSCACHING_BACKUP_DIR:-}"
 KEEP=7
-# private: in the archive, or beside it in private storage when the archive lies on shared storage;
-# archive: in the archive wherever it lies; none: left out.
+# private: in the private secrets archive; archive: there and in the archive itself; none: left out.
 SECRETS=private
 MEDIA_MODE=auto
 MEDIA_MAX_MB="${APRSCACHING_BACKUP_MEDIA_MAX_MB:-50}"
@@ -106,20 +113,9 @@ if (check !== "ok") { console.error("quick_check: " + check); process.exit(1); }
 console.log(db.prepare("select count(*) n from sqlite_master where type = ?").get("table").n);'
 node_sqlite() { (cd "$DIR/servers/node" && node -e "$@"); }
 
-# The archives' place for the secrets they leave out: Termux's private storage, which no other app reads.
+# The archives' default place, and the one place of the secrets: Termux's private storage, which no other app
+# reads or writes.
 PRIVATE="$DATA/backups"
-
-# Whether DIR lies on the phone's shared storage (~/storage links into it).
-on_shared_storage() {
-  local real storage
-  real="$(cd "$1" && pwd -P)"
-  case "$real" in /storage/* | /sdcard* | /mnt/*) return 0 ;; esac
-  if [ -d "$HOME/storage" ]; then
-    storage="$(cd "$HOME/storage" && pwd -P)"
-    case "$real/" in "$storage"/*) return 0 ;; esac
-  fi
-  return 1
-}
 
 STAGE=""
 cleanup() { if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi; }
@@ -134,15 +130,25 @@ if [ -n "$RESTORE" ]; then
   tar -xzf "$RESTORE" -C "$STAGE"
   src="$(find "$STAGE" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   [ -n "$src" ] && [ -f "$src/aprscaching.db" ] || die "$RESTORE is not a Pocket backup (no aprscaching.db inside)."
+  info "archive: $RESTORE, written $(date -r "$RESTORE" '+%F %T %Z' 2>/dev/null || echo "at an unknown time")"
+  if [ -f "$src/MANIFEST" ]; then
+    info "manifest:"
+    sed 's/^/      /' "$src/MANIFEST"
+  fi
+  # The archive may lie where any app writes: a .env or a *.secret in it is never installed.
+  carried="$(find "$src" -maxdepth 1 \( -name '*.secret' -o -name env \) -exec basename {} \; | sort | tr '\n' ' ')"
+  if [ -n "$carried" ]; then
+    info "ignored in the archive: ${carried% } (secrets come only from $PRIVATE)"
+  fi
   secrets="$PRIVATE/$(basename "$src")-secrets.tar.gz"
-  if grep -q '^secrets: ' "$src/MANIFEST" 2>/dev/null; then
-    if [ -f "$secrets" ]; then
-      tar -xzf "$secrets" -C "$STAGE"
-      info "secrets taken from $secrets"
-    else
-      warn "the archive's secrets were kept in $secrets, which is not on this phone:" \
-        "the database comes back without them, and the current .env and secrets stay."
-    fi
+  keep="$STAGE/private"
+  mkdir -p "$keep"
+  if [ -f "$secrets" ]; then
+    tar -xzf "$secrets" -C "$keep"
+    keep="$keep/$(basename "$src")"
+    info "secrets taken from $secrets"
+  else
+    info "no secrets for this archive in $PRIVATE: the current .env and *.secret files stay."
   fi
   tables="$(node_sqlite "$CHECK_JS" "$src/aprscaching.db")" || die "the database in $RESTORE fails its check."
   info "database: $tables tables, check ok"
@@ -167,7 +173,7 @@ if [ -n "$RESTORE" ]; then
   mv "$src/aprscaching.db" "$DB"
   chmod 600 "$DB"
   info "database restored to $DB"
-  for f in "$src"/*.secret; do
+  for f in "$keep"/*.secret; do
     [ -e "$f" ] || continue
     if [ -e "$DB_DIR/$(basename "$f")" ]; then mv "$DB_DIR/$(basename "$f")" "$aside/"; fi
     mv "$f" "$DB_DIR/"
@@ -180,14 +186,27 @@ if [ -n "$RESTORE" ]; then
     mv "$src/media" "$MEDIA"
     info "media restored to $MEDIA"
   fi
-  if [ -f "$src/env" ]; then
+  if [ -f "$keep/env" ]; then
     if [ "$RESTORE_ENV" -eq 1 ]; then
       if [ -f "$ENV_FILE" ]; then cp -p "$ENV_FILE" "$aside/.env"; fi
-      cat "$src/env" >"$ENV_FILE"
+      # The scripts source the .env: only known settings come back, each written so that no shell runs it.
+      (umask 077 && : >"$STAGE/env.new")
+      refused=""
+      while IFS= read -r key; do
+        cfg_known "$key" || continue
+        if value="$(env_inert_value "$(env_file_raw "$keep/env" "$key")")"; then
+          env_file_unset "$STAGE/env.new" "$key"
+          printf '%s=%s\n' "$key" "$value" >>"$STAGE/env.new"
+        else
+          refused="${refused:+$refused }$key"
+        fi
+      done < <(env_file_keys "$keep/env")
+      mv -f "$STAGE/env.new" "$ENV_FILE"
       chmod 600 "$ENV_FILE"
       info ".env restored (the previous one is in $aside)"
+      if [ -n "$refused" ]; then warn "settings left out, their values would run as shell: $refused"; fi
     else
-      info "the archive holds a .env; kept the current one (--with-env restores it)"
+      info "the backup holds a .env; kept the current one (--with-env restores it)"
     fi
   fi
   if [ "$running" -eq 1 ]; then
@@ -199,13 +218,12 @@ if [ -n "$RESTORE" ]; then
 fi
 
 # ---- backup ------------------------------------------------------------------------------------------
-if [ -z "$DEST" ]; then
-  shared="$HOME/storage/shared"
-  [ -d "$shared" ] || die "$shared is missing: Termux has no access to shared storage yet." \
-    "Run termux-setup-storage once and allow the permission, or pass --dest DIR."
-  DEST="$shared/aprscaching-backups"
-fi
 [ -f "$DB" ] || die "no database at $DB (DB_PATH in $ENV_FILE); start the gateway once first."
+if [ -z "$DEST" ]; then
+  DEST="$PRIVATE"
+  (umask 077 && mkdir -p "$DEST")
+  chmod 700 "$DEST"
+fi
 mkdir -p "$DEST"
 [ -w "$DEST" ] || die "cannot write to $DEST."
 
@@ -225,12 +243,8 @@ SHARED=0
 if on_shared_storage "$DEST"; then SHARED=1; fi
 SECRETS_TAR=""
 if [ "$SECRETS" != none ]; then
-  SEC="$OUT"
-  if [ "$SECRETS" = private ] && [ "$SHARED" -eq 1 ]; then
-    SEC="$STAGE/secrets/$NAME"
-    mkdir -p "$SEC"
-    SECRETS_TAR="$PRIVATE/$NAME-secrets.tar.gz"
-  fi
+  SEC="$STAGE/secrets/$NAME"
+  mkdir -p "$SEC"
   secret_names=""
   if [ -f "$ENV_FILE" ]; then
     cp "$ENV_FILE" "$SEC/env"
@@ -241,10 +255,12 @@ if [ "$SECRETS" != none ]; then
     cp "$f" "$SEC/"
     secret_names="${secret_names:+$secret_names, }$(basename "$f")"
   done
-  if [ -z "$SECRETS_TAR" ]; then
-    if [ -n "$secret_names" ]; then included="$included, $secret_names"; fi
-  elif [ -z "$secret_names" ]; then
-    SECRETS_TAR=""
+  if [ -n "$secret_names" ]; then
+    SECRETS_TAR="$PRIVATE/$NAME-secrets.tar.gz"
+    if [ "$SECRETS" = archive ]; then
+      cp -p "$SEC"/* "$OUT/"
+      included="$included, $secret_names"
+    fi
   fi
 fi
 
@@ -279,9 +295,13 @@ if [ -n "$SECRETS_TAR" ]; then
   chmod 700 "$PRIVATE"
   (umask 077 && tar -czf "$PRIVATE/.$NAME-secrets.tar.gz.partial" -C "$STAGE/secrets" "$NAME")
   mv "$PRIVATE/.$NAME-secrets.tar.gz.partial" "$SECRETS_TAR"
-  info "$secret_names kept off shared storage, in $SECRETS_TAR (--restore takes them from there)"
+  info "$secret_names kept in $SECRETS_TAR (--restore takes them from there)"
 fi
 
+if [ "$SHARED" -eq 1 ]; then
+  warn "the archive lies on shared storage, which any app with storage permission can read: it holds every" \
+    "account's email address and the caches' unlock secrets. Move it somewhere private once copied off the phone."
+fi
 if [ "$SECRETS" = archive ] && [ "$SHARED" -eq 1 ]; then
   warn "the archive holds the instance secrets (.env, session.secret) and lies on shared storage, which" \
     "any app with storage permission can read. Move it somewhere private, or leave out --with-secrets."

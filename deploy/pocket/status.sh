@@ -276,7 +276,7 @@ if [ -d "$LOG_DIR" ]; then info "logs: $(du -sh "$LOG_DIR" 2>/dev/null | cut -f1
 last=""
 if [ -f "$RUN_DIR/last-backup" ]; then last="$(cat "$RUN_DIR/last-backup")"; fi
 # The archive names carry their UTC time, so the last in name order is the newest.
-archives=("$HOME/storage/shared/aprscaching-backups"/aprscaching-pocket-*.tar.gz)
+archives=("${APRSCACHING_BACKUP_DIR:-$DATA/backups}"/aprscaching-pocket-*Z.tar.gz)
 newest="${archives[${#archives[@]} - 1]}"
 if [ -f "$newest" ]; then
   mtime="$(stat -c %Y "$newest" 2>/dev/null || echo 0)"
