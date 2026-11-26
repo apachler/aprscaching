@@ -506,12 +506,13 @@ I="$TMP/ingest.unit"
 bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
   BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-ingest.service'" >"$I"
 check "the ingest unit: a read-only system, owner-only files" bash -c "grep -qx 'ProtectSystem=strict' '$I' && grep -qx 'NoNewPrivileges=yes' '$I' && grep -qx 'UMask=0077' '$I'"
-check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|RestrictAddressFamilies)=' '$I'"
+# ProtectClock= implies DeviceAllow=char-rtc, which some systemd versions read as a closed device policy
+check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|ProtectClock|RestrictAddressFamilies)=' '$I'"
 check "  … and data/ writable, for the MeshCom transmit audit (MESHCOM_TX_AUDIT)" bash -c "grep -qx 'ReadWritePaths=/srv/acs/data' '$I'"
 # The ingest parses hostile input: whoever takes it over gets no capability, kernel interface, namespace, foreign
 # architecture or other process, and no home directory.
 INGEST_SANDBOX="CapabilityBoundingSet= ProtectKernelTunables=yes ProtectKernelModules=yes ProtectKernelLogs=yes
-  ProtectControlGroups=yes ProtectClock=yes ProtectHostname=yes RestrictNamespaces=yes RestrictSUIDSGID=yes
+  ProtectControlGroups=yes ProtectHostname=yes RestrictNamespaces=yes RestrictSUIDSGID=yes
   LockPersonality=yes SystemCallArchitectures=native SystemCallFilter=@system-service ProtectProc=invisible ProtectHome=yes"
 check "  … and sandboxed from the kernel, capabilities and other processes" bash -c "for d in $(echo $INGEST_SANDBOX); do grep -qxF \"\$d\" '$I' || { echo \"     missing \$d\"; exit 1; }; done"
 if have systemd-analyze; then

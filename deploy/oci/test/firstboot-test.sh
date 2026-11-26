@@ -102,10 +102,10 @@ check "  … removes its settings and cloud-init's copies" \
   bash -c "[ ! -e '$R/etc/firstboot.env' ] && [ ! -e '$R/cloud/instances/i-1/user-data.txt' ] && [ ! -e '$R/cloud/instances/i-1/cloud-config.txt' ]"
 check "  … installs the unit that removes the copies after every boot" \
   bash -c "grep -q 'rm -f $R/cloud/instances/\*/user-data.txt ' '$R/units/aprscaching-scrub-userdata.service' && grep -q '$R/cloud/instances/\*/cloud-config.txt' '$R/units/aprscaching-scrub-userdata.service'"
-# imds_dropped BRIDGE: the ruleset firstboot wrote has, in a chain on the forward hook, a rule dropping what BRIDGE
-# sends to the metadata service
+# imds_dropped BRIDGE [ip|ip6 ADDRESS]: the ruleset firstboot wrote has, in a chain on the forward hook, a rule dropping
+# what BRIDGE sends to the metadata service's address (its IPv4 one by default)
 imds_dropped() {
-  awk -v want="iifname \"$1\" ip daddr 169.254.169.254 drop" '
+  awk -v want="iifname \"$1\" ${2:-ip} daddr ${3:-169.254.169.254} drop" '
     /^[[:space:]]*chain / { fwd = 0 }
     /type filter hook forward / { fwd = 1 }
     fwd { line = $0; sub(/^[[:space:]]+/, "", line); if (line == want) found = 1 }
@@ -113,6 +113,8 @@ imds_dropped() {
 }
 check "  … drops what the default Docker bridge forwards to the metadata service" imds_dropped docker0
 check "  … and what the compose networks' bridges forward to it" imds_dropped "br-*"
+check "  … over IPv6 too, from either" \
+  bash -c "$(declare -f imds_dropped); R='$R'; imds_dropped docker0 ip6 fd00:c1::a9fe:a9fe && imds_dropped 'br-*' ip6 fd00:c1::a9fe:a9fe"
 check "  … leaves the host's own requests (the backup unit) alone" bash -c "[ -s '$R/etc/imds-guard.nft' ] && ! grep -q 'hook output' '$R/etc/imds-guard.nft'"
 check "  … loads the ruleset at every boot, before Docker starts" \
   bash -c "grep -qx 'ExecStart=/usr/sbin/nft -f $R/etc/imds-guard.nft' '$R/units/aprscaching-imds-guard.service' && grep -qx 'Before=docker.service' '$R/units/aprscaching-imds-guard.service' && grep -q 'systemctl enable --now aprscaching-imds-guard.service' '$MOCK_LOG'"

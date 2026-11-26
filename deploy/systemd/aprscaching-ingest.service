@@ -21,7 +21,9 @@ User=aprscaching
 # MeshCom transmit audit (MESHCOM_TX_AUDIT) goes, /home is hidden, other processes are invisible, and its own files
 # are the service user's alone. The devices and the address families stay open: serial and USB TNCs, soundcards,
 # GPIO and USB PTT (character devices), Bluetooth and the network ports are what it runs on. /sys stays readable
-# (sound and serial devices are found there); nothing it does writes to it.
+# (sound and serial devices are found there); nothing it does writes to it. No ProtectClock= and no PrivateDevices=:
+# ProtectClock= adds a DeviceAllow= entry for the clock, which on some systemd versions closes the device policy to
+# that one device and takes the radios with it, and the empty capability set already keeps the clock unsettable.
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -33,7 +35,6 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-ProtectClock=yes
 ProtectHostname=yes
 RestrictNamespaces=yes
 RestrictSUIDSGID=yes
