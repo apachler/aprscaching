@@ -55,9 +55,10 @@ export type {
   Spot,
 };
 import { photoForUpload, thumbnailOf } from "./media/resize.js";
-import { MEDIA_LIMITS, mediaMB, openSealedStage, type StagePayload, type ToolRegistryEntry } from "@aprscaching/shared";
+import { MEDIA_LIMITS, mediaMB, openSealedStage, type ToolRegistryEntry } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, packSearch, saveAutoArea, type OfflineSource } from "./offline/packs.js";
+import { OWNER_KEY, forgetPrivateData, keepReveal, ownReveals } from "./offline/owner.js";
 import { imageKey } from "./offline/download.js";
 import { fromB64u, toB64u } from "./base64url.js";
 import { stageRefusalText } from "./log/stageUnlock.js";
@@ -1727,19 +1728,9 @@ export function deleteForwardRule(id: number): Promise<{ ok: boolean }> {
 import type { CacheStage } from "@aprscaching/shared";
 export type { CacheStage };
 // ---- stages offline: the published start and the NFC stages a pack carries sealed (stageseal.ts) ----
-const STAGE_UNLOCKS_KEY = "acs.stages.unlocked";
-type LocalUnlocks = Record<string, StagePayload>;
-async function localUnlocks(): Promise<LocalUnlocks> {
-  try {
-    return JSON.parse((await (await offlineReady()).kvGet(STAGE_UNLOCKS_KEY)) ?? "{}") as LocalUnlocks;
-  } catch {
-    return {};
-  }
-}
-
 /**
  * A cache's stages; without a connection, as its offline pack knows them: the published start, every stage
- * this phone unlocked offline, and the rest locked (an NFC stage the pack carries sealed can be unlocked by
+ * the signed-in player unlocked offline on this phone, and the rest locked (an NFC stage the pack carries sealed can be unlocked by
  * scanning its tag).
  */
 export async function getStages(
@@ -1752,7 +1743,7 @@ export async function getStages(
     if (!isOffline(e)) throw e;
     const hit = await packCache(await offlineReady(), cacheId);
     if (!hit) throw e;
-    const unlocks = await localUnlocks();
+    const unlocks = await ownReveals(await offlineReady());
     return {
       stages: hit.cache.stages.map((s) => {
         const known = s.open ?? unlocks[`${cacheId}:${s.stageNo}`];
@@ -1806,9 +1797,7 @@ export async function unlockStage(
     // an unlock kept for nobody could only ever be confirmed under someone else's session
     const owner = await queueOwner();
     if (!owner) throw e;
-    const unlocks = await localUnlocks();
-    unlocks[`${cacheId}:${stageNo}`] = payload;
-    await store.kvSet(STAGE_UNLOCKS_KEY, JSON.stringify(unlocks));
+    await keepReveal(store, owner, `${cacheId}:${stageNo}`, payload);
     const instance = await getInstance();
     await enqueue(
       queueStore,
@@ -2125,11 +2114,16 @@ const queueStore: QueueStore = {
  * The signed-in callsign the queue is kept for, where the page and the service worker both read it: an entry
  * is sent and listed only while its owner is signed in, since every send carries whichever session cookie is
  * current. The session hook sets it from each server answer and clears it on sign-out; open lists then re-read.
+ *
+ * The same call owns the player's private offline data (offline/owner.ts): a known call deletes every other
+ * player's, and `forget` (a sign-out) deletes all of it. A call cleared without `forget` (a session the server no
+ * longer answers for) only hides it, so the player finds it again on signing back in.
  */
-const QUEUE_OWNER = "acs.sync.owner";
-export async function setQueueOwner(callsign: string | null): Promise<void> {
+const QUEUE_OWNER = OWNER_KEY;
+export async function setQueueOwner(callsign: string | null, opts: { forget?: boolean } = {}): Promise<void> {
   const st = await offlineReady();
   const next = callsign?.trim().toUpperCase() ?? "";
+  if (next || opts.forget) await forgetPrivateData(st, next || null);
   if (((await st.kvGet(QUEUE_OWNER)) ?? "") === next) return;
   await st.kvSet(QUEUE_OWNER, next);
   queueChanged();

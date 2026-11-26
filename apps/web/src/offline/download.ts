@@ -19,6 +19,7 @@ import {
   type PackResponse,
 } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
+import { isPrivatePack, storedOwner } from "./owner.js";
 import { downloadTiles, type TilePlan, type TileReader } from "./tiles.js";
 
 const PARALLEL = 4;
@@ -96,13 +97,15 @@ export interface SaveProgress {
 
 /**
  * Store a pack: its images first (only the ones the pack does not hold yet), then its data and
- * description, so an interrupted download leaves the previous version of the pack intact.
+ * description, so an interrupted download leaves the previous version of the pack intact. The owner maintenance
+ * pack is stored under the signed-in call (owner.ts) and refused when none is known: kept for nobody, it could
+ * only be shown to whoever signs in next.
  */
 export async function storePack(
   store: OfflineStore,
   fetcher: Fetcher,
   base: string,
-  meta: Omit<PackMeta, "sizeBytes" | "cacheCount" | "generation" | "instance">,
+  meta: Omit<PackMeta, "sizeBytes" | "cacheCount" | "generation" | "instance" | "owner">,
   data: PackResponse,
   opts: {
     onProgress?: (p: SaveProgress) => void;
@@ -111,6 +114,8 @@ export async function storePack(
     tiles?: { reader: TileReader; plan: TilePlan; attribution: string };
   } = {},
 ): Promise<PackMeta> {
+  const owner = isPrivatePack(meta) ? await storedOwner(store) : null;
+  if (isPrivatePack(meta) && !owner) throw new Error("sign in again to pack your caches");
   const wanted = data.caches.flatMap((c) => imagesFor(c, meta.images));
   const have = new Set(await store.blobKeys(meta.id));
   const todo = wanted.filter((i) => !have.has(imageKey(i, meta.images)));
@@ -162,6 +167,7 @@ export async function storePack(
   }
   const full: PackMeta = {
     ...meta,
+    ...(owner && { owner }),
     ...(tiles && { tiles }),
     instance: data.instance,
     generation: data.generation,

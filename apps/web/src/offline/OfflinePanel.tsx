@@ -247,7 +247,7 @@ function OwnerPack(props: { packs: PackMeta[]; onSaved: () => void; disabled: bo
     <Group title="Your caches" status="owner maintenance" defaultOpen={false}>
       <p className="muted fine">
         Every cache you own, with thumbnails, flagged where a visit is due. Maintenance you log in the field is sent
-        when you are back online.
+        when you are back online. This pack is yours alone: it leaves this device when you sign out.
       </p>
       <Button onClick={() => void run()} disabled={props.disabled || busy}>
         {busy ? "Packing…" : existing ? "Refresh my caches" : "Pack my caches"}
