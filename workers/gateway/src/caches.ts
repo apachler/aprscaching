@@ -20,6 +20,7 @@ import {
   DEFAULT_POLICY,
   instanceMinTier,
   plausiblePresence,
+  stationEvidence,
   type CacheRow,
   type PositionRow,
   type VerifyResult,
@@ -33,6 +34,7 @@ import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCal
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
+import { fixesOf, loggerTrack } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -1006,21 +1008,15 @@ export async function scoreFind(
 ): Promise<FindScore> {
   const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
-  const lp = await env.DB.prepare(
-    // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-  )
-    .bind(loggerCall, since, at + 60)
-    .all<PositionRow>();
+  // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
+  const track = await loggerTrack(env, loggerCall, since, at + 60);
+  const lp = { results: track.own };
 
   let cacheStationPositions: PositionRow[] | undefined;
   if (cache.type === "aprs_living" && cache.station_call) {
-    const cs = await env.DB.prepare(
-      "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
-    )
-      .bind(cache.station_call, since, at + 60)
-      .all<PositionRow>();
-    cacheStationPositions = cs.results;
+    // every attested station fix, uncapped: a flood of fixes under the station's call cannot push one out of the
+    // read and leave an owner-signed fix with nothing to be judged against
+    cacheStationPositions = await fixesOf(env, cache.station_call, since, at + 60);
   }
 
   // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
@@ -1057,8 +1053,9 @@ export async function scoreFind(
   const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
 
   // A living cache is placed for Tier A or B only by its station's attested fixes or by the ones its owner's own
-  // browser bridge signed: a signed batch carries only its signer's base call, so a `browser-rf` fix under a base
-  // call the owner's account holds is the owner's own.
+  // browser bridge signed and the attested ones could have reached (verify.ts stationEvidence): a signed batch
+  // carries only its signer's base call, so a `browser-rf` fix under a base call the owner's account holds is the
+  // owner's own.
   const ownerSigned = cacheStationPositions?.length ? await ownerSignsFor(env, cache.id, cache.station_call) : false;
   const station = cacheStationPositions
     ? attest(cacheStationPositions).map((p) => ({ ...p, ownerSigned: ownerSigned && p.source === "browser-rf" }))
@@ -1069,6 +1066,7 @@ export async function scoreFind(
     appGeo,
     {
       loggerPositions: attest(lp.results),
+      loggerTrackPositions: attest(track.others),
       cacheStationPositions: station,
       loggerOwnIgates,
       loggerOwnBoxes,
@@ -1099,7 +1097,7 @@ export async function scoreFind(
   let route: PacketRouteInfo | null = matched
     ? routeOf(matched, sitesFor(attested, matched.ingest_box), everySite(attested))
     : null;
-  const lastStation = station?.find((p) => p.ts <= at + 60 && (p.firstPartyAttested || p.ownerSigned) && !p.commanded);
+  const lastStation = station && stationEvidence(station).find((p) => p.ts <= at + 60);
   const point =
     cache.type === "aprs_living"
       ? lastStation
@@ -1127,7 +1125,15 @@ export async function scoreFind(
     // are collected as they arrive (corroborate_retry.ts).
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
-    if (ev && plausiblePresence({ ...point, ts: ev.ts }, attest(lp.results), DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+    if (
+      ev &&
+      plausiblePresence(
+        { ...point, ts: ev.ts },
+        attest([...lp.results, ...track.others]),
+        DEFAULT_POLICY,
+        COARSEN.timeBucketSec,
+      )
+    ) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
