@@ -17,6 +17,7 @@ import {
 import { parseAddr, sameAddr } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { numEnv } from "./config.js";
+import { txLimitFromEnv } from "./txlimit.js";
 
 export interface ConnectedStackOpts {
   link: FrameLink;
@@ -67,6 +68,7 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
       alias: env.NETROM_ALIAS,
       ...netromSettings(env),
       inp3: env.NETROM_INP3 === "1",
+      txLimit: txLimitFromEnv("netrom"),
       gatewayBase: gwBase,
       secret,
     });

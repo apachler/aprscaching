@@ -199,6 +199,8 @@ NETROM_ALIAS	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Alias of t
 NETROM_BROADCAST_MS	int	ingest	3600000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)	
 NETROM_PATH_QUALITY	int	ingest	192		0	0	selfhost,baremetal,ingest-box,pocket	Link quality (0-255) assumed for a directly heard neighbour	
 NETROM_INP3	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also speaks INP3 alongside NODES	
+NETROM_TX_BURST	int	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	NET/ROM node answers allowed at once before pacing applies	
+NETROM_TX_REFILL_SEC	number	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one NET/ROM node answer	
 NODE_PERSONALITY	string	ingest	netrom		0	0	selfhost,baremetal,ingest-box,pocket	Command surface of the node: netrom, flexnet, tnn or baycom	
 CONNECTED_MAX_SESSIONS	int	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Inbound AX.25 connects to the node, BBS and federation sync answered at once	
 CONNECTED_MAX_PER_CALL	int	ingest	2		0	0	selfhost,baremetal,ingest-box,pocket	Inbound AX.25 connects answered at once from one base call	

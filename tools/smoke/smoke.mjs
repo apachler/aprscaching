@@ -1608,10 +1608,23 @@ ok(
   addNode.status === 201 && addNode.data?.dest === "OE8XBM-7",
   JSON.stringify(addNode.data),
 );
+const addNodes = await call("POST", "/api/node/nodes", {
+  nodes: [
+    { dest: "OE8XBN-7", alias: "VILL", neighbor: "OE8REL-7", quality: 180, port: "kiss-tnc" },
+    { dest: "OE8XBO-7", alias: "KLU", neighbor: "OE8REL-7", quality: 170, port: "kiss-tnc" },
+  ],
+});
+ok(
+  "the ingest mirrors several NET/ROM routes in one request",
+  addNodes.status === 201 && addNodes.data?.stored === 2,
+  JSON.stringify(addNodes.data),
+);
 const nodes = await call("GET", "/api/node/nodes");
 ok(
-  "NODES table lists the route",
-  (nodes.data?.nodes ?? []).some((n) => n.alias === "GRAZ" && n.neighbor === "OE8REL-7"),
+  "NODES table lists the routes",
+  ["GRAZ", "VILL", "KLU"].every((a) =>
+    (nodes.data?.nodes ?? []).some((n) => n.alias === a && n.neighbor === "OE8REL-7"),
+  ),
   JSON.stringify(nodes.data?.nodes),
 );
 
