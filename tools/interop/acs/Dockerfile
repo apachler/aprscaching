@@ -16,6 +16,7 @@ COPY apps/ingest ./apps/ingest
 COPY db ./db
 RUN pnpm install --frozen-lockfile --filter @aprscaching/node-gateway... --filter @aprscaching/ingest...
 COPY tools/interop/acs/start.sh /start.sh
-RUN chmod +x /start.sh
+COPY tools/interop/enroll-bbs-box.sh /enroll-bbs-box.sh
+RUN chmod +x /start.sh /enroll-bbs-box.sh
 EXPOSE 8787 10093/udp
 CMD ["/start.sh"]

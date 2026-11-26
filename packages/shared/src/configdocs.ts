@@ -237,7 +237,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IGATE_TX_BURST: "IGate transmits allowed at once before pacing applies",
   IGATE_TX_REFILL_SEC: "Seconds to regain one IGate transmit",
   RF_SITE_CALL: "Callsign naming this box as the receiving site of what its TNCs and soundcard ports hear",
-  BOX_ID: "Remote-control ID of this box; set it to link the box to your account",
+  BOX_ID: "ID of this box, written by enrollment; pairing and remote control need its BOX_KEY too",
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
   BOX_CALL: "Callsign the box transmits remote commands as",
@@ -325,12 +325,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`INGEST_SECRET`",
-        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror, heard federation frames, finds logged over APRS, and remote-box polling and pairing. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
+        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, the NET/ROM node mirror and heard federation frames. Its authority is packets only. It never verifies a callsign: an on-air `VERIFY` counts only from a box enrolled with its own key. It acts for no remote box: pairing, polling and a box's queue take the box's own key. It acts as no player or cache owner: hiding or editing a cache, logs, favourites, watches and ratings take a signed-in session. It runs no BBS: the packet BBS mailbox, FBB forwarding, the partner list and White Pages take a box enrolled with its own key that runs this instance's services. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
         "*(required)*",
       ],
       [
         "`OPERATOR_SECRET`",
-        "The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), `POST /auth/operator-link` (`tools/admin/signin-link.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, catalog imports and removing an imported place, the FBB federation enqueue, relay dispatch, and donation confirms. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box",
+        "The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), `POST /auth/operator-link` (`tools/admin/signin-link.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, catalog imports and removing an imported place, the FBB federation enqueue, relay dispatch, donation confirms, and any remote box's pairing, polling and queue (`/api/box/<id>/…`) as the operator's override. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box",
         "—",
       ],
       [
@@ -471,7 +471,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`1` sends the caches near the transmitting ingest box on air as APRS objects with the point-of-interest symbol, from the service call, through that box's radio and its transmit gates; never through APRS-IS ([Caches on air](../run/radios/caches-on-air.md))",
         "off",
       ],
-      ["`CACHE_OBJECTS_BOX`", "The `BOX_ID` of the ingest box whose radio sends the cache objects", "—"],
+      [
+        "`CACHE_OBJECTS_BOX`",
+        "The `BOX_ID` of the ingest box whose radio sends the cache objects: a box enrolled with its own key that runs this instance's services",
+        "—",
+      ],
       [
         "`CACHE_OBJECTS_RADIUS_KM`",
         "Only active caches this many kilometres or closer to the transmitting box's own position (`BOX_LAT`, `BOX_LON`) go on air, 1–50",
@@ -546,7 +550,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`FIRST_PARTY_SITES`",
-        "Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Trusted sites are also the only ones whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
+        "Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. A site in this list never verifies a callsign: an on-air `VERIFY <code>` counts only from a site trusted through an enrolled box, delivered with that box's key ([How the box signs in](../run/radios/ingest-box.md#how-the-box-signs-in)). Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
         "—",
       ],
       [
@@ -831,7 +835,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`BOX_ID` / `BOX_KEY`",
-        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. `BOX_ID` also names the box for remote control (below)",
+        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. Only an enrolled box's hearings verify callsigns on the air, and only an enrolled box is paired and remote-controlled. `BOX_ID` also names the box for remote control (below)",
         "—",
       ],
       ["`BATCH_MS`", "Batch flush interval", "`1500` (`2000` in the `.env` that `deploy/setup.sh` writes)"],
@@ -907,7 +911,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "BBS (inbound + forwarding)",
-        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing). Both run only on a box enrolled with its own key that runs this instance's services ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway))",
       ],
       [
         "Federation over packet circuits",
@@ -923,7 +927,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` and `BOX_KEY` (the enrolled box; it pairs with an account by the one-time code it prints at start, and a box without a key of its own takes no remote control), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Automatic beacons",

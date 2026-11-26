@@ -444,13 +444,12 @@ describe("the gateway lookup", () => {
     calls: { "OE8APR-10": { ok: true }, DL1ABC: { ok: false, reason: "not control-verified" } },
   });
 
-  it("asks /ingest/txgate with the calls, a fresh nonce and the box id, and checks the MAC", async () => {
+  it("asks /ingest/txgate with the calls and a fresh nonce, and checks the MAC", async () => {
     const g = gateway(body);
     const lookup = gatewayTxGateLookup({
       ingestUrl: "http://gw:8080/ingest",
       secret: SECRET,
       boxKey: false,
-      boxId: "shack-1",
       fetch: g.f,
     });
     const got = await lookup(["OE8APR-10", "DL1ABC"]);
@@ -459,7 +458,7 @@ describe("the gateway lookup", () => {
     const u = g.urls[0]!;
     expect(u.pathname).toBe("/ingest/txgate");
     expect(u.searchParams.get("calls")).toBe("OE8APR-10,DL1ABC");
-    expect(u.searchParams.get("box")).toBe("shack-1");
+    expect(u.searchParams.has("box")).toBe(false);
     expect(u.searchParams.get("nonce")!.length).toBeGreaterThanOrEqual(16);
     await lookup(["OE8APR-10"]);
     expect(g.urls[1]!.searchParams.get("nonce")).not.toBe(u.searchParams.get("nonce"));

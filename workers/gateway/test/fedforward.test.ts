@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { handleFedBbsEnqueue, enqueueAcsfedBulletin } from "../src/fedforward.js";
 import { handleForwardInbound } from "../src/forward.js";
+import { setBoxPrincipal } from "../src/boxprincipal.js";
 import type { Env } from "../src/env.js";
 
 const SECRET = "test-ingest-secret-0123456789";
@@ -107,6 +108,18 @@ function post(url: string, body: unknown): Request {
   });
 }
 
+/** An inbound forwarded message from the packet BBS box: an enrolled box that runs this instance's services, as
+ *  route() marks one whose signature it verified. The shared ingest secret runs no FBB forwarding. */
+function fromBbsBox(url: string, body: unknown): Request {
+  const req = new Request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  setBoxPrincipal(req, { box: "bbs", callsign: null, services: true });
+  return req;
+}
+
 describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () => {
   it("round-trips a cache record from local feed to a remote mirror via an ACSFED bulletin", async () => {
     // publisher: pack local cache records into one bulletin
@@ -142,7 +155,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
     } as unknown as Env;
     const deliver = () =>
       handleForwardInbound(
-        post("http://gw/api/bbs/forward/inbound", {
+        fromBbsBox("http://gw/api/bbs/forward/inbound", {
           message: { bid, type: "P", from: fromCall, to: toCall, title: "federation batch (1)", body },
           origin: "rf-fbb:OE1PUB-1",
         }),
@@ -242,7 +255,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
       OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     const res = await handleForwardInbound(
-      post("http://gw/api/bbs/forward/inbound", {
+      fromBbsBox("http://gw/api/bbs/forward/inbound", {
         message: { bid: "1_OE8XBB", type: "B", from: "OE8APR", to: "ALL", title: "hi", body: "hello mesh" },
       }),
       env,
@@ -302,7 +315,7 @@ describe("federation over FBB is off by default and partner-only", () => {
       OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     const res = await handleForwardInbound(
-      post("http://gw/api/bbs/forward/inbound", {
+      fromBbsBox("http://gw/api/bbs/forward/inbound", {
         message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body },
         origin: "rf-fbb:OE1PUB-1",
       }),
@@ -333,7 +346,7 @@ describe("federation over FBB is off by default and partner-only", () => {
     ]) {
       const r = (await (
         await handleForwardInbound(
-          post("http://gw/api/bbs/forward/inbound", {
+          fromBbsBox("http://gw/api/bbs/forward/inbound", {
             message: { bid, type, from: "OE8APR", to: "ACSFED", body },
             origin,
           }),
@@ -361,7 +374,7 @@ describe("federation over FBB is off by default and partner-only", () => {
     } as unknown as Env;
     const r = (await (
       await handleForwardInbound(
-        post("http://gw/api/bbs/forward/inbound", {
+        fromBbsBox("http://gw/api/bbs/forward/inbound", {
           message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body },
           origin: "rf-fbb:OE1PUB",
         }),

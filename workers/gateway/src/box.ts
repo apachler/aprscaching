@@ -4,16 +4,19 @@
  * commands; the box pulls them over its existing outbound connection (no inbound ports), executes,
  * and acks. The ECHOCAT pattern with the gateway as the rendezvous.
  *
- *   POST /api/box/:id/command         enqueue (session or box secret; TX kinds are control-verified)
- *   GET  /api/box/:id/commands        the box leases queued commands (x-ingest-secret) → marks them sent;
+ *   POST /api/box/:id/command         enqueue (session or the box's credential; TX kinds are control-verified)
+ *   GET  /api/box/:id/commands        the box leases queued commands (its credential) → marks them sent;
  *                                     `?tx=1&rf=1&meshcom=CALL,…` reports what it can transmit (box_status)
- *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
- *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
- *   POST /api/box/:id/pair            the box obtains a one-time pairing code (x-ingest-secret) and shows it
+ *   POST /api/box/:id/commands/ack    the box reports done/failed (its credential)
+ *   GET  /api/box/:id/log             operator view of recent commands + status (session or the box's credential)
+ *   POST /api/box/:id/pair            the box obtains a one-time pairing code (its credential) and shows it
  *   POST /api/box/:id/claim {code}    a signed-in operator links the box to their account with that code
  *
- * A box belongs to the account that presented a pairing code the box itself obtained — proof of
- * possession of the box (its ingest secret) — so no account can take a box id by touching it first.
+ * The box's credential is its own signature: remote control takes a box enrolled with its own key, and
+ * OPERATOR_SECRET is the operator's override. The shared INGEST_SECRET acts for no box (boxkeys.ts
+ * boxActorRefusal): it sits on every box that runs on it, so it would let any of them pair, poll or read
+ * another. A box belongs to the account that presented a pairing code the box itself obtained — proof of
+ * possession of the box — so no account can take a box id by touching it first.
  *
  * Gating (non-negotiable): every TX-capable command requires a callsign gated on control-verification;
  * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
@@ -25,7 +28,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
-import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, operatorSecretOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
 import { baseCall, isValidLatLon } from "@aprscaching/aprs";
@@ -44,7 +47,11 @@ const ALL_KINDS = new Set([...TX_KINDS, "status"]);
  */
 const SYSTEM_TX_KINDS = new Set(["object"]);
 const leasedTx = (kind: string) => TX_KINDS.has(kind) || SYSTEM_TX_KINDS.has(kind);
-const boxAuth = ingestOrBoxOk;
+/**
+ * The box's own signature, or the operator's override OPERATOR_SECRET. route() has already refused a box key
+ * that signs for another box, and the shared secret (boxkeys.ts boxActorRefusal).
+ */
+const boxAuth = (req: Request, env: Env) => boxPrincipal(req) !== null || operatorSecretOk(req, env);
 
 /** Does `accountId` own `boxId` (boxowner.ts)? A box with no owner takes no session commands. */
 async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
@@ -71,7 +78,7 @@ async function codeHash(boxId: string, code: string): Promise<string> {
 }
 
 /**
- * POST /api/box/:id/pair — the box asks for a pairing code with its ingest secret and prints it for its
+ * POST /api/box/:id/pair — the box asks for a pairing code with its credential and prints it for its
  * operator. A new code replaces any earlier one. Only a hash is stored.
  */
 export async function handleBoxPair(req: Request, env: Env, boxId: string): Promise<Response> {
@@ -141,13 +148,13 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
       { error: "a box beacons its own configured position (BOX_LAT, BOX_LON): leave lat and lon out" },
       { status: 400 },
     );
-  // authorize: a signed-in operator session that OWNS this box, or the box secret (trusted
-  // backend / the operator's own box). Read commands need no callsign; TX commands require a verified one.
+  // authorize: a signed-in operator session that OWNS this box, or the box's own key or the operator secret.
+  // Read commands need no callsign; TX commands require a verified one.
   const me = await sessionIdentity(req, env);
   const trusted = boxAuth(req, env);
-  if (!me && !trusted) return json({ error: "sign in (or provide the box secret) to control a box" }, { status: 401 });
+  if (!me && !trusted) return json({ error: "sign in to control a box" }, { status: 401 });
   if (me && !trusted && !(await ownsBox(env, boxId, me.accountId))) return unpaired();
-  // A session may only transmit as a callsign its own account holds; the trusted backend may name any.
+  // A session may only transmit as a callsign its own account holds; the box's key or the operator may name any.
   const callsign = (body.callsign ?? me?.callsign ?? "").toUpperCase();
   if (TX_KINDS.has(kind)) {
     // a box's own key queues a transmission only on a box the sysop lets run this instance's services
@@ -426,7 +433,7 @@ export async function handleBoxLog(req: Request, env: Env, boxId: string): Promi
   const me = await sessionIdentity(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in to view box activity" }, { status: 401 });
-  // a box's activity is visible only to its paired owner (or the box secret)
+  // a box's activity is visible only to its paired owner (or the box's own key, or the operator)
   if (me && !trusted && !(await ownsBox(env, boxId, me.accountId))) return unpaired();
   const rows = (
     await env.DB.prepare(

@@ -2,15 +2,16 @@
 // What an enrolled box's key may do. It delivers what the box hears and drives the box's own command queue.
 // Only once the sysop marks it "Runs this instance's services" does it also run them (the outbox, the packet
 // BBS mailbox, FBB forwarding, the NET/ROM node mirror) and queue transmissions; trusting its hearings grants
-// none of that. It never acts as the shared secret does: it logs no find, acts for no cache owner and creates
-// or imports no cache. A box's frames attest only that box's own trusted sites, and FIRST_PARTY_SITES only the
+// none of that. It logs no find, acts for no cache owner and creates or imports no cache: those take a
+// signed-in session. A box's frames attest only that box's own trusted sites, and FIRST_PARTY_SITES only the
 // shared secret's frames, for a find's Tier A and for an RF callsign verification alike. These drive the real
 // gateway over a migrated SQLite with the ingest box's own signing code (apps/ingest gatewayauth.ts).
 import { describe, it, expect } from "vitest";
 import { createPrivateKey } from "node:crypto";
 import type { Env } from "@aprscaching/gateway/env";
-import { authEnv, call, emailSignup, ORIGIN } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, markCallVerified, ORIGIN, sessionCookie } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
+import { boxCall } from "./helpers/box.js";
 import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps/ingest/src/gatewayauth.js";
 
 const OPS = { "x-operator-secret": "test-operator-secret" };
@@ -90,10 +91,12 @@ async function cacheHere(env: Env): Promise<number> {
   return Number(r.meta.last_row_id);
 }
 
-/** `logger`'s found log, posted by the instance's own ingest plane; its tier. */
+/** `logger`'s found log, posted from the logger's own session with the call control-verified; its tier. */
 async function findTier(env: Env, logger: string): Promise<string> {
   const id = await cacheHere(env);
-  const res = await call(env, "POST", `/api/caches/${id}/logs`, { loggerCall: logger, logType: "found" }, INGEST);
+  await markCallVerified(env, logger);
+  const cookie = await sessionCookie(env, logger);
+  const res = await call(env, "POST", `/api/caches/${id}/logs`, { logType: "found" }, { cookie });
   expect(res.status, JSON.stringify(res.data)).toBeLessThan(300);
   return res.data.tier as string;
 }
@@ -295,13 +298,24 @@ describe("FBB forwarding", () => {
       .bind(now())
       .run();
     const post = (fromCall: string) =>
-      call(env, "POST", "/api/bbs/messages", { fromCall, toCall: "OE1XYZ @ OE1BBB.OE.EU", body: "hi" }, INGEST);
+      boxCall(
+        env,
+        "bbs",
+        "POST",
+        "/api/bbs/messages",
+        { fromCall, toCall: "OE1XYZ @ OE1BBB.OE.EU", body: "hi" },
+        {
+          services: true,
+        },
+      );
     const fromVerified = await post("OE8VER-7");
     const fromUnverified = await post("DL9NOV");
     expect(fromVerified.status).toBe(201);
     expect(fromUnverified.status).toBe(201);
 
-    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1BBB", undefined, INGEST);
+    const pool = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=OE1BBB", undefined, {
+      services: true,
+    });
     expect(pool.status).toBe(200);
     const bids = (pool.data.messages as { bid: string }[]).map((m) => m.bid);
     expect(bids).toContain(fromVerified.data.bid);
@@ -323,12 +337,16 @@ describe("FBB forwarding", () => {
     await env.DB.prepare(
       "INSERT INTO bbs_partners (call, ha, federation) VALUES ('OE1FED-1', 'OE1FED.AUT.EU', 1)",
     ).run();
-    const pool = await call(env, "GET", "/api/bbs/forward/pool?partner=OE1FED-1", undefined, INGEST);
+    const pool = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=OE1FED-1", undefined, {
+      services: true,
+    });
     expect(pool.data.messages).toContainEqual(
       expect.objectContaining({ bid: "FEDBID1", type: "P", to: "ACSFED", at: "OE1FED.AUT.EU" }),
     );
     // the catch-all route never carries it
-    const fallback = await call(env, "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, INGEST);
+    const fallback = await boxCall(env, "bbs", "GET", "/api/bbs/forward/pool?partner=IP-FED", undefined, {
+      services: true,
+    });
     expect((fallback.data.messages as { bid: string }[]).map((m) => m.bid)).not.toContain("FEDBID1");
   });
 });

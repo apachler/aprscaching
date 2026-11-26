@@ -273,15 +273,15 @@ async function toggleSet(
     .first<{ n: number }>();
   return { on: want, count: count?.n ?? 0 };
 }
-/** A favourite or watch belongs to the caller: the signed-in session, or a named callsign only with the ingest secret. */
+/** A favourite or watch belongs to the signed-in caller (actor()). */
 async function handleToggle(
   req: Request,
   env: Env,
   cacheId: number,
   table: "favorites" | "watches",
 ): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as { callsign?: string; on?: boolean };
-  const who = await actor(req, env, b.callsign);
+  const b = (await req.json().catch(() => ({}))) as { on?: boolean };
+  const who = await actor(req, env);
   if (!who) return json({ error: "sign in to change your favourites and watches" }, { status: 401 });
   return json(await toggleSet(env, table, cacheId, who, b.on));
 }
@@ -375,8 +375,8 @@ export async function ratingInfo(
 export async function handleRate(req: Request, env: Env, cacheId: number): Promise<Response> {
   const parsed = RateRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "stars must be 1–5", issues: parsed.error.issues }, { status: 400 });
-  const who = await actor(req, env, parsed.data.callsign);
-  if (!who) return json({ error: "sign in or pass callsign to rate" }, { status: 401 });
+  const who = await actor(req, env);
+  if (!who) return json({ error: "sign in to rate" }, { status: 401 });
   const cache = await env.DB.prepare("SELECT rating_policy FROM caches WHERE id=?")
     .bind(cacheId)
     .first<{ rating_policy: string }>();

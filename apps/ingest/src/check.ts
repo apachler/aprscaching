@@ -39,7 +39,6 @@ if (args[0] === "--soundcard" || args[0] === "--ptt-test") {
       ingestUrl: ingest,
       secret: env.INGEST_SECRET ?? "",
       boxKey: !!env.BOX_KEY,
-      boxId: env.BOX_ID || undefined,
     }),
   };
   if (args[0] === "--soundcard") {
