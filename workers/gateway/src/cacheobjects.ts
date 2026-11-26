@@ -177,12 +177,13 @@ async function wantedNear(env: Env, at: { lat: number; lon: number }, radiusKm: 
 /** Why a run sent nothing, or how many objects it queued. */
 type CacheObjectsResult = { queued: number } | { skipped: string };
 
-/** May this box transmit for the instance? A box enrolled with its own key must run the instance's services. */
+/** May this box transmit for the instance? Only a box enrolled with its own key polls, and it must run the
+ *  instance's services. */
 async function boxMayServe(env: Env, box: string): Promise<boolean> {
   const k = await env.DB.prepare("SELECT services, revoked_at FROM box_keys WHERE box_id = ?")
     .bind(box)
     .first<{ services: number; revoked_at: number | null }>();
-  return !k || (k.revoked_at == null && k.services === 1);
+  return !!k && k.revoked_at == null && k.services === 1;
 }
 
 /** One run of the scheduler (every five minutes): queue the objects due now for the transmitting box. */
@@ -192,7 +193,8 @@ export async function runCacheObjects(env: Env, now = nowS()): Promise<CacheObje
   if (!cfg.box) return { skipped: "no transmitting box set" };
   const caps = await freshBoxCaps(env, cfg.box);
   if (!caps?.tx || !caps.rf || !caps.pos) return { skipped: "the box cannot transmit on RF, or reports no position" };
-  if (!(await boxMayServe(env, cfg.box))) return { skipped: "the box does not run this instance's services" };
+  if (!(await boxMayServe(env, cfg.box)))
+    return { skipped: "the box is not enrolled with its own key and running this instance's services" };
   const call = serviceCall(env);
   if (!(await isCallsignVerified(env, baseCall(call)))) return { skipped: `${call} is not control-verified` };
   // one batch at a time: a box that has not collected the last one gets no more

@@ -39,7 +39,10 @@ export interface SessionServerOpts {
   services: Service[];
   clock?: () => number;
   cfg?: Partial<LinkConfig>;
-  maxSessions?: number; // refuse new connects past this (a station can still be served)
+  /** Sessions at once, warming ones included; a connect past it is ignored. Default `MAX_SESSIONS_DEFAULT`. */
+  maxSessions?: number;
+  /** Sessions at once from one base call (any SSID, any service). Default `MAX_PER_CALL_DEFAULT`. */
+  maxPerCall?: number;
   /** Drop a slot still warming after this long; default 30 s. A hung/never-settling app
    *  factory must not pin the key (swallowing the peer's SABM retransmits) or eat a `maxSessions` slot. */
   warmupDeadlineMs?: number;
@@ -47,9 +50,18 @@ export interface SessionServerOpts {
 }
 
 const WARMUP_DEADLINE_MS_DEFAULT = 30_000;
+/**
+ * Every session costs a service factory run (the BBS loads the caller's mail from the gateway) and a dozen
+ * transmitted frames (UA, greeting, polls) until a silent caller is reaped, and any station can send a SABM
+ * from any call — so the server always has a cap.
+ */
+export const MAX_SESSIONS_DEFAULT = 10;
+/** One station's share of the sessions, so a single caller cannot take every one. */
+export const MAX_PER_CALL_DEFAULT = 2;
 
 interface Live {
   link?: ConnectedLink;
+  call: string; // the caller's base call, for the per-call cap
   service: Service;
   warming: boolean;
   warmingSince?: number; // clock() at slot reservation; used to reap a never-settling warm-up
@@ -97,9 +109,15 @@ export class SessionServer {
     }
 
     if (f.type !== "SABM") return; // no session + not a connect request → ignore
-    if (this.o.maxSessions != null && this.sessions.size >= this.o.maxSessions) {
+    const call = f.src.call.toUpperCase();
+    let fromCall = 0;
+    for (const s of this.sessions.values()) if (s.call === call) fromCall++;
+    if (
+      this.sessions.size >= (this.o.maxSessions ?? MAX_SESSIONS_DEFAULT) ||
+      fromCall >= (this.o.maxPerCall ?? MAX_PER_CALL_DEFAULT)
+    ) {
       this.o.onEvent?.({ kind: "refused", service: svc.name ?? addrStr(svc.addr), remote: addrStr(f.src) });
-      return; // at capacity — the peer's SABM retransmit / DM handles it
+      return; // at capacity: no answer, so a flood of connects costs the channel nothing — the peer retries
     }
     this.open(svc, f, key);
   }
@@ -109,7 +127,7 @@ export class SessionServer {
   private open(svc: Service, sabm: Ax25Frame, key: string): void {
     const remote = sabm.src;
     const now = (this.o.clock ?? Date.now)();
-    const slot: Live = { service: svc, warming: true, warmingSince: now };
+    const slot: Live = { service: svc, call: remote.call.toUpperCase(), warming: true, warmingSince: now };
     this.sessions.set(key, slot); // reserve the key so a retransmitted SABM doesn't double-open
     const wire = (app: LineApp) => {
       if (!this.sessions.has(key)) return; // torn down while warming

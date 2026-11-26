@@ -68,6 +68,7 @@ export type AppGeo = z.infer<typeof AppGeo>;
  * accuracy and timestamp are optional); an NFC stage takes the tag's `code`.
  */
 export const StageUnlockRequest = z.object({
+  // the player who queued it offline: a call of another base call than the session's is refused, never credited
   callsign: z.string().optional(),
   appGeo: AppGeo.partial({ accuracyM: true, ts: true }).optional(),
   code: z.string().optional(),
@@ -90,9 +91,8 @@ export const CacheTags = z.array(z.string().trim().min(1).max(TEXT_LIMITS.tag)).
 export const RatingPolicy = z.enum(["finders", "all", "off"]);
 export type RatingPolicy = z.infer<typeof RatingPolicy>;
 
-/** Submit a 1–5 star rating for a cache. */
+/** Submit a 1–5 star rating for a cache, as the signed-in session's call. */
 export const RateRequest = z.object({
-  callsign: Callsign.optional(), // omitted by signed-in web (attributed to the session)
   stars: z.number().int().min(1).max(5),
 });
 export type RateRequest = z.infer<typeof RateRequest>;
@@ -105,7 +105,7 @@ export const CacheTitle = z
   .max(TEXT_LIMITS.title)
   .regex(/^[^\u0000-\u001f\u007f]*$/, "the title must not contain control characters");
 
-/** Owner "hide a cache" — create a native cache. Owner taken from session, else `ownerCall`. */
+/** Owner "hide a cache" — create a native cache. The owner is the signed-in session's call. */
 export const CreateCacheRequest = z.object({
   title: CacheTitle,
   type: CacheType.default("traditional"),
@@ -113,13 +113,12 @@ export const CreateCacheRequest = z.object({
   lon: Lon,
   difficulty: DT.default(1.5),
   terrain: DT.default(1.5),
-  ownerCall: Callsign.optional(),
   stationCall: Callsign.optional(), // aprs_living: the beaconing station that IS the cache
   hint: z.string().max(TEXT_LIMITS.hint).optional(),
   description: z.string().max(TEXT_LIMITS.description).optional(),
   minTrust: MinTrust.optional(),
   fedScope: FedScope.default("public"), // how far this cache federates
-  code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
+  code: z.string().trim().max(32).optional(), // a code the sysop chooses; else AC-#### is minted
   driveIn: z.boolean().optional(), // car-accessible cache (original APRScaching "Drive-In")
   country: z.union([z.literal(""), DxccPrefix]).optional(), // a DXCC prefix; "" clears it
   tags: CacheTags.optional(),
@@ -130,7 +129,6 @@ export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
 /** Owner edit. Every field optional; `status` lets an owner disable/archive a cache. */
 export const UpdateCacheRequest = z.object({
-  ownerCall: Callsign.optional(), // advisory actor identity until passkey sessions land
   title: CacheTitle.optional(),
   type: CacheType.optional(),
   status: CacheStatus.optional(),
@@ -162,7 +160,7 @@ export const AuthorSig = z.object({
 
 /** A log entry against a cache (found/DNF/note/…), posted to /api/caches/:id/logs. Verification only runs for `found`. */
 export const LogRequest = z.object({
-  loggerCall: Callsign.optional(), // omitted by signed-in web (attributed to the session)
+  loggerCall: Callsign.optional(), // an SSID of the session's own call to log as; else the session's call
   logType: LogType.default("found"),
   comment: z.string().max(TEXT_LIMITS.logComment).optional(),
   appGeo: AppGeo.optional(),

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { NetromCircuit, NR_MAX_INFO, type NrTpPacket } from "../src/netrom-circuit.js";
+import { NetromCircuit, NR_MAX_INFO, NR_MAX_REASSEMBLY, type NrTpPacket } from "../src/netrom-circuit.js";
+import { NrOp, NR_MORE } from "../src/netrom-wire.js";
 
 const A = (call: string, ssid = 0) => ({ call, ssid });
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
@@ -100,6 +101,11 @@ describe("NET/ROM L4 circuit", () => {
     const origin = NetromCircuit.originOf(captured!.info)!;
     expect(origin.user).toEqual({ call: "OE3ABC", ssid: 7 });
     expect(origin.node).toEqual({ call: "OE8NOD", ssid: 1 });
+    for (const at of [1, 8]) {
+      const bad = captured!.info.slice();
+      bad[at] = 0x1b << 1; // an escape byte in the user's, then the node's, call
+      expect(NetromCircuit.originOf(bad), `offset ${at}`).toBeNull();
+    }
   });
 });
 
@@ -157,5 +163,58 @@ describe("NET/ROM circuit timers", () => {
     c.poll(); // long after T1 would have fired
     expect(before.length).toBe(n); // no retransmit — the timer was disarmed on connect
     expect(b.state).toBe("connected");
+  });
+});
+
+describe("NET/ROM circuit bounds", () => {
+  /** An accepted inbound circuit and what it sends, on a settable clock. */
+  function accepted() {
+    const clock = { t: 0 };
+    const sent: NrTpPacket[] = [];
+    const states: string[] = [];
+    const c = new NetromCircuit(
+      { send: (p) => sent.push(p), deliver: () => {}, state: (s) => states.push(s) },
+      { index: 1, id: 1 },
+      undefined,
+      { clock: () => clock.t },
+    );
+    c.onPacket({ opcode: NrOp.ConnReq, flags: 0, circuitIndex: 7, circuitId: 7, txSeq: 0, rxSeq: 0 }, Uint8Array.of(4));
+    return { c, sent, states, clock };
+  }
+
+  it("tears the circuit down when a message passes 8 KiB without its last fragment", () => {
+    const { c, sent } = accepted();
+    const frag = new Uint8Array(NR_MAX_INFO).fill(0x41);
+    for (let i = 0; i < 1000; i++)
+      c.onPacket({ opcode: NrOp.Info, flags: NR_MORE, circuitIndex: 1, circuitId: 1, txSeq: i & 0xff, rxSeq: 0 }, frag);
+    expect(c.state).toBe("disconnecting");
+    expect(sent.some((p) => p.tp.opcode === NrOp.DiscReq)).toBe(true);
+    expect((c as unknown as { rxFrag: Uint8Array[] }).rxFrag.length).toBe(0);
+  });
+
+  it("delivers a message just under the cap", () => {
+    const got: Uint8Array[] = [];
+    const c = new NetromCircuit({ send: () => {}, deliver: (b) => got.push(b), state: () => {} }, { index: 1, id: 1 });
+    c.onPacket({ opcode: NrOp.ConnReq, flags: 0, circuitIndex: 7, circuitId: 7, txSeq: 0, rxSeq: 0 }, Uint8Array.of(4));
+    const n = Math.floor(NR_MAX_REASSEMBLY / NR_MAX_INFO);
+    for (let i = 0; i < n; i++)
+      c.onPacket(
+        { opcode: NrOp.Info, flags: i < n - 1 ? NR_MORE : 0, circuitIndex: 1, circuitId: 1, txSeq: i, rxSeq: 0 },
+        new Uint8Array(NR_MAX_INFO),
+      );
+    expect(got.map((b) => b.length)).toEqual([n * NR_MAX_INFO]);
+  });
+
+  it("closes a circuit idle for 15 minutes, and not one that keeps talking", () => {
+    const NR_IDLE_MS = 15 * 60_000;
+    const { c, clock } = accepted();
+    clock.t = NR_IDLE_MS - 1000;
+    c.onPacket({ opcode: NrOp.InfoAck, flags: 0, circuitIndex: 1, circuitId: 1, txSeq: 0, rxSeq: 0 }, new Uint8Array());
+    clock.t += NR_IDLE_MS - 1;
+    c.poll();
+    expect(c.state).toBe("connected");
+    clock.t += 1;
+    c.poll();
+    expect(c.state).toBe("disconnecting");
   });
 });

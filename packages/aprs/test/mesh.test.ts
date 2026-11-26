@@ -235,12 +235,36 @@ describe("meshtastic — licensed-only acceptance", () => {
   });
 
   it("is bounded and forgets a node whose NodeInfo is too old", () => {
-    const reg = new MeshtasticLicensedNodes({ max: 2, ttlMs: 1000 });
-    for (const n of ["!1", "!2", "!3"])
-      reg.observe({ kind: "nodeinfo", node: n, longName: "OE8APR", isLicensed: true }, 0);
+    const reg = new MeshtasticLicensedNodes({ max: 2, ttlMs: 1000, protectMs: 100 });
+    reg.observe({ kind: "nodeinfo", node: "!1", longName: "OE8APR", isLicensed: true }, 0);
+    reg.observe({ kind: "nodeinfo", node: "!2", longName: "OE8APR", isLicensed: true }, 0);
+    reg.observe({ kind: "nodeinfo", node: "!3", longName: "OE8APR", isLicensed: true }, 200);
     expect(reg.size).toBe(2);
-    expect(reg.callsignFor("!1", 1)).toBeNull(); // the oldest entry was evicted
+    expect(reg.callsignFor("!1", 201)).toBeNull(); // the least recently heard entry was evicted
     expect(reg.callsignFor("!3", 999)).toBe("OE8APR");
-    expect(reg.callsignFor("!3", 1001)).toBeNull(); // expired
+    expect(reg.callsignFor("!3", 1201)).toBeNull(); // expired
+  });
+
+  it("keeps the nodes it hears through a NodeInfo flood from fresh node ids", () => {
+    const reg = new MeshtasticLicensedNodes({ max: 3 });
+    const info = (node: string, now: number) =>
+      reg.observe({ kind: "nodeinfo", node, longName: "OE8APR", isLicensed: true }, now);
+    info("!real", 0);
+    for (let i = 0; i < 5000; i++) info(`!fake${i}`, 1000 + i);
+    expect(reg.callsignFor("!real", 10_000)).toBe("OE8APR");
+    expect(reg.refused).toBeGreaterThan(4000);
+  });
+
+  it("evicts the least recently heard node, where a position counts as hearing it", () => {
+    const reg = new MeshtasticLicensedNodes({ max: 2, protectMs: 1000 });
+    const info = (node: string, now: number) =>
+      reg.observe({ kind: "nodeinfo", node, longName: "OE8APR", isLicensed: true }, now);
+    info("!a", 0);
+    info("!b", 10);
+    expect(reg.callsignFor("!a", 500)).toBe("OE8APR"); // a position from !a
+    info("!c", 1200); // !b was last heard at 10, !a at 500
+    expect(reg.callsignFor("!b", 1201)).toBeNull();
+    expect(reg.callsignFor("!a", 1201)).toBe("OE8APR");
+    expect(reg.callsignFor("!c", 1201)).toBe("OE8APR");
   });
 });

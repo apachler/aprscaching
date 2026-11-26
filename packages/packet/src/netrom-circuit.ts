@@ -16,6 +16,11 @@ import { encodeAddress, decodeAddress, type Ax25Address } from "@aprscaching/ax2
 export const NR_MAX_INFO = 236; // 256-byte AX.25 frame − 20-byte net+transport header
 const MOD = 256; // 8-bit transport sequence numbers → windows up to 127
 const MAX_TXQ = 2048; // bound the outbound fragment queue (backpressure, no OOM)
+/** The largest message a peer may reassemble on us, the session driver's 8 KiB line bound: past it the peer
+ *  is hostile or broken, and the circuit is torn down rather than holding whatever it keeps sending. */
+export const NR_MAX_REASSEMBLY = 8192;
+/** A circuit with no traffic either way for this long is torn down, so an abandoned one frees its slot. */
+export const NR_IDLE_MS = 15 * 60_000;
 
 export type CircuitState = "disconnected" | "connecting" | "connected" | "disconnecting";
 export interface NrTpPacket {
@@ -43,6 +48,7 @@ export class NetromCircuit {
   private txq: Array<{ info: Uint8Array; more: boolean }> = []; // queued fragments + their more-follows flag
   private sent: Array<{ seq: number; info: Uint8Array; more: boolean }> = []; // unacked window (for retransmit)
   private rxFrag: Uint8Array[] = []; // reassembly buffer for more-follows fragments
+  private rxFragBytes = 0;
 
   // Clock-injected T1 so a lost ConnReq/Info/DiscReq is retransmitted and the circuit is
   // eventually torn down instead of wedging forever. The host drives `poll()` on an interval.
@@ -52,18 +58,22 @@ export class NetromCircuit {
   private t1 = 0; // retransmit deadline (0 = disarmed)
   private rc = 0; // retransmit count for the current outstanding item
   private connReqInfo: Uint8Array | null = null; // cached to retransmit the ConnReq
+  private idleMs: number;
+  private lastActivity: number;
 
   constructor(
     private ev: CircuitEvents,
     id: { index: number; id: number },
     private origin?: { user: Ax25Address; node: Ax25Address },
-    opts?: { clock?: () => number; t1Ms?: number; n2?: number },
+    opts?: { clock?: () => number; t1Ms?: number; n2?: number; idleMs?: number },
   ) {
     this.myIndex = id.index;
     this.myId = id.id;
     this.clock = opts?.clock ?? (() => Date.now());
     this.t1Ms = opts?.t1Ms ?? 5000;
     this.n2 = opts?.n2 ?? 5;
+    this.idleMs = opts?.idleMs ?? NR_IDLE_MS;
+    this.lastActivity = this.clock();
   }
 
   private armFresh(): void {
@@ -78,8 +88,12 @@ export class NetromCircuit {
     this.rc = 0;
   }
 
-  /** Drive the retransmit timer — the host calls this on a ~1 s interval (like the AX.25 link). */
+  /** Drive the retransmit and idle timers — the host calls this on a ~1 s interval (like the AX.25 link). */
   poll(): void {
+    if (this.state === "connected" && this.clock() - this.lastActivity >= this.idleMs) {
+      this.disconnect();
+      return;
+    }
     if (!this.t1 || this.clock() < this.t1) return;
     if (this.rc >= this.n2) {
       this.disarm();
@@ -167,12 +181,14 @@ export class NetromCircuit {
       if (info.length === 0) break;
     }
     if (this.txq.length + frags.length > MAX_TXQ) return; // backpressure — drop rather than grow without bound
+    this.lastActivity = this.clock();
     frags.forEach((f, i) => this.txq.push({ info: f, more: i < frags.length - 1 }));
     if (this.state === "connected") this.pump();
   }
 
   /** Handle an inbound transport packet (the host has stripped the network header). */
   onPacket(tp: NrTransport, info: Uint8Array): void {
+    this.lastActivity = this.clock();
     switch (tp.opcode) {
       case NrOp.ConnReq:
         return this.onConnReq(tp, info);
@@ -247,18 +263,25 @@ export class NetromCircuit {
     if (this.state !== "connected") return;
     if (tp.txSeq === this.vr) {
       // in-sequence
+      if (this.rxFragBytes + info.length > NR_MAX_REASSEMBLY) {
+        this.rxFrag = [];
+        this.rxFragBytes = 0;
+        this.disconnect();
+        return;
+      }
       this.vr = (this.vr + 1) % MOD;
       this.rxFrag.push(info);
+      this.rxFragBytes += info.length;
       if (!(tp.flags & NR_MORE)) {
         // last fragment → reassemble + deliver
-        const total = this.rxFrag.reduce((n, f) => n + f.length, 0);
-        const out = new Uint8Array(total);
+        const out = new Uint8Array(this.rxFragBytes);
         let o = 0;
         for (const f of this.rxFrag) {
           out.set(f, o);
           o += f.length;
         }
         this.rxFrag = [];
+        this.rxFragBytes = 0;
         this.ev.deliver(out);
       }
     }
@@ -327,6 +350,8 @@ export class NetromCircuit {
   /** Decode a ConnReq info field into the originating user/node calls (for a node accepting a circuit). */
   static originOf(info: Uint8Array): { window: number; user: Ax25Address; node: Ax25Address } | null {
     if (info.length < 15) return null;
-    return { window: info[0]!, user: decodeAddress(info, 1).addr, node: decodeAddress(info, 8).addr };
+    const user = decodeAddress(info, 1)?.addr,
+      node = decodeAddress(info, 8)?.addr;
+    return user && node ? { window: info[0]!, user, node } : null;
   }
 }

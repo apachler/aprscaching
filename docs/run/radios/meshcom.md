@@ -160,8 +160,9 @@ nothing about where a station was.
 
 **Callsign verification** follows the same rule. A player's `VERIFY <code>` direct message to the service
 call, from any SSID of their call, verifies the call only when your node heard it directly over
-LoRa and the node's callsign is a trusted receiving station on the gateway (Instance admin, or
-`FIRST_PARTY_SITES`). A copy relayed by another node, or passed on by the
+LoRa and your ingest box, enrolled with its own key, delivered it with the node's callsign trusted under that
+box (**Trust this station's hearings**); a box on the shared `INGEST_SECRET` verifies no callsign
+([How the box signs in](ingest-box.md#how-the-box-signs-in)). A copy relayed by another node, or passed on by the
 MeshCom server, is dropped without an answer and costs the player no attempt. The verification names your
 node as the station that heard it. With [answering](#answering-radio-commands-optional) set up, the node
 acks the message and confirms the verification. The player's steps are in

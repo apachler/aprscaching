@@ -6,7 +6,9 @@
  * F-protocol. This wrapper serves both from one callsign: lines go to the interactive `BbsSession`
  * until the peer's first line IS an SID — from then on the session is an `FbbSession` responder
  * (proposals in, verdicts out, reverse forwarding from the store), and when it ends (`FQ`) the
- * collected traffic is handed to `onSessionEnd` for persistence.
+ * collected traffic is handed to `onSessionEnd` for persistence. Only a caller `isPartner` names gets the
+ * responder: anyone can answer a greeting with a SID, and the responder takes mail into the gateway and hands
+ * out the reverse pool, so a caller that is no configured forwarding partner is told so and disconnected.
  */
 import { FbbSession, type FbbStore } from "./fbb-session.js";
 import type { LineApp, LineReply } from "./link-app.js";
@@ -18,6 +20,8 @@ export interface FbbGateOpts {
   sid?: string;
   /** Build the responder's store when a forwarding peer announces itself (may fetch the reverse pool). */
   makeStore: () => FbbStore | Promise<FbbStore>;
+  /** Whether the caller is a forwarding partner of this BBS (an enabled entry of the sysop's partner list). */
+  isPartner: () => boolean | Promise<boolean>;
   /** Called once when the forwarding session completes; persist store.inbox / sent BIDs here. */
   onSessionEnd?: (store: FbbStore) => void | Promise<void>;
 }
@@ -45,6 +49,8 @@ export class FbbGatedBbs implements LineApp {
       const t = input.trim();
       if (SID_RE.test(t)) {
         // the caller is a forwarding peer — switch this session to the F-protocol responder
+        if (!(await this.opts.isPartner()))
+          return { lines: ["*** Not a forwarding partner of this BBS. Disconnecting."], disconnect: true };
         this.store = await this.opts.makeStore();
         this.fbb = new FbbSession(this.store, { initiator: false, sid: this.sid(), sidAlreadySent: true });
         const r = this.fbb.feed(t);

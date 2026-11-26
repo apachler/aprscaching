@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Starting an RF control-verification challenge: a signed-in caller may only challenge a call its
 // account holds, starts are throttled per account and per callsign so nobody can churn codes, and an
-// instance with no attested receiving site refuses to start one, since nothing could ever hear the reply.
+// instance with no receiving site trusted through an enrolled box refuses to start one, since nothing could
+// ever hear the reply.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { trustedBox } from "./helpers/box.js";
 
 describe("RF verification challenge start", () => {
   it("a session cannot start a challenge for a call its account does not hold", async () => {
@@ -32,8 +34,9 @@ describe("RF verification challenge start", () => {
     expect(methods.rfSites).toEqual([]);
   });
 
-  it("with attested sites, the start answer and the methods list name the listening site calls", async () => {
-    const env = authEnv({ FIRST_PARTY_SITES: "oe8xxx, OE8YYY-10" });
+  it("with sites trusted through a box, the start answer and the methods list name the listening site calls", async () => {
+    const env = authEnv({ FIRST_PARTY_SITES: "OE8ZZZ" });
+    await trustedBox(env, "shack-rx", ["OE8YYY-10", "OE8XXX"]);
     const me = await emailSignup(env, "owner@example.test", "OE8APR");
     const r = await call(env, "POST", "/verify/aprs/start", { callsign: "OE8APR" }, { cookie: me.cookie });
     expect(r.status).toBe(200);
@@ -44,7 +47,8 @@ describe("RF verification challenge start", () => {
   });
 
   it("starts are rate limited per callsign and per account", async () => {
-    const env = authEnv({ FIRST_PARTY_SITES: "OE8XXX" });
+    const env = authEnv();
+    await trustedBox(env, "shack-rx", ["OE8XXX"]);
     const me = await emailSignup(env, "owner@example.test", "OE8APR");
     const statuses: number[] = [];
     for (let i = 0; i < 8; i++)

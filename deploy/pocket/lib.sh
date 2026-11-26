@@ -299,6 +299,32 @@ net44_address() {
   done < <(list_ipv4)
   return 1
 }
+# "name address" for each global IPv6 address of this phone: a carrier hands one out on mobile data, often
+# with no inbound filter, so it is reachable from the whole internet. Link-local (fe80::/10) and unique local
+# (fc00::/7) addresses are not. Nothing when ip is missing or lists none.
+global_ipv6() {
+  have ip || return 0
+  { ip -6 -o addr show scope global 2>/dev/null || true; } | awk '/ scope global/ {sub(/@.*/, "", $2); print $2, $4}' |
+    while read -r name cidr; do
+      [ -n "${name:-}" ] || continue
+      case "${cidr%%/*}" in [fF][cCdD]* | [fF][eE][89aAbB]*) continue ;; esac
+      printf '%s %s\n' "$name" "${cidr%%/*}"
+    done
+}
+# The first global IPv6 address the gateway answers on, or nothing. Unset, HOST makes the server listen on
+# every interface, IPv6 included (`::`); `0.0.0.0` and an IPv4 address listen on IPv4 alone.
+exposed_ipv6() {
+  local host first
+  host="$(env_get HOST)"
+  host="${host#[}"
+  host="${host%]}"
+  first="$(global_ipv6 | head -n 1)"
+  [ -n "$first" ] || return 1
+  case "$host" in
+    '' | '::') printf '%s\n' "$first" ;;
+    *) global_ipv6 | awk -v h="$host" '$2 == h { print; f = 1; exit } END { exit !f }' ;;
+  esac
+}
 # The address of the hamnet endpoint FED_ENDPOINTS declares, or nothing. HAMNET is what the sysop declares:
 # no address range tells a HAMNET address from an internet-reachable 44Net one.
 hamnet_endpoint() {

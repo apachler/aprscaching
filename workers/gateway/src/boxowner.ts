@@ -36,11 +36,6 @@ export async function boxOwner(env: Env, boxId: string): Promise<string | null> 
   return row?.account_id ?? null;
 }
 
-/** Does box `boxId` have a key of its own (live or revoked)? Such a box speaks only through its signature. */
-export async function boxHasKey(env: Env, boxId: string): Promise<boolean> {
-  return !!(await env.DB.prepare("SELECT 1 AS x FROM box_keys WHERE box_id = ?").bind(boxId).first());
-}
-
 /**
  * The statements that forget the boxes `ids` selects (a subquery over `box_id`, with its binds): their trust,
  * their last status, an open pairing, their queued commands and, last, their owner. Their box_keys rows are left

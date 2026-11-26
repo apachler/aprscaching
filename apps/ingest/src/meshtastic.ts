@@ -25,6 +25,7 @@ import {
 import type { Packet } from "@aprscaching/shared";
 import { Backoff } from "./backoff.js";
 import { MqttSubscriber } from "./mqtt.js";
+import { eachFrame } from "./each-frame.js";
 
 /** A stream that never completes a frame within this many bytes is not a Meshtastic stream: drop it. */
 export const MESHTASTIC_RX_MAX_BYTES = 64 * 1024;
@@ -107,7 +108,11 @@ export class MeshtasticTcp {
     merged.set(chunk, this.buf.length);
     const { frames, rest } = deframeMeshtastic(merged);
     this.buf = rest.length > MESHTASTIC_RX_MAX_BYTES ? new Uint8Array(0) : rest.slice();
-    for (const f of frames) this.ingest.handle(parseFromRadio(f));
+    eachFrame(
+      frames,
+      (f) => this.ingest.handle(parseFromRadio(f)),
+      (m) => console.error("[meshtastic] %s", m),
+    );
   }
 
   private connect(): void {

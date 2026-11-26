@@ -17,7 +17,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SESSION_SECRET: "Key that signs sign-in sessions; must differ from the ingest and operator secrets",
   SESSION_TTL_DAYS: "Days a sign-in session lasts",
   SESSION_EPOCH: "Unix seconds: sessions minted before this time are refused",
-  TRUST_PROXY: "1 when a reverse proxy fronts the instance, so x-forwarded-for and x-forwarded-proto are trusted",
+  TRUST_PROXY: "Reverse proxies in front (1 for one); the client is the x-forwarded-for entry that far from right",
   TRUST_CF: "1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept",
   ADMIN_CALLSIGNS: "Comma-separated licensed calls that may administer this instance",
   INSTANCE: "Federation instance id (domain); defaults to the host of APP_URL",
@@ -139,6 +139,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   KISS_SERVER_PORTS: "Radio ports the KISS server exposes, as [<kiss port>=]<radio port>; default all, in order",
   KISS_SERVER_PORT_LISTENERS: "Extra KISS server TCP ports, <tcp port>=<kiss port>, each carrying that port as port 0",
   KISS_SERVER_MAX_CLIENTS: "Programs connected to the KISS server at once",
+  KISS_SERVER_MAX_PER_ADDR: "KISS server programs connected at once from one address other than the box's own",
+  KISS_SERVER_IDLE_SEC: "Seconds of silence after which a KISS server program gives up its slot to a newcomer",
   KISS_SERVER_TX: "1 lets KISS server clients transmit; without it they only receive",
   KISS_SERVER_TX_CALLS: "Base calls KISS server clients may transmit as (default: the box's station calls)",
   KISS_SERVER_TX_BURST: "KISS server client transmits allowed at once before pacing applies",
@@ -195,7 +197,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MESHCOM_KISS_PASS: "The node's KISS password: answers then go out from the service call through KISS",
   MESHCOM_KISS_PORT: "The node's KISS TCP port",
   AXUDP_PORT: "UDP port for AX.25-over-UDP; set it to enable AXUDP",
-  AXUDP_BIND: "Local address the AXUDP socket binds",
+  AXUDP_BIND: "Local address the AXUDP socket binds; unset, loopback without peers",
   AXUDP_PEERS: "AXUDP peers as host:port, comma-separated",
   AXIP_ENABLE: "Set to enable the AXIP listener (IP protocol 93, needs raw-socket rights)",
   AXIP_PEERS: "AXIP peer hosts, comma-separated; set it to enable AXIP",
@@ -209,7 +211,11 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   NETROM_BROADCAST_MS: "Interval in milliseconds between NODES broadcasts; at least 300000 (5 minutes)",
   NETROM_PATH_QUALITY: "Link quality (0-255) assumed for a directly heard neighbour",
   NETROM_INP3: "1 also speaks INP3 alongside NODES",
+  NETROM_TX_BURST: "NET/ROM node answers allowed at once before pacing applies",
+  NETROM_TX_REFILL_SEC: "Seconds to regain one NET/ROM node answer",
   NODE_PERSONALITY: "Command surface of the node: netrom, flexnet, tnn or baycom",
+  CONNECTED_MAX_SESSIONS: "Inbound AX.25 connects to the node, BBS and federation sync answered at once",
+  CONNECTED_MAX_PER_CALL: "Inbound AX.25 connects answered at once from one base call",
   BBS_NODE_CALL: "Callsign the BBS answers inbound connects on",
   BBS_FORWARD: "1 enables FBB forwarding to partner BBSes",
   BBS_FORWARD_CALL: "Callsign the box forwards FBB mail as; default BBS_NODE_CALL",
@@ -233,7 +239,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   IGATE_TX_BURST: "IGate transmits allowed at once before pacing applies",
   IGATE_TX_REFILL_SEC: "Seconds to regain one IGate transmit",
   RF_SITE_CALL: "Callsign naming this box as the receiving site of what its TNCs and soundcard ports hear",
-  BOX_ID: "Remote-control ID of this box; set it to link the box to your account",
+  BOX_ID: "ID of this box, written by enrollment; pairing and remote control need its BOX_KEY too",
   BOX_KEY: "This box's private signing key, written by enrollment; it replaces INGEST_SECRET",
   BOX_TX: "1 allows transmitting on remote command",
   BOX_CALL: "Callsign the box transmits remote commands as",
@@ -280,7 +286,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   TLS_CA_CERT: "CA certificate offered for download at /pocket-ca.crt",
   LICENCE_SOURCES: "Licence registers to import, comma-separated (fcc, ised, acma, at, de or all)",
   BASE: "Gateway the licence importer sends to",
-  HOST: "Address the desktop app listens on; 0.0.0.0 serves the local network",
+  HOST: "Address the server listens on; 127.0.0.1 behind a proxy on this machine, unset for every interface",
   DATA_DIR: "Where the desktop app keeps its database and media",
   VITE_API_BASE: "Gateway base URL, when the API lives on another host than the web app",
   VITE_APP_URL: "Public URL of the web app, for its canonical link and Open Graph tags",
@@ -321,12 +327,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`INGEST_SECRET`",
-        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror, heard federation frames, finds logged over APRS, and remote-box polling and pairing. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
+        "The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, the NET/ROM node mirror and heard federation frames. Its authority is packets only. It never verifies a callsign: an on-air `VERIFY` counts only from a box enrolled with its own key. It acts for no remote box: pairing, polling and a box's queue take the box's own key. It acts as no player or cache owner: hiding or editing a cache, logs, favourites, watches and ratings take a signed-in session. It runs no BBS: the packet BBS mailbox, FBB forwarding, the partner list and White Pages take a box enrolled with its own key that runs this instance's services. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me`",
         "*(required)*",
       ],
       [
         "`OPERATOR_SECRET`",
-        "The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), `POST /auth/operator-link` (`tools/admin/signin-link.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, catalog imports and removing an imported place, the FBB federation enqueue, relay dispatch, and donation confirms. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box",
+        "The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), `POST /auth/operator-link` (`tools/admin/signin-link.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, catalog imports and removing an imported place, the FBB federation enqueue, relay dispatch, donation confirms, and any remote box's pairing, polling and queue (`/api/box/<id>/…`) as the operator's override. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box",
         "—",
       ],
       [
@@ -372,12 +378,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TRUST_PROXY`",
-        "Trust the proxy's `x-forwarded-for` for rate-limit client identity and its `x-forwarded-proto` for the scheme a request came on (the address its cookie and links name). Set it only behind your own proxy; the Docker stack sets it, since Caddy is the only way in. Without it both headers are ignored",
-        "off",
+        "The number of reverse proxies between a client and the gateway, `0` for none. Behind them the gateway trusts `x-forwarded-for` for rate-limit client identity and `x-forwarded-proto` for the scheme a request came on (the address its cookie and links name). Each proxy appends the address it was reached from, so the client is the entry `TRUST_PROXY` places from the right: `1` takes the rightmost, which your proxy wrote; `2` the one before it, for a proxy behind another. Entries further left are what the client sent and never count; a header with fewer entries than that keys on its rightmost. Set it only behind your own proxy, with the gateway reachable through that proxy alone (`HOST=127.0.0.1` for a proxy on the same machine). The Docker stack sets `1`, since Caddy is the only way in and writes a single entry. Without it both headers are ignored",
+        "`0`",
       ],
       [
         "`TRUST_CF`",
-        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare: the tunnel, or proxied DNS with `CF_RANGES` set to Cloudflare's ranges; otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
+        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity; it takes precedence over `x-forwarded-for`. It is safe only when the gateway is reachable through Cloudflare alone: the tunnel, or proxied DNS with `CF_RANGES` set to Cloudflare's ranges. A client that reaches the gateway any other way sends its own `cf-connecting-ip` and picks a fresh identity per request. Unset, a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
         "off",
       ],
       [
@@ -467,7 +473,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`1` sends the caches near the transmitting ingest box on air as APRS objects with the point-of-interest symbol, from the service call, through that box's radio and its transmit gates; never through APRS-IS ([Caches on air](../run/radios/caches-on-air.md))",
         "off",
       ],
-      ["`CACHE_OBJECTS_BOX`", "The `BOX_ID` of the ingest box whose radio sends the cache objects", "—"],
+      [
+        "`CACHE_OBJECTS_BOX`",
+        "The `BOX_ID` of the ingest box whose radio sends the cache objects: a box enrolled with its own key that runs this instance's services",
+        "—",
+      ],
       [
         "`CACHE_OBJECTS_RADIUS_KM`",
         "Only active caches this many kilometres or closer to the transmitting box's own position (`BOX_LAT`, `BOX_LON`) go on air, 1–50",
@@ -487,6 +497,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     header: ["Variable", "Purpose", "Default"],
     rows: [
       ["`PORT`", "Port the server listens on", "`8787`"],
+      [
+        "`HOST`",
+        "Address the server's listeners bind, the https one included. `127.0.0.1` when a reverse proxy on the same machine fronts the gateway, so the proxy is the only way in: a client that reaches the port directly writes its own `x-forwarded-for`. Bare metal sets it when a domain is given. Leave it unset in the Docker stack, where Caddy reaches the gateway over the container network",
+        "every interface",
+      ],
       ["`DB_PATH`", "The SQLite database file", "`data/aprscaching.db` beside the server"],
       ["`MIGRATIONS_DIR`", "Where the schema migrations are read from", "`db/migrations` of the checkout"],
       ["`MEDIA_DIR`", "Where cache media is stored", "`data/media` beside the server"],
@@ -542,7 +557,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`FIRST_PARTY_SITES`",
-        "Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Trusted sites are also the only ones whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
+        "Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. A site in this list never verifies a callsign: an on-air `VERIFY <code>` counts only from a site trusted through an enrolled box, delivered with that box's key ([How the box signs in](../run/radios/ingest-box.md#how-the-box-signs-in)). Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
         "—",
       ],
       [
@@ -827,7 +842,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`BOX_ID` / `BOX_KEY`",
-        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. `BOX_ID` also names the box for remote control (below)",
+        "An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. Only an enrolled box's hearings verify callsigns on the air, and only an enrolled box is paired and remote-controlled. `BOX_ID` also names the box for remote control (below)",
         "—",
       ],
       ["`BATCH_MS`", "Batch flush interval", "`1500` (`2000` in the `.env` that `deploy/setup.sh` writes)"],
@@ -850,7 +865,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "KISS server (other packet programs share the box's radio ports)",
-        "`KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md)",
+        "`KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_MAX_PER_ADDR` (`2`, clients from one address other than the box's own), `KISS_SERVER_IDLE_SEC` (`300`, a client silent this long gives up its slot to a newcomer when the server is full), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md)",
       ],
       [
         "AGWPE",
@@ -895,11 +910,15 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "NET/ROM node",
-        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
+        "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`3600000`, one hour; at least 5 minutes), `NETROM_PATH_QUALITY` (`192`, 0–255), `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NETROM_TX_BURST` (`20`) / `NETROM_TX_REFILL_SEC` (`3`) — the node's answers to what it hears ([transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
+      ],
+      [
+        "Connected-mode sessions (node, BBS, federation sync)",
+        "`CONNECTED_MAX_SESSIONS` (`10`, 1–100, inbound AX.25 connects answered at once), `CONNECTED_MAX_PER_CALL` (`2`, 1–10, of them from one base call) — [Connected-mode AX.25](../run/radios/packet-node.md#connected-mode-ax25)",
       ],
       [
         "BBS (inbound + forwarding)",
-        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing). Both run only on a box enrolled with its own key that runs this instance's services ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway))",
       ],
       [
         "Federation over packet circuits",
@@ -915,7 +934,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` and `BOX_KEY` (the enrolled box; it pairs with an account by the one-time code it prints at start, and a box without a key of its own takes no remote control), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_LAT` / `BOX_LON` (the box's own position, the only one a remote beacon names; without them the box sends no remote beacon), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`; none when the box transmits on an HF soundcard port), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Automatic beacons",

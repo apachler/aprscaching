@@ -5,6 +5,7 @@
 //
 //   ACS=http://127.0.0.1:8787 BPQ_HOST=127.0.0.1 BPQ_PORT=8010 node tools/interop/tests/bpq-loop.mjs
 import net from "node:net";
+import { boxFetch, enrollBox } from "../../smoke/boxsign.mjs";
 
 const ACS = process.env.ACS ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "interop-ci-secret-0001";
@@ -29,6 +30,22 @@ async function api(method, path, body) {
   } catch (e) {
     return { status: 0, data: null, error: String(e?.cause ?? e) };
   }
+}
+
+let probe = null;
+/** One request as the packet BBS box sends it: signed by "bpq-probe", a box enrolled with its own key that the
+ *  sysop lets run the instance's services. Mail and the FBB forwarding queue take only such a box. */
+async function bbs(method, path, body) {
+  if (!probe) {
+    const r = await enrollBox(ACS, OPERATOR_SECRET, "bpq-probe");
+    const s = r.error ? null : await api("POST", "/api/admin/boxes/bpq-probe/services", { services: true });
+    if (r.error || s.status !== 200) {
+      console.error(`FAIL the probe box could not be enrolled: ${r.error ?? JSON.stringify(s.data)}`);
+      process.exit(1);
+    }
+    probe = r.key;
+  }
+  return boxFetch(ACS, probe, method, path, body);
 }
 
 /** Drive the BPQ telnet console: login, send lines, capture output until quiet (or `waitFor`
@@ -131,7 +148,7 @@ ok(
 // ---- 2. FBB forward acs -> BPQ BBS ----
 await api("POST", "/api/bbs/partners", { call: "GB7BPQ-1", ha: "GB7BPQ.GBR.EU", proto: "rf-fbb", enabled: true });
 await api("POST", "/api/bbs/forward", { partner: "GB7BPQ-1", route: "GBR", transport: "rf-fbb" });
-await api("POST", "/api/bbs/messages", {
+await bbs("POST", "/api/bbs/messages", {
   fromCall: "OE1ACS",
   toCall: "SYSOP @ GB7BPQ.GBR.EU",
   subject: "interop bpq",
@@ -147,7 +164,7 @@ if (!bbsRunning) {
   console.log("SKIP acs forward pool drain + BPQ mail list — this LinBPQ build runs no mail application");
 } else {
   const drained = await until(180000, async () => {
-    const r = await api("GET", "/api/bbs/forward/pool?partner=GB7BPQ-1");
+    const r = await bbs("GET", "/api/bbs/forward/pool?partner=GB7BPQ-1");
     return r.status === 200 && (r.data?.messages ?? []).length === 0;
   });
   ok("acs forward pool drained (session with BPQ completed)", !!drained);

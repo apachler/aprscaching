@@ -143,6 +143,9 @@ frame it sent ([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-
 - **Transmit is opt-in** (`KISS_SERVER_TX=1`) and limited to the calls `KISS_SERVER_TX_CALLS` lists, which the
   gateway must confirm for this box. You stay the control operator of everything these programs send.
 - `KISS_SERVER_MAX_CLIENTS` (8) bounds the connections. A program that stops reading is disconnected.
+- `KISS_SERVER_MAX_PER_ADDR` (2) bounds the connections from one address other than the box's own.
+- A program that has sent nothing for `KISS_SERVER_IDLE_SEC` (300) gives up its connection when a new one finds
+  the server full. A program that only listens keeps its connection as long as no other needs the slot.
 
 ## Check that it worked
 

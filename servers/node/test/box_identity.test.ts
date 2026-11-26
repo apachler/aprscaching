@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Who a box transmits for, and what follows a call when it changes hands. Over the real gateway and a migrated
 // SQLite: a box the sysop enrols for another ham is that ham's; a revoked box has no owner; the shared secret
-// cannot borrow an enrolled box's owner; releasing or erasing a call takes its box trust and boxes with it; a
+// names no box, so it borrows no box's owner; releasing or erasing a call takes its box trust and boxes with it; a
 // suspended call or box owner transmits nothing and attests nothing; a revoked verification leaves nothing
 // queued; and ADMIN_CALLSIGNS matches by base call everywhere.
 import { describe, it, expect } from "vitest";
@@ -18,6 +18,7 @@ import {
   type Res,
 } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
+import { boxCall } from "./helpers/box.js";
 import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps/ingest/src/gatewayauth.js";
 import { gatewayTxGateLookup } from "../../../apps/ingest/src/callverify.js";
 
@@ -67,12 +68,11 @@ async function enrol(w: World, id: string, callsign?: string, headers?: Record<s
 }
 
 /** The box's transmit-gate lookup through the gateway in-process: signed by `key`, or with the shared secret. */
-const gate = (env: Env, o: { key?: BoxKey; boxId?: string } = {}) =>
+const gate = (env: Env, o: { key?: BoxKey } = {}) =>
   gatewayTxGateLookup({
     ingestUrl: `${ORIGIN}/ingest`,
     secret: o.key ? "" : SECRET,
     boxKey: !!o.key,
-    boxId: o.boxId,
     fetch: (async (u: string, init?: RequestInit) =>
       serve(env)(
         new Request(u, {
@@ -168,20 +168,27 @@ describe("a revoked box", () => {
   });
 });
 
-describe("the shared secret naming a box", () => {
+describe("the shared secret at the transmit gate", () => {
   it("does not borrow the owner of a box that has its own key", async () => {
     const w = await world({ FIRST_PARTY_SITES: "" });
     await enrol(w, "lent-1", "OE3OTH");
-    const got = await gate(w.env, { boxId: "lent-1" })(["OE3OTH-1"]);
+    const got = await gate(w.env)(["OE3OTH-1"]);
     expect(got.get("OE3OTH-1")).toMatchObject({ ok: false, reason: "not held by this box's operator" });
   });
 
-  it("still names a box paired on the shared secret", async () => {
+  it("names no box: a box id it sends lends it no owner's calls", async () => {
     const w = await world({ FIRST_PARTY_SITES: "" });
     await w.env.DB.prepare("INSERT INTO boxes (box_id, account_id, created_at) VALUES ('paired-1', ?, 1)")
       .bind(await accountOf(w.env, "OE3OTH"))
       .run();
-    expect((await gate(w.env, { boxId: "paired-1" })(["OE3OTH-1"])).get("OE3OTH-1")?.ok).toBe(true);
+    const r = await call(
+      w.env,
+      "GET",
+      `/ingest/txgate?calls=OE3OTH-1&nonce=${"n".repeat(20)}&box=paired-1`,
+      undefined,
+      INGEST,
+    );
+    expect(r.data.calls["OE3OTH-1"]).toMatchObject({ ok: false, reason: "not held by this box's operator" });
   });
 });
 
@@ -258,14 +265,6 @@ describe("a suspension", () => {
       ok: false,
       reason: "suspended",
     });
-    // the shared secret's paired box of a suspended owner: the owner's calls are refused as suspended
-    await w.env.DB.prepare("INSERT INTO boxes (box_id, account_id, created_at) VALUES ('paired-1', ?, 1)")
-      .bind(await accountOf(w.env, "OE3OTH"))
-      .run();
-    expect((await gate(w.env, { boxId: "paired-1" })(["OE8APR-10"])).get("OE8APR-10")).toEqual({
-      ok: false,
-      reason: "suspended",
-    });
     expect((await suspend(w, "OE3OTH", true)).status).toBe(200);
     expect((await gate(w.env, { key: k })(["OE3OTH-1"])).get("OE3OTH-1")?.ok).toBe(true);
   });
@@ -319,7 +318,7 @@ describe("a revoked verification", () => {
       .run();
     const out = await call(w.env, "GET", "/outbox", undefined, INGEST);
     expect(out.data.items.map((i: { src_call: string }) => i.src_call)).toEqual(["OE8APR-7"]);
-    const poll = await call(w.env, "GET", "/api/box/b1/commands", undefined, INGEST);
+    const poll = await boxCall(w.env, "b1", "GET", "/api/box/b1/commands");
     expect(poll.data.commands.map((c: { callsign: string }) => c.callsign)).toEqual(["OE8APR-9"]);
     expect(await one(w.env, "SELECT status FROM box_commands WHERE callsign = 'DL9NOV-9'")).toMatchObject({
       status: "failed",

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Drive the real auth endpoints of `handle()` over a migrated SQLite: email magic-link sign-up with
 // in-band dev tokens, and passkey register/login with a software P-256 authenticator ("none"
-// attestation), so tests exercise the same ceremony a browser runs.
+// attestation), so tests exercise the same ceremony a browser runs; and a direct session, for a test that
+// needs only a signed-in caller.
 import type { Env } from "@aprscaching/gateway/env";
+import { issueSessionCookie } from "@aprscaching/gateway/auth";
 import { instanceEnv, serve } from "./fedpeer.js";
 
 export const ORIGIN = "https://gw.test";
@@ -268,33 +270,26 @@ export async function operatorVerify(env: Env, callsign: string): Promise<void> 
 }
 
 /**
- * Verify a held call over RF: start a challenge for the signed-in account, then ingest the `VERIFY <code>`
- * message as heard on the TNC of the attested site OE8XXX (the env must name it in FIRST_PARTY_SITES).
+ * A session cookie for `callsign` on any test instance, for the account that holds its base call, created in the
+ * store when nobody does: for a test that needs a signed-in caller (an owner, a logger, a finder) rather than the
+ * sign-up ceremony.
  */
-export async function rfVerify(env: Env, cookie: string, callsign: string): Promise<void> {
-  const s = await call(env, "POST", "/verify/aprs/start", { callsign }, { cookie });
-  if (s.status !== 200) throw new Error(`verify start ${callsign} failed: ${JSON.stringify(s.data)}`);
-  await call(
-    env,
-    "POST",
-    "/ingest",
-    {
-      packets: [
-        {
-          src: `${callsign}-7`,
-          dst: "APRS",
-          path: ["WIDE1-1", "qAR", "OE8XXX"],
-          payload: `:${String(s.data.to).padEnd(9)}:${s.data.text}`,
-          kind: "message",
-          heardVia: "rf",
-          igateCall: "OE8XXX",
-          port: "kiss-tnc",
-          ts: Math.floor(Date.now() / 1000),
-        },
-      ],
-    },
-    { "x-ingest-secret": "test-ingest-secret" },
-  );
-  const st = await call(env, "GET", `/verify/aprs/status?callsign=${callsign}`);
-  if (st.data?.verified !== true) throw new Error(`rf-verify ${callsign} failed`);
+export async function sessionCookie(env: Env, callsign: string): Promise<string> {
+  const base = callsign.toUpperCase().replace(/-\d+$/, "");
+  const held = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
+    .bind(base)
+    .first<{ account_id: string }>();
+  const accountId = held?.account_id ?? `acct-${base.toLowerCase()}`;
+  if (!held) {
+    await env.DB.prepare("INSERT INTO accounts (account_id, callsign, created_at) VALUES (?, ?, 1)")
+      .bind(accountId, base)
+      .run();
+    await env.DB.prepare("INSERT INTO account_callsigns (account_id, callsign, added_at) VALUES (?, ?, 1)")
+      .bind(accountId, base)
+      .run();
+  }
+  // a session is bound to the origin it was issued on: the instance's own
+  const origin = String((env as { APP_URL?: string }).APP_URL ?? `https://${env.INSTANCE}`);
+  const set = await issueSessionCookie(new Request(`${origin}/`), env, accountId, callsign);
+  return set.split(";")[0]!;
 }

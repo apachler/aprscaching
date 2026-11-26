@@ -11,6 +11,7 @@ import {
   NR_CHOKE,
   NETROM_PID,
 } from "../src/netrom-wire.js";
+import { parseAddr } from "@aprscaching/ax25";
 
 describe("NET/ROM wire codec", () => {
   it("round-trips an inter-node packet (15-byte net + 5-byte transport header)", () => {
@@ -86,5 +87,23 @@ describe("NET/ROM wire codec", () => {
 
   it("exposes the amateur NET/ROM PID", () => {
     expect(NETROM_PID).toBe(0xcf);
+  });
+
+  it("refuses a network header, and skips a NODES entry, whose call is not A–Z, 0–9 and space", () => {
+    const bytes = encodeNetrom({
+      net: { origin: parseAddr("OE8APR-1"), dest: parseAddr("OE8XBM-7"), ttl: 7 },
+      tp: { circuitIndex: 1, circuitId: 2, txSeq: 0, rxSeq: 0, opcode: 1, flags: 0 },
+      info: new Uint8Array(0),
+    });
+    expect(decodeNetrom(bytes)).not.toBeNull();
+    const bad = bytes.slice();
+    bad[2] = 0x0a << 1; // a newline in the origin call
+    expect(decodeNetrom(bad)).toBeNull();
+    const [frame] = encodeNodesBroadcast("OE8HUB", [
+      { dest: parseAddr("OE1AAA-1"), alias: "AAA", neighbor: parseAddr("OE8APR-1"), quality: 200 },
+      { dest: parseAddr("OE1BBB-1"), alias: "BBB", neighbor: parseAddr("OE8APR-1"), quality: 200 },
+    ]);
+    frame![7 + 21 + 1] = 0x1b << 1; // an escape byte in the second entry's destination call
+    expect(decodeNodesBroadcast(frame!)!.dests.map((d) => d.dest.call)).toEqual(["OE1AAA"]);
   });
 });
