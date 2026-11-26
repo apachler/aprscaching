@@ -13,7 +13,8 @@ shape_init() {
   step "Desktop"
   info "Download the binary for your system and SHA256SUMS from the project's release page, check them:"
   info "  sha256sum -c --ignore-missing SHA256SUMS"
-  info "  gh attestation verify <the binary> --repo apachler/aprscaching"
+  info "  gh attestation verify <the binary> --repo apachler/aprscaching \\"
+  info "    --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml"
   info "then run it; it serves the app on http://127.0.0.1:8787."
   info "Steps and options: docs/run/install/verified-downloads.md and deploy/desktop/README.md."
 }

@@ -234,7 +234,15 @@ async function serveRequest(
       headers,
       ...(body ? { body: body.stream, duplex: "half" } : {}),
     } as RequestInit);
+    // The client may leave while the handler runs, and `close` does not fire again for a listener added later: a
+    // body it can no longer be sent is cancelled here, since a tile answer's body holds an open archive copy.
+    let gone = false;
+    nres.once("close", () => (gone = true));
     let response = await handle(request, env, { waitUntil: (p) => void p.catch(() => {}) });
+    if (gone) {
+      await response.body?.cancel().catch(() => {});
+      return;
+    }
     const failure = body?.failure();
     if (failure) response = bodyFailureResponse(failure);
     const stall = opts.writeStallMs ?? WRITE_STALL_MS;
@@ -262,7 +270,11 @@ async function serveRequest(
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (!(await writeSlices(nres, value, stall))) return;
+        if (!(await writeSlices(nres, value, stall))) {
+          // a stall drop or a client gone: the rest is never sent, so the source is released now
+          await reader.cancel().catch(() => {});
+          return;
+        }
       }
       nres.end();
     } else {

@@ -53,7 +53,8 @@ the latest release, check it and run it:
 curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/pocket.sh
 curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
-gh attestation verify pocket.sh --repo apachler/aprscaching   # pkg install gh; gh auth login
+gh attestation verify pocket.sh --repo apachler/aprscaching \
+  --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml   # pkg install gh; gh auth login
 bash pocket.sh --call <YOURCALL>
 ```
 

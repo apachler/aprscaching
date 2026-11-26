@@ -5,7 +5,8 @@
 #
 #   curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/pocket.sh
 #   curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/SHA256SUMS
-#   sha256sum -c --ignore-missing SHA256SUMS && gh attestation verify pocket.sh --repo apachler/aprscaching
+#   sha256sum -c --ignore-missing SHA256SUMS && gh attestation verify pocket.sh --repo apachler/aprscaching \
+#     --signer-workflow apachler/aprscaching/.github/workflows/release-verify.yml
 #   bash pocket.sh --call OE8APR
 #
 # Steps:
