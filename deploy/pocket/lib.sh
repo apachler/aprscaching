@@ -94,6 +94,8 @@ pocket_sockets_env() {
 
 # The windows start.sh runs a helper script in. Each runs the loop of the script it started with, and the lib.sh
 # that script read then; respawned, it runs its command again, which loads the scripts on disk and the .env.
+# A window that fails to respawn (closed since the list was read) is named and the rest still go: the caller
+# runs on, and stopping at one window would leave every later one on its old loop as well.
 POCKET_HELPERS=(tls notify usb-kiss alerts battery)
 restart_helpers() {
   session_exists || return 0
@@ -101,8 +103,13 @@ restart_helpers() {
   for w in $(tmux list-windows -t "=$SESSION" -F '#{window_name}' 2>/dev/null); do
     case " ${POCKET_HELPERS[*]} " in
       *" $w "*)
-        tmux respawn-window -k -t "=$SESSION:$w"
-        info "$w: restarted"
+        if tmux respawn-window -k -t "=$SESSION:$w"; then
+          info "$w: restarted"
+        else
+          warn "the $w window did not restart and runs the script it started with; run" \
+            "bash $DIR/deploy/pocket/stop.sh, then bash $DIR/deploy/pocket/start.sh (from Termux, not from" \
+            "the session's shell window)"
+        fi
         ;;
     esac
   done
@@ -133,6 +140,13 @@ pocket_restart_on_sockets() {
     done
   fi
   restart_helpers
+}
+
+# The move onto the sockets, as install.sh runs it on every install and update: the .env first, then a running
+# station restarts onto it when the .env changed.
+pocket_move_onto_sockets() {
+  pocket_sockets_env
+  [ "$POCKET_ENV_MOVED" -eq 0 ] || pocket_restart_on_sockets
 }
 
 gateway_port() {
