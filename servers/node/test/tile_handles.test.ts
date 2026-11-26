@@ -77,25 +77,25 @@ it("every opened archive copy is closed, including for a client gone before the 
   process.on("uncaughtException", onUncaught);
   process.on("warning", onWarning);
   const steps: string[] = [];
-  const step = (name: string) => steps.push(`${name}: opened ${opened}, closed ${closed}`);
+  // A step ends once every copy it opened is closed, or after five seconds: a copy still open then is the leak.
+  const step = async (name: string, want: number) => {
+    const deadline = Date.now() + 5_000;
+    while ((opened < want || closed < opened) && Date.now() < deadline) await sleep(20);
+    steps.push(`${name}: opened ${opened}, closed ${closed}`);
+  };
   try {
     get("bytes=0-", (s) => s.on("data", () => {}));
-    await sleep(500);
-    step("full read");
+    await step("full read", 1);
     get("bytes=0-", (s) => s.once("data", () => s.destroy()));
-    await sleep(500);
-    step("gone mid-answer");
+    await step("gone mid-answer", 2);
     get("bytes=0-", (s) => s.pause());
-    await sleep(1500);
-    step("never reads");
+    await step("never reads", 3);
     get("bytes=99999999-", (s) => s.on("data", () => {}));
-    await sleep(300);
-    step("range past the end");
+    await step("range past the end", 4);
     // the archive opens 300 ms after the request; the client leaves at 50 ms, before any answer exists
     openDelay = 300;
     get("bytes=0-", (s) => setTimeout(() => s.destroy(), 50));
-    await sleep(1000);
-    step("gone before the answer was ready");
+    await step("gone before the answer was ready", 5);
     openDelay = 0;
     // a copy nobody closed is closed by the collector, which is where Node reports it
     collectGarbage();
