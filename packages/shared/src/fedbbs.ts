@@ -4,9 +4,11 @@
  * mesh. Signed fedwire frames (see fedwire.ts) are transport-agnostic: their authenticity lives in
  * their bytes, so a batch can ride an FBB bulletin exactly as it rides an HTTP sync page. A batch is
  * packed as a text-safe bulletin body — a header line plus whitespace-wrapped base64 of the CBOR
- * frame array — addressed to a reserved category. The BID is content-addressed: identical batches
- * carry the same BID, so a bulletin flooded across the mesh dedups by BID at every relay, and the
- * receiver applies each frame idempotently by its global id.
+ * frame array — addressed to a reserved category. The BID is content-addressed over what makes a
+ * batch the same records — each record's identity, version and body, never its signing time or
+ * signature — so the same snapshot carries the same BID whatever second it was signed in, a bulletin
+ * flooded across the mesh dedups by BID at every relay, and the receiver applies each frame
+ * idempotently by its global id.
  */
 import { cborEncode, cborDecode, type CborValue } from "./cbor.js";
 
@@ -76,16 +78,41 @@ function b64decode(text: string): Uint8Array | null {
   return out.subarray(0, o);
 }
 
+/** The fedwire keys this envelope reads: the frame's payload, and the payload's signing time. */
+const FRAME_PAYLOAD = 1;
+const PAYLOAD_AT = 5;
+
 /**
- * 64-bit FNV-1a over the payload → base36, so identical batches carry the SAME BID and dedup
- * mesh-wide. A dedup key, not a security digest — frame authenticity comes from the Ed25519
- * signatures inside each frame, never from this.
+ * What makes a frame the same record: its payload without the signing time `at`, the signer key and
+ * the signature. A record re-signed in a later second is the same record; a new version or an edited
+ * body is not. A frame that does not parse as a fedwire frame counts by its raw bytes.
  */
-function contentBid(payload: Uint8Array): string {
+function frameIdentity(frame: Uint8Array): CborValue {
+  try {
+    const f = cborDecode(frame);
+    const payload = f instanceof Map ? f.get(FRAME_PAYLOAD) : undefined;
+    if (!(payload instanceof Uint8Array)) return frame;
+    const record = cborDecode(payload);
+    if (!(record instanceof Map)) return frame;
+    const stable = new Map(record);
+    stable.delete(PAYLOAD_AT);
+    return stable;
+  } catch {
+    return frame;
+  }
+}
+
+/**
+ * 64-bit FNV-1a over the frames' identities → base36, so batches of the same records carry the SAME
+ * BID and dedup mesh-wide. A dedup key, not a security digest — frame authenticity comes from the
+ * Ed25519 signatures inside each frame, never from this.
+ */
+function contentBid(frames: Uint8Array[]): string {
+  const key = cborEncode(frames.map(frameIdentity));
   let h = 0xcbf29ce484222325n;
   const prime = 0x100000001b3n;
   const mask = 0xffffffffffffffffn;
-  for (let i = 0; i < payload.length; i++) h = ((h ^ BigInt(payload[i]!)) * prime) & mask;
+  for (let i = 0; i < key.length; i++) h = ((h ^ BigInt(key[i]!)) * prime) & mask;
   // FBB BIDs are at most 12 characters: "AF" plus ten base-36 digits of the hash
   return "AF" + h.toString(36).toUpperCase().padStart(13, "0").slice(-10);
 }
@@ -109,7 +136,7 @@ export function encodeFedBbsBatch(frames: Uint8Array[]): FedBbsBulletin {
   if (!frames.length) throw new Error("fedbbs: empty batch");
   if (frames.length > MAX_FRAMES) throw new Error(`fedbbs: batch exceeds ${MAX_FRAMES} frames`);
   const payload = cborEncode(frames);
-  const bid = contentBid(payload);
+  const bid = contentBid(frames);
   const wrapped = b64encode(payload).replace(/(.{64})/g, "$1\n"); // wrap so BBS line limits don't truncate
   const body = `${FED_BBS_MAGIC} ${frames.length} ${bid}\n${wrapped}\n`;
   return { category: FED_BBS_CATEGORY, bid, subject: `federation batch (${frames.length})`, body };
@@ -122,8 +149,8 @@ export function isFedBbsCategory(to: string): boolean {
 
 /**
  * Parse a federation bulletin body back to its frames, or null if it is not one / is malformed.
- * Validates the declared frame count and re-derives the content-addressed BID, so a truncated or
- * forged body is rejected rather than half-applied.
+ * Validates the payload's canonical CBOR, the declared frame count and the content-addressed BID, so
+ * a truncated or forged body is rejected rather than half-applied.
  */
 export function decodeFedBbsBatch(body: string): FedBbsBatch | null {
   const nl = body.indexOf("\n");
@@ -137,7 +164,6 @@ export function decodeFedBbsBatch(body: string): FedBbsBatch | null {
   if (region.length > MAX_B64_CHARS) return null;
   const payload = b64decode(region);
   if (!payload) return null;
-  if (contentBid(payload) !== bid) return null; // content-address mismatch → truncated/forged
   let decoded: CborValue;
   try {
     decoded = cborDecode(payload);
@@ -150,5 +176,6 @@ export function decodeFedBbsBatch(body: string): FedBbsBatch | null {
     if (!(f instanceof Uint8Array)) return null;
     frames.push(f);
   }
+  if (contentBid(frames) !== bid) return null; // content-address mismatch → forged header
   return { bid, frames };
 }

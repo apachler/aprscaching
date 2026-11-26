@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Federation over FBB on a real instance: off unless FED_BBS is on, carried only to and from the forwarding
 // partners the sysop marks for it, as personal mail the forward rules never route, and deduped by its BID.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { encodeFedBbsBatch } from "@aprscaching/shared";
 // the app first: it loads the gateway's modules in the order the server does
 import { newFedKey, instanceEnv, addCache, serve } from "./helpers/fedpeer.js";
@@ -117,6 +117,43 @@ describe("partners only, never flooded", () => {
     const first = await call(env, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
     const second = await call(env, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
     expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
+  });
+
+  describe("signed in different seconds", () => {
+    // only Date is faked: the clock stands still between the steps the test takes
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(1_800_000_000_900);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const enqueue = (env: Env) => call(env, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+    const stepSecond = () => vi.setSystemTime(Date.now() + 1000);
+
+    it("an unchanged snapshot still queues once", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      const second = await enqueue(env);
+      expect(first.data).toMatchObject({ enqueued: 1 });
+      expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
+    });
+
+    it("a new or an edited record queues under a new bulletin ID", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      await addCache(env, 1001);
+      const added = await enqueue(env);
+      expect(added.data).toMatchObject({ enqueued: 1 });
+      expect(added.data.bid).not.toBe(first.data.bid);
+      stepSecond();
+      await env.DB.prepare("UPDATE caches SET title = 'Renamed' WHERE code = (SELECT MIN(code) FROM caches)").run();
+      const edited = await enqueue(env);
+      expect(edited.data).toMatchObject({ enqueued: 1 });
+      expect([first.data.bid, added.data.bid]).not.toContain(edited.data.bid);
+    });
   });
 
   it("resumes each feed from its own cursor when the answer's cursors come back as since", async () => {

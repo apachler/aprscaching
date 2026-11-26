@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { encodeFedBbsBatch, decodeFedBbsBatch, isFedBbsCategory, FED_BBS_CATEGORY } from "../src/fedbbs.js";
+import { encodeFedFrame, encodeFedPayload, type FedRecord } from "../src/fedwire.js";
 
 const frame = (n: number, len = 20) => Uint8Array.from({ length: len }, (_, i) => (n * 31 + i * 7) & 0xff);
 
@@ -31,6 +32,34 @@ describe("fed-over-BBS store-and-forward envelope", () => {
     expect(a.bid).not.toBe(b.bid);
     expect(a.bid.startsWith("AF")).toBe(true);
     expect(decodeFedBbsBatch(a.body)!.bid).toBe(a.bid);
+  });
+
+  it("keys the BID on each record's identity, version and body, not its signing time or signature", () => {
+    const rec = (over: Partial<FedRecord> = {}): FedRecord => ({
+      kind: "cache",
+      gid: "a.example:cache:1",
+      origin: "a.example",
+      v: 7,
+      at: 1_800_000_000,
+      signer: "a.example",
+      body: { title: "Hut" },
+      ...over,
+    });
+    // the signature stands in as bytes: a re-signed frame differs in `at` and in its signature
+    const signed = (r: FedRecord, sig: number) =>
+      encodeFedFrame(
+        encodeFedPayload(r),
+        "key",
+        Uint8Array.from({ length: 64 }, () => sig),
+      );
+    const base = encodeFedBbsBatch([signed(rec(), 1)]);
+    const resigned = encodeFedBbsBatch([signed(rec({ at: 1_800_000_001 }), 2)]);
+    expect(resigned.body).not.toBe(base.body); // the frames themselves are untouched
+    expect(resigned.bid).toBe(base.bid);
+    expect(decodeFedBbsBatch(resigned.body)!.bid).toBe(base.bid);
+    const changed = [rec({ v: 8 }), rec({ body: { title: "Hut 2" } }), rec({ gid: "a.example:cache:2" })];
+    for (const r of changed) expect(encodeFedBbsBatch([signed(r, 1)]).bid).not.toBe(base.bid);
+    expect(encodeFedBbsBatch([signed(rec(), 1), signed(rec({ gid: "a.example:cache:2" }), 1)]).bid).not.toBe(base.bid);
   });
 
   it("survives the whitespace a BBS inserts (re-wrapped, CR/LF, trailing spaces)", () => {
