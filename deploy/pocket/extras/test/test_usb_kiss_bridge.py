@@ -151,9 +151,13 @@ class DeviceTest(unittest.TestCase):
     def test_escaped_bytes_are_unescaped(self):
         self.assertEqual(b.unescape(bytes([0x00, b.FESC, b.TFEND, b.FESC, b.TFESC])), bytes([0x00, b.FEND, b.FESC]))
 
-    def test_the_kiss_port_is_loopback_only(self):
+    def test_the_kiss_socket_is_a_filesystem_path(self):
+        self.assertIsNone(b.socket_path_error("/data/run/kiss.sock"))
+        self.assertIn("abstract", b.socket_path_error("@kiss"))
+        self.assertIn("abstract", b.socket_path_error("\0kiss"))
+        self.assertIn("absolute", b.socket_path_error("run/kiss.sock"))
         with self.assertRaises(SystemExit):
-            b.main(["--serial", "/dev/null", "--host", "0.0.0.0"])
+            b.main(["--serial", "/dev/null", "--socket", "@kiss"])
 
 
 if __name__ == "__main__":

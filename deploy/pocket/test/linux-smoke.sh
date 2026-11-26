@@ -305,7 +305,7 @@ chmod +x "$WORK/bin/termux-usb"
 CHECK="usb-kiss.sh --list: the attached device" check test "$(bash "$HERE/extras/usb-kiss.sh" --list)" = /dev/bus/usb/001/002
 bash "$HERE/extras/usb-kiss.sh" --setup --baud 1200 >/dev/null
 CHECK="usb-kiss.sh --setup: device and baud in the .env" check test "$(env_get USB_KISS_DEVICE):$(env_get USB_KISS_BAUD)" = /dev/bus/usb/001/002:1200
-CHECK="usb-kiss.sh --setup: the ingest reads KISS at 127.0.0.1:8001" check test "$(env_get KISS_TNC_HOST):$(env_get KISS_TNC_PORT)" = 127.0.0.1:8001
+CHECK="usb-kiss.sh --setup: the ingest reads KISS on the bridge's socket" check test "$(env_get KISS_TNC_HOST):$(env_get KISS_TNC_PORT)" = "$RUN_DIR/kiss.sock:"
 CHECK="start.sh: the usb-kiss window" check grep -qxF usb-kiss <<<"$(tmux list-windows -t "=$SESSION" -F '#{window_name}')"
 CHECK="status.sh: the USB TNC, receive-only" check grep -q "USB KISS TNC: /dev/bus/usb/001/002, 1200 baud, receive-only" <<<"$(bash "$HERE/status.sh" 2>&1 || true)"
 

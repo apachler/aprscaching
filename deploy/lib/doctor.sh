@@ -477,6 +477,13 @@ doc_ingest_url_http() {
     "use an https INGEST_URL for a gateway beyond this box's LAN"
 }
 
+# A KISS_TNC_HOST that is a path names the TNC's Unix socket (a KISS bridge on the same machine): it is there.
+doc_kiss_socket() {
+  if [ -S "$1" ]; then pass ingest.kiss_tnc "KISS_TNC socket $1 is there"; else
+    failc ingest.kiss_tnc "KISS_TNC socket $1 is missing" "start the KISS bridge, or check KISS_TNC_HOST"
+  fi
+}
+
 doc_transports() {
   local host port name
   host="$(doc_get APRSIS_HOST)"
@@ -489,6 +496,10 @@ doc_transports() {
   for name in KISS_TNC AGWPE HOSTMODE LORA_APRS MESHTASTIC; do
     host="$(doc_get "${name}_HOST")"
     [ -n "$host" ] || continue
+    if [ "$name" = KISS_TNC ] && [ "${host#/}" != "$host" ]; then
+      doc_kiss_socket "$host"
+      continue
+    fi
     port="$(doc_get "${name}_PORT")"
     port="${port:-$(cfg_default "${name}_PORT")}"
     if tcp_open "$host" "$port"; then pass "ingest.${name,,}" "$name $host:$port is reachable"; else

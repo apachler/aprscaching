@@ -11,7 +11,8 @@
 //
 // The link is a bearer credential: hand it to the person it is for (on their screen, by QR, in person),
 // never over a channel others read. BASE is where this script reaches the gateway: it defaults to the
-// gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787).
+// gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787), or its socket when GATEWAY_SOCKET is
+// set, as a Pocket station's .env does (gateway.mjs).
 //
 //   --link-origin <origin>  the origin the link names: APP_URL, an EXTRA_ORIGINS address (a member on HAMNET
 //                    opens the HAMNET one), or the station's https hotspot origin
@@ -20,8 +21,8 @@
 //   --qr             also print the link as a QR code for a phone to scan.
 //
 // Exits non-zero on failure.
+import { GATEWAY, operatorPost } from "./gateway.mjs";
 
-const BASE = (process.env.BASE ?? `http://127.0.0.1:${process.env.PORT || 8787}`).replace(/\/+$/, "");
 const SECRET = process.env.OPERATOR_SECRET;
 
 const USAGE =
@@ -47,12 +48,12 @@ if (!callsign || !SECRET || linkBase === "") {
   process.exit(2);
 }
 
-const res = await fetch(`${BASE}/auth/operator-link`, {
-  method: "POST",
-  headers: { "content-type": "application/json", "x-operator-secret": SECRET },
-  body: JSON.stringify(linkBase === undefined ? { callsign } : { callsign, base: linkBase }),
-}).catch((e) => {
-  console.error(`cannot reach ${BASE}: ${e.message}`);
+const res = await operatorPost(
+  "/auth/operator-link",
+  SECRET,
+  linkBase === undefined ? { callsign } : { callsign, base: linkBase },
+).catch((e) => {
+  console.error(`cannot reach ${GATEWAY}: ${e.message}`);
   process.exit(1);
 });
 const data = await res.json().catch(() => null);
