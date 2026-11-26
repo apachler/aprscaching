@@ -95,7 +95,8 @@ describe("a failure inside the gateway", () => {
 describe("request bodies", () => {
   it("stop at BODY_MAX_BYTES on the Node server, answered 413", async () => {
     const port = await listen(instanceEnv("gw.test", null));
-    const r = await post(port, "/federation/frames", BODY_MAX_BYTES + 1024 * 1024);
+    // an anonymous route that reads its body whole: the cap is the server's, not the handler's
+    const r = await post(port, "/auth/claim", BODY_MAX_BYTES + 1024 * 1024);
     expect(r.status).toBe(413);
     expect(JSON.parse(r.body)).toEqual({ error: "request body too large" });
   });

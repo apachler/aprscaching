@@ -40,13 +40,32 @@ proxy terminates TLS and forwards the whole site to that port.
     3. creates `/opt/aprscaching` for that user, as **root**, and fills it with the checkout, as that user;
     4. installs the dependencies and builds the web app, as that user;
     5. writes `/opt/aprscaching/deploy/.env` with the Self-host questions (`setup.sh`), readable by its owner
-       only, and points `INGEST_URL` at the gateway on this host;
+       only, and points `INGEST_URL` at the gateway on this host. With `--domain`, a reverse proxy fronts the
+       gateway, so it also sets `HOST=127.0.0.1` and `TRUST_PROXY=1` unless the `.env` already sets them;
     6. installs `aprscaching-gateway` and `aprscaching-ingest` into `/etc/systemd/system` from
        `deploy/systemd/`, then enables and starts them, as **root**;
     7. waits up to a minute for `/health` and prints how to sign in and confirm your call.
 
 3. For a public instance, point your reverse proxy at the gateway: forward `https://<your domain>` to
-   `http://127.0.0.1:8080`.
+   `http://127.0.0.1:8080`, and have it pass the client's address in `X-Forwarded-For`. nginx's
+   `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` and Apache's `mod_proxy` append it, Caddy's
+   `reverse_proxy` sets it.
+
+### Behind the reverse proxy
+
+Per-address limits (sign-in mail, passkeys, the read API, live connections) key on the client's address. Behind
+the proxy, the gateway reads it from `X-Forwarded-For`, and trusts only the entry your proxy wrote:
+
+- `TRUST_PROXY=1` takes the rightmost entry. A proxy appends the address it was reached from, so every entry to
+  the left of it is whatever the client sent, and never counts.
+- `TRUST_PROXY=2` (or more) is for proxies in a chain, such as a CDN in front of nginx: the client is the entry
+  that many places from the right. A header with fewer entries keys on its rightmost.
+- `HOST=127.0.0.1` binds the gateway to this machine, so the proxy is the only way in. Without it, a client that
+  reaches port 8080 directly sends any `X-Forwarded-For` it likes and picks a new identity per request.
+- `TRUST_CF=1` keeps Cloudflare's `cf-connecting-ip` instead. Set it only when the gateway is reachable through
+  Cloudflare alone; a client that reaches it another way sends its own.
+
+The settings are in [Configuration](../../reference/configuration.md).
 
 The gateway applies the database migrations when it starts. The database and media live in
 `/opt/aprscaching/data`, readable by the service user only.

@@ -246,32 +246,46 @@ export function licensedCallsign(user: { longName?: string; isLicensed?: boolean
 
 /**
  * Which Meshtastic nodes are licensed, by node id — learned from NodeInfo, which a licensed node sends
- * every ten minutes and which often arrives after its first positions. Bounded (oldest entry evicted) and
- * time-limited, so a node that stops announcing, or turns licensed mode off, is forgotten.
+ * every ten minutes and which often arrives after its first positions. Time-limited, so a node that stops
+ * announcing, or turns licensed mode off, is forgotten.
+ *
+ * Bounded, and a full table gives way only to what has gone quiet: a node new to it takes the place of the
+ * least recently heard one (a NodeInfo or a position) only when that one has not been heard for `protectMs`,
+ * and is refused otherwise. Any mesh or MQTT sender can forge NodeInfo under fresh node ids, so a flood of them
+ * must not push out the nodes that are on the air.
  */
 export class MeshtasticLicensedNodes {
-  private nodes = new Map<string, { call: string; at: number }>();
-  constructor(private o: { max?: number; ttlMs?: number } = {}) {}
+  /** In order of last hearing, least recent first. */
+  private nodes = new Map<string, { call: string; at: number; heard: number }>();
+  /** NodeInfo from new nodes turned away because the table was full of recently heard ones. */
+  refused = 0;
+  constructor(private o: { max?: number; ttlMs?: number; protectMs?: number } = {}) {}
 
   /** Learn from a decoded event; only NodeInfo changes anything. */
   observe(ev: MeshEvent | null, now = Date.now()): void {
     if (ev?.kind !== "nodeinfo") return;
     const call = licensedCallsign(ev);
-    this.nodes.delete(ev.node);
+    const known = this.nodes.delete(ev.node);
     if (!call) return;
-    this.nodes.set(ev.node, { call, at: now });
-    const max = this.o.max ?? 2000;
-    while (this.nodes.size > max) this.nodes.delete(this.nodes.keys().next().value!);
+    if (!known && this.nodes.size >= (this.o.max ?? 2000)) {
+      const [quietest, e] = this.nodes.entries().next().value!;
+      if (now - e.heard < (this.o.protectMs ?? 30 * 60_000)) {
+        this.refused++;
+        return;
+      }
+      this.nodes.delete(quietest);
+    }
+    this.nodes.set(ev.node, { call, at: now, heard: now });
   }
 
-  /** The node's callsign while its licence is known and fresh, else null. */
+  /** The node's callsign while its licence is known and fresh, else null. Asking for it counts as hearing it. */
   callsignFor(node: string, now = Date.now()): string | null {
     const e = this.nodes.get(node);
     if (!e) return null;
-    if (now - e.at > (this.o.ttlMs ?? 6 * 3600_000)) {
-      this.nodes.delete(node);
-      return null;
-    }
+    this.nodes.delete(node);
+    if (now - e.at > (this.o.ttlMs ?? 6 * 3600_000)) return null;
+    e.heard = now;
+    this.nodes.set(node, e);
     return e.call;
   }
 

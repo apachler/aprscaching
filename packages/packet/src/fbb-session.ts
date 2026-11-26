@@ -349,3 +349,6 @@ export class FbbSession {
     return this.proposeBlock();
   }
 }
+
+/** The largest body a received message may decode to; a larger one aborts the session. */
+export { MAX_RECV_BYTES as FBB_MAX_RECV_BYTES };

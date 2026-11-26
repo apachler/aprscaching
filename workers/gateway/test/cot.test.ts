@@ -87,7 +87,7 @@ describe("CoT SSE stream (/api/cot/stream)", () => {
   } as unknown as Env;
 
   it("returns an event-stream response and pushes the snapshot as CoT frames", async () => {
-    const res = handleCotStream(new Request("http://gw/api/cot/stream"), env, 5000);
+    const res = await handleCotStream(new Request("http://gw/api/cot/stream"), env, 5000);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     expect(res.headers.get("cache-control")).toContain("no-transform");
 

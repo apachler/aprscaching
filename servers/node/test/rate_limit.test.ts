@@ -65,9 +65,9 @@ describe("clientIp comes from sources the client cannot choose", () => {
     expect(clientIp(reqWith({ "x-forwarded-for": "6.6.6.6", "x-real-ip": "192.0.2.7" }), env)).toBe("192.0.2.7");
   });
 
-  it("behind a declared reverse proxy (TRUST_PROXY=1) the forwarded chain's first hop is used", () => {
+  it("behind a declared reverse proxy (TRUST_PROXY=1) the entry the proxy appended is used", () => {
     const env = { TRUST_PROXY: "1" } as Env;
-    expect(clientIp(reqWith({ "x-forwarded-for": "198.51.100.4, 10.0.0.1" }), env)).toBe("198.51.100.4");
+    expect(clientIp(reqWith({ "x-forwarded-for": "6.6.6.6, 198.51.100.4" }), env)).toBe("198.51.100.4");
   });
 
   it("falls back to the bridge-stamped socket address, else 'unknown'", () => {

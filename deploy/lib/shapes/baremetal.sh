@@ -230,6 +230,7 @@ shape_init() {
   bm_user bash "$BM_DIR/deploy/setup.sh" "${opts[@]}" "${setup[@]+"${setup[@]}"}"
   # The ingest reaches the gateway on this host, not by the Docker stack's service name.
   bm_user sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
+  bm_proxy_bind "$SHAPE_ENV" || die "could not read $SHAPE_ENV as $BM_USER to set HOST and TRUST_PROXY for the proxy."
   bm_user chmod 600 "$SHAPE_ENV"
 
   step "systemd units"
@@ -253,6 +254,21 @@ shape_init() {
   if [ "$start" = 1 ]; then bm_wait_health; fi
   n44_init_offer "$net44"
   bm_next_steps
+}
+
+# Behind the reverse proxy an https APP_URL names, the gateway listens on 127.0.0.1 alone and keys rate limits on
+# the X-Forwarded-For entry that proxy wrote: a client that reached the port directly would choose its own. A
+# value the operator set stays. A plain-http APP_URL is the gateway itself, reached on every interface.
+# The file is the service user's alone (mode 600), so the service user reads and writes it: an installer that
+# cannot read it must not take the refusal for an unset APP_URL. Fails when the file cannot be read.
+bm_proxy_bind() {
+  # shellcheck disable=SC2016 # the script expands in the service user's shell
+  bm_user bash -c 'set -e
+    . "$1/deploy/lib/env.sh"
+    [ -r "$2" ] || { echo "cannot read $2" >&2; exit 1; }
+    case "$(env_file_get "$2" APP_URL)" in https://*) ;; *) exit 0 ;; esac
+    env_file_has "$2" HOST || env_file_set "$2" HOST 127.0.0.1
+    env_file_has "$2" TRUST_PROXY || env_file_set "$2" TRUST_PROXY 1' _ "$BM_DIR" "$1"
 }
 
 # The gateway answers once it has migrated the database; wait up to a minute.
