@@ -5,10 +5,12 @@
  *
  * While offline the map shows the caches of every pack in view, each once (a cache in several packs is
  * taken from the most recently refreshed one; the automatic area only where no pack of the user's has it),
- * and says where they came from. The cache page reads the cache's stored details, logs and images.
+ * and says where they came from. The cache page reads the cache's stored details, logs and images. The owner
+ * maintenance pack is read only while its owner is signed in (owner.ts).
  */
 import type { MapCache, PackCache, SearchHitCache } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
+import { shownPacks } from "./owner.js";
 
 const AUTO_PACK_ID = "auto";
 /** The automatic area keeps at most this many caches. */
@@ -74,7 +76,7 @@ export async function packCachesInBox(
   bbox: BBox,
 ): Promise<{ caches: MapCache[]; source: OfflineSource | null }> {
   // the user's packs first, newest first; the automatic area last
-  const packs = (await store.packs()).sort(
+  const packs = (await shownPacks(store)).sort(
     (a, b) => Number(!!a.auto) - Number(!!b.auto) || b.refreshedAt - a.refreshedAt,
   );
   const seen = new Map<string, MapCache>();
@@ -122,7 +124,7 @@ function mapFields(c: PackCache): MapCache {
 
 /** A native cache by its id, from the most recently refreshed pack that holds its details. */
 export async function packCache(store: OfflineStore, id: number): Promise<{ cache: PackCache; pack: PackMeta } | null> {
-  const packs = (await store.packs()).sort(
+  const packs = (await shownPacks(store)).sort(
     (a, b) => Number(!!a.auto) - Number(!!b.auto) || b.refreshedAt - a.refreshedAt,
   );
   for (const p of packs) {
@@ -139,7 +141,7 @@ export async function packCache(store: OfflineStore, id: number): Promise<{ cach
 export async function packSearch(store: OfflineStore, q: string, limit: number): Promise<SearchHitCache[]> {
   const needle = q.trim().toLowerCase();
   if (needle.length < 2) return [];
-  const packs = (await store.packs()).sort(
+  const packs = (await shownPacks(store)).sort(
     (a, b) => Number(!!a.auto) - Number(!!b.auto) || b.refreshedAt - a.refreshedAt,
   );
   const hits = new Map<number, { hit: SearchHitCache; rank: number }>();
@@ -179,5 +181,5 @@ export async function packSearch(store: OfflineStore, q: string, limit: number):
 
 /** The user's own packs, newest first (the automatic area is not one of them). */
 export async function userPacks(store: OfflineStore): Promise<PackMeta[]> {
-  return (await store.packs()).filter((p) => !p.auto).sort((a, b) => b.createdAt - a.createdAt);
+  return (await shownPacks(store)).filter((p) => !p.auto).sort((a, b) => b.createdAt - a.createdAt);
 }
