@@ -3,6 +3,8 @@
 // the SQL form of attestation decides every stored row as provenanceOf does, and the database's speed test refuses
 // exactly the presences the engine refuses.
 import { describe, it, expect } from "vitest";
+import { Worker } from "node:worker_threads";
+import { createRequire } from "node:module";
 import { attestedSql, provenanceOf } from "@aprscaching/gateway/provenance";
 import { sitesFor, type Attestation } from "@aprscaching/gateway/attestedsites";
 import { outrunBy } from "@aprscaching/gateway/track";
@@ -98,6 +100,64 @@ describe("the SQL form of attestation", () => {
     expect(differ).toEqual([]);
     expect(new Set(got.map((p) => !!p.sql_attested))).toEqual(new Set([true, false]));
   });
+});
+
+/**
+ * Runs `sql` over `paths` in a worker thread on its own in-memory SQLite, so a query that never ends is cut off
+ * after `ms` and fails the test instead of blocking the suite (the driver's calls are synchronous). Answers, per path
+ * in order, the SQL attestation (0 or 1), or null when the query did not end.
+ */
+async function inWorker(sql: string, binds: string[], igate: string, paths: string[], ms = 10_000) {
+  const code = `
+    const { parentPort, workerData: w } = require("node:worker_threads");
+    const Database = require(w.driver);
+    const db = new Database(":memory:");
+    db.exec("CREATE TABLE positions (id INTEGER PRIMARY KEY, heard_via TEXT, transport TEXT, igate_call TEXT, ingest_box TEXT, path TEXT)");
+    const ins = db.prepare("INSERT INTO positions (heard_via, transport, igate_call, path) VALUES ('rf', 'tnc', ?, ?)");
+    for (const p of w.paths) ins.run(w.igate, p);
+    const rows = db.prepare("SELECT p.id, " + w.sql + " AS a FROM positions p ORDER BY p.id").all(...w.binds);
+    parentPort.postMessage(rows.map((r) => r.a));
+  `;
+  const driver = createRequire(import.meta.url).resolve("better-sqlite3");
+  const worker = new Worker(code, { eval: true, workerData: { sql, binds, igate, paths, driver } });
+  try {
+    return await new Promise<number[] | null>((resolve, reject) => {
+      const timer = setTimeout(() => resolve(null), ms);
+      worker.once("message", (m: number[]) => {
+        clearTimeout(timer);
+        resolve(m);
+      });
+      worker.once("error", (e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
+    });
+  } finally {
+    await worker.terminate();
+  }
+}
+
+describe("the SQL path split", () => {
+  it("ends for any stored path, a NUL anywhere in it included", async () => {
+    const att = attestedSql(A, "p");
+    const shapes = [
+      "X,qAS#",
+      "#",
+      "#,",
+      ",#",
+      "qAR#,X",
+      "a#b,qAC",
+      "##,#",
+      "WIDE1-1,qAR,X#",
+      "X,qAS#Y,Z",
+      "#qAR",
+      "qAC,#",
+    ];
+    const paths = shapes.map((x) => x.replaceAll("#", "\u0000"));
+    const got = await inWorker(att.sql, att.binds, SITE, paths);
+    expect(got, "the query did not end within 10 s").not.toBeNull();
+    expect(got).toHaveLength(paths.length);
+  }, 20_000);
 });
 
 /** The point `m` metres from (lat, lon) on initial bearing `brg` degrees (spherical, R as haversineMeters). */

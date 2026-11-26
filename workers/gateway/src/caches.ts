@@ -1074,8 +1074,9 @@ export async function scoreFind(
   // The fixes that contradict a matched presence, found by the database one per match (track.ts contradictionOf):
   // the engine is judged again with each until its match has none, so it decides as it would over every fix of the
   // window. Each round adds one fix that rules out one match, or rules the match out when the database's answers
-  // stay unresolved; a ruled-out match still contradicts others, as a fix of the track. The rows stay within the
-  // read's own, plus the shared budget of rows the engine sets aside.
+  // stay unresolved. A ruled-out match leaves the track too, which decides nothing: it was tried only because every
+  // attested fix of the logger could reach it, and those are all the other matches. The rows stay within the read's
+  // own, plus the shared budget of rows the engine sets aside.
   const witnesses: PositionRow[] = [];
   const ruledOut = new Set<number>();
   const budget = { rejected: 0 };
@@ -1086,7 +1087,7 @@ export async function scoreFind(
       appGeo,
       {
         loggerPositions,
-        loggerTrackPositions: [...witnesses, ...attestedOwn.filter((p) => ruledOut.has(p.id)), ...extra],
+        loggerTrackPositions: [...witnesses, ...extra],
         cacheStationPositions: station,
         loggerOwnIgates,
         loggerOwnBoxes,

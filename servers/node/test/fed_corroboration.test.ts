@@ -10,6 +10,7 @@ import { scoreFind } from "@aprscaching/gateway/caches";
 import { signFedRecord } from "@aprscaching/gateway/fedcbor";
 import { newFedKey, instanceEnv, peerRow, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { decoyFix, decoying } from "./helpers/decoy.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -490,6 +491,17 @@ describe("peer-corroborated finds still need a plausible local track", () => {
       .run();
     const s = await scoreFind(hub.env, cache, LOGGER, now());
     expect(s.result.tier).not.toBe("A");
+  });
+
+  it("is refused when the search for a contradicting fix stays unresolved", async () => {
+    const hub = await setup();
+    // answered truly, the search finds nothing and the peer's hearing lifts the find
+    const decoy = await decoyFix(hub.env, `${LOGGER}-7`, now() - 1100, 52.52, 13.4);
+    expect((await scoreFind(hub.env, cache, LOGGER, now())).result.method).toBe("aprs_rf_peer");
+    // answered only with fixes the engine sets aside, until the budget is spent
+    const s = await scoreFind(decoying(hub.env, decoy, Infinity), cache, LOGGER, now());
+    expect(s.result.tier).not.toBe("A");
+    expect(s.result.method).not.toBe("aprs_rf_peer");
   });
 
   it("is not refused by an APRS-IS fix hundreds of km away: anyone can inject one under the call", async () => {

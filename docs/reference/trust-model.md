@@ -40,6 +40,9 @@ Every find carries exactly one tier, graded by the evidence behind it:
 - The database runs that check, so a window flooded with fixes is judged without loading them all. The match is
   sought among the newest 100 attested fixes within the cache radius, and a living cache's station among its newest
   500 fixes that place it.
+- The verify engine checks each fix the database returns as contradicting. One it does not take as contradicting is
+  set aside, and the database is asked again. Once more than 8 fixes were set aside for one find, the find is refused
+  Tier A, whether locally, through peers or in a later attempt.
 - The finder's track is every SSID of their base call, the bare call included: a find logged as `OE8APR-9` is
   judged against the fixes of `OE8APR`, `OE8APR-7` and the rest too, so logging under an SSID never heard before
   leaves nothing out. Only the logged call's own fix can match the cache. A fixed home station, digipeater or

@@ -10,6 +10,7 @@ import { newFedKey, instanceEnv, serve, stubFetch, type FedKey, type Serve } fro
 import { authEnv, call, emailSignup, markCallVerified } from "./helpers/authflow.js";
 import { addCache } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { decoyFix, decoying } from "./helpers/decoy.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -241,6 +242,22 @@ describe("the later attempt", () => {
     const r = await retryCorroborations(hub, at + 73 * 3600);
     expect(r).toMatchObject({ asked: 0, dropped: 1 });
     expect(await retryRow(hub, logId)).toBeNull();
+  });
+
+  it("refuses the lift when the search for a contradicting fix stays unresolved", async () => {
+    const lifted: number[] = [];
+    for (const decoyed of [false, true]) {
+      const { hub, p1, p2, cache } = await setup(1);
+      await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+      stubFetch({ [P1]: down, [P2]: serve(p2.env) });
+      const { at } = await logFind(hub, cache);
+      const decoy = await decoyFix(hub, `${LOGGER}-7`, at - 1100, 52.52, 13.4);
+      stubFetch({ [P1]: serve(p1.env), [P2]: serve(p2.env) });
+      // decoyed: answered only with fixes the engine sets aside, until the budget is spent
+      const env = decoyed ? decoying(hub, decoy, Infinity) : hub;
+      lifted.push((await retryCorroborations(env, at + RETRY_AFTER_S[0]!)).upgraded);
+    }
+    expect(lifted).toEqual([1, 0]);
   });
 
   it("still needs the logger's own track to allow the presence", async () => {

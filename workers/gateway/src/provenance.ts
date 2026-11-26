@@ -166,10 +166,15 @@ export function attestedSql(
   const pairs: string[] = [];
   for (const [box, sites] of a.byBox) for (const s of sites) pairs.push(`${box}\u001f${s}`);
   const trimChars = `char(${[...TOKEN_TRIM].map((c) => c.codePointAt(0)).join(", ")})`;
+  // Each round either takes the text up to the next comma, leaving a shorter rest, or, finding none, takes all
+  // that is left and ends: SQLite's string functions stop at a NUL, so a comma past one is never found, and a split
+  // that waited for it would never end.
+  const cut = "instr(rest, ',')";
   const firstQ = `(WITH RECURSIVE s(tok, rest) AS (
       SELECT NULL, COALESCE(${t}.path, '') || ','
       UNION ALL
-      SELECT trim(substr(rest, 1, instr(rest, ',') - 1), ${trimChars}), substr(rest, instr(rest, ',') + 1)
+      SELECT trim(CASE WHEN ${cut} = 0 THEN rest ELSE substr(rest, 1, ${cut} - 1) END, ${trimChars}),
+             CASE WHEN ${cut} = 0 THEN '' ELSE substr(rest, ${cut} + 1) END
         FROM s WHERE rest <> '')
     SELECT tok FROM s WHERE tok GLOB 'q[A-Z][A-Z]' LIMIT 1)`;
   return {

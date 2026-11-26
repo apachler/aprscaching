@@ -8,6 +8,7 @@ import { CANDIDATE_LIMIT, RECENT_LIMIT, REJECT_LIMIT } from "@aprscaching/gatewa
 import type { Env } from "@aprscaching/gateway/env";
 import type { SqlDatabase, SqlStatement } from "@aprscaching/gateway/runtime";
 import { authEnv } from "./helpers/authflow.js";
+import { decoyFix, decoying } from "./helpers/decoy.js";
 
 const SITE = "OE8XXX-10";
 const LAT = 47 + 4.2 / 60;
@@ -149,24 +150,6 @@ describe(`a flood of ${FLOOD} signed fixes at the spot`, () => {
   });
 });
 
-/**
- * `env` whose search for a contradicting fix (track.ts outrunBy) answers with `decoy`, a fix the engine does not take
- * as contradicting, for its first `times` questions, and truly after.
- */
-function decoying(env: Env, decoy: unknown, times: number): Env {
-  let asked = 0;
-  const wrap = (s: SqlStatement, sql: string): SqlStatement => ({
-    bind: (...v: unknown[]) => wrap(s.bind(...v), sql),
-    run: () => s.run(),
-    all: <T>() => s.all<T>(),
-    first: async <T>() => {
-      if (/NOT IN \(SELECT value FROM json_each/.test(sql) && asked++ < times) return decoy as T;
-      return s.first<T>();
-    },
-  });
-  return { ...env, DB: { prepare: (sql) => wrap(env.DB.prepare(sql), sql), batch: (st) => env.DB.batch(st) } };
-}
-
 describe("the search for a fix that contradicts a match", () => {
   it("rules out each match by its own contradicting fix, however many matches there are", async () => {
     const env = world();
@@ -193,12 +176,7 @@ describe("the search for a fix that contradicts a match", () => {
   it("asks again past a fix the engine does not take as contradicting", async () => {
     const env = world();
     const trad = await cache(env, { type: "traditional" });
-    const decoy = await env.DB.prepare(
-      `INSERT INTO positions (callsign, ts, lat, lon, heard_via, path, source, transport)
-       VALUES ('OE8LOG-7', ?, ?, ?, 'aprs_is', 'TCPIP*,qAC,T2', 'firehose', 'aprs-is') RETURNING *`,
-    )
-      .bind(now() - 90, LAT - 1, LON)
-      .first();
+    const decoy = await decoyFix(env, "OE8LOG-7", now() - 90, LAT - 1, LON);
     await attested(env, "OE8LOG-7", { ago: 250, dLat: 1 }); // the attested fix that contradicts the match
     await attested(env, "OE8LOG-9", { ago: 60 }); // the match at the cache
     expect((await scoreFind(decoying(env, decoy, 1), trad, "OE8LOG-9", now())).result.tier).toBe("C");
@@ -207,12 +185,7 @@ describe("the search for a fix that contradicts a match", () => {
   it("takes a match as contradicted once the fixes set aside run out, and reads no more for it", async () => {
     const env = world();
     const trad = await cache(env, { type: "traditional" });
-    const decoy = await env.DB.prepare(
-      `INSERT INTO positions (callsign, ts, lat, lon, heard_via, path, source, transport)
-       VALUES ('OE8LOG-7', ?, ?, ?, 'aprs_is', 'TCPIP*,qAC,T2', 'firehose', 'aprs-is') RETURNING *`,
-    )
-      .bind(now() - 90, LAT - 1, LON)
-      .first();
+    const decoy = await decoyFix(env, "OE8LOG-7", now() - 90, LAT - 1, LON);
     await attested(env, "OE8LOG-9", { ago: 60 }); // the match at the cache, with no true contradiction
     expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).toBe("A");
     const c = counting(decoying(env, decoy, Infinity));
