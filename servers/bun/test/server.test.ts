@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The Bun server holds the Node server's limits: a request body stops at BODY_MAX_BYTES, a failure answers a
 // generic JSON 500 (never Bun's error page), the https listener settings it has no listener for stop the boot,
-// tool-registry fetches get their own guard, and an event stream reaches its client. Run with `bun test servers/bun/test` (the CI Bun conformance).
+// tool-registry fetches get their own guard, an event stream reaches its client, and HOST binds the listener. Run with `bun test servers/bun/test` (the CI Bun conformance).
 import { afterAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import { connect, createServer as netServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -191,5 +192,49 @@ describe("the heard stream", () => {
     expect(ingest.status).toBe(200);
     await until(/event: heard[\s\S]*"status":"On the air"/);
     await reader.cancel();
+  });
+});
+
+describe("HOST", () => {
+  const accepts = (host: string, port: number) =>
+    new Promise<boolean>((resolve) => {
+      const sock = connect(port, host);
+      sock.once("connect", () => (sock.destroy(), resolve(true)));
+      sock.once("error", () => resolve(false));
+    });
+
+  // 127.0.0.2 is another loopback address on Linux: a listener on every interface answers there.
+  it.skipIf(process.platform !== "linux")("binds the server to 127.0.0.1 alone", async () => {
+    const probe = netServer();
+    await new Promise<void>((r) => probe.listen(0, "127.0.0.1", r));
+    const port = (probe.address() as AddressInfo).port;
+    await new Promise((r) => probe.close(r));
+    const dir = mkdtempSync(join(tmpdir(), "acs-bun-host-"));
+    const child = Bun.spawn([process.execPath, join(HERE, "../server.ts")], {
+      env: {
+        PATH: process.env.PATH ?? "",
+        ...BASE_ENV,
+        ...SECRETS,
+        PORT: String(port),
+        HOST: "127.0.0.1",
+        DB_PATH: join(dir, "gw.db"),
+        MEDIA_DIR: join(dir, "media"),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    try {
+      const reader = child.stdout.getReader();
+      let out = "";
+      while (!/listening on /.test(out)) {
+        const r = await reader.read();
+        if (r.done) throw new Error(`server exited: ${out}${await new Response(child.stderr).text()}`);
+        out += new TextDecoder().decode(r.value);
+      }
+      expect(await accepts("127.0.0.1", port)).toBe(true);
+      expect(await accepts("127.0.0.2", port)).toBe(false);
+    } finally {
+      child.kill(9);
+    }
   });
 });

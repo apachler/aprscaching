@@ -66,26 +66,22 @@ describe("validateConfig", () => {
 
   it("refuses a malformed value, naming the key and never the value", () => {
     const problems = validateConfig(
-      { SESSION_TTL_DAYS: "thirty", TRUST_PROXY: "true", FED_KEY_HISTORY: "[{", APP_URL: "aprs.example.net" },
+      { SESSION_TTL_DAYS: "thirty", TRUST_CF: "true", FED_KEY_HISTORY: "[{", APP_URL: "aprs.example.net" },
       "gateway",
     );
-    expect(problems.map((p) => p.key).sort()).toEqual([
-      "APP_URL",
-      "FED_KEY_HISTORY",
-      "SESSION_TTL_DAYS",
-      "TRUST_PROXY",
-    ]);
+    expect(problems.map((p) => p.key).sort()).toEqual(["APP_URL", "FED_KEY_HISTORY", "SESSION_TTL_DAYS", "TRUST_CF"]);
     for (const p of problems) {
       expect(p.message.startsWith(`${p.key}: `)).toBe(true);
       expect(p.message).not.toMatch(/thirty|aprs\.example\.net|\[\{/);
     }
-    expect(problems.find((p) => p.key === "TRUST_PROXY")?.message).toContain("expected one of: 0, 1");
+    expect(problems.find((p) => p.key === "TRUST_CF")?.message).toContain("expected one of: 0, 1");
+    expect(validateConfig({ TRUST_PROXY: "yes" }, "gateway")[0]?.message).toBe("TRUST_PROXY: expected a whole number");
   });
 
   it("accepts well-formed values", () => {
     expect(
       validateConfig(
-        { SESSION_TTL_DAYS: "7", TRUST_PROXY: "1", FED_KEY_HISTORY: "[]", APP_URL: "https://aprs.example.net" },
+        { SESSION_TTL_DAYS: "7", TRUST_PROXY: "2", FED_KEY_HISTORY: "[]", APP_URL: "https://aprs.example.net" },
         "gateway",
       ),
     ).toEqual([]);
