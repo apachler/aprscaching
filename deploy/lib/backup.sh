@@ -6,7 +6,8 @@
 # A shape module supplies the hooks: shape_db_dump (rows to stdout), shape_db_restore <rows-file> <schema>
 # [exact] (builds the new database and keeps the old one aside; with `exact` it stays at the backup's schema), and optionally shape_secrets_dump <dir> /
 # shape_secrets_restore <dir>, shape_media_dump <dir> / shape_media_restore <dir>, shape_stop / shape_start
-# and shape_settings_restore <file> (where settings do not live in a .env). Sourced by deploy/aprscaching.
+# and shape_settings_restore <file> (where settings do not live in a .env), and shape_archive_untrusted <archive>
+# (an archive another program may have written: its settings and secret files stay out). Sourced by deploy/aprscaching.
 # shellcheck shell=bash
 
 BACKUP_FORMAT="aprscaching-backup/1"
@@ -16,12 +17,10 @@ MIGRATIONS_DIR_LOCAL="$DEPLOY_DIR/../db/migrations"
 BACKUP_HOST_KEYS=" INGEST_URL DB_PATH PORT MEDIA_DIR MIGRATIONS_DIR WEB_DIST HTTPS_PORT TLS_CERT TLS_KEY TLS_CA_CERT DOMAIN TUNNEL_TOKEN HOST DATA_DIR BOX_ID BOX_KEY TRUST_PROXY TRUST_CF "
 
 # bk_tmpdir VAR: a temporary directory, owner-only, in VAR, removed when the command exits however it exits.
-BK_TMPS=()
 bk_tmpdir() {
   local d
   d="$(umask 077 && mktemp -d)"
-  BK_TMPS+=("$d")
-  [ "${#BK_TMPS[@]}" -gt 1 ] || trap 'rm -rf "${BK_TMPS[@]}"' EXIT
+  rm_on_exit "$d"
   printf -v "$1" '%s' "$d"
 }
 
@@ -78,12 +77,6 @@ bk_prune() {
     done
 }
 
-# The newest archive in the bucket, as an object name; empty when there is none.
-bk_bucket_newest() {
-  oci os object list -bn "$1" --prefix "$BK_BUCKET_PREFIX" --all \
-    --query 'max_by(data, &"time-created").name' --raw-output 2>/dev/null | grep -v '^null$' || true
-}
-
 # The newest object's upload time under PREFIX (default: the archives), as epoch seconds; empty when there is
 # none or the bucket is unreachable.
 bk_bucket_newest_time() {
@@ -94,19 +87,28 @@ bk_bucket_newest_time() {
   date -d "$t" +%s 2>/dev/null || true
 }
 
-# bk_fetch oci://BUCKET/OBJECT DIR: downloads one archive (OBJECT "latest" is the newest) and prints its path.
+# bk_fetch oci://BUCKET/OBJECT DIR: downloads the one archive the operator named into DIR, prints its path, and
+# writes its upload time, as the bucket reports it, to DIR/uploaded. There is no "newest": the VM's own principal can upload
+# to the bucket, so the newest archive may be one a compromised VM placed there; the operator names the archive
+# from a listing they trust (`oci os object list`, the console).
 bk_fetch() {
   local rest="${1#oci://}" bucket object
   bucket="${rest%%/*}"
   object="${rest#*/}"
   [ -n "$bucket" ] && [ "$object" != "$rest" ] && [ -n "$object" ] ||
-    die "A bucket archive is oci://<bucket>/<object>, or oci://<bucket>/latest."
+    die "A bucket archive is oci://<bucket>/<object>, naming one archive: oci://<bucket>/${BK_BUCKET_PREFIX}aprscaching-<shape>-<UTC time>.tar.gz."
+  case "$(basename "$object")" in
+    aprscaching-*.tar.gz) ;;
+    *)
+      die "oci://$bucket/$object names no archive: restore takes one archive by its name." \
+        "Name it as oci://<bucket>/${BK_BUCKET_PREFIX}aprscaching-<shape>-<UTC time>.tar.gz; list them with" \
+        "  oci os object list -bn $bucket --prefix $BK_BUCKET_PREFIX --query 'data[].{name:name,uploaded:\"time-created\"}' --output table"
+      ;;
+  esac
   have oci || die "Restoring from a bucket needs the oci CLI."
-  if [ "$object" = latest ]; then
-    object="$(bk_bucket_newest "$bucket")"
-    [ -n "$object" ] || die "No archive under $BK_BUCKET_PREFIX in the bucket $bucket."
-  fi
   info "downloading oci://$bucket/$object" >&2
+  oci os object head -bn "$bucket" --name "$object" 2>/dev/null |
+    sed -n -E 's/^ *"last-modified": *"([^"]*)".*/\1/p' | head -n 1 >"$2/uploaded" || true
   oci os object get -bn "$bucket" --name "$object" --file "$2/$(basename "$object")" >/dev/null ||
     die "Downloading oci://$bucket/$object failed."
   chmod 600 "$2/$(basename "$object")"
@@ -192,9 +194,37 @@ run_backup() {
 # The archive's manifest field (a string or a number), without jq.
 manifest_get() { sed -n -E "s/^ *\"$2\": *\"?([^\",]*)\"?,?$/\\1/p" "$1/manifest.json" | head -n 1; }
 
-# restore <file | oci://bucket/object | oci://bucket/latest> [--dry-run] [--no-settings]
+# bk_settings FILE: the settings of an archive's FILE that a restore writes, in BK_SETTINGS: the instance's own
+# (known, read by the gateway, not this host's), each with a value a shell sourcing the .env runs none of. Those
+# left out for their value are in BK_REFUSED.
+bk_settings() {
+  local key
+  BK_SETTINGS=()
+  BK_REFUSED=()
+  while IFS= read -r key; do
+    case "$BACKUP_HOST_KEYS" in *" $key "*) continue ;; esac
+    cfg_known "$key" && [[ "$(cfg_field "$key" 3)" == *gateway* ]] || continue
+    if env_inert_value "$(env_file_raw "$1" "$key")" >/dev/null; then BK_SETTINGS+=("$key"); else BK_REFUSED+=("$key"); fi
+  done < <(env_file_keys "$1")
+}
+
+# bk_settings_write FILE ENV: writes FILE's settings (bk_settings) into ENV, each value plain or single-quoted.
+# Pocket's scripts source their .env, so nothing an archive carries may reach it in a form a shell would run.
+bk_settings_write() {
+  local key
+  bk_settings "$1"
+  env_file_secure "$2"
+  for key in "${BK_SETTINGS[@]+"${BK_SETTINGS[@]}"}"; do
+    env_file_set "$2" "$key" "$(env_inert_value "$(env_file_raw "$1" "$key")")"
+  done
+}
+
+# A manifest's schema is the name of one migration file, nothing that reaches outside db/migrations.
+bk_schema_name() { [[ "$1" =~ ^[0-9]{4}_[A-Za-z0-9_-]+\.sql$ ]]; }
+
+# restore <file | oci://bucket/object> [--dry-run] [--no-settings]
 run_restore() {
-  local file="" dry=0 settings=1 tmp fetched schema src newest forward key line
+  local file="" dry=0 settings=1 untrusted=0 tmp fetched schema src newest forward uploaded=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) dry=1 ;;
@@ -202,7 +232,8 @@ run_restore() {
       -h | --help)
         printf '%s\n' "deploy/aprscaching restore <archive> [--dry-run] [--no-settings]" \
           "Replaces this instance's data with the archive's; --dry-run shows what would change and changes nothing." \
-          "<archive> may be oci://<bucket>/<object>, or oci://<bucket>/latest for the newest one there."
+          "<archive> is a file, or one archive in a bucket by its name: oci://<bucket>/<object>." \
+          "It shows the archive's upload time and manifest before anything changes."
         return 0
         ;;
       -*) die "Unknown option $1." ;;
@@ -214,9 +245,13 @@ run_restore() {
     oci://*)
       bk_tmpdir fetched
       file="$(bk_fetch "$file" "$fetched")"
+      uploaded="$(cat "$fetched/uploaded" 2>/dev/null || true)"
+      uploaded="uploaded ${uploaded:-at a time the bucket did not report}"
       ;;
+    "") die "Name the archive to restore." "deploy/aprscaching restore <archive> [--dry-run]" ;;
   esac
   [ -f "$file" ] || die "No archive at '$file'."
+  [ -n "$uploaded" ] || uploaded="written $(date -r "$file" '+%F %T %Z' 2>/dev/null || echo "at an unknown time")"
   bk_tmpdir tmp
   tar -xzf "$file" -C "$tmp" 2>/dev/null || die "$file is not a backup archive."
   if [ ! -f "$tmp/manifest.json" ] && [ -f "$tmp/aprscaching.db" ] && declare -F shape_restore_pocket_archive >/dev/null; then
@@ -224,26 +259,33 @@ run_restore() {
     return
   fi
   [ "$(manifest_get "$tmp" format)" = "$BACKUP_FORMAT" ] || die "$file is not an $BACKUP_FORMAT archive."
+  if declare -F shape_archive_untrusted >/dev/null && shape_archive_untrusted "$file"; then
+    warn "$file lies where any app can write: its settings and secret files are not restored, only its data."
+    settings=0
+    untrusted=1
+  fi
   declare -F shape_db_restore >/dev/null || die "'restore' is not available for the $SHAPE shape."
   schema="$(manifest_get "$tmp" schema)"
   src="$(manifest_get "$tmp" shape)"
+  bk_schema_name "$schema" || die "$file names its schema '$schema', which is no migration file name."
   newest="$(newest_migration)"
   [ -f "$MIGRATIONS_DIR_LOCAL/$schema" ] ||
     die "The backup's schema ($schema) is newer than this checkout ($newest)." "Update this installation first, then restore."
   forward="$(find "$MIGRATIONS_DIR_LOCAL" -maxdepth 1 -name '*.sql' -exec basename {} \; | sort | awk -v s="$schema" '$0 > s' | tr '\n' ' ')"
 
   step "Restore of a $src backup into this $SHAPE instance"
+  info "archive: $(basename "$file"), $uploaded"
+  info "manifest:"
+  sed 's/^/      /' "$tmp/manifest.json" | _out
   info "taken: $(date -d "@$(manifest_get "$tmp" createdAt)" '+%F %T %Z' 2>/dev/null || manifest_get "$tmp" createdAt)"
   info "database: $(grep -c '^INSERT INTO' "$tmp/rows.sql" || true) rows at $schema${forward:+, then migrated forward: $forward}"
   if [ "$settings" = 1 ] && [ -f "$tmp/settings.env" ]; then
-    local keys=()
-    while IFS= read -r key; do
-      case "$BACKUP_HOST_KEYS" in *" $key "*) continue ;; esac
-      cfg_known "$key" && [[ "$(cfg_field "$key" 3)" == *gateway* ]] && keys+=("$key")
-    done < <(env_file_keys "$tmp/settings.env")
-    info "settings restored: ${keys[*]:-none}"
+    bk_settings "$tmp/settings.env"
+    info "settings restored: ${BK_SETTINGS[*]:-none}"
+    [ "${#BK_REFUSED[@]}" = 0 ] ||
+      warn "settings left out, their values would run as shell where the .env is sourced: ${BK_REFUSED[*]}"
   fi
-  [ -z "$(find "$tmp/secrets" -type f 2>/dev/null)" ] || info "secret files: $(find "$tmp/secrets" -type f -exec basename {} \; | tr '\n' ' ')"
+  [ "$untrusted" = 1 ] || [ -z "$(find "$tmp/secrets" -type f 2>/dev/null)" ] || info "secret files: $(find "$tmp/secrets" -type f -exec basename {} \; | tr '\n' ' ')"
   [ ! -d "$tmp/media" ] || info "media: $(find "$tmp/media" -type f | wc -l | tr -d ' ') files"
   if [ "$src" != "$SHAPE" ]; then
     info "Moving between shapes: keep the same APP_URL (passkeys are bound to its domain), and point the"
@@ -261,17 +303,10 @@ run_restore() {
     if declare -F shape_settings_restore >/dev/null; then
       shape_settings_restore "$tmp/settings.env"
     elif [ -n "${SHAPE_ENV:-}" ]; then
-      env_file_secure "$SHAPE_ENV"
-      while IFS= read -r key; do
-        case "$BACKUP_HOST_KEYS" in *" $key "*) continue ;; esac
-        cfg_known "$key" && [[ "$(cfg_field "$key" 3)" == *gateway* ]] || continue
-        # the value exactly as written, quotes included: Pocket's .env is sourced by the shell
-        line="$(env_file_raw "$tmp/settings.env" "$key")"
-        env_file_set "$SHAPE_ENV" "$key" "$line"
-      done < <(env_file_keys "$tmp/settings.env")
+      bk_settings_write "$tmp/settings.env" "$SHAPE_ENV"
     fi
   fi
-  if [ -n "$(find "$tmp/secrets" -type f 2>/dev/null)" ] && declare -F shape_secrets_restore >/dev/null; then
+  if [ "$untrusted" = 0 ] && [ -n "$(find "$tmp/secrets" -type f 2>/dev/null)" ] && declare -F shape_secrets_restore >/dev/null; then
     shape_secrets_restore "$tmp/secrets"
   fi
   if [ -d "$tmp/media" ] && declare -F shape_media_restore >/dev/null; then shape_media_restore "$tmp/media"; fi

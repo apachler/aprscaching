@@ -28,7 +28,7 @@ Pick the tool for your shape:
 |---|---|---|
 | Self-host, bare metal, Desktop | `deploy/aprscaching backup`, scheduled | a portable archive: rows, settings, secrets, optionally media |
 | Self-host, bare metal (SQLite file on the host) | `deploy/backup.sh` from cron | a gzipped SQLite snapshot only |
-| Pocket | `deploy/pocket/backup.sh`, or `deploy/aprscaching backup` | an archive in the phone's shared storage |
+| Pocket | `deploy/pocket/backup.sh`, or `deploy/aprscaching backup` | an archive in Termux's private folder |
 
 **When to use which.** `deploy/aprscaching backup` writes the one archive that `restore` reads on any shape:
 use it for scheduled backups, before risky changes and to move between shapes. `deploy/backup.sh` takes only
@@ -119,29 +119,41 @@ then needs delete permission. The Oracle Cloud stack's VM holds none, so it reli
 
 ## Pocket
 
-On a phone, `deploy/pocket/backup.sh` writes the station to the phone's shared storage. Run these in Termux:
+On a phone, `deploy/pocket/backup.sh` writes the station to Termux's private folder. Run it in Termux:
 
 ```bash
-termux-setup-storage                                  # once: allow Termux to write to shared storage
-bash ~/aprscaching/deploy/pocket/backup.sh            # to ~/storage/shared/aprscaching-backups/
+bash ~/aprscaching/deploy/pocket/backup.sh            # to ~/.aprscaching/backups/
 ```
 
 The archive, `aprscaching-pocket-<UTC time>.tar.gz`, holds a consistent snapshot of the database taken while the
 gateway runs and the media while it is at most 50 MiB (`APRSCACHING_BACKUP_MEDIA_MAX_MB`; `--media` or
-`--no-media` decides it yourself). The newest 7 are kept (`--keep <n>`); `--dest <dir>` writes elsewhere.
+`--no-media` decides it yourself). The newest 7 are kept (`--keep <n>`).
 
-Shared storage is readable by any app with storage permission, and by any app that syncs the folder to a cloud.
-So an archive there leaves out the `.env` and `session.secret`: they go into
-`~/.aprscaching/backups/aprscaching-pocket-<UTC time>-secrets.tar.gz`, in Termux's own storage, readable by its
-owner only. An archive written with `--dest` outside shared storage holds them itself. `--no-env` leaves them out
-everywhere; `--with-secrets` puts them in the archive even on shared storage. Copy the secrets archive somewhere
-private to restore the station on another phone.
+The database holds every account's email address and the caches' unlock secrets, so the archive stays where no
+other app reads it. Termux's private folder goes with Termux: uninstalling Termux or clearing its data deletes the
+backups too. To keep a copy past that, write one to shared storage with `--dest` and move it off the phone:
 
-To restore one, run `bash ~/aprscaching/deploy/pocket/backup.sh --restore <file>`. It stops the station, moves
-the current database, media and secrets aside to `~/.aprscaching/before-restore-<time>/`, puts the archive's in
-place and starts the station again if it was running. It takes the secrets from the secrets archive in
-`~/.aprscaching/backups/` when the archive left them there. The `.env` comes back only with `--with-env`. `deploy/aprscaching restore`
-accepts these archives too. The station CA stays on the phone; a station restored elsewhere makes a new one.
+```bash
+termux-setup-storage                                  # once: allow Termux to write to shared storage
+bash ~/aprscaching/deploy/pocket/backup.sh --dest ~/storage/shared/aprscaching-backups
+```
+
+Shared storage is readable by any app with storage permission, and by any app that syncs the folder to a cloud, so
+the script warns when it writes there.
+
+The `.env` and `session.secret` never go into the archive: they go into
+`~/.aprscaching/backups/aprscaching-pocket-<UTC time>-secrets.tar.gz`, readable by its owner only. `--no-env`
+leaves them out; `--with-secrets` also puts them in the archive, for a copy that leaves the phone. Copy the secrets
+archive into `~/.aprscaching/backups/` on another phone to restore the station there.
+
+To restore one, run `bash ~/aprscaching/deploy/pocket/backup.sh --restore <file>`. It shows the archive's time and
+manifest, stops the station, moves the current database, media and secrets aside to
+`~/.aprscaching/before-restore-<time>/`, puts the archive's in place and starts the station again if it was running.
+It takes the secrets only from the secrets archive of the same name in `~/.aprscaching/backups/`, never from the
+archive itself, which another app may have written. The `.env` comes back only with `--with-env`, and only its known
+settings, each written so that no shell runs it. `deploy/aprscaching restore` accepts these archives too; on
+Pocket it restores only the data of an archive on shared storage, never its settings or secret files. The
+station CA stays on the phone; a station restored elsewhere makes a new one.
 
 [Pocket extras](../pocket/extras.md) schedule this backup to run daily while the phone charges.
 
@@ -152,18 +164,23 @@ accepts these archives too. The station CA stays on the phone; a station restore
 ```bash
 deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz --dry-run
 deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz
-deploy/aprscaching restore oci://aprscaching-backups/latest      # the newest archive in an OCI bucket
+deploy/aprscaching restore oci://aprscaching-backups/archives/aprscaching-oci-20261001T020000Z.tar.gz
 ```
 
-1. It refuses an archive from a newer schema than this checkout knows. [Update](updates.md) first.
-2. `--dry-run` shows what it would restore and changes nothing. Without `--yes` it asks before it changes
+1. It takes one archive, named: a file, or an object in an OCI bucket. There is no "newest": a compromised host
+   can upload to its own bucket, so pick the archive from a time you trust. It shows the archive's upload time and
+   manifest before it changes anything.
+2. It refuses an archive from a newer schema than this checkout knows. [Update](updates.md) first. It refuses a
+   manifest whose schema is not a migration file name.
+3. `--dry-run` shows what it would restore and changes nothing. Without `--yes` it asks before it changes
    anything.
-3. It stops the instance and builds a new database: the migrations up to the archive's schema, then its rows,
+4. It stops the instance and builds a new database: the migrations up to the archive's schema, then its rows,
    then every newer migration. The old database stays beside it as `before-restore-<time>-*`.
-4. It restores the instance's settings: identity, secrets, federation, operator. It keeps this host's own:
-   `INGEST_URL`, paths, ports, `DOMAIN`, the tunnel token, `TRUST_PROXY`, `TRUST_CF` and the box's key.
-   `--no-settings` leaves every setting as it is.
-5. It restores the secret files and any media, starts the instance and runs `doctor`.
+5. It restores the instance's settings: identity, secrets, federation, operator. It keeps this host's own:
+   `INGEST_URL`, paths, ports, `DOMAIN`, the tunnel token, `TRUST_PROXY`, `TRUST_CF` and the box's key. It
+   writes only known settings, each so that a shell sourcing the `.env` runs none of it, and leaves out a value
+   it cannot write that way. `--no-settings` leaves every setting as it is.
+6. It restores the secret files and any media, starts the instance and runs `doctor`.
 
 The rows come back exactly as the archive holds them. Federation needs nothing more: the instance numbers every new
 cache, find and deletion at least by the time in milliseconds, so its peers never take a new record for one they
@@ -191,7 +208,7 @@ Run `deploy/aprscaching doctor` and read the `resources` group:
 - `resources.backup` passes while the newest backup is at most 7 days old (`APRS_BACKUP_MAX_DAYS`). It counts
   both the archives of `deploy/aprscaching backup` and the snapshots of `deploy/backup.sh`, wherever either
   writes: `BACKUP_DIR` or `deploy/backups`, `OCI_BUCKET` when the `oci` CLI is installed, and `BACKUP_BUCKET`
-  with `R2_ENDPOINT` when the `aws` CLI is. On Pocket it also looks in the phone's shared storage. The
+  with `R2_ENDPOINT` when the `aws` CLI is. On Pocket it also looks in `~/.aprscaching/backups/`, or `APRSCACHING_BACKUP_DIR`. The
   [table of places](../troubleshooting.md#resourcesbackup) lists them per shape.
 - `resources.backup_place` warns when the backups stay on this host's disk: no `BACKUP_DIR`, and no bucket
   with the CLI that uploads to it. `BACKUP_BUCKET` takes the snapshots of `deploy/backup.sh`, not these

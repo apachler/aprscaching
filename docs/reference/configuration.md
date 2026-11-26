@@ -142,6 +142,7 @@ The Node and Bun servers also read plain runtime knobs that are not part of the 
 | `FED_SYNC_INTERVAL_MS` | Milliseconds between scheduled peer syncs; `0` disables them | `300000` |
 | `FED_RELAY_POLL_MS` | Milliseconds between relay rounds: a spoke collects the queries its hub holds for it, and an instance reads the answers to corroboration questions it left at a hub; `0` leaves both to the peer sync | `15000` |
 | `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front. Text assets go out brotli- or gzip-compressed when the browser accepts it | — |
+| `GATEWAY_SOCKET` | Node only: an absolute filesystem path where the gateway also listens, as a Unix socket, beside `PORT`. With it set, the ingest sends every gateway request through it (`INGEST_URL` then names only the paths), and `tools/admin/*.mjs` send `OPERATOR_SECRET` through it unless `BASE` is set. The gateway creates its directory with mode `0700`, makes the socket file `0600`, replaces a socket file left by a gateway that was killed, and refuses to start when another process listens on the path or a file that is not a socket is there. Never an abstract socket name, which every process on the machine can reach. A Pocket station sets it (`~/.aprscaching/run/gateway.sock`): on Android every app shares loopback and may bind the gateway's TCP port while it is free, so a secret sent to `127.0.0.1` can reach another app | off |
 <!-- /config-table -->
 
 The Node server can also listen for https itself, beside its plain port, for a station whose visitors reach
@@ -256,7 +257,7 @@ only when its variable is present.
 <!-- config-table:ingest-core -->
 | Variable | Purpose | Default |
 |---|---|---|
-| `INGEST_URL` | Gateway ingest endpoint to POST batches to | `http://127.0.0.1:8787/ingest` |
+| `INGEST_URL` | Gateway ingest endpoint to POST batches to. With `GATEWAY_SOCKET` set, every gateway request goes through that socket and this names only the paths | `http://127.0.0.1:8787/ingest` |
 | `INGEST_SECRET` | Sent as `x-ingest-secret`. The only gateway secret an ingest box holds — never give it `OPERATOR_SECRET` or `SESSION_SECRET` | `change-me` |
 | `BOX_ID` / `BOX_KEY` | An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. Only an enrolled box's hearings verify callsigns on the air, and only an enrolled box is paired and remote-controlled. `BOX_ID` also names the box for remote control (below) | — |
 | `BATCH_MS` | Batch flush interval | `1500` (`2000` in the `.env` that `deploy/setup.sh` writes) |
@@ -270,7 +271,7 @@ only when its variable is present.
 <!-- config-table:ingest-transports -->
 | Subsystem | Variables |
 |---|---|
-| KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing) |
+| KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST` (a host, or the path of a Unix socket, starting with `/`), `KISS_TNC_PORT` (`8001`; unused with a path), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing) |
 | KISS server (other packet programs share the box's radio ports) | `KISS_SERVER_PORT` (unset: off), `KISS_SERVER_HOST` (`127.0.0.1`), `KISS_SERVER_PORTS` (default every radio port in order: `kiss-tnc`, `kiss-tnc-<n>`, `soundcard-<name>`), `KISS_SERVER_PORT_LISTENERS` (`<tcp port>=<kiss port>`, one port as port 0), `KISS_SERVER_MAX_CLIENTS` (`8`), `KISS_SERVER_MAX_PER_ADDR` (`2`, clients from one address other than the box's own), `KISS_SERVER_IDLE_SEC` (`300`, a client silent this long gives up its slot to a newcomer when the server is full), `KISS_SERVER_TX` (`1` lets clients transmit; off by default), `KISS_SERVER_TX_CALLS` (default the box's station calls), `KISS_SERVER_TX_BURST` (`6`) / `KISS_SERVER_TX_REFILL_SEC` (`10`) — [Share the box's radio](../run/radios/kiss-server.md) |
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`; the one radio port heard and transmitted on) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` (`0`, the first channel) |

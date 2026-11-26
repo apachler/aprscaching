@@ -352,16 +352,16 @@ check "--no-next-steps prints no Docker steps" bash -c "! '$S' --non-interactive
 
 # ---- bare metal ------------------------------------------------------------------------------------------------
 if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
-  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --dir /srv/acs --user acs --port 8090 --call OE8APR
+  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --unverified --dir /srv/acs --user acs --port 8090 --call OE8APR
   check "  … lists the root steps first" grep -q "Steps that need root" "$TMP/out"
   check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs" "$TMP/out"
   check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
   check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
   check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
   check "  … makes data/ the service user's alone" grep -q "\[acs\] install -d -m 700 /srv/acs/data" "$TMP/out"
-  check "  … says the checkout is unverified" grep -q "without verification" "$TMP/err"
+  check "  … says the checkout is unverified" grep -q "main (branch) is not verified" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
-  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --no-start --call OE8APR
+  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --unverified --no-start --call OE8APR
   check "  … no systemctl" bash -c "! grep -q '\[root\] systemctl' '$TMP/out'"
   if run --non-interactive init baremetal --dry-run --ref main --call OE8APR; then
     bad "bare metal: an unverified install without --yes is refused"
@@ -371,33 +371,89 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
 else
   echo "skip bare metal (needs systemctl and Node.js 22+)"
 fi
-# A release download, verified: curl and gh stand in for GitHub (fixtures in $REL).
-REL="$TMP/rel"
-mkdir -p "$REL"
-printf 'a git bundle\n' >"$REL/aprscaching-v9.9.9.bundle"
-(cd "$REL" && sha256sum aprscaching-v9.9.9.bundle >SHA256SUMS)
-verify_release() { # verify_release MODE: good | tampered | missing | nogh | nogh-checksum
-  bash -c '
-    . "$1/lib/common.sh"; DEPLOY_DIR="$1"; . "$1/lib/shapes/baremetal.sh"
-    REL="$2"; MODE="$3"; BM_ALLOW_UNSIGNED=0
-    [ "$MODE" = nogh-checksum ] && BM_ALLOW_UNSIGNED=1
-    curl() { local out="" url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done
-      [ "$MODE" = missing ] && return 22
-      cp "$REL/${url##*/}" "$out"
-      if [ "$MODE" = tampered ] && [ "${url##*/}" != SHA256SUMS ]; then echo evil >>"$out"; fi; }
-    have() { [ "$1" = gh ] && [ "${MODE#nogh}" != "$MODE" ] && return 1; command -v "$1" >/dev/null; }
-    gh() { [ "$1 $2" = "attestation verify" ]; }
-    bm_verified_bundle https://github.com/apachler/aprscaching v9.9.9
-  ' _ "$DEPLOY" "$REL" "$1"
+# ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
+# deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
+FIX="$TMP/relfix"
+mkdir -p "$FIX/rel" "$FIX/rel-moved" "$FIX/rel-notag"
+(
+  g() { git -c user.name=t -c user.email=t@example.org -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+  cd "$FIX" && git init --quiet -b main src && cd src
+  g commit --quiet --allow-empty -m one && g tag v1.0.0
+  g commit --quiet --allow-empty -m two && g tag -a -m v1.1.0 v1.1.0
+  git clone --quiet --bare . "$FIX/origin.git"
+  git bundle create --quiet "$FIX/rel/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+  # a bundle published under v1.1.0's name that holds another tag
+  git bundle create --quiet "$FIX/rel-notag/aprscaching-v1.1.0.bundle" refs/tags/v1.0.0
+  # the same tag name at another commit: what a tag pushed outside the release workflow looks like
+  g checkout --quiet v1.0.0 && g commit --quiet --allow-empty -m other && g tag -f -a -m v1.1.0 v1.1.0 >/dev/null
+  git bundle create --quiet "$FIX/rel-moved/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+) >/dev/null 2>&1
+for d in rel rel-moved rel-notag; do (cd "$FIX/$d" && sha256sum aprscaching-v1.1.0.bundle >SHA256SUMS); done
+RELEASE="$(git -C "$FIX/origin.git" rev-parse 'v1.1.0^{commit}')"
+OTHER="$(git -C "$FIX/src" rev-parse 'v1.1.0^{commit}')"
+N=0
+# rc_case CALLER MODE [options]: run one case in $W; its output in $TMP/rc.out and $TMP/rc.err, its exit status in $RC
+rc_case() {
+  local c="$1" m="$2"
+  shift 2
+  N=$((N + 1))
+  W="$TMP/case$N"
+  mkdir -p "$W"
+  RC=0
+  bash "$DEPLOY/test/release-case.sh" "$c" "$m" "$W" "$FIX" "$@" >"$TMP/rc.out" 2>"$TMP/rc.err" </dev/null || RC=$?
 }
-check "a release whose checksum and signature verify gives its bundle" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; p=\$(verify_release good 2>/dev/null) && [ -f \"\$p\" ]"
-rc_of() { verify_release "$1" >/dev/null 2>&1 && echo 0 || echo $?; }
-check "a bundle that does not match its checksum stops the install" eq "$(rc_of tampered)" 2
-check "a release without a bundle falls back to the warned install" eq "$(rc_of missing)" 1
-check "  … quietly, for the warned install" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; [ -z \"\$(verify_release missing 2>&1)\" ]"
-check "without gh the signature cannot be checked, so it stops" eq "$(rc_of nogh)" 2
-check "  … unless --checksum-only accepts the checksum alone" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; verify_release nogh-checksum >/dev/null 2>&1"
-check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh'; [ \"\$(bm_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(bm_github_repo https://git.example.org/a/b)\" ]"
+stopped() { [ "$RC" != 0 ] && [ ! -e "$W/applied" ] && [ -z "$(ls -A "$W/tmp")" ] && ! grep -q useradd "$TMP/rc.out"; }
+for caller in init update; do
+  if [ "$caller" = init ]; then args=(--ref v1.1.0); else args=(); fi
+  rc_case "$caller" good "${args[@]+"${args[@]}"}"
+  check "$caller: a release whose checksum and signature verify goes ahead with --yes" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … saying so" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+  check "  … and leaves no download behind" eq "$(ls -A "$W/tmp")" ""
+  rc_case "$caller" tampered "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle that does not match its checksum stops before any change" stopped
+  check "  … naming the checksum" grep -q "does not match its checksum" "$TMP/rc.err"
+  rc_case "$caller" notag "${args[@]+"${args[@]}"}"
+  check "$caller: a verified bundle that holds no tag v1.1.0 stops before any step" stopped
+  check "  … naming the tag" grep -q "the release bundle holds no tag v1.1.0" "$TMP/rc.err"
+  rc_case "$caller" unattested "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle with no attestation stops before any step" stopped
+  check "  … as a refusal, quoting gh" bash -c "grep -q 'signed provenance does not verify' '$TMP/rc.err' && grep -q 'HTTP 404' '$TMP/rc.err'"
+  rc_case "$caller" otherflow "${args[@]+"${args[@]}"}"
+  check "$caller: an attestation by another workflow than the release workflow stops" stopped
+  check "  … naming the release workflow" grep -q "no attestation by apachler/aprscaching/.github/workflows/release-verify.yml covers it" "$TMP/rc.err"
+  rc_case "$caller" sigstore "${args[@]+"${args[@]}"}"
+  check "$caller: a check that could not run stops" stopped
+  check "  … saying it could not run, with gh's exit and message, not that it failed" bash -c "grep -q 'could not be checked: gh attestation verify exited 1' '$TMP/rc.err' && grep -q 'no valid Sigstore verifiers' '$TMP/rc.err' && ! grep -q 'does not verify' '$TMP/rc.err'"
+  rc_case "$caller" error "${args[@]+"${args[@]}"}"
+  check "$caller: a failed download stops, not taken for a missing bundle" stopped
+  check "  … naming the server's answer" grep -q "HTTP 500" "$TMP/rc.err"
+  rc_case "$caller" nogh "${args[@]+"${args[@]}"}"
+  check "$caller: without gh the signature cannot be checked, so it stops" stopped
+  check "  … pointing to --checksum-only" grep -q -- "--checksum-only" "$TMP/rc.err"
+  rc_case "$caller" nogh --checksum-only "${args[@]+"${args[@]}"}"
+  check "$caller: --checksum-only accepts the checksum alone" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … with its warning" grep -q "only the checksum was checked" "$TMP/rc.err"
+  rc_case "$caller" missing "${args[@]+"${args[@]}"}"
+  check "$caller: a tag with no bundle is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  check "  … and how to take it anyway" grep -q -- "--unverified" "$TMP/rc.err"
+  rc_case "$caller" missing --unverified "${args[@]+"${args[@]}"}"
+  check "$caller: --unverified takes it, warned" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … warned" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main
+  check "$caller: a branch is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "main (branch) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main --unverified
+  check "$caller: --unverified takes a branch" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+done
+rc_case update good
+check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"
+rc_case update moved
+check "update: a tag on origin at another commit than the verified release's stops before any rebuild" stopped
+check "  … naming both commits" grep -q "on origin is commit $RELEASE, but the verified release v1.1.0 is commit $OTHER" "$TMP/rc.err"
+rc_case update good --ref v1.1.0
+check "update: --ref to a release tag is verified like the newest" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/release.sh'; [ \"\$(rel_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ \"\$(rel_github_repo git@github.com:apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(rel_github_repo https://git.example.org/a/b)\" ]"
 
 render() {
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
@@ -610,6 +666,56 @@ if restore_dry "$TMP/future.tar.gz" --dry-run; then bad "a backup newer than the
 check "  … with the way out" grep -q "Update this installation first" "$TMP/err"
 printf 'not an archive' >"$TMP/junk.tar.gz"
 if restore_dry "$TMP/junk.tar.gz" --dry-run; then bad "a file that is not an archive is refused"; else ok "a file that is not an archive is refused"; fi
+mkarchive "$TMP/escape.tar.gz" "../x"
+# the refusal is its own message: a schema that reaches outside db/migrations is not "newer than this checkout"
+restore_dry "$TMP/escape.tar.gz" --dry-run || true
+check "a manifest whose schema is no migration file name is refused, naming it" \
+  grep -q "schema '../x', which is no migration file name" "$TMP/err"
+check "  … before it describes the restore" bash -c "! grep -q 'Restore of a' '$TMP/out'"
+restore_dry "$TMP/a.tar.gz" --dry-run || true
+check "a restore shows the archive's time" grep -q "^    archive: a.tar.gz, written " "$TMP/out"
+check "  … and its manifest" grep -q '"createdAt": 1790000000' "$TMP/out"
+
+# ---- restored settings: only known keys, each written so that a shell sourcing the .env runs nothing ----------
+SRC="$TMP/settings-src.env"
+printf '%s\n' 'APP_URL=$(touch '"$TMP"'/ran-unquoted)' 'ADMIN_CALLSIGNS="`touch '"$TMP"'/ran-backtick`"' \
+  "OPERATOR_NAME='Station \$(touch $TMP/ran-single)'" 'RP_ID=aprs.example.net' 'RETENTION={"positions": 30}' 'NOT_A_SETTING=1' \
+  'DB_PATH=/elsewhere/x.db' >"$SRC"
+DST="$TMP/settings-dst.env"
+printf 'APP_URL=https://kept.example\nDB_PATH=/here/x.db\n' >"$DST"
+check "restored settings are written" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/backup.sh'; bk_settings_write '$SRC' '$DST'"
+check "  … a value holding \$(…) is left out, the current one kept" eq "$(env_file_get "$DST" APP_URL)" "https://kept.example"
+check "  … a double-quoted value holding a backtick is left out" bash -c "! grep -q '^ADMIN_CALLSIGNS=' '$DST'"
+check "  … a single-quoted value comes back single-quoted, as written" eq "$(grep '^OPERATOR_NAME=' "$DST")" "OPERATOR_NAME='Station \$(touch $TMP/ran-single)'"
+check "  … a plain value plainly" eq "$(grep '^RP_ID=' "$DST")" "RP_ID=aprs.example.net"
+check "  … a JSON value single-quoted, read back as written" eq "$(env_file_get "$DST" RETENTION)" '{"positions": 30}'
+check "  … an unknown key and this host's own are not written" bash -c "! grep -q '^NOT_A_SETTING=' '$DST' && grep -qx 'DB_PATH=/here/x.db' '$DST'"
+check "  … and sourcing the .env runs none of them" bash -c "set -a; . '$DST'; set +a; [ ! -e '$TMP/ran-unquoted' ] && [ ! -e '$TMP/ran-backtick' ] && [ ! -e '$TMP/ran-single' ]"
+
+# ---- Pocket: an archive on shared storage brings no settings or secret files into the station --------------
+SH="$TMP/pkshared"
+mkdir -p "$SH/home/storage/shared" "$SH/data" "$SH/arch"
+tar -xzf "$TMP/a.tar.gz" -C "$SH/arch"
+printf 'SESSION_SECRET=planted-session-secret-0123456789\nAPP_URL=https://planted.example\n' >"$SH/arch/settings.env"
+printf 'planted\n' >"$SH/arch/secrets/session.secret"
+tar -czf "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz" -C "$SH/arch" .
+cp "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz" "$SH/data/"
+pk_restore() { # pk_restore ARCHIVE: the real restore on the Pocket shape, its database, stop and start hooks stubbed
+  printf 'mine\n' >"$SH/data/session.secret"
+  printf 'APP_URL=https://mine.example\n' >"$SH/data/.env"
+  HOME="$SH/home" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'
+    DEPLOY_DIR='$DEPLOY'; APRS_JSON=0 APRS_INTERACTIVE=0 APRS_ASSUME_YES=1; SHAPE=pocket SHAPE_ENV='$SH/data/.env'
+    . '$DEPLOY/lib/backup.sh'; . '$DEPLOY/lib/shapes/pocket.sh'
+    shape_db_restore() { :; }; shape_stop() { :; }; shape_start() { :; }; run_doctor() { :; }; sleep() { :; }
+    run_restore '$1'" >"$TMP/out" 2>"$TMP/err"
+}
+check "Pocket: an archive on shared storage restores" pk_restore "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz"
+check "  … but not its secret files" eq "$(cat "$SH/data/session.secret")" mine
+check "  … nor its settings" bash -c "grep -qx 'APP_URL=https://mine.example' '$SH/data/.env' && ! grep -q SESSION_SECRET '$SH/data/.env'"
+check "  … and says so" grep -q "its settings and secret files are not restored" "$TMP/err"
+check "  … from Termux's own storage they are" pk_restore "$SH/data/aprscaching-selfhost-20261001T020000Z.tar.gz"
+check "  … the secret files" eq "$(cat "$SH/data/session.secret")" planted
+check "  … and the settings" grep -qx "APP_URL=https://planted.example" "$SH/data/.env"
 if APRSCACHING_DATA="$PDATA" "$H" --non-interactive --shape pocket restore "$TMP/a.tar.gz" </dev/null >/dev/null 2>&1; then
   bad "a restore without --yes changes nothing when nobody can be asked"
 else
@@ -639,6 +745,7 @@ cat >"$TMP/ocibin/oci" <<'MOCK'
 #!/usr/bin/env bash
 echo "oci $*" >>"$OCI_LOG"
 case "$*" in
+  *"object head"*) printf '{\n  "content-length": "1",\n  "last-modified": "Thu, 01 Oct 2026 02:00:05 GMT"\n}\n' ;;
   *"object list"*)
     case "$*" in *'."time-created"'*) echo "${OCI_NEWEST_TIME:-null}" ;; *) echo "${OCI_NEWEST:-null}" ;; esac ;;
   *"object get"*) while [ $# -gt 0 ]; do [ "$1" = --file ] && cp "$OCI_ARCHIVE" "$2"; shift; done ;;
@@ -650,15 +757,16 @@ chmod +x "$TMP/ocibin/oci"
 export OCI_LOG="$TMP/oci.log" OCI_ARCHIVE="$TMP/a.tar.gz"
 : >"$OCI_LOG"
 oci_restore_dry() { PATH="$TMP/ocibin:$PATH" OCI_NEWEST="archives/aprscaching-selfhost-20261001T020000Z.tar.gz" restore_dry "$@"; }
-check "restore takes the newest archive from a bucket" oci_restore_dry oci://acs-backups/latest --dry-run
+check "restore takes the archive named in a bucket" oci_restore_dry oci://acs-backups/archives/aprscaching-selfhost-20261001T020000Z.tar.gz --dry-run
 check "  … downloads that one" grep -q "object get -bn acs-backups --name archives/aprscaching-selfhost-20261001T020000Z.tar.gz" "$OCI_LOG"
+check "  … shows when it was uploaded" grep -q "archive: aprscaching-selfhost-20261001T020000Z.tar.gz, uploaded Thu, 01 Oct 2026 02:00:05 GMT" "$TMP/out"
+check "  … and its manifest" grep -q '"createdAt": 1790000000' "$TMP/out"
 check "  … and describes it" grep -q "settings restored: APP_URL ADMIN_CALLSIGNS" "$TMP/out"
+: >"$OCI_LOG"
+if oci_restore_dry oci://b/latest --dry-run; then bad "restore oci://b/latest is refused"; else ok "restore oci://b/latest is refused"; fi
+check "  … naming the form to use" grep -q "Name it as oci://<bucket>/archives/aprscaching-<shape>-<UTC time>.tar.gz" "$TMP/err"
+check "  … before it asks the bucket anything" test ! -s "$OCI_LOG"
 if oci_restore_dry oci://acs-backups --dry-run; then bad "a bucket address without an object is refused"; else ok "a bucket address without an object is refused"; fi
-if PATH="$TMP/ocibin:$PATH" OCI_NEWEST=null restore_dry oci://acs-backups/latest --dry-run; then
-  bad "an empty bucket is refused"
-else
-  ok "an empty bucket is refused"
-fi
 bk() { # bk ENVFILE FUNCTION ARGS…: one function of backup.sh, with the mocked oci on PATH
   local env="$1"
   shift
@@ -723,6 +831,13 @@ SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
   doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
 check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
   "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+kisssock() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_kiss_socket '$1'; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2"; }
+KSOCK="$TMP/kiss.sock"
+python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$KSOCK"
+check "doctor passes a KISS_TNC_HOST path where a socket is" eq "$(kisssock "$KSOCK")" "$(printf 'pass\tingest.kiss_tnc')"
+check "  … and fails a path with no socket" eq "$(kisssock "$TMP/none.sock")" "$(printf 'fail\tingest.kiss_tnc')"
+: >"$TMP/plain.file"
+check "  … or a file that is not one" eq "$(kisssock "$TMP/plain.file")" "$(printf 'fail\tingest.kiss_tnc')"
 grace() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; tx_gate_grace_min '$1'"; }
 check "TX_GATE_GRACE reads minutes and hours, as the ingest does" eq \
   "$(grace ''),$(grace 30),$(grace 45m),$(grace 2H),$(grace 1),$(grace 48h)" "6,30,45,120,6,1440"

@@ -307,10 +307,11 @@ Every shape with an ingest.
 
 ### `ingest.kiss_tnc`
 
-- **Tests:** a TCP connection to `KISS_TNC_HOST:KISS_TNC_PORT`, when `KISS_TNC_HOST` is set.
-- **Message:** `KISS_TNC <host>:<port> does not answer` (fail).
-- **Fix:** start the TNC or Direwolf, and check the host and port. In a container, `localhost` is the
-  container, not your machine.
+- **Tests:** a TCP connection to `KISS_TNC_HOST:KISS_TNC_PORT`, when `KISS_TNC_HOST` is set; for a path (it
+  starts with `/`), that a Unix socket is there.
+- **Message:** `KISS_TNC <host>:<port> does not answer` or `KISS_TNC socket <path> is missing` (fail).
+- **Fix:** start the TNC, Direwolf or the KISS bridge, and check the host and port or the path. In a container,
+  `localhost` is the container, not your machine.
 - **See:** [KISS TNC quick start](radios/quick-starts.md#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc) and
   [From a container](radios/rf-ingest.md#from-a-container).
 
@@ -856,7 +857,7 @@ across those places counts:
 | Shape | Where the doctor looks |
 |---|---|
 | Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Else `deploy/backups/`, also when a bucket is set but its CLI is missing, since nothing then uploads |
-| Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/storage/shared/aprscaching-backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
+| Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/.aprscaching/backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
 | Desktop | the archives of `deploy/aprscaching backup` (`deploy/backups/`); without one it warns rather than fails |
 
 - **Message:** `no backup destination is set` (fail).

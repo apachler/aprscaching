@@ -117,8 +117,10 @@ never trust the node's call: trust it yourself under **Instance admin → Truste
 
 A KISS TNC on the phone's USB-C port, through an OTG adapter, feeds the ingest directly. The phone then logs
 **every** station the TNC hears, off grid. `extras/usb_kiss_bridge.py` drives the TNC as a CDC-ACM serial port
-through libusb and serves KISS over TCP on `127.0.0.1:8001`, where the ingest connects. Android gives USB access
-per app, so `termux-usb` (Termux:API) hands the bridge the device.
+through libusb and serves KISS on a Unix socket in Termux's private directory, `~/.aprscaching/run/kiss.sock`,
+where the ingest connects. It has no TCP port: every app on the phone shares loopback, and could transmit
+through a port or bind it first and stand in for the TNC. Android gives USB access per app, so `termux-usb`
+(Termux:API) hands the bridge the device.
 
 1. Install the packages:
 
@@ -138,7 +140,7 @@ per app, so `termux-usb` (Termux:API) hands the bridge the device.
     bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup --baud 9600
     ```
 
-    `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD`, `KISS_TNC_HOST=127.0.0.1` and `KISS_TNC_PORT` to the
+    `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD` and `KISS_TNC_HOST` (the socket's path) to the
     `.env` and restarts the station. `start.sh` then runs the bridge in the tmux window `usb-kiss`. It waits for
     the TNC and restarts the bridge when the TNC is unplugged and plugged in again.
 
@@ -193,7 +195,7 @@ network*, switched off until you follow it. To be found by the others, set `FED_
 
 ## Backup
 
-`backup.sh` writes an archive to the phone's shared storage, and `extras/setup.sh --scheduled-backup` runs it
+`backup.sh` writes an archive to Termux's private folder, and `extras/setup.sh --scheduled-backup` runs it
 daily while the phone charges. [Backups: Pocket](../day-to-day/backups.md#pocket) has the commands and the
 restore.
 
@@ -205,7 +207,7 @@ restore.
 | `termux-*` commands hang | The Termux:API app does not answer, for the same reasons. The scripts give up after 8 seconds. |
 | No status notification | Android 13 and later ask for the notification permission: grant it to Termux:API in Android's app settings. |
 | The shortcuts do not show | Install Termux:Widget from the same source, put its widget on the home screen, then run `extras/setup.sh --shortcuts` again. |
-| The scheduled backup never runs | It runs only while charging with the battery above 50 %, and needs `termux-setup-storage` once. `status.sh` shows the last backup. |
+| The scheduled backup never runs | It runs only while charging with the battery above 50 %. `status.sh` shows the last backup. |
 | No spoken alerts | Set `POCKET_ALERTS=1` and `POCKET_ALERTS_SPEAK=1` in the `.env`, restart, and install a text-to-speech engine in Android. Only messages to the calls in `ADMIN_CALLSIGNS` alert. |
 | The battery saver never switches | `POCKET_BATTERY_LOW` is 0, or Termux:API does not answer. `status.sh` shows the saver state. |
 | `usb-kiss.sh --list` shows nothing | Check the OTG adapter, and that the TNC has power. A TNC on an FTDI, CP210x, CH340 or PL2303 chip is refused by name: only CDC-ACM devices work. |

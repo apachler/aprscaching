@@ -108,7 +108,8 @@ CREATE TABLE auth_challenges (
   expires_at INTEGER NOT NULL
 );
 
--- Magic-link email tokens (register / login / recovery).
+-- Magic-link email tokens (register / login / recovery). `token` holds the hex SHA-256 of the link's token, never
+-- the token: a copy of the database must yield no link anyone can spend.
 CREATE TABLE email_tokens (
   token      TEXT PRIMARY KEY,
   email      TEXT NOT NULL,

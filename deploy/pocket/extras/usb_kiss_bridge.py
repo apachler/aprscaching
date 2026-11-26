@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""A USB KISS TNC on the phone's USB port, served as KISS over TCP for the ingest.
+"""A USB KISS TNC on the phone's USB port, served as KISS over a Unix socket for the ingest.
 
 termux-usb hands this program a file descriptor for the device (Android grants USB access per app, and
 Termux has no /dev/bus/usb access of its own). libusb wraps that descriptor (libusb_wrap_sys_device, with
 device discovery switched off as Android requires), the program drives the device as a CDC-ACM serial port,
-and it serves the raw KISS stream on 127.0.0.1:<port> to one client: the ingest, as KISS_TNC_HOST /
-KISS_TNC_PORT. It is a transport, never a trust source: what the TNC hears is a local TNC's hearing like any
-other.
+and it serves the raw KISS stream to one client, the ingest (KISS_TNC_HOST set to the socket's path), on a
+Unix socket at --socket PATH. It is a transport, never a trust source: what the TNC hears is a local TNC's
+hearing like any other.
+
+Never a TCP port: on Android every app with the INTERNET permission shares loopback, so any app could connect
+and key the radio once transmit is on, or bind the port first and feed the ingest frames that count as this
+site's own hearing. The socket is a file in a directory only Termux's user opens (mode 0700), and a
+filesystem path, never an abstract socket name, which every app can reach. A socket file left by a killed
+bridge is replaced at start; a socket another process still listens on, or any other file, is not.
 
 Receive-only by default: every frame the client sends toward the radio is dropped, with one warning. With
 --tx the client's KISS data frames reach the radio through a watchdog: at most --tx-per-min frames a minute
@@ -29,6 +35,7 @@ import ctypes.util
 import os
 import selectors
 import socket
+import stat
 import sys
 import threading
 import time
@@ -391,18 +398,18 @@ class Bridge:
         while not self.stop.is_set():
             for key, _ in sel.select(0.2):
                 if key.data == "listen":
-                    conn, addr = self.listen.accept()
+                    conn, _ = self.listen.accept()
                     with self.lock:
                         busy = self.client is not None
                     if busy:
-                        log(f"refused a second client from {addr[0]}: one client at a time")
+                        log("refused a second client: one client at a time")
                         conn.close()
                         continue
                     with self.lock:
                         self.client = conn
                     deframer = Deframer()
                     sel.register(conn, selectors.EVENT_READ, "client")
-                    log(f"client connected from {addr[0]}")
+                    log("client connected")
                 else:
                     try:
                         data = key.fileobj.recv(4096)
@@ -421,23 +428,89 @@ class Bridge:
             raise self.error
 
 
+def socket_path_error(path: str) -> str | None:
+    """Why PATH cannot be the bridge's socket, or None when it can."""
+    if path.startswith("@") or "\0" in path:
+        return "--socket must be a filesystem path, not an abstract socket name: every app can reach those"
+    if not os.path.isabs(path):
+        return f"--socket must be an absolute path, not {path!r}"
+    if len(os.fsencode(path)) > 107:
+        return f"--socket is longer than 107 bytes: {path}"
+    return None
+
+
+def private_dir(path: str) -> None:
+    """The socket's directory exists, is a real directory owned by this user, and has mode 0700."""
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    st = os.lstat(path)
+    if not stat.S_ISDIR(st.st_mode):
+        raise OSError(f"{path} is not a directory")
+    if st.st_uid != os.getuid():
+        raise OSError(f"{path} belongs to another user (uid {st.st_uid})")
+    if stat.S_IMODE(st.st_mode) != 0o700:
+        os.chmod(path, 0o700)
+
+
+def clear_stale(path: str) -> None:
+    """Remove a socket file nobody answers on (left by a killed bridge); refuse a live socket or any other file."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISSOCK(st.st_mode):
+        raise OSError(f"{path} exists and is not a socket; it is left as it is")
+    probe = socket.socket(socket.AF_UNIX)
+    try:
+        probe.connect(path)
+    except OSError:
+        os.unlink(path)
+        return
+    finally:
+        probe.close()
+    raise OSError(f"another process listens on {path}")
+
+
+def listen_unix(path: str) -> socket.socket:
+    """A listening socket at PATH, in its private directory, the file itself 0600."""
+    private_dir(os.path.dirname(path))
+    clear_stale(path)
+    listen = socket.socket(socket.AF_UNIX)
+    try:
+        listen.bind(path)
+        os.chmod(path, 0o600)
+        listen.listen()
+    except BaseException:
+        listen.close()
+        raise
+    return listen
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="A USB KISS TNC served as KISS over TCP.")
+    ap = argparse.ArgumentParser(description="A USB KISS TNC served as KISS over a Unix socket.")
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--fd", type=int, help="the file descriptor termux-usb -e passes")
     src.add_argument("--serial", help="a serial device node or pty instead of USB")
     ap.add_argument("--baud", type=int, default=9600)
-    ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8001)
+    ap.add_argument("--socket", required=True, help="the Unix socket's path, in a directory only this user opens")
     ap.add_argument("--tx", action="store_true", help="pass KISS data frames to the radio (off: receive-only)")
     ap.add_argument("--tx-per-min", type=int, default=6)
     ap.add_argument("--tx-burst", type=int, default=3)
     a = ap.parse_args(argv)
-    if a.host not in ("127.0.0.1", "localhost", "::1"):
-        ap.error("--host must be a loopback address: the KISS port has no authentication")
-    serial = UsbCdcAcm(a.fd, a.baud) if a.fd is not None else SerialPath(a.serial, a.baud)
-    listen = socket.create_server((a.host, a.port), reuse_port=False)
-    log(f"KISS over TCP on {a.host}:{a.port}, {'transmit enabled (watchdog on)' if a.tx else 'receive-only'}")
+    problem = socket_path_error(a.socket)
+    if problem:
+        ap.error(problem)
+    try:
+        listen = listen_unix(a.socket)
+    except OSError as e:
+        log(f"cannot listen on {a.socket}: {e}")
+        return 4
+    log(f"KISS on {a.socket}, {'transmit enabled (watchdog on)' if a.tx else 'receive-only'}")
+    try:
+        serial = UsbCdcAcm(a.fd, a.baud) if a.fd is not None else SerialPath(a.serial, a.baud)
+    except BaseException:
+        listen.close()
+        os.unlink(a.socket)
+        raise
     try:
         Bridge(serial, listen, TxGate(a.tx, a.tx_per_min, a.tx_burst)).run()
     except ConnectionError as e:
@@ -446,6 +519,10 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         listen.close()
         serial.close()
+        try:
+            os.unlink(a.socket)
+        except FileNotFoundError:
+            pass
     return 0
 
 

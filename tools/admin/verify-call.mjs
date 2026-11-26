@@ -12,11 +12,12 @@
 // run without a terminal needs it.
 //
 // BASE defaults to the gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787), so inside
-// the gateway container, which carries PORT and OPERATOR_SECRET, no variable is needed. OPERATOR_SECRET is
+// the gateway container, which carries PORT and OPERATOR_SECRET, no variable is needed; with GATEWAY_SOCKET
+// set (a Pocket station's .env), the request goes through that socket (gateway.mjs). OPERATOR_SECRET is
 // required. Exits non-zero on failure.
 import { createInterface } from "node:readline/promises";
+import { GATEWAY, operatorPost } from "./gateway.mjs";
 
-const BASE = (process.env.BASE ?? `http://127.0.0.1:${process.env.PORT || 8787}`).replace(/\/+$/, "");
 const SECRET = process.env.OPERATOR_SECRET;
 const USAGE = "usage: BASE=<gateway url> OPERATOR_SECRET=<secret> node tools/admin/verify-call.mjs [--yes] <CALLSIGN>";
 
@@ -36,12 +37,8 @@ if (!callsign || !SECRET) {
 }
 
 async function post(body) {
-  const res = await fetch(`${BASE}/verify/operator`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-operator-secret": SECRET },
-    body: JSON.stringify(body),
-  }).catch((e) => {
-    console.error(`cannot reach ${BASE}: ${e.message}`);
+  const res = await operatorPost("/verify/operator", SECRET, body).catch((e) => {
+    console.error(`cannot reach ${GATEWAY}: ${e.message}`);
     process.exit(1);
   });
   const data = await res.json().catch(() => null);

@@ -43,13 +43,15 @@ shape_db_restore() {
 }
 shape_secrets_dump() { (cd "$(pk_data)" && for f in *.secret; do if [ -e "$f" ]; then cp -p "$f" "$1/"; fi; done); }
 shape_secrets_restore() { cp -p "$1"/*.secret "$(pk_data)/" && chmod 600 "$(pk_data)"/*.secret; }
+# Any app with a storage grant writes shared storage: an archive there brings no settings or secret files with it.
+shape_archive_untrusted() { on_shared_storage "$1"; }
 shape_media_dump() { if [ -d "$(pk_media)" ]; then cp -a "$(pk_media)/." "$1/"; fi; }
 shape_media_restore() { mkdir -p "$(pk_media)" && cp -a "$1/." "$(pk_media)/"; }
 shape_stop() { bash "$POCKET_DIR/stop.sh" || true; }
 shape_start() { bash "$POCKET_DIR/start.sh" --no-attach; }
 shape_restore_pocket_archive() { bash "$POCKET_DIR/backup.sh" --restore "$1"; }
 
-# doctor: the station on this phone; its backups in shared storage.
+# doctor: the station on this phone; its backups in Termux's private folder, or where --dest put them.
 shape_doctor_context() {
   local data port
   data="$(dirname "$SHAPE_ENV")"
@@ -62,9 +64,9 @@ shape_doctor_context() {
   DOC_DATA_DIR="$data"
   DOC_DB_FILE="$(env_file_get "$SHAPE_ENV" DB_PATH)"
   DOC_DB_FILE="${DOC_DB_FILE:-$data/aprscaching.db}"
-  # the phone's scheduled backup (pocket/backup.sh, shared storage) and deploy/aprscaching backup's archives
+  # the phone's scheduled backup (pocket/backup.sh) and deploy/aprscaching backup's archives
   DOC_BACKUP_PLACES=(
-    "${APRSCACHING_BACKUP_DIR:-$HOME/storage/shared/aprscaching-backups}|aprscaching-pocket-*.tar.gz"
+    "${APRSCACHING_BACKUP_DIR:-$data/backups}|aprscaching-pocket-*Z.tar.gz"
     "$(backup_dest_default)|aprscaching-pocket-*.tar.gz"
   )
 }

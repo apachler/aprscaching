@@ -68,8 +68,9 @@ fi
 
 base="$(gateway_base)"
 health_ok "$base" || die "the gateway does not answer on $base." "Start the station first:  bash $HERE/start.sh"
-secret="$(env_get OPERATOR_SECRET)"
-[ -n "$secret" ] || die "OPERATOR_SECRET is not set in $ENV_FILE."
+[ -n "$(env_get OPERATOR_SECRET)" ] || die "OPERATOR_SECRET is not set in $ENV_FILE."
+[ -n "$(gateway_socket)" ] || die "GATEWAY_SOCKET is not set in $ENV_FILE." \
+  "Run update.sh (or install.sh) once; it adds the gateway's socket."
 
 types='"cache","key"'
 [ "$FINDS" -eq 0 ] || types="$types,\"find\""
@@ -80,10 +81,8 @@ info "region: ${region:-all caches (FED_SYNC_REGION=S,W,N,E in the .env narrows 
 notify "APRScaching: syncing" "pulling from the federation peers${WIFI_SSID:+ over $WIFI_SSID}"
 
 started=$(date +%s)
-# The header comes from a file descriptor, so the secret never shows in the process list.
-if ! out="$(curl -fsS --max-time 900 -X POST -H 'content-type: application/json' \
-  -H @<(printf 'x-operator-secret: %s\n' "$secret") \
-  --data "{\"types\":[$types],\"maxPages\":$PAGES}" "$base/federation/sync" 2>&1)"; then
+if ! out="$(operator_curl /federation/sync -fsS --max-time 900 -X POST -H 'content-type: application/json' \
+  --data "{\"types\":[$types],\"maxPages\":$PAGES}" 2>&1)"; then
   notify "APRScaching: sync failed" "see sync-now.sh in Termux"
   die "the sync request failed: $out"
 fi
