@@ -30,8 +30,8 @@ free_port() { node -e 'const s=require("net").createServer();s.listen(0,"127.0.0
 
 # Wait for a gateway's /health; fail early if its process died.
 wait_health() {
-  local port="$1" pid="$2" log="$3" i
-  for i in $(seq 1 60); do
+  local port="$1" pid="$2" log="$3"
+  for _ in $(seq 1 60); do
     if curl -sf "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then return 0; fi
     if ! kill -0 "$pid" 2>/dev/null; then echo "✗ gateway on :${port} died on boot"; tail -5 "$log"; return 1; fi
     sleep 0.5
@@ -87,8 +87,8 @@ run_federation() {
 }
 
 run_suite() {
-  local suite="$1" port db log pid i rc=0
-  port=$(( 8850 + (RANDOM % 120) ))
+  local suite="$1" port db log pid rc=0
+  port=$(free_port)
   db="$(mktemp -u)-${suite}.db"
   log="$(mktemp)"
   # start in its own process group so we can reap pnpm AND its node/tsx children on teardown
@@ -97,12 +97,13 @@ run_suite() {
     FIRST_PARTY_SITES="$FIRST_PARTY_SITES" \
     pnpm --filter @aprscaching/node-gateway start >"$log" 2>&1 &
   pid=$!
-  # wait for /health (up to ~20s)
-  for i in $(seq 1 40); do
-    if curl -sf "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then break; fi
-    if ! kill -0 "$pid" 2>/dev/null; then echo "✗ ${suite}: server died on boot"; tail -5 "$log"; return 1; fi
-    sleep 0.5
-  done
+  if ! wait_health "$port" "$pid" "$log"; then
+    echo "✗ ${suite}: gateway did not come up"
+    kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    rm -f "$db" "$log"
+    return 1
+  fi
   echo "== ${suite} (:${port}) =="
   if BASE="http://127.0.0.1:${port}" INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" node "tools/smoke/${suite}.mjs"; then
     rc=0
