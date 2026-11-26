@@ -77,7 +77,8 @@ The binaries are not code-signed, so macOS Gatekeeper and Windows SmartScreen wa
 | Linux | `~/.local/share/aprscaching` (`$XDG_DATA_HOME/aprscaching`) |
 
 `DATA_DIR` picks another directory. It holds the database (`aprscaching.db`), the media, and the three secrets
-the app generates on first start, readable by you only:
+the app generates on first start. On Linux and macOS the app keeps the directory to you alone (mode `0700`), and
+tightens an existing one at every start, so other users of the computer can't read the database or the secrets:
 
 | File | Variable | Used by |
 |---|---|---|

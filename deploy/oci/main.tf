@@ -371,6 +371,13 @@ resource "oci_core_instance" "this" {
     assign_public_ip = !var.use_reserved_ip
   }
 
+  # IMDSv1 answers any request without a header, so a request forgery anywhere on the VM could read the instance
+  # principal's credentials; v2 asks for the `Authorization: Bearer Oracle` header. That header is fixed, so it does
+  # not stop code running in a container: firstboot.sh drops the containers' traffic to the metadata service.
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+
   # the Bastion plugin of the Oracle Cloud Agent, for managed SSH sessions (port forwarding needs none)
   agent_config {
     plugins_config {

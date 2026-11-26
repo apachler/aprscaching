@@ -56,15 +56,23 @@ check "  … and JSON as written" eq "$(env_file_raw "$E" RETENTION)" '{"positio
 # ---- the deploy files: what reaches the image and the ingest ------------------------------------------------
 # The gateway-only secrets: secret in the schema, and not read by the ingest.
 GW_SECRETS="$(awk -F'\t' '!/^#/ && $6 == 1 && $3 !~ /ingest/ {print $1}' "$DEPLOY/lib/config-keys.tsv")"
-blanks_all() { # blanks_all TEXT: every gateway-only secret is set to "" in TEXT
+blanks_all() { # blanks_all KEYS TEXT: every key of KEYS is set to "" in TEXT
   local k missing=""
-  for k in $GW_SECRETS; do grep -qE "^ +$k: \"\"\$" <<<"$1" || missing="$missing $k"; done
+  for k in $1; do grep -qE "^ +$k: \"\"\$" <<<"$2" || missing="$missing $k"; done
   eq "${missing:-none}" none
 }
 INGEST_SVC="$(sed -n '/^  ingest:/,/^  [a-z]*:/p' "$DEPLOY/docker-compose.yml")"
-check "the stack's ingest blanks every gateway-only secret" blanks_all "$INGEST_SVC"
-check "the ingest box blanks every gateway-only secret" blanks_all "$(cat "$DEPLOY/compose.ingest-only.yml")"
+check "the stack's ingest blanks every gateway-only secret" blanks_all "$GW_SECRETS" "$INGEST_SVC"
+check "the ingest box blanks every gateway-only secret" blanks_all "$GW_SECRETS" "$(cat "$DEPLOY/compose.ingest-only.yml")"
 check "the ingest unit unsets every gateway-only secret" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-ingest.service'); for k in $(echo $GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
+# The secrets the gateway must not hold: secret in the schema, and read by neither the gateway nor its server
+# process (the ingest's credentials, the deploy-only tokens).
+NOT_GW_SECRETS="$(awk -F'\t' '!/^#/ && $6 == 1 { n = split($3, u, ","); r = 0; for (i = 1; i <= n; i++) if (u[i] == "gateway" || u[i] == "server") r = 1; if (!r) print $1 }' "$DEPLOY/lib/config-keys.tsv")"
+check "the schema has secrets the gateway does not read" test -n "$NOT_GW_SECRETS"
+GATEWAY_SVC="$(sed -n '/^  gateway:/,/^  [a-z]*:/p' "$DEPLOY/docker-compose.yml")"
+check "the stack's gateway blanks every secret it does not read" blanks_all "$NOT_GW_SECRETS" "$GATEWAY_SVC"
+check "the gateway unit unsets every secret it does not read" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-gateway.service'); for k in $(echo $NOT_GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
+check "  … and nothing it reads" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-gateway.service'); for k in INGEST_SECRET OPERATOR_SECRET SESSION_SECRET; do [[ \" \$u \" != *\" \$k \"* ]] || exit 1; done"
 check "the ingest's settings come from .env, not as empty \${KEY} strings" \
   bash -c "! grep -v '^ *#' <<<\"\$1\$2\" | grep -E '\\\$\\{[A-Z_]+(:-)?\\}'" _"$INGEST_SVC" "$(cat "$DEPLOY/compose.ingest-only.yml")"
 check "the image runs as UID 10001, not as root" grep -qx 'USER 10001' "$DEPLOY/Dockerfile"
@@ -95,6 +103,31 @@ if have docker && docker compose version >/dev/null 2>&1; then
     grep -qE "^ +CF_RANGES: 0\.0\.0\.0/0 ::/0\$" <<<"$(merged -f docker-compose.yml)"
   check "  … with the tunnel overlay, only the stack network's" \
     grep -qE "^ +CF_RANGES: private_ranges\$" <<<"$(merged -f docker-compose.yml -f compose.home.yml)"
+  # hardened FILES…: every service of the merged configuration drops every capability and gains none through a
+  # setuid binary, Caddy adds back only the port bind, and the gateway's image file system is read-only beside a
+  # tmpfs /tmp. Prints what is missing, service by service.
+  hardened() {
+    local cfg
+    cfg="$(cd "$DEPLOY" && TUNNEL_TOKEN=t INGEST_SECRET=s docker compose --env-file /dev/null "$@" config --format json)" || return 1
+    node -e '
+      const c = JSON.parse(process.argv[1]), bad = [];
+      const names = Object.keys(c.services ?? {});
+      if (!names.length) bad.push("no services read");
+      for (const n of names) {
+        const s = c.services[n], has = (l, v) => (s[l] ?? []).includes(v);
+        if (!has("cap_drop", "ALL")) bad.push(`${n}: no cap_drop ALL`);
+        if (!has("security_opt", "no-new-privileges:true")) bad.push(`${n}: no no-new-privileges`);
+        const add = (s.cap_add ?? []).join(" ");
+        if (add !== (n === "caddy" ? "NET_BIND_SERVICE" : "")) bad.push(`${n}: cap_add [${add}]`);
+      }
+      const g = c.services.gateway;
+      if (g && (g.read_only !== true || !(g.tmpfs ?? []).includes("/tmp"))) bad.push("gateway: not read_only with a tmpfs /tmp");
+      for (const b of bad) console.log("     " + b);
+      process.exit(bad.length ? 1 : 0);' "$cfg"
+  }
+  check "the stack's containers drop every capability and gain none" hardened -f docker-compose.yml
+  check "  … with the tunnel overlay too" hardened -f docker-compose.yml -f compose.home.yml
+  check "  … and on the ingest box" hardened -f compose.ingest-only.yml
 else
   echo "skip the merged compose configuration (needs docker compose)"
 fi
@@ -473,8 +506,23 @@ I="$TMP/ingest.unit"
 bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
   BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-ingest.service'" >"$I"
 check "the ingest unit: a read-only system, owner-only files" bash -c "grep -qx 'ProtectSystem=strict' '$I' && grep -qx 'NoNewPrivileges=yes' '$I' && grep -qx 'UMask=0077' '$I'"
-check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|RestrictAddressFamilies)=' '$I'"
+# ProtectClock= implies DeviceAllow=char-rtc, which some systemd versions read as a closed device policy
+check "  … with the radios' devices open" bash -c "! grep -qE '^(PrivateDevices|DevicePolicy|DeviceAllow|ProtectClock|RestrictAddressFamilies)=' '$I'"
 check "  … and data/ writable, for the MeshCom transmit audit (MESHCOM_TX_AUDIT)" bash -c "grep -qx 'ReadWritePaths=/srv/acs/data' '$I'"
+# The ingest parses hostile input: whoever takes it over gets no capability, kernel interface, namespace, foreign
+# architecture or other process, and no home directory.
+INGEST_SANDBOX="CapabilityBoundingSet= ProtectKernelTunables=yes ProtectKernelModules=yes ProtectKernelLogs=yes
+  ProtectControlGroups=yes ProtectHostname=yes RestrictNamespaces=yes RestrictSUIDSGID=yes
+  LockPersonality=yes SystemCallArchitectures=native SystemCallFilter=@system-service ProtectProc=invisible ProtectHome=yes"
+check "  … and sandboxed from the kernel, capabilities and other processes" bash -c "for d in $(echo $INGEST_SANDBOX); do grep -qxF \"\$d\" '$I' || { echo \"     missing \$d\"; exit 1; }; done"
+if have systemd-analyze; then
+  # systemd-analyze reads the unit's name from the file name
+  mkdir -p "$TMP/units" && cp "$I" "$TMP/units/aprscaching-ingest.service" && cp "$U" "$TMP/units/aprscaching-gateway.service"
+  check "the rendered units pass systemd-analyze verify" \
+    systemd-analyze verify "$TMP/units/aprscaching-ingest.service" "$TMP/units/aprscaching-gateway.service"
+else
+  echo "skip systemd-analyze verify (needs systemd)"
+fi
 # An install directory under /home: ProtectHome=yes would hide the gateway's own code, so /home is read-only there.
 HOMEUNIT="$TMP/gateway-home.unit"
 bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
@@ -971,6 +1019,13 @@ check "cache-rules.sh succeeds when Cloudflare accepts the rules" cache_rules '{
 assets_rule() { node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).rules.find((x)=>x.expression.includes("/assets/")); console.log(JSON.stringify(r.action_parameters.edge_ttl.status_code_ttl ?? null))' "$CF/sent"; }
 check "  … and keeps no error answer at the edge, whatever the edge TTL of /assets/" \
   eq "$(assets_rule)" '[{"status_code_range":{"from":400,"to":599},"value":-1}]'
+# cached PATH VERDICT: what Cloudflare does with PATH under the ruleset the script sent (cache, bypass or origin)
+cached() { eq "$(node "$DEPLOY/test/cf-cache-rules.mjs" "$CF/sent" "$1" | cut -f2)" "$2"; }
+check "  … and never caches a dynamic path, whatever its suffix" cached /api/x.woff2 bypass
+check "    … under /auth either" cached /auth/x.pmtiles bypass
+check "  … while the build's assets stay at the edge" cached /assets/index-abc123.js cache
+check "    … and the fonts and map archives outside the dynamic paths" bash -c "$(declare -f eq cached); DEPLOY='$DEPLOY' CF='$CF'; cached /fonts/x.woff2 cache && cached /tiles/world.pmtiles cache"
+check "  … and the HTML is never cached" bash -c "$(declare -f eq cached); DEPLOY='$DEPLOY' CF='$CF'; cached / bypass && cached /index.html bypass"
 check "cache-rules.sh fails when Cloudflare rejects the rules" \
   bash -c "! PATH='$CF/bin:$PATH' CF_SENT='$CF/sent' CF_ANSWER='{\"success\":false,\"errors\":[{\"message\":\"bad rule\"}]}' CF_API_TOKEN=t CF_ZONE_ID=z bash '$DEPLOY/cloudflare/cache-rules.sh' >'$CF/out' 2>&1"
 check "  … and quotes what Cloudflare said" grep -q "bad rule" "$CF/out"

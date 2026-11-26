@@ -8,6 +8,10 @@ WorkingDirectory=/opt/aprscaching
 # and Restart=always would otherwise crash-loop every 5 s); OPERATOR_SECRET is optional; an empty
 # SESSION_SECRET is generated on first start and kept beside the database (data/session.secret).
 EnvironmentFile=/opt/aprscaching/deploy/.env
+# The env file holds the ingest's credentials and the deploy-only tokens too: the gateway's environment drops
+# every secret the gateway does not read, so a gateway that is taken over does not yield them.
+# config-blank gateway: the next line is written by tools/config/generate.mjs from the schema
+UnsetEnvironment=APRSIS_PASSCODE MESHTASTIC_MQTT_URL MESHCOM_KISS_PASS IGATE_PASS BOX_KEY APRSIS_SERVICE_PASS TUNNEL_TOKEN CF_API_TOKEN
 Environment=DB_PATH=/opt/aprscaching/data/aprscaching.db
 Environment=MEDIA_DIR=/opt/aprscaching/data/media
 Environment=PORT=8080

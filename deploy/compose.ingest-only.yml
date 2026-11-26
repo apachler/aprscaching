@@ -15,6 +15,11 @@ services:
   ingest:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
+    # No Linux capabilities and no privileges gained through a setuid binary: the ingest parses hostile RF and
+    # APRS-IS input, so code that takes it over keeps only what the service user may do. The devices it is
+    # given are reached through the user's groups (below), which need no capability.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # node itself, under Docker's init: a stop's SIGTERM reaches it, so it unkeys every PTT and flushes its
     # batch before it exits (within the grace period). A `pnpm … start` here would leave the signal with pnpm,
     # and node would be killed with the radio still keyed.
@@ -42,8 +47,9 @@ services:
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:
-      # the ingest box holds only its own credential: blank every gateway-only secret (secret in
-      # packages/shared/src/configkeys.ts and not read by the ingest), should .env hold one
+      # the ingest box holds only its own credentials: blank every secret the ingest does not read, should .env
+      # hold one
+      # config-blank ingest: these lines are written by tools/config/generate.mjs from the schema
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
       FED_PRIVATE_KEY: ""

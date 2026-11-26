@@ -9,12 +9,24 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# Every container runs without Linux capabilities and cannot gain privileges through a setuid binary: the
+# gateway answers the internet and the ingest parses hostile RF and APRS-IS input, so code that takes one over
+# keeps only what the service user may do. Caddy adds back the one capability it needs.
+x-hardened: &hardened
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
 services:
   gateway:
     # SOURCE_COMMIT names the commit in the image's source link: run compose as
     # `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose …` (deploy/aprscaching does it itself)
     build: { context: .., dockerfile: deploy/Dockerfile, args: { SOURCE_COMMIT: "${SOURCE_COMMIT:-}" } }
     image: aprscaching:local
+    <<: *hardened
+    # The image's file system is read-only: the gateway writes the data volume alone, and /tmp (tsx's compile
+    # cache) is a tmpfs.
+    read_only: true
+    tmpfs: [/tmp]
     # node runs as the shell's exec, under Docker's init, so a stop's SIGTERM reaches it and it closes SQLite
     # cleanly; a `pnpm … start` here would leave the signal with pnpm and the shell, and node would be killed.
     command: ["sh", "-c", "cd /app/servers/node && exec node --import tsx src/server.ts"]
@@ -43,6 +55,17 @@ services:
       # Every interface of the container: Caddy reaches the gateway over the stack's network, so a HOST in .env
       # (bare metal's 127.0.0.1) must not reach it.
       HOST: ""
+      # .env holds the ingest's credentials and the deploy-only tokens too (TUNNEL_TOKEN, CF_API_TOKEN): blank
+      # every secret the gateway does not read, so a gateway that is taken over does not yield them
+      # config-blank gateway: these lines are written by tools/config/generate.mjs from the schema
+      APRSIS_PASSCODE: ""
+      MESHTASTIC_MQTT_URL: ""
+      MESHCOM_KISS_PASS: ""
+      IGATE_PASS: ""
+      BOX_KEY: ""
+      APRSIS_SERVICE_PASS: ""
+      TUNNEL_TOKEN: ""
+      CF_API_TOKEN: ""
     # The image runs as UID 10001 and the named volume takes that owner. A host directory bound here instead
     # needs `sudo chown -R 10001:10001 <dir>` once.
     volumes: ["data:/data"]
@@ -64,6 +87,7 @@ services:
 
   ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
     image: aprscaching:local
+    <<: *hardened
     # node itself, under Docker's init: a stop's SIGTERM reaches it, so it unkeys every PTT and flushes its
     # batch before it exits (within the grace period). A `pnpm … start` here would leave the signal with pnpm,
     # and node would be killed with the radio still keyed.
@@ -95,8 +119,9 @@ services:
     environment:
       # inside the stack the gateway is the `gateway` service, not the ingest's localhost default
       INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
-      # .env reaches this container too: blank every gateway-only secret (secret in
-      # packages/shared/src/configkeys.ts and not read by the ingest), so the ingest never holds one
+      # .env reaches this container too: blank every secret the ingest does not read, so it never holds the
+      # gateway's keys or the deploy-only tokens
+      # config-blank ingest: these lines are written by tools/config/generate.mjs from the schema
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
       FED_PRIVATE_KEY: ""
@@ -119,6 +144,7 @@ services:
     # apps/web/dist is gitignored, so a fresh clone has no host build — the image is the source
     # of truth for the static bundle and this copy step keeps Caddy self-contained.
     image: aprscaching:local
+    <<: *hardened
     # Caddy keeps serving while this runs, so the volume never lacks a file the shell names: the new
     # build's hashed assets land first, the shell is swapped in last, in one rename, and the previous
     # build's assets stay for the pages still open on them until no build has named them for a week.
@@ -137,6 +163,9 @@ services:
 
   caddy: # TLS + static SPA + reverse proxy
     image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    <<: *hardened
+    # Caddy runs as root in its image and binds 80 and 443; that bind is all it keeps of root's capabilities
+    cap_add: [NET_BIND_SERVICE]
     # 443/udp is HTTP/3 (QUIC), which Caddy serves beside HTTPS
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:

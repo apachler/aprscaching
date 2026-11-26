@@ -9,6 +9,8 @@
  *   .env.example, deploy/.env.example from the layouts in envfiles.mjs
  *   deploy/lib/config-keys.tsv        what the deploy helpers read (one key per line, tab-separated)
  *   deploy/lib/config-keys.json       the same for automation
+ *   the deploy files' blank lists     below each `# config-blank <unit>:` line: in a compose file the
+ *                                     `KEY: ""` lines, in a systemd unit its UnsetEnvironment= line
  *
  *   node tools/config/generate.mjs           write the files
  *   node tools/config/generate.mjs --check   fail when a file differs from what it would write
@@ -169,6 +171,48 @@ const tsv =
 // one key per line, so a change to a key is a one-line diff
 const json = `{"generatedFrom":"packages/shared/src/config.ts","keys":[\n${rows.map((r) => JSON.stringify(r)).join(",\n")}\n]}\n`;
 
+// The secrets a unit must not hold, which its deploy file blanks: the .env file is shared, so the gateway's
+// container and unit would otherwise receive the ingest's credentials and the deploy-only tokens, and the ingest
+// the gateway's keys. A key belongs to the gateway when the gateway or its server process reads it.
+const NOT_READ_BY = {
+  gateway: (r) => !r.units.includes("gateway") && !r.units.includes("server"),
+  ingest: (r) => !r.units.includes("ingest"),
+};
+const blankFor = (unit) => rows.filter((r) => r.secret && NOT_READ_BY[unit](r)).map((r) => r.name);
+const BLANK_FILES = [
+  "deploy/docker-compose.yml",
+  "deploy/compose.ingest-only.yml",
+  "deploy/systemd/aprscaching-gateway.service",
+  "deploy/systemd/aprscaching-ingest.service",
+];
+const MARKER = /^(\s*)# config-blank (\w+):/;
+const blankOut = BLANK_FILES.map((path) => {
+  const lines = readFileSync(join(root, path), "utf8").split("\n");
+  const out = [];
+  let marked = 0;
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    const m = MARKER.exec(lines[i]);
+    if (!m) continue;
+    const [, indent, unit] = m;
+    if (!NOT_READ_BY[unit]) {
+      errors.push(`${path}:${i + 1}: config-blank names no unit the generator knows (${unit})`);
+      continue;
+    }
+    marked++;
+    const keys = blankFor(unit);
+    if (path.endsWith(".service")) {
+      if (lines[i + 1]?.startsWith("UnsetEnvironment=")) i++;
+      out.push(`UnsetEnvironment=${keys.join(" ")}`);
+    } else {
+      while (/^\s+[A-Z][A-Z0-9_]*: ""$/.test(lines[i + 1] ?? "")) i++;
+      for (const k of keys) out.push(`${indent}${k}: ""`);
+    }
+  }
+  if (!marked) errors.push(`${path}: no config-blank line, so nothing blanks the secrets its units do not read`);
+  return [path, out.join("\n")];
+});
+
 if (errors.length) {
   for (const e of errors) console.error(`✗ ${e}`);
   process.exit(1);
@@ -177,6 +221,7 @@ if (errors.length) {
 const outputs = [
   [CONFIG_MD, md],
   ...envOut,
+  ...blankOut,
   ["deploy/lib/config-keys.tsv", tsv],
   ["deploy/lib/config-keys.json", json],
 ];

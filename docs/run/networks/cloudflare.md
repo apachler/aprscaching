@@ -22,7 +22,8 @@ Cloudflare's free plan, and neither bills by what the instance writes.
    On the "Install connector" step, copy the long token from the command shown: that is the `TUNNEL_TOKEN`.
    Don't run Cloudflare's install command; the compose stack runs the connector.
 2. **Give the token to the stack.** In `deploy/`, run `./setup.sh` and choose the Cloudflare Tunnel, then
-   paste the token and your hostname. `deploy/aprscaching init selfhost` asks the same. It writes
+   enter your hostname and paste the token, which the terminal doesn't show. `deploy/aprscaching init selfhost`
+   asks the same; a script passes the token as `TUNNEL_TOKEN` in the environment. It writes
    `TUNNEL_TOKEN`, `APP_URL=https://<hostname>` and `DOMAIN=:80`: TLS ends at Cloudflare's edge, so Caddy
    serves plain http inside the stack and must not try to fetch a certificate.
 3. **Route your hostname.** In the tunnel dialog, or later under **Tunnels → your tunnel → Public

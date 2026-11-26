@@ -27,6 +27,7 @@ OCI_VENV="${APRS_FB_OCI_VENV:-/opt/oci-cli}"
 OCI_BIN="${APRS_FB_OCI_BIN:-/usr/local/bin/oci}"
 IMDS="${APRS_FB_IMDS:-http://169.254.169.254/opc/v2}"
 IP_WAIT_S="${APRS_FB_IP_WAIT_S:-600}"
+IMDS_NFT="${APRS_FB_IMDS_NFT:-/etc/aprscaching/imds-guard.nft}"
 
 # Docker's release signing key. apt trusts the downloaded key only when its fingerprint is this one, so a
 # tampered download or mirror cannot slip in packages.
@@ -118,6 +119,49 @@ else
   say "Docker installed from download.docker.com (key $DOCKER_KEY_FPR)"
 fi
 command -v git >/dev/null 2>&1 || apt_get install -y -q git
+
+# ---- keep the containers off the metadata service -------------------------------------------------------------
+# The instance metadata service hands out this VM's instance-principal credentials, which read the backup bucket,
+# and the archives there hold every secret. Only the host's backup unit needs it. Traffic the Docker bridges
+# forward to it is dropped, so code running in the ingest or Caddy container cannot reach it; the host's own
+# requests leave through the output hook and are not touched. The ruleset is loaded at every boot before Docker
+# starts, and a reload replaces the table rather than adding to it.
+command -v nft >/dev/null 2>&1 || apt_get install -y -q nftables
+mkdir -p "$(dirname "$IMDS_NFT")"
+cat >"$IMDS_NFT" <<'NFT'
+table inet aprscaching_imds
+delete table inet aprscaching_imds
+table inet aprscaching_imds {
+  chain forward {
+    type filter hook forward priority filter - 10; policy accept;
+    iifname "docker0" ip daddr 169.254.169.254 drop
+    iifname "br-*" ip daddr 169.254.169.254 drop
+    iifname "docker0" ip6 daddr fd00:c1::a9fe:a9fe drop
+    iifname "br-*" ip6 daddr fd00:c1::a9fe:a9fe drop
+  }
+}
+NFT
+chmod 644 "$IMDS_NFT"
+cat >"$UNIT_DIR/aprscaching-imds-guard.service" <<UNIT
+[Unit]
+Description=Drop the Docker containers' traffic to the instance metadata service
+Before=docker.service
+Wants=network-pre.target
+After=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f $IMDS_NFT
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now aprscaching-imds-guard.service ||
+  stop "could not load $IMDS_NFT, so the containers could reach the instance metadata service" \
+    "journalctl -u aprscaching-imds-guard shows why. The stack was not started."
+say "the containers cannot reach the instance metadata service ($IMDS_NFT)"
 
 # ---- the code ------------------------------------------------------------------------------------------------
 if [ -d "$DIR/.git" ]; then

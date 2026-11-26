@@ -15,13 +15,14 @@
  * Assets (SPA + migrations) are embedded via assets.generated.ts when compiled; in dev (plain
  * `bun run launcher.ts`) it falls back to reading apps/web/dist + db/migrations from disk.
  */
-import { mkdirSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appDataDir } from "./appdata.ts";
 import { createServer, type BunServer } from "../../servers/bun/server.ts";
 import { migrationsFromDir } from "../../servers/node/src/migrate.ts";
 import { resolveInstanceSecrets } from "../../servers/node/src/secrets.ts";
+import { privateDir } from "../../servers/node/src/unixsocket.ts";
 import { compressed, negotiate } from "../../servers/node/src/compress.ts";
 import { embeddedSpaFile, SPA_NOT_FOUND_HEADERS, spaFile } from "../../servers/node/src/spa.ts";
 import { PAGE_HEADERS } from "../../workers/gateway/src/pageheaders.ts";
@@ -56,7 +57,16 @@ if (MIGRATIONS.length === 0 && existsSync(MIGRATIONS_DIR)) MIGRATIONS = migratio
 
 // ---- storage (app-data dir) ----
 const dir = process.env.DATA_DIR ?? appDataDir("aprscaching");
-mkdirSync(dir, { recursive: true });
+// The directory holds the database (e-mail addresses, unspent sign-in tokens) and the secrets, and SQLite creates
+// its files with the default umask, readable by every local user. So the directory is this user's alone (0700, an
+// existing one tightened) before anything is written into it; a DATA_DIR that is a link is followed to its target.
+try {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  privateDir(realpathSync(dir));
+} catch (e) {
+  console.error(`APRScaching: cannot keep the data directory ${dir} private: ${(e as Error).message}`);
+  process.exit(1);
+}
 
 // ---- secrets: each from the environment, else generated once and kept in the app-data dir ----
 const resolved = resolveInstanceSecrets(process.env, dir);

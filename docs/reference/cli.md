@@ -33,7 +33,7 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 
 | Command | Options |
 |---|---|
-| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--extra-origins`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
+| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--extra-origins`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; the tunnel token from `TUNNEL_TOKEN` in the environment, never an option; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
 | `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--unverified`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
