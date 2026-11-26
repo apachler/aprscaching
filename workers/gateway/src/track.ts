@@ -27,6 +27,12 @@ import { attestedSql } from "./provenance.js";
 export const RECENT_LIMIT = 500;
 /** Attested fixes of the logged call that can place it at the cache, newest first. */
 export const CANDIDATE_LIMIT = 100;
+/**
+ * Fixes the database returns as contradicting that the verify engine does not take as contradicting, per find. Past
+ * it the presence being judged is taken as contradicted: the search never stops at such a row, and never runs
+ * unbounded.
+ */
+export const REJECT_LIMIT = 8;
 
 /** The haversine Earth radius, as `haversineMeters` (packages/aprs geo.ts) uses it. */
 const R = 6371000;
@@ -156,8 +162,8 @@ export async function ownFixes(
 
 /**
  * A fix of any SSID of `call`'s base call in `[since, until]` that can contradict (verify.ts `contradicts`) and
- * from which no ground speed of `maxMps` reaches `at` (the time gap widened by `slackSec`), other than the fix
- * `exceptId`; null when there is none. One row however many fixes fill the window: the verify engine, given it,
+ * from which no ground speed of `maxMps` reaches `at` (the time gap widened by `slackSec`), other than the fixes
+ * `except`; null when there is none. One row however many fixes fill the window: the verify engine, given it,
  * refuses the presence at `at` as it would given every fix.
  */
 export async function outrunBy(
@@ -167,7 +173,7 @@ export async function outrunBy(
   until: number,
   a: Attestation,
   at: { lat: number; lon: number; ts: number },
-  opts: { maxMps: number; slackSec?: number; exceptId?: number },
+  opts: { maxMps: number; slackSec?: number; except?: number[] },
 ): Promise<PositionRow | null> {
   const fam = familySql(call, "p");
   const ev = evidenceSql(a, "p");
@@ -179,12 +185,40 @@ export async function outrunBy(
   );
   return (
     (await env.DB.prepare(
-      `SELECT p.* FROM positions p WHERE ${fam.sql} AND p.ts >= ? AND p.ts <= ? AND p.id <> ? AND ${ev.sql}
+      `SELECT p.* FROM positions p WHERE ${fam.sql} AND p.ts >= ? AND p.ts <= ?
+         AND p.id NOT IN (SELECT value FROM json_each(?)) AND ${ev.sql}
          AND ${outruns} LIMIT 1`,
     )
-      .bind(...fam.binds, since, until, opts.exceptId ?? -1, ...ev.binds)
+      .bind(...fam.binds, since, until, JSON.stringify(opts.except ?? []), ...ev.binds)
       .first<PositionRow>()) ?? null
   );
+}
+
+/**
+ * The fix that contradicts the presence at `at`, as the verify engine judges it: {@link outrunBy}'s answer when
+ * `refutes` (the engine, given that fix) agrees. A fix the engine does not take as contradicting is set aside and
+ * the database asked again, so such a row never hides one behind it; `budget` counts those rows across one find,
+ * and once it is spent the presence is `unresolved`, which a caller takes as contradicted.
+ */
+export async function contradictionOf(
+  env: Env,
+  call: string,
+  since: number,
+  until: number,
+  a: Attestation,
+  at: { lat: number; lon: number; ts: number },
+  opts: { maxMps: number; slackSec?: number; except?: number[] },
+  refutes: (fix: PositionRow) => boolean,
+  budget: { rejected: number },
+): Promise<{ fix: PositionRow | null; unresolved: boolean }> {
+  const except = [...(opts.except ?? [])];
+  for (;;) {
+    const fix = await outrunBy(env, call, since, until, a, at, { ...opts, except });
+    if (!fix) return { fix: null, unresolved: false };
+    if (refutes(fix)) return { fix, unresolved: false };
+    if (++budget.rejected > REJECT_LIMIT) return { fix: null, unresolved: true };
+    except.push(fix.id);
+  }
 }
 
 /** Whether the logged `call` has a fix in `[since, until]` that matched a beacon this instance asked a box to send. */

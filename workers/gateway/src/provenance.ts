@@ -44,10 +44,32 @@ export interface RawProvenance {
 /** RF-originated q-constructs: the IGate is asserting it heard this frame on-air. */
 const RF_QCONSTRUCT = /^q(AR|AO)$/;
 
+/**
+ * The characters trimmed from each end of a path token: the ones `String.prototype.trim` strips (ECMAScript
+ * WhiteSpace and LineTerminator). {@link qConstructOf} and {@link attestedSql} both trim by this one list, so the
+ * database and the engine read the same q-construct from any stored path.
+ */
+const TOKEN_TRIM =
+  "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+
+function trimToken(t: string): string {
+  let a = 0;
+  let b = t.length;
+  while (a < b && TOKEN_TRIM.includes(t[a]!)) a++;
+  while (b > a && TOKEN_TRIM.includes(t[b - 1]!)) b--;
+  return t.slice(a, b);
+}
+
+/**
+ * Upper-case ASCII letters only, as SQLite's `UPPER` does: {@link provenanceOf} and {@link attestedSql} compare a
+ * receiving site's call by this one rule.
+ */
+const asciiUpper = (s: string): string => s.replace(/[a-z]+/g, (m) => m.toUpperCase());
+
 /** Pull the qXX token out of a stored comma path (e.g. "WIDE1-1,qAR,OE8XXX"). */
 export function qConstructOf(path?: string | null): string | undefined {
   for (const t of (path ?? "").split(",")) {
-    const s = t.trim();
+    const s = trimToken(t);
     if (/^q[A-Z]{2}$/.test(s)) return s;
   }
   return undefined;
@@ -116,7 +138,7 @@ function transportOf(p: RawProvenance): Transport {
  */
 export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Provenance {
   const qConstruct = qConstructOf(p.path);
-  const igate = (p.igate_call ?? "").toUpperCase();
+  const igate = asciiUpper(p.igate_call ?? "");
   const rfOriginated = p.heard_via === "rf" && (!qConstruct || RF_QCONSTRUCT.test(qConstruct));
   const siteOk = !!attestedSites && attestedSites.size > 0 && !!igate && attestedSites.has(igate);
   const transport = transportOf(p);
@@ -143,10 +165,11 @@ export function attestedSql(
 ): { sql: string; binds: string[] } {
   const pairs: string[] = [];
   for (const [box, sites] of a.byBox) for (const s of sites) pairs.push(`${box}\u001f${s}`);
+  const trimChars = `char(${[...TOKEN_TRIM].map((c) => c.codePointAt(0)).join(", ")})`;
   const firstQ = `(WITH RECURSIVE s(tok, rest) AS (
       SELECT NULL, COALESCE(${t}.path, '') || ','
       UNION ALL
-      SELECT trim(substr(rest, 1, instr(rest, ',') - 1), char(32, 9, 10, 11, 12, 13)), substr(rest, instr(rest, ',') + 1)
+      SELECT trim(substr(rest, 1, instr(rest, ',') - 1), ${trimChars}), substr(rest, instr(rest, ',') + 1)
         FROM s WHERE rest <> '')
     SELECT tok FROM s WHERE tok GLOB 'q[A-Z][A-Z]' LIMIT 1)`;
   return {

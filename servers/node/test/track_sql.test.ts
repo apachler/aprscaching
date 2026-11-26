@@ -60,6 +60,44 @@ describe("the SQL form of attestation", () => {
     // both answers occur, so the comparison saw each side
     expect(new Set(got.map((p) => !!p.sql_attested))).toEqual(new Set([true, false]));
   });
+
+  it("trims a path token and upper-cases a site call as provenanceOf does, beyond ASCII", async () => {
+    const env = authEnv();
+    const site = "OE8XXI-10";
+    const att = { shared: new Set([site]), byBox: new Map<string, Set<string>>() };
+    // every character JavaScript's trim strips, read from the runtime rather than listed, with neighbours it keeps
+    const blank: string[] = [];
+    for (let c = 0; c <= 0xffff; c++) {
+      if (c >= 0xd800 && c <= 0xdfff) continue;
+      if (String.fromCharCode(c).trim() === "") blank.push(String.fromCharCode(c));
+    }
+    expect(blank.length).toBeGreaterThan(20);
+    const kept = ["\u0085", "\u180e", "\u200b", "\u2060", "x"];
+    const paths = [...blank, ...kept].flatMap((c) => [`${c}qAS,X`, `qAS${c},X`, `${c}qAR${c}`, `W${c},qAC`]);
+    const igates = [site, "oe8xxi-10", "oe8xx\u0131-10", "OE8XX\u0130-10", "\u00f6e8xxi-10"];
+    const rows = paths.flatMap((path) => igates.map((igate) => [igate, path]));
+    for (let i = 0; i < rows.length; i += 400) {
+      const part = rows.slice(i, i + 400);
+      await env.DB.prepare(
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, transport, igate_call, path)
+         VALUES ${part.map(() => "('OE8LOG-9', 1, 47, 15, 'rf', 'tnc', ?, ?)").join(",")}`,
+      )
+        .bind(...part.flat())
+        .run();
+    }
+    const sql = attestedSql(att, "p");
+    const got = (
+      await env.DB.prepare(`SELECT p.*, ${sql.sql} AS sql_attested FROM positions p`)
+        .bind(...sql.binds)
+        .all<PositionRow & { sql_attested: number; path: string | null }>()
+    ).results;
+    expect(got.length).toBe(rows.length);
+    const differ = got
+      .filter((p) => !!p.sql_attested !== provenanceOf(p, sitesFor(att, p.ingest_box)).firstPartyAttested)
+      .map((p) => ({ igate: p.igate_call, path: JSON.stringify(p.path), sql: !!p.sql_attested }));
+    expect(differ).toEqual([]);
+    expect(new Set(got.map((p) => !!p.sql_attested))).toEqual(new Set([true, false]));
+  });
 });
 
 /** The point `m` metres from (lat, lon) on initial bearing `brg` degrees (spherical, R as haversineMeters). */

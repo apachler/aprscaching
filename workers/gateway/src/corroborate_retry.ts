@@ -32,14 +32,14 @@ import {
   type RelayedAsk,
 } from "./corroborate.js";
 import { COARSEN } from "./corroborate_privacy.js";
-import { DEFAULT_POLICY, plausiblePresence } from "./verify.js";
+import { DEFAULT_POLICY, plausiblePresence, type PositionRow } from "./verify.js";
 import { awardFindBadges } from "./community.js";
 import { attestation, sitesFor } from "./attestedsites.js";
 import { provenanceOf } from "./provenance.js";
 import { callSuspended } from "./moderation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { beaconCommandedIn } from "./beacontag.js";
-import { commandedIn, outrunBy } from "./track.js";
+import { commandedIn, contradictionOf } from "./track.js";
 
 /** When each attempt is due, after the find; their count is the attempt limit. */
 export const RETRY_AFTER_S = [3600, 6 * 3600, 24 * 3600];
@@ -140,17 +140,29 @@ async function liftLater(
   if ((await commandedIn(env, call, q.since, until)) || (await beaconCommandedIn(env, call, q.since, until)))
     return false;
   // the track the presence is judged against — every SSID of the base call, as at log time: the database finds a
-  // fix of it that contradicts the presence (track.ts outrunBy), stamped with its attestation (verify.ts contradicts)
+  // fix of it that contradicts the presence (track.ts contradictionOf), the engine judging it stamped with its
+  // attestation (verify.ts contradicts); an answer that stays unresolved refuses the lift
   const attested = await attestation(env);
   const at = { lat: q.lat, lon: q.lon, ts: winner.ts };
   const maxMps = (DEFAULT_POLICY.maxSpeedKmh * 1000) / 3600;
-  const outrun = await outrunBy(env, call, q.since, until, attested, at, { maxMps, slackSec: COARSEN.timeBucketSec });
-  const track = (outrun ? [outrun] : []).map((p) => ({
+  const slack = COARSEN.timeBucketSec;
+  const stamp = (p: PositionRow) => ({
     ...p,
     commanded: !!p.commanded,
     firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
-  }));
-  if (!plausiblePresence(at, track, DEFAULT_POLICY, COARSEN.timeBucketSec)) return false;
+  });
+  const outrun = await contradictionOf(
+    env,
+    call,
+    q.since,
+    until,
+    attested,
+    at,
+    { maxMps, slackSec: slack },
+    (w) => !plausiblePresence(at, [stamp(w)], DEFAULT_POLICY, slack),
+    { rejected: 0 },
+  );
+  if (outrun.fix || outrun.unresolved) return false;
   const igate = corroboratorIgate({
     method: "aprs_rf_peer",
     peerIgate: winner.igateCall ?? null,

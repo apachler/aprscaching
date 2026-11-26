@@ -4,7 +4,7 @@
 // the attested fix that contradicts a match.
 import { describe, it, expect } from "vitest";
 import { scoreFind } from "@aprscaching/gateway/caches";
-import { CANDIDATE_LIMIT, RECENT_LIMIT } from "@aprscaching/gateway/track";
+import { CANDIDATE_LIMIT, RECENT_LIMIT, REJECT_LIMIT } from "@aprscaching/gateway/track";
 import type { Env } from "@aprscaching/gateway/env";
 import type { SqlDatabase, SqlStatement } from "@aprscaching/gateway/runtime";
 import { authEnv } from "./helpers/authflow.js";
@@ -16,9 +16,9 @@ const now = () => Math.floor(Date.now() / 1000);
 /** Far more fixes than any read of the window may bring out of the database. */
 const FLOOD = 4 * (2 * RECENT_LIMIT + CANDIDATE_LIMIT);
 /** The rows a find's trust read may load: the logged call's newest fixes and its attested ones that can place it at
- *  the cache, one contradicting fix for each of those tried as the match and one for a peer's hearing, and a living
- *  cache station's newest fixes and newest fixes that place it. */
-const BOUND = 2 * (RECENT_LIMIT + CANDIDATE_LIMIT) + 1 + 2 * RECENT_LIMIT;
+ *  the cache, one contradicting fix for each of those tried as the match and one for a peer's hearing, the fixes the
+ *  engine sets aside, and a living cache station's newest fixes and newest fixes that place it. */
+const BOUND = 2 * (RECENT_LIMIT + CANDIDATE_LIMIT) + 1 + REJECT_LIMIT + 2 * RECENT_LIMIT;
 
 const room = { fetch: async () => new Response(null, { status: 204 }) };
 const world = () => authEnv({ FIRST_PARTY_SITES: SITE, ROOMS: { get: () => room } });
@@ -40,13 +40,14 @@ async function cache(env: Env, o: { type: string; stationCall?: string }) {
 }
 
 /** One fix the attested site's own TNC heard, `ago` seconds back, `dLat` degrees north of the spot. */
-async function attested(env: Env, call: string, o: { ago: number; dLat?: number }) {
-  await env.DB.prepare(
+async function attested(env: Env, call: string, o: { ago: number; dLat?: number; path?: string }) {
+  const r = await env.DB.prepare(
     `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport)
-     VALUES (?,?,?,?, 'rf', ?, 'WIDE1-1', 'firehose', 'tnc')`,
+     VALUES (?,?,?,?, 'rf', ?, ?, 'firehose', 'tnc')`,
   )
-    .bind(call, now() - o.ago, LAT + (o.dLat ?? 0), LON, SITE)
+    .bind(call, now() - o.ago, LAT + (o.dLat ?? 0), LON, SITE, o.path ?? "WIDE1-1")
     .run();
+  return Number(r.meta.last_row_id);
 }
 
 /** `n` signed browser-RF fixes of `call` at the spot, 100–199 s back: between the far fix and the match. */
@@ -145,5 +146,77 @@ describe(`a flood of ${FLOOD} signed fixes at the spot`, () => {
       tiers.push((await scoreFind(env, living, "OE8LOG-9", now())).result.tier);
     }
     expect(tiers).toEqual(["C", "C"]);
+  });
+});
+
+/**
+ * `env` whose search for a contradicting fix (track.ts outrunBy) answers with `decoy`, a fix the engine does not take
+ * as contradicting, for its first `times` questions, and truly after.
+ */
+function decoying(env: Env, decoy: unknown, times: number): Env {
+  let asked = 0;
+  const wrap = (s: SqlStatement, sql: string): SqlStatement => ({
+    bind: (...v: unknown[]) => wrap(s.bind(...v), sql),
+    run: () => s.run(),
+    all: <T>() => s.all<T>(),
+    first: async <T>() => {
+      if (/NOT IN \(SELECT value FROM json_each/.test(sql) && asked++ < times) return decoy as T;
+      return s.first<T>();
+    },
+  });
+  return { ...env, DB: { prepare: (sql) => wrap(env.DB.prepare(sql), sql), batch: (st) => env.DB.batch(st) } };
+}
+
+describe("the search for a fix that contradicts a match", () => {
+  it("rules out each match by its own contradicting fix, however many matches there are", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    await attested(env, "OE8LOG-9", { ago: 60 }); // a match at the cache
+    await attested(env, "OE8LOG-9", { ago: 1500 }); // a second match at the cache
+    await attested(env, "OE8LOG-7", { ago: 100, dLat: 1 }); // 111 km north, 40 s from the first, reachable from the second
+    await attested(env, "OE8LOG-7", { ago: 1540, dLat: -1 }); // 111 km south, 40 s from the second, reachable from the first
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).toBe("C");
+  });
+
+  it("is not stopped by a stored path the engine reads as an APRS-IS copy", async () => {
+    // a no-break space before a non-RF q-construct: the database and the engine must both read the copy as unattested
+    for (const call of ["OE8LOG", "OE8LOG-1", "OE8LOG-9"]) {
+      const env = world();
+      const trad = await cache(env, { type: "traditional" });
+      await attested(env, call, { ago: 100, dLat: -1, path: "\u00a0qAS,X" });
+      await attested(env, "OE8LOG-7", { ago: 250, dLat: 1 }); // the attested fix that contradicts the match
+      await attested(env, "OE8LOG-9", { ago: 60 }); // the match at the cache
+      expect({ call, tier: (await scoreFind(env, trad, "OE8LOG-9", now())).result.tier }).toEqual({ call, tier: "C" });
+    }
+  });
+
+  it("asks again past a fix the engine does not take as contradicting", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    const decoy = await env.DB.prepare(
+      `INSERT INTO positions (callsign, ts, lat, lon, heard_via, path, source, transport)
+       VALUES ('OE8LOG-7', ?, ?, ?, 'aprs_is', 'TCPIP*,qAC,T2', 'firehose', 'aprs-is') RETURNING *`,
+    )
+      .bind(now() - 90, LAT - 1, LON)
+      .first();
+    await attested(env, "OE8LOG-7", { ago: 250, dLat: 1 }); // the attested fix that contradicts the match
+    await attested(env, "OE8LOG-9", { ago: 60 }); // the match at the cache
+    expect((await scoreFind(decoying(env, decoy, 1), trad, "OE8LOG-9", now())).result.tier).toBe("C");
+  });
+
+  it("takes a match as contradicted once the fixes set aside run out, and reads no more for it", async () => {
+    const env = world();
+    const trad = await cache(env, { type: "traditional" });
+    const decoy = await env.DB.prepare(
+      `INSERT INTO positions (callsign, ts, lat, lon, heard_via, path, source, transport)
+       VALUES ('OE8LOG-7', ?, ?, ?, 'aprs_is', 'TCPIP*,qAC,T2', 'firehose', 'aprs-is') RETURNING *`,
+    )
+      .bind(now() - 90, LAT - 1, LON)
+      .first();
+    await attested(env, "OE8LOG-9", { ago: 60 }); // the match at the cache, with no true contradiction
+    expect((await scoreFind(env, trad, "OE8LOG-9", now())).result.tier).toBe("A");
+    const c = counting(decoying(env, decoy, Infinity));
+    expect((await scoreFind(c.env, trad, "OE8LOG-9", now())).result.tier).not.toBe("A");
+    expect(c.rows()).toBeLessThanOrEqual(1 + REJECT_LIMIT + 1 + 1);
   });
 });

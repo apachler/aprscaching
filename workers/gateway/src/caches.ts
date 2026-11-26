@@ -35,7 +35,7 @@ import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCal
 import { maybeAnnounceFind } from "./announce.js";
 import { askPeers, boxesOfCalls, corroboratorIgate } from "./corroborate.js";
 import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
-import { commandedIn, outrunBy, ownFixes, stationFixes } from "./track.js";
+import { commandedIn, contradictionOf, ownFixes, stationFixes } from "./track.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { beaconCommandedIn } from "./beacontag.js";
@@ -1070,18 +1070,23 @@ export async function scoreFind(
   const loggerOwnBoxes = await boxesOfCalls(env, loggerOwnIgates);
 
   const policy = { ...DEFAULT_POLICY, minTier: instanceMinTier(setting(env, "MIN_TRUST")) };
-  const loggerPositions = attest(lp.results);
-  // The fixes that contradict a matched presence, found by the database one per match (track.ts outrunBy): the
-  // engine is judged again with each until its match has none, so it decides as it would over every fix of the
-  // window. Each round adds one fix and rules out one match, so the rows stay within the read's own.
+  const attestedOwn = attest(lp.results);
+  // The fixes that contradict a matched presence, found by the database one per match (track.ts contradictionOf):
+  // the engine is judged again with each until its match has none, so it decides as it would over every fix of the
+  // window. Each round adds one fix that rules out one match, or rules the match out when the database's answers
+  // stay unresolved; a ruled-out match still contradicts others, as a fix of the track. The rows stay within the
+  // read's own, plus the shared budget of rows the engine sets aside.
   const witnesses: PositionRow[] = [];
-  const judge = (verified: boolean) =>
+  const ruledOut = new Set<number>();
+  const budget = { rejected: 0 };
+  let loggerPositions = attestedOwn;
+  const judge = (verified: boolean, extra: PositionRow[] = []) =>
     verifyFind(
       cache,
       appGeo,
       {
         loggerPositions,
-        loggerTrackPositions: witnesses,
+        loggerTrackPositions: [...witnesses, ...attestedOwn.filter((p) => ruledOut.has(p.id)), ...extra],
         cacheStationPositions: station,
         loggerOwnIgates,
         loggerOwnBoxes,
@@ -1090,16 +1095,31 @@ export async function scoreFind(
       },
       policy,
     );
-  for (let last: number | undefined; ;) {
+  for (;;) {
     // as if control-verified: a heard match counts in the result's reason even when it lifts nothing
     const heard = judge(true);
-    // the same match again: the engine does not take the database's fix as contradicting it
-    if (heard.method !== "aprs_rf" || heard.matchedPositionId == null || heard.matchedPositionId === last) break;
-    last = heard.matchedPositionId;
-    const m = loggerPositions.find((p) => p.id === last)!;
-    const w = await outrunBy(env, loggerCall, since, until, attested, m, { maxMps, exceptId: m.id });
-    if (!w) break;
-    witnesses.push(...attest([w]));
+    if (heard.method !== "aprs_rf" || heard.matchedPositionId == null) break;
+    const id = heard.matchedPositionId;
+    const m = loggerPositions.find((p) => p.id === id)!;
+    const c = await contradictionOf(
+      env,
+      loggerCall,
+      since,
+      until,
+      attested,
+      m,
+      { maxMps, except: [id] },
+      (w) => {
+        const r = judge(true, attest([w]));
+        return r.method !== "aprs_rf" || r.matchedPositionId !== id;
+      },
+      budget,
+    );
+    if (c.fix) witnesses.push(...attest([c.fix]));
+    else if (c.unresolved) {
+      ruledOut.add(id);
+      loggerPositions = attestedOwn.filter((p) => !ruledOut.has(p.id));
+    } else break;
   }
   const result = judge(controlVerified);
 
@@ -1153,11 +1173,22 @@ export async function scoreFind(
     if (!ev && !asked.denied && (asked.unreachable.length || asked.relayed.length))
       retry = { query, unreachable: asked.unreachable, hits: asked.hits, relayed: asked.relayed };
     const heardAt = ev && { ...point, ts: ev.ts };
+    const slack = COARSEN.timeBucketSec;
     const outrun =
       heardAt &&
-      (await outrunBy(env, loggerCall, since, until, attested, heardAt, { maxMps, slackSec: COARSEN.timeBucketSec }));
-    const local = [...loggerPositions, ...attest(outrun ? [outrun] : [])];
-    if (heardAt && plausiblePresence(heardAt, local, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
+      plausiblePresence(heardAt, attestedOwn, DEFAULT_POLICY, slack) &&
+      (await contradictionOf(
+        env,
+        loggerCall,
+        since,
+        until,
+        attested,
+        heardAt,
+        { maxMps, slackSec: slack },
+        (w) => !plausiblePresence(heardAt, attest([w]), DEFAULT_POLICY, slack),
+        budget,
+      ));
+    if (heardAt && outrun && !outrun.fix && !outrun.unresolved) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
