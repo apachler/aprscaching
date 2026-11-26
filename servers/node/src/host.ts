@@ -80,11 +80,15 @@ export async function startFieldDiscovery(env: Env, port: number, fieldShape: bo
   }
 }
 
-/** The checked-out commit, for the AGPL §13 source link of an instance run from a git checkout. */
-export function gitHead(): string | undefined {
+/**
+ * The checked-out commit, for the AGPL §13 source link of an instance run from a git checkout. The service
+ * reads a checkout another user owns (bare metal's is root's, so the service user cannot rewrite it), which git
+ * refuses as "dubious ownership" unless the directory is named safe; this one read-only rev-parse names it so.
+ */
+export function gitHead(cwd: string = process.cwd()): string | undefined {
   try {
     return (
-      execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      execSync("git -c safe.directory=* rev-parse HEAD", { cwd, stdio: ["ignore", "pipe", "ignore"] })
         .toString()
         .trim() || undefined
     );

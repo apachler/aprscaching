@@ -10,7 +10,8 @@ proxy terminates TLS and forwards the whole site to that port.
 ## Before you start
 
 - **Linux with systemd**, Node.js 22 or newer, pnpm or corepack (Node.js ships corepack), git and curl.
-- **sudo**, or a root shell. Four steps need root; the rest runs as a dedicated system user.
+- **sudo**, or a root shell. Root owns the checkout and installs the units; the build and the services run as
+  two system users of their own.
 - **The GitHub CLI (`gh`)**, signed in, to check the release's signature ([Check a download](verified-downloads.md)).
 - **Your callsign and APRS-IS passcode.**
 - **How people reach the box:** a public name your reverse proxy serves with TLS, or the LAN only
@@ -36,11 +37,12 @@ proxy terminates TLS and forwards the whole site to that port.
     It lists the root steps first, then asks before it installs (`--yes` confirms). It then:
 
     1. checks the requirements above;
-    2. creates the system user `aprscaching` (home `/var/lib/aprscaching`), as **root**;
-    3. creates `/opt/aprscaching` for that user, as **root**, and fills it with the checkout, as that user;
-    4. installs the dependencies and builds the web app, as that user;
-    5. writes `/opt/aprscaching/deploy/.env` with the Self-host questions (`setup.sh`), readable by its owner
-       only, and points `INGEST_URL` at the gateway on this host. With `--domain`, a reverse proxy fronts the
+    2. creates the system users `aprscaching`, which runs the services (home `/var/lib/aprscaching`), and
+       `aprscaching-build`, which runs the build, as **root**;
+    3. creates `/opt/aprscaching` and fills it with the checkout, as **root**, which owns it;
+    4. installs the dependencies and builds the web app, as `aprscaching-build`;
+    5. writes `/opt/aprscaching/deploy/.env` with the Self-host questions (`setup.sh`), as **root**, readable by
+       root only, and points `INGEST_URL` at the gateway on this host. With `--domain`, a reverse proxy fronts the
        gateway, so it also sets `HOST=127.0.0.1` and `TRUST_PROXY=1` unless the `.env` already sets them;
     6. installs `aprscaching-gateway` and `aprscaching-ingest` into `/etc/systemd/system` from
        `deploy/systemd/`, then enables and starts them, as **root**;
@@ -69,6 +71,24 @@ The settings are in [Configuration](../../reference/configuration.md).
 
 The gateway applies the database migrations when it starts. The database and media live in
 `/opt/aprscaching/data`, readable by the service user only.
+
+### Who owns what
+
+The helper runs as root, so no user that runs other code may write it:
+
+| Path | Owner | Why |
+|---|---|---|
+| `/opt/aprscaching`, `deploy/` and the rest of the checkout | root | root runs `deploy/aprscaching` and `setup.sh` from it |
+| `deploy/.env` | root, mode 600 | systemd reads it for the units; each finished build sets `SOURCE_COMMIT`, the commit the Source link names |
+| `node_modules` (each package's) and `apps/web/dist` | `aprscaching-build` | `pnpm install` and the web build write them; dependencies' install scripts run there |
+| `data/` | `aprscaching` | the database, media and `session.secret`; the services write nothing else |
+
+`deploy/aprscaching update` and `init baremetal` hand a checkout where the service user owns anything outside
+`data/` to root before they build: they make everything but `data/` root's, take away the write bits others
+have, remove the build's outputs, and build them again as `aprscaching-build`. `update` does this, and finishes a
+build an earlier run left unfinished, even when the checkout is already at its target: the newest release, or the
+branch `--ref` names for an install that follows a branch. A checkout that was changed before that hand-over is
+not repaired by it.
 
 The units run in a systemd sandbox. The gateway may write `/opt/aprscaching/data` and nothing else: the checkout,
 its `.env` and the rest of the system are read-only to it, and it sees no `/home` and no devices. So `DB_PATH` and

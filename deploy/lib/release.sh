@@ -70,7 +70,6 @@ rel_verified_bundle() {
   [ -n "$gh_repo" ] || return 1
   have curl || { printf '\nERROR: curl is needed to download the release for its check.\n' >&2; return 2; }
   dir="$(mktemp -d)"
-  chmod 755 "$dir" # a service user fetches from here
   base="https://github.com/$gh_repo/releases/download/$tag"
   rel_download "$base/aprscaching-$tag.bundle" "$dir/aprscaching-$tag.bundle" &&
     rel_download "$base/SHA256SUMS" "$dir/SHA256SUMS" || rc=$?
