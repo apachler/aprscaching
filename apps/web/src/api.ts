@@ -2126,8 +2126,13 @@ export async function setQueueOwner(callsign: string | null, opts: { forget?: bo
   // the owner first: what is shown and sent follows it, so a delete that fails after it leaves the data hidden
   const changed = ((await st.kvGet(QUEUE_OWNER)) ?? "") !== next;
   if (changed) await st.kvSet(QUEUE_OWNER, next);
-  if (next || opts.forget) await forgetPrivateData(st, next || null);
-  if (changed) queueChanged();
+  const cleans = next !== "" || !!opts.forget;
+  try {
+    if (cleans) await forgetPrivateData(st, next || null);
+  } finally {
+    // open lists re-read after every cleanup, also when another tab stored this owner first or a delete failed
+    if (changed || cleans) queueChanged();
+  }
 }
 const queueOwner = async (): Promise<string | null> => (await queueStore.get(QUEUE_OWNER)) || null;
 

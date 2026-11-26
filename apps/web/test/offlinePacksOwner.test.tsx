@@ -29,7 +29,7 @@ const { useSession } = await import("../src/identity/useSession.js");
 const { packCache, packCachesInBox, packSearch, userPacks } = await import("../src/offline/packs.js");
 const { storePack } = await import("../src/offline/download.js");
 const { shownPackCaches } = await import("../src/offline/owner.js");
-const { OfflinePanel } = await import("../src/offline/OfflinePanel.js");
+const { OfflinePanel, OwnerAttention } = await import("../src/offline/OfflinePanel.js");
 
 const SERIAL = "04:A2:5F:1B:3C:80:90";
 const REVEALS = "acs.stages.unlocked";
@@ -302,9 +302,25 @@ describe("a pack being downloaded when its owner signs out", () => {
       }
       return new Response(new Blob(["img"]));
     };
+    const put = vi.spyOn(await offlineReady(), "putPack");
     await act(() => expect(seedOwnerPack(fetcher)).rejects.toThrow(/signed out/));
     expect(signedOut).toBe(true);
+    // not written at all once the owner is gone, so no other tab reads it in between
+    expect(put).not.toHaveBeenCalled();
     expect(await aLeftOnDevice()).toEqual(NOTHING);
+  });
+
+  it("refuses to refill another player's pack, and keeps nothing of the new session's under that player's call", async () => {
+    await signInAsAWithPrivateData();
+    const st = await offlineReady();
+    const aPack = (await st.packs()).find((p) => p.id === "mine-a")!;
+    await st.kvSet("acs.sync.owner", "OE8BBB");
+    const data: PackResponse = { instance: "x", generation: "g2", builtAt: 2, caches: [cache(502)] };
+    await expect(storePack(st, async () => new Response(new Blob(["img"])), "", aPack, data)).rejects.toThrow(
+      /sign in again/,
+    );
+    expect((await st.packCaches("mine-a")).map((c) => c.id)).toEqual([501]);
+    expect((await st.packs()).find((p) => p.id === "mine-a")?.owner).toBe("OE8AAA");
   });
 });
 
@@ -363,6 +379,45 @@ describe("the Offline panel", () => {
     await until(() => !text().includes("My caches"));
     expect(text()).not.toContain("My caches");
     expect(text()).not.toContain("needs a visit");
+  });
+
+  it("drops the last player's pack when another tab already stored the next player", async () => {
+    await signInAsAWithPrivateData();
+    render(<OfflinePanel onClose={() => {}} />);
+    await until(() => text().includes("1 cache needs a visit"));
+    // the other tab moved the owner to B and deleted A's pack; this tab's hook then finds B, the owner unchanged
+    const st = await offlineReady();
+    await st.kvSet("acs.sync.owner", "OE8BBB");
+    await st.deletePack("mine-a");
+    answers.session = { callsign: "OE8BBB" };
+    await act(() => hook.refresh());
+    await until(() => !text().includes("My caches"));
+    expect(hook.callsign).toBe("OE8BBB");
+    expect(text()).not.toContain("My caches");
+  });
+
+  it("drops the last player's pack when deleting it fails", async () => {
+    await signInAsAWithPrivateData();
+    render(<OfflinePanel onClose={() => {}} />);
+    await until(() => text().includes("1 cache needs a visit"));
+    const st = await offlineReady();
+    vi.spyOn(st, "deletePack").mockRejectedValue(new Error("quota"));
+    answers.session = { callsign: "OE8BBB" };
+    await act(() => hook.refresh());
+    await until(() => !text().includes("My caches"));
+    expect(await st.kvGet("acs.sync.owner")).toBe("OE8BBB");
+    expect(text()).not.toContain("My caches");
+  });
+
+  it("lists no visits due from a pack another player's session hides", async () => {
+    await signInAsAWithPrivateData();
+    const st = await offlineReady();
+    await st.kvSet("acs.sync.owner", "OE8BBB");
+    render(<OwnerAttention packId="mine-a" />);
+    await until(() => text().includes("None of your caches"));
+    expect(text()).toContain("None of your caches needs a visit.");
+    expect(text()).not.toContain("needs a visit:");
+    expect(text()).not.toContain("1 cache needs a visit");
   });
 
   it("reads no caches of a pack another player's session hides", async () => {

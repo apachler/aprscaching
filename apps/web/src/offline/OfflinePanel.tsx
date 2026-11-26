@@ -178,7 +178,7 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
 }
 
 /** The caches of the owner's pack that need a visit, and why. */
-function OwnerAttention(props: { packId: string }) {
+export function OwnerAttention(props: { packId: string }) {
   const [due, setDue] = useState<{ code: string; title: string; why: string[] }[] | null>(null);
   useEffect(() => {
     void (async () => {
