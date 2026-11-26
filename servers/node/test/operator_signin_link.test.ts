@@ -5,7 +5,7 @@
 // in. On an instance that has another sign-in path the link is limited to ADMIN_CALLSIGNS, which bounds
 // what a leaked operator secret can reach there.
 import { describe, it, expect } from "vitest";
-import { call, emailSignup } from "./helpers/authflow.js";
+import { call, emailSignup, tokenKey } from "./helpers/authflow.js";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -110,7 +110,7 @@ describe("operator sign-in link — off-grid instance", () => {
     const env = offGrid();
     const r = await mint(env, "OE8OLD");
     await env.DB.prepare("UPDATE email_tokens SET created_at = created_at - 901 WHERE token = ?")
-      .bind(tokenOf(r.data.link))
+      .bind(await tokenKey(tokenOf(r.data.link)))
       .run();
     expect((await call(env, "POST", "/auth/email/verify", { token: tokenOf(r.data.link) })).status).toBe(400);
   });

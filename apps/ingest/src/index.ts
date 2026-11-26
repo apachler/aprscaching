@@ -167,7 +167,7 @@ try {
   process.exit(1);
 }
 const callGate = new CallVerifier(
-  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY, boxId: env.BOX_ID || undefined }),
+  gatewayTxGateLookup({ ingestUrl: INGEST_URL, secret: SECRET, boxKey: !!env.BOX_KEY }),
   { log: (m) => console.error(m), graceMs: txGateGrace },
 );
 /** The box's station calls; the gateway's service call joins them once the gateway names it. */
@@ -756,6 +756,12 @@ console.log("[ingest] started -> %s", INGEST_URL);
 // configured in the gateway (Instance admin); this box runs the sessions (ingest-locality).
 // The BBS forwards under its own call unless another is set: one packet BBS, one call.
 const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
+// The packet BBS and FBB forwarding carry every station's personal mail, so the gateway serves them only to a
+// box enrolled with its own key that the sysop marks "Runs this instance's services", never to the shared secret.
+if ((env.BBS_NODE_CALL || env.BBS_FORWARD === "1") && !env.BOX_KEY)
+  console.warn(
+    "[bbs] the packet BBS and FBB forwarding answer no mail: the box has no key of its own (BOX_KEY), and the gateway serves mail only to an enrolled box that runs this instance's services. Enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box), then switch on Runs this instance's services",
+  );
 if (env.BBS_FORWARD === "1" && forwardCall && serviceLink) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
@@ -815,10 +821,15 @@ if (env.FED_LINK_PULL === "1") {
 }
 
 // ---- Remote control: lease commands the operator queued in the web app and execute them.
-// Opt-in with BOX_ID; remote transmit additionally needs BOX_TX=1 and a command callsign that is this
-// box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon names the box's own
-// position (BOX_LAT, BOX_LON), never one the command carries.
-if (env.BOX_ID) {
+// Opt-in with BOX_ID on a box enrolled with its own key (BOX_KEY): the gateway pairs and polls a box only by
+// its signature, never by the shared INGEST_SECRET. Remote transmit additionally needs BOX_TX=1 and a command
+// callsign that is this box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL). A remote beacon
+// names the box's own position (BOX_LAT, BOX_LON), never one the command carries.
+if (env.BOX_ID && !env.BOX_KEY) {
+  console.warn(
+    "[box] remote control is off: BOX_ID is set, but the box has no key of its own (BOX_KEY). The gateway pairs and polls only an enrolled box: enroll it with a one-time code from Instance admin → Ingest boxes (deploy/aprscaching init ingest-box)",
+  );
+} else if (env.BOX_ID) {
   const { BoxPoller, parseBoxPath, parseBoxPosition } = await import("./boxpoll.js");
   const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
   let boxPosition: ReturnType<typeof parseBoxPosition>;

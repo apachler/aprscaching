@@ -19,9 +19,10 @@ import { makeFetchGuard } from "./fetchguard.js";
 import { mdnsMode, startMdns } from "./mdns.js";
 
 /**
- * The largest request body either server accepts. Both buffer a body before routing and authentication, so
- * without a ceiling one multi-GB anonymous POST exhausts a Pi's memory; 20 MB clears every legitimate payload
- * (the largest is a cache-media upload). Past it the request is answered 413.
+ * The largest request body either server accepts. A handler that reads its body reads it whole, so without a
+ * ceiling one multi-GB POST exhausts a Pi's memory; 20 MB clears every legitimate payload (the largest is a
+ * cache-media upload). Past it the request is answered 413. How many such bodies are read at once is bounded by
+ * the body slots (bodygate.ts).
  */
 export const BODY_MAX_BYTES = 20 * 1024 * 1024;
 

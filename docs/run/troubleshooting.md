@@ -857,7 +857,7 @@ across those places counts:
 | Shape | Where the doctor looks |
 |---|---|
 | Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Else `deploy/backups/`, also when a bucket is set but its CLI is missing, since nothing then uploads |
-| Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/storage/shared/aprscaching-backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
+| Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/.aprscaching/backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
 | Desktop | the archives of `deploy/aprscaching backup` (`deploy/backups/`); without one it warns rather than fails |
 
 - **Message:** `no backup destination is set` (fail).

@@ -8,6 +8,8 @@
 //
 //   A=http://127.0.0.1:9601 B=http://127.0.0.1:9602 node tools/interop/local-loop.mjs
 
+import { boxFetch, enrollBox } from "../smoke/boxsign.mjs";
+
 const A = process.env.A ?? "http://127.0.0.1:9601";
 const B = process.env.B ?? "http://127.0.0.1:9602";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
@@ -21,10 +23,15 @@ function ok(name, cond, detail = "") {
   if (!pass) failures++;
 }
 
-async function call(base, method, path, body) {
+async function call(base, method, path, body, headers = {}) {
   const res = await fetch(base + path, {
     method,
-    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, "x-operator-secret": OPERATOR_SECRET },
+    headers: {
+      "content-type": "application/json",
+      "x-ingest-secret": SECRET,
+      "x-operator-secret": OPERATOR_SECRET,
+      ...headers,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -37,6 +44,44 @@ async function call(base, method, path, body) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const probes = new Map();
+/**
+ * One request to the BBS at `base` as its packet BBS box would send it: signed by "loop-probe", a box enrolled
+ * with its own key that the sysop lets run the instance's services. The mailboxes and the FBB forwarding queue
+ * take only such a box; the shared ingest secret runs no BBS.
+ */
+async function bbs(base, method, path, body) {
+  if (!probes.has(base)) {
+    const r = await enrollBox(base, OPERATOR_SECRET, "loop-probe");
+    const s = r.error ? null : await call(base, "POST", "/api/admin/boxes/loop-probe/services", { services: true });
+    if (r.error || s.status !== 200) {
+      console.error(`FAIL the probe box could not be enrolled on ${base}: ${r.error ?? JSON.stringify(s.data)}`);
+      process.exit(1);
+    }
+    probes.set(base, r.key);
+  }
+  return boxFetch(base, probes.get(base), method, path, body);
+}
+
+/**
+ * A session for `cs`, the ADMIN_CALLSIGNS call of the gateway at `base`, opened with the operator's sign-in
+ * link and verified with the operator secret, the way `pnpm dev:admin` does. Returns the cookie, or "".
+ * A cache is hidden by a signed-in, control-verified call: the ingest secret hides none.
+ */
+async function operatorSession(base, cs) {
+  const link = await call(base, "POST", "/auth/operator-link", { callsign: cs });
+  const token = link.data?.link ? new URL(link.data.link).searchParams.get("token") : null;
+  if (!token) return "";
+  const vr = await fetch(base + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const cookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  const verified = await call(base, "POST", "/verify/operator", { callsign: cs });
+  return verified.status === 200 ? cookie : "";
+}
 
 /** Poll until `check` returns truthy or the deadline passes; returns the last value. */
 async function until(label, deadlineMs, check) {
@@ -70,7 +115,7 @@ const verified = await call(A, "POST", "/verify/operator", { callsign: "OE1AAA" 
 ok("A: sysop call OE1AAA verified", verified.data?.verified === true, JSON.stringify(verified.data));
 
 // ---- post the message that must travel A -> B over the AXUDP AX.25 link ----
-const post = await call(A, "POST", "/api/bbs/messages", {
+const post = await bbs(A, "POST", "/api/bbs/messages", {
   fromCall: "OE1AAA",
   toCall: "OE1TST @ OE1BBB.OE.EU",
   subject: "interop loop",
@@ -78,7 +123,7 @@ const post = await call(A, "POST", "/api/bbs/messages", {
 });
 ok("A: message posted", post.status === 201 || post.data?.id > 0, JSON.stringify(post.data));
 
-const pool = await call(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
+const pool = await bbs(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
 ok("A: message sits in the OE1BBB-1 pool", (pool.data?.messages ?? []).length === 1, JSON.stringify(pool.data));
 
 // ---- NODES: each side learns the other's alias from broadcasts on the AXUDP wire ----
@@ -95,7 +140,7 @@ ok("B: NODES table learned ACSA (A's alias) from broadcasts", !!bSeesA);
 
 // ---- the forwarding session: A's scheduler dials OE1BBB-1, B's SID gate answers ----
 const delivered = await until("forwarded message lands on B", 90000, async () => {
-  const r = await call(B, "GET", "/api/bbs/messages?to=OE1TST");
+  const r = await bbs(B, "GET", "/api/bbs/messages?to=OE1TST");
   return (r.data?.messages ?? []).find((m) => m.subject === "interop loop");
 });
 ok("B: forwarded message arrived over the AX.25/AXUDP session", !!delivered, JSON.stringify(delivered));
@@ -103,7 +148,7 @@ if (delivered) ok("B: arrival is marked as RF-FBB origin", /rf-fbb/.test(deliver
 
 // ---- idempotency: the BID must not forward twice ----
 const drained = await until("A's pool drains", 30000, async () => {
-  const r = await call(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
+  const r = await bbs(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
   return (r.data?.messages ?? []).length === 0;
 });
 ok("A: pool drained after the session (BID logged, no re-forward)", !!drained);
@@ -127,24 +172,24 @@ if (process.env.FED_BBS === "1") {
   ok("B: partner OE1AAA-1 marked for federation", markB.data?.partner?.federation === true, JSON.stringify(markB));
 
   // a local bulletin gives A's feed a record to sign
-  await call(A, "POST", "/api/bbs/messages", { fromCall: "OE1AAA", toCall: "ALL", type: "B", body: "federated" });
+  await bbs(A, "POST", "/api/bbs/messages", { fromCall: "OE1AAA", toCall: "ALL", type: "B", body: "federated" });
   const enq = await call(A, "POST", "/federation/bbs/enqueue", { types: ["bulletin"] });
   ok("A: batch enqueued", enq.data?.enqueued === 1, JSON.stringify(enq.data));
-  const offered = await call(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
+  const offered = await bbs(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
   ok(
     "A: the batch is offered to OE1BBB-1 as personal mail to ACSFED",
     (offered.data?.messages ?? []).some((m) => m.bid === enq.data?.bid && m.type === "P" && m.to === "ACSFED"),
     JSON.stringify(offered.data),
   );
   const landed = await until("the batch lands on B", 150000, async () => {
-    const r = await call(B, "GET", "/api/bbs/messages?to=ACSFED");
+    const r = await bbs(B, "GET", "/api/bbs/messages?to=ACSFED");
     return (r.data?.messages ?? []).find((m) => m.bid === enq.data?.bid);
   });
   ok("B: the batch arrived from the marked partner and was taken", !!landed, JSON.stringify(landed));
 } else {
   const enq = await call(A, "POST", "/federation/bbs/enqueue", {});
   ok("A: federation over FBB is off by default (enqueue refused)", enq.status === 409, JSON.stringify(enq));
-  const offered = await call(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
+  const offered = await bbs(A, "GET", "/api/bbs/forward/pool?partner=OE1BBB-1");
   ok(
     "A: nothing addressed to ACSFED is offered",
     !(offered.data?.messages ?? []).some((m) => m.to === "ACSFED"),
@@ -181,15 +226,15 @@ ok(
 );
 
 const CACHE_TITLE = `Packet circuit ${Date.now()}`;
-const made = await call(B, "POST", "/api/caches", {
-  title: CACHE_TITLE,
-  type: "traditional",
-  lat: 48.2082,
-  lon: 16.3738,
-  difficulty: 2,
-  terrain: 2,
-  ownerCall: "OE1BBB",
-});
+const ownerB = await operatorSession(B, "OE1BBB");
+ok("B: its sysop OE1BBB signs in and is verified", !!ownerB);
+const made = await call(
+  B,
+  "POST",
+  "/api/caches",
+  { title: CACHE_TITLE, type: "traditional", lat: 48.2082, lon: 16.3738, difficulty: 2, terrain: 2 },
+  { cookie: ownerB, "x-ingest-secret": "", "x-operator-secret": "" },
+);
 ok("B: created a cache", made.status === 201, JSON.stringify(made.data));
 const mirrored = await until("B's cache appears on A", 180000, async () => {
   const r = await call(A, "GET", "/api/caches?bbox=16,48,16.6,48.5");

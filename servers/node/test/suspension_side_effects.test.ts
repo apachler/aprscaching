@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { runScheduled } from "@aprscaching/gateway/app";
 import { authEnv, call, emailSignup, markCallVerified, operatorVerify, type Res } from "./helpers/authflow.js";
 import { newFedKey } from "./helpers/fedpeer.js";
+import { boxCall } from "./helpers/box.js";
 import { accountActionDigest, accountActionMessage } from "@aprscaching/shared";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -188,27 +189,29 @@ describe("removing a message", () => {
 });
 
 describe("a suspension that outlived the erasure of its account", () => {
-  it("still keeps the call off the BBS through the ingest box", async () => {
+  it("still keeps the call off the BBS through the packet BBS box", async () => {
     const w = await world();
     await user(w.env, "DL1ERS");
     expect((await suspend(w, "DL1ERS")).status).toBe(200);
     expect((await signedErase(w.env, "DL1ERS")).status).toBe(200);
-    const post = await call(
+    const post = await boxCall(
       w.env,
+      "bbs",
       "POST",
       "/api/bbs/messages",
       { fromCall: "DL1ERS-5", toCall: "ALL", body: "back again", subject: "hi" },
-      { "x-ingest-secret": SECRET },
+      { services: true },
     );
     expect(post.status).toBe(403);
     expect(post.data.error).toMatch(/suspended/);
     // and a call never suspended still posts
-    const ok = await call(
+    const ok = await boxCall(
       w.env,
+      "bbs",
       "POST",
       "/api/bbs/messages",
       { fromCall: "DL1FRE", toCall: "ALL", body: "hello", subject: "hi" },
-      { "x-ingest-secret": SECRET },
+      { services: true },
     );
     expect(ok.status).toBeLessThan(300);
   });

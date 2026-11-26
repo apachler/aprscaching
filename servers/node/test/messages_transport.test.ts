@@ -3,6 +3,7 @@
 // same as a position's), a sent one the radio that sent it. A row stored without one reads as none.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const room = { fetch: async () => new Response(null, { status: 204 }) };
@@ -56,13 +57,10 @@ describe("message transport", () => {
     )
       .bind(JSON.stringify({ to: "OE3ABC", text: "from the box" }), now())
       .run();
-    const ack = await call(
-      env,
-      "POST",
-      "/api/box/box-t/commands/ack",
-      { id: Number(cmd.meta.last_row_id), status: "done" },
-      SECRET,
-    );
+    const ack = await boxCall(env, "box-t", "POST", "/api/box/box-t/commands/ack", {
+      id: Number(cmd.meta.last_row_id),
+      status: "done",
+    });
     expect(ack.status).toBe(200);
     expect(await transportOf(env, "from the box")).toBe("tnc");
   });

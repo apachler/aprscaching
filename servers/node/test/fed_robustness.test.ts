@@ -12,6 +12,7 @@ import { validEndpointAddress } from "@aprscaching/shared";
 import { makeFetchGuard } from "../src/fetchguard.js";
 import { newFedKey, instanceEnv, addCache, serve, stubFetch, type FedKey, type Serve } from "./helpers/fedpeer.js";
 import type { Env } from "@aprscaching/gateway/env";
+import { boxCall } from "./helpers/box.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -254,19 +255,16 @@ describe("carrier ids and body caps", () => {
     const batch = encodeFedBbsBatch([f]);
     expect(batch.bid.length).toBeLessThanOrEqual(12);
     const post = (bid: string) =>
-      serve(hub)(
-        new Request("https://hub.example/api/bbs/forward/inbound", {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-ingest-secret": "test-ingest-secret" },
-          body: JSON.stringify({
-            message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body: batch.body },
-            origin: "rf-fbb:OE1PRT-1",
-          }),
-        }),
+      boxCall(
+        hub,
+        "bbs",
+        "POST",
+        "/api/bbs/forward/inbound",
+        { message: { bid, type: "P", from: "OE8APR", to: "ACSFED", body: batch.body }, origin: "rf-fbb:OE1PRT-1" },
+        { services: true },
       );
     expect((await post("SQUAT1")).status).toBe(400); // a squatter's BID never claims the content
-    const ok = (await (await post(batch.bid)).json()) as { stored: number };
-    expect(ok.stored).toBe(1);
+    expect((await post(batch.bid)).data.stored).toBe(1);
   });
 
   it("refuses a pull page larger than 4 MiB", async () => {

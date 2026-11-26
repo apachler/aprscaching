@@ -54,24 +54,51 @@ export interface BinaryTransfer {
 
 type DecState = "type" | "soh-len" | "soh-data" | "stx-len" | "stx-data" | "eot-chk";
 
+/** Bytes received into a buffer that doubles as it fills, never past its ceiling. */
+class ByteBuffer {
+  private mem = new Uint8Array(256);
+  length = 0;
+  constructor(private readonly max: number) {}
+
+  /** Append one byte; false, and nothing kept, once the ceiling is reached. */
+  push(b: number): boolean {
+    if (this.length >= this.max) return false;
+    if (this.length === this.mem.length) {
+      const grown = new Uint8Array(Math.min(this.max, this.mem.length * 2));
+      grown.set(this.mem);
+      this.mem = grown;
+    }
+    this.mem[this.length++] = b;
+    return true;
+  }
+
+  bytes(): Uint8Array {
+    return this.mem.slice(0, this.length);
+  }
+}
+
 /**
  * A streaming decoder for the block stream: feed it received bytes, drain completed transfers. It never
- * grows without bound — a transfer whose data exceeds `maxBytes` aborts (surfaced as checksumOk=false).
+ * grows without bound — a transfer whose data exceeds `maxBytes` aborts (surfaced as checksumOk=false). The
+ * data is held as bytes, one per byte received, not as an array of numbers at eight.
  */
 export class BinaryTransferDecoder {
   private state: DecState = "type";
-  private header: number[] = [];
-  private data: number[] = [];
+  private header: ByteBuffer;
+  private data: ByteBuffer;
   private chk = 0;
   private need = 0; // bytes remaining in the current block payload
   private ready: BinaryTransfer[] = [];
   private overflow = false;
 
-  constructor(private maxBytes = 1024 * 1024) {}
+  constructor(private maxBytes = 1024 * 1024) {
+    this.header = new ByteBuffer(maxBytes);
+    this.data = new ByteBuffer(maxBytes);
+  }
 
   /** Feed link bytes; returns any transfers that completed. */
   push(bytes: Uint8Array): BinaryTransfer[] {
-    for (const b of bytes) this.byte(b & 0xff);
+    for (let i = 0; i < bytes.length; i++) this.byte(bytes[i]!);
     if (!this.ready.length) return [];
     const out = this.ready;
     this.ready = [];
@@ -105,7 +132,7 @@ export class BinaryTransferDecoder {
         return;
       case "eot-chk": {
         const ok = !this.overflow && ((this.chk + b) & 0xff) === 0;
-        this.ready.push({ header: Uint8Array.from(this.header), data: Uint8Array.from(this.data), checksumOk: ok });
+        this.ready.push({ header: this.header.bytes(), data: this.data.bytes(), checksumOk: ok });
         this.reset();
         this.state = "type";
         return;
@@ -113,18 +140,15 @@ export class BinaryTransferDecoder {
     }
   }
 
-  private accum(into: number[], b: number): void {
+  private accum(into: ByteBuffer, b: number): void {
     this.chk = (this.chk + b) & 0xff;
-    if (into.length + 1 > this.maxBytes) {
-      this.overflow = true;
-      return; // stop buffering but keep counting the checksum so we consume the block cleanly
-    }
-    into.push(b);
+    // past the ceiling: stop buffering but keep counting the checksum so we consume the block cleanly
+    if (!into.push(b)) this.overflow = true;
   }
 
   private reset(): void {
-    this.header = [];
-    this.data = [];
+    this.header = new ByteBuffer(this.maxBytes);
+    this.data = new ByteBuffer(this.maxBytes);
     this.chk = 0;
     this.need = 0;
     this.overflow = false;

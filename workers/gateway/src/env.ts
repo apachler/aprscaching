@@ -40,6 +40,15 @@ export type Env = {
 export const flagOn = (v: string | undefined): boolean => v === "1" || v === "true" || v === "yes";
 
 /**
+ * The reverse proxies the operator declares in front of the server: TRUST_PROXY=<n>, the number of hops
+ * between the client and the gateway. 0, unset or anything but a positive whole number declares none.
+ */
+export function proxyHops(env: Env): number {
+  const n = Number(env.TRUST_PROXY ?? "");
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+/**
  * The malformed settings of a gateway environment (a whole number that is not one, an unknown value of a
  * fixed set, JSON that does not parse). The Node and Bun servers refuse to start on any; the Setup
  * checklist reports the same check.

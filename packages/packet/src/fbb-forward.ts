@@ -7,7 +7,7 @@
  * and get raw payloads out. The buffer is bytes (never decoded as UTF-8) because a compressed body is
  * arbitrary bytes that must not be mangled — only complete command lines are decoded to text.
  */
-import { FbbSession, type FbbStore } from "./fbb-session.js";
+import { FBB_MAX_RECV_BYTES, FbbSession, type FbbStore } from "./fbb-session.js";
 import { BinaryTransferDecoder } from "./fbb-binary.js";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
@@ -35,6 +35,13 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   }
   return out;
 }
+
+/**
+ * The compressed stream one received message may carry; the decoder holds it whole until its EOT. The session
+ * refuses a body that decodes past FBB_MAX_RECV_BYTES, and text compresses, so twice that leaves room for an
+ * incompressible body while a peer streaming blocks without end is cut off long before it costs memory.
+ */
+const MAX_COMPRESSED_BYTES = 2 * FBB_MAX_RECV_BYTES;
 
 /** One side of an FBB forwarding exchange over a byte link. Command lines are CR-terminated (FBB wire). */
 export class FbbForwarder {
@@ -119,7 +126,7 @@ export class FbbForwarder {
       const expect = this.session.expectingBinary();
       if (expect > 0) {
         this.binRemaining = expect;
-        this.binDecoder = new BinaryTransferDecoder();
+        this.binDecoder = new BinaryTransferDecoder(MAX_COMPRESSED_BYTES);
       }
     }
     // Keep only the unconsumed tail: a held partial line is at most FBB_MAX_LINE bytes, so moving it

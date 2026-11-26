@@ -42,6 +42,9 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787; // a blank/NaN PORT must not bind port 0
+// HOST binds both listeners to one address (127.0.0.1 behind a reverse proxy on this machine, so the proxy is
+// the only way in); unset, they listen on every interface.
+const HOST = process.env.HOST?.trim() || undefined;
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
@@ -118,7 +121,7 @@ if (TLS) {
   }
   env.HTTPS_LISTENER_PORT = String(TLS.port);
   secure = createGatewayServer({ ...listenerBase, tls: pair }) as https.Server;
-  secure.listen(TLS.port, () => console.log("APRScaching node-gateway https on :%s", TLS.port));
+  secure.listen(TLS.port, HOST, () => console.log("APRScaching node-gateway https on %s:%s", HOST ?? "", TLS.port));
   // A re-issued certificate (a hotspot that came back on another address) loads without a restart.
   process.on("SIGHUP", () => {
     try {
@@ -131,9 +134,10 @@ if (TLS) {
 }
 const server = createGatewayServer({ ...listenerBase, httpsPort: TLS?.port });
 
-server.listen(PORT, () =>
+server.listen(PORT, HOST, () =>
   console.log(
-    "APRScaching node-gateway listening on :%s  (db: %s)%s",
+    "APRScaching node-gateway listening on %s:%s  (db: %s)%s",
+    HOST ?? "",
     PORT,
     DB_PATH,
     WEB_DIST ? `  (web: ${WEB_DIST})` : "",

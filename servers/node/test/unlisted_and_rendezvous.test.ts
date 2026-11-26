@@ -43,7 +43,15 @@ describe("a living cache's rendezvous", () => {
   it("give the time and place to the owner, and the day alone to anyone else", async () => {
     const env = authEnv();
     const owner = await hiderSignup(env, "rover@example.test", "OE8RDV");
-    // the station rule is covered in living_cache_station.test.ts; the ingest secret path skips it here
+    // a living cache follows one of the hider's own stations (living_cache_station.test.ts)
+    const station = await call(
+      env,
+      "POST",
+      "/api/my/stations",
+      { callsign: "OE8RDV-9", lat: 47, lon: 15 },
+      { cookie: owner.cookie },
+    );
+    expect(station.status, JSON.stringify(station.data)).toBeLessThan(300);
     const made = await call(
       env,
       "POST",
@@ -55,9 +63,8 @@ describe("a living cache's rendezvous", () => {
         lat: 47,
         lon: 15,
         rendezvous: true,
-        ownerCall: "OE8RDV",
       },
-      { "x-ingest-secret": String(env.INGEST_SECRET) },
+      { cookie: owner.cookie },
     );
     expect(made.status, JSON.stringify(made.data)).toBe(201);
     const id = made.data.cache.id;

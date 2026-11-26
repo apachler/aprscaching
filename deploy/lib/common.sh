@@ -24,6 +24,20 @@ die() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Whether DIR (or a file's directory) lies on an Android phone's shared storage, which every app with a storage
+# grant reads and writes: ~/storage links into it under Termux.
+on_shared_storage() {
+  local real storage d="$1"
+  [ -d "$d" ] || d="$(dirname "$d")"
+  real="$(cd "$d" && pwd -P)" || return 1
+  case "$real" in /storage/* | /sdcard* | /mnt/*) return 0 ;; esac
+  if [ -d "$HOME/storage" ]; then
+    storage="$(cd "$HOME/storage" && pwd -P)"
+    case "$real/" in "$storage"/*) return 0 ;; esac
+  fi
+  return 1
+}
+
 # A terminal to ask on: stdin may be a pipe even when a person is at the keyboard.
 can_ask() { [ "$APRS_INTERACTIVE" = 1 ] && { [ -t 0 ] || (: </dev/tty) 2>/dev/null; }; }
 
@@ -71,6 +85,14 @@ confirm() {
   printf '%s [y/N] ' "$1" >&2
   _read_tty _ans
   case "$_ans" in [yY]*) return 0 ;; *) return 1 ;; esac
+}
+
+# rm_on_exit PATH: remove PATH when the command exits, however it exits. One EXIT trap holds every path, so
+# no caller replaces another's.
+EXIT_RMS=()
+rm_on_exit() {
+  EXIT_RMS+=("$1")
+  [ "${#EXIT_RMS[@]}" -gt 1 ] || trap 'rm -rf "${EXIT_RMS[@]}"' EXIT
 }
 
 # A fresh random secret: 24 bytes as 48 hex characters.

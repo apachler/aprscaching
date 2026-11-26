@@ -13,7 +13,7 @@ stops background apps, and battery and heat are real limits.
 | `stop.sh` | stops the ingest and the gateway (SIGTERM, then SIGKILL after a grace period), closes the session, releases the wake lock |
 | `status.sh` | the processes (uptime, restarts), `/health`, the URLs other devices use on each network (the hotspot included, http and https), a warning on a joined Wi-Fi network, the https certificate (and a warning 14 days before the ampr.org one expires), 44Net with its exposure warning, the HAMNET endpoint when `FED_ENDPOINTS` declares one, the federation sync (last push to the hub, records waiting, offline since), storage, database size, battery |
 | `update.sh` | runs `install.sh` for the current branch, then restarts both processes and the helper windows; the gateway migrates on start |
-| `backup.sh` | database snapshot, `.env` and media to shared storage, keeps the newest 7; `--restore FILE` |
+| `backup.sh` | database snapshot and media to Termux's private folder (`--dest` elsewhere), secrets beside them, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
 | `sync.sh` | pulls from the peers and pushes to the home hub now, then shows the last push and the records still waiting; `--status` only shows them |
 | `restart.sh` | restarts the gateway, the ingest or both in the running station (after editing the `.env`, or once the hotspot is on for a MeshCom node) |
@@ -277,15 +277,14 @@ interface to Termux on every phone; test from another network before you rely on
 ## Backup
 
 ```bash
-termux-setup-storage                                # once: allow Termux to write to shared storage
-bash ~/aprscaching/deploy/pocket/backup.sh          # to ~/storage/shared/aprscaching-backups/
+bash ~/aprscaching/deploy/pocket/backup.sh          # to ~/.aprscaching/backups/
 ```
 
 The snapshot is consistent while the gateway runs (SQLite's online backup, through the better-sqlite3 the
-gateway already uses). Shared storage is readable by any app with storage permission, so an archive there
-leaves out the `.env` and `session.secret`: they go into a secrets archive in `~/.aprscaching/backups/`, owner
-only, and `--restore` takes them from there. `--no-env` leaves them out everywhere, `--with-secrets` puts them in
-the archive. `--dest DIR`, `--keep N`, `--media` /
+gateway already uses). The archive holds every account's email address, so it stays in Termux's private folder;
+`--dest DIR` writes elsewhere, shared storage included (run `termux-setup-storage` once), with a warning. The `.env`
+and `session.secret` go into a secrets archive beside it, owner only, and `--restore` takes them only from there,
+never from the archive it is handed. `--no-env` leaves them out, `--with-secrets` also puts them in the archive. `--keep N`, `--media` /
 `--no-media` (media is included up to 50 MiB by default), and `--restore FILE`, which stops the station,
 keeps the current database in `~/.aprscaching/before-restore-<time>/` and starts it again.
 

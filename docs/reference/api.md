@@ -5,7 +5,16 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 [the read API](#public-read-api)); the other routes power the web app and federation.
 
 A request body stops at 20 MB on both the Node and the Bun server (`413` past it), and a route with a smaller
-cap of its own reads no further than that cap. A failure inside the gateway answers `500` with the JSON body
+cap of its own reads no further than that cap. A body is read only once its route takes it, so an unknown path or a
+refused caller is answered without it. The one exception is a request signed by a box (`x-box-sig`): its body is
+read up to 5 MB to check the signature before routing, and a larger one is answered `413`. A body larger than 64 KB
+takes one of 8 upload places on the server until the request is answered, at most 2 per client address; without a
+free place the request is answered `503` with `Retry-After`. A client that sends its body slowly keeps its place for
+as long as it keeps sending. The Node server drops a client that takes no bytes of an answer for 30 seconds; the
+wait counts per write, so a client that takes a little every 30 seconds stays connected. Behind a proxy, "client
+address" is the address the server takes as the client's (`TRUST_PROXY`, `TRUST_CF`).
+
+A failure inside the gateway answers `500` with the JSON body
 `{"error":"internal error"}` and nothing else; the error itself goes to the server's log.
 
 ## Authentication
@@ -15,8 +24,8 @@ cap of its own reads no further than that cap. A failure inside the gateway answ
 | **public**                                 | No authentication.                                                                                                                                                                                                                 |
 | **rate-limited**                           | Public, throttled per IP (and higher with a free API key).                                                                                                                                                                         |
 | **session**                                | A passkey, email-link or operator-link cookie session, signed with `SESSION_SECRET`. It names the account and its session generation, and resolves only while that account exists at that generation and holds the session's call. |
-| **actor**                                  | A session **or** `x-ingest-secret` — the "web write behind sign-in / RF write over APRS" dual path.                                                                                                                                |
-| **x-ingest-secret**                        | Matches `INGEST_SECRET` — the ingest box. Ingest-plane only: never operator configuration, device keys or sessions.                                                                                                                |
+| **actor**                                  | A session, acting as its own call. No machine credential acts as a player or cache owner; a find heard on the air is logged from the packet itself.                                                                              |
+| **x-ingest-secret**                        | Matches `INGEST_SECRET` — the ingest box. Packets only: never a callsign verification, a remote box, a player or cache owner, operator configuration, device keys or sessions.                                                     |
 | **x-operator-secret**                      | Matches `OPERATOR_SECRET` — the operator's scripts. Closed while `OPERATOR_SECRET` is unset.                                                                                                                                       |
 | **sysop**                                  | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS`, held by their account and control-verified, with a session issued on an https address (any address when the instance has none), or `x-operator-secret` where marked. Locked if `ADMIN_CALLSIGNS` is unset.                                                |
 | **signed-body**                            | An Ed25519 assertion (`key`, `sig`, `at`) registered to the callsign, over the route's action and the digest of the rest of the body (`accountActionMessage`, `accountActionDigest` in `@aprscaching/shared`), accepted once; or a session of the account that holds the call.                                                                                                             |
@@ -44,21 +53,22 @@ An enrolled ingest box sends no `x-ingest-secret`: it signs each request with it
 headers `x-box-id`, `x-box-at` (unix seconds), `x-box-nonce` and `x-box-sig`. The signature covers the
 method, the path with its query, the time, the nonce and the body's SHA-256, with the domain prefix
 `acs-box/1` (`boxRequestMessage` in `packages/shared`). It is fresh for five minutes and accepted once. A box's
-key is narrower than `x-ingest-secret`, since the box may be a receiver a ham lends to an instance they do not
-run ([Enrolling ingest boxes](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)):
+key starts narrow, since the box may be a receiver a ham lends to an instance they do not run
+([Enrolling ingest boxes](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)):
 
 - **box-signed**: any enrolled box. It reaches `/ingest`, `/ingest/check`, `/ingest/txgate` and its own `/api/box/:id`
   endpoints.
 - **service box**: an enrolled box the sysop marks **Runs this instance's services**, off by default. It also
   reaches the outbox, the packet BBS mailbox, FBB forwarding, the partner list, the NET/ROM node mirror, White
   Pages and federation pages, and may queue transmit commands for itself. **Trust this station's hearings**
-  grants none of these.
+  grants none of these. The packet BBS mailbox, FBB forwarding, the partner list and White Pages take only a
+  service box, never `x-ingest-secret`: they carry every station's personal mail.
 
 A box's frames attest only the receiving sites trusted under that box; `FIRST_PARTY_SITES` and the stations
 added by call count only for frames sent with `x-ingest-secret`.
 
-No box key logs a find, acts as a cache owner, creates a cache or runs an import: those take
-`x-ingest-secret` or a session.
+No machine credential logs a find, acts as a cache owner or creates a cache: those take a session. No box key
+runs an import.
 
 ## Public read API
 
@@ -214,8 +224,8 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | ------ | ----------------- | ---------------------------------------------------------------------------- | ------ |
 | GET    | `/ws?region=`     | Upgrade to the live room (positions/finds); `region` is `global` or absent, anything else is `400`. One client address (the rate-limit identity, see `TRUST_PROXY` and `TRUST_CF`) holds at most 16 live sockets at once (`429` past it), and a client frame larger than 4 KiB closes the socket | public |
 | GET    | `/api/spots`      | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED`              | public |
-| GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`)                                   | public |
-| GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates | public |
+| GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`); counts against the [read API's](#public-read-api) limit | rate-limited |
+| GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates. Opening one counts against the read API's limit; 2 streams open at once per IP without a key, 10 per key, 64 on the instance (`429` past it) | rate-limited |
 
 ## Federation
 
@@ -255,11 +265,11 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 
 | Method     | Path                                      | Purpose                                                                                                                      | Auth                                      |
 | ---------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| POST       | `/api/box/:id/pair`                       | The box obtains a one-time pairing code (`{ code, expiresAt }`, 15 min) to print for its operator                            | x-ingest-secret, or box-signed for its own id |
+| POST       | `/api/box/:id/pair`                       | The box obtains a one-time pairing code (`{ code, expiresAt }`, 15 min) to print for its operator                            | box-signed for its own id, or x-operator-secret |
 | POST       | `/api/box/:id/claim`                      | Link the box to the signed-in account with that code (`{ code }`); single-use                                                | session                                   |
-| POST       | `/api/box/:id/command`                    | Enqueue a command (TX kinds need a verified callsign); `403 { pair: true }` until the box is paired to the session's account; a `beacon` names no `lat`/`lon` (`400`): the box beacons its own configured position | session (paired owner), x-ingest-secret, or box-signed for its own id (TX kinds: a service box) |
-| GET · POST | `/api/box/:id/commands` · `/commands/ack` | Box leases · acks commands (`{ id, status, result, position? }`; a beacon's ack names the position it was sent from). A command still queued after an hour is marked `expired`, never handed out                                                                                                   | x-ingest-secret, or box-signed for its own id |
-| GET        | `/api/box/:id/log`                        | Operator view of command activity                                                                                            | session (paired owner), x-ingest-secret, or box-signed for its own id |
+| POST       | `/api/box/:id/command`                    | Enqueue a command (TX kinds need a verified callsign); `403 { pair: true }` until the box is paired to the session's account; a `beacon` names no `lat`/`lon` (`400`): the box beacons its own configured position | session (paired owner), box-signed for its own id (TX kinds: a service box), or x-operator-secret |
+| GET · POST | `/api/box/:id/commands` · `/commands/ack` | Box leases · acks commands (`{ id, status, result, position? }`; a beacon's ack names the position it was sent from). A command still queued after an hour is marked `expired`, never handed out                                                                                                   | box-signed for its own id, or x-operator-secret |
+| GET        | `/api/box/:id/log`                        | Operator view of command activity                                                                                            | session (paired owner), box-signed for its own id, or x-operator-secret |
 
 ## Admin / sysop
 
@@ -305,7 +315,7 @@ A cache the sysop removed answers `410` on `/api/caches/:id`, `/logs`, `/media` 
 | GET                 | `/api/admin/station-status`                                      | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most) | sysop or x-operator-secret                                                                              |
 | GET                 | `/api/admin/federation/identity` | The records this instance publishes for its callsign identity, each with its Portal name, type and value; `?check=1` adds the read-only self-check (endpoint, A record, `_aprscaching` TXT, where the record sends peers), each pass/warn/fail/info with a fix | sysop or x-operator-secret                                                                              |
 | GET · POST          | `/api/node/nodes` · GET `/api/node/mheard`                       | NET/ROM NODES table · MHeard                                                                                                                                                                                                                                                                                                                                                                                                  | public read; the POST mirror takes x-ingest-secret, a service box, sysop or x-operator-secret                          |
-| GET · POST · DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners                                                                                                                                                                                                                                                                                                                                                                                               | sysop or x-operator-secret (the partner-list read also x-ingest-secret or a service box, for the ingest box's scheduler) |
+| GET · POST · DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners                                                                                                                                                                                                                                                                                                                                                                                               | sysop or x-operator-secret (the partner-list read also a service box, for the ingest box's scheduler) |
 
 Every admin route is gated server-side. Scripts reach the routes marked _x-operator-secret_ with the operator
 secret; the others need a signed-in sysop.
@@ -316,11 +326,11 @@ secret; the others need a signed-in sysop.
 | ----------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | POST              | `/ingest`                                                                      | Ingest positions/finds/packets                                                                                                                                          | x-ingest-secret, box-signed, or a batch signed on the device |
 | GET               | `/ingest/check`                                                                | Whether the ingest credential works: `200 {ok, instance, serviceCall, sites, box}`, else `401`; `sites` are the receiving sites this credential's frames may claim; reads and writes nothing | x-ingest-secret, or box-signed       |
-| GET               | `/ingest/txgate`                                                               | May this box transmit under `calls` (comma list, up to 16; `nonce`, 16 to 64 characters; `box`, the shared secret's BOX_ID of a box without a key of its own): `{calls: {CALL: {ok, reason}}}`. A call passes when control-verified, not suspended (`reason: "suspended"`, also while the box's owner is), and its base call is held by the box's operator (the account that owns the box: for a box enrolled for a callsign, that call's holder; or for the shared secret an instance operator); for the shared secret `x-txgate-mac` is the HMAC-SHA256 of `nonce` and the body under `INGEST_SECRET` | x-ingest-secret, or box-signed       |
+| GET               | `/ingest/txgate`                                                               | May this box transmit under `calls` (comma list, up to 16; `nonce`, 16 to 64 characters): `{calls: {CALL: {ok, reason}}}`. A call passes when control-verified, not suspended (`reason: "suspended"`, also while the box's owner is), and its base call is held by the box's operator (the account that owns the box: for a box enrolled for a callsign, that call's holder; or for the shared secret an instance operator); for the shared secret `x-txgate-mac` is the HMAC-SHA256 of `nonce` and the body under `INGEST_SECRET` | x-ingest-secret, or box-signed       |
 | POST              | `/ingest/enroll`                                                               | A box enrolls with a one-time code: `{code, box, key, at, sig}`, the request signed with the new key → `201 {box, instance, label, callsign}`; rate-limited per address | the code                                         |
 | GET · POST        | `/outbox` · `/outbox/ack`                                                      | Box pulls / acks queued APRS-IS messages                                                                                                                                | x-ingest-secret, or a service box                                  |
-| GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box; the pool offers local mail only from senders whose base call is control-verified, and federation bulletins                                                                                                                               | x-ingest-secret, or a service box                                  |
-| GET · POST        | `/api/bbs/session` · `/api/bbs/kill`                                           | Connected-mode BBS session state · end a session                                                                                                                        | x-ingest-secret, or a service box                                  |
+| GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box; the pool offers local mail only from senders whose base call is control-verified, and federation bulletins                                                                                                                               | a service box                                                      |
+| GET · POST        | `/api/bbs/session` · `/api/bbs/kill`                                           | Connected-mode BBS session state · end a session                                                                                                                        | a service box                                                      |
 | POST              | `/api/import/:source`                                                          | Import an external catalog — see [Import heritage places](../run/day-to-day/import-places.md)                                                                  | sysop or x-operator-secret                        |
 | GET               | `/api/import`                                                                  | The import sources: `{ sources: [{ id, sourceName, state, needs? }] }`, `state` one of `ready`, `needs-permission`                                            | sysop or x-operator-secret                        |
 | GET               | `/api/admin/imports?q=&source=` | Imported places matching a code, title or listing id (`{ places, removed }`, at most 50 each) | sysop or x-operator-secret |
@@ -373,13 +383,13 @@ its base calls answers `403` with `reason: "suspended"` and
 
 | Method     | Path                                            | Purpose                                                                                                                      | Auth                                                     |
 | ---------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| POST       | `/api/bbs/messages`                             | Post mail or a bulletin `{ fromCall, toCall, body, subject?, type?, replyTo?, lifetimeSec? }`; sent in `fromCall`'s name. Body ≤ 64 KB, subject ≤ 80 characters, lifetime ≤ 30 days; 20 posts a day per account (per base call through the ingest box)                   | session holding `fromCall`, x-ingest-secret, or a service box           |
-| GET        | `/api/bbs/messages?to=` · `/api/bbs/sent?from=` | A callsign's personal mail: received · sent, with read state and the partners it was forwarded to                                                             | session holding the call, x-ingest-secret, or a service box             |
-| POST       | `/api/bbs/messages/:id/read`                    | Mark a message read `{ call? }`; a `call` other than the addressee answers `403`, so the ingest box names the station reading | session holding the addressee's call, x-ingest-secret, or a service box |
+| POST       | `/api/bbs/messages`                             | Post mail or a bulletin `{ fromCall, toCall, body, subject?, type?, replyTo?, lifetimeSec? }`; sent in `fromCall`'s name. Body ≤ 64 KB, subject ≤ 80 characters, lifetime ≤ 30 days; 20 posts a day per account (per base call through the ingest box)                   | session holding `fromCall`, or a service box                            |
+| GET        | `/api/bbs/messages?to=` · `/api/bbs/sent?from=` | A callsign's personal mail: received · sent, with read state and the partners it was forwarded to                                                             | session holding the call, or a service box                              |
+| POST       | `/api/bbs/messages/:id/read`                    | Mark a message read `{ call? }`; a `call` other than the addressee answers `403`, so the ingest box names the station reading | session holding the addressee's call, or a service box                  |
 | GET        | `/api/bbs/thread/:id`                           | A conversation; personal messages appear only to their sender and addressee                                                  | public (filtered)                                        |
 | GET        | `/api/bbs/bulletins`                            | Bulletins                                                                                                                    | public                                                   |
 | GET        | `/api/bbs/route`                                | Hierarchical routing lookup                                                                                                  | public                                                   |
-| GET · POST | `/api/bbs/wp`                                   | White Pages: look up (`?call=`, required) · set a callsign's home BBS (`{ callsign, homeBbs }`), which steers where FBB forwarding sends its mail. The operator's entry stands; one the ingest box sets, or one learned from forwarded mail's R: headers, never replaces it | public · x-ingest-secret, a service box, sysop or x-operator-secret     |
+| GET · POST | `/api/bbs/wp`                                   | White Pages: look up (`?call=`, required) · set a callsign's home BBS (`{ callsign, homeBbs }`), which steers where FBB forwarding sends its mail. The operator's entry stands; one the ingest box sets, or one learned from forwarded mail's R: headers, never replaces it | public · a service box, sysop or x-operator-secret                      |
 
 A mailbox is its callsign's: a session reaches it when its account holds the call's base call (any SSID),
 and a hierarchical address (`OE1TST @ OE1BBB.OE.EU`) is the mailbox of its callsign. The ingest box reaches

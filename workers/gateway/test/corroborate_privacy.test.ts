@@ -7,6 +7,7 @@ import {
   distanceBucketM,
   bucketTs,
   rateLimited,
+  RL_BUCKETS_MAX,
   negCached,
   negStore,
   corroborationAuthorized,
@@ -70,6 +71,17 @@ describe("corroboration abuse limits", () => {
     expect(rateLimited(key, t0 + 60_000, 60, 60_000)).toBe(false); // new window resets
   });
 
+  it("rateLimited keeps at most RL_BUCKETS_MAX windows, dropping the oldest, while every window still runs", () => {
+    const t0 = 3_000_000;
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(false);
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(true); // over budget while its window is kept
+    for (let i = 0; i < RL_BUCKETS_MAX; i++) rateLimited(`cap:${i}`, t0, 1, 60_000);
+    // the first window was the oldest: it is gone, so the key starts a fresh one
+    expect(rateLimited("cap:first", t0, 1, 60_000)).toBe(false);
+    // the newest windows are kept
+    expect(rateLimited(`cap:${RL_BUCKETS_MAX - 1}`, t0, 1, 60_000)).toBe(true);
+  });
+
   it("negative memoization caches within the TTL and expires after it", () => {
     const key = "neg:test-B",
       t0 = 2_000_000;
@@ -104,7 +116,7 @@ describe("corroboration abuse limits", () => {
       clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }), {
         TRUST_PROXY: "1",
       } as never),
-    ).toBe("5.6.7.8");
+    ).toBe("9.9.9.9");
     expect(clientIp(new Request("http://x"), {} as Env)).toBe("unknown");
   });
 });

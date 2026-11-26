@@ -78,10 +78,8 @@ export function frameAddresses(bytes: Uint8Array): FrameAddresses | null {
   let off = 0;
   for (;;) {
     if (calls.length === 10 || off + 7 > bytes.length) return null;
-    // a call byte is an ASCII character shifted left: its low bit is never set
-    for (let i = 0; i < 6; i++) if (bytes[off + i]! & 1) return null;
     const a = decodeAddress(bytes, off);
-    if (!CALL.test(a.addr.call)) return null;
+    if (!a || !CALL.test(a.addr.call)) return null;
     calls.push(addrStr(a.addr));
     off += 7;
     if (a.last) break;

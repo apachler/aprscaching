@@ -17,6 +17,7 @@ import { Backoff } from "./backoff.js";
 import { numEnv } from "./config.js";
 import { tncPacket } from "./link.js";
 import type { SentFrames } from "./echo.js";
+import { eachFrame } from "./each-frame.js";
 
 export interface KissOpts {
   /** The TNC's host, or the path of its Unix socket when it starts with `/` (see {@link kissSocketPath}). */
@@ -221,12 +222,15 @@ export class KissLink {
         this.o.tag,
         KISS_RX_MAX_BYTES,
       );
-    for (const crcd of frames) {
-      // a KISS host such as the Linux kernel's mkiss opens with SMACK and FlexNet CRC probes
-      const k = kissStripCrc(crcd);
-      if (k.command !== 0) continue; // a KISS command rather than a frame
-      this.onData(k);
-    }
+    eachFrame(
+      frames,
+      (crcd) => {
+        // a KISS host such as the Linux kernel's mkiss opens with SMACK and FlexNet CRC probes
+        const k = kissStripCrc(crcd);
+        if (k.command === 0) this.onData(k); // a nonzero command is a KISS command rather than a frame
+      },
+      (m) => console.error("[%s] %s", this.o.tag, m),
+    );
   }
 }
 

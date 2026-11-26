@@ -36,6 +36,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib/doctor.sh"
 # shellcheck source=deploy/lib/backup.sh
 . "$HERE/lib/backup.sh"
+# shellcheck source=deploy/lib/release.sh
+. "$HERE/lib/release.sh"
 # shellcheck source=deploy/lib/update.sh
 . "$HERE/lib/update.sh"
 # shellcheck source=deploy/lib/net44.sh

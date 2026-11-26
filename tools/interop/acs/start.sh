@@ -12,4 +12,10 @@ until node -e "fetch('http://127.0.0.1:$PORT/health').then((r)=>process.exit(r.o
   [ "$i" -gt 60 ] && echo "gateway did not start" && exit 1
   sleep 1
 done
+# The ingest runs the packet BBS and FBB forwarding, which take only a box enrolled with its own key that the
+# sysop lets run the instance's services: enroll it first.
+box="$(/enroll-bbs-box.sh "http://127.0.0.1:$PORT" acs-bbs)"
+BOX_ID="$(printf '%s\n' "$box" | sed -n 's/^BOX_ID=//p')"
+BOX_KEY="$(printf '%s\n' "$box" | sed -n 's/^BOX_KEY=//p')"
+export BOX_ID BOX_KEY
 INGEST_URL="http://127.0.0.1:$PORT/ingest" exec pnpm --filter @aprscaching/ingest start

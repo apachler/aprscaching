@@ -8,7 +8,7 @@ import { encodeAx25, kissCommand, kissDecode, kissWrap, type KissFrame } from "@
 import { kissTncPort, type Packet } from "@aprscaching/shared";
 import { KissTnc } from "../src/kiss.js";
 import { SentFrames } from "../src/echo.js";
-import { KissServer, kissServerSettings, type KissServerSettings } from "../src/hubserver.js";
+import { KissServer, addressFull, kissServerSettings, type KissServerSettings } from "../src/hubserver.js";
 
 const cleanups: (() => unknown)[] = [];
 afterEach(async () => {
@@ -77,6 +77,8 @@ async function box(o: { tx: boolean; txCalls?: string[]; echo?: boolean; confirm
     listeners: [{ tcpPort: 0, kiss: 1 }],
     map: RADIOS.map((radio, kiss) => ({ kiss, radio })),
     maxClients: 4,
+    maxPerAddr: 2,
+    idleSec: 300,
     tx: o.tx,
     txCalls: o.txCalls ?? ["OE8APR"],
     pacing: { burst: 10, refillSec: 6 },
@@ -200,6 +202,8 @@ describe("kissServerSettings", () => {
         { kiss: 1, radio: "kiss-tnc-1" },
       ],
       maxClients: 8,
+      maxPerAddr: 2,
+      idleSec: 300,
       tx: false,
       txCalls: ["OE8APR", "OE8ABC"],
     });
@@ -215,6 +219,8 @@ describe("kissServerSettings", () => {
         KISS_SERVER_TX: "1",
         KISS_SERVER_TX_CALLS: "oe8apr-7, OE8XYZ",
         KISS_SERVER_MAX_CLIENTS: "2",
+        KISS_SERVER_MAX_PER_ADDR: "1",
+        KISS_SERVER_IDLE_SEC: "60",
       },
       RADIOS,
       [],
@@ -226,6 +232,8 @@ describe("kissServerSettings", () => {
       tx: true,
       txCalls: ["OE8APR", "OE8XYZ"],
       maxClients: 2,
+      maxPerAddr: 1,
+      idleSec: 60,
     });
   });
 
@@ -237,5 +245,87 @@ describe("kissServerSettings", () => {
     expect(() =>
       kissServerSettings({ KISS_SERVER_PORT: "8101", KISS_SERVER_PORT_LISTENERS: "8101=0" }, RADIOS, []),
     ).toThrow(/KISS_SERVER_PORT already/);
+  });
+});
+
+describe("KISS server slots", () => {
+  /** A server of `maxClients` slots on a clock the test moves; one radio port that hears nothing. */
+  async function slots(o: { maxClients: number; maxPerAddr?: number; idleSec?: number }) {
+    let clock = 1_000_000;
+    const log: string[] = [];
+    const server = new KissServer(
+      {
+        host: "127.0.0.1",
+        port: 0,
+        listeners: [],
+        map: [{ kiss: 0, radio: "kiss-tnc" }],
+        maxClients: o.maxClients,
+        maxPerAddr: o.maxPerAddr ?? 2,
+        idleSec: o.idleSec ?? 300,
+        tx: false,
+        txCalls: [],
+        pacing: { burst: 6, refillSec: 10 },
+      },
+      [{ name: "kiss-tnc", sendRaw: () => true }],
+      { log: (m) => log.push(m), now: () => clock },
+    );
+    await server.start();
+    cleanups.push(() => server.stop());
+    const port = server.ports()[0]!;
+    const join = async () => {
+      const s = net.connect(port, "127.0.0.1");
+      const c = { closed: false, send: (b: Uint8Array) => s.write(b) };
+      s.on("error", () => {});
+      s.on("close", () => (c.closed = true));
+      await new Promise<void>((r) => s.once("connect", () => r()));
+      cleanups.push(() => s.destroy());
+      await settle();
+      return c;
+    };
+    /** Make every client accepted from now on appear to come from `addr` (the test cannot connect from off-box). */
+    let fromAddr: string | null = null;
+    (server as unknown as { servers: net.Server[] }).servers[0]!.prependListener("connection", (sock: net.Socket) => {
+      if (fromAddr) Object.defineProperty(sock, "remoteAddress", { value: fromAddr });
+    });
+    const from = (addr: string) => (fromAddr = addr);
+    return { log, join, from, advance: (s: number) => (clock += s * 1000) };
+  }
+
+  it("gives the slot of a client silent past the idle time to a newcomer, never that of one that spoke", async () => {
+    const b = await slots({ maxClients: 2, idleSec: 60 });
+    const silent = await b.join();
+    const talking = await b.join();
+    expect((await b.join()).closed).toBe(true); // full, and nobody idle long enough yet
+    b.advance(61);
+    talking.send(new Uint8Array([0xc0, 0xc0]));
+    await settle();
+    const late = await b.join();
+    expect(late.closed).toBe(false);
+    expect(silent.closed).toBe(true);
+    expect(talking.closed).toBe(false);
+    expect(b.log.some((l) => /sent nothing for 60 s/.test(l))).toBe(true);
+  });
+
+  it("refuses a client past the per-address cap off loopback, and admits one from another address", async () => {
+    const b = await slots({ maxClients: 8, maxPerAddr: 2 });
+    b.from("192.0.2.7");
+    expect((await b.join()).closed).toBe(false);
+    expect((await b.join()).closed).toBe(false);
+    expect((await b.join()).closed).toBe(true);
+    expect(b.log.some((l) => /192\.0\.2\.7.*KISS_SERVER_MAX_PER_ADDR/.test(l))).toBe(true);
+    b.from("192.0.2.8");
+    expect((await b.join()).closed).toBe(false);
+  });
+
+  it("lets any number of loopback clients in under a per-address cap of one", async () => {
+    const b = await slots({ maxClients: 8, maxPerAddr: 1 });
+    for (let i = 0; i < 3; i++) expect((await b.join()).closed).toBe(false);
+  });
+
+  it("refuses a client from an address that holds its share of the slots off loopback", () => {
+    expect(addressFull("192.0.2.7", ["192.0.2.7"], 2)).toBe(false);
+    expect(addressFull("192.0.2.7", ["192.0.2.7", "192.0.2.8", "192.0.2.7"], 2)).toBe(true);
+    expect(addressFull("::ffff:192.0.2.7", ["::ffff:192.0.2.7"], 1)).toBe(true);
+    for (const lo of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) expect(addressFull(lo, [lo, lo, lo], 1)).toBe(false);
   });
 });

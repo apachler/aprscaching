@@ -31,6 +31,7 @@ import { tncPacket } from "./link.js";
 import { LineBuffer } from "./lines.js";
 import { numEnv } from "./config.js";
 import { loraAirtimeMs, loraBitRate, type LoraModem } from "./lora-airtime.js";
+import { eachFrame } from "./each-frame.js";
 
 /** The ingest port name of every frame this port hears. */
 export const LORA_APRS_PORT = "lora-aprs";
@@ -256,7 +257,11 @@ export class LoraAprsPort {
       this.link = new TcpLink(tcp, {
         onOpen: () => lines.reset(),
         onChunk: (c) => {
-          for (const l of lines.push(c.toString("latin1"))) if (l) this.onBytes(Buffer.from(l, "latin1"));
+          eachFrame(
+            lines.push(c.toString("latin1")),
+            (l) => l && this.onBytes(Buffer.from(l, "latin1")),
+            (m) => this.log.error(`[lora-aprs] ${m}`),
+          );
         },
       });
     } else {
