@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Update the Pocket station: fetch the branch, install the dependencies, rebuild better-sqlite3 and the
-# web app when needed (install.sh does all of it and keeps the .env), then restart the gateway and the
-# ingest in the running tmux session. The gateway applies new database migrations when it starts.
+# web app when needed (install.sh does all of it and keeps the .env), then restart the gateway, the ingest
+# and the helper windows (the notification, alerts, battery saver, https watch, USB KISS bridge) in the running
+# tmux session. The gateway applies new database migrations when it starts.
 # The station keeps running while the update builds; the restart takes a few seconds.
 #
 #   bash ~/aprscaching/deploy/pocket/update.sh
@@ -95,6 +96,8 @@ if ! restart_station; then
   info "the station is not running; start it with: bash $DIR/deploy/pocket/start.sh"
   exit 0
 fi
+# The helper windows load their new scripts, lib.sh and .env (lib.sh, restart_helpers).
+restart_helpers
 BASE="$(gateway_base)"
 sleep 2
 for _ in $(seq 1 "${APRSCACHING_START_WAIT:-120}"); do

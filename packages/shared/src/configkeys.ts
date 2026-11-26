@@ -454,6 +454,11 @@ export const CONFIG_KEYS = {
   FED_SYNC_INTERVAL_MS: { type: "int", units: ["server"], default: "300000" },
   FED_RELAY_POLL_MS: { type: "int", units: ["server"], default: "15000" },
   WEB_DIST: { type: "string", units: ["server", "desktop"] },
+  GATEWAY_SOCKET: {
+    type: "string",
+    units: ["server", "ingest", "pocket"],
+    shapes: ["selfhost", "baremetal", "pocket"],
+  },
   HTTPS_PORT: { type: "int", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },
   TLS_CERT: { type: "string", units: ["server", "pocket"], shapes: ["selfhost", "baremetal", "pocket"] },
   TLS_KEY: { type: "string", units: ["server"], shapes: ["selfhost", "baremetal", "pocket"] },

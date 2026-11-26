@@ -831,6 +831,13 @@ SC_ROWS="$(bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'
   doc_soundcard; printf '%s\n' \"\${DOC_ROWS[@]}\" | cut -f1,2,5")"
 check "doctor relays the soundcard checks under their ids, each linked to its entry" eq "$SC_ROWS" \
   "$(printf 'pass\tingest.soundcard_alsa\t\nfail\tingest.soundcard_ptt.1\tdocs/run/troubleshooting.md#ingestsoundcard_pttport\nwarn\tingest.soundcard_tx.1\tdocs/run/troubleshooting.md#ingestsoundcard_txport')"
+kisssock() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; doc_kiss_socket '$1'; printf '%s' \"\${DOC_ROWS[*]}\" | cut -f1,2"; }
+KSOCK="$TMP/kiss.sock"
+python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$KSOCK"
+check "doctor passes a KISS_TNC_HOST path where a socket is" eq "$(kisssock "$KSOCK")" "$(printf 'pass\tingest.kiss_tnc')"
+check "  … and fails a path with no socket" eq "$(kisssock "$TMP/none.sock")" "$(printf 'fail\tingest.kiss_tnc')"
+: >"$TMP/plain.file"
+check "  … or a file that is not one" eq "$(kisssock "$TMP/plain.file")" "$(printf 'fail\tingest.kiss_tnc')"
 grace() { bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh'; tx_gate_grace_min '$1'"; }
 check "TX_GATE_GRACE reads minutes and hours, as the ingest does" eq \
   "$(grace ''),$(grace 30),$(grace 45m),$(grace 2H),$(grace 1),$(grace 48h)" "6,30,45,120,6,1440"

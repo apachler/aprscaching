@@ -20,6 +20,7 @@ import type { SentFrames } from "./echo.js";
 import { eachFrame } from "./each-frame.js";
 
 export interface KissOpts {
+  /** The TNC's host, or the path of its Unix socket when it starts with `/` (see {@link kissSocketPath}). */
   host: string;
   port: number;
   retryMs?: number;
@@ -114,6 +115,8 @@ export interface KissChannelRadio {
 export interface TcpLinkOpts {
   host: string;
   port: number;
+  /** A Unix socket's path: set, the link connects to that file and `host` and `port` are not dialled. */
+  path?: string;
   retryMs?: number;
   /** The log prefix, such as `kiss` or `lora-aprs`. */
   tag: string;
@@ -154,16 +157,17 @@ export class TcpLink {
 
   private connect() {
     if (this.stopped) return;
-    const s = net.connect(this.o.port, this.o.host);
+    const s = this.o.path ? net.connect({ path: this.o.path }) : net.connect(this.o.port, this.o.host);
     this.sock = s;
     // A quiet channel sends nothing for hours, so silence proves nothing; TCP keepalive probes find a device
-    // host that vanished (power cut, Wi-Fi drop) and close the socket, which reconnects.
-    s.setKeepAlive(true, 30_000);
+    // host that vanished (power cut, Wi-Fi drop) and close the socket, which reconnects. A Unix socket's peer
+    // is on this machine: its exit closes the socket.
+    if (!this.o.path) s.setKeepAlive(true, 30_000);
     this.h.onOpen?.(); // a new connection never continues the old one's partial frame
     s.on("connect", () => {
       this.connected = true;
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
-      console.log("[%s] connected %s:%s", this.o.tag, this.o.host, this.o.port);
+      console.log("[%s] connected %s", this.o.tag, this.o.path ?? `${this.o.host}:${this.o.port}`);
       this.h.onConnect?.(); // written here, ahead of anything else sent on this connection
     });
     s.on("data", (chunk: Buffer) => this.h.onChunk(chunk));
@@ -231,7 +235,16 @@ export class KissLink {
 }
 
 /**
- * KISS-over-TCP TNC client (e.g. Direwolf on :8001). Decodes each frame as AX.25, forwards each UI frame as
+ * The Unix socket a KISS_TNC_HOST names, when it is a path (it starts with `/`), as a Pocket station's USB bridge
+ * serves it: a socket file in a directory only that user opens, where no other app on the phone can stand in for
+ * the TNC. Always a filesystem path; an abstract socket name, which every app can reach, never starts with `/`.
+ */
+function kissSocketPath(host: string): string | undefined {
+  return host.startsWith("/") ? host : undefined;
+}
+
+/**
+ * KISS-over-TCP TNC client (e.g. Direwolf on :8001), or over a Unix socket (KISS_TNC_HOST a path). Decodes each frame as AX.25, forwards each UI frame as
  * an `rf`-heard packet on its channel's port (`kiss-tnc` for channel 0, `kiss-tnc-<n>` for the others), and
  * exposes send() so a digipeater / TX-IGate can transmit on a channel. Each listed channel is its own radio port;
  * a frame on a channel the box does not list is ignored, since the box neither knows that radio nor answers on it.
@@ -250,7 +263,7 @@ export class KissTnc {
   ) {
     this.channels = new Set(o.channels?.length ? o.channels : [0]);
     this.link = new KissLink(
-      { host: o.host, port: o.port, retryMs: o.retryMs, tag: "kiss" },
+      { host: o.host, port: o.port, path: kissSocketPath(o.host), retryMs: o.retryMs, tag: "kiss" },
       (k) => this.onData(k),
       () => this.sendTiming(),
     );

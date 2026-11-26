@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # A USB KISS TNC on the phone's USB-C port (OTG), for the ingest: the phone then logs every station the TNC
 # hears, off-grid. extras/usb_kiss_bridge.py drives the TNC through the file descriptor termux-usb hands
-# over and serves KISS over TCP on 127.0.0.1:8001, where the ingest connects (KISS_TNC_HOST/KISS_TNC_PORT).
+# over and serves KISS on a Unix socket in the private run directory (~/.aprscaching/run/kiss.sock), where the
+# ingest connects (KISS_TNC_HOST, the socket's path). Never a TCP port: every app on the phone shares loopback,
+# and could transmit through a port or stand in for the TNC by binding it first.
 # What the TNC hears is a local TNC's hearing like any other: it names RF_SITE_CALL when set, and counts
 # toward Tier A only once that call is trusted under Instance admin → Trusted receiving stations (or listed
 # in FIRST_PARTY_SITES).
@@ -10,7 +12,7 @@
 #   bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup [--device /dev/bus/usb/001/002] [--baud 9600]
 #   bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh        # run the bridge (start.sh does, in window usb-kiss)
 #
-# --setup writes USB_KISS_DEVICE, USB_KISS_BAUD, KISS_TNC_HOST=127.0.0.1 and KISS_TNC_PORT to the .env and
+# --setup writes USB_KISS_DEVICE, USB_KISS_BAUD and KISS_TNC_HOST (the socket's path) to the .env and
 # restarts the station. Android asks once for permission to use the device.
 #
 # Receive-only unless all three hold: USB_KISS_TX=1 in the .env, the operator's callsign is
@@ -54,8 +56,6 @@ done
 pocket_paths
 
 BRIDGE="$HERE/extras/usb_kiss_bridge.py"
-PORT="$(env_get KISS_TNC_PORT)"
-PORT="${PORT:-8001}"
 TX_STATE="$RUN_DIR/usb-kiss.tx"
 
 have termux-usb || die "termux-usb is missing." "Install the Termux:API app, then:  pkg install termux-api"
@@ -95,9 +95,9 @@ case "$MODE" in
     termux_api termux-usb -r "$DEVICE" >/dev/null || true
     env_set USB_KISS_DEVICE "$DEVICE"
     env_set USB_KISS_BAUD "$BAUD"
-    env_set KISS_TNC_HOST 127.0.0.1
-    env_set KISS_TNC_PORT "$PORT"
-    info "wrote USB_KISS_DEVICE, USB_KISS_BAUD, KISS_TNC_HOST=127.0.0.1 and KISS_TNC_PORT=$PORT"
+    env_set KISS_TNC_HOST "$RUN_DIR/kiss.sock"
+    env_unset KISS_TNC_PORT
+    info "wrote USB_KISS_DEVICE, USB_KISS_BAUD and KISS_TNC_HOST=$RUN_DIR/kiss.sock"
     [ -n "$(env_get RF_SITE_CALL)" ] || info "set RF_SITE_CALL to this station's call to name it as the receiving site"
     if session_exists; then
       APRSCACHING_DIR="$DIR" APRSCACHING_DATA="$DATA" bash "$HERE/start.sh" --no-attach >/dev/null
@@ -111,6 +111,13 @@ esac
 # ---- run: keep the bridge up while the device is attached --------------------------------------------
 BAUD="$(env_get USB_KISS_BAUD)"
 BAUD="${BAUD:-9600}"
+# The bridge serves the socket the ingest reads: KISS_TNC_HOST, a path. A host there would have the ingest dial
+# a TCP port the bridge does not serve, and any app may bind.
+SOCK="$(env_get KISS_TNC_HOST)"
+case "$SOCK" in
+  /*) ;;
+  *) die "KISS_TNC_HOST is '$SOCK', not the bridge's socket." "Run:  bash $HERE/extras/usb-kiss.sh --setup" ;;
+esac
 tx_allowed() {
   [ "$(env_get USB_KISS_TX)" = 1 ] || return 1
   local verified
@@ -140,7 +147,7 @@ while :; do
   # termux-usb -e appends the device's file descriptor to the command, after --fd.
   termux_api termux-usb -r "$DEVICE" >/dev/null || true
   status=0
-  termux-usb -e "python3 $(printf '%q' "$BRIDGE") --port $PORT --baud $BAUD ${tx[*]} --fd" "$DEVICE" || status=$?
+  termux-usb -e "python3 $(printf '%q' "$BRIDGE") --socket $(printf '%q' "$SOCK") --baud $BAUD ${tx[*]} --fd" "$DEVICE" || status=$?
   rm -f "$TX_STATE"
   if [ $(($(date +%s) - started)) -ge 60 ]; then delay=5; fi
   info "the bridge stopped (status $status); again in ${delay}s"

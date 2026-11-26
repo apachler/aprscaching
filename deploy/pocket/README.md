@@ -12,7 +12,7 @@ stops background apps, and battery and heat are real limits.
 | `start.sh` | starts the tmux session `aprscaching` (windows `gateway`, `ingest`, `logs`, `shell`, and `tls` with https on) with a wake lock, or attaches to it; `--no-attach`, `--gateway-only` |
 | `stop.sh` | stops the ingest and the gateway (SIGTERM, then SIGKILL after a grace period), closes the session, releases the wake lock |
 | `status.sh` | the processes (uptime, restarts), `/health`, the URLs other devices use on each network (the hotspot included, http and https), a warning on a joined Wi-Fi network, the https certificate (and a warning 14 days before the ampr.org one expires), 44Net with its exposure warning, the HAMNET endpoint when `FED_ENDPOINTS` declares one, the federation sync (last push to the hub, records waiting, offline since), storage, database size, battery |
-| `update.sh` | runs `install.sh` for the current branch, then restarts both processes; the gateway migrates on start |
+| `update.sh` | runs `install.sh` for the current branch, then restarts both processes and the helper windows; the gateway migrates on start |
 | `backup.sh` | database snapshot and media to Termux's private folder (`--dest` elsewhere), secrets beside them, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
 | `sync.sh` | pulls from the peers and pushes to the home hub now, then shows the last push and the records still waiting; `--status` only shows them |
@@ -23,7 +23,7 @@ stops background apps, and battery and heat are real limits.
 | `extras/battery.sh` | the battery saver: below `POCKET_BATTERY_LOW` % on battery, APRS-IS narrowed to your own call and a 2-hour raw log, back when charging or 10 points higher (Termux:API); `start.sh` runs it |
 | `extras/alerts.sh` | field alerts (off by default, `POCKET_ALERTS=1`): vibrate, and optionally speak the sender, for a new direct message to your call (Termux:API); `start.sh` runs it |
 | `extras/usb-kiss.sh` | a USB KISS TNC on OTG: `--list`, `--setup` (writes the `.env`), and the run loop `start.sh` keeps in the window `usb-kiss`; receive-only unless `USB_KISS_TX=1` and the operator's call is control-verified |
-| `extras/usb_kiss_bridge.py` | the bridge itself: libusb through `ctypes` on the fd `termux-usb` hands over, CDC-ACM, KISS over TCP on `127.0.0.1:8001` for one client, a transmit watchdog; `extras/test/` holds its tests |
+| `extras/usb_kiss_bridge.py` | the bridge itself: libusb through `ctypes` on the fd `termux-usb` hands over, CDC-ACM, KISS on the Unix socket `run/kiss.sock` (no TCP port) for one client, a transmit watchdog; `extras/test/` holds its tests |
 | `extras/usb_ptt.py` | PTT for the ingest's soundcard port (`SOUNDCARD_PTT=termux-usb`): usbfs control transfers on the fd `termux-usb` hands over, a CDC-ACM, CP210x, FTDI or CH340 line or a CM108 GPIO, driven by the ingest over stdin with a watchdog of its own; `extras/test/` holds its tests |
 | `extras/ampr-cert.sh` | a Let's Encrypt certificate for the station's ampr.org name by manual DNS-01 with lego: prints the `_acme-challenge` TXT record, polls DNS until the portal publishes it, lets lego finish; `--use` serves it on the https port |
 | `extras/sync-now.sh` | sync before a trip: a narrowed pull from the federation peers (caches, deletes, keys; finds with `--finds`; `--pages` per feed), on Wi-Fi only unless `--mobile`; reports the records and bytes, in a notification too |
@@ -35,6 +35,8 @@ stops background apps, and battery and heat are real limits.
 | `test/backup-test.sh` | checks where `backup.sh` and the scheduled backup put the instance secrets, with a stand-in better-sqlite3; CI runs it |
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 | `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`, the home instance; CI runs it |
+| `test/operator-socket-test.sh` | holds the gateway's TCP port with a stand-in for another app and checks that every script call carrying `OPERATOR_SECRET` goes through the gateway's socket instead; CI runs it |
+| `test/upgrade-socket-test.sh` | an update of a running station from an earlier `.env`: after `install.sh`'s move no helper window goes on sending `OPERATOR_SECRET` to the TCP port, and each reaches the gateway's socket; with a stand-in tmux and supervisor; CI runs it |
 | `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
 | `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the monthly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 
@@ -85,8 +87,11 @@ a dry run).
 `install.sh` writes `~/.aprscaching/.env` from `.env.pocket.example` once, with new secrets, your call and
 the paths, and keeps it on every later run. The profile suits a phone:
 
-- the gateway on port 8787 on every interface, `APP_URL=http://localhost:8787`, the ingest posting to
-  `127.0.0.1`;
+- the gateway on port 8787 on every interface, `APP_URL=http://localhost:8787`, and on the Unix socket
+  `~/.aprscaching/run/gateway.sock` (`GATEWAY_SOCKET`), where the ingest posts and the scripts send
+  `OPERATOR_SECRET`: on Android every app shares loopback and may bind the gateway's port while it is free, so
+  no secret goes to `127.0.0.1`. The socket's directory is private to Termux (mode `0700`). `update.sh` adds
+  `GATEWAY_SOCKET` to an older `.env`, and moves a USB TNC's `KISS_TNC_HOST` to the bridge's socket;
 - APRS-IS receive-only (passcode `-1`) with a 300 km example filter; tune `APRSIS_FILTER` to where you
   operate. Offline, the ingest retries with a backoff;
 - `RETENTION` keeps the raw packet log 6 h, weather and telemetry 7 days, port counters and the node MHeard

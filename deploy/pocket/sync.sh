@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Sync this phone's station with the federation now: pull from its peers and push to its home hub at once,
 # instead of waiting for the next interval. Use it when the phone is back online after a trip; the station
-# also notices on its own (it probes the hub after a failed push). Loads OPERATOR_SECRET and PORT from
-# ~/.aprscaching/.env and asks the gateway at http://127.0.0.1:<PORT>, then shows how pushing stands.
+# also notices on its own (it probes the hub after a failed push). Loads OPERATOR_SECRET and GATEWAY_SOCKET
+# from ~/.aprscaching/.env and asks the gateway through its socket, then shows how pushing stands.
 #
 #   bash ~/aprscaching/deploy/pocket/sync.sh
 #
@@ -31,6 +31,8 @@ done
 pocket_paths
 
 [ -n "$(env_get OPERATOR_SECRET)" ] || die "OPERATOR_SECRET is not set in $ENV_FILE." "Run install.sh again to add one."
+[ -n "$(gateway_socket)" ] || die "GATEWAY_SOCKET is not set in $ENV_FILE." \
+  "Run update.sh (or install.sh) once; it adds the gateway's socket."
 health_ok "$(gateway_base)" || die "The station is not answering on $(gateway_base)." "Start it: bash $DIR/deploy/pocket/start.sh"
 [ -n "$(env_get FED_HUB_URL)$(env_get FED_PEERS)" ] || info "no FED_HUB_URL or FED_PEERS: this station syncs with nobody"
 

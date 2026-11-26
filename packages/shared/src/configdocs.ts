@@ -126,7 +126,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   APRSIS_CALLSIGN: "Callsign the box logs in to APRS-IS with",
   APRSIS_PASSCODE: "APRS-IS passcode for that callsign; -1 logs in receive-only",
   APRSIS_FILTER: "APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed",
-  KISS_TNC_HOST: "Host of the KISS TNC over TCP; set it to enable the TNC",
+  KISS_TNC_HOST: "KISS TNC host over TCP, or its Unix socket's path (starting with /); set it to enable the TNC",
   KISS_TNC_PORT: "TCP port of the KISS TNC",
   KISS_TNC_CHANNELS: "KISS channels (0-15) the TNC's radios use, comma-separated; each is its own port",
   KISS_TNC_TX_CHANNEL: "KISS channel of the box's own transmissions (default: the first listed)",
@@ -280,6 +280,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_SYNC_INTERVAL_MS: "Federation peer-sync interval in milliseconds; 0 turns it off",
   FED_RELAY_POLL_MS: "Relay round interval in milliseconds (spoke queries, relayed answers); 0 leaves it to the sync",
   WEB_DIST: "Built web app directory, served on the same origin as the API",
+  GATEWAY_SOCKET: "Unix socket path the gateway also listens on; the ingest and admin tools then use it",
   HTTPS_PORT: "Port of the optional https listener; needs TLS_CERT and TLS_KEY",
   TLS_CERT: "PEM certificate, with its chain, for the https listener",
   TLS_KEY: "PEM private key for the https listener",
@@ -527,6 +528,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`WEB_DIST`",
         "Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front. Text assets go out brotli- or gzip-compressed when the browser accepts it",
         "—",
+      ],
+      [
+        "`GATEWAY_SOCKET`",
+        "Node only: an absolute filesystem path where the gateway also listens, as a Unix socket, beside `PORT`. With it set, the ingest sends every gateway request through it (`INGEST_URL` then names only the paths), and `tools/admin/*.mjs` send `OPERATOR_SECRET` through it unless `BASE` is set. The gateway creates its directory with mode `0700`, makes the socket file `0600`, replaces a socket file left by a gateway that was killed, and refuses to start when another process listens on the path or a file that is not a socket is there. Never an abstract socket name, which every process on the machine can reach. A Pocket station sets it (`~/.aprscaching/run/gateway.sock`): on Android every app shares loopback and may bind the gateway's TCP port while it is free, so a secret sent to `127.0.0.1` can reach another app",
+        "off",
       ],
     ],
   },
@@ -834,7 +840,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     id: "ingest-core",
     header: ["Variable", "Purpose", "Default"],
     rows: [
-      ["`INGEST_URL`", "Gateway ingest endpoint to POST batches to", "`http://127.0.0.1:8787/ingest`"],
+      [
+        "`INGEST_URL`",
+        "Gateway ingest endpoint to POST batches to. With `GATEWAY_SOCKET` set, every gateway request goes through that socket and this names only the paths",
+        "`http://127.0.0.1:8787/ingest`",
+      ],
       [
         "`INGEST_SECRET`",
         "Sent as `x-ingest-secret`. The only gateway secret an ingest box holds — never give it `OPERATOR_SECRET` or `SESSION_SECRET`",
@@ -861,7 +871,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "KISS TNC (gates digi/node/BBS/IGate)",
-        "`KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
+        "`KISS_TNC_HOST` (a host, or the path of a Unix socket, starting with `/`), `KISS_TNC_PORT` (`8001`; unused with a path), `KISS_TNC_CHANNELS` (`0`; each channel its own port), `KISS_TNC_TX_CHANNEL` (default the first listed) — [Several channels](../run/radios/direwolf.md#several-channels); timing sent after each connect: `KISS_TIMING` (`on`; `off` leaves the TNC's own), `KISS_TXDELAY` (`30`), `KISS_PERSIST` (`63`), `KISS_SLOTTIME` (`10`) — [TNC timing](../run/radios/rf-ingest.md#tnc-timing)",
       ],
       [
         "KISS server (other packet programs share the box's radio ports)",

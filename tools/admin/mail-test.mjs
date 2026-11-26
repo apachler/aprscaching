@@ -7,9 +7,10 @@
 //   docker compose exec gateway node tools/admin/mail-test.mjs you@example.net     (from deploy/)
 //
 // BASE is where this script reaches the gateway: it defaults to the gateway on this host
-// (http://127.0.0.1:$PORT, PORT defaulting to 8787). Exits non-zero on failure.
+// (http://127.0.0.1:$PORT, PORT defaulting to 8787), or its socket when GATEWAY_SOCKET is set (gateway.mjs).
+// Exits non-zero on failure.
+import { GATEWAY, operatorPost } from "./gateway.mjs";
 
-const BASE = (process.env.BASE ?? `http://127.0.0.1:${process.env.PORT || 8787}`).replace(/\/+$/, "");
 const SECRET = process.env.OPERATOR_SECRET;
 const to = process.argv[2]?.trim() ?? "";
 
@@ -18,12 +19,8 @@ if (!to || to.startsWith("-") || !SECRET) {
   process.exit(2);
 }
 
-const res = await fetch(`${BASE}/api/admin/mail-test`, {
-  method: "POST",
-  headers: { "content-type": "application/json", "x-operator-secret": SECRET },
-  body: JSON.stringify({ to }),
-}).catch((e) => {
-  console.error(`cannot reach ${BASE}: ${e.message}`);
+const res = await operatorPost("/api/admin/mail-test", SECRET, { to }).catch((e) => {
+  console.error(`cannot reach ${GATEWAY}: ${e.message}`);
   process.exit(1);
 });
 const data = await res.json().catch(() => null);

@@ -307,10 +307,11 @@ Every shape with an ingest.
 
 ### `ingest.kiss_tnc`
 
-- **Tests:** a TCP connection to `KISS_TNC_HOST:KISS_TNC_PORT`, when `KISS_TNC_HOST` is set.
-- **Message:** `KISS_TNC <host>:<port> does not answer` (fail).
-- **Fix:** start the TNC or Direwolf, and check the host and port. In a container, `localhost` is the
-  container, not your machine.
+- **Tests:** a TCP connection to `KISS_TNC_HOST:KISS_TNC_PORT`, when `KISS_TNC_HOST` is set; for a path (it
+  starts with `/`), that a Unix socket is there.
+- **Message:** `KISS_TNC <host>:<port> does not answer` or `KISS_TNC socket <path> is missing` (fail).
+- **Fix:** start the TNC, Direwolf or the KISS bridge, and check the host and port or the path. In a container,
+  `localhost` is the container, not your machine.
 - **See:** [KISS TNC quick start](radios/quick-starts.md#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc) and
   [From a container](radios/rf-ingest.md#from-a-container).
 
