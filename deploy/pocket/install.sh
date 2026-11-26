@@ -386,7 +386,7 @@ else
 fi
 
 # The secrets and the USB TNC's KISS stream move to Unix sockets in the private run directory, on a kept .env as
-# on a new one, so an update needs no step by the operator (lib.sh, pocket_sockets_env).
+# on a new one, so an update needs no step by the operator (lib.sh, pocket_move_onto_sockets).
 if [ "$DRY" -eq 1 ]; then
   info "[dry-run] sets GATEWAY_SOCKET, and a USB TNC's KISS_TNC_HOST, to sockets in $DATA/run"
 else
@@ -395,9 +395,8 @@ else
     APRSCACHING_DIR="$DIR" APRSCACHING_DATA="$DATA"
     # shellcheck source=deploy/pocket/lib.sh
     . "$DIR/deploy/pocket/lib.sh"
-    pocket_sockets_env
     # A station running on the .env it had restarts onto the sockets now, helper windows too.
-    [ "$POCKET_ENV_MOVED" -eq 0 ] || pocket_restart_on_sockets
+    pocket_move_onto_sockets
   )
 fi
 

@@ -3,15 +3,17 @@
 # helper windows (notify, alerts, the USB KISS bridge's loop) run the loop of the script they started with,
 # and the lib.sh it read then: a helper of an earlier release goes on sending OPERATOR_SECRET to
 # 127.0.0.1:PORT, where any app on the phone may listen, until its window is respawned. An earlier release's
-# update.sh or pocket.sh restarts only the gateway and the ingest, so the move runs from install.sh, through
-# lib.sh's pocket_sockets_env and pocket_restart_on_sockets.
+# update.sh or pocket.sh restarts only the gateway and the ingest, so the move runs from install.sh, which
+# every update runs, through lib.sh's pocket_move_onto_sockets.
 #
-# A stand-in for another app holds the gateway's TCP port. A running station on an earlier .env: a stand-in
-# supervisor whose gateway serves GATEWAY_SOCKET once the .env names it and it is restarted (USR1, as
-# supervise.sh does), and helper windows in a stand-in tmux whose script is an earlier release's
-# station_status loop. The update replaces the scripts on disk, as git does, then runs what install.sh runs.
-# After it the TCP port must see no secret, the socket must see the respawned helpers, and install.sh must run
-# the restart. Runs anywhere with bash, curl, node and setsid; no Termux, no tmux, no gateway.
+# Each station: a stand-in for another app holds the gateway's TCP port; a stand-in supervisor whose gateway
+# serves GATEWAY_SOCKET once the .env names it and it is restarted (USR1, as supervise.sh does); helper windows
+# in a stand-in tmux whose script is an earlier release's station_status loop. The update replaces the scripts
+# on disk, as git does, then runs install.sh itself on the kept .env, with stand-ins for the toolchain it checks
+# (corepack, better-sqlite3) and a web build handed in. After it the TCP port must see no secret and the socket
+# must see the respawned helpers. The stations: one with a USB TNC, one without, and one whose alerts window
+# fails to respawn, where install.sh names that window and finishes the move. Runs anywhere with bash, curl,
+# git, node and setsid; no Termux, no tmux, no gateway.
 #
 #   bash deploy/pocket/test/upgrade-socket-test.sh
 set -euo pipefail
@@ -26,10 +28,19 @@ fail() {
   printf 'FAIL %s\n' "$1"
   FAILS=$((FAILS + 1))
 }
+PIDS=()
+cleanup() {
+  local d
+  for d in "$WORK"/tmux/*/; do [ -d "$d" ] && tmux kill-session -t "=$(basename "$d")" 2>/dev/null; done
+  kill "${PIDS[@]}" 2>/dev/null || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 # ---- a stand-in tmux: a window is a process group running its command ----------------------------------
 # $FAKE_TMUX/<session>/<window>.cmd holds the command, .pid the group's leader. respawn-window -k ends the
-# group and runs the command again, as tmux does.
+# group and runs the command again, as tmux does; it fails for the window FAKE_TMUX_FAIL names, as tmux does for
+# a window closed since the list was read.
 mkdir -p "$WORK/bin" "$WORK/tmux"
 cat >"$WORK/bin/tmux" <<'SH'
 #!/usr/bin/env bash
@@ -61,31 +72,39 @@ case "$sub" in
   has-session) [ -d "$D/$S" ] ;;
   new-session | new-window) run ;;
   list-windows) for f in "$D/$S"/*.cmd; do [ -e "$f" ] && basename "$f" .cmd; done; true ;;
-  respawn-window) stop "$W"; C="$(cat "$D/$S/$W.cmd")"; run ;;
+  respawn-window)
+    if [ "$W" = "${FAKE_TMUX_FAIL:-}" ]; then echo "can't respawn window $W" >&2; exit 1; fi
+    stop "$W"; C="$(cat "$D/$S/$W.cmd")"; run ;;
   kill-session) for f in "$D/$S"/*.pid; do [ -e "$f" ] && stop "$(basename "$f" .pid)"; done; rm -rf "${D:?}/$S" ;;
   *) echo "stand-in tmux: $sub is not supported" >&2; exit 2 ;;
 esac
 SH
 chmod +x "$WORK/bin/tmux"
-export PATH="$WORK/bin:$PATH" FAKE_TMUX="$WORK/tmux"
-export APRSCACHING_DATA="$WORK/d" APRSCACHING_DIR="$ROOT" APRSCACHING_SESSION=acs-upgrade APRSCACHING_START_WAIT=20
-DATA="$APRSCACHING_DATA"
-RUN="$DATA/run"
-cleanup() {
-  tmux kill-session -t "=$APRSCACHING_SESSION" 2>/dev/null || true
-  kill "${SQUATTER:-}" "${SUP:-}" 2>/dev/null || true
-  rm -rf "$WORK"
-}
-trap cleanup EXIT
-
+export PATH="$WORK/bin:$PATH" FAKE_TMUX="$WORK/tmux" APRSCACHING_START_WAIT=20
 SECRET=deadbeefsecret
-mkdir -p "$RUN"
-chmod 700 "$DATA" "$RUN"
-PORT="$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
-# A station installed by an earlier release: no GATEWAY_SOCKET, a USB TNC on loopback.
-printf '%s\n' "PORT=$PORT" "OPERATOR_SECRET=$SECRET" USB_KISS_DEVICE=/dev/bus/usb/001/002 KISS_TNC_HOST=127.0.0.1 \
-  KISS_TNC_PORT=8001 >"$DATA/.env"
-chmod 600 "$DATA/.env"
+
+# ---- what install.sh checks before the .env: the toolchain and a web build -----------------------------
+# corepack answers for pnpm; node answers the better-sqlite3 check (the test needs no native build) and runs
+# everything else as itself; python3, make and cc need only exist.
+REAL_NODE="$(command -v node)"
+mkdir -p "$WORK/ibin" "$WORK/web"
+printf '<!doctype html>\n' >"$WORK/web/index.html"
+printf '#!/bin/sh\n[ "${2:-}" = --version ] && echo stand-in\nexit 0\n' >"$WORK/ibin/corepack"
+cat >"$WORK/ibin/node" <<SH
+#!/usr/bin/env bash
+case "\${1:-} \${2:-}" in "-e "*better-sqlite3*) echo "SQLite stand-in"; exit 0 ;; esac
+exec "$REAL_NODE" "\$@"
+SH
+# The checkout install.sh is pointed at: its own repository whose deploy/ is this one's, so install.sh runs this
+# tree's scripts and writes nothing into it.
+CHECKOUT="$WORK/checkout"
+mkdir -p "$CHECKOUT/servers/node/src"
+: >"$CHECKOUT/servers/node/src/server.ts"
+ln -s "$ROOT/deploy" "$CHECKOUT/deploy"
+git -C "$CHECKOUT" init -q
+git -C "$CHECKOUT" -c user.name=test -c user.email=test@invalid commit -q --allow-empty -m checkout
+for t in python3 make cc; do command -v "$t" >/dev/null || printf '#!/bin/sh\nexit 0\n' >"$WORK/ibin/$t"; done
+chmod +x "$WORK"/ibin/*
 
 # ---- the other app on the TCP port, and the gateway on the socket ------------------------------------
 # Each logs "<listener> <path> <secret or ->" and answers what station_status parses.
@@ -102,8 +121,6 @@ if (where.startsWith("/")) srv.listen(where);
 else srv.listen(Number(where), "127.0.0.1");
 process.on("SIGTERM", () => srv.close(() => process.exit(0)));
 JS
-node "$WORK/listen.mjs" "$PORT" "$WORK/log" &
-SQUATTER=$!
 
 # A stand-in supervise.sh for the gateway: it starts the gateway from the .env (a socket only once the .env
 # names one) and restarts it on USR1, and leaves the state file restart_station reads.
@@ -125,10 +142,8 @@ trap '[ -z "$child" ] || kill "$child"; exit 0' TERM
 start
 while :; do sleep 0.2; done
 SH
-bash "$WORK/sup/supervise.sh" "$DATA/.env" "$WORK/listen.mjs" "$WORK/log" "$RUN/gateway.state" &
-SUP=$!
 
-# ---- the helper windows, running an earlier release's scripts -----------------------------------------
+# ---- the helper windows' scripts ---------------------------------------------------------------------
 # lib.sh's station_status of an earlier release: the secret to the gateway's TCP port.
 mkdir -p "$WORK/scripts"
 cat >"$WORK/scripts/old-helper.sh" <<'SH'
@@ -148,53 +163,92 @@ cat >"$WORK/scripts/new-helper.sh" <<SH
 . "$POCKET/lib.sh"
 while :; do station_status "" >/dev/null || true; sleep 0.3; done
 SH
-for w in notify alerts usb-kiss; do cp "$WORK/scripts/old-helper.sh" "$WORK/scripts/$w.sh"; done
-tmux new-session -d -s "$APRSCACHING_SESSION" -n gateway "sleep 600"
-for w in notify alerts usb-kiss; do tmux new-window -d -t "=$APRSCACHING_SESSION:" -n "$w" "bash $WORK/scripts/$w.sh"; done
-tmux new-window -d -t "=$APRSCACHING_SESSION:" -n shell "sleep 600"
 
-sleep 1.5
-before="$(grep -c "^tcp .* $SECRET\$" "$WORK/log" || true)"
-if [ "$before" -gt 0 ]; then pass "before the update the earlier helpers send the secret to TCP ($before requests)"; else
-  fail "the earlier helpers sent nothing before the update: the check after it would prove nothing"
-fi
-declare -A oldpid
-for w in notify alerts usb-kiss shell; do oldpid[$w]="$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/$w.pid")"; done
+# station NAME FAIL_WINDOW ENV_LINE…: a station installed by an earlier release, running on an .env of those
+# lines, updated. FAIL_WINDOW names the window whose respawn fails, or is empty.
+station() {
+  local name=$1 failw=$2 data="$WORK/$1" w port before out status leaked on_socket
+  shift 2
+  local log="$WORK/$name.log" scripts="$WORK/$name.scripts"
+  echo "== $name"
+  mkdir -p "$data/run" "$scripts"
+  chmod 700 "$data" "$data/run"
+  port="$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
+  printf '%s\n' "PORT=$port" "OPERATOR_SECRET=$SECRET" "$@" >"$data/.env"
+  chmod 600 "$data/.env"
+  node "$WORK/listen.mjs" "$port" "$log" &
+  PIDS+=($!)
+  bash "$WORK/sup/supervise.sh" "$data/.env" "$WORK/listen.mjs" "$log" "$data/run/gateway.state" &
+  PIDS+=($!)
 
-# ---- the update: git replaces the scripts, then install.sh's step on the .env ------------------------
-for w in notify alerts usb-kiss; do cp "$WORK/scripts/new-helper.sh" "$WORK/scripts/$w.sh"; done
-# The step as install.sh runs it, in a subshell with lib.sh (checked below that install.sh does).
-(
-  # shellcheck source=deploy/pocket/lib.sh
-  . "$POCKET/lib.sh"
-  pocket_sockets_env
-  [ "$POCKET_ENV_MOVED" -eq 0 ] || pocket_restart_on_sockets
-) >"$WORK/move.log" 2>&1 || fail "the move failed: $(cat "$WORK/move.log")"
-: >"$WORK/log"
-sleep 2
-
-leaked="$(grep "^tcp " "$WORK/log" | grep -v -- ' -$' || true)"
-if [ -z "$leaked" ]; then pass "after the update no helper sends the secret to the TCP port"; else
-  fail "after the update the TCP port still received the secret:"
-  sed 's/^/       /' <<<"$leaked"
-fi
-on_socket="$(grep -c "^socket /api/admin/station-status $SECRET\$" "$WORK/log" || true)"
-if [ "$on_socket" -gt 0 ]; then pass "the respawned helpers reach the gateway on its socket ($on_socket requests)"; else
-  fail "the gateway's socket saw no helper after the update: $(cat "$WORK/move.log")"
-fi
-for w in notify alerts usb-kiss; do
-  if [ "$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/$w.pid")" != "${oldpid[$w]}" ]; then pass "the $w window was respawned"; else
-    fail "the $w window runs the loop it started with"
+  export APRSCACHING_DATA="$data" APRSCACHING_SESSION="acs-$name"
+  for w in notify alerts usb-kiss; do cp "$WORK/scripts/old-helper.sh" "$scripts/$w.sh"; done
+  tmux new-session -d -s "$APRSCACHING_SESSION" -n gateway "sleep 600"
+  for w in notify alerts usb-kiss; do tmux new-window -d -t "=$APRSCACHING_SESSION:" -n "$w" "bash $scripts/$w.sh"; done
+  tmux new-window -d -t "=$APRSCACHING_SESSION:" -n shell "sleep 600"
+  : >"$log"
+  for _ in $(seq 1 50); do
+    grep -q "^tcp .* $SECRET\$" "$log" && break
+    sleep 0.2
+  done
+  before="$(grep -c "^tcp .* $SECRET\$" "$log" || true)"
+  if [ "$before" -gt 0 ]; then pass "before the update the earlier helpers send the secret to TCP ($before requests)"; else
+    fail "the earlier helpers sent nothing before the update: the check after it would prove nothing"
   fi
-done
-if [ "$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/shell.pid")" = "${oldpid[shell]}" ]; then pass "  … and the shell window was left alone"; else
-  fail "the shell window was respawned"
+  declare -A oldpid
+  for w in notify alerts usb-kiss shell; do oldpid[$w]="$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/$w.pid")"; done
+
+  # The update: git replaces the scripts, then install.sh runs on the kept .env.
+  for w in notify alerts usb-kiss; do cp "$WORK/scripts/new-helper.sh" "$scripts/$w.sh"; done
+  status=0
+  out="$(PATH="$WORK/ibin:$PATH" FAKE_TMUX_FAIL="$failw" bash "$POCKET/install.sh" --allow-non-termux --skip-pkg \
+    --no-update --no-next-steps --dir "$CHECKOUT" --data-dir "$data" --web-dist "$WORK/web" 2>&1)" || status=$?
+  printf '%s\n' "$out" >"$WORK/$name.install.log"
+  if [ "$status" -eq 0 ]; then pass "install.sh finishes"; else
+    fail "install.sh exited $status:"
+    tail -n 8 <<<"$out" | sed 's/^/       /'
+  fi
+  : >"$log"
+  sleep 2
+
+  if grep -qx "GATEWAY_SOCKET=$data/run/gateway.sock" "$data/.env"; then pass "the .env names the gateway's socket"; else
+    fail "the .env names no gateway socket"
+  fi
+  if [ -z "$failw" ]; then
+    leaked="$(grep "^tcp " "$log" | grep -v -- ' -$' || true)"
+    if [ -z "$leaked" ]; then pass "after the update no helper sends the secret to the TCP port"; else
+      fail "after the update the TCP port still received the secret:"
+      sed 's/^/       /' <<<"$leaked"
+    fi
+  fi
+  on_socket="$(grep -c "^socket /api/admin/station-status $SECRET\$" "$log" || true)"
+  if [ "$on_socket" -gt 0 ]; then pass "the respawned helpers reach the gateway on its socket ($on_socket requests)"; else
+    fail "the gateway's socket saw no helper after the update"
+  fi
+  for w in notify alerts usb-kiss; do
+    [ "$w" != "$failw" ] || continue
+    if [ "$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/$w.pid")" != "${oldpid[$w]}" ]; then pass "the $w window was respawned"; else
+      fail "the $w window runs the loop it started with"
+    fi
+  done
+  if [ "$(cat "$FAKE_TMUX/$APRSCACHING_SESSION/shell.pid")" = "${oldpid[shell]}" ]; then pass "  … and the shell window was left alone"; else
+    fail "the shell window was respawned"
+  fi
+  if [ -n "$failw" ]; then
+    # The operator learns which window still runs the earlier loop, and how to load the new one.
+    if grep -q "WARNING: the $failw window did not restart.*stop\.sh, then .*start\.sh" <<<"$out"; then
+      pass "install.sh names the $failw window and says to run stop.sh, then start.sh"
+      grep "WARNING: the $failw window" <<<"$out" | sed 's/^/       /'
+    else fail "install.sh does not warn that the $failw window did not restart, with stop.sh and start.sh"; fi
+  fi
+}
+
+station usb "" USB_KISS_DEVICE=/dev/bus/usb/001/002 KISS_TNC_HOST=127.0.0.1 KISS_TNC_PORT=8001
+if grep -qx "KISS_TNC_HOST=$WORK/usb/run/kiss.sock" "$WORK/usb/.env"; then pass "the .env names the USB TNC's socket"; else
+  fail "the USB TNC's KISS_TNC_HOST was not moved to its socket"
 fi
-# install.sh runs the move and the restart before the gateway's first start, after the .env is written or kept.
-if awk '/^# ---- 10\./{exit} /^step "Writing \$ENV_FILE"/{w=1} w && /pocket_restart_on_sockets$/{found=1} END{exit !found}' \
-  "$POCKET/install.sh"; then
-  pass "install.sh restarts a moved station onto the sockets"
-else fail "install.sh does not run pocket_restart_on_sockets after the move"; fi
+station no-tnc ""
+station respawn-fails alerts USB_KISS_DEVICE=/dev/bus/usb/001/002 KISS_TNC_HOST=127.0.0.1 KISS_TNC_PORT=8001
 
 if [ "$FAILS" -gt 0 ]; then
   echo "$FAILS check(s) failed" >&2
