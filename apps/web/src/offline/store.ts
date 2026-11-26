@@ -26,6 +26,8 @@ export interface PackMeta {
   cacheCount: number;
   /** Bytes stored for the pack: its data and its images. */
   sizeBytes: number;
+  /** The signed-in call an owner maintenance pack was stored for; it is read only by that call (owner.ts). */
+  owner?: string;
   /** The last area browsed, kept automatically; never listed with the user's own packs. */
   auto?: boolean;
   /** The map tiles the pack holds (tiles.ts), when the instance offers an offline map. */
