@@ -1,21 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The delivery queue: a backlog drains in batches the gateway accepts, a refused packet is isolated and
 // dropped instead of blocking every later flush, and only an unreachable gateway keeps packets queued.
-import { describe, it, expect } from "vitest";
-import { INGEST_BATCH_MAX, type Packet } from "@aprscaching/shared";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
+import { build } from "esbuild";
+import { describe, it, expect, beforeAll } from "vitest";
+import { INGEST_BATCH_MAX, Packet } from "@aprscaching/shared";
 import { Delivery } from "../src/deliver.js";
+import type { BurstJob, BurstResult } from "./burst.worker.js";
+import { pkt, many } from "./burst-packets.js";
 
-const pkt = (i: number): Packet => ({
-  src: `N0CALL-${i % 16}`,
-  dst: "APRS",
-  path: [],
-  payload: `>${i}`,
-  kind: "other",
-  heardVia: "rf",
-  port: "kiss-tnc",
-  ts: i,
-});
-const many = (n: number, from = 0) => Array.from({ length: n }, (_, i) => pkt(from + i));
 const ids = (ps: Packet[]) => ps.map((p) => p.ts);
 
 /** A gateway stub: records every batch and answers with `status(batch)`. */
@@ -139,34 +133,66 @@ describe("Delivery", () => {
 });
 
 describe("Delivery after a burst", () => {
-  // past ~125k packets in one call a spread append overflows the call stack; 300k is well past it
-  const BURST = 300_000;
+  // A spread append passes every packet as an argument on the call stack, 8 bytes each: 50 000 packets
+  // need 400 KB, more than the worker's whole 384 KB stack, so the overflow is certain on every machine,
+  // with a burst a sixth of the one the test runner's own ~1 MB stack would need.
+  const BURST = 50_000;
+  const STACK_MB = 0.375;
+  let bundle = "";
+
+  beforeAll(async () => {
+    const out = await build({
+      entryPoints: [fileURLToPath(new URL("./burst.worker.ts", import.meta.url))],
+      bundle: true,
+      write: false,
+      format: "cjs",
+      platform: "node",
+      target: "node22",
+      logLevel: "silent",
+      alias: { "@aprscaching/shared": fileURLToPath(new URL("./burst.shared-stub.ts", import.meta.url)) },
+      metafile: true,
+    });
+    // the delivery queue alone: the schema library would cost the worker more than the burst itself
+    const inputs = Object.keys(out.metafile.inputs);
+    expect(inputs.filter((f) => f.includes("node_modules") || f.includes("packages/"))).toEqual([]);
+    bundle = out.outputFiles[0]!.text;
+  });
+
+  const inSmallStack = (job: BurstJob) =>
+    new Promise<BurstResult>((resolve, reject) => {
+      const w = new Worker(bundle, {
+        eval: true,
+        // the bundle is plain JavaScript: none of the test runner's own flags or loaders
+        execArgv: [],
+        workerData: job,
+        resourceLimits: { stackSizeMb: STACK_MB },
+      });
+      w.once("message", (r: BurstResult) => {
+        resolve(r);
+        void w.terminate();
+      });
+      w.once("error", reject);
+      // an exit with no answer and no error would otherwise leave the test waiting for its timeout
+      w.once("exit", (code) => reject(new Error(`burst worker exited with code ${code} before answering`)));
+    });
+
+  it("bursts only packets the real schema accepts, as the worker's stand-in assumes", () => {
+    for (const p of [pkt(0), pkt(BURST - 1), pkt(BURST + 2)]) expect(Packet.safeParse(p).success).toBe(true);
+  });
 
   it("queues a burst of any size, keeping the newest maxQueue", async () => {
-    const gw = gateway();
-    const d = new Delivery({ post: gw.post, maxQueue: 5000, log: () => {} });
-    d.add(many(BURST));
-    expect(d.size).toBe(5000);
-    expect(d.dropped).toBe(BURST - 5000);
-    await d.flush();
-    expect(gw.batches.flat().map((p) => p.ts)).toEqual(ids(many(5000, BURST - 5000)));
+    const r = await inSmallStack({ scenario: "add", burst: BURST, batchMax: INGEST_BATCH_MAX });
+    expect(r.size).toBe(5000);
+    expect(r.dropped).toBe(BURST - 5000);
+    expect(r.delivered).toEqual(ids(many(5000, BURST - 5000)));
+    expect(r.left).toBe(0);
   });
 
   it("keeps delivering what is heard after a burst between two commits", async () => {
-    const gw = gateway();
-    const d = new Delivery({ post: gw.post, maxQueue: 5000, log: () => {} });
-    for (const p of many(BURST)) d.hear(p);
-    d.commit();
-    await d.flush();
-    for (let tick = 0; tick < 3; tick++) {
-      d.hear(pkt(BURST + tick));
-      d.commit();
-      await d.flush();
-    }
-    const got = gw.batches.flat().map((p) => p.ts);
-    expect(got).toHaveLength(5003);
-    expect(got.slice(-3)).toEqual([BURST, BURST + 1, BURST + 2]);
-    expect(d.size).toBe(0);
+    const r = await inSmallStack({ scenario: "hear", burst: BURST, batchMax: INGEST_BATCH_MAX });
+    expect(r.delivered).toHaveLength(5003);
+    expect(r.delivered.slice(-3)).toEqual([BURST, BURST + 1, BURST + 2]);
+    expect(r.left).toBe(0);
   });
 
   it("holds at most twice maxQueue between two commits", () => {
