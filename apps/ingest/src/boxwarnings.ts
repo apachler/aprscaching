@@ -30,3 +30,30 @@ export function bbsWarning(env: Env, services?: boolean | null): string | null {
     return `${head} the gateway serves mail only to an enrolled box that runs this instance's services, and this box does not. Switch on Runs this instance's services for ${env.BOX_ID ?? "this box"} in Instance admin → Ingest boxes`;
   return null;
 }
+
+/**
+ * Print, at the box's start, what the box knows on its own settings: BOX_ID without a key, and a packet BBS or FBB
+ * forwarding on a box with no key. The start path calls this and nothing else prints these.
+ */
+export function warnAtStart(env: Env, warn: (line: string) => void = console.warn): void {
+  for (const w of [bbsWarning(env), boxKeyWarning(env)]) if (w) warn(w);
+}
+
+/**
+ * Print, once per distinct text, what the gateway's `/ingest/check` answer tells a keyed box: a packet BBS or FBB
+ * forwarding whose services the sysop has not switched on. The answer is read every 15 minutes; `warned` keeps
+ * the log to one line per cause.
+ */
+export function warnOnCheck(
+  env: Env,
+  services: boolean | null | undefined,
+  warned: Set<string>,
+  warn: (line: string) => void = console.warn,
+): void {
+  if (!env.BOX_KEY) return; // an unkeyed box was told at start
+  const w = bbsWarning(env, services);
+  if (w && !warned.has(w)) {
+    warned.add(w);
+    warn(w);
+  }
+}
