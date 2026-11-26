@@ -127,7 +127,7 @@ async function world(env: Env, seed: number): Promise<World> {
       .run();
   }
   const since = big ? T0 : T0 + pick([-10, 0, 0, 5, 20, 39]);
-  return {
+  const w: World = {
     call: big ? CALL : pick([CALL, CALL, CALL, "oe8own-9", "OE8OWN"]),
     since,
     until: since + (big ? 2000 : pick([-1, 0, 1, 10, 40, 40, 2000])),
@@ -140,6 +140,16 @@ async function world(env: Env, seed: number): Promise<World> {
     // 0 refuses any move at all, so a signed fix at an attested fix's own position sits exactly on the bound
     maxMps: pick([0, 0.001, 1, 50, 300, 3000, 1e7]),
   };
+  // an attested fix far from every spot on either end of the window, where an off-by-one bound would drop it
+  for (const ts of [w.since, w.until])
+    if (next() < 0.3)
+      await env.DB.prepare(
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, transport, igate_call, path, source)
+         VALUES (?, ?, ?, 15, 'rf', 'tnc', ?, 'WIDE1-1', 'firehose')`,
+      )
+        .bind(w.call, ts, 47 + pick([0.01, 0.1, 1, 5]), SITE)
+        .run();
+  return w;
 }
 
 describe("the station read's judgement of owner-signed fixes", () => {
