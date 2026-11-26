@@ -49,7 +49,10 @@ bash tools/interop/run-local-loop.sh
 ```
 
 Asserts NODES broadcasts learned in both directions and an FBB forwarding session (our initiator →
-our SID-gated responder) carrying a message A→B over real AX.25 connected mode, BID-deduped. Runs
+our SID-gated responder) carrying a message A→B over real AX.25 connected mode, BID-deduped. Each BBS
+lists the other as a forwarding partner: the responder takes the F-protocol only from an enabled partner
+with the caller's exact call and SSID (`packages/packet/test/fbb-gate-session.test.ts` checks that gate
+over AX.25 on every CI run). Runs
 anywhere Node runs; CI runs it in the `interop` workflow before the containerized peers.
 
 By default it also checks that federation over FBB stays off: no batch is queued or offered. With

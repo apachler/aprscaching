@@ -94,7 +94,7 @@ async function until(label, deadlineMs, check) {
   }
 }
 
-// ---- partner + routing config on A: everything @...OE... forwards to B's BBS callsign ----
+// ---- partner + routing config: everything @...OE... on A forwards to B's BBS callsign ----
 const addPartner = await call(A, "POST", "/api/bbs/partners", {
   call: "OE1BBB-1",
   ha: "OE1BBB.OE.EU",
@@ -106,6 +106,20 @@ ok(
   "A: partner OE1BBB-1 configured",
   addPartner.status === 200 || addPartner.status === 201,
   JSON.stringify(addPartner),
+);
+// B runs the F-protocol only for a station on its own partner list, by exact call and SSID: A's BBS dials in
+// as OE1AAA-1. Both sysops list each other, as on any FBB forwarding link; interval 0 keeps B from dialling A.
+const addPartnerB = await call(B, "POST", "/api/bbs/partners", {
+  call: "OE1AAA-1",
+  ha: "OE1AAA.OE.EU",
+  proto: "rf-fbb",
+  intervalMin: 0,
+  enabled: true,
+});
+ok(
+  "B: partner OE1AAA-1 configured",
+  addPartnerB.status === 200 || addPartnerB.status === 201,
+  JSON.stringify(addPartnerB),
 );
 const addRule = await call(A, "POST", "/api/bbs/forward", { partner: "OE1BBB-1", route: "OE", transport: "rf-fbb" });
 ok("A: route OE -> OE1BBB-1", addRule.status === 201, JSON.stringify(addRule.data));
