@@ -42,8 +42,9 @@ services:
     # login and filter; INGEST_SECRET, or BOX_ID + BOX_KEY for a box enrolled with its own key). A key .env
     # leaves out stays unset, so the ingest's own default applies; an interpolated one would arrive empty.
     environment:
-      # the ingest box holds only its own credential: blank every gateway-only secret (secret in
-      # packages/shared/src/configkeys.ts and not read by the ingest), should .env hold one
+      # the ingest box holds only its own credentials: blank every secret the ingest does not read, should .env
+      # hold one
+      # config-blank ingest: these lines are written by tools/config/generate.mjs from the schema
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
       FED_PRIVATE_KEY: ""

@@ -43,6 +43,17 @@ services:
       # Every interface of the container: Caddy reaches the gateway over the stack's network, so a HOST in .env
       # (bare metal's 127.0.0.1) must not reach it.
       HOST: ""
+      # .env holds the ingest's credentials and the deploy-only tokens too (TUNNEL_TOKEN, CF_API_TOKEN): blank
+      # every secret the gateway does not read, so a gateway that is taken over does not yield them
+      # config-blank gateway: these lines are written by tools/config/generate.mjs from the schema
+      APRSIS_PASSCODE: ""
+      MESHTASTIC_MQTT_URL: ""
+      MESHCOM_KISS_PASS: ""
+      IGATE_PASS: ""
+      BOX_KEY: ""
+      APRSIS_SERVICE_PASS: ""
+      TUNNEL_TOKEN: ""
+      CF_API_TOKEN: ""
     # The image runs as UID 10001 and the named volume takes that owner. A host directory bound here instead
     # needs `sudo chown -R 10001:10001 <dir>` once.
     volumes: ["data:/data"]
@@ -95,8 +106,9 @@ services:
     environment:
       # inside the stack the gateway is the `gateway` service, not the ingest's localhost default
       INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
-      # .env reaches this container too: blank every gateway-only secret (secret in
-      # packages/shared/src/configkeys.ts and not read by the ingest), so the ingest never holds one
+      # .env reaches this container too: blank every secret the ingest does not read, so it never holds the
+      # gateway's keys or the deploy-only tokens
+      # config-blank ingest: these lines are written by tools/config/generate.mjs from the schema
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
       FED_PRIVATE_KEY: ""

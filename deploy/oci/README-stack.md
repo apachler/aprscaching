@@ -105,7 +105,9 @@ first boot, so a broken policy shows in the boot log at once. `deploy/aprscachin
 the newest archive in the bucket.
 
 The archive holds the instance's secrets, so the bucket is private, and only this VM and your tenancy's
-administrators can read it.
+administrators can read it. Within the VM only the host signs in as the VM: the first boot installs an nftables
+ruleset (`aprscaching-imds-guard.service`) that drops the containers' traffic to the instance metadata service, and
+the instance answers only its header-checked v2 endpoints.
 
 **Apply fails at the dynamic group** (`NotAuthorizedOrNotFound`, or a 404 on `oci_identity_dynamic_group`)?
 Dynamic groups and policies are tenancy-level and are written in the tenancy's home region, which needs

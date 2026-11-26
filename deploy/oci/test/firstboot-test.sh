@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks of deploy/oci/firstboot.sh with apt, gpg, git, docker and systemd mocked on PATH: Docker comes from
 # its apt repository only behind the pinned key, a release checkout must be the stamped commit, init gets the
-# stack's values (and no passcode when there is none), a second run keeps the checkout and .env, and the
+# stack's values (and no passcode when there is none), the containers are cut off from the metadata service, a second run keeps the checkout and .env, and the
 # settings and cloud-init's copies of them are removed without the passcode reaching the log.
 #
 #   bash deploy/oci/test/firstboot-test.sh
@@ -40,7 +40,8 @@ mock gpg 'case "$*" in
   *--dearmor*) while [ $# -gt 0 ]; do [ "$1" = -o ] && { echo bin >"$2"; shift; }; shift; done ;;
 esac'
 mock dpkg 'echo arm64'
-mock systemctl ':'
+# systemctl: with MOCK_NFT_FAIL the metadata guard's ruleset does not load
+mock systemctl 'case "$*" in *"enable --now aprscaching-imds-guard"*) [ -z "${MOCK_NFT_FAIL:-}" ] ;; esac'
 mock sleep ':'
 mock hostname 'echo 10.0.1.5'
 mock shred '[ "$1" = -u ] && rm -f "$2"'
@@ -81,7 +82,7 @@ run() {
   APRS_FB_SETTINGS="$R/etc/firstboot.env" APRS_FB_LOG="$R/firstboot.log" APRS_FB_CONSOLE="$R/nonexistent/console" \
     APRS_FB_DIR="$R/opt" APRS_FB_KEYRING="$R/keyrings/docker.gpg" APRS_FB_APT_LIST="$R/docker.list" \
     APRS_FB_CLOUD_DIR="$R/cloud" APRS_FB_UNIT_DIR="$R/units" APRS_FB_OCI_VENV="$R/oci-cli" APRS_FB_OCI_BIN="$R/bin-oci" \
-    "$SCRIPT"
+    APRS_FB_IMDS_NFT="$R/etc/imds-guard.nft" "$SCRIPT"
 }
 fails() { ! "$@"; }
 logged() { grep -q -- "$1" "$R/firstboot.log"; }
@@ -101,6 +102,22 @@ check "  … removes its settings and cloud-init's copies" \
   bash -c "[ ! -e '$R/etc/firstboot.env' ] && [ ! -e '$R/cloud/instances/i-1/user-data.txt' ] && [ ! -e '$R/cloud/instances/i-1/cloud-config.txt' ]"
 check "  … installs the unit that removes the copies after every boot" \
   bash -c "grep -q 'rm -f $R/cloud/instances/\*/user-data.txt ' '$R/units/aprscaching-scrub-userdata.service' && grep -q '$R/cloud/instances/\*/cloud-config.txt' '$R/units/aprscaching-scrub-userdata.service'"
+# imds_dropped BRIDGE: the ruleset firstboot wrote has, in a chain on the forward hook, a rule dropping what BRIDGE
+# sends to the metadata service
+imds_dropped() {
+  awk -v want="iifname \"$1\" ip daddr 169.254.169.254 drop" '
+    /^[[:space:]]*chain / { fwd = 0 }
+    /type filter hook forward / { fwd = 1 }
+    fwd { line = $0; sub(/^[[:space:]]+/, "", line); if (line == want) found = 1 }
+    END { exit !found }' "$R/etc/imds-guard.nft"
+}
+check "  … drops what the default Docker bridge forwards to the metadata service" imds_dropped docker0
+check "  … and what the compose networks' bridges forward to it" imds_dropped "br-*"
+check "  … leaves the host's own requests (the backup unit) alone" bash -c "[ -s '$R/etc/imds-guard.nft' ] && ! grep -q 'hook output' '$R/etc/imds-guard.nft'"
+check "  … loads the ruleset at every boot, before Docker starts" \
+  bash -c "grep -qx 'ExecStart=/usr/sbin/nft -f $R/etc/imds-guard.nft' '$R/units/aprscaching-imds-guard.service' && grep -qx 'Before=docker.service' '$R/units/aprscaching-imds-guard.service' && grep -q 'systemctl enable --now aprscaching-imds-guard.service' '$MOCK_LOG'"
+check "  … before the stack starts" \
+  bash -c "[ \"\$(grep -n 'aprscaching-imds-guard' '$MOCK_LOG' | head -1 | cut -d: -f1)\" -lt \"\$(grep -n 'docker compose up' '$MOCK_LOG' | cut -d: -f1)\" ]"
 check "  … keeps the passcode out of its log" bash -c "! grep -q 24680 '$R/firstboot.log'"
 check "  … keeps its log owner-only" bash -c "[ \"\$(stat -c %a '$R/firstboot.log')\" = 600 ]"
 
@@ -135,6 +152,10 @@ check "  … and falls back to the private address" called "--lan-host 10.0.1.5"
 setup aptlock "$HEAD_SHA"
 check "apt's lists lock held at first boot does not stop it" env MOCK_APT_LOCKED=1 bash -c "$(declare -f run); SCRIPT='$SCRIPT' R='$R' run"
 check "  … the update is tried again" bash -c "[ \"\$(grep -c 'apt-get -o DPkg::Lock::Timeout=600 update' '$MOCK_LOG')\" -ge 3 ] && grep -q 'apt-get -o DPkg::Lock::Timeout=600 install -y -q docker-ce' '$MOCK_LOG'"
+
+setup nftfail "$HEAD_SHA"
+check "a metadata guard that does not load stops the boot" fails env MOCK_NFT_FAIL=1 bash -c "$(declare -f run); SCRIPT='$SCRIPT' R='$R' run"
+check "  … before the stack starts" bash -c "! grep -q 'docker compose up' '$MOCK_LOG' && grep -q 'STOPPED: could not load' '$R/firstboot.log'"
 
 setup branch ""
 check "a branch deploys" run

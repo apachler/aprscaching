@@ -56,15 +56,23 @@ check "  … and JSON as written" eq "$(env_file_raw "$E" RETENTION)" '{"positio
 # ---- the deploy files: what reaches the image and the ingest ------------------------------------------------
 # The gateway-only secrets: secret in the schema, and not read by the ingest.
 GW_SECRETS="$(awk -F'\t' '!/^#/ && $6 == 1 && $3 !~ /ingest/ {print $1}' "$DEPLOY/lib/config-keys.tsv")"
-blanks_all() { # blanks_all TEXT: every gateway-only secret is set to "" in TEXT
+blanks_all() { # blanks_all KEYS TEXT: every key of KEYS is set to "" in TEXT
   local k missing=""
-  for k in $GW_SECRETS; do grep -qE "^ +$k: \"\"\$" <<<"$1" || missing="$missing $k"; done
+  for k in $1; do grep -qE "^ +$k: \"\"\$" <<<"$2" || missing="$missing $k"; done
   eq "${missing:-none}" none
 }
 INGEST_SVC="$(sed -n '/^  ingest:/,/^  [a-z]*:/p' "$DEPLOY/docker-compose.yml")"
-check "the stack's ingest blanks every gateway-only secret" blanks_all "$INGEST_SVC"
-check "the ingest box blanks every gateway-only secret" blanks_all "$(cat "$DEPLOY/compose.ingest-only.yml")"
+check "the stack's ingest blanks every gateway-only secret" blanks_all "$GW_SECRETS" "$INGEST_SVC"
+check "the ingest box blanks every gateway-only secret" blanks_all "$GW_SECRETS" "$(cat "$DEPLOY/compose.ingest-only.yml")"
 check "the ingest unit unsets every gateway-only secret" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-ingest.service'); for k in $(echo $GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
+# The secrets the gateway must not hold: secret in the schema, and read by neither the gateway nor its server
+# process (the ingest's credentials, the deploy-only tokens).
+NOT_GW_SECRETS="$(awk -F'\t' '!/^#/ && $6 == 1 { n = split($3, u, ","); r = 0; for (i = 1; i <= n; i++) if (u[i] == "gateway" || u[i] == "server") r = 1; if (!r) print $1 }' "$DEPLOY/lib/config-keys.tsv")"
+check "the schema has secrets the gateway does not read" test -n "$NOT_GW_SECRETS"
+GATEWAY_SVC="$(sed -n '/^  gateway:/,/^  [a-z]*:/p' "$DEPLOY/docker-compose.yml")"
+check "the stack's gateway blanks every secret it does not read" blanks_all "$NOT_GW_SECRETS" "$GATEWAY_SVC"
+check "the gateway unit unsets every secret it does not read" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-gateway.service'); for k in $(echo $NOT_GW_SECRETS); do [[ \" \$u \" == *\" \$k \"* ]] || exit 1; done"
+check "  … and nothing it reads" bash -c "u=\$(sed -n 's/^UnsetEnvironment=//p' '$DEPLOY/systemd/aprscaching-gateway.service'); for k in INGEST_SECRET OPERATOR_SECRET SESSION_SECRET; do [[ \" \$u \" != *\" \$k \"* ]] || exit 1; done"
 check "the ingest's settings come from .env, not as empty \${KEY} strings" \
   bash -c "! grep -v '^ *#' <<<\"\$1\$2\" | grep -E '\\\$\\{[A-Z_]+(:-)?\\}'" _"$INGEST_SVC" "$(cat "$DEPLOY/compose.ingest-only.yml")"
 check "the image runs as UID 10001, not as root" grep -qx 'USER 10001' "$DEPLOY/Dockerfile"
