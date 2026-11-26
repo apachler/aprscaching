@@ -84,10 +84,14 @@ interface World {
  */
 async function world(env: Env, seed: number): Promise<World> {
   const { next, pick } = generator(seed);
-  const spots = Array.from({ length: 1 + Math.floor(next() * 4) }, () => [
-    47 + pick([0, 0, 1e-4, 0.01, 0.1, 1, -1]) * next(),
-    15 + pick([0, 0, 1e-4, 0.01, 0.5, 3]) * next(),
-  ]);
+  // spots are drawn from a few latitudes and a few longitudes, so two spots often share one coordinate and differ
+  // in the other: only the whole position makes fixes interchangeable
+  const lats = Array.from(
+    { length: 1 + Math.floor(next() * 3) },
+    () => 47 + pick([0, 0, 1e-4, 0.01, 0.1, 1, -1]) * next(),
+  );
+  const lons = Array.from({ length: 1 + Math.floor(next() * 3) }, () => 15 + pick([0, 0, 1e-4, 0.01, 0.5, 3]) * next());
+  const spots = Array.from({ length: 1 + Math.floor(next() * 4) }, () => [pick(lats), pick(lons)]);
   const place = (): [number, number] =>
     next() < 0.7
       ? (pick(spots) as [number, number])
