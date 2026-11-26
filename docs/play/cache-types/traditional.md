@@ -23,7 +23,7 @@ accuracy of your phone's location. Nothing checks that you opened the container.
 ## How it is logged and verified
 
 Tap **✓ Log a find**. You can also log **Couldn't find it** (a [DNF](../../glossary.md#dnf)) or **Add a
-note**. Each callsign logs one find per cache. You can also log from your radio with `FOUND AC-1234`.
+note**. Each person logs one find per cache, whichever SSID they log under. You can also log from your radio with `FOUND AC-1234`.
 
 A find reaches one of three tiers:
 

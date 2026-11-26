@@ -438,16 +438,12 @@ async function releaseCall(env: Env, holderId: string, cs: string, now: number):
     env.DB.prepare(
       `DELETE FROM corroboration_retries WHERE log_id IN (SELECT id FROM cache_logs WHERE ${logWindow})`,
     ).bind(cs, like, since),
-    // one found per cache and person: a found the remaining identity already logged (or one under another
-    // SSID of the call) is the same find, so only the first survives
+    // one found per cache and person: a found the remaining identity already logged, under any SSID, is the same
+    // find, so the one moving over gives way (the database holds one found per cache and base call)
     env.DB.prepare(
       `DELETE FROM cache_logs WHERE log_type = 'found' AND ${logWindow}
-         AND cache_id IN (SELECT cache_id FROM cache_logs WHERE log_type = 'found' AND logger_call = ?)`,
-    ).bind(cs, like, since, shownAs),
-    env.DB.prepare(
-      `DELETE FROM cache_logs WHERE log_type = 'found' AND ${logWindow}
-         AND id NOT IN (SELECT MIN(id) FROM cache_logs WHERE log_type = 'found' AND ${logWindow} GROUP BY cache_id)`,
-    ).bind(cs, like, since, cs, like, since),
+         AND cache_id IN (SELECT cache_id FROM cache_logs WHERE log_type = 'found' AND ${ofCall("logger_call")})`,
+    ).bind(cs, like, since, shownAs, `${shownAs}-%`),
     env.DB.prepare(`UPDATE cache_logs SET logger_call = ? WHERE ${logWindow}`).bind(shownAs, cs, like, since),
     // a cache moves with its owner's account; the bumped updated_at re-serves it to the federation
     env.DB.prepare(

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Heritage places come from the sysop's import, never from a player's hide form; a find counts as verified from
-// the instance's minimum (MIN_TRUST) up, unless the cache sets its own, which its owner can clear again.
+// the stricter of the instance's minimum (MIN_TRUST) and the cache's own, which its owner can clear again.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, hiderSignup, operatorVerify } from "./helpers/authflow.js";
 
@@ -103,5 +103,12 @@ describe("the minimum tier", () => {
     expect(clear.status, JSON.stringify(clear.data)).toBe(200);
     expect((await call(w.env, "GET", `/api/caches/${relaxed}`)).data.cache.minTrust).toBe("B");
     expect(await w.find(relaxed)).toMatchObject({ tier: "B", verified: true });
+  });
+
+  it("is never below the instance's: a hider's lower minimum does not relax MIN_TRUST=A", async () => {
+    const a = await world({ MIN_TRUST: "A" });
+    const lower = await a.hide({ minTrust: "B" });
+    expect((await call(a.env, "GET", `/api/caches/${lower}`)).data.cache.minTrust).toBe("A");
+    expect(await a.find(lower)).toMatchObject({ tier: "B", verified: false });
   });
 });
