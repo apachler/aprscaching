@@ -225,7 +225,7 @@ export const ENV_FILES = [
       "# --- optional: AXUDP tunnel (tunnelled AX.25 over UDP — always Tier C, never first-party RF) ---",
       "# set the listen port to enable (default 10093 if enabled without a value)",
       { key: "AXUDP_PORT", value: "" },
-      "# bind address (blank = all interfaces)",
+      "# bind address (blank = loopback without peers, all interfaces with them; 0.0.0.0 opens a peerless listener to all)",
       { key: "AXUDP_BIND", value: "" },
       "# host:port,host:port — with peers it's a bidirectional KISS-equivalent port",
       { key: "AXUDP_PEERS", value: "" },

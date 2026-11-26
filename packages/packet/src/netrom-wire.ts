@@ -46,9 +46,10 @@ export interface NrPacket {
 
 // The network-header callsigns are "AX.25 shifted format". encodeAddress(a, cbit, last) writes the
 // 7-byte shifted form; the c-bit/reserved bits carry no L3 meaning here, so we fix cbit=false and set
-// EOA (last=true) only on the dest, mirroring the spec's "w/EOA bit" note. decodeAddress reads 7 bytes.
+// EOA (last=true) only on the dest, mirroring the spec's "w/EOA bit" note. decodeAddress reads 7 bytes, and
+// null for a call that is not A–Z, 0–9 and space.
 const putCall = (a: Ax25Address, last: boolean) => encodeAddress(a, false, last);
-const getCall = (b: Uint8Array, off: number): Ax25Address => decodeAddress(b, off).addr;
+const getCall = (b: Uint8Array, off: number): Ax25Address | null => decodeAddress(b, off)?.addr ?? null;
 
 /** Encode a NET/ROM inter-node packet (the info that rides inside an AX.25 UI/I frame with PID 0xCF). */
 export function encodeNetrom(p: NrPacket): Uint8Array {
@@ -65,12 +66,18 @@ export function encodeNetrom(p: NrPacket): Uint8Array {
   return out;
 }
 
-/** Decode a NET/ROM inter-node packet. Returns null if the buffer is too short for the fixed headers. */
+/**
+ * Decode a NET/ROM inter-node packet. Returns null if the buffer is too short for the fixed headers or a
+ * network-header call is not a valid address.
+ */
 export function decodeNetrom(b: Uint8Array): NrPacket | null {
   if (b.length < 20) return null;
+  const origin = getCall(b, 0),
+    dest = getCall(b, 7);
+  if (!origin || !dest) return null;
   const opByte = b[19]!;
   return {
-    net: { origin: getCall(b, 0), dest: getCall(b, 7), ttl: b[14]! },
+    net: { origin, dest, ttl: b[14]! },
     tp: {
       circuitIndex: b[15]!,
       circuitId: b[16]!,
@@ -135,18 +142,19 @@ export function encodeNodesBroadcast(senderAlias: string, dests: NodesDest[]): U
   return frames;
 }
 
-/** Decode a NODES-broadcast info field. Returns null if the signature is wrong or the buffer is short. */
+/**
+ * Decode a NODES-broadcast info field. Returns null if the signature is wrong or the buffer is short; an entry
+ * whose destination or neighbour call is not a valid address is skipped.
+ */
 export function decodeNodesBroadcast(info: Uint8Array): { senderAlias: string; dests: NodesDest[] } | null {
   if (info.length < 7 || info[0] !== NODES_SIG) return null;
   const senderAlias = getAlias(info, 1);
   const dests: NodesDest[] = [];
   for (let off = 7; off + 21 <= info.length; off += 21) {
-    dests.push({
-      dest: getCall(info, off),
-      alias: getAlias(info, off + 7),
-      neighbor: getCall(info, off + 13),
-      quality: info[off + 20]!,
-    });
+    const dest = getCall(info, off),
+      neighbor = getCall(info, off + 13);
+    if (!dest || !neighbor) continue;
+    dests.push({ dest, alias: getAlias(info, off + 7), neighbor, quality: info[off + 20]! });
   }
   return { senderAlias, dests };
 }

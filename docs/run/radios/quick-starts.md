@@ -227,9 +227,9 @@ AXUDP_PEERS=bpq.example.net:10093
 ```
 
 The log shows `[axudp] port udp/10093 ↔ bpq.example.net:10093 (Tier C)`. The port then accepts frames only
-from the peers' addresses and drops the rest. Without `AXUDP_PEERS` it only listens, from any host, and warns
-about that at start; bind it to your LAN with `AXUDP_BIND`. The node, the BBS and FBB forwarding run over
-this link even without a radio: [Packet: BBS & NET/ROM node](packet-node.md).
+from the peers' addresses and drops the rest. Without `AXUDP_PEERS` it only listens, from any host that reaches
+it, so it binds loopback until `AXUDP_BIND` names your LAN address (or `0.0.0.0`), and warns at start when it is
+open beyond loopback. The node, the BBS and FBB forwarding run over this link even without a radio: [Packet: BBS & NET/ROM node](packet-node.md).
 
 AXIP (raw IP protocol 93) is the same with `AXIP_PEERS=host1,host2` (no ports). It needs the optional
 `raw-socket` package and the `CAP_NET_RAW` privilege; without them the log shows `[axip] disabled — …`.

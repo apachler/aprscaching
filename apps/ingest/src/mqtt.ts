@@ -13,6 +13,7 @@
 import net from "node:net";
 import tls from "node:tls";
 import { Backoff } from "./backoff.js";
+import { eachFrame } from "./each-frame.js";
 
 /** A packet declaring more than this is not a feed we read: the connection is dropped and re-opened. */
 export const MQTT_MAX_PACKET = 256 * 1024;
@@ -26,6 +27,11 @@ export interface MqttOpts {
   retryMs?: number;
   /** How long to wait for CONNACK before giving up on the connection (default 10 s). */
   connackTimeoutMs?: number;
+  /**
+   * How long one packet may take to arrive from its first byte (default 30 s). Any byte refreshes the
+   * keepalive watchdog, so without this a broker trickling one packet a byte at a time stays connected.
+   */
+  packetTimeoutMs?: number;
   /** Log tag. */
   name?: string;
 }
@@ -128,14 +134,90 @@ export function parsePublish(pkt: MqttPacket): { topic: string; id?: number; pay
   return { topic, ...(id != null ? { id } : {}), payload: b.subarray(p) };
 }
 
+/**
+ * Reassembles packets from a byte stream. Chunks are kept as they arrive and joined once, when the packet at
+ * the head is complete — never re-copied per chunk, so a packet delivered a byte at a time costs one copy of
+ * its length, not one per byte.
+ */
+export class MqttReader {
+  private chunks: Uint8Array[] = [];
+  private have = 0;
+  /** Header plus body length of the packet at the head, 0 while its fixed header is incomplete. */
+  private need = 0;
+
+  /** Bytes of a packet not yet complete. */
+  get pending(): number {
+    return this.have;
+  }
+
+  reset(): void {
+    this.chunks = [];
+    this.have = this.need = 0;
+  }
+
+  /** The packets the chunk completes, or null for an oversized or malformed packet (a broken stream). */
+  push(chunk: Uint8Array): MqttPacket[] | null {
+    if (chunk.length === 0) return [];
+    this.chunks.push(chunk);
+    this.have += chunk.length;
+    if (this.need === 0) {
+      const need = this.headLength();
+      if (need === null) return null;
+      this.need = need;
+    }
+    if (this.need === 0 || this.have < this.need) return [];
+    const merged = this.join();
+    const split = splitPackets(merged);
+    if (!split) return null;
+    this.chunks = split.rest.length ? [split.rest.slice()] : [];
+    this.have = split.rest.length;
+    const need = this.headLength();
+    if (need === null) return null;
+    this.need = need;
+    return split.packets;
+  }
+
+  /** The head packet's total length once its fixed header is in, 0 before; null past the cap or malformed. */
+  private headLength(): number | null {
+    const head = new Uint8Array(Math.min(5, this.have));
+    let o = 0;
+    for (const c of this.chunks) {
+      if (o === head.length) break;
+      const n = Math.min(c.length, head.length - o);
+      head.set(c.subarray(0, n), o);
+      o += n;
+    }
+    let len = 0,
+      mult = 1;
+    for (let p = 1; p < head.length; p++) {
+      len += (head[p]! & 0x7f) * mult;
+      mult *= 128;
+      if (!(head[p]! & 0x80)) return len > MQTT_MAX_PACKET ? null : p + 1 + len;
+    }
+    return head.length === 5 ? null : 0; // a fifth length byte still continuing is malformed
+  }
+
+  private join(): Uint8Array {
+    if (this.chunks.length === 1) return this.chunks[0]!;
+    const out = new Uint8Array(this.have);
+    let o = 0;
+    for (const c of this.chunks) {
+      out.set(c, o);
+      o += c.length;
+    }
+    return out;
+  }
+}
+
 export class MqttSubscriber {
   private sock?: net.Socket;
-  private buf: Uint8Array = new Uint8Array(0);
+  private readonly reader = new MqttReader();
   private backoff: Backoff;
   private ping?: ReturnType<typeof setInterval>;
   private timer?: ReturnType<typeof setTimeout>;
   private connack?: ReturnType<typeof setTimeout>;
   private watchdog?: ReturnType<typeof setTimeout>;
+  private packetDeadline?: ReturnType<typeof setTimeout>;
   private stopped = false;
   private readonly name: string;
 
@@ -162,7 +244,8 @@ export class MqttSubscriber {
     if (this.ping) clearInterval(this.ping);
     if (this.connack) clearTimeout(this.connack);
     if (this.watchdog) clearTimeout(this.watchdog);
-    this.ping = this.connack = this.watchdog = undefined;
+    if (this.packetDeadline) clearTimeout(this.packetDeadline);
+    this.ping = this.connack = this.watchdog = this.packetDeadline = undefined;
   }
 
   private connect(): void {
@@ -171,7 +254,7 @@ export class MqttSubscriber {
     const secure = u.protocol === "mqtts:";
     const port = Number(u.port) || (secure ? 8883 : 1883);
     const host = u.hostname;
-    this.buf = new Uint8Array(0);
+    this.reader.reset();
     this.clearSessionTimers();
     const s = secure ? tls.connect({ host, port, servername: host }) : net.connect(port, host);
     this.sock = s;
@@ -207,18 +290,32 @@ export class MqttSubscriber {
     });
   }
 
+  /** A packet started must complete within the deadline; the clock runs from its first byte. */
+  private armPacketDeadline(completed: boolean): void {
+    if (completed || this.reader.pending === 0) {
+      if (this.packetDeadline) clearTimeout(this.packetDeadline);
+      this.packetDeadline = undefined;
+    }
+    if (this.reader.pending === 0 || this.packetDeadline) return;
+    const sock = this.sock;
+    const ms = this.o.packetTimeoutMs ?? 30_000;
+    this.packetDeadline = setTimeout(() => {
+      this.packetDeadline = undefined;
+      console.log("[%s] a packet took longer than %s s to arrive — reconnecting", this.name, ms / 1000);
+      sock?.destroy();
+    }, ms);
+    this.packetDeadline.unref?.();
+  }
+
   private receive(chunk: Uint8Array, keepAliveSec: number): void {
-    const merged = new Uint8Array(this.buf.length + chunk.length);
-    merged.set(this.buf);
-    merged.set(chunk, this.buf.length);
-    const split = splitPackets(merged);
-    if (!split) {
+    const packets = this.reader.push(chunk);
+    if (!packets) {
       console.log("[%s] oversized or malformed packet — reconnecting", this.name);
       this.sock?.destroy();
       return;
     }
-    this.buf = split.rest.slice();
-    for (const pkt of split.packets) {
+    this.armPacketDeadline(packets.length > 0);
+    for (const pkt of packets) {
       if (pkt.type === 2) {
         // CONNACK: return code in the second byte
         if (this.connack) clearTimeout(this.connack);
@@ -256,7 +353,11 @@ export class MqttSubscriber {
         const pub = parsePublish(pkt);
         if (!pub) continue;
         if (pub.id != null) this.sock?.write(Uint8Array.from([0x40, 0x02, pub.id >> 8, pub.id & 0xff])); // PUBACK
-        this.onMessage(pub.topic, pub.payload);
+        eachFrame(
+          [pub],
+          (m) => this.onMessage(m.topic, m.payload),
+          (m) => console.log("[%s] %s", this.name, m),
+        );
       }
     }
   }

@@ -9,8 +9,16 @@ export { crc16X25, appendAxipCrc, stripAxipCrc } from "@aprscaching/ax25";
 
 export interface AxudpOpts {
   port: number;
+  /**
+   * Local address the socket binds. Unset or blank: the listener (no peers) binds loopback, since it accepts
+   * frames from any host that reaches it; the port with peers binds all addresses, since its allowlist admits
+   * only the peers. `0.0.0.0` opens the listener to every network the box is on.
+   */
   bind?: string;
 }
+
+/** Where a listener with no peers binds when none is set: only this host's own programs reach it. */
+export const AXUDP_LISTENER_DEFAULT_BIND = "127.0.0.1";
 /** A UDP endpoint to send AX.25 frames to (the other end of an AXUDP link). */
 export interface AxudpPeer {
   host: string;
@@ -66,7 +74,8 @@ export class AxudpListener {
   ) {}
 
   start() {
-    console.warn(openListenerWarning("axudp", "AXUDP_BIND", "AXUDP_PEERS"));
+    const bind = this.o.bind || AXUDP_LISTENER_DEFAULT_BIND;
+    if (bind !== AXUDP_LISTENER_DEFAULT_BIND) console.warn(openListenerWarning("axudp", "AXUDP_BIND", "AXUDP_PEERS"));
     const s = dgram.createSocket("udp4");
     this.sock = s;
     s.on("message", (msg: Buffer) => {
@@ -75,10 +84,17 @@ export class AxudpListener {
     });
     s.on("error", (e: NodeJS.ErrnoException) => {
       console.error("[axudp] socket error:", e.message);
-      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // retry the bind once the address frees up
+      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, bind), 5000).unref?.(); // retry the bind once the address frees up
     });
-    s.bind(this.o.port, this.o.bind, () =>
-      console.log("[axudp] listening udp/%s (tunnelled AX.25 — Tier C only)", this.o.port),
+    s.bind(this.o.port, bind, () =>
+      console.log(
+        "[axudp] listening udp/%s on %s (tunnelled AX.25 — Tier C only)%s",
+        this.o.port,
+        bind,
+        bind === AXUDP_LISTENER_DEFAULT_BIND
+          ? "; only this host reaches it — set AXUDP_BIND to a LAN address, or 0.0.0.0 for all, to take frames from others"
+          : "",
+      ),
     );
   }
 

@@ -68,18 +68,21 @@ export function encodeRif(rips: Rip[]): Uint8Array {
   return Uint8Array.from(out);
 }
 
-/** Decode a RIF info field into its RIP entries, or null if it isn't a RIF. Tolerant of truncation. */
+/**
+ * Decode a RIF info field into its RIP entries, or null if it isn't a RIF. Tolerant of truncation; an entry whose
+ * destination call is not a valid address is skipped.
+ */
 export function decodeRif(info: Uint8Array): Rip[] | null {
   if (info.length < 1 || info[0] !== INP_RIF) return null;
   const rips: Rip[] = [];
   let o = 1;
   while (o + 10 <= info.length) {
-    const dest = decodeAddress(info, o).addr;
+    const dest = decodeAddress(info, o)?.addr;
     o += 7;
     const hops = info[o++]!;
     const tt = (info[o]! << 8) | info[o + 1]!;
     o += 2;
-    const rip: Rip = { dest, hops, tt };
+    const rip: Rip = { dest: dest ?? { call: "", ssid: 0 }, hops, tt };
     // options until EOP (a zero length byte)
     for (;;) {
       if (o >= info.length) break;
@@ -95,7 +98,7 @@ export function decodeRif(info: Uint8Array): Rip[] | null {
         rip.ip = { addr: [data[0]!, data[1]!, data[2]!, data[3]!], bits: data[4]! };
       o += len;
     }
-    rips.push(rip);
+    if (dest) rips.push(rip); // an entry whose call is not a valid address is read past, not kept
   }
   return rips;
 }

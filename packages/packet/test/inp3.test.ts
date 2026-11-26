@@ -48,6 +48,12 @@ describe("INP3 RIF codec", () => {
     expect(info[10]).toBe(0x02); // tt low byte
     expect(decodeRif(new Uint8Array([0x00, 1, 2, 3]))).toBeNull();
   });
+
+  it("skips an entry whose destination call is not A–Z, 0–9 and space, and reads the next", () => {
+    const info = encodeRif([rip("OE1AAA-1", 1, 10, "AAA"), rip("OE1BBB-1", 2, 20, "BBB")]);
+    info[1 + 2] = 0x0a << 1; // a newline in the first entry's destination call
+    expect(decodeRif(info)!.map((r) => [r.dest.call, r.hops, r.alias])).toEqual([["OE1BBB", 2, "BBB"]]);
+  });
 });
 
 describe("INP3 L3RTT probe", () => {
