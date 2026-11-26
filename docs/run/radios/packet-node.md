@@ -46,11 +46,16 @@ a two-way AXUDP port. The node:
 - broadcasts its **NODES** table every `NETROM_BROADCAST_MS` (default 3600000, one hour; at least five minutes) and learns
   routes from the NODES broadcasts it hears, letting stale routes age out; `NETROM_PATH_QUALITY` (0–255) is
   the quality it assumes for a neighbour heard directly;
-- switches directed NET/ROM frames: delivers them locally, forwards them on, or drops them;
+- switches NET/ROM frames sent to its own call: delivers them locally, forwards them on, or drops them. A
+  frame heard between two other stations is ignored, and forwards draw from the node's
+  [transmit bucket](../compliance/on-air-stations.md#transmit-pacing);
 - accepts **L4 circuits** that end at the node (bound to the node command line), and **connect-through**
-  (`C <dest>`), which routes a caller onward and bridges the two;
+  (`C <dest>`), which routes a caller onward and bridges the two. It keeps at most 64 circuits open, ties
+  each to the node at its far end, and closes one idle for 15 minutes or sending a message over 8 KiB;
 - answers with the command surface set by `NODE_PERSONALITY`: `netrom`, `flexnet`, `tnn` or `baycom`;
-- mirrors its learned NODES table and its MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`).
+- mirrors its learned NODES table and its MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`):
+  the routes that changed, in one request at most every 30 seconds. A route the gateway refuses is logged
+  and not sent again until it changes.
 
 **Check that it worked.** The box logs `[netrom] node <ALIAS>:<CALL> active on <port>` and, once it answers
 connects, `[netrom] node CLI answering inbound connects on <CALL>`. Learned routes log as
@@ -64,11 +69,16 @@ the fixed five-minute flood with **triggered, point-to-point Routing Information
 the measured **round-trip transport time (`tt`)**. The network converges faster and prefers paths with low
 latency. The node:
 
-- learns routes from a neighbour's directed RIF, adds the link's own `tt` to each route, and advertises
+- takes a station whose NODES broadcast or RIF it hears as a neighbour once it answers an L3RTT probe, and
+  keeps at most 16 neighbours, dropping one not heard for three broadcast intervals;
+- learns routes from a neighbour's RIF sent to its own call, adds the link's own `tt` to each route, and advertises
   again only what changed, within a 30-hop horizon;
 - measures each neighbour's latency with **L3RTT** probes and takes a route's `tt` as half the smoothed
   round trip;
 - withdraws a route (`tt = 60000`) when its neighbour does, or when it ages out;
+- sends its RIFs, probes and probe echoes through the node's
+  [transmit bucket](../compliance/on-air-stations.md#transmit-pacing), where stations that are not yet
+  neighbours share at most half;
 - shows INP3 routes in the same node table, with their `tt` mapped to a NET/ROM-style quality for display
   only; routing stays on `tt`.
 
