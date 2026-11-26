@@ -3,8 +3,7 @@
 // real F6FBB partner takes it. Only this BBS issues BIDs with its call: one arriving by forwarding is dropped.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup } from "./helpers/authflow.js";
-
-const INGEST = { "x-ingest-secret": "test-ingest-secret" };
+import { boxCall } from "./helpers/box.js";
 
 describe("FBB BIDs", () => {
   it("are issued as <id>_<sysop base call>, within 12 characters", async () => {
@@ -27,12 +26,13 @@ describe("FBB BIDs", () => {
   it("drop a forwarded message under a BID of this BBS, so it cannot claim one the BBS has yet to issue", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     const inbound = (bid: string) =>
-      call(
+      boxCall(
         env,
+        "bbs",
         "POST",
         "/api/bbs/forward/inbound",
         { message: { bid, type: "P", from: "DL1ABC", to: "OE1AAA", title: "hi", body: "x" } },
-        INGEST,
+        { services: true },
       );
     expect((await inbound("1_OE8APR")).data).toMatchObject({ stored: 0, deduped: true });
     expect((await inbound("1_DB0ABC")).data).toMatchObject({ stored: 1 });
@@ -52,12 +52,13 @@ describe("FBB BIDs", () => {
 
   it("are never owned by an instance without a sysop call, which shares the fallback call", async () => {
     const env = authEnv();
-    const r = await call(
+    const r = await boxCall(
       env,
+      "bbs",
       "POST",
       "/api/bbs/forward/inbound",
       { message: { bid: "1_APRSCG", type: "P", from: "DL1ABC", to: "OE1AAA", title: "hi", body: "x" } },
-      INGEST,
+      { services: true },
     );
     expect(r.data).toMatchObject({ stored: 1 });
   });

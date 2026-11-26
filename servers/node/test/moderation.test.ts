@@ -4,6 +4,7 @@
 // federation (through a signed tombstone). Only the sysop reaches any of it.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import { addCache, gid, instanceEnv, newFedKey, serve, stubFetch } from "./helpers/fedpeer.js";
 import { syncAllPeers } from "@aprscaching/gateway/federation_sync";
 import type { Env } from "@aprscaching/gateway/env";
@@ -441,25 +442,48 @@ describe("suspension", () => {
     expect(signIn.data.error).toMatch(/suspended.*repeated spam/);
     expect(signIn.cookie).toBe("");
 
-    // the ingest plane cannot log or post in the suspended call's name either
-    const ingest = { "x-ingest-secret": "test-ingest-secret" };
+    // nor log in the suspended call's name over the air: a FOUND heard from it is refused for the suspension
     const owner2 = await user(w, "DL1OTH");
     const other = await hide(w, owner2, "elsewhere");
-    const radioFind = await call(
+    const heard = await call(
       w.env,
       "POST",
-      `/api/caches/${other.id}/logs`,
-      { logType: "note", loggerCall: "DL1BAD", comment: "hi" },
-      ingest,
+      "/ingest",
+      {
+        packets: [
+          {
+            src: "DL1BAD-7",
+            dst: "APRS",
+            path: ["TCPIP*", "qAC", "T2TEST"],
+            heardVia: "aprs_is",
+            igateCall: "T2TEST",
+            port: "aprs-is",
+            ts: Math.floor(Date.now() / 1000),
+            payload: `:OE8APR-15:FOUND ${other.code}{1`,
+          },
+        ],
+      },
+      { "x-ingest-secret": "test-ingest-secret" },
     );
-    expect(radioFind.status).toBe(409);
-    expect(radioFind.data.error).toMatch(/suspended/);
-    const bbs = await call(
+    expect(heard.status).toBe(200);
+    const radioFind = await w.env.DB.prepare(
+      "SELECT status, reason FROM radio_commands WHERE from_call = 'DL1BAD-7'",
+    ).first<{ status: string; reason: string | null }>();
+    expect(radioFind?.status).toBe("rejected");
+    expect(radioFind?.reason).toMatch(/suspended/);
+    const otherLogs = await w.env.DB.prepare("SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ?")
+      .bind(other.id)
+      .first<{ n: number }>();
+    expect(otherLogs?.n).toBe(0);
+
+    // nor post in its name through the packet BBS
+    const bbs = await boxCall(
       w.env,
+      "bbs",
       "POST",
       "/api/bbs/messages",
       { fromCall: "DL1BAD", toCall: "ALL", body: "spam" },
-      ingest,
+      { services: true },
     );
     expect(bbs.status).toBe(403);
 

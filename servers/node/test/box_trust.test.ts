@@ -9,7 +9,15 @@
 import { describe, it, expect } from "vitest";
 import { createPrivateKey } from "node:crypto";
 import type { Env } from "@aprscaching/gateway/env";
-import { authEnv, call, emailSignup, operatorVerify, ORIGIN } from "./helpers/authflow.js";
+import {
+  authEnv,
+  call,
+  emailSignup,
+  markCallVerified,
+  operatorVerify,
+  ORIGIN,
+  sessionCookie,
+} from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import { enrollBody, newBoxKey, signedHeaders, type BoxKey } from "../../../apps/ingest/src/gatewayauth.js";
 
@@ -76,7 +84,7 @@ async function heard(env: Env, k: BoxKey, src: string) {
 }
 
 let seq = 0;
-/** A cache at the heard spot, and `logger`'s found log on it (as the ingest plane, so no session is needed). */
+/** A cache at the heard spot, and `logger`'s found log on it from the logger's session, the call control-verified. */
 async function find(env: Env, logger: string) {
   const code = `AC-LR${++seq}`;
   const r = await env.DB.prepare(
@@ -84,12 +92,14 @@ async function find(env: Env, logger: string) {
   )
     .bind(code, LAT, LON, now() - 86400, now() - 86400)
     .run();
+  await markCallVerified(env, logger);
+  const cookie = await sessionCookie(env, logger);
   const res = await call(
     env,
     "POST",
     `/api/caches/${Number(r.meta.last_row_id)}/logs`,
-    { loggerCall: logger, logType: "found" },
-    INGEST,
+    { logType: "found" },
+    { cookie },
   );
   expect(res.status, JSON.stringify(res.data)).toBeLessThan(300);
   return { code, tier: res.data.tier as string };

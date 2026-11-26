@@ -5,12 +5,12 @@
  * (`GET /api/box/:id/commands`), executes each one, and reports the outcome
  * (`POST /api/box/:id/commands/ack`). No inbound port is ever opened on the box.
  *
- * Pairing: at start the box asks the gateway for a one-time pairing code (`POST /api/box/:id/pair`, with
- * its secret) and prints it. The operator enters that code in the web app to link the box to their
+ * Pairing: at start the box asks the gateway for a one-time pairing code (`POST /api/box/:id/pair`, signed
+ * with its own key: the gateway takes no shared secret for a box) and prints it. The operator enters that code in the web app to link the box to their
  * account — only someone who can see this box's output can claim it. Restart the box for a fresh code.
  *
  * The gateway already requires a control-verified callsign for every transmit kind. The box enforces
- * its own, independent gates, because the shared ingest secret also lets a trusted backend enqueue:
+ * its own, independent gates, because the operator secret and the box's own services also enqueue:
  *  - remote transmit is off unless the operator opts in on the box (`BOX_TX=1`);
  *  - a transmit command must name a callsign whose base call is the box's own station call;
  *  - a beacon names the box's own position (`BOX_LAT`, `BOX_LON`), never one the command carries, and the

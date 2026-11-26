@@ -239,7 +239,6 @@ export function gatewayTxGateLookup(o: {
   ingestUrl: string;
   secret: string;
   boxKey: boolean;
-  boxId?: string;
   fetch?: typeof fetch;
 }): TxGateLookup {
   const f = o.fetch ?? gatewayFetch;
@@ -250,7 +249,6 @@ export function gatewayTxGateLookup(o: {
     const nonce = randomBytes(18).toString("base64url");
     url.searchParams.set("calls", calls.join(","));
     url.searchParams.set("nonce", nonce);
-    if (o.boxId) url.searchParams.set("box", o.boxId);
     const r = await f(url.toString(), { headers: { "x-ingest-secret": o.secret } });
     if (r.status === 404) throw new TxGateUnsupported("the gateway has no /ingest/txgate (HTTP 404)");
     if (r.status === 401 || r.status === 403)

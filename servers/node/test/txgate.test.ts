@@ -37,12 +37,11 @@ async function world() {
 }
 
 /** The box's lookup, sent through the gateway in-process; a key box signs its request. */
-const lookup = (env: Env, o: { secret?: string; key?: BoxKey; boxId?: string }) =>
+const lookup = (env: Env, o: { secret?: string; key?: BoxKey }) =>
   gatewayTxGateLookup({
     ingestUrl: `${ORIGIN}/ingest`,
     secret: o.secret ?? "",
     boxKey: !!o.key,
-    boxId: o.boxId,
     fetch: (async (u: string, init?: RequestInit) =>
       serve(env)(
         new Request(u, {

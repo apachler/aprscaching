@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A callsign's BBS mailbox is its holder's. The web routes read and write personal mail only for a
-// session whose account holds the call, or for the ingest box (INGEST_SECRET), which carries mail for
-// the stations it hears and forwards. A White Pages entry steers FBB forwarding, so only the ingest box
+// session whose account holds the call, or for the packet BBS (an ingest box enrolled with its own key that
+// runs this instance's services), which carries mail for the stations that connect to it. The shared
+// ingest secret acts for no mailbox. A White Pages entry steers FBB forwarding, so only the packet BBS box
 // and the operator set one. Bulletins stay public.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
 const OPERATOR = { "x-operator-secret": "test-operator-secret" };
+
+/** A request the packet BBS signs: a box enrolled with its own key that runs this instance's services. */
+const bbs = (env: Parameters<typeof call>[0], method: string, path: string, body?: unknown) =>
+  boxCall(env, "bbs", method, path, body, { services: true });
 
 async function twoOperators() {
   const env = authEnv();
@@ -19,7 +25,7 @@ async function twoOperators() {
 }
 
 describe("posting BBS mail", () => {
-  it("needs a session or the ingest secret", async () => {
+  it("needs a session or the packet BBS box", async () => {
     const { env } = await twoOperators();
     const r = await call(env, "POST", "/api/bbs/messages", { fromCall: "OE1AAA", toCall: "OE2BBB", body: "hi" });
     expect(r.status).toBe(401);
@@ -45,15 +51,9 @@ describe("posting BBS mail", () => {
     expect(own.status).toBe(201);
   });
 
-  it("the ingest box posts for any station", async () => {
+  it("the packet BBS box posts for any station", async () => {
     const { env } = await twoOperators();
-    const r = await call(
-      env,
-      "POST",
-      "/api/bbs/messages",
-      { fromCall: "OE9XYZ", toCall: "OE2BBB", body: "rf" },
-      INGEST,
-    );
+    const r = await bbs(env, "POST", "/api/bbs/messages", { fromCall: "OE9XYZ", toCall: "OE2BBB", body: "rf" });
     expect(r.status).toBe(201);
   });
 
@@ -83,7 +83,7 @@ describe("reading a mailbox", () => {
 
     expect((await call(env, "GET", "/api/bbs/sent?from=OE1AAA", undefined, bob)).status).toBe(403);
     expect((await call(env, "GET", "/api/bbs/sent?from=OE1AAA", undefined, alice)).status).toBe(200);
-    expect((await call(env, "GET", "/api/bbs/messages?to=OE2BBB", undefined, INGEST)).status).toBe(200);
+    expect((await bbs(env, "GET", "/api/bbs/messages?to=OE2BBB", undefined)).status).toBe(200);
   });
 
   it("only the addressee marks a message read", async () => {
@@ -102,23 +102,17 @@ describe("reading a mailbox", () => {
     expect((await call(env, "POST", "/api/bbs/messages/999999/read", undefined, bob)).status).toBe(404);
   });
 
-  it("the ingest box marks mail read only for the station it names as its addressee", async () => {
+  it("the packet BBS box marks mail read only for the station it names as its addressee", async () => {
     const { env, bob } = await twoOperators();
-    const post = await call(
-      env,
-      "POST",
-      "/api/bbs/messages",
-      { fromCall: "OE1AAA", toCall: "OE2BBB", body: "x" },
-      INGEST,
-    );
+    const post = await bbs(env, "POST", "/api/bbs/messages", { fromCall: "OE1AAA", toCall: "OE2BBB", body: "x" });
     const id = post.data.id as number;
     const unread = async () =>
       (await call(env, "GET", "/api/bbs/messages?to=OE2BBB", undefined, bob)).data.messages.find(
         (m: { id: number }) => m.id === id,
       ).readAt;
-    expect((await call(env, "POST", `/api/bbs/messages/${id}/read`, { call: "OE1AAA" }, INGEST)).status).toBe(403);
+    expect((await bbs(env, "POST", `/api/bbs/messages/${id}/read`, { call: "OE1AAA" })).status).toBe(403);
     expect(await unread()).toBeNull();
-    expect((await call(env, "POST", `/api/bbs/messages/${id}/read`, { call: "oe2bbb" }, INGEST)).status).toBe(200);
+    expect((await bbs(env, "POST", `/api/bbs/messages/${id}/read`, { call: "oe2bbb" })).status).toBe(200);
     expect(await unread()).not.toBeNull();
   });
 
@@ -147,25 +141,24 @@ describe("reading a mailbox", () => {
 
   it("a hierarchical address is the mailbox of its callsign", async () => {
     const { env, bob } = await twoOperators();
-    const r = await call(
-      env,
-      "POST",
-      "/api/bbs/messages",
-      { fromCall: "OE9XYZ", toCall: "OE2BBB @ OE2BBS.OE.EU", body: "via hierarchy" },
-      INGEST,
-    );
+    const r = await bbs(env, "POST", "/api/bbs/messages", {
+      fromCall: "OE9XYZ",
+      toCall: "OE2BBB @ OE2BBS.OE.EU",
+      body: "via hierarchy",
+    });
     expect((await call(env, "POST", `/api/bbs/messages/${r.data.id}/read`, undefined, bob)).status).toBe(200);
   });
 });
 
 describe("White Pages", () => {
-  it("anyone looks an entry up; only the ingest box and the operator set one", async () => {
+  it("anyone looks an entry up; only the packet BBS box and the operator set one", async () => {
     const { env, alice } = await twoOperators();
     const entry = { callsign: "OE2BBB", homeBbs: "OE1EVL.OE.EU" };
     expect((await call(env, "POST", "/api/bbs/wp", entry)).status).toBe(403);
     expect((await call(env, "POST", "/api/bbs/wp", entry, alice)).status).toBe(403);
     expect((await call(env, "POST", "/api/bbs/wp", entry, { "x-ingest-secret": "nope" })).status).toBe(401);
-    expect((await call(env, "POST", "/api/bbs/wp", entry, INGEST)).status).toBe(200);
+    expect((await call(env, "POST", "/api/bbs/wp", entry, INGEST)).status).toBe(401);
+    expect((await bbs(env, "POST", "/api/bbs/wp", entry)).status).toBe(200);
     expect(
       (await call(env, "POST", "/api/bbs/wp", { callsign: "OE2BBB", homeBbs: "OE2X.OE.EU" }, OPERATOR)).status,
     ).toBe(200);

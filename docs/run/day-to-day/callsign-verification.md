@@ -11,7 +11,7 @@ method (`callsign_verifications.method`) and who vouched for it (`verified_by`):
 
 | Method | How | `verified_by` | Needs on this instance |
 |---|---|---|---|
-| `rf_heard` | `VERIFY <code>` sent to the service call, heard by a trusted receiving station (`FIRST_PARTY_SITES`, or **Instance admin → Trusted receiving stations**, including enrolled boxes trusted there) on its own TNC, or by its MeshCom node directly over LoRa | the receiving site | attested sites |
+| `rf_heard` | `VERIFY <code>` sent to the service call, heard by an enrolled ingest box at a site trusted under it (**Trust this station's hearings**) on its own TNC, or by its MeshCom node directly over LoRa, and delivered with the box's own key; never from `FIRST_PARTY_SITES`, a station trusted by call or the shared `INGEST_SECRET` | the receiving site | an [enrolled, trusted box](../radios/ingest-box.md#how-the-box-signs-in) |
 | `ampr_dns` | a code in the `_aprscaching-verify.<call>.ampr.org` TXT record (a name of its own, apart from the [federation identity record](../networks/44net-identity.md#3-name-and-identity)): a DNSSEC-validated answer over `DOH_URL`, or else the same TXT set from every resolver of `AMPR_DNS_RESOLVERS` that answers (at least 2) | `<call>.ampr.org` | outbound HTTPS to the resolvers |
 | `lotw` | a challenge signed with the member's LoTW callsign certificate, which must chain to a CA in `LOTW_CA_PEM` and name the call | the trusted CA's name | `LOTW_CA_PEM` |
 | `operator` | the operator CLI with the operator secret, for an `ADMIN_CALLSIGNS` call | `operator` | — |

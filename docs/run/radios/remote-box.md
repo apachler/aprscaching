@@ -8,15 +8,17 @@ own outbound connection (`/api/box/<id>/…`), runs them, and reports each resul
 
 ## Before you start
 
-- A running ingest box ([Set up an ingest box](ingest-box.md)) and access to its log.
+- A running ingest box enrolled with its own key (`BOX_ID` and `BOX_KEY`,
+  [Enrolling the box](ingest-box.md#enrolling-the-box)) and access to its log. A box on the shared
+  `INGEST_SECRET` takes no remote control: the gateway pairs and polls a box only by its own key.
 - An account on the instance. Transmit commands also need a verified callsign on that account
   ([Callsign verification](../day-to-day/callsign-verification.md)).
 - An enrolled box whose code you created while signed in is yours already: skip the pairing steps.
 
 ## Pair the box
 
-1. On the box, set `BOX_ID` to a name of your choice, for example `pi-home`, and restart the ingest. At start
-   the box prints a one-time pairing code to its log:
+1. Restart the ingest on the enrolled box. Its id is the `BOX_ID` enrollment wrote, for example `pi-home`. At
+   start the box prints a one-time pairing code to its log:
    `[box] pairing code for pi-home: ABCD-EFGH (valid 15 min) — enter it under Shack → Remote box …`.
 2. In the app, open **Shack → Remote box**. Enter the same name as the **Box ID**, then the
    **Pairing code**, and select **Pair box**. The box now belongs to your account: no other account can send

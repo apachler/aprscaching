@@ -94,7 +94,7 @@ import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import {
   authenticateBox,
-  boxMayActAs,
+  boxActorRefusal,
   handleCreateEnrollCode,
   handleEnroll,
   handleListBoxes,
@@ -572,9 +572,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log|pair|claim)$/.exec(p);
   if (box) {
     const [boxId, op] = [box[1]!, box[2]!];
-    // an enrolled box signs only for itself; the shared secret and the operator act for any box
-    if (!boxMayActAs(req, boxId))
-      return json({ error: "this box's key does not act for another box" }, { status: 403 });
+    const refused = boxActorRefusal(req, env, boxId);
+    if (refused) return json({ error: refused }, { status: 403 });
     if (op === "command" && m === "POST") return handleBoxEnqueue(req, env, boxId);
     if (op === "commands" && m === "GET") return handleBoxPoll(req, env, boxId);
     if (op === "commands/ack" && m === "POST") return handleBoxAck(req, env, boxId);

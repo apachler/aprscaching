@@ -5,6 +5,7 @@
 // holder of the ingest secret knows lets them mint one.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import { freshDb } from "./helpers/fedpeer.js";
 
 const INGEST = { "x-ingest-secret": "test-ingest-secret" };
@@ -65,9 +66,10 @@ describe("the ingest secret is not an operator credential", () => {
     expect(partner.status).toBe(201);
   });
 
-  it("the ingest plane keeps what the ingest box does: partner list read, node mirror, heard frames", async () => {
+  it("the ingest plane keeps the node mirror; the partner list is the packet BBS box's", async () => {
     const env = authEnv({ ADMIN_CALLSIGNS: "OE8APR" });
-    expect((await call(env, "GET", "/api/bbs/partners", undefined, INGEST)).status).toBe(200);
+    expect((await call(env, "GET", "/api/bbs/partners", undefined, INGEST)).status).toBe(401);
+    expect((await boxCall(env, "bbs", "GET", "/api/bbs/partners", undefined, { services: true })).status).toBe(200);
     const node = await call(
       env,
       "POST",
