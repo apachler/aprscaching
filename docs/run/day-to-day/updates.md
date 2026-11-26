@@ -37,10 +37,13 @@ Run these in the checkout's root directory:
 deploy/aprscaching update                          # to the newest release tag, else the branch's head
 deploy/aprscaching update --ref v1.2.0             # to a tag, branch or commit
 deploy/aprscaching update --rollback-window 30     # roll back without asking for 30 minutes, not 15
+deploy/aprscaching update --checksum-only          # no GitHub CLI: trust the release's checksum alone
+deploy/aprscaching update --ref main --unverified  # a branch, no check, without asking
 ```
 
-1. It fetches, shows the current and the target version with the commits in between, and asks before it
-   changes anything (`--yes` answers for you). A target that is not ahead of the running version gets a
+1. It fetches and verifies the target ([What update verifies](#what-update-verifies)). It shows the current
+   and the target version with the commits in between, and asks before it changes anything (`--yes` answers
+   for you, unless the target is unverified). A target that is not ahead of the running version gets a
    warning: migrations never run backward.
 2. It runs `doctor` and takes a backup with `deploy/aprscaching backup`.
 3. It moves the checkout to the target and brings the instance onto it:
@@ -61,6 +64,31 @@ deploy/aprscaching update --rollback-window 30     # roll back without asking fo
 A failure that existed before the update does not trigger a rollback. When you decline the rollback, the helper
 prints the two commands that roll back by hand.
 
+## What update verifies
+
+On Self-host, bare metal and an ingest box, `update` moves the checkout only to code it can trace to a release,
+the same check `init baremetal` makes:
+
+1. It downloads the release's git bundle and `SHA256SUMS` from the repository's GitHub releases.
+2. The bundle must match its line in `SHA256SUMS`.
+3. `gh attestation verify` must confirm the bundle's signed provenance: an attestation signed by the
+   repository's release workflow, `release-verify.yml`, and no other workflow. A check that cannot run, such as
+   Sigstore out of reach, stops the update too, and says so apart from a refusal.
+4. The bundle must hold the release's tag.
+5. The checkout moves to the commit the bundle's tag names. When the tag on `origin` names any other commit, the
+   helper stops and names both commits: a tag alone proves nothing, since anyone who can push a tag can make one.
+
+Any failed step stops the update before the backup and the rebuild, and nothing changes. A download that fails
+stops it too.
+
+- **`--checksum-only`.** Without the GitHub CLI, step 3 cannot run and the update stops. `--checksum-only` skips
+  it. The checksum then proves only that the bundle arrived intact; `SHA256SUMS` comes from the same release
+  page, so whoever can change the release can change both. Install `gh` (https://cli.github.com) instead
+  where you can.
+- **Unverified targets.** A branch, a commit, a tag whose release has no bundle, or a checkout whose `origin` is
+  not on GitHub has nothing to check. The helper says so and asks, and `--yes` does not answer for you. Pass
+  `--unverified` to take it without asking, for example in a script that tracks a branch.
+
 ## Self-host by hand
 
 Without the helper, run this in `deploy/`:
@@ -68,6 +96,8 @@ Without the helper, run this in `deploy/`:
 ```bash
 git pull && SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build
 ```
+
+`git pull` checks nothing: verify the release first ([Check a download](../install/verified-downloads.md)).
 
 The image cannot see `.git`, so `SOURCE_COMMIT` is how its source link names the commit it runs. Migrations
 apply when the gateway starts; they run forward only and are tracked in `_migrations` by file name, so a file

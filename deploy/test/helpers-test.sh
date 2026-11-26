@@ -113,13 +113,13 @@ check "a whole number passes" cfg_check KISS_TNC_PORT 8001
 check "a blank value passes" cfg_check KISS_TNC_PORT "  "
 check "a word fails as a number" eq "$(cfg_check KISS_TNC_PORT eighty || true)" "KISS_TNC_PORT: expected a whole number"
 check "a fraction passes as a number" cfg_check MESHCOM_RATE 2.5
-check "an enum value passes" cfg_check TRUST_PROXY 1
+check "an enum value passes" cfg_check TRUST_CF 1
 check "a callsign with an SSID passes" cfg_check DIGI_CALL OE8APR-10
 check "a callsign with an SSID over 15 fails" eq "$(cfg_check DIGI_CALL OE8APR-20 || true)" "DIGI_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
 check "a word without a digit fails as a callsign" eq "$(cfg_check SERVICE_CALL APRSCG || true)" "SERVICE_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
 check "a list of callsigns passes, a MeshCom SSID too" cfg_check FIRST_PARTY_SITES "OE8APR-10, OE8APR-42"
 check "a list with a non-callsign fails" eq "$(cfg_check FIRST_PARTY_SITES "OE8APR-10,nope" || true)" "FIRST_PARTY_SITES: expected callsigns such as OE8APR,OE8APR-10, separated by commas"
-check "an unknown enum value fails" eq "$(cfg_check TRUST_PROXY true || true)" "TRUST_PROXY: expected one of: 0, 1"
+check "an unknown enum value fails" eq "$(cfg_check TRUST_CF true || true)" "TRUST_CF: expected one of: 0, 1"
 check "a URL passes" cfg_check APP_URL https://aprs.example.net
 check "a bare host fails as a URL" eq "$(cfg_check APP_URL aprs.example.net || true)" "APP_URL: expected an absolute URL"
 if have node || have python3; then
@@ -352,16 +352,16 @@ check "--no-next-steps prints no Docker steps" bash -c "! '$S' --non-interactive
 
 # ---- bare metal ------------------------------------------------------------------------------------------------
 if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
-  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --dir /srv/acs --user acs --port 8090 --call OE8APR
+  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --unverified --dir /srv/acs --user acs --port 8090 --call OE8APR
   check "  … lists the root steps first" grep -q "Steps that need root" "$TMP/out"
   check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs" "$TMP/out"
   check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
   check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
   check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
   check "  … makes data/ the service user's alone" grep -q "\[acs\] install -d -m 700 /srv/acs/data" "$TMP/out"
-  check "  … says the checkout is unverified" grep -q "without verification" "$TMP/err"
+  check "  … says the checkout is unverified" grep -q "main (branch) is not verified" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
-  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --no-start --call OE8APR
+  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --unverified --no-start --call OE8APR
   check "  … no systemctl" bash -c "! grep -q '\[root\] systemctl' '$TMP/out'"
   if run --non-interactive init baremetal --dry-run --ref main --call OE8APR; then
     bad "bare metal: an unverified install without --yes is refused"
@@ -371,33 +371,89 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
 else
   echo "skip bare metal (needs systemctl and Node.js 22+)"
 fi
-# A release download, verified: curl and gh stand in for GitHub (fixtures in $REL).
-REL="$TMP/rel"
-mkdir -p "$REL"
-printf 'a git bundle\n' >"$REL/aprscaching-v9.9.9.bundle"
-(cd "$REL" && sha256sum aprscaching-v9.9.9.bundle >SHA256SUMS)
-verify_release() { # verify_release MODE: good | tampered | missing | nogh | nogh-checksum
-  bash -c '
-    . "$1/lib/common.sh"; DEPLOY_DIR="$1"; . "$1/lib/shapes/baremetal.sh"
-    REL="$2"; MODE="$3"; BM_ALLOW_UNSIGNED=0
-    [ "$MODE" = nogh-checksum ] && BM_ALLOW_UNSIGNED=1
-    curl() { local out="" url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done
-      [ "$MODE" = missing ] && return 22
-      cp "$REL/${url##*/}" "$out"
-      if [ "$MODE" = tampered ] && [ "${url##*/}" != SHA256SUMS ]; then echo evil >>"$out"; fi; }
-    have() { [ "$1" = gh ] && [ "${MODE#nogh}" != "$MODE" ] && return 1; command -v "$1" >/dev/null; }
-    gh() { [ "$1 $2" = "attestation verify" ]; }
-    bm_verified_bundle https://github.com/apachler/aprscaching v9.9.9
-  ' _ "$DEPLOY" "$REL" "$1"
+# ---- release verification: init baremetal and update, through the one check in deploy/lib/release.sh --------------
+# deploy/test/release-case.sh runs one case through one caller, with curl and gh standing in for GitHub.
+FIX="$TMP/relfix"
+mkdir -p "$FIX/rel" "$FIX/rel-moved" "$FIX/rel-notag"
+(
+  g() { git -c user.name=t -c user.email=t@example.org -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+  cd "$FIX" && git init --quiet -b main src && cd src
+  g commit --quiet --allow-empty -m one && g tag v1.0.0
+  g commit --quiet --allow-empty -m two && g tag -a -m v1.1.0 v1.1.0
+  git clone --quiet --bare . "$FIX/origin.git"
+  git bundle create --quiet "$FIX/rel/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+  # a bundle published under v1.1.0's name that holds another tag
+  git bundle create --quiet "$FIX/rel-notag/aprscaching-v1.1.0.bundle" refs/tags/v1.0.0
+  # the same tag name at another commit: what a tag pushed outside the release workflow looks like
+  g checkout --quiet v1.0.0 && g commit --quiet --allow-empty -m other && g tag -f -a -m v1.1.0 v1.1.0 >/dev/null
+  git bundle create --quiet "$FIX/rel-moved/aprscaching-v1.1.0.bundle" refs/tags/v1.1.0
+) >/dev/null 2>&1
+for d in rel rel-moved rel-notag; do (cd "$FIX/$d" && sha256sum aprscaching-v1.1.0.bundle >SHA256SUMS); done
+RELEASE="$(git -C "$FIX/origin.git" rev-parse 'v1.1.0^{commit}')"
+OTHER="$(git -C "$FIX/src" rev-parse 'v1.1.0^{commit}')"
+N=0
+# rc_case CALLER MODE [options]: run one case in $W; its output in $TMP/rc.out and $TMP/rc.err, its exit status in $RC
+rc_case() {
+  local c="$1" m="$2"
+  shift 2
+  N=$((N + 1))
+  W="$TMP/case$N"
+  mkdir -p "$W"
+  RC=0
+  bash "$DEPLOY/test/release-case.sh" "$c" "$m" "$W" "$FIX" "$@" >"$TMP/rc.out" 2>"$TMP/rc.err" </dev/null || RC=$?
 }
-check "a release whose checksum and signature verify gives its bundle" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; p=\$(verify_release good 2>/dev/null) && [ -f \"\$p\" ]"
-rc_of() { verify_release "$1" >/dev/null 2>&1 && echo 0 || echo $?; }
-check "a bundle that does not match its checksum stops the install" eq "$(rc_of tampered)" 2
-check "a release without a bundle falls back to the warned install" eq "$(rc_of missing)" 1
-check "  … quietly, for the warned install" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; [ -z \"\$(verify_release missing 2>&1)\" ]"
-check "without gh the signature cannot be checked, so it stops" eq "$(rc_of nogh)" 2
-check "  … unless --checksum-only accepts the checksum alone" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; verify_release nogh-checksum >/dev/null 2>&1"
-check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh'; [ \"\$(bm_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(bm_github_repo https://git.example.org/a/b)\" ]"
+stopped() { [ "$RC" != 0 ] && [ ! -e "$W/applied" ] && [ -z "$(ls -A "$W/tmp")" ] && ! grep -q useradd "$TMP/rc.out"; }
+for caller in init update; do
+  if [ "$caller" = init ]; then args=(--ref v1.1.0); else args=(); fi
+  rc_case "$caller" good "${args[@]+"${args[@]}"}"
+  check "$caller: a release whose checksum and signature verify goes ahead with --yes" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … saying so" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+  check "  … and leaves no download behind" eq "$(ls -A "$W/tmp")" ""
+  rc_case "$caller" tampered "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle that does not match its checksum stops before any change" stopped
+  check "  … naming the checksum" grep -q "does not match its checksum" "$TMP/rc.err"
+  rc_case "$caller" notag "${args[@]+"${args[@]}"}"
+  check "$caller: a verified bundle that holds no tag v1.1.0 stops before any step" stopped
+  check "  … naming the tag" grep -q "the release bundle holds no tag v1.1.0" "$TMP/rc.err"
+  rc_case "$caller" unattested "${args[@]+"${args[@]}"}"
+  check "$caller: a bundle with no attestation stops before any step" stopped
+  check "  … as a refusal, quoting gh" bash -c "grep -q 'signed provenance does not verify' '$TMP/rc.err' && grep -q 'HTTP 404' '$TMP/rc.err'"
+  rc_case "$caller" otherflow "${args[@]+"${args[@]}"}"
+  check "$caller: an attestation by another workflow than the release workflow stops" stopped
+  check "  … naming the release workflow" grep -q "no attestation by apachler/aprscaching/.github/workflows/release-verify.yml covers it" "$TMP/rc.err"
+  rc_case "$caller" sigstore "${args[@]+"${args[@]}"}"
+  check "$caller: a check that could not run stops" stopped
+  check "  … saying it could not run, with gh's exit and message, not that it failed" bash -c "grep -q 'could not be checked: gh attestation verify exited 1' '$TMP/rc.err' && grep -q 'no valid Sigstore verifiers' '$TMP/rc.err' && ! grep -q 'does not verify' '$TMP/rc.err'"
+  rc_case "$caller" error "${args[@]+"${args[@]}"}"
+  check "$caller: a failed download stops, not taken for a missing bundle" stopped
+  check "  … naming the server's answer" grep -q "HTTP 500" "$TMP/rc.err"
+  rc_case "$caller" nogh "${args[@]+"${args[@]}"}"
+  check "$caller: without gh the signature cannot be checked, so it stops" stopped
+  check "  … pointing to --checksum-only" grep -q -- "--checksum-only" "$TMP/rc.err"
+  rc_case "$caller" nogh --checksum-only "${args[@]+"${args[@]}"}"
+  check "$caller: --checksum-only accepts the checksum alone" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … with its warning" grep -q "only the checksum was checked" "$TMP/rc.err"
+  rc_case "$caller" missing "${args[@]+"${args[@]}"}"
+  check "$caller: a tag with no bundle is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  check "  … and how to take it anyway" grep -q -- "--unverified" "$TMP/rc.err"
+  rc_case "$caller" missing --unverified "${args[@]+"${args[@]}"}"
+  check "$caller: --unverified takes it, warned" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+  check "  … warned" grep -q "v1.1.0 (tag) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main
+  check "$caller: a branch is not passed by --yes alone" stopped
+  check "  … says it is unverified" grep -q "main (branch) is not verified" "$TMP/rc.err"
+  rc_case "$caller" good --ref main --unverified
+  check "$caller: --unverified takes a branch" eq "$RC:$([ -e "$W/applied" ] && echo applied)" 0:applied
+done
+rc_case update good
+check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"
+rc_case update moved
+check "update: a tag on origin at another commit than the verified release's stops before any rebuild" stopped
+check "  … naming both commits" grep -q "on origin is commit $RELEASE, but the verified release v1.1.0 is commit $OTHER" "$TMP/rc.err"
+rc_case update good --ref v1.1.0
+check "update: --ref to a release tag is verified like the newest" grep -q "the release v1.1.0 is verified" "$TMP/rc.out"
+check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/release.sh'; [ \"\$(rel_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ \"\$(rel_github_repo git@github.com:apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(rel_github_repo https://git.example.org/a/b)\" ]"
 
 render() {
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
@@ -424,6 +480,42 @@ HOMEUNIT="$TMP/gateway-home.unit"
 bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
   BM_DIR=/home/op/aprscaching BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'" >"$HOMEUNIT"
 check "a gateway installed under /home sees its checkout read-only" bash -c "grep -qx 'ProtectHome=read-only' '$HOMEUNIT' && ! grep -qx 'ProtectHome=yes' '$HOMEUNIT' && grep -qx 'ReadWritePaths=/home/op/aprscaching/data' '$HOMEUNIT'"
+
+# Bare metal behind a reverse proxy: the gateway listens on 127.0.0.1 and trusts the proxy's X-Forwarded-For entry.
+proxy_bind() { # proxy_bind FILE: bm_proxy_bind as the service user, who is the user running this test
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
+    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")' BM_USER='$(id -un)'; bm_proxy_bind '$1'"
+}
+printf '%s\n' "APP_URL=https://aprs.example.net" "# HOST=127.0.0.1" >"$TMP/bm-proxy.env"
+check "bare metal writes the proxy settings behind an https APP_URL" proxy_bind "$TMP/bm-proxy.env"
+check "bare metal behind a proxy listens on 127.0.0.1" eq "$(env_file_get "$TMP/bm-proxy.env" HOST)" 127.0.0.1
+check "  … and trusts one proxy's X-Forwarded-For entry" eq "$(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" 1
+check "  … the .env stays owner-only" eq "$(stat -c %a "$TMP/bm-proxy.env")" 600
+printf '%s\n' "APP_URL=https://aprs.example.net" "HOST=0.0.0.0" "TRUST_PROXY=2" >"$TMP/bm-proxy.env"
+check "  … runs over an operator's own values" proxy_bind "$TMP/bm-proxy.env"
+check "  … a HOST and TRUST_PROXY the operator set stay" eq "$(env_file_get "$TMP/bm-proxy.env" HOST) $(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" "0.0.0.0 2"
+printf '%s\n' "APP_URL=http://192.168.1.10:8080" >"$TMP/bm-proxy.env"
+check "bare metal on plain http runs the proxy step" proxy_bind "$TMP/bm-proxy.env"
+check "bare metal on plain http is the gateway itself, on every interface" bash -c "! grep -qE '^(HOST|TRUST_PROXY)=' '$TMP/bm-proxy.env'"
+# The .env is the service user's alone. A stand-in bm_user plays that user: it alone may read the file, so an
+# installer that reads it itself sees nothing and writes nothing.
+proxy_bind_as_service() { # proxy_bind_as_service FILE
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'
+    . '$DEPLOY/lib/shapes/baremetal.sh'; BM_DIR='$(dirname "$DEPLOY")'
+    bm_user() { chmod 600 '$1'; \"\$@\"; local rc=\$?; chmod 000 '$1'; return \$rc; }
+    bm_proxy_bind '$1'"
+}
+printf '%s\n' "APP_URL=https://aprs.example.net" >"$TMP/bm-proxy.env"
+chmod 000 "$TMP/bm-proxy.env"
+check "bare metal reads the .env as the service user when the installer cannot" proxy_bind_as_service "$TMP/bm-proxy.env"
+chmod 600 "$TMP/bm-proxy.env"
+check "  … and sets HOST and TRUST_PROXY there" eq "$(env_file_get "$TMP/bm-proxy.env" HOST) $(env_file_get "$TMP/bm-proxy.env" TRUST_PROXY)" "127.0.0.1 1"
+if [ "$(id -u)" != 0 ]; then # root reads a mode-000 file
+  chmod 000 "$TMP/bm-proxy.env"
+  refused() { ! proxy_bind "$1" 2>/dev/null; }
+  check "a .env the service user cannot read fails, never passes for an unset APP_URL" refused "$TMP/bm-proxy.env"
+  chmod 600 "$TMP/bm-proxy.env"
+fi
 
 # ---- doctor ------------------------------------------------------------------------------------------------
 # A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket

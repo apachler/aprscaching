@@ -382,9 +382,10 @@ export async function handleEnroll(req: Request, env: Env): Promise<Response> {
 /**
  * Verify a box's signed request and remember its principal for the handlers. A request without the
  * headers is left alone; one whose signature does not verify is left unauthenticated, so the handler
- * answers it as it would any request without a credential.
+ * answers it as it would any request without a credential. A signed body larger than any a box sends is answered
+ * 413 here, since its signature cannot be checked without reading it whole.
  */
-export async function authenticateBox(req: Request, env: Env): Promise<void> {
+export async function authenticateBox(req: Request, env: Env): Promise<Response | void> {
   const box = req.headers.get("x-box-id");
   const sig = req.headers.get("x-box-sig");
   if (!box || !sig) return;
@@ -401,7 +402,7 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
     const url = new URL(req.url);
     // read through the ingest batch's byte cap: a larger body is never one a box sends, and is not buffered
     const body = await readCappedBody(req.clone(), BODY_MAX);
-    if (!body) return;
+    if (!body) return json({ error: "request body too large" }, { status: 413 });
     // A signature is taken only in the one spelling a box writes, unpadded base64url: the decoder forgives
     // padding, whitespace, the other alphabet and the unused bits of the last character, so any other
     // spelling would name the same signature under a different text.

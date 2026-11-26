@@ -34,13 +34,13 @@ One command for every shape ([The deploy/aprscaching command](../run/day-to-day/
 | Command | Options |
 |---|---|
 | `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--extra-origins`, `--mail`, `--email-from`, `--smtp-host`, `--smtp-port`, `--smtp-secure`, `--smtp-user`, `--smtp-pass`, `--resend-key`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
-| `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
+| `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--unverified`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
 | `status`, `doctor` | none |
 | `backup` | `--dest`, `--with-media`, `--no-settings` |
 | `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
-| `update` | `--ref`, `--rollback-window` |
+| `update` | `--ref`, `--rollback-window`, `--checksum-only`, `--unverified` ([What update verifies](../run/day-to-day/updates.md#what-update-verifies)) |
 | `rotate-secret <name>` | `--yes`; the name is one of `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_SUBMIT_SECRET`, `FED_RELAY_SECRET`, `FED_CORROBORATION_SECRET` |
 | `net44 setup <connect.conf>` | `--name`, `--https` (serve the name over https too: [One instance, several addresses](../run/networks/several-addresses.md)), `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |
 | `net44 status`, `net44 check [name]`, `net44 remove` | none |

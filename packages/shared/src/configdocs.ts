@@ -17,7 +17,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   SESSION_SECRET: "Key that signs sign-in sessions; must differ from the ingest and operator secrets",
   SESSION_TTL_DAYS: "Days a sign-in session lasts",
   SESSION_EPOCH: "Unix seconds: sessions minted before this time are refused",
-  TRUST_PROXY: "1 when a reverse proxy fronts the instance, so x-forwarded-for and x-forwarded-proto are trusted",
+  TRUST_PROXY: "Reverse proxies in front (1 for one); the client is the x-forwarded-for entry that far from right",
   TRUST_CF: "1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept",
   ADMIN_CALLSIGNS: "Comma-separated licensed calls that may administer this instance",
   INSTANCE: "Federation instance id (domain); defaults to the host of APP_URL",
@@ -286,7 +286,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   TLS_CA_CERT: "CA certificate offered for download at /pocket-ca.crt",
   LICENCE_SOURCES: "Licence registers to import, comma-separated (fcc, ised, acma, at, de or all)",
   BASE: "Gateway the licence importer sends to",
-  HOST: "Address the desktop app listens on; 0.0.0.0 serves the local network",
+  HOST: "Address the server listens on; 127.0.0.1 behind a proxy on this machine, unset for every interface",
   DATA_DIR: "Where the desktop app keeps its database and media",
   VITE_API_BASE: "Gateway base URL, when the API lives on another host than the web app",
   VITE_APP_URL: "Public URL of the web app, for its canonical link and Open Graph tags",
@@ -378,12 +378,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`TRUST_PROXY`",
-        "Trust the proxy's `x-forwarded-for` for rate-limit client identity and its `x-forwarded-proto` for the scheme a request came on (the address its cookie and links name). Set it only behind your own proxy; the Docker stack sets it, since Caddy is the only way in. Without it both headers are ignored",
-        "off",
+        "The number of reverse proxies between a client and the gateway, `0` for none. Behind them the gateway trusts `x-forwarded-for` for rate-limit client identity and `x-forwarded-proto` for the scheme a request came on (the address its cookie and links name). Each proxy appends the address it was reached from, so the client is the entry `TRUST_PROXY` places from the right: `1` takes the rightmost, which your proxy wrote; `2` the one before it, for a proxy behind another. Entries further left are what the client sent and never count; a header with fewer entries than that keys on its rightmost. Set it only behind your own proxy, with the gateway reachable through that proxy alone (`HOST=127.0.0.1` for a proxy on the same machine). The Docker stack sets `1`, since Caddy is the only way in and writes a single entry. Without it both headers are ignored",
+        "`0`",
       ],
       [
         "`TRUST_CF`",
-        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare: the tunnel, or proxied DNS with `CF_RANGES` set to Cloudflare's ranges; otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
+        "Keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity; it takes precedence over `x-forwarded-for`. It is safe only when the gateway is reachable through Cloudflare alone: the tunnel, or proxied DNS with `CF_RANGES` set to Cloudflare's ranges. A client that reaches the gateway any other way sends its own `cf-connecting-ip` and picks a fresh identity per request. Unset, a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel",
         "off",
       ],
       [
@@ -497,6 +497,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     header: ["Variable", "Purpose", "Default"],
     rows: [
       ["`PORT`", "Port the server listens on", "`8787`"],
+      [
+        "`HOST`",
+        "Address the server's listeners bind, the https one included. `127.0.0.1` when a reverse proxy on the same machine fronts the gateway, so the proxy is the only way in: a client that reaches the port directly writes its own `x-forwarded-for`. Bare metal sets it when a domain is given. Leave it unset in the Docker stack, where Caddy reaches the gateway over the container network",
+        "every interface",
+      ],
       ["`DB_PATH`", "The SQLite database file", "`data/aprscaching.db` beside the server"],
       ["`MIGRATIONS_DIR`", "Where the schema migrations are read from", "`db/migrations` of the checkout"],
       ["`MEDIA_DIR`", "Where cache media is stored", "`data/media` beside the server"],

@@ -6,11 +6,11 @@
  * address, so a member on HAMNET stays on HAMNET. APP_URL stays the canonical address for what is
  * not tied to a request (the sitemap, the digest mail, the federation descriptor's identity).
  *
- * The request's address is read from its Host and, behind a declared proxy (TRUST_PROXY=1), the scheme the
+ * The request's address is read from its Host and, behind a declared proxy (TRUST_PROXY), the scheme the
  * TLS-terminating proxy reports, and is believed only when it is one of the configured addresses: a sign-in link built from a Host header anyone can send
  * would carry its token to that host. Any other host is answered as if the request came to APP_URL.
  */
-import type { Env } from "./env.js";
+import { proxyHops, type Env } from "./env.js";
 import { parseOriginList } from "@aprscaching/shared";
 import { hotspotOrigin } from "./visitor.js";
 
@@ -60,14 +60,13 @@ export function passkeyOrigins(env: Env): string[] {
 /**
  * The origin the request arrived on as the browser saw it: the listener's scheme, raised to https when a
  * TLS-terminating proxy says so (a header never lowers an https request), and the Host. The proxy's header
- * counts only with TRUST_PROXY=1: without a declared proxy anyone can send it, and a plain-http request
+ * counts only behind a declared proxy (TRUST_PROXY): without a declared proxy anyone can send it, and a plain-http request
  * claiming https would get the https address's cookie and links.
  */
 function arrivalOrigin(req: Request, env: Env): string | null {
   try {
     const u = new URL(req.url);
-    const fwd =
-      env.TRUST_PROXY === "1" ? req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase() : undefined;
+    const fwd = proxyHops(env) ? req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase() : undefined;
     const scheme = u.protocol === "https:" || fwd === "https" ? "https:" : "http:";
     return new URL(`${scheme}//${u.host}`).origin;
   } catch {

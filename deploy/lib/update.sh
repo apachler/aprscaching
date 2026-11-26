@@ -37,35 +37,78 @@ update_restore_exact() {
   shape_db_restore "$tmp/rows.sql" "$schema" exact
 }
 
-# The commit to update to: --ref, else the newest v* tag, else the tracked branch's remote head.
+# The target: --ref, else the newest v* tag, else the tracked branch's remote head. Sets UPD_NAME (what it
+# is called), UPD_KIND (tag, branch or commit) and UPD_TARGET (its commit in this checkout, as fetched).
 update_target() {
-  local ref="$1" branch t
+  local ref="$1" branch
   if [ -n "$ref" ]; then
-    shape_git rev-parse --verify --quiet "origin/$ref^{commit}" 2>/dev/null ||
-      shape_git rev-parse --verify --quiet "$ref^{commit}" ||
+    UPD_NAME="$ref"
+    if UPD_TARGET="$(shape_git rev-parse --verify --quiet "origin/$ref^{commit}" 2>/dev/null)"; then
+      UPD_KIND=branch
+    elif UPD_TARGET="$(shape_git rev-parse --verify --quiet "refs/tags/$ref^{commit}" 2>/dev/null)"; then
+      UPD_KIND=tag
+    elif UPD_TARGET="$(shape_git rev-parse --verify --quiet "$ref^{commit}")"; then
+      UPD_KIND=commit
+    else
       die "No commit, tag or branch '$ref' in the repository."
-    return
+    fi
+    return 0
   fi
-  t="$(shape_git tag -l 'v*' --sort=-v:refname | head -n 1)"
-  if [ -n "$t" ]; then
-    shape_git rev-parse "$t^{commit}"
-    return
+  UPD_NAME="$(shape_git tag -l 'v*' --sort=-v:refname | head -n 1)"
+  if [ -n "$UPD_NAME" ]; then
+    UPD_KIND=tag
+    UPD_TARGET="$(shape_git rev-parse "refs/tags/$UPD_NAME^{commit}")"
+    return 0
   fi
   branch="$(shape_git rev-parse --abbrev-ref HEAD)"
   [ "$branch" != HEAD ] || die "The checkout is on no branch and the repository has no release tag." "Pass --ref."
-  shape_git rev-parse "origin/$branch"
+  UPD_NAME="$branch"
+  UPD_KIND=branch
+  UPD_TARGET="$(shape_git rev-parse "origin/$branch")"
 }
 
+# Verify the target before anything changes (deploy/lib/release.sh). A tag is taken only as its release's
+# verified bundle names it: the commit the bundle's tag names is the target, and a tag on origin at any other
+# commit is refused, since the tag alone says nothing about who made it. Sets UPD_VERIFIED=1 when it
+# verified; what no release verifies is left for run_update to confirm explicitly.
+update_verify() {
+  local repo out rc=1 verified bundle
+  if [ "$UPD_KIND" = tag ]; then
+    repo="$(shape_git remote get-url origin)"
+    out="$(rel_verified_bundle "$repo" "$UPD_NAME")" && rc=0 || rc=$?
+  fi
+  [ "$rc" != 2 ] || die "The release $UPD_NAME did not verify." "Nothing was changed."
+  [ "$rc" = 0 ] || return 0
+  read -r verified bundle <<<"$out"
+  # origin's fetch holds the commit's objects, so the checkout needs nothing from the bundle
+  rm -rf "$(dirname "$bundle")"
+  [ "$verified" = "$UPD_TARGET" ] ||
+    die "The tag $UPD_NAME on origin is commit $UPD_TARGET, but the verified release $UPD_NAME is commit $verified." \
+      "Nothing was changed: a tag that is not the release's is not installed."
+  info "the release $UPD_NAME is verified: its checksum and its signed provenance"
+  UPD_VERIFIED=1
+}
+
+# shellcheck disable=SC2034 # REL_ALLOW_* are read by deploy/lib/release.sh
 run_update() {
   local ref="" window=15 cur target branch before after new t0 age
+  local UPD_NAME UPD_KIND UPD_TARGET UPD_VERIFIED=0
+  REL_ALLOW_UNSIGNED=0
+  REL_ALLOW_UNVERIFIED=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --ref) ref="$2"; shift ;;
       --rollback-window) window="$2"; shift ;;
+      --checksum-only) REL_ALLOW_UNSIGNED=1 ;;
+      --unverified) REL_ALLOW_UNVERIFIED=1 ;;
       -h | --help)
-        printf '%s\n' "deploy/aprscaching update [--ref REF] [--rollback-window MINUTES]" \
+        printf '%s\n' "deploy/aprscaching update [--ref REF] [--rollback-window MINUTES] [--checksum-only] [--unverified]" \
           "Updates to REF (default: the newest release tag, else the branch's head), backing up first and" \
-          "rolling back code and database when doctor finds a new failure (automatically within the window)."
+          "rolling back code and database when doctor finds a new failure (automatically within the window)." \
+          "A release tag is installed only from its release's bundle, checked against SHA256SUMS and its signed" \
+          "provenance (gh attestation verify); --checksum-only accepts the checksum alone when gh is missing." \
+          "A branch, a commit or a tag without a bundle is unverified: it is asked about even with --yes," \
+          "unless --unverified is passed."
         return 0
         ;;
       *) die "Unknown option $1." ;;
@@ -81,11 +124,13 @@ run_update() {
     die "The checkout has local changes." "Commit or stash them, then update again."
   cur="$(shape_git rev-parse HEAD)"
   branch="$(shape_git rev-parse --abbrev-ref HEAD)"
-  target="$(update_target "$ref")"
+  update_target "$ref"
+  target="$UPD_TARGET"
   if [ "$target" = "$cur" ]; then
     info "already at $(shape_git describe --tags --always "$cur")"
     return 0
   fi
+  update_verify
   info "from $(shape_git describe --tags --always "$cur") to $(shape_git describe --tags --always "$target")"
   if shape_git merge-base --is-ancestor "$cur" "$target"; then
     info "changes ($(shape_git rev-list --count "$cur..$target") commits):"
@@ -93,7 +138,12 @@ run_update() {
   else
     warn "the target is not ahead of the running version (a downgrade or another line): migrations never run backward"
   fi
-  confirm "Update now?" || die "Nothing was changed." "Pass --yes to update without asking."
+  if [ "$UPD_VERIFIED" = 1 ]; then
+    confirm "Update now?" || die "Nothing was changed." "Pass --yes to update without asking."
+  else
+    rel_confirm_unverified "$UPD_NAME" "$UPD_KIND" "Update to $UPD_NAME without verification?" ||
+      die "Nothing was changed." "Pass --unverified to update to it without asking; --yes alone does not."
+  fi
 
   before="$(doctor_failures)"
   BACKUP_LAST=""
