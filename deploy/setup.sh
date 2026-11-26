@@ -9,7 +9,8 @@
 #
 #   ./setup.sh                                   # interactive
 #   ./setup.sh --non-interactive --call OE8APR --passcode 12345 --filter r/47.07/15.42/300 \
-#              --domain aprs.example.net [--tunnel-token …] [--site-call OE8APR-10]
+#              --domain aprs.example.net [--site-call OE8APR-10]
+#   TUNNEL_TOKEN=… ./setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # through a Cloudflare Tunnel
 #   ./setup.sh --non-interactive --call OE8APR --lan-host 192.168.1.10     # LAN / off-grid, plain http
 #
 # A public instance gets the safe federation posture: auto-promotion off and a corroboration quorum of 2
@@ -34,6 +35,8 @@
 #          --email-from ADDRESS · --smtp-host HOST · --smtp-port PORT (587) · --smtp-secure starttls|tls|none ·
 #          --smtp-user USER · --smtp-pass PASSWORD · --resend-key KEY. The SMTP password and the Resend key may
 #          come from the SMTP_PASS and EMAIL_API_KEY environment variables instead, off the command line.
+# Cloudflare Tunnel: the token comes from the TUNNEL_TOKEN environment variable, or is asked for without echo; it
+#          never goes on the command line, where `ps` and the shell history would show it to others.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
@@ -42,10 +45,10 @@ ENV_FILE="$HERE/.env"
 INTERACTIVE=1
 NETWORK=1
 ASSUME_YES=0
-CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" TUNNEL="" SITE="" SITE_SET=0 APP_PORT="" NO_TUNNEL=0 NEXT_STEPS=1
+CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" SITE="" SITE_SET=0 APP_PORT="" NO_TUNNEL=0 NEXT_STEPS=1
 FED_PEERS_IN="" FED_PEERS_SET=0 FED_SUBMIT_IN="" FED_REGKEY_IN="" NET44_IN="" NET44_SET=0 EXTRA_IN="" EXTRA_SET=0
 MAIL="" MAIL_FROM="" SMTP_HOST_IN="" SMTP_PORT_IN="" SMTP_SECURE_IN="" SMTP_USER_IN=""
-SMTP_PASS_IN="${SMTP_PASS:-}" RESEND_KEY_IN="${EMAIL_API_KEY:-}"
+SMTP_PASS_IN="${SMTP_PASS:-}" RESEND_KEY_IN="${EMAIL_API_KEY:-}" TUNNEL="${TUNNEL_TOKEN:-}"
 
 usage() { awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"; }
 while [ $# -gt 0 ]; do
@@ -56,7 +59,9 @@ while [ $# -gt 0 ]; do
     --filter) FILTER="$2"; shift ;;
     --domain) DOMAIN_IN="$2"; shift ;;
     --lan-host) LAN_HOST="$2"; shift ;;
-    --tunnel-token) TUNNEL="$2"; shift ;;
+    --tunnel-token)
+      echo "Pass the tunnel token as TUNNEL_TOKEN in the environment, not on the command line, where other users see it." >&2
+      exit 2 ;;
     --site-call) SITE="$2"; SITE_SET=1; shift ;;
     --env-file) ENV_FILE="$2"; shift ;;
     --app-port) APP_PORT="$2"; shift ;;
@@ -216,7 +221,7 @@ elif [ -n "$DOMAIN_IN" ]; then MODE=domain
 elif [ -n "$LAN_HOST" ]; then MODE=lan
 fi
 if [ "$NO_TUNNEL" -eq 1 ] && [ "$MODE" = tunnel ]; then
-  echo "This installation offers no Cloudflare Tunnel (--no-tunnel); leave out --tunnel-token." >&2
+  echo "This installation offers no Cloudflare Tunnel (--no-tunnel); unset TUNNEL_TOKEN." >&2
   exit 2
 fi
 if [ -z "$MODE" ] && [ "$INTERACTIVE" -eq 1 ]; then
@@ -241,8 +246,14 @@ case "$MODE" in
     [ -n "$DOMAIN_IN" ] || { echo "A hostname is required (--domain)." >&2; exit 2; }
     APP_URL="https://$DOMAIN_IN"
     if [ "$MODE" = tunnel ]; then
-      ask TUNNEL "Cloudflare Tunnel token" "${TUNNEL:-$(current TUNNEL_TOKEN)}"
-      [ -n "$TUNNEL" ] || { echo "A tunnel token is required (--tunnel-token)." >&2; exit 2; }
+      # the token is a credential: read without echo, and the current one is never shown
+      [ -n "$TUNNEL" ] || TUNNEL="$(current TUNNEL_TOKEN)"
+      if [ -n "$TUNNEL" ]; then
+        ask_secret TUNNEL "Cloudflare Tunnel token (blank = keep the current one)"
+      else
+        ask_secret TUNNEL "Cloudflare Tunnel token"
+      fi
+      [ -n "$TUNNEL" ] || { echo "A tunnel token is required (TUNNEL_TOKEN in the environment)." >&2; exit 2; }
       CADDY_DOMAIN=":80" # TLS terminates at Cloudflare's edge
       HEALTH="$APP_URL/health"
     else
