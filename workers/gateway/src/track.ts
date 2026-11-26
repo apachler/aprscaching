@@ -248,26 +248,24 @@ export async function stationFixes(
 ): Promise<{ fixes: PositionRow[]; placed: Set<number> }> {
   const c = attestedSql(a, "c");
   const s = attestedSql(a, "s");
+  // The station's attested fixes are read once, into `attested`, and each signed fix is judged against those alone:
+  // a subquery over the station's fixes would read every one of them again for every signed fix, so a flood of
+  // signed fixes that none qualify would cost the square of the flood.
   const allowed = `(c.source = 'browser-rf' AND NOT EXISTS (
-      SELECT 1 FROM positions s WHERE s.callsign = c.callsign AND s.ts >= ? AND s.ts <= ? AND s.commanded = 0
-        AND ${s.sql} AND ${outrunsSql({ lat: "s.lat", lon: "s.lon", ts: "s.ts" }, { lat: "c.lat", lon: "c.lon", ts: "c.ts" }, maxMps, 0)}))`;
+      SELECT 1 FROM attested s WHERE ${outrunsSql({ lat: "s.lat", lon: "s.lon", ts: "s.ts" }, { lat: "c.lat", lon: "c.lon", ts: "c.ts" }, maxMps, 0)}))`;
+  const attestedCte = `WITH attested AS MATERIALIZED (
+      SELECT s.lat, s.lon, s.ts FROM positions s
+        WHERE s.callsign = ? AND s.ts >= ? AND s.ts <= ? AND s.commanded = 0 AND ${s.sql})`;
   const [recent, placing] = await Promise.all([
     recentOf(env, call, since, until),
     env.DB.prepare(
-      `SELECT c.*, ${ownerSigned ? allowed : "0"} AS placed_by_owner FROM positions c
+      `${ownerSigned ? attestedCte : ""}
+      SELECT c.*, ${ownerSigned ? allowed : "0"} AS placed_by_owner FROM positions c
         WHERE c.callsign = ? AND c.ts >= ? AND c.ts <= ? AND c.commanded = 0
           AND (${c.sql} OR ${ownerSigned ? allowed : "0"})
         ORDER BY c.ts DESC, c.id DESC LIMIT ?`,
     )
-      .bind(
-        ...(ownerSigned ? [since, until, ...s.binds] : []),
-        call,
-        since,
-        until,
-        ...c.binds,
-        ...(ownerSigned ? [since, until, ...s.binds] : []),
-        RECENT_LIMIT,
-      )
+      .bind(...(ownerSigned ? [call, since, until, ...s.binds] : []), call, since, until, ...c.binds, RECENT_LIMIT)
       .all<PositionRow & { placed_by_owner: number }>(),
   ]);
   const placed = new Set(placing.results.filter((p) => p.placed_by_owner).map((p) => p.id));
