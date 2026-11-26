@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Federation over FBB on a real instance: off unless FED_BBS is on, carried only to and from the forwarding
 // partners the sysop marks for it, as personal mail the forward rules never route, and deduped by its BID.
-import { describe, it, expect } from "vitest";
-import { encodeFedBbsBatch } from "@aprscaching/shared";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { decodeFedBbsBatch, encodeFedBbsBatch } from "@aprscaching/shared";
 // the app first: it loads the gateway's modules in the order the server does
 import { newFedKey, instanceEnv, addCache, serve } from "./helpers/fedpeer.js";
 import { boxCall } from "./helpers/box.js";
@@ -119,6 +119,67 @@ describe("partners only, never flooded", () => {
     expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
   });
 
+  describe("signed in different seconds", () => {
+    // only Date is faked: the clock stands still between the steps the test takes
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(1_800_000_000_900);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const enqueue = (env: Env) => call(env, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+    const stepSecond = () => vi.setSystemTime(Date.now() + 1000);
+
+    it("an unchanged snapshot still queues once", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      const second = await enqueue(env);
+      expect(first.data).toMatchObject({ enqueued: 1 });
+      expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
+    });
+
+    it("names the queued entry it skipped for, and queues again once a sysop removed that entry", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      const skipped = await enqueue(env);
+      const row = await env.DB.prepare("SELECT id FROM bbs_messages WHERE bid = ?")
+        .bind(first.data.bid)
+        .first<{ id: number }>();
+      expect(skipped.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true, queued: row!.id });
+      const removed = await call(
+        env,
+        "POST",
+        "/api/admin/moderation/remove",
+        { kind: "bbs", id: skipped.data.queued, reason: "resend the snapshot" },
+        OPERATOR,
+      );
+      expect(removed.status).toBe(200);
+      stepSecond();
+      const again = await enqueue(env);
+      expect(again.data).toMatchObject({ enqueued: 1, deduped: false });
+      expect(again.data.queued).toBeUndefined();
+      expect(again.data.bid).not.toBe(first.data.bid);
+    });
+
+    it("a new or an edited record queues under a new bulletin ID", async () => {
+      const env = await station({ FED_BBS: "1" });
+      const first = await enqueue(env);
+      stepSecond();
+      await addCache(env, 1001);
+      const added = await enqueue(env);
+      expect(added.data).toMatchObject({ enqueued: 1 });
+      expect(added.data.bid).not.toBe(first.data.bid);
+      stepSecond();
+      await env.DB.prepare("UPDATE caches SET title = 'Renamed' WHERE code = (SELECT MIN(code) FROM caches)").run();
+      const edited = await enqueue(env);
+      expect(edited.data).toMatchObject({ enqueued: 1 });
+      expect([first.data.bid, added.data.bid]).not.toContain(edited.data.bid);
+    });
+  });
+
   it("resumes each feed from its own cursor when the answer's cursors come back as since", async () => {
     const env = await station({ FED_BBS: "1" });
     // a bulletin counts in seconds, a cache in fed_seq values: one shared number cannot resume both
@@ -218,6 +279,31 @@ describe("receiving", () => {
       .bind(batch.bid)
       .first<{ type: string; expires_at: number | null }>();
     expect(row).toMatchObject({ type: "P", expires_at: expect.any(Number) });
+  });
+
+  it("a receiver's unchanged decoder accepts the batch an unchanged snapshot queued under, and applies it", async () => {
+    const key = await newFedKey();
+    const pub = instanceEnv("pub.example", key, { ADMIN_CALLSIGNS: "OE8APR", FED_BBS: "1" });
+    await addCache(pub, 1000);
+    const first = await call(pub, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 1000);
+      const second = await call(pub, "POST", "/federation/bbs/enqueue", {}, OPERATOR);
+      expect(second.data).toMatchObject({ bid: first.data.bid, enqueued: 0, deduped: true });
+    } finally {
+      vi.useRealTimers();
+    }
+    const queued = await pub.DB.prepare("SELECT bid, body FROM bbs_messages WHERE to_call = 'ACSFED'").all<{
+      bid: string;
+      body: string;
+    }>();
+    expect(queued.results.map((r) => r.bid)).toEqual([first.data.bid]);
+    const { bid, body } = queued.results[0]!;
+    expect(decodeFedBbsBatch(body)?.bid).toBe(bid);
+    const env = await receiver(key, { FED_BBS: "1" });
+    const got = await deliver(env, bid, body, "rf-fbb:OE1FED-1");
+    expect(got.data).toMatchObject({ stored: 1, federation: { applied: first.data.frames } });
   });
 
   it("applies nothing while FED_BBS is off, even from the marked partner", async () => {

@@ -1100,9 +1100,11 @@ CREATE TABLE bbs_messages (
   origin     TEXT NOT NULL DEFAULT 'local',        -- local, or the instance a bulletin was mirrored from
   read_at    INTEGER,                              -- personal: when the recipient read it
   reply_to   INTEGER,
-  thread_id  INTEGER
+  thread_id  INTEGER,
+  fed_key    TEXT                                  -- an ACSFED batch: its records' identity, version and body
 );
 CREATE INDEX idx_bbs_to ON bbs_messages (to_call, type, posted_at DESC);
+CREATE INDEX idx_bbs_fed_key ON bbs_messages (fed_key) WHERE fed_key IS NOT NULL;
 CREATE INDEX idx_bbs_thread ON bbs_messages (thread_id, posted_at);
 
 -- The forward table: a hierarchical route token (or '*' catch-all) maps to a partner and transport.
