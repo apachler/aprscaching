@@ -53,7 +53,7 @@ exists.
   **Instance admin → FBB forwarding** ([Packet: BBS & NET/ROM node](../radios/packet-node.md#fbb-forwarding)).
 - The ingest box enrolled on your gateway with its own key (`BOX_ID` and `BOX_KEY`), with **Runs this instance's
   services** switched on under **Instance admin → Ingest boxes**
-  ([Enrolling the box](../radios/ingest-box.md#enrolling-the-box)). The gateway forwards mail and federation
+  ([Enrolling boxes on the gateway](../radios/ingest-box.md#enrolling-boxes-on-the-gateway)). The gateway forwards mail and federation
   records only through such a box, never on the shared `INGEST_SECRET`.
 - A signing key in `FED_PRIVATE_KEY` ([Sign your feeds](index.md#sign-your-feeds)).
 - The partner instance as a peer you trust, with its key fingerprint compared

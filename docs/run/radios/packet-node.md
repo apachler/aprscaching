@@ -21,7 +21,7 @@ These services run on the operator's own ingest box, over its radio (the KISS TN
   ([Callsigns and SSIDs](rf-ingest.md#callsigns-and-ssids)).
 - For the BBS and FBB forwarding: the box enrolled on the gateway with its own key (`BOX_ID` and `BOX_KEY`), and
   **Runs this instance's services** switched on for it under **Instance admin → Ingest boxes**
-  ([Enrolling the box](ingest-box.md#enrolling-the-box)). The gateway serves mail only to such a box, never to the
+  ([Enrolling boxes on the gateway](ingest-box.md#enrolling-boxes-on-the-gateway)). The gateway serves mail only to such a box, never to the
   shared `INGEST_SECRET`.
 - Settings go in the box's settings file (`deploy/.env` in Docker); restart the ingest after each change.
 
