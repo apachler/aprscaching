@@ -121,7 +121,7 @@ try {
   compiled = rules.map((r) => {
     if (r.action !== "set_cache_settings" || typeof r.action_parameters?.cache !== "boolean")
       throw new Error(`a rule that is not a cache on/off setting: ${JSON.stringify(r)}`);
-    return { match: compile(r.expression), cache: r.action_parameters.cache };
+    return { matches: compile(r.expression), cache: r.action_parameters.cache };
   });
 } catch (e) {
   console.error(`cannot read the ruleset in ${file}: ${e.message}`);
@@ -129,6 +129,6 @@ try {
 }
 for (const p of paths) {
   let verdict = "origin";
-  for (const r of compiled) if (r.match(p)) verdict = r.cache ? "cache" : "bypass";
+  for (const r of compiled) if (r.matches(p)) verdict = r.cache ? "cache" : "bypass";
   console.log(`${p}\t${verdict}`);
 }
