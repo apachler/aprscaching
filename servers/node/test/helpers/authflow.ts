@@ -11,6 +11,12 @@ export const ORIGIN = "https://gw.test";
 const RP_ID = "gw.test";
 const enc = new TextEncoder();
 
+/** What `email_tokens.token` holds for a sign-in link's token: its hex SHA-256. */
+export async function tokenKey(token: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", enc.encode(token));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** An instance with dev tokens and passkeys configured. */
 export function authEnv(extra: Record<string, unknown> = {}, db?: unknown): Env {
   return instanceEnv("gw.test", null, { ALLOW_DEV_TOKENS: "1", APP_URL: ORIGIN, RP_ID, ...extra }, db);

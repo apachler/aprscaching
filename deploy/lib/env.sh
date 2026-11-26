@@ -16,6 +16,32 @@ env_file_raw() {
   { grep -E "^$2=" "$1" || true; } | tail -n 1 | cut -d= -f2-
 }
 
+# env_inert_value RAW: the right-hand side to write for a value as another .env wrote it (env_file_raw), such that
+# a shell sourcing the file reads the value and runs nothing: plain when it holds only plain characters, else in
+# single quotes. Fails, printing nothing, for a value a shell would expand or that single quotes cannot hold.
+# A restored archive's settings go through it, since Pocket's scripts source their .env.
+env_inert_value() {
+  local raw="$1" v
+  case "$raw" in
+    \'*\') v="${raw:1:${#raw}-2}" ;;
+    \"*\")
+      v="${raw:1:${#raw}-2}"
+      case "$v" in *[\$\`\\\"]*) return 1 ;; esac
+      ;;
+    *)
+      # as written unquoted, a .env reader other than the shell (Compose, systemd) takes it literally: JSON
+      # settings are written so; only an expansion has no literal reading both agree on
+      v="$raw"
+      case "$v" in *[\$\`]*) return 1 ;; esac
+      ;;
+  esac
+  case "$v" in *\'*) return 1 ;; esac
+  case "$v" in
+    *[!A-Za-z0-9_./:@,+=%-]*) printf "'%s'" "$v" ;;
+    *) printf '%s' "$v" ;;
+  esac
+}
+
 # Whether FILE assigns KEY (even an empty value).
 env_file_has() { [ -f "$1" ] && grep -qE "^$2=" "$1"; }
 

@@ -24,6 +24,20 @@ die() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Whether DIR (or a file's directory) lies on an Android phone's shared storage, which every app with a storage
+# grant reads and writes: ~/storage links into it under Termux.
+on_shared_storage() {
+  local real storage d="$1"
+  [ -d "$d" ] || d="$(dirname "$d")"
+  real="$(cd "$d" && pwd -P)" || return 1
+  case "$real" in /storage/* | /sdcard* | /mnt/*) return 0 ;; esac
+  if [ -d "$HOME/storage" ]; then
+    storage="$(cd "$HOME/storage" && pwd -P)"
+    case "$real/" in "$storage"/*) return 0 ;; esac
+  fi
+  return 1
+}
+
 # A terminal to ask on: stdin may be a pipe even when a person is at the keyboard.
 can_ask() { [ "$APRS_INTERACTIVE" = 1 ] && { [ -t 0 ] || (: </dev/tty) 2>/dev/null; }; }
 

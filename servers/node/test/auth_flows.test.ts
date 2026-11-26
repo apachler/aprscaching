@@ -3,7 +3,7 @@
 // email link that needs an explicit confirm before it signs anyone in, and pairing a remote box by a
 // code only that box can obtain.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, operatorVerify, ORIGIN } from "./helpers/authflow.js";
+import { authEnv, call, emailSignup, operatorVerify, ORIGIN, tokenKey } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 import { boxCall } from "./helpers/box.js";
 
@@ -61,7 +61,7 @@ describe("the email link needs a confirm step", () => {
     const json = await call(env, "GET", `/auth/email/verify?token=${token}`);
     expect(json.cookie).toBe("");
     const row = await env.DB.prepare("SELECT used FROM email_tokens WHERE token=?")
-      .bind(token)
+      .bind(await tokenKey(token))
       .first<{ used: number }>();
     expect(row?.used).toBe(0);
     // no account exists until the confirm
@@ -209,7 +209,9 @@ describe("every outcome of a link is a page for a browser and JSON for an API cl
     const env = authEnv();
     const key = await call(env, "POST", "/auth/email/start", { email: "x@example.test", callsign: "DL1XYZ" });
     expect(key.status).toBe(200);
-    await env.DB.prepare("UPDATE email_tokens SET purpose = 'confirm' WHERE token = ?").bind(key.data.devToken).run();
+    await env.DB.prepare("UPDATE email_tokens SET purpose = 'confirm' WHERE token = ?")
+      .bind(await tokenKey(key.data.devToken))
+      .run();
     expect(await (await open(env, key.data.devToken)).text()).toContain("<h1>Confirm your email address</h1>");
   });
 
