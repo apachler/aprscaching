@@ -5,6 +5,14 @@ import { encodeFedBbsBatch, decodeFedBbsBatch, isFedBbsCategory, FED_BBS_CATEGOR
 const frame = (n: number, len = 20) => Uint8Array.from({ length: len }, (_, i) => (n * 31 + i * 7) & 0xff);
 
 describe("fed-over-BBS store-and-forward envelope", () => {
+  it("gives fixed batch bytes the BID every other version of this code gives them", () => {
+    // Receivers re-derive the BID from the body and refuse a mismatch, so a changed formula splits the mesh
+    // between versions: the literal pins it, whatever this encoder and decoder agree on between themselves.
+    const bull = encodeFedBbsBatch([frame(1), frame(2, 40)]);
+    expect(bull.bid).toBe("AFW2WF5YC1X3");
+    expect(decodeFedBbsBatch(bull.body)?.bid).toBe("AFW2WF5YC1X3");
+  });
+
   it("round-trips a batch of frames through a text-safe bulletin body", () => {
     const frames = [frame(1), frame(2, 5), frame(3, 200)];
     const bull = encodeFedBbsBatch(frames);
