@@ -117,8 +117,10 @@ never trust the node's call: trust it yourself under **Instance admin → Truste
 
 A KISS TNC on the phone's USB-C port, through an OTG adapter, feeds the ingest directly. The phone then logs
 **every** station the TNC hears, off grid. `extras/usb_kiss_bridge.py` drives the TNC as a CDC-ACM serial port
-through libusb and serves KISS over TCP on `127.0.0.1:8001`, where the ingest connects. Android gives USB access
-per app, so `termux-usb` (Termux:API) hands the bridge the device.
+through libusb and serves KISS on a Unix socket in Termux's private directory, `~/.aprscaching/run/kiss.sock`,
+where the ingest connects. It has no TCP port: every app on the phone shares loopback, and could transmit
+through a port or bind it first and stand in for the TNC. Android gives USB access per app, so `termux-usb`
+(Termux:API) hands the bridge the device.
 
 1. Install the packages:
 
@@ -138,7 +140,7 @@ per app, so `termux-usb` (Termux:API) hands the bridge the device.
     bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup --baud 9600
     ```
 
-    `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD`, `KISS_TNC_HOST=127.0.0.1` and `KISS_TNC_PORT` to the
+    `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD` and `KISS_TNC_HOST` (the socket's path) to the
     `.env` and restarts the station. `start.sh` then runs the bridge in the tmux window `usb-kiss`. It waits for
     the TNC and restarts the bridge when the TNC is unplugged and plugged in again.
 

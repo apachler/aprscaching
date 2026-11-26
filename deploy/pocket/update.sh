@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Update the Pocket station: fetch the branch, install the dependencies, rebuild better-sqlite3 and the
-# web app when needed (install.sh does all of it and keeps the .env), then restart the gateway and the
-# ingest in the running tmux session. The gateway applies new database migrations when it starts.
+# web app when needed (install.sh does all of it and keeps the .env), then restart the gateway, the ingest
+# and the helper windows (the notification, alerts, battery saver, https watch, USB KISS bridge) in the running
+# tmux session. The gateway applies new database migrations when it starts.
 # The station keeps running while the update builds; the restart takes a few seconds.
 #
 #   bash ~/aprscaching/deploy/pocket/update.sh
@@ -94,6 +95,19 @@ step "Restarting the gateway and the ingest"
 if ! restart_station; then
   info "the station is not running; start it with: bash $DIR/deploy/pocket/start.sh"
   exit 0
+fi
+# The helper windows run the loop of the script they started with, and the lib.sh it read then: respawned,
+# each loads its new script, lib.sh and the .env install.sh may have moved, so the operator's secret goes to the
+# gateway's socket and the USB KISS bridge serves its own.
+if session_exists; then
+  for w in $(tmux list-windows -t "=$SESSION" -F '#W' 2>/dev/null); do
+    case "$w" in
+      tls | notify | usb-kiss | alerts | battery)
+        tmux respawn-window -k -t "=$SESSION:$w"
+        info "$w: restarted"
+        ;;
+    esac
+  done
 fi
 BASE="$(gateway_base)"
 sleep 2

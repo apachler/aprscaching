@@ -9,7 +9,7 @@
  * Run: `pnpm --filter @aprscaching/node-gateway start`  (env: PORT, DB_PATH, INGEST_SECRET, OPERATOR_SECRET, …)
  * WEB_DIST (the built apps/web/dist) makes it serve the SPA on the same origin too, with no proxy in front.
  * HTTPS_PORT with TLS_CERT/TLS_KEY adds an https listener beside the plain one (listen.ts); SIGHUP reloads
- * its certificate.
+ * its certificate. GATEWAY_SOCKET adds a Unix socket for the local callers that carry a secret (unixsocket.ts).
  */
 import type https from "node:https";
 import fs from "node:fs";
@@ -24,6 +24,7 @@ import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { validateConfig } from "@aprscaching/shared";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { resolveServerSecrets } from "./secrets.js";
+import { listenUnix } from "./unixsocket.js";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
 import { makeFsMedia } from "./media.js";
@@ -139,6 +140,20 @@ server.listen(PORT, () =>
   ),
 );
 
+// The Unix socket beside the TCP port, when GATEWAY_SOCKET names one: the same gateway, for the scripts and
+// the ingest on this machine. It never redirects to https: no browser loads pages through it.
+const SOCKET = process.env.GATEWAY_SOCKET?.trim();
+const local = SOCKET ? createGatewayServer(listenerBase) : undefined;
+if (local && SOCKET) {
+  try {
+    await listenUnix(local, SOCKET);
+  } catch (e) {
+    console.error("FATAL: cannot listen on GATEWAY_SOCKET: %s", (e as Error).message);
+    process.exit(1);
+  }
+  console.log("APRScaching node-gateway listening on %s", SOCKET);
+}
+
 startSchedules(env, fedSyncInterval(process.env), relayPollInterval(process.env));
 // a Pocket station sets FED_MDNS in its .env; a server shape leaves it off
 void startFieldDiscovery(env, PORT, false);
@@ -154,6 +169,7 @@ function shutdown(signal: string): void {
   shuttingDown = true;
   console.log("%s received — closing gateway", signal);
   secure?.close();
+  local?.close(); // closing removes the socket file
   server.close(() => {
     try {
       sqlite.pragma("wal_checkpoint(TRUNCATE)");

@@ -246,7 +246,7 @@ fi
 usbdev="$(env_get USB_KISS_DEVICE)"
 if [ -n "$usbdev" ]; then
   if [ -f "$RUN_DIR/usb-kiss.tx" ]; then mode="TRANSMIT ENABLED (watchdog on)"; else mode="receive-only"; fi
-  info "USB KISS TNC: $usbdev, $(env_get USB_KISS_BAUD) baud, $mode; the ingest reads it at $(env_get KISS_TNC_HOST):$(env_get KISS_TNC_PORT)"
+  info "USB KISS TNC: $usbdev, $(env_get USB_KISS_BAUD) baud, $mode; the ingest reads it at $(env_get KISS_TNC_HOST)"
 fi
 aprsis="$(env_get APRSIS_HOST)"
 if [ -n "$aprsis" ]; then

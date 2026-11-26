@@ -106,6 +106,12 @@ ok "the gateway answers /health"
 page="$(curl -fsS --max-time 5 "http://127.0.0.1:$PORT/")" || fail "the web app at /"
 grep -qi "<html" <<<"$page" || fail "the web app at / is not the web app"
 ok "the gateway serves the web app"
+# The secrets' way in: the socket install.sh named, in a directory only this user opens.
+sock="$(grep -E '^GATEWAY_SOCKET=' "$DATA/.env" | tail -n 1 | cut -d= -f2-)"
+[ -n "$sock" ] || fail "install.sh wrote no GATEWAY_SOCKET"
+curl -fsS --max-time 5 --unix-socket "$sock" "http://localhost/health" >/dev/null || fail "/health over $sock"
+[ "$(stat -c %a "$(dirname "$sock")")" = 700 ] || fail "$(dirname "$sock") is not mode 700"
+ok "the gateway answers on its socket $sock, in a 0700 directory"
 out="$(bash "$DIR/deploy/pocket/status.sh" --data-dir "$DATA" 2>&1)" || true
 grep -q "gateway  running" <<<"$out" || fail "status.sh: $out"
 ok "status.sh shows the gateway running"

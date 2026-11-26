@@ -114,7 +114,7 @@ APRSIS_PORT	int	ingest,pocket	14580		0	0	selfhost,baremetal,ingest-box,pocket	AP
 APRSIS_CALLSIGN	call	ingest,pocket	N0CALL		0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box logs in to APRS-IS with	
 APRSIS_PASSCODE	int	ingest	-1		1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode for that callsign; -1 logs in receive-only	
 APRSIS_FILTER	string	ingest,pocket	r/47.07/15.42/300		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed	
-KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Host of the KISS TNC over TCP; set it to enable the TNC	
+KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	KISS TNC host over TCP, or its Unix socket's path (starting with /); set it to enable the TNC	
 KISS_TNC_PORT	int	ingest,pocket	8001		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the KISS TNC	
 KISS_TNC_CHANNELS	list	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	KISS channels (0-15) the TNC's radios use, comma-separated; each is its own port	
 KISS_TNC_TX_CHANNEL	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	KISS channel of the box's own transmissions (default: the first listed)	
@@ -262,6 +262,7 @@ HIDE_DAILY_LIMIT	int	gateway	5		0	0	selfhost,baremetal,pocket,desktop	New caches
 FED_SYNC_INTERVAL_MS	int	server	300000		0	0	selfhost,baremetal,pocket,desktop	Federation peer-sync interval in milliseconds; 0 turns it off	
 FED_RELAY_POLL_MS	int	server	15000		0	0	selfhost,baremetal,pocket,desktop	Relay round interval in milliseconds (spoke queries, relayed answers); 0 leaves it to the sync	
 WEB_DIST	string	server,desktop			0	0	selfhost,baremetal,pocket,desktop	Built web app directory, served on the same origin as the API	
+GATEWAY_SOCKET	string	server,ingest,pocket			0	0	selfhost,baremetal,pocket	Unix socket path the gateway also listens on; the ingest and admin tools then use it	
 HTTPS_PORT	int	server,pocket			0	0	selfhost,baremetal,pocket	Port of the optional https listener; needs TLS_CERT and TLS_KEY	
 TLS_CERT	string	server,pocket			0	0	selfhost,baremetal,pocket	PEM certificate, with its chain, for the https listener	
 TLS_KEY	string	server			0	0	selfhost,baremetal,pocket	PEM private key for the https listener	

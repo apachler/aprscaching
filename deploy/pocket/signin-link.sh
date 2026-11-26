@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Mint a one-time sign-in link for a callsign on this phone's gateway: the way in when a passkey does
 # not work (a browser without passkey support on localhost, no email provider off-grid). It loads
-# OPERATOR_SECRET and PORT from ~/.aprscaching/.env and runs tools/admin/signin-link.mjs against
-# http://127.0.0.1:<PORT>. The link is single-use and expires in 15 minutes; open it in the browser on
+# OPERATOR_SECRET and GATEWAY_SOCKET from ~/.aprscaching/.env and runs tools/admin/signin-link.mjs, which
+# reaches the gateway through that socket. The link is single-use and expires in 15 minutes; open it in the browser on
 # this phone, or hand it to its owner in person, never over a channel others read.
 #
 #   bash ~/aprscaching/deploy/pocket/signin-link.sh OE8APR
@@ -48,6 +48,11 @@ pocket_paths
 env_load
 [ -n "${OPERATOR_SECRET:-}" ] || die "OPERATOR_SECRET is empty in $ENV_FILE." \
   "Set one (node -e \"console.log(require('crypto').randomBytes(24).toString('hex'))\") and restart the gateway."
+[ -n "${GATEWAY_SOCKET:-}" ] || die "GATEWAY_SOCKET is empty in $ENV_FILE." \
+  "Run update.sh (or install.sh) once; it adds the gateway's socket."
+# The script reaches the gateway through GATEWAY_SOCKET, never a BASE URL: a TCP port on the phone may be
+# held by another app.
+unset BASE
 ARGS=()
 if [ "$HOTSPOT" -eq 1 ]; then
   HTTPS="$(tls_port)"
@@ -69,4 +74,4 @@ if [ "$HOTSPOT" -eq 1 ]; then
 elif [ "$QR" -eq 1 ]; then
   ARGS=(--qr)
 fi
-BASE="http://127.0.0.1:${PORT:-8787}" exec node "$DIR/tools/admin/signin-link.mjs" "${ARGS[@]}" "$CALL"
+exec node "$DIR/tools/admin/signin-link.mjs" "${ARGS[@]}" "$CALL"

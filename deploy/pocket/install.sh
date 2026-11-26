@@ -385,6 +385,20 @@ else
   info "callsign $CALL, port $PORT, ingest and operator secrets generated"
 fi
 
+# The secrets and the USB TNC's KISS stream move to Unix sockets in the private run directory, on a kept .env as
+# on a new one, so an update needs no step by the operator (lib.sh, pocket_sockets_env).
+if [ "$DRY" -eq 1 ]; then
+  info "[dry-run] sets GATEWAY_SOCKET, and a USB TNC's KISS_TNC_HOST, to sockets in $DATA/run"
+else
+  (
+    # lib.sh takes its paths from these, not from this script's DIR and DATA.
+    APRSCACHING_DIR="$DIR" APRSCACHING_DATA="$DATA"
+    # shellcheck source=deploy/pocket/lib.sh
+    . "$DIR/deploy/pocket/lib.sh"
+    pocket_sockets_env
+  )
+fi
+
 # ---- 10. first start: migrations ---------------------------------------------------------------------
 # The gateway applies db/migrations at every start, so starting it once and stopping it migrates the
 # database and proves the whole chain (secrets, SQLite, web build) before the station goes out.

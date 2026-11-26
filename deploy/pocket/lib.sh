@@ -69,6 +69,25 @@ env_set() {
   printf '%s=%s\n' "$1" "$2" >>"$ENV_FILE"
 }
 
+# The operator's scripts and the ingest send their secrets to the gateway over its Unix socket, and the ingest
+# reads the USB KISS bridge over the bridge's socket, both in the private run directory: on Android every app
+# shares loopback and may bind a free TCP port, so a secret or a KISS stream on 127.0.0.1 can reach another
+# app. install.sh runs this on a new .env and on a kept one, so an update needs no step by the operator.
+pocket_sockets_env() {
+  if [ -z "$(env_get GATEWAY_SOCKET)" ]; then
+    env_set GATEWAY_SOCKET "$RUN_DIR/gateway.sock"
+    info "GATEWAY_SOCKET=$RUN_DIR/gateway.sock: the scripts and the ingest reach the gateway there"
+  fi
+  [ -n "$(env_get USB_KISS_DEVICE)" ] || return 0
+  case "$(env_get KISS_TNC_HOST)" in
+    127.0.0.1 | localhost | ::1)
+      env_set KISS_TNC_HOST "$RUN_DIR/kiss.sock"
+      env_unset KISS_TNC_PORT
+      info "KISS_TNC_HOST=$RUN_DIR/kiss.sock: the ingest reads the USB KISS TNC there"
+      ;;
+  esac
+}
+
 gateway_port() {
   local p
   p="$(env_get PORT)"
@@ -121,25 +140,35 @@ pulse_ensure() {
   fi
 }
 
-# GET the operator's station summary (/api/admin/station-status) from the local gateway, with the
-# OPERATOR_SECRET from the .env; empty output when the gateway does not answer.
-station_status() {
-  local secret
+# The gateway's Unix socket (GATEWAY_SOCKET), where every request carrying OPERATOR_SECRET goes. On Android
+# every app with the INTERNET permission shares loopback and may bind the gateway's TCP port while it is free
+# (the boot delay, a restart), so a secret sent there goes to whoever holds the port; the socket sits in
+# Termux's private data directory, which no other app can open or create files in.
+gateway_socket() { env_get GATEWAY_SOCKET; }
+
+# A request to the local gateway with the OPERATOR_SECRET from the .env, through the socket only:
+# `operator_curl PATH [curl options…]`. Fails without sending anything when OPERATOR_SECRET or
+# GATEWAY_SOCKET is unset (update.sh and install.sh write GATEWAY_SOCKET), never falling back to TCP.
+# The header comes from a file descriptor, so the secret never shows in the process list.
+operator_curl() {
+  local path=$1 secret sock
+  shift
   secret="$(env_get OPERATOR_SECRET)"
-  [ -n "$secret" ] || return 1
-  # The header comes from a file descriptor, so the secret never shows in the process list.
-  curl -fsS --max-time 5 -H @<(printf 'x-operator-secret: %s\n' "$secret") \
-    "$(gateway_base)/api/admin/station-status${1:+?since=$1}" 2>/dev/null
+  sock="$(gateway_socket)"
+  [ -n "$secret" ] && [ -n "$sock" ] || return 1
+  curl --unix-socket "$sock" -H @<(printf 'x-operator-secret: %s\n' "$secret") "$@" "http://localhost$path"
 }
 
-# The local gateway's federation sync endpoint (/api/admin/federation/sync), with the OPERATOR_SECRET from
-# the .env: `fed_sync GET` reads the state, `fed_sync POST` starts a sync. Empty output when the gateway does not answer.
+# GET the operator's station summary (/api/admin/station-status) from the local gateway; empty output when
+# the gateway does not answer.
+station_status() {
+  operator_curl "/api/admin/station-status${1:+?since=$1}" -fsS --max-time 5 2>/dev/null
+}
+
+# The local gateway's federation sync endpoint (/api/admin/federation/sync): `fed_sync GET` reads the state,
+# `fed_sync POST` starts a sync. Empty output when the gateway does not answer.
 fed_sync() {
-  local secret
-  secret="$(env_get OPERATOR_SECRET)"
-  [ -n "$secret" ] || return 1
-  curl -fsS --max-time 5 -X "$1" -H @<(printf 'x-operator-secret: %s\n' "$secret") \
-    "$(gateway_base)/api/admin/federation/sync" 2>/dev/null
+  operator_curl /api/admin/federation/sync -fsS --max-time 5 -X "$1" 2>/dev/null
 }
 # The sync state as lines for status.sh and sync.sh: the hub push, then any spokes pushing here.
 fed_sync_lines() {
