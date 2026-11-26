@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { authorshipMessage, ingestMessage, sha256Hex, stableStringify, SIG_DOMAIN } from "@aprscaching/shared";
 import { FIND_FEED } from "@aprscaching/gateway/federation";
 import { instanceEnv, serve } from "./helpers/fedpeer.js";
-import { emailSignup } from "./helpers/authflow.js";
+import { emailSignup, markCallVerified, sessionCookie } from "./helpers/authflow.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 const INSTANCE = "field.example";
@@ -41,6 +41,8 @@ async function setup(opts: { cacheAge?: number; keyAge?: number } = {}) {
   )
     .bind(code, LAT, LON, created, created)
     .run();
+  // Tier A says the logger was heard on the air, which counts for a control-verified call only
+  await markCallVerified(env, LOGGER);
   return { env, kp, pub, code, id: Number(r.meta.last_row_id) };
 }
 type Setup = Awaited<ReturnType<typeof setup>>;
@@ -53,7 +55,7 @@ const heard = (env: Env, ts: number) =>
     .bind(LOGGER, ts, LAT, LON, SITE)
     .run();
 
-/** POST a found log as the ingest plane (or as `cookie`'s session); `at` signs it, `extra` adds body fields. */
+/** POST a found log from the logger's session (or `cookie`'s); `at` signs it, `extra` adds body fields. */
 async function log(s: Setup, at: number | null, extra: Record<string, unknown> = {}, cookie?: string) {
   const body: Record<string, unknown> = { loggerCall: LOGGER, logType: "found", ...extra };
   if (at != null) {
@@ -66,7 +68,7 @@ async function log(s: Setup, at: number | null, extra: Record<string, unknown> =
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...(cookie ? { cookie } : { "x-ingest-secret": "test-ingest-secret" }),
+        cookie: cookie ?? (await sessionCookie(s.env, LOGGER)),
       },
       body: JSON.stringify(body),
     }),
@@ -106,14 +108,6 @@ describe("a signed field time", () => {
     const res = await log(s, at, { appGeo: { lat: LAT, lon: LON, accuracyM: 10, ts: at } }, player.cookie);
     expect(res.body.tier).toBe("B");
     expect(res.body.method).toBe("app_geo");
-  });
-
-  it("ignores a geolocation the ingest plane sends: a machine has no in-app reading", async () => {
-    const s = await setup();
-    const at = now() - 8 * H;
-    const res = await log(s, at, { appGeo: { lat: LAT, lon: LON, accuracyM: 10, ts: at } });
-    expect(res.status).toBeLessThan(300);
-    expect(res.body.tier).toBe("C");
   });
 
   it("federates the find at its field time", async () => {
@@ -178,11 +172,6 @@ describe("a FOUND in a signed browser batch", () => {
   async function radioFound(s: Setup, at: number) {
     await s.env.DB.prepare(
       "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('acct-log', ?, 1, 0)",
-    )
-      .bind(LOGGER)
-      .run();
-    await s.env.DB.prepare(
-      "INSERT INTO callsign_verifications (callsign, method, status, attempts, created_at, verified_at) VALUES (?, 'operator', 'verified', 0, 0, 0)",
     )
       .bind(LOGGER)
       .run();

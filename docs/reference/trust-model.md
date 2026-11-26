@@ -100,6 +100,9 @@ enrolled box counts only for the frames that box delivers itself, and a box's fr
 - **The path vouches for the hearing.** The ingest box's writes need the ingest secret or its enrolled key.
 - **Tier A is default-deny.** Until a site is attested, no find reaches Tier A locally and no member can
   verify a callsign on the air, because nothing the instance hears counts as heard by its own radio.
+- **A callsign proof needs an enrolled box.** An on-air `VERIFY` counts only from a site trusted through an
+  enrolled box, delivered with that box's own key. `FIRST_PARTY_SITES`, the stations added by call and the
+  shared ingest secret attest finds but verify no callsign: whoever holds the shared secret can post any frame.
 
 An APRS-IS line is never attested, even one whose q-construct names an attested site (`qAR,OE8XBM-10`):
 APRS-IS passcodes are public, so anyone can inject that line. A standalone IGate visible only on APRS-IS
@@ -141,7 +144,7 @@ the tiers that grade a find. Every verification records its method and who vouch
 
 | Method | Counts when |
 |---|---|
-| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an attested receiving site hears it on its own radio: a TNC, a soundcard port, or a MeshCom node that heard it directly over LoRa |
+| On the air | The holder sends `VERIFY <code>` to the instance's service call, and an ingest box enrolled with its own key hears it on its own radio at a site trusted under that box: a TNC, a soundcard port, or a MeshCom node that heard it directly over LoRa |
 | ampr.org DNS | The holder publishes the code under their ARDC-delegated `<call>.ampr.org` name, confirmed by a DNSSEC-validated answer or by several independent public resolvers returning the same record |
 | LoTW certificate | The holder signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the browser |
 | Operator CLI | The instance's operator confirms their own call listed in `ADMIN_CALLSIGNS` |

@@ -20,6 +20,11 @@
  * batch the box posts to the gateway: it did not cross the air to the box's receiver, so it is no hearing, and the
  * receiving site never attests it. Its echo is dropped like any frame the box sent.
  *
+ * Slots: `KISS_SERVER_MAX_CLIENTS` connections at once, at most `KISS_SERVER_MAX_PER_ADDR` from one remote address
+ * off loopback. A client that has sent nothing for `KISS_SERVER_IDLE_SEC` gives up its slot when a new client finds
+ * the server full: connections that say nothing cannot lock everyone else out, while a receive-only program (it
+ * sends nothing on a quiet channel) keeps its connection as long as no one needs the slot.
+ *
  * KISS commands from clients (TXDELAY, PERSIST, SLOTTIME, TXTAIL, FULLDUPLEX, SETHARDWARE, return-from-KISS) are
  * ignored: the box sets its TNC's timing, and one client must not change the channel access the others share.
  */
@@ -50,6 +55,10 @@ export interface KissServerSettings {
   listeners: SinglePortListener[];
   map: PortMapEntry[];
   maxClients: number;
+  /** Clients at once from one remote address; loopback clients are all one address and are not counted. */
+  maxPerAddr: number;
+  /** Seconds a client has sent nothing after which a new client may take its slot when the server is full. */
+  idleSec: number;
   tx: boolean;
   /** The base calls a client may transmit as. */
   txCalls: string[];
@@ -59,6 +68,10 @@ export interface KissServerSettings {
 
 /** Clients at once unless `KISS_SERVER_MAX_CLIENTS` says otherwise. */
 const MAX_CLIENTS_DEFAULT = 8;
+/** Clients from one remote address unless `KISS_SERVER_MAX_PER_ADDR` says otherwise. */
+const MAX_PER_ADDR_DEFAULT = 2;
+/** Silence after which a client's slot goes to a newcomer, unless `KISS_SERVER_IDLE_SEC` says otherwise. */
+const IDLE_SEC_DEFAULT = 300;
 /** A client that has this much unread output is not reading: it is dropped, so the box's memory stays bounded. */
 const CLIENT_BACKLOG_MAX = 256 * 1024;
 
@@ -107,10 +120,21 @@ export function kissServerSettings(
     listeners,
     map,
     maxClients: Math.floor(numEnv("KISS_SERVER_MAX_CLIENTS", MAX_CLIENTS_DEFAULT, { min: 1, max: 64 }, env)),
+    maxPerAddr: Math.floor(numEnv("KISS_SERVER_MAX_PER_ADDR", MAX_PER_ADDR_DEFAULT, { min: 1, max: 64 }, env)),
+    idleSec: numEnv("KISS_SERVER_IDLE_SEC", IDLE_SEC_DEFAULT, { min: 1, max: 86_400 }, env),
     tx: env.KISS_SERVER_TX === "1",
     txCalls,
     pacing: txLimitFromEnv("hub"),
   };
+}
+
+/**
+ * Whether a client from `addr` is refused because `maxPerAddr` clients from that address are connected already.
+ * Loopback is never full: every program on the box itself connects from it.
+ */
+export function addressFull(addr: string, connected: readonly string[], maxPerAddr: number): boolean {
+  if (addr.startsWith("127.") || addr === "::1" || addr.startsWith("::ffff:127.")) return false;
+  return connected.filter((a) => a === addr).length >= maxPerAddr;
 }
 
 /** What a refusal means, for the log. */
@@ -133,8 +157,11 @@ export class KissServer {
   private servers: net.Server[] = [];
   private names = new Map<net.Socket, string>();
   private logged = new Map<net.Socket, Set<TxRefusal>>();
+  /** When each client last sent a byte (or connected). */
+  private lastRx = new Map<net.Socket, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private log: (msg: string) => void;
+  private now: () => number;
   /** Client frames handed to a radio. */
   sent = 0;
 
@@ -147,6 +174,7 @@ export class KissServer {
     this.bucket = new TokenBucket({ ...s.pacing, now: deps.now });
     this.radios = new Map(radios.map((r) => [r.name, r]));
     this.log = deps.log ?? ((m) => console.log("[kiss-server] %s", m));
+    this.now = deps.now ?? Date.now;
   }
 
   /** Listen on the server's port and each single-port listener; resolves once all are bound. */
@@ -194,6 +222,21 @@ export class KissServer {
 
   private accept(sock: net.Socket, only?: number): void {
     const name = `${sock.remoteAddress}:${sock.remotePort}`;
+    const addr = sock.remoteAddress ?? "";
+    if (
+      addressFull(
+        addr,
+        [...this.names.keys()].map((s) => s.remoteAddress ?? ""),
+        this.s.maxPerAddr,
+      )
+    ) {
+      this.log(
+        `${name} refused: ${this.s.maxPerAddr} clients from ${addr} are connected already (KISS_SERVER_MAX_PER_ADDR)`,
+      );
+      sock.destroy();
+      return;
+    }
+    if (this.core.clients.size >= this.s.maxClients) this.evictIdle();
     if (!this.core.connect(sock, only)) {
       this.log(`${name} refused: ${this.s.maxClients} clients are connected already (KISS_SERVER_MAX_CLIENTS)`);
       sock.destroy();
@@ -201,12 +244,14 @@ export class KissServer {
     }
     this.names.set(sock, name);
     this.logged.set(sock, new Set());
+    this.lastRx.set(sock, this.now());
     sock.setNoDelay(true);
     sock.setKeepAlive(true, 30_000);
     this.log(
       `${name} connected${only === undefined ? "" : ` (KISS port ${only} as port 0)`}, ${this.core.clients.size} of ${this.s.maxClients}`,
     );
     sock.on("data", (chunk: Buffer) => {
+      this.lastRx.set(sock, this.now());
       const waiting = this.core.receive(sock, chunk);
       this.report(sock, this.core.read(sock));
       if (waiting.length) this.pump();
@@ -217,11 +262,29 @@ export class KissServer {
       this.report(sock, counts);
       this.names.delete(sock);
       this.logged.delete(sock);
+      this.lastRx.delete(sock);
       const refused = Object.entries(counts.refused)
         .map(([k, n]) => `${n} ${k}`)
         .join(", ");
       this.log(`${name} disconnected${refused ? ` (refused: ${refused})` : ""}`);
     });
+  }
+
+  /** Free the slot of the client silent longest, when it has been silent for `idleSec`. */
+  private evictIdle(): void {
+    let victim: net.Socket | null = null;
+    let since = this.now() - this.s.idleSec * 1000;
+    for (const [sock, at] of this.lastRx) {
+      if (at <= since) {
+        victim = sock;
+        since = at;
+      }
+    }
+    if (!victim) return;
+    this.log(`${this.names.get(victim)} sent nothing for ${this.s.idleSec} s and the server is full; disconnected`);
+    // free the slot now: the socket's close event, which also forgets it, comes after this connect is decided
+    this.core.disconnect(victim);
+    victim.destroy();
   }
 
   /** Log each kind of refusal once per client, the first time it happens. */

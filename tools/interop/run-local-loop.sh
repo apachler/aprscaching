@@ -51,17 +51,24 @@ for i in $(seq 1 60); do
   sleep 0.5
 done
 
+# Each ingest runs its stack's packet BBS and FBB forwarding, which take only a box enrolled with its own key
+# that the sysop lets run the instance's services: enroll both before they start.
+BOX_A="$(cd "$ROOT" && sh "$HERE/enroll-bbs-box.sh" http://127.0.0.1:9601 interop-a)"
+BOX_B="$(cd "$ROOT" && sh "$HERE/enroll-bbs-box.sh" http://127.0.0.1:9602 interop-b)"
+
 # Both nodes speak INP3 (NETROM_INP3) alongside NODES, so the triggered RIF / L3RTT path is exercised
 # live. LZHUF-B1 compressed forwarding is covered by unit tests; this ASCII gate can only negotiate
 # compression back to ASCII, and the fbb interop job forwards uncompressed.
-setsid env $COMMON INGEST_URL=http://127.0.0.1:9601/ingest INGEST_SECRET="$INGEST_SECRET" \
+# shellcheck disable=SC2086 # BOX_A is BOX_ID=… and BOX_KEY=…, one word each
+setsid env $COMMON $BOX_A INGEST_URL=http://127.0.0.1:9601/ingest INGEST_SECRET="$INGEST_SECRET" \
   AXUDP_PORT=10501 AXUDP_PEERS=127.0.0.1:10502 \
   NETROM_CALL=OE1AAA-7 NETROM_ALIAS=ACSA NETROM_BROADCAST_MS=3000 NETROM_INP3=1 \
   BBS_NODE_CALL=OE1AAA-1 BBS_FORWARD=1 BBS_FORWARD_CALL=OE1AAA-1 BBS_FORWARD_POLL_MS=3000 \
   FED_LINK_PULL=1 FED_LINK_CALL=OE1AAA-9 FED_LINK_PULL_MS=60000 \
   bash -c "exec pnpm --filter @aprscaching/ingest start" >/tmp/interop-ina.log 2>&1 &
 PIDS+=($!)
-setsid env $COMMON INGEST_URL=http://127.0.0.1:9602/ingest INGEST_SECRET="$INGEST_SECRET" \
+# shellcheck disable=SC2086 # BOX_B is BOX_ID=… and BOX_KEY=…, one word each
+setsid env $COMMON $BOX_B INGEST_URL=http://127.0.0.1:9602/ingest INGEST_SECRET="$INGEST_SECRET" \
   AXUDP_PORT=10502 AXUDP_PEERS=127.0.0.1:10501 \
   NETROM_CALL=OE1BBB-7 NETROM_ALIAS=ACSB NETROM_BROADCAST_MS=3000 NETROM_INP3=1 \
   BBS_NODE_CALL=OE1BBB-1 FED_LINK_SERVE=1 FED_LINK_CALL=OE1BBB-9 \

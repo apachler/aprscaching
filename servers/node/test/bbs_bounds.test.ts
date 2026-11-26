@@ -17,6 +17,7 @@ import { handleForwardInbound, handleWhitePages, originBbs } from "@aprscaching/
 import { outboxAck } from "@aprscaching/gateway/outbox";
 import { handleCreateCache } from "@aprscaching/gateway/caches";
 import { issueSessionCookie } from "@aprscaching/gateway/auth";
+import { setBoxPrincipal } from "../../../workers/gateway/src/boxprincipal.js";
 import type { Env } from "@aprscaching/gateway/env";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,14 +47,26 @@ const ingest = (url: string, body: unknown) =>
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 
+/** A request from the packet BBS: a box the sysop lets run this instance's services, as route() marks one
+ *  whose signature it verified. */
+const bbsBox = (url: string, body: unknown) => {
+  const req = new Request(`http://gw.test${url}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+  setBoxPrincipal(req, { box: "bbs", callsign: null, services: true });
+  return req;
+};
+
 const post = (b: Record<string, unknown>) =>
-  handleBbsPost(ingest("/api/bbs/messages", { fromCall: "OE8APR", toCall: "OE1TST", body: "hi", ...b }), env);
+  handleBbsPost(bbsBox("/api/bbs/messages", { fromCall: "OE8APR", toCall: "OE1TST", body: "hi", ...b }), env);
 
 describe("BBS post bounds", () => {
   it("answers 400, not 500, when a call or the body is not text", async () => {
     for (const b of [{ fromCall: 7 }, { toCall: { x: 1 } }, { body: ["a"] }, { subject: 5 }])
       expect((await post(b)).status).toBe(400);
-    const junk = await handleBbsPost(ingest("/api/bbs/messages", "[1,2]"), env);
+    const junk = await handleBbsPost(bbsBox("/api/bbs/messages", "[1,2]"), env);
     expect(junk.status).toBe(400);
   });
 
@@ -76,7 +89,7 @@ describe("BBS post bounds", () => {
     expect(row.expires_at - row.posted_at).toBe(BBS_LIFETIME_MAX_SEC);
   });
 
-  it("holds a sender to a daily budget through the ingest box", async () => {
+  it("holds a sender to a daily budget through the packet BBS box", async () => {
     for (let i = 0; i < BBS_POSTS_PER_DAY; i++) expect((await post({})).status).toBe(201);
     expect((await post({ fromCall: "OE8APR-7" })).status).toBe(429); // an SSID shares its base call's budget
     expect((await post({ fromCall: "OE5NEW" })).status).toBe(201);
@@ -118,7 +131,7 @@ describe("White Pages learning", () => {
       { home_bbs: string; source: string } | undefined;
   const inbound = (bid: string, body: string) =>
     handleForwardInbound(
-      ingest("/api/bbs/forward/inbound", {
+      bbsBox("/api/bbs/forward/inbound", {
         message: { type: "P", from: "OE5ABC", at: "OE8XBM", to: "OE8APR", bid, title: "t", body },
         origin: "rf-fbb:OE8XBM-1",
       }),
@@ -145,26 +158,47 @@ describe("White Pages learning", () => {
   });
 
   it("keeps the operator's entry over a learned one", async () => {
-    const set = (headers: Record<string, string>, homeBbs: string) =>
+    const set = (homeBbs: string) =>
       handleWhitePages(
         new Request("http://gw.test/api/bbs/wp", {
           method: "POST",
-          headers: { "content-type": "application/json", ...headers },
+          headers: { "content-type": "application/json", "x-operator-secret": "a-strong-operator-secret" },
           body: JSON.stringify({ callsign: "OE5ABC", homeBbs }),
         }),
         env,
       );
-    expect((await set({ "x-operator-secret": "a-strong-operator-secret" }, "OE5XYZ.#OOE.AUT.EU")).status).toBe(200);
+    const learn = (homeBbs: string) => handleWhitePages(bbsBox("/api/bbs/wp", { callsign: "OE5ABC", homeBbs }), env);
+    expect((await set("OE5XYZ.#OOE.AUT.EU")).status).toBe(200);
     await inbound("B3_OE5XBL", "R:261004/1150Z @:OE5XBL.#OOE.AUT.EU\r\n\r\nHello");
-    expect((await set({ "x-ingest-secret": SECRET }, "DB0ZZZ.#BAY.DEU.EU")).status).toBe(200);
+    expect((await learn("DB0ZZZ.#BAY.DEU.EU")).status).toBe(200);
     expect(home("OE5ABC")).toEqual({ home_bbs: "OE5XYZ.#OOE.AUT.EU", source: "manual" });
   });
 });
 
 describe("cache create", () => {
-  const create = (code?: string) =>
+  /** The sysop OE8APR's session: an explicit cache code is the sysop's to choose. */
+  async function sysop(): Promise<string> {
+    env.ADMIN_CALLSIGNS = "OE8APR";
+    sqlite
+      .prepare("INSERT OR IGNORE INTO accounts (account_id, callsign, created_at) VALUES ('acct-op','OE8APR',1)")
+      .run();
+    sqlite
+      .prepare("INSERT OR IGNORE INTO account_callsigns (account_id, callsign, added_at) VALUES ('acct-op','OE8APR',1)")
+      .run();
+    sqlite
+      .prepare(
+        "INSERT OR IGNORE INTO callsign_verifications (callsign, method, status, verified_at) VALUES ('OE8APR','operator','verified',1)",
+      )
+      .run();
+    return (await issueSessionCookie(new Request("http://gw.test/"), env, "acct-op", "OE8APR")).split(";")[0]!;
+  }
+  const create = async (code?: string) =>
     handleCreateCache(
-      ingest("/api/caches", { title: "Hut", lat: 47, lon: 15, ownerCall: "OE8APR", ...(code && { code }) }),
+      new Request("http://gw.test/api/caches", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: await sysop() },
+        body: JSON.stringify({ title: "Hut", lat: 47, lon: 15, ...(code && { code }) }),
+      }),
       env,
     );
   const count = () => (sqlite.prepare("SELECT COUNT(*) AS n FROM caches").get() as { n: number }).n;
@@ -174,6 +208,13 @@ describe("cache create", () => {
     expect((await create("GC12345")).status).toBe(409);
     expect(count()).toBe(1);
     expect(sqlite.prepare("SELECT code FROM caches").all()).toEqual([{ code: "GC12345" }]);
+  });
+
+  it("refuses an explicit AC- code, even from the sysop: AC- codes are the instance's to mint", async () => {
+    const res = await create("AC-9999");
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/minted by the instance/);
+    expect(count()).toBe(0);
   });
 
   it("mints an AC- code when none is given", async () => {

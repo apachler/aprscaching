@@ -131,7 +131,6 @@ export function HidePanel(props: {
         terrain,
         lat: props.draft.lat,
         lon: props.draft.lon,
-        ownerCall: callsign,
         hint: hint.trim() || undefined,
         description: description.trim() || undefined,
         fedScope,

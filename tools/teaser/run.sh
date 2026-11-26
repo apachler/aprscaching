@@ -10,6 +10,8 @@ PORT_API="${PORT_API:-8787}"
 PORT_WEB="${PORT_WEB:-4173}"
 # the ingest secret the throwaway gateway and the seed script share
 export INGEST_SECRET="${INGEST_SECRET:-teaser-ingest-secret-0123456789}"
+# the operator secret the seed enrolls its receiving box with: a callsign proof counts only from an enrolled box
+export OPERATOR_SECRET="${OPERATOR_SECRET:-teaser-operator-secret-0123456789}"
 # In this sandbox Chromium lives at /opt/pw-browsers; elsewhere `npx playwright install chromium`
 # and leave PW_CHROMIUM unset so Playwright resolves its own download.
 export PW_CHROMIUM="${PW_CHROMIUM:-/opt/pw-browsers/chromium}"
@@ -35,8 +37,9 @@ echo "==> fresh database + start the gateway"
 cleanup; sleep 1
 rm -f "$OUT/teaser.db" "$OUT/teaser.db-wal" "$OUT/teaser.db-shm"
 # Tier A is default-deny; the demo seed gates its RF find through OE8XXX, so attest it so the teaser
-# logbook shows the intended Tier-A (RF) entry.
-( cd "$ROOT" && DB_PATH="$OUT/teaser.db" PORT="$PORT_API" FIRST_PARTY_SITES=OE8XXX \
+# logbook shows the intended Tier-A (RF) entry. The seed's players sign in by email, and this gateway has
+# no mail provider: ALLOW_DEV_TOKENS hands the sign-in token back.
+( cd "$ROOT" && DB_PATH="$OUT/teaser.db" PORT="$PORT_API" FIRST_PARTY_SITES=OE8XXX ALLOW_DEV_TOKENS=1 \
     pnpm --filter @aprscaching/node-gateway start ) >"$OUT/gateway.log" 2>&1 &
 GW_PID=$!
 wait_url "http://127.0.0.1:$PORT_API/health" || { echo "gateway did not start"; exit 1; }

@@ -7,8 +7,14 @@
  * the operator has: a KISS TNC on RF, or an AXUDP port on the Internet leg (the interop environment
  * and BPQ/FBB crosslinks). Wiring only — every engine is the same pure code either way.
  */
-import { SessionServer, type LineApp, type Service } from "@aprscaching/packet";
-import { parseAddr } from "@aprscaching/ax25";
+import {
+  SessionServer,
+  MAX_SESSIONS_DEFAULT,
+  MAX_PER_CALL_DEFAULT,
+  type LineApp,
+  type Service,
+} from "@aprscaching/packet";
+import { parseAddr, sameAddr } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
 import { numEnv } from "./config.js";
 import { txLimitFromEnv } from "./txlimit.js";
@@ -111,6 +117,8 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
         // with its own — the gate then runs the F-protocol responder: accept its proposals into the
         // gateway (BID-deduped) and reverse-forward whatever the pool has routed to that peer.
         return new FbbGatedBbs(interactive, {
+          // the F-protocol only for a station on the sysop's partner list
+          isPartner: async () => (await fwdApi.partners()).some((p) => p.enabled && sameAddr(parseAddr(p.call), r)),
           makeStore: async () => new SessionStore(await fwdApi.pool(r.call), []),
           onSessionEnd: async (s) => {
             const st = s as InstanceType<typeof SessionStore>;
@@ -137,6 +145,8 @@ export async function startConnectedServices(o: ConnectedStackOpts): Promise<boo
         link.sendFrame(f);
       },
       services,
+      maxSessions: Math.floor(numEnv("CONNECTED_MAX_SESSIONS", MAX_SESSIONS_DEFAULT, { min: 1, max: 100 }, env)),
+      maxPerCall: Math.floor(numEnv("CONNECTED_MAX_PER_CALL", MAX_PER_CALL_DEFAULT, { min: 1, max: 10 }, env)),
       onEvent: (e) => {
         console.log("[l2] %s: %s -> %s", e.kind, e.remote, e.service);
         if (e.kind === "connect") users.add(e.remote);

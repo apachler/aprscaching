@@ -24,6 +24,14 @@ export interface LinkConfig {
   pid: number;
   modulo?: 8 | 128; // sequence-number modulus; 128 connects with SABME (extended window). Default 8.
   srej?: boolean; // use SREJ (selective reject) on a receive gap instead of REJ (go-back-N). Default off.
+  /** Largest info field of one I-frame; `send()` splits longer data into frames of at most this many bytes. */
+  paclen?: number;
+  /**
+   * Most bytes `send()` may hold queued and not yet sent. The peer decides when the queue drains (RNR, or no
+   * acknowledgements), so data past this ends the link instead of growing the box's memory. The default holds an
+   * FBB block of five 64 KiB messages, the largest single write a service makes.
+   */
+  maxPending?: number;
 }
 export const DEFAULT_CONFIG: LinkConfig = {
   t1: 3000,
@@ -33,6 +41,8 @@ export const DEFAULT_CONFIG: LinkConfig = {
   pid: PID_NO_L3,
   modulo: 8,
   srej: false,
+  paclen: 256,
+  maxPending: 512 * 1024,
 };
 
 export interface LinkEvents {
@@ -48,6 +58,8 @@ export interface LinkEvents {
    * repeated poll yields no sample, since the answer could belong to either copy (Karn's rule).
    */
   rtt?(ms: number, kind: "ack" | "poll"): void;
+  /** I-frames left the send queue: `backlog` bytes are still queued. A writer that paused on the backlog resumes. */
+  drained?(backlog: number): void;
 }
 
 interface SentIFrame {
@@ -65,6 +77,7 @@ export class ConnectedLink {
   private vr = 0;
   private va = 0; // send / receive / ack state vars
   private pending: { info: Uint8Array; pid?: number }[] = []; // layer-3 data not yet sent as I-frames
+  private pendingBytes = 0; // info bytes held in `pending`
   private sent: SentIFrame[] = []; // I-frames sent, awaiting ack (contiguous from V(A))
   private rc = 0; // retry counter
   private peerBusy = false; // peer sent RNR
@@ -122,6 +135,7 @@ export class ConnectedLink {
       return;
     }
     this.pending = [];
+    this.pendingBytes = 0;
     this.sent = [];
     this.tx("DISC", true, true);
     this.rc = 0;
@@ -129,11 +143,31 @@ export class ConnectedLink {
     this.stopT3();
     this.to("disconnecting");
   }
-  /** Queue layer-3 data to send as I-frame(s). `pid` overrides the link's default protocol id
-   *  for this chunk (a NET/ROM neighbour sends network packets as PID 0xCF on the same session). */
-  send(info: Uint8Array, pid?: number): void {
-    this.pending.push({ info, pid });
+  /**
+   * Queue layer-3 data to send as I-frames of at most `paclen` bytes each. `pid` overrides the link's default
+   * protocol id for this chunk (a NET/ROM neighbour sends network packets as PID 0xCF on the same session; a
+   * NET/ROM packet is at most 256 bytes, so it stays one frame at the default paclen). Data that would take the
+   * queue past `maxPending` bytes is refused and the link is torn down — a peer that never lets the queue
+   * drain must not grow it without bound. Returns whether the data was queued.
+   */
+  send(info: Uint8Array, pid?: number): boolean {
+    if (this.pendingBytes + info.length > (this.cfg.maxPending ?? Infinity)) {
+      this.ev.error?.(`send queue over ${this.cfg.maxPending} bytes — the peer is not taking data; disconnecting`);
+      this.disconnect();
+      return false;
+    }
+    const paclen = Math.max(1, this.cfg.paclen ?? info.length);
+    if (info.length <= paclen) this.pending.push({ info, pid });
+    else
+      for (let at = 0; at < info.length; at += paclen) this.pending.push({ info: info.subarray(at, at + paclen), pid });
+    this.pendingBytes += info.length;
     if (this.state === "connected") this.sendPending();
+    return true;
+  }
+
+  /** Bytes queued by `send()` and not yet sent as I-frames. */
+  get backlog(): number {
+    return this.pendingBytes;
   }
 
   /**
@@ -322,6 +356,7 @@ export class ConnectedLink {
     let any = false;
     while (this.pending.length && !this.peerBusy && this.outstanding(this.va, this.vs) < this.cfg.window) {
       const { info, pid } = this.pending.shift()!;
+      this.pendingBytes -= info.length;
       this.txI(this.vs, info, pid);
       this.sent.push({ ns: this.vs, info, pid, at: this.clock() });
       this.vs = (this.vs + 1) % this.mod;
@@ -329,6 +364,7 @@ export class ConnectedLink {
       this.startT1();
       any = true;
     }
+    if (any) this.ev.drained?.(this.pendingBytes);
     return any;
   }
   /** Remove acked I-frames — N(R) acknowledges everything before it. */
@@ -398,6 +434,7 @@ export class ConnectedLink {
   private reset(): void {
     this.vs = this.vr = this.va = this.rc = 0;
     this.pending = [];
+    this.pendingBytes = 0;
     this.sent = [];
     this.peerBusy = false;
     this.rejSent = false;

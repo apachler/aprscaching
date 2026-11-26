@@ -3,6 +3,7 @@
 // APRS message from the service call, within the per-cache and per-hour limits, back the way it was heard.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, emailSignup, operatorVerify } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import { decideRadioCommand } from "@aprscaching/gateway/radiolog";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -184,9 +185,7 @@ describe("the near-cache radio message", () => {
 
   it("goes back through the box's MeshCom node when the station was heard on MeshCom", async () => {
     const { env } = await player({ on: true });
-    await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12&kiss=OE8APR-12", undefined, {
-      "x-ingest-secret": SECRET,
-    });
+    await boxCall(env, "pi-home", "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12&kiss=OE8APR-12");
     await ingest(env, {
       src: "OE1ABC-7",
       payload: `!${AT}>`,

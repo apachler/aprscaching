@@ -3,6 +3,7 @@
 // FBB forward log, unseen watch alerts, and long-silent stations — each kept only as long as it is of use.
 import { describe, it, expect } from "vitest";
 import { authEnv, call, markCallVerified } from "./helpers/authflow.js";
+import { boxCall } from "./helpers/box.js";
 import { runScheduled } from "@aprscaching/gateway/app";
 import type { Env } from "@aprscaching/gateway/env";
 
@@ -55,12 +56,13 @@ describe("the nightly prune", () => {
   it("gives an inbound bulletin the default lifetime, and deletes bulletins past theirs but never personal mail", async () => {
     const env = authEnv({ ROOMS });
     const inbound = (bid: string, type: string) =>
-      call(
+      boxCall(
         env,
+        "bbs",
         "POST",
         "/api/bbs/forward/inbound",
         { message: { bid, type, from: "DL1ABC", to: type === "B" ? "ALL" : "OE1AAA", title: "t", body: "x" } },
-        SECRET,
+        { services: true },
       );
     expect((await inbound("7_DB0ABC", "B")).data).toMatchObject({ stored: 1 });
     expect((await inbound("8_DB0ABC", "P")).data).toMatchObject({ stored: 1 });
