@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The Bun server holds the Node server's limits: a request body stops at BODY_MAX_BYTES, a failure answers a
-// generic JSON 500 (never Bun's error page), a body is read only once its handler pulls it and a large one takes one
-// of the body slots, the https listener settings it has no listener for stop the boot,
+// The Bun server holds the Node server's limits: a request body stops at BODY_MAX_BYTES (413), a failure answers a
+// generic JSON 500 (never Bun's error page), a body is read only as far as its handler pulls it — an unknown path
+// is answered while its body is still coming — a body past BODY_FREE_BYTES holds one of the body slots while it is
+// read and gives it back once the request is answered, a box-signed body past 5 MB is answered 413, the https
+// listener settings it has no listener for stop the boot,
 // tool-registry fetches get their own guard, an event stream reaches its client, and HOST binds the listener. Run with `bun test servers/bun/test` (the CI Bun conformance).
 import { afterAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
