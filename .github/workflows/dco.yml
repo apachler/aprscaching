@@ -14,7 +14,10 @@ permissions:
 jobs:
   check:
     # pull requests opened by the workflow token (release-please's release PR, the sync of dev after a release) are
-    # github-actions[bot]'s; the job reports as skipped, which a required check accepts once the workflow runs
+    # github-actions[bot]'s; the job reports as skipped, which a required check accepts once the workflow runs. Their
+    # unsigned release commits reach no other pull request: once merged they sit below every other PR's base. The
+    # opener's login is the one mark of the bot a contributor cannot set; a commit's author string is whatever its
+    # maker writes, so no commit is excused by it.
     if: github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -26,25 +29,39 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          # Only what the pull request adds beyond dev is checked: every commit on dev entered it through a pull
+          # request this check ran on, or is pushed history, which is never rewritten. A release pull request from dev
+          # into main then adds nothing, and a hotfix into main is checked commit by commit. origin/dev is the base
+          # repository's branch, which a pull request cannot move; without it the check fails rather than check nothing.
+          dev="$(git rev-parse --verify -q 'refs/remotes/origin/dev^{commit}')" \
+            || { echo "::error::origin/dev is missing from the checkout."; exit 1; }
+          commits="$(git rev-list "$HEAD" --not "$BASE" "$dev")" || { echo "::error::git rev-list failed."; exit 1; }
           missing=0
-          for sha in $(git rev-list "$BASE..$HEAD"); do
-            # skip merge commits (they have >1 parent)
-            if [ "$(git rev-list --parents -n 1 "$sha" | wc -w)" -gt 2 ]; then continue; fi
+          for sha in $commits; do
             author="$(git show -s --format='%an <%ae>' "$sha")"
-            # release-please's release commits are github-actions[bot]'s and carry no sign-off; they reach a pull
-            # request from main into dev after a release
-            if [ "$author" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" ]; then continue; fi
-            if ! git show -s --format='%B' "$sha" | grep -qiE "^Signed-off-by: .+ <.+@.+>"; then
-              echo "::error::Commit $sha ($author) is missing a Signed-off-by line."
-              missing=1
+            if git show -s --format='%B' "$sha" | grep -qiE "^Signed-off-by: .+ <.+@.+>"; then continue; fi
+            # A merge commit can carry changes of its own. An unsigned one passes only when its tree is exactly the
+            # automatic merge of its two parents, so all it holds is theirs, and they are checked or already in the
+            # base. A resolved conflict, an added change or an octopus merge needs the sign-off.
+            read -r _ p1 p2 more <<<"$(git rev-list --parents -n 1 "$sha")"
+            # merge-tree exits non-zero on a conflict or any other failure, which falls through to the error below
+            if [ -n "$p2" ] && [ -z "$more" ] && auto="$(git merge-tree --write-tree "$p1" "$p2" 2>/dev/null)" \
+              && [ "$auto" = "$(git rev-parse "$sha^{tree}")" ]; then
+              continue
             fi
+            if [ -n "$p2" ]; then
+              echo "::error::Merge commit $sha ($author) is missing a Signed-off-by line and is not the automatic merge of its parents."
+            else
+              echo "::error::Commit $sha ($author) is missing a Signed-off-by line."
+            fi
+            missing=1
           done
           if [ "$missing" -ne 0 ]; then
             echo "One or more commits are not signed off. Run: git rebase --signoff $BASE  (or git commit -s)."
             echo "See CONTRIBUTING.md → 'Sign your work (DCO)'."
             exit 1
           fi
-          echo "All commits signed off."
+          echo "All $(printf '%s\n' "$commits" | grep -c .) commits the pull request adds beyond dev are signed off."
       - name: No coding-assistant attribution
         env:
           BASE: ${{ github.event.pull_request.base.sha }}

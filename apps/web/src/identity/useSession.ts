@@ -5,8 +5,12 @@ import { forgetSession, recallSession, rememberSession, type SessionStore } from
 import type { EndedReason } from "./accountNotices.js";
 import { disablePush } from "../push.js";
 
-/** The offline queue sends only this call's entries (api.ts `setQueueOwner`); unreadable storage holds none. */
-const ownQueue = (callsign: string | null | undefined) => setQueueOwner(callsign ?? null).catch(() => {});
+/**
+ * The offline queue sends only this call's entries, and the device keeps only this call's private offline data
+ * (api.ts `setQueueOwner`); `forget` on a sign-out deletes that data. Unreadable storage holds none.
+ */
+const ownQueue = (callsign: string | null | undefined, opts?: { forget?: boolean }) =>
+  setQueueOwner(callsign ?? null, opts).catch(() => {});
 
 const store: SessionStore = {
   get: (k) => localStorage.getItem(k),
@@ -54,7 +58,7 @@ export function useSession() {
     await disablePush().catch(() => {});
     await logout().catch(() => {});
     forgetSession(store);
-    await ownQueue(null);
+    await ownQueue(null, { forget: true });
     setS({ callsign: null });
   }, []);
   /**
@@ -76,7 +80,7 @@ export function useSession() {
     await disablePush().catch(() => {});
     await logoutAll();
     forgetSession(store);
-    await ownQueue(null);
+    await ownQueue(null, { forget: true });
     setS({ callsign: null });
   }, []);
   return {

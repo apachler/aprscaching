@@ -241,9 +241,13 @@ const mirrored = await until("B's cache appears on A", 180000, async () => {
   return (r.data?.caches ?? []).find((c) => c.title === CACHE_TITLE);
 });
 ok("A: B's cache arrived over the AX.25 circuit", !!mirrored);
-const status = await call(A, "GET", "/federation/packet/peers");
-const pb = status.data?.peers?.[0];
-ok("A: the packet session is recorded", !!pb?.lastOk && !pb?.lastError, JSON.stringify(pb));
+// the puller reports the session's outcome after it hands the pages over, so the cache can land first
+let pb = null;
+const recorded = await until("A records the packet session", 30000, async () => {
+  pb = (await call(A, "GET", "/federation/packet/peers")).data?.peers?.[0] ?? null;
+  return pb?.lastOk || pb?.lastError ? pb : null;
+});
+ok("A: the packet session is recorded", !!recorded?.lastOk && !recorded?.lastError, JSON.stringify(pb));
 const peerList = await call(A, "GET", "/federation/peers");
 const bRow = (peerList.data?.peers ?? []).find((p) => p.url === B);
 ok(

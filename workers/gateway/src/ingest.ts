@@ -119,7 +119,8 @@ const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * GET /ingest/check — does this ingest credential work? 200 with the instance id, its service call (the box
- * asks APRS-IS for messages addressed to it) and, for an enrolled box's signed request, the box, for a valid
+ * asks APRS-IS for messages addressed to it) and, for an enrolled box's signed request, the box and whether the
+ * sysop lets it run this instance's services (its packet BBS and FBB forwarding get mail only then), for a valid
  * credential, 401 otherwise, with the receiving sites this credential's frames may claim (so the box can say
  * when its own site is not among them). It reads only that list and writes nothing, so a box (and
  * `deploy/aprscaching doctor`) can test its settings without posting a batch, draining the outbox or leasing
@@ -127,13 +128,15 @@ const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
  */
 export async function handleIngestCheck(req: Request, env: Env): Promise<Response> {
   if (!ingestOrBoxOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
-  const box = boxPrincipal(req)?.box ?? null;
+  const principal = boxPrincipal(req);
+  const box = principal?.box ?? null;
   return json({
     ok: true,
     instance: env.INSTANCE ?? null,
     serviceCall: serviceCall(env),
     sites: [...sitesFor(await attestation(env), box)],
     box,
+    services: principal ? principal.services : null,
   });
 }
 
@@ -318,8 +321,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           path: p.path,
           signed: signer != null,
           ...(signer ? { signer } : {}),
-          // routing hints come only from the trusted ingest box, never from a signed browser batch
-          ...(trusted && p.box ? { box: p.box } : {}),
+          // routing hints come only from the trusted ingest box, never from a signed browser batch. The answer
+          // keys up the transmitter of the box it names, so only that box's own signature may name it: on the
+          // shared secret a sender could name any box and key it up at a site it never heard, and the answer
+          // takes the APRS-IS outbox instead.
+          ...(p.box && p.box === principal?.box ? { box: p.box } : {}),
           ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
           ...(principal ? { deliveredBy: principal.box } : {}),
         });
