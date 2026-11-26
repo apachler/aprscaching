@@ -666,6 +666,56 @@ if restore_dry "$TMP/future.tar.gz" --dry-run; then bad "a backup newer than the
 check "  … with the way out" grep -q "Update this installation first" "$TMP/err"
 printf 'not an archive' >"$TMP/junk.tar.gz"
 if restore_dry "$TMP/junk.tar.gz" --dry-run; then bad "a file that is not an archive is refused"; else ok "a file that is not an archive is refused"; fi
+mkarchive "$TMP/escape.tar.gz" "../x"
+# the refusal is its own message: a schema that reaches outside db/migrations is not "newer than this checkout"
+restore_dry "$TMP/escape.tar.gz" --dry-run || true
+check "a manifest whose schema is no migration file name is refused, naming it" \
+  grep -q "schema '../x', which is no migration file name" "$TMP/err"
+check "  … before it describes the restore" bash -c "! grep -q 'Restore of a' '$TMP/out'"
+restore_dry "$TMP/a.tar.gz" --dry-run || true
+check "a restore shows the archive's time" grep -q "^    archive: a.tar.gz, written " "$TMP/out"
+check "  … and its manifest" grep -q '"createdAt": 1790000000' "$TMP/out"
+
+# ---- restored settings: only known keys, each written so that a shell sourcing the .env runs nothing ----------
+SRC="$TMP/settings-src.env"
+printf '%s\n' 'APP_URL=$(touch '"$TMP"'/ran-unquoted)' 'ADMIN_CALLSIGNS="`touch '"$TMP"'/ran-backtick`"' \
+  "OPERATOR_NAME='Station \$(touch $TMP/ran-single)'" 'RP_ID=aprs.example.net' 'RETENTION={"positions": 30}' 'NOT_A_SETTING=1' \
+  'DB_PATH=/elsewhere/x.db' >"$SRC"
+DST="$TMP/settings-dst.env"
+printf 'APP_URL=https://kept.example\nDB_PATH=/here/x.db\n' >"$DST"
+check "restored settings are written" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/backup.sh'; bk_settings_write '$SRC' '$DST'"
+check "  … a value holding \$(…) is left out, the current one kept" eq "$(env_file_get "$DST" APP_URL)" "https://kept.example"
+check "  … a double-quoted value holding a backtick is left out" bash -c "! grep -q '^ADMIN_CALLSIGNS=' '$DST'"
+check "  … a single-quoted value comes back single-quoted, as written" eq "$(grep '^OPERATOR_NAME=' "$DST")" "OPERATOR_NAME='Station \$(touch $TMP/ran-single)'"
+check "  … a plain value plainly" eq "$(grep '^RP_ID=' "$DST")" "RP_ID=aprs.example.net"
+check "  … a JSON value single-quoted, read back as written" eq "$(env_file_get "$DST" RETENTION)" '{"positions": 30}'
+check "  … an unknown key and this host's own are not written" bash -c "! grep -q '^NOT_A_SETTING=' '$DST' && grep -qx 'DB_PATH=/here/x.db' '$DST'"
+check "  … and sourcing the .env runs none of them" bash -c "set -a; . '$DST'; set +a; [ ! -e '$TMP/ran-unquoted' ] && [ ! -e '$TMP/ran-backtick' ] && [ ! -e '$TMP/ran-single' ]"
+
+# ---- Pocket: an archive on shared storage brings no settings or secret files into the station --------------
+SH="$TMP/pkshared"
+mkdir -p "$SH/home/storage/shared" "$SH/data" "$SH/arch"
+tar -xzf "$TMP/a.tar.gz" -C "$SH/arch"
+printf 'SESSION_SECRET=planted-session-secret-0123456789\nAPP_URL=https://planted.example\n' >"$SH/arch/settings.env"
+printf 'planted\n' >"$SH/arch/secrets/session.secret"
+tar -czf "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz" -C "$SH/arch" .
+cp "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz" "$SH/data/"
+pk_restore() { # pk_restore ARCHIVE: the real restore on the Pocket shape, its database, stop and start hooks stubbed
+  printf 'mine\n' >"$SH/data/session.secret"
+  printf 'APP_URL=https://mine.example\n' >"$SH/data/.env"
+  HOME="$SH/home" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; . '$DEPLOY/lib/config.sh'
+    DEPLOY_DIR='$DEPLOY'; APRS_JSON=0 APRS_INTERACTIVE=0 APRS_ASSUME_YES=1; SHAPE=pocket SHAPE_ENV='$SH/data/.env'
+    . '$DEPLOY/lib/backup.sh'; . '$DEPLOY/lib/shapes/pocket.sh'
+    shape_db_restore() { :; }; shape_stop() { :; }; shape_start() { :; }; run_doctor() { :; }; sleep() { :; }
+    run_restore '$1'" >"$TMP/out" 2>"$TMP/err"
+}
+check "Pocket: an archive on shared storage restores" pk_restore "$SH/home/storage/shared/aprscaching-selfhost-20261001T020000Z.tar.gz"
+check "  … but not its secret files" eq "$(cat "$SH/data/session.secret")" mine
+check "  … nor its settings" bash -c "grep -qx 'APP_URL=https://mine.example' '$SH/data/.env' && ! grep -q SESSION_SECRET '$SH/data/.env'"
+check "  … and says so" grep -q "its settings and secret files are not restored" "$TMP/err"
+check "  … from Termux's own storage they are" pk_restore "$SH/data/aprscaching-selfhost-20261001T020000Z.tar.gz"
+check "  … the secret files" eq "$(cat "$SH/data/session.secret")" planted
+check "  … and the settings" grep -qx "APP_URL=https://planted.example" "$SH/data/.env"
 if APRSCACHING_DATA="$PDATA" "$H" --non-interactive --shape pocket restore "$TMP/a.tar.gz" </dev/null >/dev/null 2>&1; then
   bad "a restore without --yes changes nothing when nobody can be asked"
 else
@@ -695,6 +745,7 @@ cat >"$TMP/ocibin/oci" <<'MOCK'
 #!/usr/bin/env bash
 echo "oci $*" >>"$OCI_LOG"
 case "$*" in
+  *"object head"*) printf '{\n  "content-length": "1",\n  "last-modified": "Thu, 01 Oct 2026 02:00:05 GMT"\n}\n' ;;
   *"object list"*)
     case "$*" in *'."time-created"'*) echo "${OCI_NEWEST_TIME:-null}" ;; *) echo "${OCI_NEWEST:-null}" ;; esac ;;
   *"object get"*) while [ $# -gt 0 ]; do [ "$1" = --file ] && cp "$OCI_ARCHIVE" "$2"; shift; done ;;
@@ -706,15 +757,16 @@ chmod +x "$TMP/ocibin/oci"
 export OCI_LOG="$TMP/oci.log" OCI_ARCHIVE="$TMP/a.tar.gz"
 : >"$OCI_LOG"
 oci_restore_dry() { PATH="$TMP/ocibin:$PATH" OCI_NEWEST="archives/aprscaching-selfhost-20261001T020000Z.tar.gz" restore_dry "$@"; }
-check "restore takes the newest archive from a bucket" oci_restore_dry oci://acs-backups/latest --dry-run
+check "restore takes the archive named in a bucket" oci_restore_dry oci://acs-backups/archives/aprscaching-selfhost-20261001T020000Z.tar.gz --dry-run
 check "  … downloads that one" grep -q "object get -bn acs-backups --name archives/aprscaching-selfhost-20261001T020000Z.tar.gz" "$OCI_LOG"
+check "  … shows when it was uploaded" grep -q "archive: aprscaching-selfhost-20261001T020000Z.tar.gz, uploaded Thu, 01 Oct 2026 02:00:05 GMT" "$TMP/out"
+check "  … and its manifest" grep -q '"createdAt": 1790000000' "$TMP/out"
 check "  … and describes it" grep -q "settings restored: APP_URL ADMIN_CALLSIGNS" "$TMP/out"
+: >"$OCI_LOG"
+if oci_restore_dry oci://b/latest --dry-run; then bad "restore oci://b/latest is refused"; else ok "restore oci://b/latest is refused"; fi
+check "  … naming the form to use" grep -q "Name it as oci://<bucket>/archives/aprscaching-<shape>-<UTC time>.tar.gz" "$TMP/err"
+check "  … before it asks the bucket anything" test ! -s "$OCI_LOG"
 if oci_restore_dry oci://acs-backups --dry-run; then bad "a bucket address without an object is refused"; else ok "a bucket address without an object is refused"; fi
-if PATH="$TMP/ocibin:$PATH" OCI_NEWEST=null restore_dry oci://acs-backups/latest --dry-run; then
-  bad "an empty bucket is refused"
-else
-  ok "an empty bucket is refused"
-fi
 bk() { # bk ENVFILE FUNCTION ARGS…: one function of backup.sh, with the mocked oci on PATH
   local env="$1"
   shift

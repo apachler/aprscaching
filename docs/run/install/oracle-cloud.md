@@ -76,12 +76,17 @@ private bucket named in the `backup_bucket` output. The bucket deletes archives 
 newest three on its own disk. The VM may add archives to the bucket and read them, never delete or overwrite one,
 so a compromised VM cannot wipe its own backups. `deploy/aprscaching doctor` reports the age of the newest archive.
 
-To restore after losing the VM, select **Apply** on the stack again, wait for the first boot, then on the new VM:
+To restore after losing the VM, select **Apply** on the stack again, wait for the first boot, then on the new VM
+list the archives, pick one from before anything went wrong, and restore it by name:
 
 ```bash
 cd /opt/aprscaching
-sudo deploy/aprscaching restore oci://<backup_bucket>/latest
+oci os object list -bn <backup_bucket> --prefix archives/ --query 'data[].{name:name,uploaded:"time-created"}' --output table
+sudo deploy/aprscaching restore oci://<backup_bucket>/archives/<name>.tar.gz
 ```
+
+The VM may upload to the bucket, so a compromised VM can place an archive there: restore takes only the archive
+you name, and shows its upload time and manifest before it changes anything.
 
 ### Staying on the free tier
 

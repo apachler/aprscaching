@@ -92,7 +92,7 @@ bash ~/aprscaching/deploy/pocket/extras/setup.sh --scheduled-backup
 ```
 
 It registers `backup.sh` with Android's job scheduler: once a day, only while the phone charges and the battery is
-above 50 %. Run `termux-setup-storage` once first. `status.sh` shows the last backup.
+above 50 %, into Termux's private folder `~/.aprscaching/backups/`. `status.sh` shows the last backup.
 [Backups: Pocket](../day-to-day/backups.md#pocket) covers the archive and the restore.
 
 `extras/setup.sh --remove` takes the shortcuts and the scheduled backup back.

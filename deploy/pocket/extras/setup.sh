@@ -118,7 +118,6 @@ if [ "${SCHEDULE:-0}" = 1 ]; then
     termux_api termux-job-scheduler --job-id "$JOB_ID" --script "$job" --period-ms 86400000 \
       --charging true --battery-not-low true --persisted true >/dev/null
     info "registered: once a day while charging, when the battery is above 50 %; status.sh shows the last run"
-    [ -d "$HOME/storage/shared" ] || info "run termux-setup-storage once, so the backup can write to shared storage"
   fi
 fi
 [ "${SHORTCUTS:-0}" = 1 ] || [ "${SCHEDULE:-0}" = 1 ] || info "nothing chosen; run again with --shortcuts or --scheduled-backup"

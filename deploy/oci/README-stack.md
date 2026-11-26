@@ -125,16 +125,17 @@ system, from the console (*Block Storage → Boot volume backups*).
 1. In Resource Manager, run **Apply** on the stack again. It creates a new VM; the bucket, the reserved IP and
    the policy stay.
 2. Wait for the first boot to finish (the serial console, or `/var/log/aprscaching-firstboot.log`).
-3. Log in through the Bastion and restore the newest archive from the bucket:
+3. Log in through the Bastion, list the archives, and restore one from before anything went wrong, by name:
 
    ```bash
    cd /opt/aprscaching
-   sudo deploy/aprscaching restore oci://<backup_bucket>/latest --dry-run   # what it would restore
-   sudo deploy/aprscaching restore oci://<backup_bucket>/latest
+   oci os object list -bn <backup_bucket> --prefix archives/ --query 'data[].{name:name,uploaded:"time-created"}' --output table
+   sudo deploy/aprscaching restore oci://<backup_bucket>/archives/<name>.tar.gz --dry-run   # what it would restore
+   sudo deploy/aprscaching restore oci://<backup_bucket>/archives/<name>.tar.gz
    ```
 
-   `oci://<bucket>/archives/<name>.tar.gz` restores an older one; `oci os object list -bn <bucket> --prefix
-   archives/` lists them. The restore stops the stack, puts back the database, the settings, the secrets and
+   There is no "newest": the VM may upload to the bucket, so a compromised VM can place an archive there. The
+   restore shows the archive's upload time and manifest first. It stops the stack, puts back the database, the settings, the secrets and
    the media, starts it again and runs `doctor`.
 
 A re-created VM is a new instance, so the dynamic group follows it once Apply updates its matching rule.

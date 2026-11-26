@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The backup Android's job scheduler runs (extras/setup.sh --scheduled-backup registers it): daily, only
-# while the phone charges. It also checks the battery is above 50 %, runs backup.sh, records the time in
-# ~/.aprscaching/run/last-backup, and shows a short toast with the result.
+# while the phone charges. It also checks the battery is above 50 %, runs backup.sh to its default place (Termux's
+# private ~/.aprscaching/backups/), records the time in ~/.aprscaching/run/last-backup, and shows a short toast
+# with the result.
 #
 # Options:
 #   --dir PATH           checkout                       (APRSCACHING_DIR, default ~/aprscaching)

@@ -71,6 +71,15 @@ function newToken(): string {
 const TOKEN_SHAPE = /^[0-9a-f]{64}$/;
 
 /**
+ * What `email_tokens.token` holds for a link: the SHA-256 of its token, in hex. The token itself lives only in the
+ * link, so a copy of the database (a backup, a leaked file) yields no link anyone can spend.
+ */
+async function tokenKey(token: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
  * The verify link of a token, on this gateway's address for the request. When the page that asked for the link
  * is another address of this instance (a web app on another host than its gateway), the link names that page's
  * origin as `app`, where the confirm step returns to.
@@ -159,7 +168,7 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, ?, ?, ?, 0, ?)",
   )
-    .bind(token, e, cs, purpose, nowS(), acct?.account_id ?? null)
+    .bind(await tokenKey(token), e, cs, purpose, nowS(), acct?.account_id ?? null)
     .run();
 
   // The link opens this gateway's confirm page on the address the sign-in started on (origins.ts), so a member
@@ -242,7 +251,7 @@ async function startAccountData(
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, NULL, ?, ?, 0, ?)",
   )
-    .bind(token, e, ACCOUNT_DATA_PURPOSE, nowS(), acct.account_id)
+    .bind(await tokenKey(token), e, ACCOUNT_DATA_PURPOSE, nowS(), acct.account_id)
     .run();
   const link = verifyLink(req, env, token);
   const sent = await sendEmail(
@@ -315,7 +324,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, '', ?, ?, ?, 0, ?)",
   )
-    .bind(token, cs, OPERATOR_PURPOSE, nowS(), holder)
+    .bind(await tokenKey(token), cs, OPERATOR_PURPOSE, nowS(), holder)
     .run();
   // A script on the box reaches the gateway over loopback, which no other device can open: the link then
   // names the app origin. Reached on another address of this instance, it names that address.
@@ -455,7 +464,7 @@ async function liveToken(env: Env, token: string): Promise<TokenRow | null> {
   const row = await env.DB.prepare(
     "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE token = ?",
   )
-    .bind(token)
+    .bind(await tokenKey(token))
     .first<TokenRow>();
   const ttl = row?.purpose === CONFIRM_PURPOSE ? CONFIRM_TTL_SEC : TTL_SEC;
   return row && !row.used && nowS() - row.created_at <= ttl ? row : null;
@@ -506,7 +515,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   const row = await liveToken(env, token);
   if (!row) return answerProblem(expired(), asPage, app);
   // spend the token atomically: of two concurrent confirms only one sees the row still unused
-  const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(token).run();
+  const key = await tokenKey(token);
+  const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(key).run();
   if (spent.meta?.changes === 0) return answerProblem(expired(), asPage, app);
 
   const now = nowS();
@@ -522,7 +532,7 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (isProblem(acct)) return answerProblem(acct, asPage, app);
   // a register link, and an operator link for a new call, had no account to name until now
   await env.DB.prepare("UPDATE email_tokens SET account_id = ? WHERE token = ? AND account_id IS NULL")
-    .bind(acct.account_id, token)
+    .bind(acct.account_id, key)
     .run();
 
   let cookie: string;
@@ -625,7 +635,7 @@ export async function sendEmailConfirmation(
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used, account_id) VALUES (?, ?, ?, ?, ?, 0, ?)",
   )
-    .bind(token, email, callsign, CONFIRM_PURPOSE, nowS(), accountId)
+    .bind(await tokenKey(token), email, callsign, CONFIRM_PURPOSE, nowS(), accountId)
     .run();
   const link = verifyLink(req, env, token);
   const sent = await sendEmail(
