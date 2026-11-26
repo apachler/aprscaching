@@ -3,7 +3,7 @@
 // the SQL form of attestation decides every stored row as provenanceOf does, and the database's speed test refuses
 // exactly the presences the engine refuses.
 import { describe, it, expect } from "vitest";
-import { Worker } from "node:worker_threads";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { attestedSql, provenanceOf } from "@aprscaching/gateway/provenance";
 import { sitesFor, type Attestation } from "@aprscaching/gateway/attestedsites";
@@ -103,38 +103,32 @@ describe("the SQL form of attestation", () => {
 });
 
 /**
- * Runs `sql` over `paths` in a worker thread on its own in-memory SQLite, so a query that never ends is cut off
- * after `ms` and fails the test instead of blocking the suite (the driver's calls are synchronous). Answers, per path
- * in order, the SQL attestation (0 or 1), or null when the query did not end.
+ * Runs `sql` over `paths` in a child process on its own in-memory SQLite, killed after `ms`: the driver's calls are
+ * synchronous and native, so a query that never ends is stopped only by ending its process, and then fails the test
+ * instead of blocking the suite. Answers, per path in order, the SQL attestation (0 or 1), or null when the query did
+ * not end.
  */
-async function inWorker(sql: string, binds: string[], igate: string, paths: string[], ms = 10_000) {
+function inChild(sql: string, binds: string[], igate: string, paths: string[], ms = 10_000): number[] | null {
   const code = `
-    const { parentPort, workerData: w } = require("node:worker_threads");
+    const w = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
     const Database = require(w.driver);
     const db = new Database(":memory:");
     db.exec("CREATE TABLE positions (id INTEGER PRIMARY KEY, heard_via TEXT, transport TEXT, igate_call TEXT, ingest_box TEXT, path TEXT)");
     const ins = db.prepare("INSERT INTO positions (heard_via, transport, igate_call, path) VALUES ('rf', 'tnc', ?, ?)");
     for (const p of w.paths) ins.run(w.igate, p);
     const rows = db.prepare("SELECT p.id, " + w.sql + " AS a FROM positions p ORDER BY p.id").all(...w.binds);
-    parentPort.postMessage(rows.map((r) => r.a));
+    process.stdout.write(JSON.stringify(rows.map((r) => r.a)));
   `;
   const driver = createRequire(import.meta.url).resolve("better-sqlite3");
-  const worker = new Worker(code, { eval: true, workerData: { sql, binds, igate, paths, driver } });
-  try {
-    return await new Promise<number[] | null>((resolve, reject) => {
-      const timer = setTimeout(() => resolve(null), ms);
-      worker.once("message", (m: number[]) => {
-        clearTimeout(timer);
-        resolve(m);
-      });
-      worker.once("error", (e) => {
-        clearTimeout(timer);
-        reject(e);
-      });
-    });
-  } finally {
-    await worker.terminate();
-  }
+  const r = spawnSync(process.execPath, ["-e", code], {
+    input: JSON.stringify({ sql, binds, igate, paths, driver }),
+    encoding: "utf8",
+    timeout: ms,
+    killSignal: "SIGKILL",
+  });
+  if (r.signal) return null;
+  if (r.status !== 0) throw new Error(`the query's process failed: ${r.stderr}`);
+  return JSON.parse(r.stdout) as number[];
 }
 
 describe("the SQL path split", () => {
@@ -154,7 +148,7 @@ describe("the SQL path split", () => {
       "qAC,#",
     ];
     const paths = shapes.map((x) => x.replaceAll("#", "\u0000"));
-    const got = await inWorker(att.sql, att.binds, SITE, paths);
+    const got = inChild(att.sql, att.binds, SITE, paths);
     expect(got, "the query did not end within 10 s").not.toBeNull();
     expect(got).toHaveLength(paths.length);
   }, 20_000);
