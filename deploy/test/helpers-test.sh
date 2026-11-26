@@ -375,6 +375,7 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
     grep -qx "    \[root\] install -d -o acs-build -g acs-build -m 755 /srv/acs/$pkg/node_modules" "$TMP/out" ||
       bad "  … $pkg/node_modules for the build user"
   done
+  check "  … writes the built commit into the .env as root, once setup.sh wrote it" bash -c "grep -n '' '$TMP/out' | awk -F: '/\\[root\\] bash .*deploy\\/setup.sh/ { s = \$1 } /SOURCE_COMMIT .* _ \\/srv\\/acs \\/srv\\/acs\\/.git\\/aprscaching-built \\/srv\\/acs\\/deploy\\/.env\$/ { m = \$1 } END { exit !(s && m && s < m) }'"
   check "  … says the checkout is unverified" grep -q "main (branch) is not verified" "$TMP/err"
   check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
   check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --unverified --no-start --call OE8APR
@@ -421,7 +422,8 @@ bm_update_case acs
 check "update hands a checkout the service user owns to root" grep -qx "\[root\] chown root:root $TMP/bmup/acs" "$TMP/bmup.out"
 check "  … everything in it but data/" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -path $TMP/bmup/acs/data -prune -o -exec chown -h root:root {} +" "$TMP/bmup.out"
 check "  … and takes the write bits a mode or an ACL left to others" grep -qx "\[root\] find $TMP/bmup/acs -mindepth 1 -path $TMP/bmup/acs/data -prune -o ! -type l -exec chmod go-w {} +" "$TMP/bmup.out"
-check "  … and records the commit it built" grep -q "^\[root\] sh -c .* $TMP/bmup/acs $TMP/bmup/acs/.git/aprscaching-built\$" "$TMP/bmup.out"
+check "  … and records the commit it built" grep -q " _ $TMP/bmup/acs $TMP/bmup/acs/.git/aprscaching-built $TMP/bmup/acs/deploy/.env\$" "$TMP/bmup.out"
+check "  … clearing the last record before it hands the checkout over" bash -c "grep -n '' '$TMP/bmup.out' | awk -F: '/\\[root\\] rm -f .*aprscaching-built\$/ { r = \$1 } /chown root:root/ && !c { c = \$1 } END { exit !(r && c && r < c) }'"
 check "  … removes the build outputs the service user wrote" bash -c "grep -qx '\[root\] rm -rf $TMP/bmup/acs/node_modules' '$TMP/bmup.out' && grep -qx '\[root\] rm -rf $TMP/bmup/acs/apps/web/dist' '$TMP/bmup.out'"
 check "  … before it builds, as the build user the unit's user names" bash -c "grep -n '' '$TMP/bmup.out' | awk -F: '/chown root:root/ { c = \$1 } /\[acs-build\] bash -c umask 022/ { b = \$1 } END { exit !(c && b && c < b) }'"
 check "  … and runs git as root from then on" bash -c "SHAPE_ENV='$TMP/bmup/acs/deploy/.env'; . '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'
@@ -432,7 +434,7 @@ bm_update_case root
 check "update leaves a checkout root owns where it is" bash -c "! grep -qE 'chown|rm -rf' '$TMP/bmup.out'"
 check "  … and builds as the build user" grep -q "^\[acs-build\] bash -c umask 022" "$TMP/bmup.out"
 bm_update_case root 1 || true
-check "a failed build records no commit, so the next update owes it" bash -c "grep -q '^\[acs-build\] bash -c umask 022' '$TMP/bmup.out' && ! grep -q aprscaching-built '$TMP/bmup.out'"
+check "a failed build records no commit, so the next update owes it" bash -c "grep -q '^\[acs-build\] bash -c umask 022' '$TMP/bmup.out' && ! grep -q 'aprscaching-built $TMP/bmup/acs/deploy/.env' '$TMP/bmup.out'"
 
 # The hand-over itself, on a real tree that the user running this test owns, standing in for the service user;
 # root's chown is left out, since only root may give a file away. A symbolic link at the top and one inside point
@@ -569,6 +571,23 @@ not_pending_at() { ! pending_at; }
 check "  … and not once one finished at the checkout's commit" not_pending_at
 git -C "$TMP/at" rev-parse HEAD~1 >"$TMP/at/.git/aprscaching-built"
 check "  … and again when the last one finished at another commit" pending_at
+# A build runs the real record steps here, root a stand-in that runs them as this user: the record is removed
+# before the build, and a finished build writes its commit into the .env, where the gateway's source link reads it.
+apply_at() { # apply_at BUILD_RC: shape_update_apply in $TMP/at, the hand-over and the build stand-ins
+  mkdir -p "$TMP/at/deploy/lib"
+  cp "$DEPLOY/lib/env.sh" "$TMP/at/deploy/lib/env.sh"
+  bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/shapes/baremetal.sh'; SHAPE_ENV='$TMP/at/deploy/.env' BM_UNIT_DIR='$TMP/at/units'
+    bm_owner() { echo root; }; bm_root() { case \"\$1\" in systemctl) ;; *) \"\$@\" ;; esac; }
+    bm_ensure_user() { :; }; bm_take_checkout() { :; }; bm_build_dirs() { :; }; bm_pnpm_for_service() { :; }
+    bm_build() { return $1; }; shape_update_apply" >"$TMP/apply.out" 2>&1
+}
+git -C "$TMP/at" rev-parse HEAD >"$TMP/at/.git/aprscaching-built"
+apply_at 1 || true
+check "a failed build at the commit the record names leaves the build owed" pending_at
+printf 'SOURCE_COMMIT=old\n' >"$TMP/at/deploy/.env"
+apply_at 0
+check "a finished build names its commit in the .env, for the source link" eq "$(grep '^SOURCE_COMMIT=' "$TMP/at/deploy/.env")" "SOURCE_COMMIT=$(git -C "$TMP/at" rev-parse HEAD)"
+check "  … and is recorded" not_pending_at
 
 rc_case update good
 check "update: the checkout moves to the commit inside the verified bundle" eq "$(cat "$W/applied" 2>/dev/null)" "$RELEASE"

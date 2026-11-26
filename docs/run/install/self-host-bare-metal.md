@@ -79,7 +79,7 @@ The helper runs as root, so no user that runs other code may write it:
 | Path | Owner | Why |
 |---|---|---|
 | `/opt/aprscaching`, `deploy/` and the rest of the checkout | root | root runs `deploy/aprscaching` and `setup.sh` from it |
-| `deploy/.env` | root, mode 600 | systemd reads it for the units |
+| `deploy/.env` | root, mode 600 | systemd reads it for the units; each finished build sets `SOURCE_COMMIT`, the commit the Source link names |
 | `node_modules` (each package's) and `apps/web/dist` | `aprscaching-build` | `pnpm install` and the web build write them; dependencies' install scripts run there |
 | `data/` | `aprscaching` | the database, media and `session.secret`; the services write nothing else |
 

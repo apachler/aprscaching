@@ -147,12 +147,17 @@ bm_take_checkout() {
   info "the checkout is root's, data/ stays $BM_USER's"
 }
 
-# The commit the build's outputs were last built from, in a file under .git that root alone writes. An update
-# whose build failed leaves it at an older commit, or missing, so the next update knows the build is owed.
+# The commit the build's outputs were last built from, in a file under .git that root alone writes. It is
+# removed before every build, so a build that fails leaves none and the next update knows the build is owed.
 bm_built_file() { echo "$BM_DIR/.git/aprscaching-built"; }
+bm_clear_built() { bm_root rm -f "$(bm_built_file)"; }
+# Records the build: its commit becomes the .env's SOURCE_COMMIT, which the gateway names in its source link
+# before asking git (git older than 2.38 refuses the root-owned checkout to the service user whatever it is
+# told), and then the record.
 bm_mark_built() {
   # shellcheck disable=SC2016 # the script expands in root's shell
-  bm_root sh -c 'umask 022 && git -C "$1" rev-parse HEAD >"$2"' _ "$BM_DIR" "$(bm_built_file)"
+  bm_root bash -c 'set -e; . "$1/deploy/lib/env.sh"; c="$(git -C "$1" rev-parse HEAD)"
+    env_file_set "$3" SOURCE_COMMIT "$c"; umask 022; printf "%s\n" "$c" >"$2"' _ "$BM_DIR" "$(bm_built_file)" "$SHAPE_ENV"
 }
 bm_built_at_head() {
   [ "$(cat "$(bm_built_file)" 2>/dev/null)" = "$(shape_git rev-parse HEAD 2>/dev/null)" ]
@@ -292,10 +297,10 @@ shape_init() {
 
   step "Dependencies and the web build"
   # The gateway and the ingest run from source (tsx); the web app is the one thing to build.
+  bm_clear_built
   bm_build_dirs
   bm_build_run
   bm_pnpm_for_service
-  bm_mark_built
 
   step "Settings ($SHAPE_ENV)"
   local opts=(--env-file "$SHAPE_ENV" --app-port "$BM_PORT" --no-tunnel --no-next-steps)
@@ -306,6 +311,7 @@ shape_init() {
   bm_root sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
   bm_proxy_bind "$SHAPE_ENV" || die "could not read $SHAPE_ENV as root to set HOST and TRUST_PROXY for the proxy."
   bm_root chmod 600 "$SHAPE_ENV"
+  bm_mark_built
 
   step "systemd units"
   tmp="$(mktemp -d)"
@@ -506,6 +512,7 @@ shape_update_pending() {
 shape_update_apply() {
   bm_ctx
   bm_ensure_user "$BM_BUILDER" >/dev/null
+  bm_clear_built
   bm_take_checkout
   bm_build_dirs
   bm_build_run || return 1
