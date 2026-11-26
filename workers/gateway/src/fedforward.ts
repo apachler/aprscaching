@@ -5,9 +5,9 @@
  * packed into a text-safe `ACSFED` batch, and stored once as a local carrier message. The forwarding pool
  * offers it only to the partners the sysop marked for federation, as a personal message to `ACSFED` at that
  * partner's BBS: personal mail is delivered, never flooded, so a partner BBS does not pass it on to its own
- * partners. All of it is off unless `FED_BBS` is on. The batch's content-addressed BID rides
- * `bbs_messages.bid` (UNIQUE), so re-enqueueing an unchanged snapshot dedups here and a second copy dedups at
- * the receiver.
+ * partners. All of it is off unless `FED_BBS` is on. The queue dedups on what the batch's records are —
+ * their identity, version and body — so an unchanged snapshot signed in a later second queues once; the
+ * batch's content-addressed BID rides `bbs_messages.bid` (UNIQUE), and a second copy dedups at the receiver.
  */
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
@@ -16,33 +16,79 @@ import { requireSysop } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { buildFedFrames } from "./fedsync.js";
 import { BULLETIN_LIFETIME_SEC } from "./bbs.js";
-import { encodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";
+import { cborDecode, cborEncode, encodeFedBbsBatch, FED_BBS_CATEGORY, type CborValue } from "@aprscaching/shared";
 import { fedBbsOn, FED_BBS_OFF } from "./fedbbsgate.js";
 
 /** Feed order inside a batch: tombstones FIRST, so a delete suppresses a stale record later in it. */
 const ENQUEUE_TYPES = ["tombstone", "cache", "find", "key", "account-move", "bulletin"] as const;
 
+/** The fedwire keys the queue key reads: a frame's signed payload, and that payload's signing time. */
+const FRAME_PAYLOAD = 1;
+const PAYLOAD_AT = 5;
+
+/**
+ * What makes a frame the same record: its payload without the signing time `at`, the signer key and the
+ * signature. A record re-signed in a later second is the same record; a new version or an edited body is not.
+ * A frame that does not parse as a fedwire frame counts by its raw bytes.
+ */
+function frameIdentity(frame: Uint8Array): CborValue {
+  try {
+    const f = cborDecode(frame);
+    const payload = f instanceof Map ? f.get(FRAME_PAYLOAD) : undefined;
+    if (!(payload instanceof Uint8Array)) return frame;
+    const record = cborDecode(payload);
+    if (!(record instanceof Map)) return frame;
+    const stable = new Map(record);
+    stable.delete(PAYLOAD_AT);
+    return stable;
+  } catch {
+    return frame;
+  }
+}
+
+/** SHA-256 (hex) over the batch's frame identities, in order: the queue's key for "the same records". */
+async function batchKey(frames: Uint8Array[]): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", cborEncode(frames.map(frameIdentity)));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Pack signed frames into an `ACSFED` batch and store it as a local carrier message for the forwarding pool,
  * which offers it to the federation partners alone. Shared by the feed-snapshot enqueue, the relay's packet
  * leg and the relay's automatic answer. Stored as personal mail to `ACSFED`, so it never lists as a bulletin,
- * never rides the HTTP bulletin feed, and expires after the bulletin lifetime. The content BID hits
- * `bbs_messages.bid` (UNIQUE), so identical content never double-posts. Throws while `FED_BBS` is off.
+ * never rides the HTTP bulletin feed, and expires after the bulletin lifetime. Throws while `FED_BBS` is off.
+ *
+ * A batch of the same records as one still queued (unexpired) is not stored again, and the answer names the
+ * queued batch's BID and its row (`queued`), which a sysop removes to send the same records again. The BID itself cannot carry that: it hashes the frame bytes, which hold each record's
+ * signing time, and receivers re-derive it from those bytes, so its formula stays as it is on the air.
  */
 export async function enqueueAcsfedBulletin(
   env: Env,
   frames: Uint8Array[],
-): Promise<{ bid: string; enqueued: number }> {
+): Promise<{ bid: string; enqueued: number; queued?: number }> {
   if (!fedBbsOn(env)) throw new Error(FED_BBS_OFF);
   const bull = encodeFedBbsBatch(frames);
+  const key = await batchKey(frames);
   const fromCall = (env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
+  const now = nowS();
+  // one statement, so two enqueues of the same records at once cannot both pass the check
   const res = await env.DB.prepare(
-    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
-     VALUES (?, 'P', ?, ?, ?, ?, ?, ?, 'local')`,
+    `INSERT OR IGNORE INTO bbs_messages
+       (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin, fed_key)
+     SELECT ?, 'P', ?, ?, ?, ?, ?, ?, 'local', ?
+     WHERE NOT EXISTS (SELECT 1 FROM bbs_messages
+                       WHERE fed_key = ? AND origin = 'local' AND (expires_at IS NULL OR expires_at > ?))`,
   )
-    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, nowS(), nowS() + BULLETIN_LIFETIME_SEC)
+    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, now, now + BULLETIN_LIFETIME_SEC, key, key, now)
     .run();
-  return { bid: bull.bid, enqueued: res.meta.changes ? 1 : 0 };
+  if (res.meta.changes) return { bid: bull.bid, enqueued: 1 };
+  const queued = await env.DB.prepare(
+    `SELECT id, bid FROM bbs_messages WHERE fed_key = ? AND origin = 'local' AND (expires_at IS NULL OR expires_at > ?)
+     ORDER BY posted_at DESC LIMIT 1`,
+  )
+    .bind(key, now)
+    .first<{ id: number; bid: string }>();
+  return queued ? { bid: queued.bid, enqueued: 0, queued: queued.id } : { bid: bull.bid, enqueued: 0 };
 }
 
 /** Where one feed resumes: its cursor and, in a feed whose cursor can repeat, the id of the last row sent. */
@@ -103,6 +149,7 @@ export async function handleFedBbsEnqueue(req: Request, env: Env): Promise<Respo
     frames: frames.length,
     enqueued: bull.enqueued,
     deduped: !bull.enqueued,
+    ...(bull.queued !== undefined && { queued: bull.queued }),
     cursors,
   });
 }
